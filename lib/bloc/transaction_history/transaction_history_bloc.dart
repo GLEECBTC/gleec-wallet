@@ -87,22 +87,24 @@ class TransactionHistoryBloc
 
               // Merge incoming batch by internalId, updating confirmations and other fields
               final Map<String, Transaction> byId = {
-                for (final t in state.transactions) t.internalId: t,
+                for (final t in state.transactions) _txKey(t): t,
               };
 
               for (final tx in newTransactions) {
                 final sanitized = tx.sanitize(myAddresses);
                 // Capture first-seen time for stable ordering where timestamp may be zero
+                final txKey = _txKey(sanitized);
+
                 _firstSeenAtById.putIfAbsent(
-                  sanitized.internalId,
+                  txKey,
                   () => sanitized.timestamp.millisecondsSinceEpoch != 0
                       ? sanitized.timestamp
                       : DateTime.now(),
                 );
-                final existing = byId[sanitized.internalId];
+                final existing = byId[txKey];
                 if (existing == null) {
-                  byId[sanitized.internalId] = sanitized;
-                  _processedTxIds.add(sanitized.internalId);
+                  byId[txKey] = sanitized;
+                  _processedTxIds.add(txKey);
                   continue;
                 }
 
@@ -170,9 +172,10 @@ class TransactionHistoryBloc
         .listen(
           (newTransaction) {
             final sanitized = newTransaction.sanitize(myAddresses);
+            final txKey = _txKey(sanitized);
             // Capture first-seen time once for stable ordering when timestamp is zero
             _firstSeenAtById.putIfAbsent(
-              sanitized.internalId,
+              txKey,
               () => sanitized.timestamp.millisecondsSinceEpoch != 0
                   ? sanitized.timestamp
                   : DateTime.now(),
@@ -180,14 +183,14 @@ class TransactionHistoryBloc
 
             // Merge single update by internalId
             final Map<String, Transaction> byId = {
-              for (final t in state.transactions) t.internalId: t,
+              for (final t in state.transactions) _txKey(t): t,
             };
 
-            final existing = byId[sanitized.internalId];
+            final existing = byId[txKey];
             if (existing == null) {
-              byId[sanitized.internalId] = sanitized;
+              byId[txKey] = sanitized;
             } else {
-              byId[sanitized.internalId] = existing.copyWith(
+              byId[txKey] = existing.copyWith(
                 confirmations: sanitized.confirmations,
                 blockHeight: sanitized.blockHeight,
                 fee: sanitized.fee ?? existing.fee,
@@ -195,7 +198,7 @@ class TransactionHistoryBloc
               );
             }
 
-            _processedTxIds.add(sanitized.internalId);
+            _processedTxIds.add(txKey);
 
             final updatedTransactions = byId.values.toList()
               ..sort(_compareTransactions);
@@ -244,7 +247,7 @@ class TransactionHistoryBloc
 
   DateTime _sortTime(Transaction tx) {
     if (tx.timestamp.millisecondsSinceEpoch != 0) return tx.timestamp;
-    final firstSeen = _firstSeenAtById[tx.internalId];
+    final firstSeen = _firstSeenAtById[_txKey(tx)];
     return firstSeen ?? DateTime.fromMillisecondsSinceEpoch(0);
   }
 
@@ -257,6 +260,16 @@ class TransactionHistoryBloc
     }
     return right.timestamp.compareTo(left.timestamp);
   }
+}
+
+String _txKey(Transaction tx) {
+  if (tx.internalId.isNotEmpty) {
+    return tx.internalId;
+  }
+  if (tx.txHash != null && tx.txHash!.isNotEmpty) {
+    return tx.txHash!;
+  }
+  return tx.id;
 }
 
 // Instance comparator now used; legacy top-level comparator removed.
