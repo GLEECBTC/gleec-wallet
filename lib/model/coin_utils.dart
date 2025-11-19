@@ -128,6 +128,9 @@ bool compareCoinByPhrase(Coin coin, String phrase) {
 }
 
 String getCoinTypeName(CoinType type, [String? symbol]) {
+  if (type == CoinType.sia) {
+    return 'SIA';
+  }
   // Override for parent chain coins like ETH, AVAX etc.
   if (symbol != null && isParentCoin(type, symbol)) {
     return 'Native';
@@ -143,6 +146,8 @@ String getCoinTypeName(CoinType type, [String? symbol]) {
       return 'Native';
     case CoinType.smartChain:
       return 'Smart Chain';
+    case CoinType.sia:
+      return 'SIA';
     case CoinType.ftm20:
       return 'FTM-20';
     case CoinType.arb20:
@@ -181,6 +186,7 @@ String getCoinTypeName(CoinType type, [String? symbol]) {
 bool isParentCoin(CoinType type, String symbol) {
   switch (type) {
     case CoinType.utxo:
+    case CoinType.sia:
     case CoinType.tendermint:
       return true;
     case CoinType.erc20:

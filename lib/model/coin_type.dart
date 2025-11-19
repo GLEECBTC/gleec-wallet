@@ -2,6 +2,7 @@
 enum CoinType {
   utxo,
   smartChain,
+  sia,
   etc,
   erc20,
   bep20,

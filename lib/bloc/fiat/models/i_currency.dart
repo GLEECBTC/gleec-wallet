@@ -129,6 +129,7 @@ class CryptoCurrency extends ICurrency {
     // "ETH-ERC20", which is not how it is stored in our coins configuration
     // files. "ETH" is the expected abbreviation, which would just be `symbol`.
     if (chainType == CoinType.utxo ||
+        chainType == CoinType.sia ||
         (chainType == CoinType.tendermint && symbol == 'ATOM') ||
         (chainType == CoinType.erc20 && symbol == 'ETH') ||
         (chainType == CoinType.bep20 && symbol == 'BNB') ||

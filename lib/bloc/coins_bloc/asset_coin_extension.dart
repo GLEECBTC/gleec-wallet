@@ -79,6 +79,8 @@ extension CoinTypeExtension on CoinSubClass {
         return CoinType.avx20;
       case CoinSubClass.smartChain:
         return CoinType.smartChain;
+      case CoinSubClass.sia:
+        return CoinType.sia;
       case CoinSubClass.moonriver:
         return CoinType.mvr20;
       case CoinSubClass.ethereumClassic:
@@ -155,6 +157,8 @@ extension CoinSubClassExtension on CoinType {
         return CoinSubClass.avx20;
       case CoinType.smartChain:
         return CoinSubClass.smartChain;
+      case CoinType.sia:
+        return CoinSubClass.sia;
       case CoinType.mvr20:
         return CoinSubClass.moonriver;
       case CoinType.etc:
