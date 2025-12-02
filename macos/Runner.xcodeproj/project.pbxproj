@@ -515,7 +515,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gleec.gleecdex;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -655,7 +655,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gleec.gleecdex;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -690,7 +690,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gleec.gleecdex;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -792,7 +792,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gleec.gleecdex;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -884,7 +884,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				"OTHER_CODE_SIGN_FLAGS[sdk=*]" = "--options=runtime --timestamp";
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gleec.gleecdex;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "[decker] Komodo(8HPBYKKKQP.com.komodo.wallet)";
 				SWIFT_VERSION = 5.0;
@@ -972,7 +972,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gleec.gleecdex;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};

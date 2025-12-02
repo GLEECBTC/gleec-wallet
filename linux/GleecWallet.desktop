@@ -1,9 +1,9 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Gleec Wallet
-Exec=./KomodoWallet
-Icon=./KomodoWallet.png
+Name=GLEEC Wallet
+Exec=./GleecWallet
+Icon=./GleecWallet.png
 Categories=Office;Finance;
 Terminal=false
 StartupNotify=true

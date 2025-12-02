@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 1200px;
+            height: 630px;
+            background: linear-gradient(135deg, #171A2C 0%, #202337 50%, #24273D 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bg-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                radial-gradient(circle at 20% 80%, rgba(73, 134, 234, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(90, 104, 230, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .logo-container {
+            width: 180px;
+            height: 180px;
+            background: linear-gradient(135deg, #4986EA 0%, #5A68E6 100%);
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 20px 60px rgba(73, 134, 234, 0.3);
+        }
+
+        .logo-container img {
+            width: 140px;
+            height: 140px;
+            border-radius: 20px;
+        }
+
+        .title {
+            color: #FFFFFF;
+            font-size: 64px;
+            font-weight: 700;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 28px;
+            font-weight: 400;
+            text-align: center;
+            max-width: 800px;
+        }
+
+        .badge {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .badge-item {
+            background: rgba(73, 134, 234, 0.2);
+            border: 1px solid rgba(73, 134, 234, 0.3);
+            padding: 10px 24px;
+            border-radius: 30px;
+            color: #4986EA;
+            font-size: 16px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-pattern"></div>
+    <div class="content">
+        <div class="logo-container">
+            <img src="assets/app_icon/logo_icon.webp" alt="GLEEC">
+        </div>
+        <h1 class="title">GLEEC Wallet</h1>
+        <p class="subtitle">Non-Custodial Multi-Coin Wallet & DEX</p>
+        <div class="badge">
+            <span class="badge-item">Secure</span>
+            <span class="badge-item">Decentralized</span>
+            <span class="badge-item">Multi-Chain</span>
+        </div>
+    </div>
+</body>
+
+</html>
