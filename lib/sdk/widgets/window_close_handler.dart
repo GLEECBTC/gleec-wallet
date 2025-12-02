@@ -23,7 +23,7 @@ import 'package:web_dex/shared/utils/window/window.dart';
 /// - Mobile (iOS, Android): Uses WidgetsBindingObserver for lifecycle management
 ///   and PopScope for exit confirmation
 ///
-/// In all cases, it ensures the KomodoDefiSdk is properly disposed when the app is closed.
+/// In all cases, it ensures the SDK is properly disposed when the app is closed.
 class WindowCloseHandler extends StatefulWidget {
   /// Creates a WindowCloseHandler.
   ///
@@ -74,7 +74,7 @@ class _WindowCloseHandlerState extends State<WindowCloseHandler>
     } else if (kIsWeb) {
       // Web platform: Use beforeunload event
       showMessageBeforeUnload(
-        'This will close Komodo Wallet and stop all trading activities.',
+        'This will close Gleec Wallet and stop all trading activities.',
       );
     } else {
       // Mobile platforms: Use lifecycle observer
@@ -108,7 +108,7 @@ class _WindowCloseHandlerState extends State<WindowCloseHandler>
               return AlertDialog(
                 title: const Text('Do you really want to quit?'),
                 content: const Text(
-                  'This will close Komodo Wallet and stop all trading activities.',
+                  'This will close Gleec Wallet and stop all trading activities.',
                 ),
                 actions: [
                   TextButton(

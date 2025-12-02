@@ -20,7 +20,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Enforce single instance: create a named mutex. If it already exists or we
   // don't have access to it, try to bring the existing window to the foreground
   // and exit immediately.
-  HANDLE singleInstanceMutex = CreateMutexW(nullptr, TRUE, L"Global\\KomodoWallet_SingleInstanceMutex");
+  HANDLE singleInstanceMutex = CreateMutexW(nullptr, TRUE, L"Global\\GleecDEX_SingleInstanceMutex");
   DWORD createMutexError = GetLastError();
   const bool mutexIndicatesOtherInstance =
       (singleInstanceMutex == nullptr && createMutexError == ERROR_ACCESS_DENIED) ||
@@ -29,7 +29,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     // Attempt to find the existing window by class or title and focus it.
     HWND existing = FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", nullptr);
     if (existing == nullptr) {
-      existing = FindWindowW(nullptr, L"komodowallet");
+      existing = FindWindowW(nullptr, L"gleecdex");
     }
     if (existing != nullptr) {
       ShowWindow(existing, SW_RESTORE);
@@ -54,7 +54,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"komodowallet", origin, size)) {
+  if (!window.Create(L"gleecdex", origin, size)) {
     if (singleInstanceMutex) {
       ReleaseMutex(singleInstanceMutex);
       CloseHandle(singleInstanceMutex);

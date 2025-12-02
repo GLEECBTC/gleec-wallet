@@ -1,4 +1,4 @@
-Komodo Wallet is a cross-platform cryptocurrency wallet and decentralized exchange (DEX)
+Gleec DEX is a cross-platform cryptocurrency wallet and decentralized exchange (DEX)
 that supports multiple blockchain networks. It provides secure storage for various
 cryptocurrencies and enables peer-to-peer trading through atomic swaps.
 

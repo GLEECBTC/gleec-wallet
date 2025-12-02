@@ -1,6 +1,6 @@
 # Project setup
 
-Komodo Wallet is a cross-platform application, meaning it can be built for multiple target platforms using the same code base. It is important to note that some target platforms may only be accessible from specific host platforms. Below is a list of all supported host platforms and their corresponding target platforms:
+Gleec Wallet is a cross-platform application, meaning it can be built for multiple target platforms using the same code base. It is important to note that some target platforms may only be accessible from specific host platforms. Below is a list of all supported host platforms and their corresponding target platforms:
 
 | Host Platform | Target Platform                  |
 | ------------- | -------------------------------- |
@@ -35,7 +35,7 @@ Komodo Wallet is a cross-platform application, meaning it can be built for multi
  6. **Initialize SDK submodule**: After cloning, initialize the komodo-defi-sdk-flutter submodule:
 
     ```bash
-    cd komodo-wallet
+    cd gleec-wallet
     git submodule update --init --recursive
     ```
 
@@ -74,12 +74,12 @@ export GITHUB_API_PUBLIC_READONLY_TOKEN=<TOKEN>
 Example of the 403 error message (more likely after multiple repeated builds):
 
 ```bash
-test@test komodo-wallet % flutter build web
+test@test gleec-wallet % flutter build web
 
 Expected to find fonts for (MaterialIcons, packages/komodo_ui_kit/Custom, packages/cupertino_icons/CupertinoIcons), but found (MaterialIcons, packages/komodo_ui_kit/Custom). This usually means you are referring to font families in an IconData class but not including them in the assets section of your pubspec.yaml, are missing the package that would include
 them, or are missing "uses-material-design: true".
 Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 13640 bytes (99.2% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
-Target web_release_bundle failed: Error: User-defined transformation of asset "/Users/test/Repos/komodo/komodo-wallet/app_build/build_config.json" failed.
+Target web_release_bundle failed: Error: User-defined transformation of asset "/Users/test/Repos/gleec/gleec-wallet/app_build/build_config.json" failed.
 Transformer process terminated with non-zero exit code: 1
 Transformer package: komodo_wallet_build_transformer
 Full command: /Users/test/fvm/versions/3.22.3/bin/cache/dart-sdk/bin/dart run komodo_wallet_build_transformer --input=/var/folders/p7/4z261zj174l1hw7q7q7pnc200000gn/T/flutter_tools.2WE4fK/build_config.json-transformOutput0.json --output=/var/folders/p7/4z261zj174l1hw7q7q7pnc200000gn/T/flutter_tools.2WE4fK/build_config.json-transformOutput1.json

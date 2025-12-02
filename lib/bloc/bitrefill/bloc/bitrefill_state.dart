@@ -20,7 +20,7 @@ final class BitrefillPaymentInProgress extends BitrefillState {
   List<Object> get props => [paymentIntent];
 }
 
-/// The payment was successful from Komodo Wallet to the Bitrefill address.
+/// The payment was successful from Gleec Wallet to the Bitrefill address.
 final class BitrefillPaymentSuccess extends BitrefillState {
   const BitrefillPaymentSuccess({
     required this.invoiceId,
@@ -33,7 +33,7 @@ final class BitrefillPaymentSuccess extends BitrefillState {
   List<Object> get props => [];
 }
 
-/// The payment failed from Komodo Wallet to the Bitrefill address.
+/// The payment failed from Gleec Wallet to the Bitrefill address.
 final class BitrefillPaymentFailure extends BitrefillState {
   const BitrefillPaymentFailure(this.message);
 

@@ -14,7 +14,7 @@ function getBitrefillUrlFromParameters() {
     const ref = urlParams.get('ref');
     const theme = urlParams.get('theme') || 'dark';
     const language = urlParams.get('language') || 'en';
-    const company_name = urlParams.get('company_name') || 'Komodo Wallet';
+    const company_name = urlParams.get('company_name') || 'Gleec Wallet';
 
     /* Optional parameters */
     const payment_methods = urlParams.get('payment_methods');

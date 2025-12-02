@@ -1,4 +1,4 @@
-# Komodo Wallet v0.9.3 Release Notes
+# Gleec Wallet v0.9.3 Release Notes
 
 This release delivers significant performance improvements, enhanced analytics capabilities, and a comprehensive overhaul of authentication and wallet management. Key highlights include real-time portfolio streaming, a dual analytics pipeline with persistent queueing, one-click sign-in, Z-HTLC support, and extensive optimisations that reduce RPC usage while improving responsiveness across all platforms.
 
@@ -19,16 +19,16 @@ This release delivers significant performance improvements, enhanced analytics c
 
 ### SDK Updates (komodo-defi-sdk-flutter)
 
-This release integrates [komodo-defi-sdk v1.0.0-pre.1](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter) with 82 commits bringing substantial improvements:
+This release integrates [komodo-defi-sdk v1.0.0-pre.1](https://github.com/GLEECBTC/komodo-defi-sdk-flutter) with 82 commits bringing substantial improvements:
 
-- **Flutter Web WASM Support** ([SDK#176](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/176)) - WASM support with OPFS integration and unified storage
-- **Enhanced RPC Coverage** ([SDK#179](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/179), [#188](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/188), [#191](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/191)) - Trading, orderbook, and Lightning RPC support
-- **Streaming Infrastructure** ([SDK#178](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/178), [#232](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/232), [#269](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/269)) - Pubkey and balance watch streams with comprehensive caching
-- **Multi-Provider Market Data** ([SDK#145](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/145), [#224](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/224)) - CoinPaprika fallback and refined Binance quotes
-- **Custom Token Storage** ([SDK#225](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/225), [#190](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/190)) - Runtime coin updates integration
-- **Platform Support** ([SDK#237](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/237), [#247](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/247)) - macOS universal binary and packaging updates
+- **Flutter Web WASM Support** ([SDK#176](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/176)) - WASM support with OPFS integration and unified storage
+- **Enhanced RPC Coverage** ([SDK#179](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/179), [#188](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/188), [#191](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/191)) - Trading, orderbook, and Lightning RPC support
+- **Streaming Infrastructure** ([SDK#178](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/178), [#232](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/232), [#269](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/269)) - Pubkey and balance watch streams with comprehensive caching
+- **Multi-Provider Market Data** ([SDK#145](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/145), [#224](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/224)) - CoinPaprika fallback and refined Binance quotes
+- **Custom Token Storage** ([SDK#225](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/225), [#190](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/190)) - Runtime coin updates integration
+- **Platform Support** ([SDK#237](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/237), [#247](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/247)) - macOS universal binary and packaging updates
 
-See the [full SDK changelog](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/releases) for complete details.
+See the [full SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/releases) for complete details.
 
 ## 🎨 UI/UX Improvements
 
@@ -146,22 +146,22 @@ See the [full SDK changelog](https://github.com/KomodoPlatform/komodo-defi-sdk-f
 
 ### SDK Integration (komodo-defi-sdk v1.0.0-pre.1)
 
-- **RPC Coverage Expansion** ([SDK#179](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/179), [#188](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/188), [#191](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/191)) - Implemented missing RPCs, including trading-related endpoints and Lightning support
-- **Message Signing** ([SDK#198](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/198), [#231](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/231)) - HD wallet support for message signing with derivation path; added AddressPath type and refactored to use Asset/PubkeyInfo
-- **Multi-Provider Market Data** ([SDK#145](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/145), [#215](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/215)) - Support for multiple market data providers with CoinPaprika fallback option
-- **Custom Token Integration** ([SDK#225](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/225), [#190](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/190)) - Custom token support in coin config manager; integrate komodo_coin_updates into komodo_coins
-- **Balance & Pubkey Streaming** ([SDK#178](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/178), [#232](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/232), [#262](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/262), [#269](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/269)) - Add pubkey watch function similar to balance watch; comprehensive caching and streaming support
-- **ETH-BASE Support** ([SDK#254](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/254)) - Add support for ETH-BASE and derived assets
-- **Asset Tagging Fixes** ([SDK#244](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/244)) - Correct UTXO coins incorrectly tagged as Smart Chain
-- **ZHTLC Fixes** ([SDK#227](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/227), [#264](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/264)) - ZHTLC activation fixes with optional sync params and sign-out cleanup
-- **Binance Quote Fixes** ([SDK#224](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/224)) - Use per-coin supported quote currency list instead of global cache
-- **Market Metrics Logging** ([SDK#223](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/223)) - Reduce market metrics log verbosity and duplication
-- **Etherscan URLs** ([SDK#217](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/217)) - Fix Etherscan URL formatting
-- **Sparkline Configuration** ([SDK#248](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/248)) - Add configurable sparkline baseline
-- **Dragon Charts Migration** ([SDK#164](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/164)) - Migrate dragon_charts_flutter to monorepo packages
-- **Trezor Polling** ([SDK#126](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/126)) - Poll Trezor connection status and sign out when disconnected
-- **KDF Version Updates** ([SDK#218](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/218), [#237](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/237), [#249](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/249), [#241](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/241), [#247](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/247)) - Roll KDF to latest releases with checksum updates
-- **Runtime Fetch Libraries** ([SDK#280](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/280)) - Use runtime fetch libraries with updated checksums
+- **RPC Coverage Expansion** ([SDK#179](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/179), [#188](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/188), [#191](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/191)) - Implemented missing RPCs, including trading-related endpoints and Lightning support
+- **Message Signing** ([SDK#198](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/198), [#231](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/231)) - HD wallet support for message signing with derivation path; added AddressPath type and refactored to use Asset/PubkeyInfo
+- **Multi-Provider Market Data** ([SDK#145](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/145), [#215](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/215)) - Support for multiple market data providers with CoinPaprika fallback option
+- **Custom Token Integration** ([SDK#225](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/225), [#190](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/190)) - Custom token support in coin config manager; integrate komodo_coin_updates into komodo_coins
+- **Balance & Pubkey Streaming** ([SDK#178](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/178), [#232](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/232), [#262](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/262), [#269](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/269)) - Add pubkey watch function similar to balance watch; comprehensive caching and streaming support
+- **ETH-BASE Support** ([SDK#254](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/254)) - Add support for ETH-BASE and derived assets
+- **Asset Tagging Fixes** ([SDK#244](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/244)) - Correct UTXO coins incorrectly tagged as Smart Chain
+- **ZHTLC Fixes** ([SDK#227](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/227), [#264](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/264)) - ZHTLC activation fixes with optional sync params and sign-out cleanup
+- **Binance Quote Fixes** ([SDK#224](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/224)) - Use per-coin supported quote currency list instead of global cache
+- **Market Metrics Logging** ([SDK#223](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/223)) - Reduce market metrics log verbosity and duplication
+- **Etherscan URLs** ([SDK#217](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/217)) - Fix Etherscan URL formatting
+- **Sparkline Configuration** ([SDK#248](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/248)) - Add configurable sparkline baseline
+- **Dragon Charts Migration** ([SDK#164](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/164)) - Migrate dragon_charts_flutter to monorepo packages
+- **Trezor Polling** ([SDK#126](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/126)) - Poll Trezor connection status and sign out when disconnected
+- **KDF Version Updates** ([SDK#218](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/218), [#237](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/237), [#249](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/249), [#241](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/241), [#247](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/247)) - Roll KDF to latest releases with checksum updates
+- **Runtime Fetch Libraries** ([SDK#280](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/280)) - Use runtime fetch libraries with updated checksums
 
 ### Analytics & Monitoring
 
@@ -192,7 +192,7 @@ See the [full SDK changelog](https://github.com/KomodoPlatform/komodo-defi-sdk-f
 
 - **SDK Changelog Cross-Linking** ([@CharlVS], #3172) - Link SDK PRs with short labels and mark SDK items in wallet changelog
 - **Ruby Installation Guide** ([@Francois], #3128) - Added Ruby installation step for iOS and macOS builds
-- **SDK Documentation** ([SDK#201](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/pull/201)) - Document project and packages for pub.dev release
+- **SDK Documentation** ([SDK#201](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/201)) - Document project and packages for pub.dev release
 
 ## ⚠️ Known Issues
 
@@ -214,13 +214,13 @@ This release includes contributions from 11 developers:
 - @naezith
 - Cursor Agent (automated refactoring)
 
-**Full Changelog**: [0.9.2...0.9.3](https://github.com/KomodoPlatform/komodo-wallet/compare/0.9.2...0.9.3)
+**Full Changelog**: [0.9.2...0.9.3](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.2...0.9.3)
 
 ---
 
-_For developers building with Komodo DeFi SDK: This release includes [komodo-defi-sdk v1.0.0-pre.1](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/releases) with breaking changes related to streaming APIs and caching behaviour. Review the [SDK changelog](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter/blob/main/CHANGELOG.md) for migration guidance._
+_For developers building with Komodo DeFi SDK: This release includes [komodo-defi-sdk v1.0.0-pre.1](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/releases) with breaking changes related to streaming APIs and caching behaviour. Review the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/main/CHANGELOG.md) for migration guidance._
 
-# Komodo Wallet v0.9.2 Release Notes
+# Gleec Wallet v0.9.2 Release Notes
 
 This release brings numerous improvements to wallet functionality, enhanced user experience, and critical bug fixes. Key highlights include HD wallet private key export, improved Trezor support, enhanced UI/UX throughout the application, and platform-specific optimizations.
 
@@ -324,11 +324,11 @@ This release brings numerous improvements to wallet functionality, enhanced user
 - Large portfolios (>100 assets) may experience slower loading times
 - Certain ERC-20 tokens may not display proper decimal precision
 
-**Full Changelog**: [0.9.1...0.9.2](https://github.com/KomodoPlatform/komodo-wallet/compare/0.9.1...0.9.2)
+**Full Changelog**: [0.9.1...0.9.2](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.1...0.9.2)
 
 ---
 
-# Komodo Wallet v0.9.1 Release Notes
+# Gleec Wallet v0.9.1 Release Notes
 
 This is a hotfix release that addresses critical issues with Trezor hardware wallet login functionality.
 
@@ -336,15 +336,15 @@ This is a hotfix release that addresses critical issues with Trezor hardware wal
 
 - **Trezor Login Issues** - Fixed critical bugs in the Trezor hardware wallet login flow that were preventing users from accessing their wallets.
 
-**Full Changelog**: [0.9.0...0.9.1](https://github.com/KomodoPlatform/komodo-wallet/compare/0.9.0...0.9.1)
+**Full Changelog**: [0.9.0...0.9.1](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.0...0.9.1)
 
 ---
 
-# Komodo Wallet v0.9.0 Release Notes
+# Gleec Wallet v0.9.0 Release Notes
 
-We are excited to announce Komodo Wallet v0.9.0. This release introduces HD wallet functionality, cross-platform fiat on-ramp improvements, a new feedback provider, and numerous bug fixes and dependency upgrades.
+We are excited to announce Gleec Wallet v0.9.0. This release introduces HD wallet functionality, cross-platform fiat on-ramp improvements, a new feedback provider, and numerous bug fixes and dependency upgrades.
 
-Under the hood, the app has undergone a major rewrite to migrate to our new KDF Flutter SDK. This also allows developers to quickly and easily build their own DeFi applications in a matter of hours instead of months. See the [SDK package](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter) for more information.
+Under the hood, the app has undergone a major rewrite to migrate to our new KDF Flutter SDK. This also allows developers to quickly and easily build their own DeFi applications in a matter of hours instead of months. See the [SDK package](https://github.com/GLEECBTC/komodo-defi-sdk-flutter) for more information.
 
 The codebase is now unified across all platforms, including web, desktop, and mobile. This change allows for more consistent development and easier maintenance.
 
@@ -420,4 +420,4 @@ The codebase is now unified across all platforms, including web, desktop, and mo
 - **Custom Token Import asset constructor** changed (#2598) - Developers using the API for custom token imports need to update their implementation.
 - **Unified Codebase** for all platforms. This means that the codebase is now shared across all platforms, including web, desktop, and mobile. This change allows for more consistent development and easier maintenance. NB: Non-web users should back up their wallets before updating to this version, as wallet data is not migrated automatically. Users can restore their wallets using the seed phrase.
 
-**Full Changelog**: [0.8.3...0.9.0](https://github.com/KomodoPlatform/komodo-wallet/compare/0.8.3...0.9.0)
+**Full Changelog**: [0.8.3...0.9.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.8.3...0.9.0)

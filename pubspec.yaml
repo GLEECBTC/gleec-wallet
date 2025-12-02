@@ -46,7 +46,7 @@ dependencies:
   komodo_persistence_layer:
     path: packages/komodo_persistence_layer
 
-  ## ---- KomodoPlatform pub.dev packages (First-party)
+  ## ---- GLEECBTC pub.dev packages (First-party)
 
   komodo_cex_market_data:
     path: sdk/packages/komodo_cex_market_data # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
@@ -82,7 +82,7 @@ dependencies:
 
   ## ---- google.com
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   window_size:
     git:
       url: https://github.com/KomodoPlatform/flutter-desktop-embedding
@@ -101,41 +101,41 @@ dependencies:
   # does not require review, since hosted and git versions are the same
   equatable: 2.0.7 # sdk depends on hosted version, and not from git
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   package_info_plus: 8.3.0
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   share_plus: 11.1.0
 
   ## ---- 3d party
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   encrypt: 5.0.3
 
   flutter_svg: 2.0.17
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   qr_flutter: 4.1.0
 
-  easy_localization: 3.0.7+1 # last reviewed 3.0.2 via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  easy_localization: 3.0.7+1 # last reviewed 3.0.2 via https://github.com/GLEECBTC/gleec-wallet/pull/1106
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   universal_html: 2.2.4
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   hive: ^2.2.3 # Changed from git to pub.dev because git dependencies are not allowed in published packages
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   hive_flutter: ^1.1.0 # Changed from git to pub.dev because git dependencies are not allowed in published packages
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   badges: 3.1.2
 
   flutter_slidable: 4.0.0
   cupertino_icons: ^1.0.8
 
   # Embedded web view
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/3
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/3
   flutter_inappwebview: 6.1.5 # Android, iOS, macOS, Web (currently broke, open issue)
 
   # Newly added, not yet reviewed

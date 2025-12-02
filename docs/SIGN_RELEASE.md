@@ -5,19 +5,19 @@
 1. Generate keystore file:
 
     ```bash
-    keytool -genkey -v -keystore komodo-wallet.jks -keyalg RSA -keysize 2048 -validity 10000 -alias komodo
+    keytool -genkey -v -keystore gleec-wallet.jks -keyalg RSA -keysize 2048 -validity 10000 -alias gleec
     ```
 
 2. Convert keystore to base64:
 
     ```bash
-    base64 -i komodo-wallet.jks -o keystore-base64.txt
+    base64 -i gleec-wallet.jks -o keystore-base64.txt
     ```
 
 3. Validate
 
     ```bash
-    keytool -list -v -keystore komodo-wallet.jks
+    keytool -list -v -keystore gleec-wallet.jks
     ```
 
 Example secrets:

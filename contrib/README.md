@@ -1,6 +1,6 @@
 # Contrib Scripts
 
-This directory contains utility scripts for building, packaging, and testing the Komodo Wallet application.
+This directory contains utility scripts for building, packaging, and testing the Gleec Wallet application.
 
 ## Scripts Overview
 
@@ -22,17 +22,17 @@ Creates a professional DMG installer for macOS applications.
 ./make-dmg.sh
 
 # Or specify custom parameters
-APP="build/.../Komodo Wallet.app" \
-VOL="Komodo Wallet" \
-OUT="dist/KomodoWallet.dmg" \
+APP="build/.../Gleec DEX.app" \
+VOL="Gleec DEX" \
+OUT="dist/GleecDEX.dmg" \
 BG="assets/dmg_background.png" \
 ./make-dmg.sh
 ```
 
 **Default Parameters:**
-- `APP`: `build/macos/Build/Products/Release-production/Komodo Wallet.app`
-- `VOL`: `Komodo Wallet`
-- `OUT`: `dist/KomodoWallet.dmg`
+- `APP`: `build/macos/Build/Products/Release-production/Gleec DEX.app`
+- `VOL`: `Gleec DEX`
+- `OUT`: `dist/GleecDEX.dmg`
 - `BG`: (optional background image)
 - `ICON_SIZE`: `128`
 - `WIN_W`: `530` (Finder window width)
@@ -63,7 +63,7 @@ Checks code signing and timestamping for macOS applications.
 ./test-sign-timestamp.sh "path/to/your/app.app"
 ```
 
-**Default App Path:** `build/macos/Build/Products/Release-production/Komodo Wallet.app`
+**Default App Path:** `build/macos/Build/Products/Release-production/Gleec DEX.app`
 
 **Requirements:** macOS, codesign utility
 
@@ -97,13 +97,13 @@ Replace the `<...>` placeholders above with your actual values.
 
 To view app entitlements used in the resulting .app:
 ```bash
-codesign -d --entitlements :- "build/macos/Build/Products/Release-production/Komodo Wallet.app" | plutil -p -
+codesign -d --entitlements :- "build/macos/Build/Products/Release-production/Gleec DEX.app" | plutil -p -
 ```
 
 Package the application bundle as a ZIP archive (required by notary service):
 ```bash
-APP="build/macos/Build/Products/Release-production/Komodo Wallet.app"
-ZIP="KomodoWallet.zip"
+APP="build/macos/Build/Products/Release-production/Gleec DEX.app"
+ZIP="GleecDEX.zip"
 ditto -c -k --keepParent "$APP" "$ZIP"
 ```
 

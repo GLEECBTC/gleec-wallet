@@ -1,10 +1,10 @@
 # SDK Dependency Management
 
-This document describes how to manage SDK dependencies in the Komodo Wallet project.
+This document describes how to manage SDK dependencies in the Gleec Wallet project.
 
 ## SDK Dependencies
 
-The Komodo Wallet relies on several SDK packages maintained in the [komodo-defi-sdk-flutter](https://github.com/KomodoPlatform/komodo-defi-sdk-flutter) repository. These packages include:
+The Gleec Wallet relies on several SDK packages maintained in the [komodo-defi-sdk-flutter](https://github.com/GLEECBTC/komodo-defi-sdk-flutter) repository. These packages include:
 
 - `komodo_cex_market_data`
 - `komodo_defi_sdk`
@@ -24,7 +24,7 @@ We have an automated process to update these SDK dependencies using a GitHub Act
 
 To manually trigger the SDK roll workflow:
 
-1. Go to the [GitHub Actions tab](https://github.com/KomodoPlatform/komodo-wallet/actions)
+1. Go to the [GitHub Actions tab](https://github.com/GLEECBTC/gleec-wallet/actions)
 2. Select the "Roll SDK Packages" workflow
 3. Click "Run workflow"
 4. Configure options:
@@ -47,7 +47,7 @@ For development or testing purposes, you can run the SDK roll script manually on
 1. Clone the repository if you haven't already:
 
    ```bash
-   git clone https://github.com/KomodoPlatform/komodo-wallet.git
+   git clone https://github.com/GLEECBTC/gleec-wallet.git
    cd komodo-wallet
    ```
 
@@ -126,9 +126,9 @@ flutter doctor
 
 ## SDK Package Identification
 
-The script identifies SDK packages by looking for packages with names matching those in the `SDK_PACKAGES` array in the script. These refer to external packages from the KomodoPlatform SDK repository and can be declared in your `pubspec.yaml` files in two ways:
+The script identifies SDK packages by looking for packages with names matching those in the `SDK_PACKAGES` array in the script. These refer to external packages from the GLEECBTC SDK repository and can be declared in your `pubspec.yaml` files in two ways:
 
-- Git dependency (Option 2): declared with a `git:` section pointing to the `KomodoPlatform/komodo-defi-sdk-flutter` repository
+- Git dependency (Option 2): declared with a `git:` section pointing to the `GLEECBTC/komodo-defi-sdk-flutter` repository
 - Hosted dependency (Option 3): declared as a standard hosted package on pub.dev with a version constraint (for example, `^0.3.0`)
 
 Local packages that are part of this repository (like `komodo_ui_kit` and `komodo_persistence_layer`) are not considered external SDK packages and will not be updated by this script unless they themselves depend on SDK packages.

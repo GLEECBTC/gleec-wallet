@@ -10,7 +10,7 @@ const double mainLayoutPadding = 29;
 const double appBarHeight = 70;
 const int scaleOnInfinitePrecision = 20; // ETH has 18 decimals, so use more
 const String allWalletsStorageKey = 'all-wallets';
-const String defaultDexCoin = 'KMD';
+const String defaultDexCoin = 'GLEEC';
 const String trezorWalletNamePrefix = 'my trezor';
 const List<Locale> localeList = [Locale('en')];
 const String assetsPath = 'assets';
@@ -145,7 +145,7 @@ const Set<String> excludedAssetList = {
   'SMTF-v2',
   'SFUSD',
 
-  // NFT v2 coins: https://github.com/KomodoPlatform/coins/pull/1061 will be
+  // NFT v2 coins: https://github.com/GLEECBTC/coins/pull/1061 will be
   // used in the background, so users do not need to see them.
   'NFT_ETH',
   'NFT_AVAX',

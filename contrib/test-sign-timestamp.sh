@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Default app path
-DEFAULT_APP="build/macos/Build/Products/Release-production/Komodo Wallet.app"
+DEFAULT_APP="build/macos/Build/Products/Release-production/Gleec DEX.app"
 
 # Parse command line arguments
 APP="${1:-$DEFAULT_APP}"

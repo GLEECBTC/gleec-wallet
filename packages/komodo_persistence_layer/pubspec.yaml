@@ -10,7 +10,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   hive: ^2.2.3 # Changed from git to pub.dev because git dependencies are not allowed in published packages
 
 dev_dependencies:

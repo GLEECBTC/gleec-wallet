@@ -1,7 +1,7 @@
-# Komodo Wallet Release Notes Template
+# Gleec Wallet Release Notes Template
 
 **Tags:** release-notes, changelog, documentation, versioning  
-**Application:** Komodo Wallet  
+**Application:** Gleec Wallet  
 **Platform:** Flutter (Web, Desktop, Mobile)  
 **Created:** 2025-05-19
 **Updated:** 2025-05-19
@@ -11,7 +11,7 @@
 
 ## Purpose/Description
 
-This template helps create structured, professional release notes for Komodo Wallet from raw changelog data and commit histories. It organizes development information into a user-friendly format suitable for publishing to users, developers, and stakeholders.
+This template helps create structured, professional release notes for Gleec Wallet from raw changelog data and commit histories. It organizes development information into a user-friendly format suitable for publishing to users, developers, and stakeholders.
 
 ---
 
@@ -57,13 +57,13 @@ Headers, expandable sections, and bullet points should be used for readability.
 
 ## Prompt Content
 
-I want to write comprehensive release notes for Komodo Wallet **{VERSION_NUMBER}**.
+I want to write comprehensive release notes for Gleec Wallet **{VERSION_NUMBER}**.
 
 For reference, here are the previous release notes to match their structure and style:
 
 **{PREVIOUS_RELEASE_NOTES}**
 
-Below is the changelog for Komodo Wallet **{VERSION_NUMBER}**. Please help me organize and format this information into proper release notes. Not everything from the changelog needs to be included - focus on significant features, enhancements, fixes, and breaking changes similar to how previous release notes were structured:
+Below is the changelog for Gleec Wallet **{VERSION_NUMBER}**. Please help me organize and format this information into proper release notes. Not everything from the changelog needs to be included - focus on significant features, enhancements, fixes, and breaking changes similar to how previous release notes were structured:
 
 **{CHANGELOG_CONTENT}**
 
@@ -83,7 +83,7 @@ Please create release notes with the following sections:
 8. Breaking Changes (if any)
 9. Full Changelog link
 
-Structure the release notes similarly to Komodo Wallet **{REFERENCE_VERSION}** format, but you can take inspiration from other previous releases as well. Use expandable details sections for longer lists where appropriate. Make the notes informative but concise, highlighting the most important changes first.
+Structure the release notes similarly to Gleec Wallet **{REFERENCE_VERSION}** format, but you can take inspiration from other previous releases as well. Use expandable details sections for longer lists where appropriate. Make the notes informative but concise, highlighting the most important changes first.
 
 For multiplatform changes, please indicate which platforms (Web, Windows, macOS, Linux, Android, iOS) are affected by each change.
 
@@ -93,9 +93,9 @@ If any information is missing or unclear, please ask before completing the relea
 
 ## Example Release Notes Structure
 
-## Komodo Wallet v1.0.0
+## Gleec Wallet v1.0.0
 
-We are excited to announce the release of Komodo Wallet v1.0.0, which includes [brief summary of major improvements].
+We are excited to announce the release of Gleec Wallet v1.0.0, which includes [brief summary of major improvements].
 
 ## 🚀 New Features
 
@@ -161,10 +161,10 @@ We are excited to announce the release of Komodo Wallet v1.0.0, which includes [
 
 ---
 
-**Full Changelog**: [v0.9.0...v1.0.0](https://github.com/KomodoPlatform/komodo-wallet/compare/v0.9.0...v1.0.0)
+**Full Changelog**: [v0.9.0...v1.0.0](https://github.com/GLEECBTC/gleec-wallet/compare/v0.9.0...v1.0.0)
 
 ---
 
 ## Version History
 
-- **1.0 (2025-05-19):** Initial version, adapted from Komodo DeFi Framework release notes template
+- **1.0 (2025-05-19):** Initial version, adapted from Gleec Wallet release notes template
