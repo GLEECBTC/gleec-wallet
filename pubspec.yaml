@@ -51,7 +51,7 @@ dependencies:
   komodo_cex_market_data:
     path: sdk/packages/komodo_cex_market_data # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_cex_market_data
     #   ref: dev
     # ^0.0.3+1 # Option 3: Pub.dev dependency
@@ -59,7 +59,7 @@ dependencies:
   dragon_logs:
     path: sdk/packages/dragon_logs # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/dragon_logs
     #   ref: dev
     # ^2.0.0 # Option 3: Pub.dev dependency
@@ -145,7 +145,7 @@ dependencies:
   dragon_charts_flutter:
     path: sdk/packages/dragon_charts_flutter # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/dragon_charts_flutter
     #   ref: dev
     # ^0.1.1-dev.3 # Option 3: Pub.dev dependency
@@ -165,7 +165,7 @@ dependencies:
   komodo_defi_sdk:
     path: sdk/packages/komodo_defi_sdk # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_defi_sdk
     #   ref: dev
     # ^0.4.0+3 # Option 3: Pub.dev dependency
@@ -173,7 +173,7 @@ dependencies:
   komodo_defi_types:
     path: sdk/packages/komodo_defi_types # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_defi_types
     #   ref: dev
     # ^0.3.2+1 # Option 3: Pub.dev dependency
@@ -181,7 +181,7 @@ dependencies:
   komodo_ui:
     path: sdk/packages/komodo_ui # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_ui
     #   ref: dev
     # ^0.3.0+3 # Option 3: Pub.dev dependency
