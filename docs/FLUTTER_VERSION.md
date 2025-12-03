@@ -2,7 +2,7 @@
 
 ## Supported Flutter Version
 
-This project supports Flutter `3.35.3` (latest stable release). We aim to keep the project up-to-date with the most recent stable Flutter versions.
+This project supports Flutter `3.35.3`. We aim to keep the project up-to-date with the most recent stable Flutter versions.
 
 ## Recommended Approach: Multiple Flutter Versions
 
