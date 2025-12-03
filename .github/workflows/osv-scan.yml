@@ -1,5 +1,5 @@
 name: Vulnerability Scan
-run-name: ${{ github.actor }} is scanning dependencies for vulnerabilities \U0001F512
+run-name: ${{ github.actor }} is scanning dependencies for vulnerabilities 🔒
 
 on:
   pull_request:
@@ -11,17 +11,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        id: checkout
+        uses: actions/checkout@v4
 
       - name: Set up Go
+        id: setup_go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
       - name: Install osv-scanner
+        id: install_osv_scanner
         run: |
           go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
           echo "${HOME}/go/bin" >> $GITHUB_PATH
 
       - name: Scan for vulnerabilities
+        id: scan_vulnerabilities
         run: osv-scanner -r .

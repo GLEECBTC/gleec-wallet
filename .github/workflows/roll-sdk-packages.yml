@@ -36,6 +36,7 @@ jobs:
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -43,6 +44,7 @@ jobs:
           submodules: recursive
 
       - name: Setup Flutter
+        id: setup_flutter
         uses: subosito/flutter-action@v2
         with:
           # NB! Keep up-to-date with the flutter version used for development
@@ -74,6 +76,7 @@ jobs:
           echo "PR_BRANCH_NAME=sdk-roll-${TARGET_BRANCH}" >> $GITHUB_ENV
 
       - name: Make roll script executable
+        id: make_script_executable
         run: |
           chmod +x .github/scripts/roll_sdk_packages.sh
 
@@ -98,12 +101,14 @@ jobs:
           fi
 
       - name: Setup Git identity
+        id: setup_git
         if: env.ROLLS_FOUND == 'true'
         run: |
           git config --global user.name "GitHub Action Bot"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Install GitHub CLI
+        id: install_gh_cli
         if: env.ROLLS_FOUND == 'true'
         run: |
           if ! command -v gh &> /dev/null; then
@@ -124,6 +129,7 @@ jobs:
           gh --version
 
       - name: Create PR Branch
+        id: create_pr_branch
         if: env.ROLLS_FOUND == 'true'
         run: |
           # Check if the branch already exists
@@ -150,6 +156,7 @@ jobs:
           }
 
       - name: Create Pull Request
+        id: create_pr
         if: env.ROLLS_FOUND == 'true'
         run: |
           # Check if a PR from this branch to target branch already exists
@@ -178,11 +185,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: PR Details
+        id: pr_details
         if: env.ROLLS_FOUND == 'true'
         run: |
           echo "Pull request created or updated successfully with rolled SDK package dependencies"
 
       - name: No Updates
+        id: no_updates
         if: env.ROLLS_FOUND == 'false'
         run: |
           echo "No SDK package rolls needed"

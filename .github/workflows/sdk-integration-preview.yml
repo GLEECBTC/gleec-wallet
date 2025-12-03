@@ -25,26 +25,28 @@ jobs:
 
     steps:
       - name: Shortify commit sha
+        id: shortify_commit
         shell: bash
         run: echo "sha_short=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
-        id: shortify_commit
 
       - name: Get branch
+        id: get_branch
         shell: bash
         run: echo "ref_short=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
-        id: get_branch
 
       - name: Get Preview Channel ID
+        id: get_preview_channel_id
         shell: bash
         run: echo "preview_channel_id=sdk-integration-${{ inputs.api_branch }}-$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
-        id: get_preview_channel_id
 
       - name: Setup GH Actions
+        id: checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Update SDK to specified branch
+        id: update_sdk_branch
         shell: bash
         run: |
           echo "Updating SDK submodule to branch ${{ inputs.sdk_branch }}..."
@@ -57,6 +59,7 @@ jobs:
           ls -la sdk/
 
       - name: Update KDF API configuration
+        id: update_kdf_config
         shell: bash
         run: |
           echo "Updating KDF API configuration for branch: ${{ inputs.api_branch }}"
@@ -80,6 +83,7 @@ jobs:
           fi
 
       - name: Update pubspec.yaml to use local SDK paths
+        id: update_pubspec
         shell: bash
         run: |
           echo "Updating pubspec.yaml files to use local SDK paths..."
@@ -128,9 +132,11 @@ jobs:
           grep -A2 -B1 "komodo_.*:" packages/komodo_ui_kit/pubspec.yaml | grep -A2 -B1 "path: ../../sdk"
 
       - name: Install Flutter and dependencies
+        id: install_flutter
         uses: ./.github/actions/flutter-deps
 
       - name: Fetch packages and generate assets
+        id: generate_assets
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,6 +152,7 @@ jobs:
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
 
       - name: Validate build
+        id: validate_build
         uses: ./.github/actions/validate-build
 
       - name: Deploy SDK Integration Preview (Expires in 7 days)
@@ -160,12 +167,13 @@ jobs:
           projectId: komodo-wallet-official
 
       - name: Display deployment information
+        id: display_info
         shell: bash
         run: |
           echo "🚀 SDK Integration Preview deployed successfully!"
           echo "📦 SDK Branch: ${{ inputs.sdk_branch }}"
           echo "🔧 API Branch: ${{ inputs.api_branch }}"
-          echo "� Channel ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
+          echo "🏷 Channel ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
           echo "🌐 Preview URL: ${{ steps.firebase_deploy.outputs.details_url }}"
           echo "⏰ Preview expires in 7 days"
           echo ""

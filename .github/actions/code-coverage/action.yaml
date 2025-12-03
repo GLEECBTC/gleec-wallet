@@ -9,6 +9,7 @@ runs:
   using: "composite"
   steps:
     - name: Code Coverage
+      id: run_coverage
       continue-on-error: false
       shell: bash
       run: |
@@ -51,12 +52,14 @@ runs:
         echo "Done running code coverage"
 
     - name: Upload Code Coverage Report
+      id: upload_lcov
       uses: actions/upload-artifact@v4
       with:
         name: ${{ runner.os }}-lcov.info
         path: ./coverage/lcov.info
 
     - name: Upload Code Coverage HTML Report
+      id: upload_html
       uses: actions/upload-artifact@v4
       with:
         name: ${{ runner.os }}-coverage-html

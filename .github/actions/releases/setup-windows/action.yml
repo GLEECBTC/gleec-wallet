@@ -14,20 +14,24 @@ runs:
   using: "composite"
   steps:
     - name: Setup Visual Studio
+      id: setup_msbuild
       uses: microsoft/setup-msbuild@v1.3
 
     - name: Install Windows SDK
+      id: install_sdk
       uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
       with:
         sdk-version: 26100
 
     - name: Install Windows build dependencies
+      id: install_deps
       shell: pwsh
       run: |
         flutter pub get --enforce-lockfile
         flutter doctor
 
     - name: Setup Windows code signing
+      id: setup_signing
       if: inputs.pfx-base64 != '' && 'KomodoPlatform/komodo-wallet' == github.repository
       shell: pwsh
       run: |

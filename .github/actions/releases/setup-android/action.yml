@@ -24,6 +24,7 @@ runs:
   using: "composite"
   steps:
     - name: Set up JDK
+      id: setup_jdk
       uses: actions/setup-java@v4
       with:
         java-version: ${{ inputs.java-version }}
@@ -31,16 +32,19 @@ runs:
         cache: "gradle"
 
     - name: Setup Android SDK
+      id: setup_android_sdk
       uses: android-actions/setup-android@v3
-      
+
     # "Fixes firebase build error when no valid google-services.json is present"
     - name: Comment out Google Play Services import
+      id: comment_google_play
       shell: bash
       run: |
         sed -i 's/id .com\.google\.gms\.google-services./\/\/ id .com\.google\.gms\.google-services./' android/app/build.gradle
         echo "Google Play Services import commented out"
 
     - name: Setup Android keystore
+      id: setup_keystore
       if: inputs.keystore-base64 != '' && 'KomodoPlatform/komodo-wallet' == github.repository
       shell: bash
       run: |

@@ -27,9 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@v4
 
       - name: Build Linux Desktop
+        id: build_linux
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Optional feedback provider secrets to embed dart-defines
@@ -49,8 +51,9 @@ jobs:
         id: vars
         shell: bash
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-  
+
       - name: Upload Linux bundle artifact
+        id: upload_artifact
         uses: actions/upload-artifact@v4
         with:
           name: komodo-wallet-linux-docker-${{ steps.vars.outputs.short_sha }}.zip

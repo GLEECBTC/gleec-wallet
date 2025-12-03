@@ -35,17 +35,20 @@ runs:
   using: "composite"
   steps:
     - name: Setup Xcode version
+      id: setup_xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:
         xcode-version: ${{ inputs.xcode-version }}
 
     - name: Setup Xcode command line tools
+      id: setup_xcode_cli
       shell: bash
       run: |
         sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
         sudo xcodebuild -license accept
 
     - name: Install macOS build dependencies
+      id: install_deps
       shell: bash
       run: |
         flutter pub get --enforce-lockfile
@@ -54,6 +57,7 @@ runs:
         pod install
 
     - name: Import macOS certificates
+      id: import_certs
       if: inputs.p12-file-base64 != '' && 'KomodoPlatform/komodo-wallet' == github.repository
       uses: apple-actions/import-codesign-certs@v3
       with:
@@ -64,6 +68,7 @@ runs:
         p12-password: ${{ inputs.p12-password }}
 
     - name: Download macOS provisioning profile
+      id: download_profile
       if: inputs.issuer-id != '' && 'KomodoPlatform/komodo-wallet' == github.repository
       uses: apple-actions/download-provisioning-profiles@v1
       with:

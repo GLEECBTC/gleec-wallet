@@ -41,21 +41,23 @@ jobs:
 
     steps:
       - name: Setup GH Actions
+        id: checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
       # Flutter integration test setup
       - name: Install Chrome and chromedriver
+        id: setup_chrome
         if: ${{ matrix.browser == 'chrome' }}
         uses: browser-actions/setup-chrome@v1
-        id: setup-chrome
         with:
           chrome-version: 116.0.5845.96
           install-chromedriver: true
           install-dependencies: true
 
       - name: Enable safaridriver (sudo) (MacOS)
+        id: enable_safari
         if: ${{ matrix.browser == 'safari' }}
         timeout-minutes: 1
         run: |
@@ -64,19 +66,22 @@ jobs:
           sudo /usr/bin/safaridriver --enable || echo "Failed to enable safaridriver!"
 
       - name: Install Flutter and dependencies
+        id: install_flutter
         uses: ./.github/actions/flutter-deps
 
       - name: Fetch packages and generate assets
+        id: generate_assets
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate build
+        id: validate_build
         uses: ./.github/actions/validate-build
 
       # Run integration tests
       - name: Test air_dex ${{ matrix.browser }}
-        id: integration-tests
+        id: integration_tests
         continue-on-error: true
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -89,6 +94,7 @@ jobs:
 
       # Post-test steps (upload logs, coverage, and failure check)
       - name: Upload driver logs
+        id: upload_logs
         uses: actions/upload-artifact@v4
         with:
           name: ${{ runner.os }}-${{ matrix.browser }}-logs
@@ -107,5 +113,6 @@ jobs:
       #     test_file: 'test_integration'
 
       - name: Fail workflow if tests failed
-        if: ${{ steps.integration-tests.outcome == 'failure' }}
+        id: check_test_result
+        if: ${{ steps.integration_tests.outcome == 'failure' }}
         run: exit 1
