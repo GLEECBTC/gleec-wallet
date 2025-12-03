@@ -54,8 +54,7 @@ const String disclaimerEulaParagraph8 =
 
 const String disclaimerEulaTitle3 = "Restrictions\n\n";
 
-const String disclaimerEulaParagraph9 =
-    "You are not permitted to:\n\n";
+const String disclaimerEulaParagraph9 = "You are not permitted to:\n\n";
 
 const String disclaimerEulaParagraph10 =
     "• Edit, alter, modify, adapt, translate or otherwise change the whole or any part of the Software nor permit the whole or any part of the Software to be combined with or become incorporated in any other software, nor decompile, disassemble or reverse engineer the Software or attempt to do any such things\n\n";
@@ -105,7 +104,7 @@ const String disclaimerTocParagraph3 =
 const String disclaimerTocParagraph4 =
     'We may change the terms of this User Agreement at any time. Any such changes will take effect when published in the application, or when You use the Services.\n\n\nRead the User Agreement carefully every time You use our Services. Your continued use of the Services shall signify your acceptance to be bound by the current User Agreement. Our failure or delay in enforcing or partially enforcing any provision of this User Agreement shall not be construed as a waiver of any.\n\n';
 const String disclaimerTocParagraph5 =
-    'You are not allowed to decompile, decode, disassemble, rent, lease, loan, sell, sublicense, or create derivative works from the Gleec Wallet application or the user content. Nor are You allowed to use any network monitoring or detection software to determine the software architecture, or extract information about usage or individuals' or users' identities. \n\nYou are not allowed to copy, modify, reproduce, republish, distribute, display, or transmit for commercial, non-profit or public purposes all or any portion of the application or the user content without our prior written authorization.\n\n';
+    "You are not allowed to decompile, decode, disassemble, rent, lease, loan, sell, sublicense, or create derivative works from the Gleec Wallet application or the user content. Nor are You allowed to use any network monitoring or detection software to determine the software architecture, or extract information about usage or individuals' or users' identities. \n\nYou are not allowed to copy, modify, reproduce, republish, distribute, display, or transmit for commercial, non-profit or public purposes all or any portion of the application or the user content without our prior written authorization.\n\n";
 const String disclaimerTocParagraph6 =
     'If you create an account in the Web Application, you are responsible for maintaining the security of your account and you are fully responsible for all activities that occur under the account and any other actions taken in connection with it. We will not be liable for any acts or omissions by you, including any damages of any kind incurred as a result of such acts or omissions. \n\n Gleec Wallet is a non-custodial wallet implementation and thus GLEEC can not access nor restore your account in case of (data) loss.\n\n';
 const String disclaimerTocParagraph7 =
