@@ -117,7 +117,7 @@ class MarketMakerBotSettings extends Equatable {
       'is_market_maker_bot_enabled': isMMBotEnabled,
       // Old builds included a price_url; provide the previous default
       'price_url':
-          'https://defi-stats.komodo.earth/api/v3/prices/tickers_v2?expire_at=60',
+          'https://defistats.gleec.com/api/v3/prices/tickers_v2?expire_at=60',
       'bot_refresh_rate': botRefreshRate,
       'trade_coin_pair_configs': tradeCoinPairConfigs
           .map((e) => e.toJson())
