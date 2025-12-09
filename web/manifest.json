@@ -4,7 +4,7 @@
     "start_url": ".",
     "display": "standalone",
     "background_color": "#202337",
-    "theme_color": "#4986EA",
+    "theme_color": "#8C41FF",
     "description": "Non-Custodial Multi-Coin Wallet & DEX.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

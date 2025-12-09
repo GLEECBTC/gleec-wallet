@@ -14,8 +14,8 @@ ThemeData get themeGlobalDark {
   //TODO! Implement all light-theme equivalent properties
   final ColorScheme colorScheme = ColorScheme.fromSeed(
     brightness: Brightness.dark,
-    seedColor: const Color(0xFF5C7FFF),
-    primary: const Color(0xFF5C7FFF),
+    seedColor: const Color(0xFF8C41FF), // GLEEC Purple primary
+    primary: const Color(0xFF8C41FF), // GLEEC Purple primary
     // secondary: const Color(0xFF00C3AA),
     tertiary: const Color(0xFF0A0A0A), // CORRECTED - darker for sidebar/header
     surface: const Color(0xFF141414), // Card color (correct)
@@ -104,9 +104,9 @@ ThemeData get themeGlobalDark {
     hintColor: const Color.fromRGBO(183, 187, 191, 1),
     snackBarTheme: snackBarThemeLight(),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: const Color(0xFF5C7FFF),
-      selectionColor: const Color(0xFF5C7FFF).withAlpha(77), // 0.3 * 255
-      selectionHandleColor: const Color(0xFF5C7FFF),
+      cursorColor: const Color(0xFF8C41FF), // GLEEC Purple primary
+      selectionColor: const Color(0xFF8C41FF).withAlpha(77), // 0.3 * 255
+      selectionHandleColor: const Color(0xFF8C41FF), // GLEEC Purple primary
     ),
     inputDecorationTheme: InputDecorationTheme(
       enabledBorder: outlineBorderLight(Colors.transparent),

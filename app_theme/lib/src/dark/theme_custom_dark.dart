@@ -47,7 +47,7 @@ class ThemeCustomDark extends ThemeExtension<ThemeCustomDark>
   @override
   final Color fiatAmountColor = const Color.fromRGBO(168, 177, 185, 1);
   @override
-  final Color headerFloatBoxColor = const Color(0xFF4986EA); // GLEEC primary
+  final Color headerFloatBoxColor = const Color(0xFF8C41FF); // GLEEC primary
   @override
   final Color headerIconColor = const Color.fromRGBO(255, 255, 255, 1);
   @override
@@ -96,7 +96,7 @@ class ThemeCustomDark extends ThemeExtension<ThemeCustomDark>
   @override
   final Gradient defaultSwitchColor = const LinearGradient(
     stops: [0, 93],
-    colors: [Color(0xFF5A68E6), Color(0xFF4986EA)], // GLEEC gradient
+    colors: [Color(0xFF6B1FE0), Color(0xFF8C41FF)], // GLEEC purple gradient
   );
   @override
   final Color settingsMenuItemBackgroundColor = const Color(0xFF141414);
@@ -109,7 +109,7 @@ class ThemeCustomDark extends ThemeExtension<ThemeCustomDark>
   @override
   final Color rewardBoxShadowColor = const Color.fromRGBO(0, 0, 0, 0.1);
   @override
-  final Color defaultBorderButtonBorder = const Color(0xFF4986EA); // GLEEC primary
+  final Color defaultBorderButtonBorder = const Color(0xFF8C41FF); // GLEEC primary
   @override
   final Color defaultBorderButtonBackground =
       const Color.fromRGBO(22, 25, 39, 1);
@@ -131,7 +131,7 @@ class ThemeCustomDark extends ThemeExtension<ThemeCustomDark>
       blurRadius: 8,
       color: Color.fromRGBO(0, 0, 0, 0.3),
     ),
-    filterPopupItemBorderColor: Color(0xFF4986EA), // GLEEC primary
+    filterPopupItemBorderColor: Color(0xFF8C41FF), // GLEEC primary
   );
   @override
   final DexPageTheme dexPageTheme = const DexPageTheme(

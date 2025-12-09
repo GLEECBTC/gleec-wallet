@@ -2,11 +2,11 @@ import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 const ColorSchemeExtension _colorSchemeExtension = ColorSchemeExtension(
-  primary: Color(0xFF4986EA), // GLEEC Blue primary
-  p50: Color(0xFF9DBDF5), // Light blue
-  p40: Color(0xFFC5D8FA), // Lighter blue
-  p10: Color(0xFFEDF3FD), // Very light blue
-  secondary: Color(0xFF5A68E6), // GLEEC Purple-blue secondary
+  primary: Color(0xFF8C41FF), // GLEEC Purple primary (Figma)
+  p50: Color(0xFFA66AFF), // Lighter purple
+  p40: Color(0xFFC5A0FF), // Even lighter purple
+  p10: Color(0xFFF0E6FF), // Very light purple
+  secondary: Color(0xFF666666), // Muted gray for text/accents on light
   s70: Color.fromRGBO(125, 144, 161, 1),
   s50: Color.fromRGBO(162, 175, 187, 1),
   s40: Color.fromRGBO(181, 191, 201, 1),
@@ -28,7 +28,7 @@ const ColorSchemeExtension _colorSchemeExtension = ColorSchemeExtension(
   surfContLowest: Color.fromRGBO(248, 249, 252, 1),
   orange: Color.fromRGBO(237, 170, 70, 1),
   yellow: Color.fromRGBO(230, 188, 65, 1),
-  purple: Color(0xFF5A68E6), // GLEEC secondary
+  purple: Color(0xFF8C41FF), // GLEEC Purple primary
 );
 
 final ColorScheme _colorScheme = theme.global.light.colorScheme.copyWith(
@@ -44,12 +44,15 @@ final ThemeData newThemeDataLight = theme.global.light.copyWith(
   colorScheme: _colorScheme,
   textTheme: _textTheme,
   inputDecorationTheme: theme.global.light.inputDecorationTheme.copyWith(
-    hintStyle: _textThemeExtension.bodySBold
-        .copyWith(color: _colorSchemeExtension.s50),
-    labelStyle: _textThemeExtension.bodyXSBold
-        .copyWith(color: _colorSchemeExtension.primary),
-    errorStyle:
-        _textThemeExtension.bodyS.copyWith(color: _colorSchemeExtension.error),
+    hintStyle: _textThemeExtension.bodySBold.copyWith(
+      color: _colorSchemeExtension.s50,
+    ),
+    labelStyle: _textThemeExtension.bodyXSBold.copyWith(
+      color: _colorSchemeExtension.primary,
+    ),
+    errorStyle: _textThemeExtension.bodyS.copyWith(
+      color: _colorSchemeExtension.error,
+    ),
     enabledBorder: _outlineBorderLight(_colorSchemeExtension.secondary),
     disabledBorder: _outlineBorderLight(_colorSchemeExtension.secondary),
     focusedBorder: _outlineBorderLight(_colorSchemeExtension.primary),
@@ -61,6 +64,6 @@ final ThemeData newThemeDataLight = theme.global.light.copyWith(
 );
 
 OutlineInputBorder _outlineBorderLight(Color accentColor) => OutlineInputBorder(
-      borderSide: BorderSide(color: accentColor, width: 2),
-      borderRadius: BorderRadius.circular(12),
-    );
+  borderSide: BorderSide(color: accentColor, width: 2),
+  borderRadius: BorderRadius.circular(12),
+);
