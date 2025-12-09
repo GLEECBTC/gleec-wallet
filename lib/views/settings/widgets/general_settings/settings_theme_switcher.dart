@@ -2,6 +2,7 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_event.dart';
@@ -70,52 +71,62 @@ class _SettingsModeSelector extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18.0),
           color: backgroundColor,
-          image: DecorationImage(
-            filterQuality: FilterQuality.high,
-            image: AssetImage(_iconPath),
-            alignment: Alignment.centerRight,
-          ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: Row(
-            children: [
-              Container(
-                width: size,
-                height: size,
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Theme.of(context).primaryColor,
+        child: Stack(
+          children: [
+            Positioned(
+              right: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: SvgPicture.asset(
+                  _iconPath,
+                  height: 24,
                 ),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: backgroundColor,
-                  ),
-                  child: DecoratedBox(
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Row(
+                children: [
+                  Container(
+                    width: size,
+                    height: size,
+                    padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? Theme.of(context).primaryColor
-                          : theme.custom.noColor,
                       shape: BoxShape.circle,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: backgroundColor,
+                      ),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Theme.of(context).primaryColor
+                              : theme.custom.noColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8.0, right: 2),
-                  child: Text(
-                    _themeName,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontSize: 14, color: _getTextColor(mode, context)),
+                  Flexible(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8.0, right: 2),
+                      child: Text(
+                        _themeName,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontSize: 14, color: _getTextColor(mode, context)),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -146,11 +157,13 @@ class _SettingsModeSelector extends StatelessWidget {
   String get _iconPath {
     switch (mode) {
       case ThemeMode.dark:
-        return '$assetsPath/logo/dark_theme.png';
+        // White logo for dark background
+        return '$assetsPath/logo/logo_dark.svg';
       case ThemeMode.light:
-        return '$assetsPath/logo/light_theme.png';
+        // Dark logo for light background
+        return '$assetsPath/logo/logo.svg';
       case ThemeMode.system:
-        return '$assetsPath/logo/dark_theme.png';
+        return '$assetsPath/logo/logo_dark.svg';
     }
   }
 
