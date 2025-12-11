@@ -158,7 +158,8 @@ runs:
         # after the assets are downloaded to register them in AssetManifest.bin
         echo ""
         flutter pub get --enforce-lockfile > /dev/null 2>&1 || true
-        $BUILD_CMD > /dev/null 2>&1 || true
+        DRY_BUILD_CMD=$(echo "$BUILD_CMD" | sed -E 's/^flutter build [^ ]+/flutter build bundle/')
+        $DRY_BUILD_CMD > /dev/null 2>&1 || true
         rm -rf build/*
 
         # Run flutter build and capture its output
