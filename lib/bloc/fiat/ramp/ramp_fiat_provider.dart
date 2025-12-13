@@ -12,7 +12,7 @@ import 'package:web_dex/bloc/fiat/ramp/models/host_assets_config.dart';
 import 'package:web_dex/bloc/fiat/ramp/models/onramp_purchase_quotation/onramp_purchase_quotation.dart';
 import 'package:web_dex/bloc/fiat/ramp/ramp_api_utils.dart';
 
-const komodoLogoUrl = 'https://app.komodoplatform.com/icons/logo_icon.webp';
+const logoUrl = 'https://app.gleec.com/icons/logo_icon.webp';
 
 class RampFiatProvider extends BaseFiatProvider {
   RampFiatProvider();
@@ -313,7 +313,7 @@ class RampFiatProvider extends BaseFiatProvider {
     final payload = {
       'hostApiKey': hostId,
       'hostAppName': appShortTitle,
-      'hostLogoUrl': komodoLogoUrl,
+      'hostLogoUrl': logoUrl,
       'userAddress': walletAddress,
       'finalUrl': returnUrlOnSuccess,
       'defaultFlow': 'ONRAMP',

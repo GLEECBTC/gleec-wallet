@@ -179,7 +179,7 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                             text: LocaleKeys.rewardBoxReadMore.tr(),
                             onPressed: () {
                               launchURLString(
-                                'https://support.komodoplatform.com/support/solutions/articles/29000024428-komodo-5-active-user-reward-all-you-need-to-know',
+                                'https://komodoplatform.com/en/docs/komodo/active-user-reward/',
                               );
                             },
                           ),
@@ -284,7 +284,7 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                             text: LocaleKeys.rewardBoxReadMore.tr(),
                             onPressed: () {
                               launchURLString(
-                                'https://support.komodoplatform.com/support/solutions/articles/29000024428-komodo-5-active-user-reward-all-you-need-to-know',
+                                'https://komodoplatform.com/en/docs/komodo/active-user-reward/',
                               );
                             },
                           ),

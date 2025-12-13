@@ -21,30 +21,10 @@ const String storedMarketMakerSettingsKey = 'market_maker_settings';
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
 
 // anchor: protocols support
-const String ercTxHistoryUrl = 'https://etherscan-proxy.komodo.earth/api';
-const String ethUrl = '$ercTxHistoryUrl/v1/eth_tx_history';
-const String ercUrl = '$ercTxHistoryUrl/v2/erc_tx_history';
-const String bnbUrl = '$ercTxHistoryUrl/v1/bnb_tx_history';
-const String bepUrl = '$ercTxHistoryUrl/v2/bep_tx_history';
-const String ftmUrl = '$ercTxHistoryUrl/v1/ftm_tx_history';
-const String ftmTokenUrl = '$ercTxHistoryUrl/v2/ftm_tx_history';
-const String arbUrl = '$ercTxHistoryUrl/v1/arbitrum_tx_history';
-const String arbTokenUrl = '$ercTxHistoryUrl/v2/arbitrum_tx_history';
-const String etcUrl = '$ercTxHistoryUrl/v1/etc_tx_history';
-const String avaxUrl = '$ercTxHistoryUrl/v1/avx_tx_history';
-const String avaxTokenUrl = '$ercTxHistoryUrl/v2/avx_tx_history';
-const String mvrUrl = '$ercTxHistoryUrl/v1/moonriver_tx_history';
-const String mvrTokenUrl = '$ercTxHistoryUrl/v2/moonriver_tx_history';
-const String hecoUrl = '$ercTxHistoryUrl/v1/heco_tx_history';
-const String hecoTokenUrl = '$ercTxHistoryUrl/v2/heco_tx_history';
-const String maticUrl = '$ercTxHistoryUrl/v1/plg_tx_history';
-const String maticTokenUrl = '$ercTxHistoryUrl/v2/plg_tx_history';
-const String kcsUrl = '$ercTxHistoryUrl/v1/kcs_tx_history';
-const String kcsTokenUrl = '$ercTxHistoryUrl/v2/kcs_tx_history';
+const String ercTxHistoryUrl = 'https://etherscan.gleec.com/api';
 const String txByHashUrl = '$ercTxHistoryUrl/v1/transactions_by_hash';
 
-const String updateCheckerEndpoint = 'https://komodo.earth/adexwebversion';
-final Uri feedbackUrl = Uri.parse('https://komodo.earth:8181/webform/');
+const String updateCheckerEndpoint = 'https://defistats.gleec.com/api/v3/dex_version';
 const int feedbackMaxLength = 1000;
 const int contactDetailsMaxLength = 100;
 // Maximum allowed length for passwords across the app
@@ -54,9 +34,6 @@ final RegExp discordUsernameRegex = RegExp(r'^[a-zA-Z0-9._]{2,32}$');
 final RegExp telegramUsernameRegex = RegExp(r'^[a-zA-Z0-9_]{5,32}$');
 final RegExp matrixIdRegex = RegExp(
   r'^@[a-zA-Z0-9._=-]+:[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-);
-final Uri pricesUrlV3 = Uri.parse(
-  'https://prices.komodian.info/api/v2/tickers?expire_at=60',
 );
 
 const int millisecondsIn24H = 86400000;
@@ -90,10 +67,10 @@ const int? matomoPlatformDimensionId =
     int.fromEnvironment('MATOMO_PLATFORM_DIMENSION_ID', defaultValue: -1) == -1
     ? null
     : int.fromEnvironment('MATOMO_PLATFORM_DIMENSION_ID');
-const String moralisProxyUrl = 'https://moralis-proxy.komodo.earth';
-const String nftAntiSpamUrl = 'https://nft.antispam.dragonhound.info';
+const String moralisProxyUrl = 'https://moralis.gleec.com';
+const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
 
 const String geoBlockerApiUrl =
-    'https://komodo-wallet-bouncer.komodoplatform.com/v1/';
+    'https://gleec-wallet-bouncer.gleec.com/v1/';
 const String tradingBlacklistUrl =
-    'https://defi-stats.komodo.earth/api/v3/utils/blacklist';
+    'https://defistats.gleec.com/api/v3/utils/blacklist';

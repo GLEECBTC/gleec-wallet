@@ -61,8 +61,8 @@ RUN set -o xtrace \
     && sudo mkdir -p /root/.android \
     && sudo chown -R $USER:$USER /root \
     && touch /root/.android/repositories.cfg \
-    && git config --global user.email "hello@komodoplatform.com" \
-    && git config --global user.name "Komodo Platform" \
+    && git config --global user.email "info@gleec.com" \
+    && git config --global user.name "Gleec" \
     && yes | sdkmanager \
     "platforms;android-$ANDROID_PLATFORM_VERSION" \
     "build-tools;$ANDROID_BUILD_TOOLS_VERSION" \

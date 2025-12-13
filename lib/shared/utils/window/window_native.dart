@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:web_dex/app_config/app_config.dart';
 
 String getOriginUrl() {
-  return 'https://app.komodoplatform.com';
+  return 'https://app.gleec.com';
 }
 
 /// Shows a confirmation dialog when the user attempts to close the application.

@@ -8,7 +8,7 @@ import 'package:web_dex/bloc/fiat/models/models.dart';
 import 'package:web_dex/model/coin_type.dart';
 import 'package:web_dex/shared/utils/window/window.dart';
 
-const String domain = 'https://fiat-ramps-proxy.komodo.earth';
+const String domain = 'https://fiat-ramps.gleec.com';
 
 abstract class BaseFiatProvider {
   String getProviderId();
