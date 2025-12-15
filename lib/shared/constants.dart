@@ -21,13 +21,11 @@ const String storedMarketMakerSettingsKey = 'market_maker_settings';
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
 
 // anchor: protocols support
-const String txByHashUrl =
-    'https://etherscan.gleec.com/api/v2/transactions_by_hash';
+const String ercTxHistoryUrl = 'https://etherscan.gleec.com/api';
 
-final String updateCheckerEndpoint = throw UnimplementedError(
-  'URL has not been migrated yet. '
-  'Either remove this feature (unused) or migrate it to Gleec infra.',
-);
+const String updateCheckerEndpoint = 'https://defistats.gleec.com/api/v3/dex_version';
+const String txByHashUrl =
+    '$ercTxHistoryUrl/v2/transactions_by_hash';
 
 const int feedbackMaxLength = 1000;
 const int contactDetailsMaxLength = 100;

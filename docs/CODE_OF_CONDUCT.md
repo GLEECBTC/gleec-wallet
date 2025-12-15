@@ -27,7 +27,7 @@
 
 ## Reporting
 
-If you witness or experience any behavior that violates this code of conduct, please report it immediately to <yurii-khi@komodoplatform.com>. All reports will be taken seriously and will be handled in a confidential and respectful manner.
+If you witness or experience any behavior that violates this code of conduct, please report it immediately to <info@gleec.com>. All reports will be taken seriously and will be handled in a confidential and respectful manner.
 
 ## Consequences
 
