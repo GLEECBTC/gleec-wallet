@@ -8,7 +8,7 @@ class EmbeddedBitrefillUrl {
     required this.referralCode,
     this.theme = 'dark',
     this.language = 'en',
-    this.companyName = 'Komodo Platform',
+    this.companyName = 'GLEEC',
     this.showPaymentInfo = false,
     this.refundAddress,
     this.paymentMethods,
@@ -31,7 +31,7 @@ class EmbeddedBitrefillUrl {
   final String language;
 
   /// The company name to use when opening the Bitrefill widget.
-  /// This defaults to 'Komodo Platform'.
+  /// This defaults to 'GLEEC'.
   final String companyName;
 
   /// Whether to display the recipient address, amount, and QR code in the
