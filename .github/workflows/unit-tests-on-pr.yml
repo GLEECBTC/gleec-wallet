@@ -13,19 +13,23 @@ jobs:
 
     steps:
       - name: Setup GH Actions
+        id: checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Flutter and dependencies
+        id: install_flutter
         uses: ./.github/actions/flutter-deps
 
       - name: Fetch packages and generate assets
+        id: generate_assets
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate build
+        id: validate_build
         uses: ./.github/actions/validate-build
 
       - name: Test unit_test (unix)

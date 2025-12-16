@@ -14,6 +14,7 @@ runs:
   using: "composite"
   steps:
     - name: Install system dependencies
+      id: install_system_deps
       shell: bash
       run: |
         sudo apt-get update
@@ -23,12 +24,14 @@ runs:
         libglu1-mesa curl libstdc++-12-dev
 
     - name: Install Linux build dependencies
+      id: install_linux_deps
       shell: bash
       run: |
         flutter pub get --enforce-lockfile
         flutter doctor
 
     - name: Setup Linux code signing
+      id: setup_signing
       if: inputs.gpg-key != '' && 'KomodoPlatform/komodo-wallet' == github.repository
       shell: bash
       run: |

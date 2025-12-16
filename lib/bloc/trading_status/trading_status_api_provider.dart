@@ -17,6 +17,11 @@ class TradingStatusApiProvider {
 
   static const String _apiKeyHeader = 'X-KW-KEY';
 
+  static Uri _ensureTrailingSlash(Uri uri) {
+    if (uri.path.endsWith('/')) return uri;
+    return uri.replace(path: '${uri.path}/');
+  }
+
   /// Fetches trading status from the geo blocker API.
   ///
   /// Throws [TimeoutException] on timeout.
@@ -25,7 +30,7 @@ class TradingStatusApiProvider {
   Future<Map<String, dynamic>> fetchGeoStatus({required String apiKey}) async {
     _log.fine('Fetching geo status from API');
 
-    final uri = Uri.parse(geoBlockerApiUrl);
+    final uri = _ensureTrailingSlash(Uri.parse(geoBlockerApiUrl));
     final headers = <String, String>{_apiKeyHeader: apiKey};
 
     try {

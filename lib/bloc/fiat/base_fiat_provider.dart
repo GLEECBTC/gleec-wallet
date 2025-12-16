@@ -61,9 +61,7 @@ abstract class BaseFiatProvider {
     // Add `is_test_mode` query param to all requests if we are in debug mode
     final passedQueryParams = <String, dynamic>{}
       ..addAll(queryParams ?? {})
-      ..addAll({
-        'is_test_mode': kDebugMode ? 'true' : 'false',
-      });
+      ..addAll({'is_test_mode': kDebugMode ? 'true' : 'false'});
 
     url = Uri(
       scheme: domainUri.scheme,
@@ -78,10 +76,7 @@ abstract class BaseFiatProvider {
     http.Response response;
     try {
       if (method == 'GET') {
-        response = await http.get(
-          url,
-          headers: headers,
-        );
+        response = await http.get(url, headers: headers);
       } else {
         response = await http.post(
           url,
@@ -163,7 +158,7 @@ abstract class BaseFiatProvider {
     // These exist in coin config but not in CoinType structure yet:
     // ARBITRUM
 
-    // These chain IDs are not supported yet by Komodo Wallet:
+    // These chain IDs are not supported yet by Gleec Wallet:
     // ADA / CARDANO
     // AVAX-X
     // ALGO
@@ -264,26 +259,23 @@ abstract class BaseFiatProvider {
   }
 
   /// Provides the URL to the checkout handler HTML page that posts the payment
-  /// status received from the fiat provider to the Komodo Wallet app. The
+  /// status received from the fiat provider to the Gleec Wallet app. The
   /// `window.opener.postMessage` function is used for this purpose, and should
-  /// be handled by the Komodo Wallet app.
+  /// be handled by the Gleec Wallet app.
   static String checkoutCallbackUrl() {
     const pagePath = 'assets/assets/web_pages/checkout_status_redirect.html';
     return '${getOriginUrl()}/$pagePath';
   }
 
   /// Provides the URL to the checkout handler HTML page that posts the payment
-  /// status received from the fiat provider to the Komodo Wallet app.
+  /// status received from the fiat provider to the Gleec Wallet app.
   static String successUrl(String accountReference) {
     final baseUrl = checkoutCallbackUrl();
 
-    final queryString = {
-      'account_reference': accountReference,
-      'status': 'success',
-    }
-        .entries
-        .map<String>((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
-        .join('&');
+    final queryString =
+        {'account_reference': accountReference, 'status': 'success'}.entries
+            .map<String>((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+            .join('&');
 
     return '$baseUrl?$queryString';
   }

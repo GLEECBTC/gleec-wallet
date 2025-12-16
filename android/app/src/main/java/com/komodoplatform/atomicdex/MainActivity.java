@@ -1,4 +1,4 @@
-package com.komodoplatform.atomicdex;
+package com.gleec.gleecdex;
 
 import android.app.Activity;
 import android.content.Intent;

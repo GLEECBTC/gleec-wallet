@@ -1,5 +1,5 @@
 name: komodo_ui_kit
-description: Komodo Wallet's UI Kit Flutter package.
+description: Gleec Wallet's UI Kit Flutter package.
 publish_to: none
 
 environment:
@@ -17,7 +17,7 @@ dependencies:
   komodo_defi_types:
     path: ../../sdk/packages/komodo_defi_types # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_defi_types
     #   ref: dev
     # ^0.3.2+1 # Option 3: Pub.dev dependency
@@ -25,7 +25,7 @@ dependencies:
   komodo_ui:
     path: ../../sdk/packages/komodo_ui # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_ui
     #   ref: dev
     # ^0.3.0+3 # Option 3: Pub.dev dependency

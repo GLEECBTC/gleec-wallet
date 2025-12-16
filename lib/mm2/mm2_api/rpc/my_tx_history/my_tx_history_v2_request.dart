@@ -41,7 +41,7 @@ class MyTxHistoryV2ParamsRequest {
     }
     return <String, dynamic>{
       'coin': coin,
-      'limit': 10000 // https://github.com/KomodoPlatform/WebDEX/issues/795
+      'limit': 10000 // https://github.com/GLEECBTC/WebDEX/issues/795
     };
   }
 }

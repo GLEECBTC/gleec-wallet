@@ -1,6 +1,6 @@
 # Installing Flutter SDK
 
-Komodo Wallet requires a specific Flutter version to build and run. The required version can be seen
+Gleec Wallet requires a specific Flutter version to build and run. The required version can be seen
 on [FLUTTER_VERSION.md](FLUTTER_VERSION.md).
 
 While it should be possible to go a few bugfixes versions over that version without issues,
@@ -25,17 +25,17 @@ Add the flutter binaries subfolder `flutter/bin` to your system PATH. This proce
 
 For macOS:
 
-   ```bash
-   nano ~/.zshrc
-   export PATH="$PATH:$HOME/flutter/bin"
-   ```
+```bash
+nano ~/.zshrc
+export PATH="$PATH:$HOME/flutter/bin"
+```
 
 For Linux:
 
-   ```bash
-   vim ~/.bashrc
-   export PATH="$PATH:$HOME/flutter/bin"
-   ```
+```bash
+vim ~/.bashrc
+export PATH="$PATH:$HOME/flutter/bin"
+```
 
 For Windows, follow the instructions below (from [flutter.dev](https://docs.flutter.dev/get-started/install/windows#update-your-path)):
 

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.komodo" "\0"
-            VALUE "FileDescription", "Komodo Wallet" "\0"
+            VALUE "CompanyName", "GLEEC" "\0"
+            VALUE "FileDescription", "Gleec DEX" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "komodowallet" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2023 com.komodo. All rights reserved." "\0"
-            VALUE "OriginalFilename", "komodowallet.exe" "\0"
-            VALUE "ProductName", "Komodo Wallet" "\0"
+            VALUE "InternalName", "gleecdex" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 GLEEC. All rights reserved." "\0"
+            VALUE "OriginalFilename", "gleecdex.exe" "\0"
+            VALUE "ProductName", "Gleec DEX" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

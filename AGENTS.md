@@ -31,9 +31,9 @@ Unit tests and integration tests are currently failing. Instead of running tests
 
 Ensure you follow the existing architecture and style of the codebase. The codebase uses BLoC where applicable and follows general OOP/SOLID coding guidelines. Familiarise yourself with the BLoC conventions and Conventional Commits standards included at the end of this document.
 
-### Komodo Wallet
+### Gleec Wallet
 
-This section is only relevant if you are working in the `komodo-wallet` repository:
+This section is only relevant if you are working in the `gleec-wallet` repository:
 
 Detailed instructions for building and running the app can be found in `docs/BUILD_RUN_APP.md` and other files in the `docs/` directory. See `README.md` for an overview of available documentation.
 

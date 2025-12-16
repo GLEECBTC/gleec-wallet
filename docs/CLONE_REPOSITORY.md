@@ -7,15 +7,15 @@ There are two options, cloning via HTTPS or via SSH. HTTPS is recommended.
 If using HTTPS, run:
 
 ```bash
-git clone https://github.com/KomodoPlatform/komodo-wallet.git
-cd komodo-wallet
+git clone https://github.com/GLEECBTC/gleec-wallet.git
+cd gleec-wallet
 git submodule update --init --recursive
 ```
 
 Alternatively, you can clone with submodules in one command:
 
 ```bash
-git clone --recurse-submodules https://github.com/KomodoPlatform/komodo-wallet.git
+git clone --recurse-submodules https://github.com/GLEECBTC/gleec-wallet.git
 ```
 
 ## SSH Clone
@@ -24,14 +24,14 @@ For SSH cloning you need to [setup SSH authentication](https://docs.github.com/e
 Then you should be able to run:
 
 ```bash
-git clone --recurse-submodules git@github.com:KomodoPlatform/komodo-wallet.git
+git clone --recurse-submodules git@github.com:GLEECBTC/gleec-wallet.git
 ```
 
 Or if you already cloned without submodules:
 
 ```bash
-git clone git@github.com:KomodoPlatform/komodo-wallet.git
-cd komodo-wallet
+git clone git@github.com:GLEECBTC/gleec-wallet.git
+cd gleec-wallet
 git submodule update --init --recursive
 ```
 
@@ -40,7 +40,7 @@ git submodule update --init --recursive
 **Important**: After cloning via IDE, you must initialize the submodules manually:
 
 ```bash
-cd komodo-wallet
+cd gleec-wallet
 git submodule update --init --recursive
 ```
 

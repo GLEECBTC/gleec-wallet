@@ -1,20 +1,31 @@
 {
-    "name": "Komodo Web Wallet",
-    "short_name": "KomodoWebWallet",
+    "name": "GLEEC Wallet",
+    "short_name": "GLEEC Wallet",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#ffffff",
+    "background_color": "#202337",
+    "theme_color": "#8C41FF",
     "description": "Non-Custodial Multi-Coin Wallet & DEX.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "related_applications": [
         {
             "platform": "play",
-            "url": "https://play.google.com/store/apps/details?id=com.komodoplatform.atomicdex"
+            "url": "https://play.google.com/store/apps/details?id=com.gleec.gleecdex",
+            "id": "com.gleec.gleecdex"
+        },
+        {
+            "platform": "itunes",
+            "url": "https://apps.apple.com/us/app/gleecdex-wallet/id1563795528",
+            "id": "1563795528"
         }
     ],
     "icons": [
+        {
+            "src": "/icons/android-chrome-96x96.png",
+            "sizes": "96x96",
+            "type": "image/png"
+        },
         {
             "src": "/icons/android-chrome-192x192.png",
             "sizes": "192x192",

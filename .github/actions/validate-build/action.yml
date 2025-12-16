@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Validate build
+      id: validate
       continue-on-error: false
       shell: bash
       run: |

@@ -67,13 +67,10 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
           padding: widget.padding,
         ),
         child: DefaultTextStyle(
-          style: _defaultTextStyle(context) ??
-              widget.textStyle ??
-              const TextStyle(),
+          style: _defaultTextStyle,
           child: widget.child ??
               _ButtonContent(
                 text: widget.text,
-                textStyle: widget.textStyle,
                 prefix: widget.prefix,
               ),
         ),
@@ -99,29 +96,42 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
         : Theme.of(context).colorScheme.secondary;
   }
 
+  /// Returns a text style with the appropriate foreground color based on the
+  /// button's background brightness. If a custom textStyle is provided but
+  /// lacks a color, the computed foreground color is applied.
+  TextStyle get _defaultTextStyle {
+    final baseStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: _foregroundColor,
+            ) ??
+        TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          color: _foregroundColor,
+        );
+
+    if (widget.textStyle == null) {
+      return baseStyle;
+    }
+
+    // Merge the custom textStyle with the foreground color if no color is set
+    return baseStyle.merge(widget.textStyle);
+  }
+
   OutlinedBorder get _shape => RoundedRectangleBorder(
         borderRadius:
             BorderRadius.all(Radius.circular(widget.borderRadius ?? 18)),
       );
 }
 
-TextStyle? _defaultTextStyle(BuildContext context) {
-  return Theme.of(context).textTheme.labelLarge?.copyWith(
-        fontWeight: FontWeight.bold,
-        fontSize: 14,
-        color: theme.custom.defaultGradientButtonTextColor,
-      );
-}
-
 class _ButtonContent extends StatelessWidget {
   const _ButtonContent({
     required this.text,
-    required this.textStyle,
     required this.prefix,
   });
 
   final String text;
-  final TextStyle? textStyle;
   final Widget? prefix;
 
   @override
@@ -130,7 +140,8 @@ class _ButtonContent extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (prefix != null) prefix!,
-        Text(text, style: textStyle ?? _defaultTextStyle(context)),
+        // Text style is inherited from DefaultTextStyle set by the parent
+        Text(text),
       ],
     );
   }

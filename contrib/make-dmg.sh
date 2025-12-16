@@ -15,11 +15,11 @@ set -euo pipefail
 
 # ------------------------ PARAMETERS ------------------------
 # Default app path
-DEFAULT_APP="build/macos/Build/Products/Release-production/Komodo Wallet.app"
+DEFAULT_APP="build/macos/Build/Products/Release-production/Gleec DEX.app"
 
 APP="${APP:-$DEFAULT_APP}"            # Path to .app (uses default if not specified)
-VOL="${VOL:-Komodo Wallet}"          # Volume/window name for DMG
-OUT="${OUT:-dist/KomodoWallet.dmg}"  # Path to output .dmg
+VOL="${VOL:-Gleec DEX}"          # Volume/window name for DMG
+OUT="${OUT:-dist/GleecDEX.dmg}"  # Path to output .dmg
 BG="${BG:-}"                         # Path to PNG background (optional)
 ICON_SIZE="${ICON_SIZE:-128}"        # Icon size
 WIN_W="${WIN_W:-530}"                # Finder window width in DMG
@@ -36,9 +36,9 @@ Usage:
   ./make_dmg.sh
   
   # Or specify custom parameters
-  APP="build/.../Komodo Wallet.app" \\
-  VOL="Komodo Wallet" \\
-  OUT="dist/KomodoWallet.dmg" \\
+  APP="build/.../Gleec DEX.app" \\
+  VOL="Gleec DEX" \\
+  OUT="dist/GleecDEX.dmg" \\
   BG="assets/dmg_background.png" \\
   ./make_dmg.sh
   

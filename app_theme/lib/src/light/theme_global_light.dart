@@ -12,8 +12,9 @@ ThemeData get themeGlobalLight {
       );
 
   final ColorScheme colorScheme = const ColorScheme.light().copyWith(
-    primary: const Color(0xFF00D4FF),
-    secondary: const Color(0xFF00C3AA),
+    primary: const Color(0xFF8C41FF), // GLEEC Purple primary
+    inversePrimary: const Color(0xFFB87DFF), // Lighter purple for gradients
+    secondary: const Color(0xFF666666), // Muted gray for accents
     tertiary: const Color.fromARGB(255, 192, 225, 255),
     surface: const Color.fromRGBO(255, 255, 255, 1),
     onSurface: const Color.fromRGBO(251, 251, 251, 1),
@@ -99,9 +100,9 @@ ThemeData get themeGlobalLight {
     hintColor: const Color.fromRGBO(183, 187, 191, 1),
     snackBarTheme: snackBarThemeLight(),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: const Color(0xFF00D4FF),
-      selectionColor: const Color(0xFF00D4FF).withAlpha(77), // 0.3 * 255
-      selectionHandleColor: const Color(0xFF00D4FF),
+      cursorColor: const Color(0xFF8C41FF), // GLEEC Purple primary
+      selectionColor: const Color(0xFF8C41FF).withAlpha(77), // 0.3 * 255
+      selectionHandleColor: const Color(0xFF8C41FF), // GLEEC Purple primary
     ),
     inputDecorationTheme: InputDecorationTheme(
       enabledBorder: outlineBorderLight(Colors.transparent),
@@ -151,7 +152,7 @@ ThemeData get themeGlobalLight {
       // remove icons shift
       type: BottomNavigationBarType.fixed,
       backgroundColor: colorScheme.surface,
-      selectedItemColor: const Color(0xFF00D4FF),
+      selectedItemColor: const Color(0xFF8C41FF), // GLEEC Purple primary
       unselectedItemColor: textColor,
       unselectedLabelStyle: const TextStyle(
         fontSize: 12,

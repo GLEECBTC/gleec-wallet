@@ -14,19 +14,23 @@ jobs:
 
     steps:
       - name: Setup GH Actions
+        id: checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Flutter and dependencies
+        id: install_flutter
         uses: ./.github/actions/flutter-deps
 
       - name: Fetch packages and generate assets
+        id: generate_assets
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate dart code
+        id: validate_dart
         run: |
           flutter analyze
           # Currently skipped due to many changes. Will be enabled in the future after doing full sweep of the codebase

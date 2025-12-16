@@ -56,6 +56,7 @@ runs:
   using: "composite"
   steps:
     - name: Determine commit hash
+      id: determine_commit
       shell: bash
       run: |
         echo "Determining commit hash..."
@@ -72,6 +73,7 @@ runs:
         # Export for subsequent steps
         echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
     - name: Fetch packages and generate assets
+      id: fetch_and_build
       shell: bash
       env:
         GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ inputs.GITHUB_TOKEN }}

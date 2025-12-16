@@ -4,6 +4,6 @@
     <item android:drawable="@color/background_color" />
 
     <item>
-        <bitmap android:gravity="center" android:src="@mipmap/launcher_icon_foreground" />
+        <bitmap android:gravity="center" android:src="@mipmap/ic_launcher_foreground" />
     </item>
 </layer-list>

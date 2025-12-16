@@ -1,5 +1,5 @@
 name: web_dex
-description: Komodo Wallet
+description: Gleec Wallet
 
 # The following line prevents the package from being accidentally published to
 # pub.dev using `pub publish`. This is preferred for private packages.
@@ -46,12 +46,12 @@ dependencies:
   komodo_persistence_layer:
     path: packages/komodo_persistence_layer
 
-  ## ---- KomodoPlatform pub.dev packages (First-party)
+  ## ---- GLEECBTC pub.dev packages (First-party)
 
   komodo_cex_market_data:
     path: sdk/packages/komodo_cex_market_data # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_cex_market_data
     #   ref: dev
     # ^0.0.3+1 # Option 3: Pub.dev dependency
@@ -59,7 +59,7 @@ dependencies:
   dragon_logs:
     path: sdk/packages/dragon_logs # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/dragon_logs
     #   ref: dev
     # ^2.0.0 # Option 3: Pub.dev dependency
@@ -82,7 +82,7 @@ dependencies:
 
   ## ---- google.com
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   window_size:
     git:
       url: https://github.com/KomodoPlatform/flutter-desktop-embedding
@@ -101,41 +101,41 @@ dependencies:
   # does not require review, since hosted and git versions are the same
   equatable: 2.0.7 # sdk depends on hosted version, and not from git
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   package_info_plus: 8.3.0
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   share_plus: 11.1.0
 
   ## ---- 3d party
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   encrypt: 5.0.3
 
   flutter_svg: 2.0.17
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   qr_flutter: 4.1.0
 
-  easy_localization: 3.0.7+1 # last reviewed 3.0.2 via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  easy_localization: 3.0.7+1 # last reviewed 3.0.2 via https://github.com/GLEECBTC/gleec-wallet/pull/1106
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   universal_html: 2.2.4
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   hive: ^2.2.3 # Changed from git to pub.dev because git dependencies are not allowed in published packages
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
   hive_flutter: ^1.1.0 # Changed from git to pub.dev because git dependencies are not allowed in published packages
 
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/1106 (Outdated)
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   badges: 3.1.2
 
   flutter_slidable: 4.0.0
   cupertino_icons: ^1.0.8
 
   # Embedded web view
-  # Approved via https://github.com/KomodoPlatform/komodo-wallet/pull/3
+  # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/3
   flutter_inappwebview: 6.1.5 # Android, iOS, macOS, Web (currently broke, open issue)
 
   # Newly added, not yet reviewed
@@ -145,7 +145,7 @@ dependencies:
   dragon_charts_flutter:
     path: sdk/packages/dragon_charts_flutter # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/dragon_charts_flutter
     #   ref: dev
     # ^0.1.1-dev.3 # Option 3: Pub.dev dependency
@@ -165,7 +165,7 @@ dependencies:
   komodo_defi_sdk:
     path: sdk/packages/komodo_defi_sdk # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_defi_sdk
     #   ref: dev
     # ^0.4.0+3 # Option 3: Pub.dev dependency
@@ -173,7 +173,7 @@ dependencies:
   komodo_defi_types:
     path: sdk/packages/komodo_defi_types # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_defi_types
     #   ref: dev
     # ^0.3.2+1 # Option 3: Pub.dev dependency
@@ -181,7 +181,7 @@ dependencies:
   komodo_ui:
     path: sdk/packages/komodo_ui # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
-    #   url: https://github.com/KomodoPlatform/komodo-defi-sdk-flutter.git
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
     #   path: packages/komodo_ui
     #   ref: dev
     # ^0.3.0+3 # Option 3: Pub.dev dependency

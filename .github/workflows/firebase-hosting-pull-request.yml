@@ -17,29 +17,32 @@ jobs:
 
     steps:
       - name: Shortify commit sha
+        id: shortify_commit
         shell: bash
         run: echo "sha_short=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
-        id: shortify_commit
 
       - name: Get branch
+        id: get_branch
         shell: bash
         run: echo "ref_short=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
-        id: get_branch
 
       - name: Get Preview Channel ID
+        id: get_preview_channel_id
         shell: bash
         run: echo "preview_channel_id=$(echo ${GITHUB_REF#*/})" >> $GITHUB_OUTPUT
-        id: get_preview_channel_id
 
       - name: Setup GH Actions
+        id: checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Flutter and dependencies
+        id: install_flutter
         uses: ./.github/actions/flutter-deps
 
       - name: Fetch packages and generate assets
+        id: generate_assets
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,9 +59,11 @@ jobs:
           ANALYTICS_DISABLED: true
 
       - name: Validate build
+        id: validate_build
         uses: ./.github/actions/validate-build
 
-      - name: Deploy Komodo Wallet web feature preview (Expires in 7 days)
+      - name: Deploy Gleec Wallet web feature preview (Expires in 7 days)
+        id: deploy_preview
         uses: FirebaseExtended/action-hosting-deploy@v0.7.1
         with:
           repoToken: "${{ secrets.GITHUB_TOKEN }}"
@@ -68,7 +73,8 @@ jobs:
           expires: 7d
           projectId: komodo-wallet-official
 
-      - name: Deploy Komodo Wallet Web dev preview (`dev` branch)
+      - name: Deploy Gleec Wallet Web dev preview (`dev` branch)
+        id: deploy_dev
         if: github.ref == 'refs/heads/dev' && github.event_name != 'workflow_dispatch'
         uses: FirebaseExtended/action-hosting-deploy@v0.7.1
         with:

@@ -60,10 +60,10 @@ Alternatively, you can run the docker build commands directly:
 # Build the supporting images
 docker build -f .docker/kdf-android.dockerfile . -t komodo/kdf-android --build-arg KDF_BRANCH=main
 docker build -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:34
-docker build -f .docker/komodo-wallet-android.dockerfile . -t komodo/komodo-wallet
+docker build -f .docker/gleec-wallet-android.dockerfile . -t gleec/gleec-wallet
 # Build the app
 mkdir -p build
-docker run --rm -v ./build:/app/build komodo/komodo-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build web --no-pub --release"
+docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build web --no-pub --release"
 ```
 
 ### Build for Android
@@ -78,8 +78,8 @@ Alternatively, you can run the docker build commands directly:
 # Build the supporting images
 docker build -f .docker/kdf-android.dockerfile . -t komodo/kdf-android --build-arg KDF_BRANCH=main
 docker build -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:34
-docker build -f .docker/komodo-wallet-android.dockerfile . -t komodo/komodo-wallet
+docker build -f .docker/gleec-wallet-android.dockerfile . -t gleec/gleec-wallet
 # Build the app
 mkdir -p build
-docker run --rm -v ./build:/app/build komodo/komodo-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build apk --no-pub --release"
+docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build apk --no-pub --release"
 ```

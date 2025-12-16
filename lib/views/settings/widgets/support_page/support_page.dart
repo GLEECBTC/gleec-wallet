@@ -98,9 +98,7 @@ class SupportPage extends StatelessWidget {
                         height: 40,
                         allowMultiline: true,
                         onPressed: () {
-                          launchURLString(
-                            'https://komodoplatform.com/discord',
-                          );
+                          launchURLString('https://www.gleec.com/contact');
                         },
                       ),
                     ],

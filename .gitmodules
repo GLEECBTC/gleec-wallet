@@ -1,6 +1,6 @@
 [submodule "sdk"]
 	path = sdk
-	url = https://github.com/gleecbtc/komodo-defi-sdk-flutter.git
+	url = https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
 	branch = dev
 	update = checkout
 	fetchRecurseSubmodules = on-demand

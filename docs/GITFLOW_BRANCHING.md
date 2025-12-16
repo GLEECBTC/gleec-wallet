@@ -36,7 +36,7 @@
 - Test branch (testing, temp branches, etc):
   - `test-`
 
-### 3. Avoid special characters (`/`, `>`, <https://github.com/KomodoPlatform/komodowallet/issues/907>)
+### 3. Avoid special characters (`/`, `>`, <https://github.com/GLEECBTC/komodowallet/issues/907>)
   
   | ❌ Bad            | ✅ Good         |
   | ----------------- | ---------------- |

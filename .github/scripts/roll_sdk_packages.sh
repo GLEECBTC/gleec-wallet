@@ -122,7 +122,7 @@ CURRENT_DATE=$(date '+%Y-%m-%d')
 # REPO_ROOT already set above
 CHANGES_FILE="$REPO_ROOT/SDK_CHANGELOG.md"
 
-# List of external SDK packages to be updated (from KomodoPlatform/komodo-defi-sdk-flutter.git)
+# List of external SDK packages to be updated (from GLEECBTC/komodo-defi-sdk-flutter.git)
 # Local packages like 'komodo_ui_kit' and 'komodo_persistence_layer' are not included
 # as they're part of this repository, not the external SDK
 

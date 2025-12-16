@@ -1,10 +1,10 @@
 # SDK Submodule Management
 
-This document provides guidance on working with the Komodo DeFi SDK Flutter submodule in the Komodo Wallet project.
+This document provides guidance on working with the Komodo DeFi SDK Flutter submodule in the Gleec Wallet project.
 
 ## Overview
 
-The Komodo Wallet project uses the komodo-defi-sdk-flutter repository as a git submodule located in the `sdk/` directory. This allows us to:
+The Gleec Wallet project uses the komodo-defi-sdk-flutter repository as a git submodule located in the `sdk/` directory. This allows us to:
 
 - Track specific SDK versions
 - Test changes locally before they're published

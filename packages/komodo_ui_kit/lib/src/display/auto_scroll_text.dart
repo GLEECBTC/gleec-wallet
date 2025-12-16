@@ -132,10 +132,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
                 : null,
           ),
           width: double.infinity,
-          child: SlideTransition(
-            position: _animation!,
-            child: textWidget,
-          ),
+          child: SlideTransition(position: _animation!, child: textWidget),
         );
       },
     );
@@ -169,12 +166,10 @@ class _AutoScrollTextState extends State<AutoScrollText>
     if (_textWidth != null) return _textWidth!;
 
     _textWidth = TextPainter.computeWidth(
-      text: TextSpan(
-        text: widget.text,
-        style: renderedTextStyle,
-      ),
+      text: TextSpan(text: widget.text, style: renderedTextStyle),
       textDirection: TextDirection.ltr,
-      textAlign: widget.textAlign ??
+      textAlign:
+          widget.textAlign ??
           // DefaultTextStyle.of(context).textAlign ??
           TextAlign.start,
       maxLines: 1,
@@ -262,13 +257,12 @@ class _AutoScrollTextState extends State<AutoScrollText>
 
     // We have to override certain properties of the style to ensure that the
     // overflow text is rendered correctly.
-    TextStyle style = widgetStyle.copyWith(
-      overflow: TextOverflow.visible,
-    );
+    TextStyle style = widgetStyle.copyWith(overflow: TextOverflow.visible);
 
     if (mustHighlightBackground) {
-      style =
-          style.copyWith(backgroundColor: Colors.red.withValues(alpha: 0.3));
+      style = style.copyWith(
+        backgroundColor: Colors.red.withValues(alpha: 0.3),
+      );
     }
 
     return _renderedTextStyle = style;
@@ -287,7 +281,8 @@ class _AutoScrollTextState extends State<AutoScrollText>
   void didUpdateWidget(AutoScrollText oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    final didWidgetValuesChange = oldWidget.text != widget.text ||
+    final didWidgetValuesChange =
+        oldWidget.text != widget.text ||
         oldWidget.style != widget.style ||
         oldWidget.textAlign != widget.textAlign;
 

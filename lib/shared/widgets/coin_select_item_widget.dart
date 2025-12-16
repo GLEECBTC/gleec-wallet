@@ -75,6 +75,16 @@ class CoinSelectItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Use the text color from textTheme since onSurface is misused as a
+    // background color in this codebase.
+    final textColor =
+        theme.textTheme.bodyMedium?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    final baseTextStyle =
+        theme.textTheme.bodyMedium ??
+        const TextStyle(fontSize: 16, fontWeight: FontWeight.w300);
+
     return InkWell(
       onTap: onTap,
       child: Row(
@@ -88,9 +98,7 @@ class CoinSelectItemWidget extends StatelessWidget {
             ),
           Expanded(
             child: DefaultTextStyle(
-              style: theme.textTheme.bodyMedium!.copyWith(
-                color: theme.colorScheme.onSurface,
-              ),
+              style: baseTextStyle.copyWith(color: textColor),
               child: title ?? Text(name),
             ),
           ),

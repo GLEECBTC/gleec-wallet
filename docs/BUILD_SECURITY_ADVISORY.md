@@ -1,8 +1,8 @@
-# Build Security Advisory for Komodo Wallet
+# Build Security Advisory for Gleec Wallet
 
 ## Critical Flags for Production Builds
 
-When building the Komodo Wallet for production, **always** use the following flags:
+When building the Gleec Wallet for production, **always** use the following flags:
 
 ```bash
 --enforce-lockfile  # When running 'flutter pub get'
@@ -75,7 +75,7 @@ flutter build web --csp --no-web-resources-cdn --no-pub
 For Docker builds:
 
 ```bash
-docker run --rm -v ./build:/app/build komodo/komodo-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build apk --no-pub --release"
+docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build apk --no-pub --release"
 ```
 
 ## Compliance and Audit

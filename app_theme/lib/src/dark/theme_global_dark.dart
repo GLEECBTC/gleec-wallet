@@ -14,8 +14,8 @@ ThemeData get themeGlobalDark {
   //TODO! Implement all light-theme equivalent properties
   final ColorScheme colorScheme = ColorScheme.fromSeed(
     brightness: Brightness.dark,
-    seedColor: const Color(0xFF5C7FFF),
-    primary: const Color(0xFF5C7FFF),
+    seedColor: const Color(0xFF8C41FF), // GLEEC Purple primary
+    primary: const Color(0xFF8C41FF), // GLEEC Purple primary
     // secondary: const Color(0xFF00C3AA),
     tertiary: const Color(0xFF0A0A0A), // CORRECTED - darker for sidebar/header
     surface: const Color(0xFF141414), // Card color (correct)
@@ -58,19 +58,19 @@ ThemeData get themeGlobalDark {
   );
 
   SnackBarThemeData snackBarThemeLight() => SnackBarThemeData(
-        elevation: 12.0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: colorScheme.primaryContainer,
-        contentTextStyle: textTheme.bodyLarge!.copyWith(
-          color: colorScheme.onPrimaryContainer,
-        ),
-        actionTextColor: colorScheme.onPrimaryContainer,
-        showCloseIcon: true,
-        closeIconColor: colorScheme.onPrimaryContainer.withAlpha(179), // 70%
-      );
+    elevation: 12.0,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+    ),
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: colorScheme.primaryContainer,
+    contentTextStyle: textTheme.bodyLarge!.copyWith(
+      color: colorScheme.onPrimaryContainer,
+    ),
+    actionTextColor: colorScheme.onPrimaryContainer,
+    showCloseIcon: true,
+    closeIconColor: colorScheme.onPrimaryContainer.withAlpha(179), // 70%
+  );
 
   final customTheme = ThemeCustomDark();
   final theme = ThemeData(
@@ -104,9 +104,9 @@ ThemeData get themeGlobalDark {
     hintColor: const Color.fromRGBO(183, 187, 191, 1),
     snackBarTheme: snackBarThemeLight(),
     textSelectionTheme: TextSelectionThemeData(
-      cursorColor: const Color(0xFF5C7FFF),
-      selectionColor: const Color(0xFF5C7FFF).withAlpha(77), // 0.3 * 255
-      selectionHandleColor: const Color(0xFF5C7FFF),
+      cursorColor: const Color(0xFF8C41FF), // GLEEC Purple primary
+      selectionColor: const Color(0xFF8C41FF).withAlpha(77), // 0.3 * 255
+      selectionHandleColor: const Color(0xFF8C41FF), // GLEEC Purple primary
     ),
     inputDecorationTheme: InputDecorationTheme(
       enabledBorder: outlineBorderLight(Colors.transparent),
@@ -198,22 +198,22 @@ ThemeData get themeGlobalDark {
       ),
     ),
     switchTheme: SwitchThemeData(
-      trackColor: WidgetStateProperty.resolveWith<Color?>(
-        (Set<WidgetState> states) {
-          if (states.contains(WidgetState.selected)) {
-            return colorScheme.primary.withOpacity(0.5);
-          }
-          return const Color(0xFF444444);
-        },
-      ),
-      thumbColor: WidgetStateProperty.resolveWith<Color?>(
-        (Set<WidgetState> states) {
-          if (states.contains(WidgetState.selected)) {
-            return colorScheme.primary;
-          }
-          return Colors.white;
-        },
-      ),
+      trackColor: WidgetStateProperty.resolveWith<Color?>((
+        Set<WidgetState> states,
+      ) {
+        if (states.contains(WidgetState.selected)) {
+          return colorScheme.primary.withOpacity(0.5);
+        }
+        return const Color(0xFF444444);
+      }),
+      thumbColor: WidgetStateProperty.resolveWith<Color?>((
+        Set<WidgetState> states,
+      ) {
+        if (states.contains(WidgetState.selected)) {
+          return colorScheme.primary;
+        }
+        return Colors.white;
+      }),
     ),
     extensions: [customTheme],
   );
