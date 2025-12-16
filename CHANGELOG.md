@@ -2,6 +2,17 @@
 
 This release delivers significant performance improvements, enhanced analytics capabilities, and a comprehensive overhaul of authentication and wallet management. Key highlights include real-time portfolio streaming, a dual analytics pipeline with persistent queueing, one-click sign-in, Z-HTLC support, and extensive optimisations that reduce RPC usage while improving responsiveness across all platforms.
 
+**This release also introduces the complete GLEEC rebrand** — migrating from Komodo Wallet to Gleec Wallet with a refreshed purple colour scheme, updated logos, new domain infrastructure, and updated legal documentation.
+
+## 🎨 GLEEC Rebrand
+
+- **Complete Brand Migration** ([@CharlVS]) - Full rebrand from Komodo Wallet to Gleec Wallet across all platforms and assets
+- **Purple Colour Scheme** ([@CharlVS]) - Updated colour palette from Komodo blue to GLEEC purple with theme-aware adjustments
+- **Logo & Asset Updates** ([@CharlVS]) - New GLEEC wordmark logos replacing Komodo branding throughout the app
+- **Domain Infrastructure** ([@CharlVS]) - Migrated URLs and endpoints to Gleec infrastructure (dex domain, tickers prefetch)
+- **Legal Documentation** ([@CharlVS]) - Updated EULA and Terms of Service to Gleec
+- **SDK Rebrand** ([@CharlVS]) - Rolled SDK to v0.9.4 with GLEEC rebrand and KDF v2.6.0
+
 ## 🚀 New Features
 
 - **Realtime Portfolio Streaming** ([@CharlVS], #3253) - Live balance updates throughout the app via `CoinsBloc` streaming, eliminating the need for manual refreshes
@@ -60,6 +71,10 @@ See the [full SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter
 
 ## 🐛 Bug Fixes
 
+- **Market Maker Bot Timeout** ([@CharlVS]) - Default bot timeout increased from 60 to 600 seconds for more reliable operation
+- **Button Text Contrast** ([@CharlVS]) - Dynamic text colour for `UiPrimaryButton` based on background luminance; fixed Create Wallet button text colour
+- **URL Normalisation** ([@CharlVS]) - Normalised trailing slashes on API URLs for consistency
+- **Android Package Name** ([@CharlVS]) - Updated main activity package name for rebrand
 - **Transaction History Cross-Asset Bleed** ([@CharlVS], #3289) - Isolated `TransactionHistoryBloc` per-coin to prevent history mixing
 - **Balance Update State Preservation** ([@CharlVS], #3253) - Realtime balance updates now preserve coin activation state to avoid turning off the Send button
 - **Transaction Sorting** ([@CharlVS], #3253) - Fixed transaction history list sorting logic
@@ -133,8 +148,13 @@ See the [full SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter
 - **WASM Support** (SDK, #176) - Flutter Web WASM support with OPFS integration and unified storage implementation
 - **CDN Disable** ([@DeckerSU], #3055) - Add `--no-web-resources-cdn` to web build in build.sh
 
+### Android
+
+- **Launch Background Cleanup** ([@CharlVS]) - Cleaned up redundant branding assets and fixed launch background for rebrand
+
 ### Docker & DevOps
 
+- **GitHub Actions Step IDs** ([@CharlVS]) - Added step IDs to all workflows and composite actions for better traceability
 - **DevContainer Modernization** ([@CharlVS], #3114) - Switched to .docker images and Linux-only devcontainer
 - **Environment Variable Passing** ([@DeckerSU], #3037) - Correct env vars passing to Docker and Dart via --dart-define
 - **Matomo Validation** ([@DeckerSU], #3165) - Added Matomo tracking params validation in build script
