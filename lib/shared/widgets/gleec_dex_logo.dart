@@ -54,7 +54,7 @@ class GleecDexLogo extends StatelessWidget {
             '$assetsPath/logo/logo$themePostfix.svg',
             height: textHeight,
           ),
-          SizedBox(width: spacing * 0.5),
+          SizedBox(width: spacing * 0.75),
           Transform.translate(
             offset: Offset(0, textHeight * 0.25),
             child: Text(
@@ -63,6 +63,7 @@ class GleecDexLogo extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'Rubik',
                 fontSize: textHeight * 1.32,
+                fontWeight: FontWeight.w600,
                 fontVariations: const [
                   FontVariation('wght', 600),
                 ], // Use this for variable fonts
