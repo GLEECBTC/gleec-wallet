@@ -63,7 +63,6 @@ class GleecDexLogo extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'Rubik',
                 fontSize: textHeight * 1.32,
-                fontWeight: FontWeight.w600,
                 fontVariations: const [
                   FontVariation('wght', 600),
                 ], // Use this for variable fonts
