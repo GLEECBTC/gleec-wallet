@@ -2,9 +2,7 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
@@ -15,7 +13,7 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
-import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/widgets/gleec_dex_logo.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_desktop_item.dart';
 
 class MainMenuDesktop extends StatefulWidget {
@@ -59,10 +57,7 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                       onTap: () {
                         routingState.selectedMenu = MainMenuValue.wallet;
                       },
-                      child: SvgPicture.asset(
-                        '$assetsPath/logo/logo$themeAssetPostfix.svg',
-                        height: 32,
-                      ),
+                      child: const GleecDexLogo(height: 32),
                     ),
                   ),
 
@@ -142,8 +137,9 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                 enabled: false,
                                 menu: MainMenuValue.nft,
                                 onTap: onTapItem,
-                                isSelected:
-                                    _checkSelectedItem(MainMenuValue.nft),
+                                isSelected: _checkSelectedItem(
+                                  MainMenuValue.nft,
+                                ),
                               ),
                             ),
                             const Spacer(),
