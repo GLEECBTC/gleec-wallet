@@ -2,13 +2,12 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/analytics/events/misc_events.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/widgets/gleec_dex_logo.dart';
 import 'package:web_dex/views/settings/widgets/common/settings_section.dart';
 
 class SettingsThemeSwitcher extends StatelessWidget {
@@ -22,26 +21,28 @@ class SettingsThemeSwitcher extends StatelessWidget {
         padding: const EdgeInsets.all(10.0),
         constraints: const BoxConstraints(maxWidth: 340),
         decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18.0),
-            color: Theme.of(context).colorScheme.onSurface),
+          borderRadius: BorderRadius.circular(18.0),
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
         child: Row(
-            mainAxisSize: MainAxisSize.max,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: 6.0),
-                  child: _SettingsModeSelector(mode: ThemeMode.light),
-                ),
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: 6.0),
+                child: _SettingsModeSelector(mode: ThemeMode.light),
               ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: 6.0),
-                  child: _SettingsModeSelector(mode: ThemeMode.dark),
-                ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: 6.0),
+                child: _SettingsModeSelector(mode: ThemeMode.dark),
               ),
-            ]),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -79,10 +80,7 @@ class _SettingsModeSelector extends StatelessWidget {
               top: 0,
               bottom: 0,
               child: Center(
-                child: SvgPicture.asset(
-                  _iconPath,
-                  height: 24,
-                ),
+                child: GleecDexLogo(height: 20, forceThemeMode: mode),
               ),
             ),
             Padding(
@@ -119,7 +117,9 @@ class _SettingsModeSelector extends StatelessWidget {
                       child: Text(
                         _themeName,
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontSize: 14, color: _getTextColor(mode, context)),
+                          fontSize: 14,
+                          color: _getTextColor(mode, context),
+                        ),
                       ),
                     ),
                   ),
@@ -151,19 +151,6 @@ class _SettingsModeSelector extends StatelessWidget {
         return 'light';
       case ThemeMode.system:
         return 'auto';
-    }
-  }
-
-  String get _iconPath {
-    switch (mode) {
-      case ThemeMode.dark:
-        // White logo for dark background
-        return '$assetsPath/logo/logo_dark.svg';
-      case ThemeMode.light:
-        // Dark logo for light background
-        return '$assetsPath/logo/logo.svg';
-      case ThemeMode.system:
-        return '$assetsPath/logo/logo_dark.svg';
     }
   }
 
