@@ -17,8 +17,7 @@ class CoinBalance extends StatelessWidget {
     final baseFont = Theme.of(context).textTheme.bodySmall;
     final balanceStyle = baseFont?.copyWith(fontWeight: FontWeight.w500);
 
-    final balance =
-        context.sdk.balances.lastKnown(coin.id)?.spendable.toDouble() ?? 0.0;
+    final balance = coin.balance(context.sdk) ?? 0.0;
 
     final children = [
       Row(

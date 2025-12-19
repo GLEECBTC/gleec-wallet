@@ -28,8 +28,14 @@ extension LegacyCoinMigrationExtensions on Coin {
   ///
   /// NB: This is not a real-time balance. Prefer using [getBalance] or
   /// [watchBalance] for up-to-date data.
-  double? balance(KomodoDefiSdk sdk) =>
-      sdk.balances.lastKnown(id)?.spendable.toDouble();
+  double? balance(KomodoDefiSdk sdk) {
+    try {
+      return sdk.balances.lastKnown(id)?.spendable.toDouble();
+    } on StateError {
+      // SDK has been disposed, return null
+      return null;
+    }
+  }
 
   /// Gets the current USD balance of this coin
   ///
@@ -45,20 +51,30 @@ extension LegacyCoinMigrationExtensions on Coin {
   }
 
   double? lastKnownUsdBalance(KomodoDefiSdk sdk) {
-    final balance = sdk.balances.lastKnown(id);
-    if (balance == null) return null;
-    if (balance.spendable == Decimal.zero) return 0;
+    try {
+      final balance = sdk.balances.lastKnown(id);
+      if (balance == null) return null;
+      if (balance.spendable == Decimal.zero) return 0;
 
-    final price = sdk.marketData.priceIfKnown(id);
-    if (price == null) return null;
+      final price = sdk.marketData.priceIfKnown(id);
+      if (price == null) return null;
 
-    return (price * balance.spendable).toDouble();
+      return (price * balance.spendable).toDouble();
+    } on StateError {
+      // SDK has been disposed, return null
+      return null;
+    }
   }
 
   double? lastKnownUsdPrice(KomodoDefiSdk sdk) {
-    final price = sdk.marketData.priceIfKnown(id);
-    if (price == null) return null;
-    return price.toDouble();
+    try {
+      final price = sdk.marketData.priceIfKnown(id);
+      if (price == null) return null;
+      return price.toDouble();
+    } on StateError {
+      // SDK has been disposed, return null
+      return null;
+    }
   }
 
   /// Get cached 24hr change from CoinsBloc state

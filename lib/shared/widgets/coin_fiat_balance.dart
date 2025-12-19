@@ -21,7 +21,13 @@ class CoinFiatBalance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final balanceStream = context.sdk.balances.watchBalance(coin.id);
+    Stream<BalanceInfo>? balanceStream;
+    try {
+      balanceStream = context.sdk.balances.watchBalance(coin.id);
+    } on StateError {
+      // SDK has been disposed, return empty widget
+      return const SizedBox();
+    }
 
     final TextStyle mergedStyle = const TextStyle(
       fontSize: 12,
