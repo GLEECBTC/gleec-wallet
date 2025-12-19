@@ -266,6 +266,9 @@ flutter:
           weight: 700
         - asset: assets/fonts/Manrope-ExtraBold.ttf
           weight: 800
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/Rubik-VariableFont_wght.ttf
     - family: Roboto
       fonts:
         - asset: assets/fallback_fonts/roboto/v20/KFOmCnqEu92Fr1Me5WZLCzYlKw.ttf
