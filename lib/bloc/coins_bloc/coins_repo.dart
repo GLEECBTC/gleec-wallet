@@ -82,6 +82,74 @@ class CoinsRepo {
   // Map to keep track of active balance watchers
   final Map<AssetId, StreamSubscription<BalanceInfo>> _balanceWatchers = {};
 
+  /// Tracks in-flight activations per asset to prevent duplicate concurrent activations
+  final Map<AssetId, Future<void>> _activationsInFlight = {};
+
+  /// Initial activation gate: used by UI flows to wait until initial wallet
+  /// activation completes in CoinsBloc before firing additional activations.
+  bool _initialActivationInProgress = false;
+  Completer<void>? _initialActivationCompleter;
+
+  /// Mark start of the initial activation phase (called by CoinsBloc)
+  void markInitialActivationStart() {
+    _initialActivationInProgress = true;
+    if (_initialActivationCompleter == null ||
+        (_initialActivationCompleter?.isCompleted ?? true)) {
+      _initialActivationCompleter = Completer<void>();
+    }
+  }
+
+  /// Mark completion of the initial activation phase (called by CoinsBloc)
+  void markInitialActivationComplete() {
+    _initialActivationInProgress = false;
+    final completer = _initialActivationCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  /// Await completion of the initial activation phase.
+  /// If not in progress, returns immediately. If in progress and a timeout is
+  /// provided, waits up to the timeout, otherwise waits until completion.
+  Future<void> waitForInitialActivationToComplete({
+    Duration? timeout,
+  }) async {
+    if (!_initialActivationInProgress) return;
+    final completer = _initialActivationCompleter;
+    if (completer == null) return;
+    try {
+      if (timeout == null) {
+        await completer.future;
+      } else {
+        await completer.future.timeout(timeout);
+      }
+    } catch (_) {
+      // Swallow timeout/errors; callers should proceed even if gate didn’t finish
+    }
+  }
+
+  Future<bool> _waitForCoinAvailability(
+    AssetId assetId, {
+    int maxRetries = 5,
+    Duration baseDelay = const Duration(milliseconds: 600),
+    Duration maxDelay = const Duration(milliseconds: 3000),
+  }) async {
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        final activated = await _kdfSdk.activatedAssetsCache
+            .getActivatedAssetIds(forceRefresh: true);
+        if (activated.contains(assetId)) return true;
+      } catch (_) {}
+
+      if (attempt < maxRetries - 1) {
+        final delayMs = (baseDelay.inMilliseconds * (1 << attempt))
+            .clamp(baseDelay.inMilliseconds, maxDelay.inMilliseconds);
+        await Future<void>.delayed(Duration(milliseconds: delayMs));
+      }
+    }
+    return false;
+  }
+
   /// Hack used to broadcast activated/deactivated coins to the CoinsBloc to
   /// update the status of the coins in the UI layer. This is needed as there
   /// are direct references to [CoinsRepo] that activate/deactivate coins
@@ -286,6 +354,11 @@ class CoinsRepo {
   /// return a zero balance.
   Future<kdf_rpc.BalanceInfo> tryGetBalanceInfo(AssetId coinId) async {
     try {
+      // Avoid triggering backend wallet-balance tasks for inactive assets.
+      final isActive = await isAssetActivated(coinId);
+      if (!isActive) {
+        return kdf_rpc.BalanceInfo.zero();
+      }
       final balanceInfo = await _kdfSdk.balances.getBalance(coinId);
       return balanceInfo;
     } catch (e, s) {
@@ -404,29 +477,51 @@ class CoinsRepo {
             'Asset ${asset.id.id} is already activated. Skipping activation.',
           );
         } else {
-          if (notifyListeners) {
-            _broadcastAsset(coin.copyWith(state: CoinState.activating));
-          }
+          // Deduplicate concurrent activations for the same asset
+          final existing = _activationsInFlight[asset.id];
+          if (existing != null) {
+            _log.info(
+              'Activation already in progress for ${asset.id.id}. Joining existing task.',
+            );
+            await existing;
+          } else {
+            if (notifyListeners) {
+              _broadcastAsset(coin.copyWith(state: CoinState.activating));
+            }
 
-          // Use retry with exponential backoff for activation
-          await retry<void>(
-            () async {
-              final progress = await _kdfSdk.assets.activateAsset(asset).last;
-              if (!progress.isSuccess) {
-                throw Exception(
-                  progress.errorMessage ??
-                      'Activation failed for ${asset.id.id}',
-                );
+            // Start activation once and track in-flight future.
+            // Avoid over-eager retries that can create duplicate backend tasks.
+            final activationFuture = (() async {
+              try {
+                final progress =
+                    await _kdfSdk.assets.activateAsset(asset).last;
+                if (!progress.isSuccess) {
+                  throw Exception(
+                    progress.errorMessage ??
+                        'Activation failed for ${asset.id.id}',
+                  );
+                }
+              } catch (e) {
+                final err = e.toString();
+                final maybeIdempotentStorageError = err.contains('ConstraintError') ||
+                    err.contains("wallet_account_id") ||
+                    err.contains('Error saving HD account to storage');
+                if (maybeIdempotentStorageError) {
+                  // Treat as idempotent: wait briefly for coin to appear instead of re-initiating.
+                  final becameActive = await _waitForCoinAvailability(asset.id);
+                  if (becameActive) return;
+                }
+                rethrow;
               }
-            },
-            maxAttempts: maxRetryAttempts,
-            backoffStrategy: ExponentialBackoff(
-              initialDelay: initialRetryDelay,
-              maxDelay: maxRetryDelay,
-            ),
-          );
+            })().whenComplete(() {
+              _activationsInFlight.remove(asset.id);
+            });
 
-          _log.info('Asset activated: ${asset.id.id}');
+            _activationsInFlight[asset.id] = activationFuture;
+            await activationFuture;
+
+            _log.info('Asset activated: ${asset.id.id}');
+          }
         }
         if (kDebugElectrumLogs) {
           _log.info(

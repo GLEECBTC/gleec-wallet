@@ -356,6 +356,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     Emitter<CoinsState> emit,
   ) async {
     _isInitialActivationInProgress = true;
+    // Inform repo to gate auto-activations from other features
+    _coinsRepo.markInitialActivationStart();
     try {
       // Ensure any cached addresses/pubkeys from a previous wallet are cleared
       // so that UI fetches fresh pubkeys for the newly logged-in wallet.
@@ -384,10 +386,12 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
           _log.shout('Error during initial coin activation', e, s);
         } finally {
           _isInitialActivationInProgress = false;
+          _coinsRepo.markInitialActivationComplete();
         }
       }());
     } catch (e, s) {
       _isInitialActivationInProgress = false;
+      _coinsRepo.markInitialActivationComplete();
       _log.shout('Error on login', e, s);
     }
   }
@@ -503,6 +507,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
   void _resetInitialActivationState() {
     _isInitialActivationInProgress = false;
+    _coinsRepo.markInitialActivationComplete();
   }
 
   Future<void> _activateCoins(
