@@ -5,6 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/coins_manager/coins_manager_bloc.dart';
+import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/wallet_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item_body.dart';
 
@@ -133,6 +139,10 @@ class _CoinDropdownState extends State<CoinDropdown> {
                     _overlayEntry = null;
                   },
                   maxHeight: dropdownHeight,
+                  onClose: () {
+                    _overlayEntry?.remove();
+                    _overlayEntry = null;
+                  },
                 ),
               ),
             ],
@@ -168,11 +178,13 @@ class _SearchableDropdown extends StatefulWidget {
   final List<DropdownMenuItem<String>> items;
   final ValueChanged<String?> onItemSelected;
   final double maxHeight;
+  final VoidCallback? onClose;
 
   const _SearchableDropdown({
     required this.items,
     required this.onItemSelected,
     this.maxHeight = 300,
+    this.onClose,
   });
 
   @override
@@ -252,6 +264,39 @@ class _SearchableDropdownState extends State<_SearchableDropdown> {
                 padding: const EdgeInsets.all(16),
                 child: Text(LocaleKeys.nothingFound.tr()),
               ),
+            const Divider(height: 1),
+            _AddAssetsFooter(onClose: widget.onClose),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddAssetsFooter extends StatelessWidget {
+  const _AddAssetsFooter({this.onClose});
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: const Key('add-assets-dropdown-footer'),
+      onTap: () {
+        context
+            .read<CoinsManagerBloc>()
+            .add(const CoinsManagerCoinsListReset(CoinsManagerAction.add));
+        routingState.selectedMenu = MainMenuValue.wallet;
+        routingState.walletState.action = coinsManagerRouteAction.addAssets;
+        onClose?.call();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.add_circle_outline),
+            const SizedBox(width: 8),
+            Text(LocaleKeys.addAssets.tr()),
           ],
         ),
       ),

@@ -8,6 +8,7 @@ import 'package:web_dex/model/forms/coin_trade_amount_input.dart';
 import 'package:web_dex/views/market_maker_bot/coin_selection_and_amount_input.dart';
 import 'package:web_dex/views/market_maker_bot/coin_trade_amount_label.dart' show CoinTradeAmountLabel;
 import 'package:web_dex/views/market_maker_bot/market_maker_form_error_message_extensions.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 
 class BuyCoinSelectDropdown extends StatelessWidget {
   const BuyCoinSelectDropdown({
@@ -26,6 +27,29 @@ class BuyCoinSelectDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return CoinSelectionAndAmountInput(
       coins: coins,
+      refine: (list) {
+        // Order: active with balance (top), active without balance (middle), inactive (bottom)
+        final sdk = context.sdk;
+        int rank(Coin c) {
+          final hasBalance = (c.lastKnownUsdBalance(sdk) ?? 0) > 0;
+          if (c.isActive && hasBalance) return 0;
+          if (c.isActive) return 1;
+          return 2;
+        }
+        final sorted = List<Coin>.from(list);
+        sorted.sort((a, b) {
+          final ra = rank(a);
+          final rb = rank(b);
+          if (ra != rb) return ra - rb;
+          // Within rank, keep existing priority/balance sorting from upstream by
+          // comparing their current position heuristically via usd balance desc then abbr
+          final ba = a.lastKnownUsdBalance(sdk) ?? 0.0;
+          final bb = b.lastKnownUsdBalance(sdk) ?? 0.0;
+          if (ba != bb) return bb.compareTo(ba);
+          return a.abbr.compareTo(b.abbr);
+        });
+        return sorted;
+      },
       title: LocaleKeys.buy.tr(),
       selectedCoin: buyCoin.value,
       onItemSelected: onItemSelected,
