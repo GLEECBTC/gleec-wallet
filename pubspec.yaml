@@ -64,7 +64,7 @@ dependencies:
     #   ref: dev
     # ^2.0.0 # Option 3: Pub.dev dependency
 
-  ## ---- Dart.dev, Flutter.dev
+  ## ---- Dart.dev, Flutter.dev (Official Packages)
   args: ^2.7.0 # dart.dev
   flutter_markdown: ^0.7.7 # flutter.dev
   http: 1.4.0 # dart.dev

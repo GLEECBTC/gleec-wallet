@@ -62,7 +62,9 @@ class _DisclaimerState extends State<Disclaimer> {
                 child: SingleChildScrollView(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
-                  child: MarkdownBody(
+                  child: Markdown(
+                    shrinkWrap: true,
+                    softLineBreak: true,
                     data: snapshot.data ?? '',
                     styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
                     onTapLink: (_, String? href, __) {
