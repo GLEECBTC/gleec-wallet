@@ -221,6 +221,7 @@ flutter:
   assets:
     - assets/
     - assets/custom_icons/16px/
+    - assets/legal/
     - assets/logo/
     - assets/fonts/
     - assets/flags/
