@@ -50,23 +50,27 @@ class _DisclaimerState extends State<Disclaimer> {
               if (snapshot.hasError) {
                 return Padding(
                   padding: const EdgeInsets.all(16),
-                  child: SelectableText(
+                  child: Text(
                     'Failed to load the Terms of Service.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 );
               }
 
-              return Markdown(
-                controller: _scrollController,
-                selectable: true,
-                padding: const EdgeInsets.all(16),
-                data: snapshot.data ?? '',
-                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
-                onTapLink: (_, String? href, __) {
-                  if (href == null || href.isEmpty) return;
-                  unawaited(launchUrlString(href));
-                },
+              return DexScrollbar(
+                scrollController: _scrollController,
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  child: MarkdownBody(
+                    data: snapshot.data ?? '',
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+                    onTapLink: (_, String? href, __) {
+                      if (href == null || href.isEmpty) return;
+                      unawaited(launchUrlString(href));
+                    },
+                  ),
+                ),
               );
             },
           ),
