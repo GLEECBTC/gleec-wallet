@@ -102,7 +102,12 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     } finally {
       // Explicitly disconnect SSE on sign-out
       _log.info('User signed out, disconnecting SSE...');
-      _kdfSdk.streaming.disconnect();
+      try {
+        _kdfSdk.streaming.disconnect();
+      } on StateError {
+        // SDK has been disposed, skip disconnect
+        _log.info('SDK already disposed, skipping SSE disconnect');
+      }
       
       await _authChangesSubscription?.cancel();
       emit(AuthBlocState.initial());
@@ -469,11 +474,21 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       if (user != null) {
         // User authenticated - connect SSE for balance/tx history streaming
         _log.info('User authenticated, connecting SSE for streaming...');
-        _kdfSdk.streaming.connectIfNeeded();
+        try {
+          _kdfSdk.streaming.connectIfNeeded();
+        } on StateError {
+          // SDK has been disposed, skip connect
+          _log.info('SDK already disposed, skipping SSE connect');
+        }
       } else {
         // User signed out - disconnect SSE to clean up resources
         _log.info('User signed out, disconnecting SSE...');
-        _kdfSdk.streaming.disconnect();
+        try {
+          _kdfSdk.streaming.disconnect();
+        } on StateError {
+          // SDK has been disposed, skip disconnect
+          _log.info('SDK already disposed, skipping SSE disconnect');
+        }
       }
     });
   }
