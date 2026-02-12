@@ -1,17 +1,21 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:web_dex/dispatchers/popup_dispatcher.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/widgets/app_dialog.dart';
 
 import 'package:web_dex/shared/widgets/disclaimer/disclaimer.dart';
 import 'package:web_dex/shared/widgets/disclaimer/eula.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class EulaTosCheckboxes extends StatefulWidget {
-  const EulaTosCheckboxes(
-      {Key? key, this.isChecked = false, required this.onCheck})
-      : super(key: key);
+  const EulaTosCheckboxes({
+    super.key,
+    this.isChecked = false,
+    required this.onCheck,
+  });
 
   final bool isChecked;
   final void Function(bool) onCheck;
@@ -22,8 +26,6 @@ class EulaTosCheckboxes extends StatefulWidget {
 
 class _EulaTosCheckboxesState extends State<EulaTosCheckboxes> {
   bool _checkBox = false;
-  PopupDispatcher? _eulaPopupManager;
-  PopupDispatcher? _disclaimerPopupManager;
 
   @override
   Widget build(BuildContext context) {
@@ -68,24 +70,6 @@ class _EulaTosCheckboxesState extends State<EulaTosCheckboxes> {
   @override
   void initState() {
     _checkBox = widget.isChecked;
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _disclaimerPopupManager = PopupDispatcher(
-        context: context,
-        popupContent: Disclaimer(
-          onClose: () {
-            _disclaimerPopupManager?.close();
-          },
-        ),
-      );
-      _eulaPopupManager = PopupDispatcher(
-        context: context,
-        popupContent: Eula(
-          onClose: () {
-            _eulaPopupManager?.close();
-          },
-        ),
-      );
-    });
     super.initState();
   }
 
@@ -94,10 +78,23 @@ class _EulaTosCheckboxesState extends State<EulaTosCheckboxes> {
   }
 
   void _showDisclaimer() {
-    _disclaimerPopupManager?.show();
+    unawaited(
+      AppDialog.showWithCallback<void>(
+        context: context,
+        useRootNavigator: false,
+        width: 640,
+        childBuilder: (closeDialog) => Disclaimer(onClose: closeDialog),
+      ),
+    );
   }
 
   void _showEula() {
-    _eulaPopupManager?.show();
+    unawaited(
+      AppDialog.showWithCallback<void>(
+        context: context,
+        useRootNavigator: false,
+        childBuilder: (closeDialog) => Eula(onClose: closeDialog),
+      ),
+    );
   }
 }

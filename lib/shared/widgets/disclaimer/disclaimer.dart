@@ -1,133 +1,80 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/shared/widgets/disclaimer/constants.dart';
-import 'package:web_dex/shared/widgets/disclaimer/tos_content.dart';
 
 class Disclaimer extends StatefulWidget {
-  const Disclaimer({Key? key, required this.onClose}) : super(key: key);
+  const Disclaimer({super.key, required this.onClose});
   final Function() onClose;
 
   @override
   State<Disclaimer> createState() => _DisclaimerState();
 }
 
-class _DisclaimerState extends State<Disclaimer> with TickerProviderStateMixin {
+class _DisclaimerState extends State<Disclaimer> {
+  static const String _termsOfServiceAssetPath =
+      'assets/legal/Terms of Service.md';
+  late final Future<String> _termsOfServiceFuture;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _termsOfServiceFuture = rootBundle.loadString(_termsOfServiceAssetPath);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final List<TextSpan> disclaimerToSText = <TextSpan>[
-      TextSpan(
-          text: disclaimerTocTitle2,
-          style: Theme.of(context).textTheme.titleLarge),
-      TextSpan(
-          text: disclaimerTocParagraph2,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle3,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocTitle4,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph3,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle5,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph4,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle6,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph5,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle7,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph6,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle8,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph7,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle9,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph8,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle10,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph9,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle11,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph10,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle12,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph11,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle13,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph12,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle14,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph13,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle15,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph14,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle16,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph15,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle17,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocTitle19,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph18,
-          style: Theme.of(context).textTheme.bodyMedium),
-      TextSpan(
-          text: disclaimerTocTitle20,
-          style: Theme.of(context).textTheme.titleSmall),
-      TextSpan(
-          text: disclaimerTocParagraph19,
-          style: Theme.of(context).textTheme.bodyMedium)
-    ];
-
     return Column(
       children: <Widget>[
         SizedBox(
           height: MediaQuery.of(context).size.height * 2 / 3,
-          child: SingleChildScrollView(
-            controller: ScrollController(),
-            child: TosContent(disclaimerToSText: disclaimerToSText),
+          child: FutureBuilder<String>(
+            future: _termsOfServiceFuture,
+            builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Failed to load the Terms of Service.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                );
+              }
+
+              return DexScrollbar(
+                scrollController: _scrollController,
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  child: Markdown(
+                    shrinkWrap: true,
+                    softLineBreak: true,
+                    data: snapshot.data ?? '',
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)),
+                    onTapLink: (_, String? href, __) {
+                      if (href == null || href.isEmpty) return;
+                      unawaited(launchUrlString(href));
+                    },
+                  ),
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(height: 24),
