@@ -83,6 +83,14 @@ class MarketMakerTradeFormBloc
     Emitter<MarketMakerTradeFormState> emit,
   ) async {
     final identicalBuyAndSellCoins = state.buyCoin.value == event.sellCoin;
+    final sellCoin = event.sellCoin?.id;
+    double sellCoinBalance = 0;
+
+    if (sellCoin != null) {
+      // Use repo guard to avoid SDK calls if inactive
+      sellCoinBalance =
+          (await _coinsRepo.tryGetBalanceInfo(sellCoin)).spendable.toDouble();
+    }
 
     // Emit immediately with new coin selection for fast UI update
     emit(
@@ -644,6 +652,11 @@ class MarketMakerTradeFormBloc
     if (coin == null) {
       return;
     }
+
+    // Gate auto-activations until initial activation completes
+    await _coinsRepo.waitForInitialActivationToComplete(
+      timeout: const Duration(seconds: 30),
+    );
 
     if (!coin.isActive) {
       await _coinsRepo.activateCoinsSync([coin]);

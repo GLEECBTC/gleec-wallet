@@ -249,7 +249,7 @@ class BridgeBloc extends Bloc<BridgeEvent, BridgeState> {
       return;
     }
 
-    _autoActivateCoin(event.coin.abbr);
+    await _autoActivateCoin(event.coin.abbr);
     _subscribeMaxSellAmount();
 
     add(const BridgeGetMinSellAmount());
