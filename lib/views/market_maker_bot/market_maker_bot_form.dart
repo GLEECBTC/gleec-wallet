@@ -172,7 +172,7 @@ class _MakerFormMobileLayoutState extends State<_MakerFormMobileLayout> {
           children: [
             BlocBuilder<CoinsBloc, CoinsState>(
               builder: (context, state) {
-                final coins = state.walletCoins.values
+                final coins = state.coins.values
                     .where((e) {
                       final usdPrice = e.usdPrice?.price?.toDouble() ?? 0.0;
                       return usdPrice > 0;

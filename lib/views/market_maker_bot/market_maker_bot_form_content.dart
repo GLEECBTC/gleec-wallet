@@ -77,7 +77,7 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
                       key: const Key('$keyPrefix-sell-select'),
                       sellCoin: state.sellCoin,
                       sellAmount: state.sellAmount,
-                      coins: _coinsWithUsdBalance(widget.coins),
+                      coins: _sellableCoins(widget.coins),
                       minimumTradeVolume: state.minimumTradeVolume,
                       maximumTradeVolume: state.maximumTradeVolume,
                       onItemSelected: _onSelectSellCoin,
@@ -175,10 +175,13 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
     );
   }
 
-  List<Coin> _coinsWithUsdBalance(List<Coin> coins) {
-    return coins
-        .where((coin) => (coin.lastKnownUsdBalance(context.sdk) ?? 0) > 0)
-        .toList();
+  List<Coin> _sellableCoins(List<Coin> coins) {
+    // Sell list: must be active, have balance, and have fiat price
+    return coins.where((coin) {
+      final hasUsdPrice = (coin.usdPrice?.price?.toDouble() ?? 0.0) > 0.0;
+      final hasBalance = (coin.lastKnownUsdBalance(context.sdk) ?? 0) > 0.0;
+      return coin.isActive && hasUsdPrice && hasBalance;
+    }).toList();
   }
 
   void _onMakeOrderPressed() {
@@ -209,7 +212,11 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
   }
 
   List<Coin> _filteredCoinsList(Coin? coin) {
-    return widget.coins.where((e) => e.abbr != coin?.abbr).toList();
+    // Buy list: include all compatible coins with price data; exclude currently selected sell coin
+    return widget.coins
+        .where((e) => e.abbr != coin?.abbr)
+        .where((e) => (e.usdPrice?.price?.toDouble() ?? 0.0) > 0.0)
+        .toList();
   }
 
   void _onTradeMarginChanged(String value) {

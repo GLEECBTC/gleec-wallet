@@ -24,6 +24,7 @@ class CoinSelectionAndAmountInput extends StatefulWidget {
     this.trailing,
     this.onItemSelected,
     this.useFrontPlate = true,
+    this.refine,
   });
 
   final Coin? selectedCoin;
@@ -32,6 +33,9 @@ class CoinSelectionAndAmountInput extends StatefulWidget {
   final Widget? trailing;
   final Function(Coin?)? onItemSelected;
   final bool useFrontPlate;
+  /// Optional refiner applied after default filtering/sorting to customize
+  /// ordering (e.g., activation/balance grouping for buy list).
+  final List<Coin> Function(List<Coin>)? refine;
 
   @override
   State<CoinSelectionAndAmountInput> createState() =>
@@ -63,31 +67,34 @@ class _CoinSelectionAndAmountInputState
 
   late final _sdk = context.read<KomodoDefiSdk>();
   void _prepareItems() {
-    _items =
-        prepareCoinsForTable(
-              context,
-              widget.coins,
-              null,
-              testCoinsEnabled: context
-                  .read<SettingsBloc>()
-                  .state
-                  .testCoinsEnabled,
-            )
-            .map(
-              (coin) => DropdownMenuItem<String>(
-                value: coin.abbr,
-                child: CoinSelectItemWidget(
-                  name: coin.displayName,
-                  coinId: coin.abbr,
-                  trailing: AssetBalanceText(
-                    coin.toSdkAsset(_sdk).id,
-                    activateIfNeeded: false,
-                  ),
-                  title: CoinItemBody(coin: coin, size: CoinItemSize.large),
-                ),
+    List<Coin> list = prepareCoinsForTable(
+      context,
+      widget.coins,
+      null,
+      testCoinsEnabled:
+          context.read<SettingsBloc>().state.testCoinsEnabled,
+    );
+
+    if (widget.refine != null) {
+      list = widget.refine!(list);
+    }
+
+    _items = list
+        .map(
+          (coin) => DropdownMenuItem<String>(
+            value: coin.abbr,
+            child: CoinSelectItemWidget(
+              name: coin.displayName,
+              coinId: coin.abbr,
+              trailing: AssetBalanceText(
+                coin.toSdkAsset(_sdk).id,
+                activateIfNeeded: false,
               ),
-            )
-            .toList();
+              title: CoinItemBody(coin: coin, size: CoinItemSize.large),
+            ),
+          ),
+        )
+        .toList();
   }
 
   @override
