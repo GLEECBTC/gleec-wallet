@@ -3,6 +3,36 @@ import 'dart:convert';
 import 'package:equatable/equatable.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error_type.dart';
 
+/// Legacy RPC exception class.
+///
+/// This class is deprecated. Use [MmRpcException] and its subclasses from
+/// `package:komodo_defi_rpc_methods` instead. The [KdfErrorRegistry] provides
+/// automatic parsing of error responses into typed exceptions.
+///
+/// Example migration:
+/// ```dart
+/// // Old code:
+/// try {
+///   await someRpcCall();
+/// } on RpcException catch (e) {
+///   print(e.error.errorType);
+/// }
+///
+/// // New code:
+/// try {
+///   await someRpcCall();
+/// } on MmRpcException catch (e) {
+///   switch (e) {
+///     case AccountRpcErrorNameTooLongException():
+///       // Handle specific error
+///     // ... other cases
+///   }
+/// }
+/// ```
+@Deprecated(
+  'Use MmRpcException and its subclasses from package:komodo_defi_rpc_methods '
+  'instead. See KdfErrorRegistry for automatic error parsing.',
+)
 class RpcException implements Exception {
   const RpcException(this.error);
 
@@ -14,6 +44,15 @@ class RpcException implements Exception {
   }
 }
 
+/// Legacy RPC error data class.
+///
+/// This class is deprecated. Use [GeneralErrorResponse] from
+/// `package:komodo_defi_rpc_methods` for error data, or catch typed
+/// [MmRpcException] subclasses which contain the error data as fields.
+@Deprecated(
+  'Use GeneralErrorResponse or typed MmRpcException subclasses from '
+  'package:komodo_defi_rpc_methods instead.',
+)
 class RpcError extends Equatable {
   const RpcError({
     this.mmrpc,
@@ -98,12 +137,12 @@ class RpcError extends Equatable {
   String toString() {
     return '''
 RpcError: {
-  mmrpc: $mmrpc, 
-  error: $error, 
-  errorPath: $errorPath, 
-  errorTrace: $errorTrace, 
+  mmrpc: $mmrpc,
+  error: $error,
+  errorPath: $errorPath,
+  errorTrace: $errorTrace,
   errorType: $errorType,
-  errorData: $errorData, 
+  errorData: $errorData,
   id: $id
 }''';
   }
