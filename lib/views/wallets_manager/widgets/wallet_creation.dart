@@ -12,7 +12,6 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
-import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 class WalletCreation extends StatefulWidget {
@@ -45,7 +44,6 @@ class _WalletCreationState extends State<WalletCreation> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _eulaAndTosChecked = false;
   bool _inProgress = false;
-  bool _isHdMode = true;
   bool _rememberMe = false;
   bool _arePasswordsValid = false;
 
@@ -169,13 +167,6 @@ class _WalletCreationState extends State<WalletCreation> {
             if (_isCreateButtonEnabled) _onCreate();
           },
         ),
-        const SizedBox(height: 16),
-        HDWalletModeSwitch(
-          value: _isHdMode,
-          onChanged: (value) {
-            setState(() => _isHdMode = value);
-          },
-        ),
         const SizedBox(height: 20),
         QuickLoginSwitch(
           key: const Key('checkbox-one-click-login-signup'),
@@ -237,7 +228,7 @@ class _WalletCreationState extends State<WalletCreation> {
       widget.onCreate(
         name: _nameController.text.trim(),
         password: _passwordController.text,
-        walletType: _isHdMode ? WalletType.hdwallet : WalletType.iguana,
+        walletType: WalletType.hdwallet,
         rememberMe: _rememberMe,
       );
     });

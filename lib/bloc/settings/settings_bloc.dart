@@ -11,11 +11,11 @@ import 'package:web_dex/shared/utils/utils.dart';
 
 class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   SettingsBloc(StoredSettings stored, SettingsRepository repository)
-      : _settingsRepo = repository,
-        super(SettingsState.fromStored(stored)) {
+    : _settingsRepo = repository,
+      super(SettingsState.fromStored(stored)) {
     _storedSettings = stored;
     theme.mode = state.themeMode;
-    
+
     // Initialize diagnostic logging with the stored setting
     KdfLoggingConfig.verboseLogging = stored.diagnosticLoggingEnabled;
     KdfApiClient.enableDebugLogging = stored.diagnosticLoggingEnabled;
@@ -27,6 +27,7 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<WeakPasswordsAllowedChanged>(_onWeakPasswordsAllowedChanged);
     on<HideZeroBalanceAssetsChanged>(_onHideZeroBalanceAssetsChanged);
     on<DiagnosticLoggingChanged>(_onDiagnosticLoggingChanged);
+    on<HideBalancesChanged>(_onHideBalancesChanged);
   }
 
   late StoredSettings _storedSettings;
@@ -51,7 +52,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     MarketMakerBotSettingsChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(marketMakerBotSettings: event.settings);
+    _storedSettings = _storedSettings.copyWith(
+      marketMakerBotSettings: event.settings,
+    );
     await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(marketMakerBotSettings: event.settings));
   }
@@ -60,7 +63,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     TestCoinsEnabledChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(testCoinsEnabled: event.testCoinsEnabled);
+    _storedSettings = _storedSettings.copyWith(
+      testCoinsEnabled: event.testCoinsEnabled,
+    );
     await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(testCoinsEnabled: event.testCoinsEnabled));
   }
@@ -70,7 +75,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     Emitter<SettingsState> emitter,
   ) async {
     _storedSettings = _storedSettings.copyWith(
-        weakPasswordsAllowed: event.weakPasswordsAllowed);
+      weakPasswordsAllowed: event.weakPasswordsAllowed,
+    );
     await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(weakPasswordsAllowed: event.weakPasswordsAllowed));
   }
@@ -94,11 +100,24 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     KdfLoggingConfig.verboseLogging = event.diagnosticLoggingEnabled;
     KdfApiClient.enableDebugLogging = event.diagnosticLoggingEnabled;
     KomodoDefiFramework.enableDebugLogging = event.diagnosticLoggingEnabled;
-    
+
     _storedSettings = _storedSettings.copyWith(
       diagnosticLoggingEnabled: event.diagnosticLoggingEnabled,
     );
     await _settingsRepo.updateSettings(_storedSettings);
-    emitter(state.copyWith(diagnosticLoggingEnabled: event.diagnosticLoggingEnabled));
+    emitter(
+      state.copyWith(diagnosticLoggingEnabled: event.diagnosticLoggingEnabled),
+    );
+  }
+
+  Future<void> _onHideBalancesChanged(
+    HideBalancesChanged event,
+    Emitter<SettingsState> emitter,
+  ) async {
+    _storedSettings = _storedSettings.copyWith(
+      hideBalances: event.hideBalances,
+    );
+    await _settingsRepo.updateSettings(_storedSettings);
+    emitter(state.copyWith(hideBalances: event.hideBalances));
   }
 }

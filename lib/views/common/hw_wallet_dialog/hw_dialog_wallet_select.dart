@@ -13,10 +13,8 @@ import 'package:web_dex/model/hw_wallet/hw_wallet.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/constants.dart';
 
 class HwDialogWalletSelect extends StatefulWidget {
-  const HwDialogWalletSelect({
-    Key? key,
-    required this.onSelect,
-  }) : super(key: key);
+  const HwDialogWalletSelect({Key? key, required this.onSelect})
+    : super(key: key);
 
   final void Function(WalletBrand) onSelect;
 
@@ -45,6 +43,14 @@ class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
               style: trezorDialogSubtitle,
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 8),
+            Text(
+              LocaleKeys.trezorWalletOnlyNotice.tr(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 24),
             _HwWalletTile(
               disabled: !platformState.isTrezorSupported,
@@ -66,16 +72,14 @@ class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
                 margin: const EdgeInsets.only(top: 4.0),
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .error
-                      .withValues(alpha: 0.1),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .error
-                        .withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.error.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(
