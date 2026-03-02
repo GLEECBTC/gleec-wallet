@@ -221,6 +221,8 @@ double compareToCex(double baseUsdPrice, double relUsdPrice, Rational rate) {
   return (dexRate - cexRate) * 100 / cexRate;
 }
 
+final Set<String> _activationInFlight = <String>{};
+
 Future<List<DexFormError>> activateCoinIfNeeded(
   String? abbr,
   CoinsRepo coinsRepository,
@@ -231,6 +233,11 @@ Future<List<DexFormError>> activateCoinIfNeeded(
   final Coin? coin = coinsRepository.getCoin(abbr);
   if (coin == null) return errors;
 
+  if (_activationInFlight.contains(coin.abbr)) {
+    return errors;
+  }
+
+  _activationInFlight.add(coin.abbr);
   try {
     // sdk handles parent activation logic, so simply call
     // activation here
@@ -241,6 +248,8 @@ Future<List<DexFormError>> activateCoinIfNeeded(
         error: '${LocaleKeys.unableToActiveCoin.tr(args: [coin.abbr])}: $e',
       ),
     );
+  } finally {
+    _activationInFlight.remove(coin.abbr);
   }
 
   return errors;

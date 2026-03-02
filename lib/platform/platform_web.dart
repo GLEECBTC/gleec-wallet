@@ -19,7 +19,7 @@ external dynamic wasmMm2Status();
 external String wasmVersion();
 
 @JS('rpc_request')
-external dynamic wasmRpc(String request);
+external Future<dynamic> wasmRpc(String request);
 
 @JS('reload_page')
 external void reloadPage();

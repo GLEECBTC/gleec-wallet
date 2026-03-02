@@ -1,14 +1,17 @@
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show Asset, NewAddressStatus, AssetPubkeys;
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/analytics/events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/utils/kdf_error_display.dart';
 
 class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   final KomodoDefiSdk sdk;
@@ -82,7 +85,9 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
             emit(
               state.copyWith(
                 createAddressStatus: () => FormStatus.failure,
-                errorMessage: () => newAddressState.error,
+                errorMessage: () => _buildDisplayError(
+                  newAddressState.error ?? LocaleKeys.somethingWrong.tr(),
+                ),
                 newAddressState: () => null,
               ),
             );
@@ -104,7 +109,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       emit(
         state.copyWith(
           createAddressStatus: () => FormStatus.failure,
-          errorMessage: () => e.toString(),
+          errorMessage: () => _buildDisplayError(e),
           newAddressState: () => null,
         ),
       );
@@ -139,7 +144,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       emit(
         state.copyWith(
           status: () => FormStatus.failure,
-          errorMessage: () => e.toString(),
+          errorMessage: () => _buildDisplayError(e),
         ),
       );
     }
@@ -168,7 +173,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         ),
       );
     } catch (e) {
-      emit(state.copyWith(errorMessage: () => e.toString()));
+      emit(state.copyWith(errorMessage: () => _buildDisplayError(e)));
     }
   }
 
@@ -203,15 +208,107 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
             },
             onError: (Object err) {
               if (!isClosed) {
-                add(CoinAddressesPubkeysSubscriptionFailed(err.toString()));
+                add(
+                  CoinAddressesPubkeysSubscriptionFailed(
+                    _buildDisplayError(err),
+                  ),
+                );
               }
             },
           );
     } catch (e) {
       if (!isClosed) {
-        add(CoinAddressesPubkeysSubscriptionFailed(e.toString()));
+        add(CoinAddressesPubkeysSubscriptionFailed(_buildDisplayError(e)));
       }
     }
+  }
+
+  String _buildDisplayError(Object error) {
+    if (_isNetworkLikeError(error)) {
+      return LocaleKeys.connectionToServersFailing.tr(args: [assetId]);
+    }
+
+    if (error is SdkError) {
+      return _localizedSdkError(error);
+    }
+
+    if (error is MmRpcException) {
+      return error.localizedMessage;
+    }
+
+    if (error is GeneralErrorResponse) {
+      return error.localizedMessage;
+    }
+
+    final raw = error.toString().trim();
+    if (raw.isEmpty) {
+      return LocaleKeys.somethingWrong.tr();
+    }
+
+    const exceptionPrefix = 'Exception: ';
+    if (raw.startsWith(exceptionPrefix)) {
+      final message = raw.substring(exceptionPrefix.length).trim();
+      if (message.isNotEmpty) {
+        return message;
+      }
+    }
+
+    return raw;
+  }
+
+  String _localizedSdkError(SdkError error) {
+    final localized = error.messageKey.tr(args: error.messageArgs);
+    return localized == error.messageKey ? error.fallbackMessage : localized;
+  }
+
+  bool _isNetworkLikeError(Object error) {
+    if (error is SdkError) {
+      return error.category == SdkErrorCategory.network;
+    }
+
+    if (error is MmRpcException) {
+      const networkErrorTypes = {
+        'Transport',
+        'Timeout',
+        'TaskTimedOut',
+        'UnreachableNodes',
+        'ClientConnectionFailed',
+        'ConnectToNodeError',
+      };
+      if (networkErrorTypes.contains(error.errorType)) {
+        return true;
+      }
+      return _containsNetworkMarkers(
+        '${error.message ?? ''} ${error.path ?? ''}',
+      );
+    }
+
+    if (error is GeneralErrorResponse) {
+      const networkErrorTypes = {
+        'Transport',
+        'Timeout',
+        'TaskTimedOut',
+        'UnreachableNodes',
+        'ClientConnectionFailed',
+        'ConnectToNodeError',
+      };
+      if (error.errorType != null &&
+          networkErrorTypes.contains(error.errorType)) {
+        return true;
+      }
+      return _containsNetworkMarkers(error.error ?? '');
+    }
+
+    return _containsNetworkMarkers(error.toString());
+  }
+
+  bool _containsNetworkMarkers(String input) {
+    final normalized = input.toLowerCase();
+    return normalized.contains('failed to fetch') ||
+        normalized.contains('network') ||
+        normalized.contains('connection') ||
+        normalized.contains('timeout') ||
+        normalized.contains('unreachable');
   }
 
   @override

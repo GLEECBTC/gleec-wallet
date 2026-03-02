@@ -1,17 +1,19 @@
 import 'package:characters/characters.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/constants.dart';
 
 /// Enum representing different types of password validation errors
 enum PasswordValidationError {
   containsPassword,
   tooShort,
+  tooLong,
   missingDigit,
   missingLowercase,
   missingUppercase,
   missingSpecialCharacter,
   consecutiveCharacters,
-  none
+  none,
 }
 
 /// Converts a password validation error to a localized error message
@@ -21,6 +23,8 @@ String? passwordErrorMessage(PasswordValidationError error) {
       return LocaleKeys.passwordContainsTheWordPassword.tr();
     case PasswordValidationError.tooShort:
       return LocaleKeys.passwordTooShort.tr();
+    case PasswordValidationError.tooLong:
+      return LocaleKeys.passwordTooLong.tr();
     case PasswordValidationError.missingDigit:
       return LocaleKeys.passwordMissingDigit.tr();
     case PasswordValidationError.missingLowercase:
@@ -43,8 +47,9 @@ String? validateConfirmPassword(String password, String confirmPassword) {
 }
 
 String? validatePasswordLegacy(String password, String errorText) {
-  final RegExp exp =
-      RegExp(r'^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9\s])).{12,}$');
+  final RegExp exp = RegExp(
+    r'^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*[^a-zA-Z0-9\s])).{12,}$',
+  );
   return password.isEmpty || !password.contains(exp) ? errorText : null;
 }
 
@@ -74,9 +79,13 @@ PasswordValidationError checkPasswordRequirements(String password) {
     return PasswordValidationError.tooShort;
   }
 
-  if (password
-      .toLowerCase()
-      .contains(RegExp('password', caseSensitive: false, unicode: true))) {
+  if (password.characters.length > passwordMaxLength) {
+    return PasswordValidationError.tooLong;
+  }
+
+  if (password.toLowerCase().contains(
+    RegExp('password', caseSensitive: false, unicode: true),
+  )) {
     return PasswordValidationError.containsPassword;
   }
 

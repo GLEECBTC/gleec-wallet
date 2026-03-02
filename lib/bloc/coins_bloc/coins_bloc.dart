@@ -178,7 +178,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     final coin = event.coin;
     final walletCoins = Map<String, Coin>.of(state.walletCoins);
 
-    if (coin.isInactive) {
+    if (coin.isInactive || coin.isSuspended) {
       walletCoins.remove(coin.id.id);
       emit(state.copyWith(walletCoins: walletCoins));
       return;
@@ -208,9 +208,16 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // Preserve persistent state fields such as activation state
     final merged = updated.copyWith(state: existing.state);
 
+    final walletCoins = Map<String, Coin>.of(state.walletCoins);
+    if (merged.isActive || merged.isActivating) {
+      walletCoins[assetId] = merged;
+    } else {
+      walletCoins.remove(assetId);
+    }
+
     emit(
       state.copyWith(
-        walletCoins: {...state.walletCoins, assetId: merged},
+        walletCoins: walletCoins,
         coins: {...state.coins, assetId: merged},
       ),
     );
@@ -228,10 +235,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     Emitter<CoinsState> emit,
   ) async {
     _updateBalancesTimer?.cancel();
-    _updateBalancesTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+    _updateBalancesTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
+      // Most active assets are already covered by live balance watchers.
+      // Keep this timer as a low-frequency fallback for non-streaming gaps.
+      if (_coinsRepo.hasActiveBalanceWatchers) {
+        return;
+      }
       if (kDebugElectrumLogs) {
         _log.info(
-          '[POLLING] Triggering periodic balance refresh (every 1 minute)',
+          '[POLLING] Triggering fallback balance refresh (every 3 minutes)',
         );
       }
       add(CoinsBalancesRefreshed());
@@ -560,8 +572,9 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       }
 
       try {
-        final saved =
-            await _kdfSdk.activationConfigService.getSavedZhtlc(asset.id);
+        final saved = await _kdfSdk.activationConfigService.getSavedZhtlc(
+          asset.id,
+        );
         if (saved != null) {
           filtered.add(asset);
         } else {

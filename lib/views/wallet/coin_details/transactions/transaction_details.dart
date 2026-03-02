@@ -96,13 +96,13 @@ class TransactionDetails extends StatelessWidget {
                     _buildSimpleData(
                       context,
                       title: LocaleKeys.confirmations.tr(),
-                      value: transaction.confirmations.toString(),
+                      value: _confirmationsLabel(context),
                       hasBackground: true,
                     ),
                     _buildSimpleData(
                       context,
                       title: LocaleKeys.blockHeight.tr(),
-                      value: transaction.blockHeight.toString(),
+                      value: _blockHeightLabel(),
                     ),
                     _buildSimpleData(
                       context,
@@ -138,6 +138,26 @@ class TransactionDetails extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _confirmationsLabel(BuildContext context) {
+    final confirmations = transaction.confirmations;
+    if (confirmations > 0) {
+      return confirmations.toString();
+    }
+
+    if (transaction.blockHeight > 0) {
+      return '0';
+    }
+
+    return LocaleKeys.inProgress.tr();
+  }
+
+  String _blockHeightLabel() {
+    if (transaction.blockHeight > 0) {
+      return transaction.blockHeight.toString();
+    }
+    return LocaleKeys.unknown.tr();
   }
 
   Widget _buildAddress(

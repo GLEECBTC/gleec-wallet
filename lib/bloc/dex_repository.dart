@@ -32,6 +32,11 @@ class DexRepository {
   DexRepository(this._mm2Api);
 
   final Mm2Api _mm2Api;
+  final _rpcCache = _RpcRequestCache();
+
+  static const Duration _tradePreimageCacheTtl = Duration(seconds: 2);
+  static const Duration _maxVolumeCacheTtl = Duration(seconds: 5);
+  static const Duration _minVolumeCacheTtl = Duration(seconds: 10);
 
   Future<SellResponse> sell(SellRequest request) async {
     try {
@@ -50,81 +55,108 @@ class DexRepository {
     Rational? volume,
     bool max = false,
   ]) async {
-    final request = TradePreimageRequest(
-      base: base,
-      rel: rel,
-      price: price,
-      volume: volume,
-      swapMethod: swapMethod,
-      max: max,
-    );
-    final ApiResponse<
-      TradePreimageRequest,
-      TradePreimageResponseResult,
-      Map<String, dynamic>
-    >
-    response = await _mm2Api.getTradePreimage(request);
+    final cacheKey =
+        'trade_preimage:$base:$rel:${price.toString()}:$swapMethod:${volume?.toString() ?? 'null'}:$max';
 
-    final Map<String, dynamic>? error = response.error;
-    final TradePreimageResponseResult? result = response.result;
-    if (error != null) {
-      return DataFromService(
-        error: tradePreimageErrorFactory.getError(error, response.request),
-      );
-    }
-    if (result == null) {
-      return DataFromService(error: TextError(error: 'Something wrong'));
-    }
-    try {
-      return DataFromService(
-        data: mapTradePreimageResponseResultToTradePreimage(
-          result,
-          response.request,
-        ),
-      );
-    } catch (e, s) {
-      log(
-        e.toString(),
-        path:
-            'swaps_service => getTradePreimage => mapTradePreimageResponseToTradePreimage',
-        trace: s,
-        isError: true,
-      );
-      return DataFromService(error: TextError(error: 'Something wrong'));
-    }
+    return _rpcCache.getOrCreate(
+      cacheKey,
+      ttl: _tradePreimageCacheTtl,
+      request: () async {
+        final request = TradePreimageRequest(
+          base: base,
+          rel: rel,
+          price: price,
+          volume: volume,
+          swapMethod: swapMethod,
+          max: max,
+        );
+        final ApiResponse<
+          TradePreimageRequest,
+          TradePreimageResponseResult,
+          Map<String, dynamic>
+        >
+        response = await _mm2Api.getTradePreimage(request);
+
+        final Map<String, dynamic>? error = response.error;
+        final TradePreimageResponseResult? result = response.result;
+        if (error != null) {
+          return DataFromService(
+            error: tradePreimageErrorFactory.getError(error, response.request),
+          );
+        }
+        if (result == null) {
+          return DataFromService(error: TextError(error: 'Something wrong'));
+        }
+        try {
+          return DataFromService(
+            data: mapTradePreimageResponseResultToTradePreimage(
+              result,
+              response.request,
+            ),
+          );
+        } catch (e, s) {
+          log(
+            e.toString(),
+            path:
+                'swaps_service => getTradePreimage => mapTradePreimageResponseToTradePreimage',
+            trace: s,
+            isError: true,
+          );
+          return DataFromService(error: TextError(error: 'Something wrong'));
+        }
+      },
+    );
   }
 
   Future<Rational?> getMaxTakerVolume(String coinAbbr) async {
-    final MaxTakerVolResponse? response = await _mm2Api.getMaxTakerVolume(
-      MaxTakerVolRequest(coin: coinAbbr),
-    );
-    if (response == null) {
-      return null;
-    }
+    return _rpcCache.getOrCreate<Rational?>(
+      'max_taker_vol:$coinAbbr',
+      ttl: _maxVolumeCacheTtl,
+      request: () async {
+        final MaxTakerVolResponse? response = await _mm2Api.getMaxTakerVolume(
+          MaxTakerVolRequest(coin: coinAbbr),
+        );
+        if (response == null) {
+          return null;
+        }
 
-    return fract2rat(response.result.toJson());
+        return fract2rat(response.result.toJson());
+      },
+    );
   }
 
   Future<Rational?> getMaxMakerVolume(String coinAbbr) async {
-    final MaxMakerVolResponse? response = await _mm2Api.getMaxMakerVolume(
-      MaxMakerVolRequest(coin: coinAbbr),
-    );
-    if (response == null) {
-      return null;
-    }
+    return _rpcCache.getOrCreate<Rational?>(
+      'max_maker_vol:$coinAbbr',
+      ttl: _maxVolumeCacheTtl,
+      request: () async {
+        final MaxMakerVolResponse? response = await _mm2Api.getMaxMakerVolume(
+          MaxMakerVolRequest(coin: coinAbbr),
+        );
+        if (response == null) {
+          return null;
+        }
 
-    return fract2rat(response.volume.toFractionalJson());
+        return fract2rat(response.volume.toFractionalJson());
+      },
+    );
   }
 
   Future<Rational?> getMinTradingVolume(String coinAbbr) async {
-    final MinTradingVolResponse? response = await _mm2Api.getMinTradingVol(
-      MinTradingVolRequest(coin: coinAbbr),
-    );
-    if (response == null) {
-      return null;
-    }
+    return _rpcCache.getOrCreate<Rational?>(
+      'min_trading_vol:$coinAbbr',
+      ttl: _minVolumeCacheTtl,
+      request: () async {
+        final MinTradingVolResponse? response = await _mm2Api.getMinTradingVol(
+          MinTradingVolRequest(coin: coinAbbr),
+        );
+        if (response == null) {
+          return null;
+        }
 
-    return fract2rat(response.result.toJson());
+        return fract2rat(response.result.toJson());
+      },
+    );
   }
 
   Future<List<Swap>?> getRecentSwaps(MyRecentSwapsRequest request) async {
@@ -254,4 +286,43 @@ class DexRepository {
       await Future.delayed(Duration(milliseconds: interval));
     }
   }
+}
+
+class _RpcRequestCache {
+  final Map<String, _RpcCacheEntry<dynamic>> _resolved = {};
+  final Map<String, Future<dynamic>> _inFlight = {};
+
+  Future<T> getOrCreate<T>(
+    String key, {
+    required Duration ttl,
+    required Future<T> Function() request,
+  }) async {
+    final now = DateTime.now();
+    final cached = _resolved[key];
+    if (cached != null && now.difference(cached.cachedAt) < ttl) {
+      return cached.value as T;
+    }
+
+    final inFlight = _inFlight[key];
+    if (inFlight != null) {
+      return await inFlight as T;
+    }
+
+    final future = request();
+    _inFlight[key] = future;
+    try {
+      final value = await future;
+      _resolved[key] = _RpcCacheEntry(value: value, cachedAt: DateTime.now());
+      return value;
+    } finally {
+      _inFlight.remove(key);
+    }
+  }
+}
+
+class _RpcCacheEntry<T> {
+  _RpcCacheEntry({required this.value, required this.cachedAt});
+
+  final T value;
+  final DateTime cachedAt;
 }

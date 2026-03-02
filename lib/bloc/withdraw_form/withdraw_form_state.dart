@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_ui/utils.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_step.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
@@ -21,6 +22,8 @@ class WithdrawFormState extends Equatable {
   final String? memo;
   final bool isIbcTransfer;
   final String? ibcChannel;
+  final WithdrawalFeeOptions? feeOptions;
+  final WithdrawalFeeLevel? selectedFeePriority;
 
   // Transaction state
   final WithdrawalPreview? preview;
@@ -43,7 +46,15 @@ class WithdrawFormState extends Equatable {
   final TextError? networkError; // Network connectivity errors
 
   bool get isCustomFeeSupported =>
-      asset.protocol is UtxoProtocol || asset.protocol is Erc20Protocol;
+      asset.protocol is UtxoProtocol ||
+      asset.protocol is Erc20Protocol ||
+      asset.protocol is QtumProtocol ||
+      asset.protocol is TendermintProtocol;
+
+  bool get isPriorityFeeSupported =>
+      asset.protocol is Erc20Protocol ||
+      asset.protocol is QtumProtocol ||
+      asset.protocol is TendermintProtocol;
 
   bool get hasPreviewError => previewError != null;
   bool get hasTransactionError => transactionError != null;
@@ -107,6 +118,8 @@ class WithdrawFormState extends Equatable {
     this.memo,
     this.isIbcTransfer = false,
     this.ibcChannel,
+    this.feeOptions,
+    this.selectedFeePriority,
     this.preview,
     this.isSending = false,
     this.result,
@@ -136,6 +149,8 @@ class WithdrawFormState extends Equatable {
     ValueGetter<String?>? memo,
     bool? isIbcTransfer,
     ValueGetter<String?>? ibcChannel,
+    ValueGetter<WithdrawalFeeOptions?>? feeOptions,
+    ValueGetter<WithdrawalFeeLevel?>? selectedFeePriority,
     ValueGetter<WithdrawalPreview?>? preview,
     bool? isSending,
     ValueGetter<WithdrawalResult?>? result,
@@ -166,6 +181,10 @@ class WithdrawFormState extends Equatable {
       memo: memo != null ? memo() : this.memo,
       isIbcTransfer: isIbcTransfer ?? this.isIbcTransfer,
       ibcChannel: ibcChannel != null ? ibcChannel() : this.ibcChannel,
+      feeOptions: feeOptions != null ? feeOptions() : this.feeOptions,
+      selectedFeePriority: selectedFeePriority != null
+          ? selectedFeePriority()
+          : this.selectedFeePriority,
       preview: preview != null ? preview() : this.preview,
       isSending: isSending ?? this.isSending,
       result: result != null ? result() : this.result,
@@ -200,6 +219,7 @@ class WithdrawFormState extends Equatable {
           ? null
           : Decimal.parse(normalizeDecimalString(amount)),
       fee: isCustomFee ? customFee : null,
+      feePriority: isCustomFee ? null : selectedFeePriority,
       from: selectedSourceAddress?.derivationPath != null
           ? WithdrawalSource.hdDerivationPath(
               selectedSourceAddress!.derivationPath!,
@@ -215,13 +235,12 @@ class WithdrawFormState extends Equatable {
   }
 
   //TODO!
-  double? get usdFeePrice => 0.0;
+  double? get usdFeePrice => null;
 
   //TODO!
-  double? get usdAmountPrice => 0.0;
+  double? get usdAmountPrice => null;
 
-  //TODO!
-  bool get isFeePriceExpensive => false;
+  bool get isFeePriceExpensive => preview?.fee.isHighFee ?? false;
 
   @override
   List<Object?> get props => [
@@ -237,6 +256,8 @@ class WithdrawFormState extends Equatable {
     memo,
     isIbcTransfer,
     ibcChannel,
+    feeOptions,
+    selectedFeePriority,
     preview,
     isSending,
     result,
