@@ -66,6 +66,24 @@ class MakerFormTradeButton extends StatelessWidget {
                                 ),
                               )
                             : null,
+                        child: _DexTradeButtonContent(
+                          text: isTradingEnabled
+                              ? LocaleKeys.makeOrder.tr()
+                              : LocaleKeys.tradingDisabled.tr(),
+                          prefix: inProgress
+                              ? Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: UiSpinner(
+                                    width: 10,
+                                    height: 10,
+                                    strokeWidth: 1,
+                                    color: theme
+                                        .custom
+                                        .defaultGradientButtonTextColor,
+                                  ),
+                                )
+                              : null,
+                        ),
                         onPressed: disabled || !isTradingEnabled
                             ? null
                             : () async {
@@ -90,6 +108,29 @@ class MakerFormTradeButton extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _DexTradeButtonContent extends StatelessWidget {
+  const _DexTradeButtonContent({required this.text, this.prefix});
+
+  final String text;
+  final Widget? prefix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (prefix != null) prefix!,
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(text, maxLines: 1, textAlign: TextAlign.center),
+          ),
+        ),
+      ],
     );
   }
 }

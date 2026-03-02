@@ -15,32 +15,41 @@ class MainLayoutRouterDelegate extends RouterDelegate<AppRoutePath>
 
   @override
   Widget build(BuildContext context) {
-    return Builder(builder: (context) {
-      switch (screenType) {
-        case ScreenType.mobile:
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: maxScreenWidth,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+        final bool isCompact = width < 1100;
+        final double leftPadding = isCompact ? 16 : 24;
+        final double rightPadding = isCompact ? 16 : mainLayoutPadding;
+        final EdgeInsets contentPadding = EdgeInsets.fromLTRB(
+          leftPadding,
+          0,
+          rightPadding,
+          0,
+        );
+
+        switch (screenType) {
+          case ScreenType.mobile:
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: maxScreenWidth),
+                child: _MobileLayout(),
               ),
-              child: _MobileLayout(),
-            ),
-          );
-        case ScreenType.tablet:
-          return Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: maxScreenWidth,
+            );
+          case ScreenType.tablet:
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: maxScreenWidth),
+                child: _TabletLayout(contentPadding: contentPadding),
               ),
-              child: _TabletLayout(),
-            ),
-          );
-        case ScreenType.desktop:
-          return _DesktopLayout();
-      }
-    });
+            );
+          case ScreenType.desktop:
+            return _DesktopLayout(contentPadding: contentPadding);
+        }
+      },
+    );
   }
 
   @override
@@ -48,6 +57,10 @@ class MainLayoutRouterDelegate extends RouterDelegate<AppRoutePath>
 }
 
 class _DesktopLayout extends StatelessWidget {
+  const _DesktopLayout({required this.contentPadding});
+
+  final EdgeInsets contentPadding;
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -75,8 +88,7 @@ class _DesktopLayout extends StatelessWidget {
               // Main content
               Expanded(
                 child: Container(
-                  padding:
-                      const EdgeInsets.fromLTRB(24, 0, mainLayoutPadding, 0),
+                  padding: contentPadding,
                   child: PageContentRouter(),
                 ),
               ),
@@ -89,16 +101,17 @@ class _DesktopLayout extends StatelessWidget {
 }
 
 class _TabletLayout extends StatelessWidget {
+  const _TabletLayout({required this.contentPadding});
+
+  final EdgeInsets contentPadding;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         const MainLayoutTopBar(),
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 0, mainLayoutPadding, 0),
-            child: PageContentRouter(),
-          ),
+          child: Container(padding: contentPadding, child: PageContentRouter()),
         ),
       ],
     );

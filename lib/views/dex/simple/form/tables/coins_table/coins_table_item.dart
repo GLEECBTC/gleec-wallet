@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/shared/widgets/coin_balance.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item_size.dart';
@@ -25,22 +26,39 @@ class CoinsTableItem<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isMobileLayout = isMobile;
+    final CoinItemSize itemSize = isMobileLayout
+        ? CoinItemSize.medium
+        : CoinItemSize.large;
+    final double spacerWidth = isMobileLayout ? 6 : 8;
+    final BoxConstraints trailingConstraints = BoxConstraints(
+      minWidth: isMobileLayout ? 90 : 110,
+      maxWidth: isMobileLayout ? 120 : 160,
+    );
     final child = ItemDecoration(
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         mainAxisSize: MainAxisSize.max,
         children: [
-          CoinItem(
-            coin: coin,
-            size: CoinItemSize.large,
-            subtitleText: subtitleText,
-            showNetworkLogo: !isGroupHeader,
+          Expanded(
+            child: CoinItem(
+              coin: coin,
+              size: itemSize,
+              subtitleText: subtitleText,
+              showNetworkLogo: !isGroupHeader,
+            ),
           ),
-          const SizedBox(width: 8),
-          if (trailing != null)
-            trailing!
-          else if (coin.isActive)
-            CoinBalance(coin: coin, isVertical: true),
+          SizedBox(width: spacerWidth),
+          ConstrainedBox(
+            constraints: trailingConstraints,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child:
+                  trailing ??
+                  (coin.isActive
+                      ? CoinBalance(coin: coin, isVertical: true)
+                      : const SizedBox.shrink()),
+            ),
+          ),
         ],
       ),
     );

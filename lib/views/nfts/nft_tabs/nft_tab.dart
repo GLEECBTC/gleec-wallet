@@ -22,10 +22,10 @@ class NftTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData themeData = Theme.of(context);
-    final ColorSchemeExtension colorScheme =
-        themeData.extension<ColorSchemeExtension>()!;
-    final TextThemeExtension textTheme =
-        themeData.extension<TextThemeExtension>()!;
+    final ColorSchemeExtension colorScheme = themeData
+        .extension<ColorSchemeExtension>()!;
+    final TextThemeExtension textTheme = themeData
+        .extension<TextThemeExtension>()!;
 
     return BlocSelector<NftMainBloc, NftMainState, NftBlockchains>(
       selector: (state) {
@@ -33,6 +33,7 @@ class NftTab extends StatelessWidget {
       },
       builder: (context, selectedChain) {
         final bool isSelected = selectedChain == chain;
+        final chainColor = _getChainColor(chain);
         return InkWell(
           key: Key('nft-tab-bnt-$chain'),
           hoverColor: Colors.transparent,
@@ -49,9 +50,7 @@ class NftTab extends StatelessWidget {
             padding: EdgeInsets.only(left: isFirst ? 0 : 20, bottom: 8),
             decoration: isSelected
                 ? BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: colorScheme.secondary),
-                    ),
+                    border: Border(bottom: BorderSide(color: chainColor)),
                   )
                 : null,
             child: Row(
@@ -62,7 +61,7 @@ class NftTab extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? colorScheme.secondary : colorScheme.s40,
+                    color: isSelected ? chainColor : colorScheme.s40,
                   ),
                   child: Center(
                     child: SvgPicture.asset(
@@ -71,7 +70,7 @@ class NftTab extends StatelessWidget {
                       height: 16,
                       key: Key('nft-tab-btn-icon-$chain'),
                       colorFilter: ColorFilter.mode(
-                        isSelected ? colorScheme.surf : colorScheme.s70,
+                        isSelected ? colorScheme.surf : chainColor,
                         BlendMode.srcIn,
                       ),
                     ),
@@ -86,9 +85,7 @@ class NftTab extends StatelessWidget {
                       _title,
                       key: Key('nft-tab-btn-text-$chain'),
                       style: textTheme.bodySBold.copyWith(
-                        color: isSelected
-                            ? colorScheme.secondary
-                            : colorScheme.s50,
+                        color: isSelected ? chainColor : colorScheme.s50,
                       ),
                     ),
                     _NftCount(chain: chain),
@@ -116,6 +113,21 @@ class NftTab extends StatelessWidget {
         return 'Fantom';
     }
   }
+
+  Color _getChainColor(NftBlockchains chain) {
+    switch (chain) {
+      case NftBlockchains.eth:
+        return const Color(0xFF3D77E9);
+      case NftBlockchains.bsc:
+        return const Color(0xFFE6BC41);
+      case NftBlockchains.avalanche:
+        return const Color(0xFFD54F49);
+      case NftBlockchains.polygon:
+        return const Color(0xFF7B49DD);
+      case NftBlockchains.fantom:
+        return const Color(0xFF3267F6);
+    }
+  }
 }
 
 class _NftCount extends StatelessWidget {
@@ -132,14 +144,17 @@ class _NftCount extends StatelessWidget {
       },
       builder: (context, nftCount) {
         final int? count = nftCount[chain];
-        final ColorSchemeExtension colorScheme =
-            Theme.of(context).extension<ColorSchemeExtension>()!;
-        final TextThemeExtension textTheme =
-            Theme.of(context).extension<TextThemeExtension>()!;
+        final ColorSchemeExtension colorScheme = Theme.of(
+          context,
+        ).extension<ColorSchemeExtension>()!;
+        final TextThemeExtension textTheme = Theme.of(
+          context,
+        ).extension<TextThemeExtension>()!;
         return Text(
-            count != null ? LocaleKeys.nItems.tr(args: [count.toString()]) : '',
-            style: textTheme.bodyXXSBold.copyWith(color: colorScheme.s40),
-            key: Key('ntf-tab-count-$chain'));
+          count != null ? LocaleKeys.nItems.tr(args: [count.toString()]) : '',
+          style: textTheme.bodyXXSBold.copyWith(color: colorScheme.s40),
+          key: Key('ntf-tab-count-$chain'),
+        );
       },
     );
   }

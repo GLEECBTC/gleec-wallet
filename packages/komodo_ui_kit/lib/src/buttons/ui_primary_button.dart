@@ -68,11 +68,9 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
         ),
         child: DefaultTextStyle(
           style: _defaultTextStyle,
-          child: widget.child ??
-              _ButtonContent(
-                text: widget.text,
-                prefix: widget.prefix,
-              ),
+          child:
+              widget.child ??
+              _ButtonContent(text: widget.text, prefix: widget.prefix),
         ),
       ),
     );
@@ -100,11 +98,12 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   /// button's background brightness. If a custom textStyle is provided but
   /// lacks a color, the computed foreground color is applied.
   TextStyle get _defaultTextStyle {
-    final baseStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: _foregroundColor,
-            ) ??
+    final baseStyle =
+        Theme.of(context).textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+          color: _foregroundColor,
+        ) ??
         TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 14,
@@ -120,16 +119,12 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   }
 
   OutlinedBorder get _shape => RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.all(Radius.circular(widget.borderRadius ?? 18)),
-      );
+    borderRadius: BorderRadius.all(Radius.circular(widget.borderRadius ?? 18)),
+  );
 }
 
 class _ButtonContent extends StatelessWidget {
-  const _ButtonContent({
-    required this.text,
-    required this.prefix,
-  });
+  const _ButtonContent({required this.text, required this.prefix});
 
   final String text;
   final Widget? prefix;
@@ -140,8 +135,14 @@ class _ButtonContent extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (prefix != null) prefix!,
-        // Text style is inherited from DefaultTextStyle set by the parent
-        Text(text),
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
       ],
     );
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui/komodo_ui.dart';
@@ -83,8 +84,17 @@ class _CoinDropdownState extends State<CoinDropdown> {
   OverlayEntry? _overlayEntry;
 
   void _showSearch() async {
+    if (_overlayEntry != null) {
+      _removeOverlay();
+      return;
+    }
     _overlayEntry = _createOverlayEntry();
     Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
   }
 
   OverlayEntry _createOverlayEntry() {
@@ -109,30 +119,37 @@ class _CoinDropdownState extends State<CoinDropdown> {
     return OverlayEntry(
       builder: (context) {
         return GestureDetector(
-          onTap: () {
-            _overlayEntry?.remove();
-            _overlayEntry = null;
-          },
+          onTap: _removeOverlay,
           behavior: HitTestBehavior.translucent,
           child: Stack(
             children: [
-              Positioned(
-                left: offset.dx,
-                top: showAbove
-                    ? offset.dy - dropdownHeight
-                    : offset.dy + size.height,
-                width: size.width,
-                child: _SearchableDropdown(
-                  items: widget.items,
-                  onItemSelected: (value) {
-                    if (value != null) {
-                      setState(() => selectedItem = value);
-                      widget.onItemSelected(value);
+              Positioned.fill(
+                child: Listener(
+                  onPointerSignal: (event) {
+                    if (event is PointerScrollEvent) {
+                      _removeOverlay();
                     }
-                    _overlayEntry?.remove();
-                    _overlayEntry = null;
                   },
-                  maxHeight: dropdownHeight,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              CompositedTransformFollower(
+                link: _layerLink,
+                showWhenUnlinked: false,
+                offset: Offset(0, showAbove ? -dropdownHeight : size.height),
+                child: SizedBox(
+                  width: size.width,
+                  child: _SearchableDropdown(
+                    items: widget.items,
+                    onItemSelected: (value) {
+                      if (value != null) {
+                        setState(() => selectedItem = value);
+                        widget.onItemSelected(value);
+                      }
+                      _removeOverlay();
+                    },
+                    maxHeight: dropdownHeight,
+                  ),
                 ),
               ),
             ],
@@ -210,10 +227,13 @@ class _SearchableDropdownState extends State<_SearchableDropdown> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: Theme.of(context).colorScheme.surfaceContainer,
+      color: colorScheme.surfaceContainer,
       child: Container(
         constraints: BoxConstraints(maxHeight: widget.maxHeight),
         child: Column(
@@ -226,10 +246,26 @@ class _SearchableDropdownState extends State<_SearchableDropdown> {
                 autofocus: true,
                 decoration: InputDecoration(
                   hintText: 'Search',
+                  hintStyle: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  filled: true,
+                  fillColor: colorScheme.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  prefixIcon: const Icon(Icons.search),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colorScheme.outlineVariant),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colorScheme.primary),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 onChanged: updateSearchQuery,
               ),

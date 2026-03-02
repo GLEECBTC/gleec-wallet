@@ -34,8 +34,9 @@ class _NftMainControlsState extends State<NftMainControls> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorSchemeExtension colorScheme =
-        Theme.of(context).extension<ColorSchemeExtension>()!;
+    final ColorSchemeExtension colorScheme = Theme.of(
+      context,
+    ).extension<ColorSchemeExtension>()!;
     final textTheme = Theme.of(context).extension<TextThemeExtension>()!;
     return Row(
       mainAxisSize: MainAxisSize.max,
@@ -47,11 +48,9 @@ class _NftMainControlsState extends State<NftMainControls> {
           height: 40,
           backgroundColor: colorScheme.surfContHighest,
           prefix: Transform.rotate(
-              angle: math.pi / 4,
-              child: Icon(
-                Icons.arrow_forward,
-                color: colorScheme.primary,
-              )),
+            angle: math.pi / 4,
+            child: Icon(Icons.arrow_forward, color: colorScheme.primary),
+          ),
           onPressed: _onReceiveNft,
           textStyle: textTheme.bodySBold.copyWith(color: colorScheme.primary),
         ),
@@ -89,6 +88,7 @@ class _NftMainControlsState extends State<NftMainControls> {
     return PopupDispatcher(
       borderColor: theme.custom.specificButtonBorderColor,
       barrierColor: isMobile ? Theme.of(context).colorScheme.onSurface : null,
+      barrierDismissible: false,
       width: 320,
       context: scaffoldKey.currentContext ?? context,
       popupContent: WalletsManagerWrapper(

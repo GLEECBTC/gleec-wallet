@@ -63,103 +63,112 @@ class SwapDetailsStep extends StatelessWidget {
     final String? txHash = this.txHash;
     final Coin? coin = this.coin;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.max,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration:
-                  BoxDecoration(color: _circleColor, shape: BoxShape.circle),
-              child: Padding(
-                padding: const EdgeInsets.all(2),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isProcessedStep || isFailedStep
-                        ? Colors.transparent
-                        : themeData.colorScheme.surface,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: _circleColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isProcessedStep || isFailedStep
+                          ? Colors.transparent
+                          : themeData.colorScheme.surface,
+                    ),
                   ),
                 ),
               ),
-            ),
-            if (!isLastStep)
-              Container(
-                height: 40,
-                width: 1,
-                color: isProcessedStep
-                    ? theme.custom.progressBarPassedColor
-                    : themeData.textTheme.bodyMedium?.color
-                            ?.withValues(alpha: 0.3) ??
-                        Colors.transparent,
-              ),
-          ],
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: AutoScrollText(
-                      text: event,
-                      style: TextStyle(
-                        color: _textColor,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4.0),
-                    child: _buildAdditionalInfo(context),
-                  ),
-                ],
-              ),
-              if (txHash != null && coin != null)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: CopiedText(
-                        copiedValue: txHash,
-                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                        isTruncated: true,
-                        fontSize: 11,
-                        iconSize: 14,
-                        backgroundColor:
-                            theme.custom.specificButtonBackgroundColor,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 6.0, right: 10),
-                      child: Material(
-                        child: Tooltip(
-                          message: LocaleKeys.viewOnExplorer.tr(),
-                          child: InkWell(
-                            child: const Icon(
-                              Icons.open_in_browser,
-                              size: 20,
-                            ),
-                            onTap: () =>
-                                launchURLString(getTxExplorerUrl(coin, txHash)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              if (!isLastStep)
+                Container(
+                  height: 40,
+                  width: 1,
+                  color: isProcessedStep
+                      ? theme.custom.progressBarPassedColor
+                      : themeData.textTheme.bodyMedium?.color?.withValues(
+                              alpha: 0.3,
+                            ) ??
+                            Colors.transparent,
                 ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.max,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: AutoScrollText(
+                        text: event,
+                        style: TextStyle(
+                          color: _textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4.0),
+                      child: _buildAdditionalInfo(context),
+                    ),
+                  ],
+                ),
+                if (txHash != null && coin != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: CopiedText(
+                          copiedValue: txHash,
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                          isTruncated: true,
+                          fontSize: 11,
+                          iconSize: 14,
+                          backgroundColor:
+                              theme.custom.specificButtonBackgroundColor,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 6.0, right: 10),
+                        child: Material(
+                          child: Tooltip(
+                            message: LocaleKeys.viewOnExplorer.tr(),
+                            child: InkWell(
+                              child: const Icon(
+                                Icons.open_in_browser,
+                                size: 20,
+                              ),
+                              onTap: () => launchURLString(
+                                getTxExplorerUrl(coin, txHash),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -13,11 +13,12 @@ import 'package:web_dex/shared/widgets/focusable_widget.dart';
 import 'package:web_dex/views/dex/entities_list/common/buy_price_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/coin_amount_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/entity_item_status_wrapper.dart';
+import 'package:web_dex/views/dex/entities_list/common/swap_actions_menu.dart';
 import 'package:web_dex/views/dex/entities_list/common/trade_amount_desktop.dart';
 
 class InProgressItem extends StatelessWidget {
   const InProgressItem(this.swap, {Key? key, required this.onClick})
-      : super(key: key);
+    : super(key: key);
   final Swap swap;
   final VoidCallback onClick;
 
@@ -27,11 +28,13 @@ class InProgressItem extends StatelessWidget {
     final Rational sellAmount = swap.sellAmount;
     final String buyCoin = swap.buyCoin;
     final Rational buyAmount = swap.buyAmount;
-    final String date =
-        swap.myInfo != null ? getFormattedDate(swap.myInfo!.startedAt) : '-';
+    final String date = swap.myInfo != null
+        ? getFormattedDate(swap.myInfo!.startedAt)
+        : '-';
     final bool isTaker = swap.isTaker;
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     final String typeText = tradingEntitiesBloc.getTypeString(isTaker);
 
     return Column(
@@ -58,6 +61,7 @@ class InProgressItem extends StatelessWidget {
             ),
             child: isMobile
                 ? _InProgressItemMobile(
+                    swap: swap,
                     buyAmount: buyAmount,
                     buyCoin: buyCoin,
                     date: date,
@@ -113,8 +117,9 @@ class _InProgressItemDesktop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     return Row(
       mainAxisSize: MainAxisSize.max,
       children: [
@@ -144,35 +149,35 @@ class _InProgressItemDesktop extends StatelessWidget {
           ),
         ),
         Expanded(
-            child: TradeAmountDesktop(coinAbbr: sellCoin, amount: sellAmount)),
+          child: TradeAmountDesktop(coinAbbr: sellCoin, amount: sellAmount),
+        ),
         Expanded(
           child: TradeAmountDesktop(coinAbbr: buyCoin, amount: buyAmount),
         ),
         Expanded(
           child: Text(
-              formatDexAmt(tradingEntitiesBloc.getPriceFromAmount(
-                sellAmount,
-                buyAmount,
-              )),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              )),
+            formatDexAmt(
+              tradingEntitiesBloc.getPriceFromAmount(sellAmount, buyAmount),
+            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
         ),
         Expanded(
-            child: Text(date,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ))),
+          child: Text(
+            date,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+        ),
         Expanded(
           flex: 0,
-          child: Text(typeText,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: protocolColor,
-              )),
+          child: Text(
+            typeText,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: protocolColor,
+            ),
+          ),
         ),
       ],
     );
@@ -182,6 +187,7 @@ class _InProgressItemDesktop extends StatelessWidget {
 class _InProgressItemMobile extends StatelessWidget {
   const _InProgressItemMobile({
     Key? key,
+    required this.swap,
     required this.sellCoin,
     required this.sellAmount,
     required this.buyCoin,
@@ -190,6 +196,7 @@ class _InProgressItemMobile extends StatelessWidget {
     required this.statusStep,
     required this.date,
   }) : super(key: key);
+  final Swap swap;
   final String sellCoin;
   final Rational sellAmount;
   final String buyCoin;
@@ -207,7 +214,7 @@ class _InProgressItemMobile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           mainAxisSize: MainAxisSize.max,
           children: [
-            Flexible(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -228,10 +235,17 @@ class _InProgressItemMobile extends StatelessWidget {
                 ],
               ),
             ),
-            BuyPriceMobile(
-              buyCoin: buyCoin,
-              buyAmount: buyAmount,
-              sellAmount: sellAmount,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                BuyPriceMobile(
+                  buyCoin: buyCoin,
+                  buyAmount: buyAmount,
+                  sellAmount: sellAmount,
+                ),
+                const SizedBox(width: 4),
+                SwapActionsMenu(swap: swap),
+              ],
             ),
           ],
         ),
@@ -239,10 +253,7 @@ class _InProgressItemMobile extends StatelessWidget {
           padding: const EdgeInsets.only(top: 12),
           child: Text(
             LocaleKeys.receive.tr(),
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
           ),
         ),
         Padding(
@@ -252,10 +263,7 @@ class _InProgressItemMobile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
-                child: CoinAmountMobile(
-                  coinAbbr: buyCoin,
-                  amount: buyAmount,
-                ),
+                child: CoinAmountMobile(coinAbbr: buyCoin, amount: buyAmount),
               ),
               Text(
                 date,
@@ -272,8 +280,9 @@ class _InProgressItemMobile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
           width: double.infinity,
           decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(9),
-              color: Theme.of(context).colorScheme.onSurface),
+            borderRadius: BorderRadius.circular(9),
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.max,
             mainAxisAlignment: MainAxisAlignment.center,
