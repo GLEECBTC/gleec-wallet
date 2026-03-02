@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -36,10 +38,7 @@ class FaucetView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _DialogHeader(title: title(state), onClose: onClose),
-                _StatesOfPage(
-                  state: state,
-                  onClose: onClose,
-                ),
+                _StatesOfPage(state: state, onClose: onClose),
               ],
             );
           },
@@ -77,10 +76,7 @@ class _DialogHeader extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
           ),
           Positioned(
             right: -8,
@@ -128,18 +124,61 @@ class _StatesOfPage extends StatelessWidget {
   }
 }
 
-class _Loading extends StatelessWidget {
+class _Loading extends StatefulWidget {
   const _Loading();
 
   @override
+  State<_Loading> createState() => _LoadingState();
+}
+
+class _LoadingState extends State<_Loading> {
+  static const _dotInterval = Duration(milliseconds: 450);
+  Timer? _timer;
+  int _dotCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(_dotInterval, (_) {
+      if (!mounted) return;
+      setState(() {
+        _dotCount = (_dotCount + 1) % 4;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final dots = '.' * _dotCount;
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(height: 28),
-        Center(child: UiSpinner()),
-        SizedBox(height: 28),
+        const SizedBox(height: 24),
+        const Center(child: UiSpinner()),
+        const SizedBox(height: 16),
+        Text(
+          '${LocaleKeys.faucetLoadingMessage.tr()}$dots',
+          style: theme.textTheme.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          LocaleKeys.faucetLoadingSubtitle.tr(),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -169,8 +208,9 @@ class _FaucetResult extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 15.0),
             decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(40),
-                border: Border.all(color: color, width: 4)),
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(color: color, width: 4),
+            ),
             child: Icon(icon, size: 66, color: color),
           ),
         ),

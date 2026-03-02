@@ -36,13 +36,26 @@ class _CoinsManagerFiltersState extends State<CoinsManagerFilters> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     if (widget.isMobile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSearchField(context),
-          const SizedBox(height: 8),
-          const CustomTokenImportButton(),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: isKeyboardVisible
+                ? const SizedBox.shrink()
+                : Column(
+                    key: const Key('coins-manager-mobile-import'),
+                    children: const [
+                      SizedBox(height: 8),
+                      CustomTokenImportButton(),
+                    ],
+                  ),
+          ),
           Padding(
             padding: const EdgeInsets.only(top: 14.0),
             child: Row(

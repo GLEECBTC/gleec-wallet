@@ -34,9 +34,7 @@ class SelectedCoinGraphControl extends StatelessWidget {
     // assert(onCoinSelected != null || emptySelectAllowed);
 
     // If onCoinSelected is non-null, then availableCoins must be non-null
-    assert(
-      onCoinSelected == null || availableCoins != null,
-    );
+    assert(onCoinSelected == null || availableCoins != null);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWideScreen = constraints.maxWidth > 600;
@@ -44,6 +42,19 @@ class SelectedCoinGraphControl extends StatelessWidget {
         final themeCustom = Theme.of(context).brightness == Brightness.dark
             ? Theme.of(context).extension<ThemeCustomDark>()!
             : Theme.of(context).extension<ThemeCustomLight>()!;
+        final bool isCentreAmountValid = centreAmount.isFinite;
+        final double safeCentreAmount = isCentreAmountValid
+            ? centreAmount
+            : 0.0;
+        final double safePercentage = percentageIncrease.isFinite
+            ? percentageIncrease
+            : 0.0;
+        final String centreAmountText = isCentreAmountValid
+            ? (NumberFormat.currency(symbol: "\$")
+                    ..minimumSignificantDigits = 3
+                    ..minimumFractionDigits = 2)
+                  .format(safeCentreAmount)
+            : '--';
 
         return ClipRect(
           child: Container(
@@ -95,25 +106,24 @@ class SelectedCoinGraphControl extends StatelessWidget {
                             ],
                           ],
                         )
-                      : Text('All',
-                          style: Theme.of(context).textTheme.bodyLarge),
+                      : Text(
+                          'All',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
                 ),
                 if (isWideScreen)
                   Text(
-                    (NumberFormat.currency(symbol: "\$")
-                          ..minimumSignificantDigits = 3
-                          ..minimumFractionDigits = 2)
-                        .format(centreAmount),
+                    centreAmountText,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          // TODO: Incorporate into theme and remove duplication accross charts
-                          fontWeight: FontWeight.w600,
-                        ),
+                      // TODO: Incorporate into theme and remove duplication accross charts
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TrendPercentageText(
-                      percentage: percentageIncrease,
+                      percentage: safePercentage,
                       upColor: themeCustom.increaseColor,
                       downColor: themeCustom.decreaseColor,
                     ),

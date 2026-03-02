@@ -136,6 +136,10 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
             builder: (context, state) {
               final walletCoinsFiltered = state.walletCoins.values.toList();
 
+              final walletType = authState.currentUser?.wallet.config.type;
+              final showMultiAddressNotice =
+                  isLoggedIn && walletType == WalletType.hdwallet;
+
               return PageLayout(
                 noBackground: true,
                 header: (isMobile && !isLoggedIn)
@@ -145,50 +149,64 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                 // Removed page padding here
                 content: Expanded(
                   child: Listener(
+                    behavior: HitTestBehavior.translucent,
                     onPointerSignal: _onPointerSignal,
-                    child: CustomScrollView(
-                      key: const Key('wallet-page-scroll-view'),
-                      controller: _scrollController,
-                      slivers: [
-                        // Add a SizedBox at the top of the sliver list for spacing
-                        if (isLoggedIn) ...[
-                          if (!isMobile)
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: 32),
+                    child: DexScrollbar(
+                      scrollController: _scrollController,
+                      isMobile: isMobile,
+                      child: CustomScrollView(
+                        key: const Key('wallet-page-scroll-view'),
+                        controller: _scrollController,
+                        slivers: [
+                          // Add a SizedBox at the top of the sliver list for spacing
+                          if (isLoggedIn) ...[
+                            if (!isMobile)
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: 32),
+                              ),
+                            SliverToBoxAdapter(
+                              child: WalletOverview(
+                                key: const Key('wallet-overview'),
+                                onPortfolioGrowthPressed: () =>
+                                    _tabController.animateTo(1),
+                                onPortfolioProfitLossPressed: () =>
+                                    _tabController.animateTo(2),
+                                onAssetsPressed: () =>
+                                    _tabController.animateTo(0),
+                              ),
                             ),
-                          SliverToBoxAdapter(
-                            child: WalletOverview(
-                              key: const Key('wallet-overview'),
-                              onPortfolioGrowthPressed: () =>
-                                  _tabController.animateTo(1),
-                              onPortfolioProfitLossPressed: () =>
-                                  _tabController.animateTo(2),
-                              onAssetsPressed: () =>
-                                  _tabController.animateTo(0),
+                            const SliverToBoxAdapter(child: Gap(24)),
+                            if (showMultiAddressNotice) ...[
+                              const SliverToBoxAdapter(
+                                child: _MultiAddressWalletNotice(),
+                              ),
+                              const SliverToBoxAdapter(child: Gap(16)),
+                            ],
+                          ],
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _SliverTabBarDelegate(
+                              TabBar(
+                                controller: _tabController,
+                                tabs: [
+                                  Tab(text: LocaleKeys.assets.tr()),
+                                  if (isLoggedIn)
+                                    Tab(text: LocaleKeys.portfolioGrowth.tr())
+                                  else
+                                    Tab(text: LocaleKeys.statistics.tr()),
+                                  if (isLoggedIn)
+                                    Tab(text: LocaleKeys.profitAndLoss.tr()),
+                                ],
+                              ),
                             ),
                           ),
-                          const SliverToBoxAdapter(child: Gap(24)),
+                          if (!isMobile) SliverToBoxAdapter(child: Gap(24)),
+                          ..._buildTabSlivers(
+                            authStateMode,
+                            walletCoinsFiltered,
+                          ),
                         ],
-                        SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _SliverTabBarDelegate(
-                            TabBar(
-                              controller: _tabController,
-                              tabs: [
-                                Tab(text: LocaleKeys.assets.tr()),
-                                if (isLoggedIn)
-                                  Tab(text: LocaleKeys.portfolioGrowth.tr())
-                                else
-                                  Tab(text: LocaleKeys.statistics.tr()),
-                                if (isLoggedIn)
-                                  Tab(text: LocaleKeys.profitAndLoss.tr()),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (!isMobile) SliverToBoxAdapter(child: Gap(24)),
-                        ..._buildTabSlivers(authStateMode, walletCoinsFiltered),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -377,6 +395,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
       width: 320,
       context: scaffoldKey.currentContext ?? context,
       barrierColor: isMobile ? Theme.of(context).colorScheme.onSurface : null,
+      barrierDismissible: false,
       borderColor: theme.custom.specificButtonBorderColor,
       popupContent: WalletsManagerWrapper(
         eventType: WalletsManagerEventType.wallet,
@@ -417,6 +436,8 @@ class CoinListView extends StatelessWidget {
           searchPhrase: searchPhrase,
           withBalance: withBalance,
           onCoinItemTap: onActiveCoinItemTap,
+          onStatisticsTap: (coin) =>
+              onAssetStatisticsTap(coin.assetId, const Duration(days: 1)),
           arrrActivationService: RepositoryProvider.of<ArrrActivationService>(
             context,
           ),
@@ -443,6 +464,51 @@ class CoinListView extends StatelessWidget {
           onStatisticsTap: onAssetStatisticsTap,
         );
     }
+  }
+}
+
+class _MultiAddressWalletNotice extends StatelessWidget {
+  const _MultiAddressWalletNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final borderColor = theme.colorScheme.primary.withValues(alpha: 0.2);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, color: theme.colorScheme.primary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  LocaleKeys.multiAddressWalletNoticeTitle.tr(),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  LocaleKeys.multiAddressWalletNoticeDescription.tr(),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

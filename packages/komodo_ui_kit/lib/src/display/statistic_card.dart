@@ -9,6 +9,7 @@ class StatisticCard extends StatelessWidget {
 
   // The value of the stat used for the title. If null, shows a skeleton placeholder
   final double? value;
+  final String? valueText;
 
   // The formatter used to format the value for the title
   final NumberFormat _valueFormatter;
@@ -26,6 +27,7 @@ class StatisticCard extends StatelessWidget {
   StatisticCard({
     super.key,
     this.value,
+    this.valueText,
     required this.caption,
     this.trendWidget,
     this.actionWidget,
@@ -50,8 +52,6 @@ class StatisticCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       decoration: BoxDecoration(
         gradient: containerGradient(Theme.of(context)),
@@ -76,12 +76,9 @@ class StatisticCard extends StatelessWidget {
                     // Value or skeleton placeholder
                     value != null
                         ? AutoScrollText(
-                            text: _valueFormatter.format(value!),
+                            text: valueText ?? _valueFormatter.format(value!),
                             style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: isDarkMode ? Colors.white : null,
-                                ),
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           )
                         : _ValuePlaceholder(),
                     const SizedBox(height: 4),

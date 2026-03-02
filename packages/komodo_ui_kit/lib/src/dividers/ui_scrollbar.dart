@@ -26,7 +26,7 @@ class DexScrollbarState extends State<DexScrollbar> {
   }
 
   void _checkScrollbarVisibility() {
-    if (!mounted) return;
+    if (!mounted || !widget.scrollController.hasClients) return;
 
     final maxScroll = widget.scrollController.position.maxScrollExtent;
     final newVisibility = maxScroll > 0;
@@ -57,11 +57,13 @@ class DexScrollbarState extends State<DexScrollbar> {
         return isScrollbarVisible
             ? Scrollbar(
                 thumbVisibility: true,
+                trackVisibility: true,
                 thickness: 5,
                 controller: widget.scrollController,
                 child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context)
-                      .copyWith(scrollbars: false),
+                  behavior: ScrollConfiguration.of(
+                    context,
+                  ).copyWith(scrollbars: false),
                   child: Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: widget.child,
