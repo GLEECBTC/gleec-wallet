@@ -9,12 +9,12 @@ import 'package:web_dex/bloc/bridge_form/bridge_event.dart';
 import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/common/screen.dart';
-import 'package:web_dex/dispatchers/popup_dispatcher.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/views/dex/dex_helpers.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
+import 'package:web_dex/shared/widgets/app_dialog.dart';
 
 class ConnectWalletButton extends StatefulWidget {
   const ConnectWalletButton({
@@ -23,8 +23,8 @@ class ConnectWalletButton extends StatefulWidget {
     this.withText = true,
     this.withIcon = false,
     Size? buttonSize,
-  })  : buttonSize = buttonSize ?? const Size(double.infinity, 40),
-        super(key: key);
+  }) : buttonSize = buttonSize ?? const Size(double.infinity, 40),
+       super(key: key);
   final Size buttonSize;
   final bool withIcon;
   final bool withText;
@@ -37,15 +37,6 @@ class ConnectWalletButton extends StatefulWidget {
 class _ConnectWalletButtonState extends State<ConnectWalletButton> {
   static const String walletIconPath =
       '$assetsPath/nav_icons/desktop/dark/wallet.svg';
-
-  PopupDispatcher? _popupDispatcher;
-
-  @override
-  void dispose() {
-    _popupDispatcher?.close();
-    _popupDispatcher = null;
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,15 +51,17 @@ class _ConnectWalletButtonState extends State<ConnectWalletButton> {
                     child: SvgPicture.asset(
                       walletIconPath,
                       colorFilter: ColorFilter.mode(
-                          theme.custom.defaultGradientButtonTextColor,
-                          BlendMode.srcIn),
+                        theme.custom.defaultGradientButtonTextColor,
+                        BlendMode.srcIn,
+                      ),
                       width: 15,
                       height: 15,
                     ),
                   )
                 : null,
-            text: LocaleKeys.connectSomething
-                .tr(args: [LocaleKeys.wallet.tr().toLowerCase()]),
+            text: LocaleKeys.connectSomething.tr(
+              args: [LocaleKeys.wallet.tr().toLowerCase()],
+            ),
             onPressed: onButtonPressed,
           )
         : ElevatedButton(
@@ -85,33 +78,32 @@ class _ConnectWalletButtonState extends State<ConnectWalletButton> {
             child: SvgPicture.asset(
               walletIconPath,
               colorFilter: ColorFilter.mode(
-                  theme.custom.defaultGradientButtonTextColor, BlendMode.srcIn),
+                theme.custom.defaultGradientButtonTextColor,
+                BlendMode.srcIn,
+              ),
               width: 20,
             ),
           );
   }
 
-  void onButtonPressed() {
-    _popupDispatcher = _createPopupDispatcher();
-    _popupDispatcher?.show();
-  }
-
-  PopupDispatcher _createPopupDispatcher() {
+  Future<void> onButtonPressed() async {
     final TakerBloc takerBloc = context.read<TakerBloc>();
     final BridgeBloc bridgeBloc = context.read<BridgeBloc>();
+    final BuildContext dialogContext = scaffoldKey.currentContext ?? context;
 
-    return PopupDispatcher(
-      borderColor: theme.custom.specificButtonBorderColor,
-      barrierColor: isMobile ? Theme.of(context).colorScheme.onSurface : null,
+    await AppDialog.showWithCallback<void>(
+      context: dialogContext,
+      barrierDismissible: false,
       width: 320,
-      context: scaffoldKey.currentContext ?? context,
-      popupContent: WalletsManagerWrapper(
+      useRootNavigator: true,
+      childBuilder: (closeDialog) => WalletsManagerWrapper(
         eventType: widget.eventType,
+        onCancel: closeDialog,
         onSuccess: (_) async {
           takerBloc.add(TakerReInit());
           bridgeBloc.add(const BridgeReInit());
-          await reInitTradingForms(context);
-          _popupDispatcher?.close();
+          await reInitTradingForms(dialogContext);
+          closeDialog();
         },
       ),
     );

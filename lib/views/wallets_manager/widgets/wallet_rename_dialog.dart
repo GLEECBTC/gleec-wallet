@@ -20,6 +20,7 @@ Future<String?> walletRenameDialog(
   final result = await AppDialog.show<String?>(
     context: context,
     width: isMobile ? null : 360,
+    barrierDismissible: false,
     child: _WalletRenameContent(
       controller: controller,
       walletsRepository: walletsRepository,

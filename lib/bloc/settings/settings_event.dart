@@ -48,3 +48,11 @@ class DiagnosticLoggingChanged extends SettingsEvent {
   @override
   List<Object> get props => [diagnosticLoggingEnabled];
 }
+
+class HideBalancesChanged extends SettingsEvent {
+  const HideBalancesChanged({required this.hideBalances});
+  final bool hideBalances;
+
+  @override
+  List<Object> get props => [hideBalances];
+}

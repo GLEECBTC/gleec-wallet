@@ -156,4 +156,25 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   Future<void> setWalletType(WalletType type) async {
     await auth.setOrRemoveActiveUserKeyValue('type', type.name);
   }
+
+  /// Sets the wallet provenance for the current user.
+  ///
+  /// Stored values are used by wallet selection UIs to show quick metadata
+  /// tags (generated/imported).
+  Future<void> setWalletProvenance(WalletProvenance provenance) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      'wallet_provenance',
+      provenance.name,
+    );
+  }
+
+  /// Sets the wallet creation timestamp for the current user.
+  ///
+  /// Stored as milliseconds since epoch.
+  Future<void> setWalletCreatedAt(DateTime createdAt) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      'wallet_created_at',
+      createdAt.millisecondsSinceEpoch,
+    );
+  }
 }

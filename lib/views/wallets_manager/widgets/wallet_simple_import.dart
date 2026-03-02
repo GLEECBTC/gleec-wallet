@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,7 +20,7 @@ import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
 import 'package:web_dex/views/wallets_manager/widgets/custom_seed_checkbox.dart';
-import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_import_type_dropdown.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 class WalletSimpleImport extends StatefulWidget {
@@ -49,6 +51,7 @@ class WalletSimpleImport extends StatefulWidget {
 enum WalletSimpleImportSteps { nameAndSeed, password }
 
 class _WalletImportWrapperState extends State<WalletSimpleImport> {
+  static const int _maxSeedSuggestions = 8;
   WalletSimpleImportSteps _step = WalletSimpleImportSteps.nameAndSeed;
   final TextEditingController _nameController = TextEditingController(text: '');
   final TextEditingController _seedController = TextEditingController(text: '');
@@ -60,8 +63,12 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   bool _eulaAndTosChecked = false;
   bool _inProgress = false;
   bool _allowCustomSeed = false;
-  bool _isHdMode = false;
+  bool _isHdMode = true;
   bool _rememberMe = false;
+  List<String> _bip39Words = const [];
+  List<String> _seedWordSuggestions = const [];
+  int _activeWordStart = -1;
+  int _activeWordEnd = -1;
 
   bool get _isButtonEnabled {
     final isFormValid = _refreshFormValidationState();
@@ -152,11 +159,106 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   void initState() {
     super.initState();
     _seedController.addListener(_onSeedChanged);
+    unawaited(_loadBip39Wordlist());
   }
 
   void _onSeedChanged() {
-    // Rebuild to update custom seed toggle visibility as user types
+    _updateSeedWordSuggestions();
+    _syncWalletTypeWithSeedCompatibility();
     setState(() {});
+  }
+
+  Future<void> _loadBip39Wordlist() async {
+    try {
+      final wordlist = await rootBundle.loadString(
+        'packages/komodo_defi_types/assets/bip-0039/english-wordlist.txt',
+      );
+      final words = wordlist
+          .split('\n')
+          .map((word) => word.trim().toLowerCase())
+          .where((word) => word.isNotEmpty)
+          .toList(growable: false);
+
+      if (!mounted) return;
+      setState(() {
+        _bip39Words = words;
+        _updateSeedWordSuggestions();
+      });
+    } catch (_) {
+      // Suggestions are a progressive enhancement; import still works without
+      // the wordlist if asset loading fails.
+    }
+  }
+
+  void _clearSeedWordSuggestions() {
+    _seedWordSuggestions = const [];
+    _activeWordStart = -1;
+    _activeWordEnd = -1;
+  }
+
+  void _updateSeedWordSuggestions() {
+    if (_allowCustomSeed || _isSeedHidden || _bip39Words.isEmpty) {
+      _clearSeedWordSuggestions();
+      return;
+    }
+
+    final text = _seedController.text.toLowerCase();
+    final cursor = _seedController.selection.baseOffset;
+    if (cursor < 0 || cursor > text.length) {
+      _clearSeedWordSuggestions();
+      return;
+    }
+
+    int start = cursor;
+    while (start > 0 && text[start - 1] != ' ') {
+      start--;
+    }
+
+    int end = cursor;
+    while (end < text.length && text[end] != ' ') {
+      end++;
+    }
+
+    final prefix = text.substring(start, cursor).trim();
+    if (prefix.isEmpty || !RegExp(r'^[a-z]+$').hasMatch(prefix)) {
+      _clearSeedWordSuggestions();
+      return;
+    }
+
+    final suggestions = _bip39Words
+        .where((word) => word.startsWith(prefix))
+        .take(_maxSeedSuggestions)
+        .toList(growable: false);
+
+    if (suggestions.length == 1 && suggestions.first == prefix) {
+      _clearSeedWordSuggestions();
+      return;
+    }
+
+    _seedWordSuggestions = suggestions;
+    _activeWordStart = start;
+    _activeWordEnd = end;
+  }
+
+  void _onSeedSuggestionSelected(String suggestion) {
+    if (_activeWordStart < 0 || _activeWordEnd < _activeWordStart) return;
+
+    var nextText = _seedController.text.replaceRange(
+      _activeWordStart,
+      _activeWordEnd,
+      suggestion,
+    );
+    var nextCursor = _activeWordStart + suggestion.length;
+
+    if (nextCursor == nextText.length || nextText[nextCursor] != ' ') {
+      nextText = nextText.replaceRange(nextCursor, nextCursor, ' ');
+      nextCursor += 1;
+    }
+
+    _seedController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextCursor),
+    );
   }
 
   @override
@@ -173,6 +275,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       onChanged: (value) {
         setState(() {
           _allowCustomSeed = value;
+          _updateSeedWordSuggestions();
         });
 
         _refreshFormValidationState();
@@ -252,15 +355,34 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         _buildNameField(),
         const SizedBox(height: 16),
         _buildSeedField(),
+        if (_seedWordSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _seedWordSuggestions
+                  .map(
+                    (word) => ActionChip(
+                      label: Text(word),
+                      onPressed: () => _onSeedSuggestionSelected(word),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
-        HDWalletModeSwitch(
-          value: _isHdMode,
-          onChanged: (value) {
+        WalletImportTypeDropdown(
+          selectedType: _isHdMode ? WalletType.hdwallet : WalletType.iguana,
+          isHdOptionEnabled: _isHdCompatibleWithCurrentSeed,
+          onChanged: (walletType) {
             setState(() {
-              _isHdMode = value;
+              _isHdMode = walletType == WalletType.hdwallet;
               _allowCustomSeed = false;
+              _updateSeedWordSuggestions();
             });
-
             _refreshFormValidationState();
           },
         ),
@@ -317,6 +439,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         onVisibilityChange: (bool isObscured) {
           setState(() {
             _isSeedHidden = isObscured;
+            _updateSeedWordSuggestions();
           });
         },
       ),
@@ -427,9 +550,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       MnemonicFailedReason.invalidChecksum =>
         LocaleKeys.mnemonicInvalidChecksumError.tr(),
       MnemonicFailedReason.invalidLength =>
-        // TODO: Specify the valid lengths since not all lengths between 12 and
-        // 24 are valid
-        LocaleKeys.mnemonicInvalidLengthError.tr(args: ['12', '24']),
+        LocaleKeys.mnemonicInvalidLengthError.tr(),
     };
   }
 
@@ -443,5 +564,33 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     final validator = context.read<KomodoDefiSdk>().mnemonicValidator;
     final isBip39 = validator.validateBip39(seed);
     return !isBip39;
+  }
+
+  void _syncWalletTypeWithSeedCompatibility() {
+    if (_isHdMode && !_isHdCompatibleWithCurrentSeed) {
+      _isHdMode = false;
+      _allowCustomSeed = false;
+    }
+  }
+
+  bool get _isHdCompatibleWithCurrentSeed {
+    final seed = _seedController.text.trim().toLowerCase();
+    if (seed.isEmpty) return true;
+
+    final words = seed.split(RegExp(r'\s+')).where((word) => word.isNotEmpty);
+    final int wordCount = words.length;
+    if (wordCount == 1) {
+      final token = words.first;
+      final bool looksLikeBip39Word =
+          RegExp(r'^[a-z]+$').hasMatch(token) && token.length <= 8;
+      return looksLikeBip39Word;
+    }
+
+    if (wordCount < 12) {
+      return true;
+    }
+
+    final validator = context.read<KomodoDefiSdk>().mnemonicValidator;
+    return validator.validateBip39(seed);
   }
 }

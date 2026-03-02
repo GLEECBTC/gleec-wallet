@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show ActivationStep, AssetId;
+import 'package:komodo_defi_types/komodo_defi_types.dart' show AssetId;
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -88,6 +87,12 @@ class _ZhtlcActivationStatusBarState extends State<ZhtlcActivationStatusBar> {
     setState(() {
       _cachedStatuses = {};
     });
+  }
+
+  Future<void> _cancelActivation(AssetId assetId) async {
+    await widget.activationService.cancelActivation(assetId);
+    await widget.activationService.clearActivationStatus(assetId);
+    await _refreshStatuses();
   }
 
   @override
@@ -193,16 +198,18 @@ class _ZhtlcActivationStatusBarState extends State<ZhtlcActivationStatusBar> {
                             assetId,
                             startTime,
                             progressPercentage,
-                            currentStep,
+                            _,
                             statusMessage,
                           ) {
                             return _ActivationStatusDetails(
                               assetId: assetId,
                               progressPercentage:
                                   progressPercentage?.toDouble() ?? 0,
-                              currentStep: currentStep!,
                               statusMessage:
                                   statusMessage ?? LocaleKeys.inProgress.tr(),
+                              onCancel: () {
+                                unawaited(_cancelActivation(assetId));
+                              },
                             );
                           },
                     ),
@@ -221,14 +228,14 @@ class _ActivationStatusDetails extends StatelessWidget {
   const _ActivationStatusDetails({
     required this.assetId,
     required this.progressPercentage,
-    required this.currentStep,
     required this.statusMessage,
+    required this.onCancel,
   });
 
   final AssetId assetId;
   final double progressPercentage;
-  final ActivationStep currentStep;
   final String statusMessage;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -255,6 +262,15 @@ class _ActivationStatusDetails extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).textTheme.bodySmall?.color,
               ),
+            ),
+          ),
+          Tooltip(
+            message: LocaleKeys.cancel.tr(),
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: onCancel,
+              icon: const Icon(Icons.close_rounded),
             ),
           ),
         ],

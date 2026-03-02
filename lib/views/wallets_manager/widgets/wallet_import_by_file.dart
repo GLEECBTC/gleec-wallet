@@ -17,7 +17,7 @@ import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/custom_seed_checkbox.dart';
-import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_import_type_dropdown.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_rename_dialog.dart';
 
 class WalletFileData {
@@ -54,7 +54,8 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isObscured = true;
-  bool _isHdMode = false;
+  bool _isHdMode = true;
+  bool _isHdOptionEnabled = true;
   bool _eulaAndTosChecked = false;
   bool _rememberMe = false;
   bool _allowCustomSeed = false;
@@ -145,15 +146,17 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                       ),
                     ),
                   const SizedBox(height: 30),
-                  HDWalletModeSwitch(
-                    value: _isHdMode,
-                    onChanged: (value) {
+                  WalletImportTypeDropdown(
+                    selectedType: _isHdMode
+                        ? WalletType.hdwallet
+                        : WalletType.iguana,
+                    isHdOptionEnabled: _isHdOptionEnabled,
+                    onChanged: (walletType) {
                       setState(() {
-                        _isHdMode = value;
-                        // Reset custom seed usage and hide toggle on HD switch
-                        if (_isHdMode) {
-                          _allowCustomSeed = false;
-                        }
+                        _isHdMode = walletType == WalletType.hdwallet;
+                        _commonError = null;
+                        _allowCustomSeed = false;
+                        _showCustomSeedToggle = false;
                       });
                     },
                   ),
@@ -257,10 +260,18 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
       if (!isBip39) {
         if (_isHdMode) {
           setState(() {
-            _commonError = LocaleKeys.walletCreationHdBip39SeedError.tr();
+            _isHdMode = false;
+            _isHdOptionEnabled = false;
+            _allowCustomSeed = false;
+            _commonError = LocaleKeys.walletCreationBip39SeedError.tr();
             _showCustomSeedToggle = true;
           });
           return;
+        }
+        if (_isHdOptionEnabled) {
+          setState(() {
+            _isHdOptionEnabled = false;
+          });
         }
         if (!_allowCustomSeed) {
           setState(() {
@@ -274,6 +285,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
 
       walletConfig.seedPhrase = decryptedSeed;
       String name = widget.fileData.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      if (!mounted) return;
       final walletsRepository = RepositoryProvider.of<WalletsRepository>(
         context,
       );
@@ -319,8 +331,11 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   }
 
   bool get _shouldShowCustomSeedToggle {
+    if (_isHdMode) return false;
     if (_allowCustomSeed) return true; // keep visible once enabled
-    if (_showCustomSeedToggle) return true; // show after first failure, even in HD
+    if (_showCustomSeedToggle) {
+      return true; // show after first non-HD BIP39 failure
+    }
     return false;
   }
 }

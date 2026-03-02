@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/version_info/version_info_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/widgets/copied_text.dart';
 
 class AppVersionNumber extends StatelessWidget {
   const AppVersionNumber({super.key});
@@ -19,19 +20,24 @@ class AppVersionNumber extends StatelessWidget {
               children: [
                 SelectableText(LocaleKeys.komodoWallet.tr(), style: _textStyle),
                 if (state.appVersion != null)
-                  SelectableText(
-                    '${LocaleKeys.version.tr()}: ${state.appVersion}',
-                    style: _textStyle,
+                  _MetadataRow(
+                    label: LocaleKeys.version.tr(),
+                    value: state.appVersion!,
+                  ),
+                if (state.buildDate != null)
+                  _MetadataRow(
+                    label: LocaleKeys.buildDate.tr(),
+                    value: state.buildDate!,
                   ),
                 if (state.commitHash != null)
-                  SelectableText(
-                    '${LocaleKeys.commit.tr()}: ${state.commitHash}',
-                    style: _textStyle,
+                  _MetadataRow(
+                    label: LocaleKeys.commit.tr(),
+                    value: state.commitHash!,
                   ),
                 if (state.apiCommitHash != null)
-                  SelectableText(
-                    '${LocaleKeys.api.tr()}: ${state.apiCommitHash}',
-                    style: _textStyle,
+                  _MetadataRow(
+                    label: LocaleKeys.api.tr(),
+                    value: state.apiCommitHash!,
                   ),
                 const SizedBox(height: 4),
                 CoinsCommitInfo(state: state),
@@ -61,14 +67,14 @@ class CoinsCommitInfo extends StatelessWidget {
       children: [
         Text(LocaleKeys.coinAssets.tr(), style: _textStyle),
         if (state.currentCoinsCommit != null)
-          SelectableText(
-            '${LocaleKeys.bundled.tr()}: ${state.currentCoinsCommit}',
-            style: _textStyle,
+          _MetadataRow(
+            label: LocaleKeys.bundled.tr(),
+            value: state.currentCoinsCommit!,
           ),
         if (state.latestCoinsCommit != null)
-          SelectableText(
-            '${LocaleKeys.updated.tr()}: ${state.latestCoinsCommit}',
-            style: _textStyle,
+          _MetadataRow(
+            label: LocaleKeys.updated.tr(),
+            value: state.latestCoinsCommit!,
           ),
       ],
     );
@@ -76,3 +82,33 @@ class CoinsCommitInfo extends StatelessWidget {
 }
 
 const _textStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.w500);
+
+class _MetadataRow extends StatelessWidget {
+  const _MetadataRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          Text('$label:', style: _textStyle),
+          CopiedTextV2(
+            copiedValue: value,
+            isTruncated: true,
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            textColor: Theme.of(context).textTheme.bodyMedium?.color,
+          ),
+        ],
+      ),
+    );
+  }
+}

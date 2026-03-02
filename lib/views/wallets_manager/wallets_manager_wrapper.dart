@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
@@ -13,6 +14,7 @@ class WalletsManagerWrapper extends StatefulWidget {
     this.selectedWallet,
     this.initialHdMode = false,
     this.rememberMe = false,
+    this.onCancel,
     super.key = const Key('wallets-manager-wrapper'),
   });
 
@@ -21,6 +23,7 @@ class WalletsManagerWrapper extends StatefulWidget {
   final Wallet? selectedWallet;
   final bool initialHdMode;
   final bool rememberMe;
+  final VoidCallback? onCancel;
 
   @override
   State<WalletsManagerWrapper> createState() => _WalletsManagerWrapperState();
@@ -50,6 +53,13 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
             padding: const EdgeInsets.only(top: 30.0),
             child: WalletsTypeList(onWalletTypeClick: _onWalletTypeClick),
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 20.0),
+            child: UiUnderlineTextButton(
+              text: LocaleKeys.cancel.tr(),
+              onPressed: _handleCancel,
+            ),
+          ),
         ],
       );
     }
@@ -77,5 +87,14 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
     setState(() {
       _selectedWalletType = null;
     });
+  }
+
+  void _handleCancel() {
+    final onCancel = widget.onCancel;
+    if (onCancel != null) {
+      onCancel();
+      return;
+    }
+    Navigator.of(context).maybePop();
   }
 }
