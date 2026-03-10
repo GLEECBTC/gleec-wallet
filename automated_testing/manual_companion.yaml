@@ -1,0 +1,287 @@
+# Gleec Wallet — Manual-Only Test Companion Checklist
+#
+# These 14 tests CANNOT be automated even with OS calls and Playwright.
+# They require physical hardware, screen reader software, native platform
+# builds, or real-time market conditions.
+#
+# 22 formerly-manual tests have been moved to test_matrix.yaml as composite
+# tests (tagged "composite") using OS network toggle, Playwright browser
+# lifecycle, viewport resizing, clock mocking, and accessibility auditing.
+#
+# Usage:
+#   Automated runner integration:  python -m runner.runner --include-manual
+#   Manual-only mode:              python -m runner.runner --manual-only
+
+manual_tests:
+
+  # =========================================================================
+  # HARDWARE WALLET (Trezor) — requires physical device
+  # =========================================================================
+
+  - id: MAN-AUTH-005
+    source: GW-MAN-AUTH-005
+    title: "Trezor connect/disconnect and signing"
+    reason: "Requires physical Trezor device + USB"
+    platforms: [web, macOS, Linux, Windows]
+    tags: [hardware, security, critical]
+    checklist:
+      - "[ ] Connect Trezor and import hardware account"
+      - "[ ] Start sign-required action (send preview) — confirm on device"
+      - "[ ] Disconnect device and retry action — app prompts reconnection"
+      - "[ ] No crash on disconnect"
+    interactive_steps:
+      - prompt: "Connect your Trezor device via USB to the computer."
+        wait_for: keypress
+      - prompt: "Open the Gleec Wallet web app and look for a hardware wallet import option. Click it to begin pairing the Trezor. Follow any prompts on the Trezor screen to authorize the connection. Is the Trezor wallet successfully imported? (y/n)"
+        wait_for: confirmation
+      - prompt: "Navigate to a coin with balance and open the Send form. Fill in a valid address and small amount, then click Preview/Confirm. The Trezor should display a signing request on its screen. Confirm on the Trezor device. Did the transaction submit successfully? (y/n)"
+        wait_for: confirmation
+      - prompt: "Disconnect the Trezor USB cable physically. Now try to initiate another send action in the app. Does the app show a reconnection prompt or clear error message (no crash)? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-GATE-002
+    source: GW-MAN-GATE-002
+    title: "Hardware-wallet restrictions for fiat/trading"
+    reason: "Requires Trezor login"
+    platforms: [web, macOS, Linux, Windows]
+    tags: [hardware, gating]
+    checklist:
+      - "[ ] Log in with Trezor wallet"
+      - "[ ] Fiat/DEX/Bridge/Bot menu items show restricted/disabled state"
+      - "[ ] Clear wallet-only messaging shown"
+    interactive_steps:
+      - prompt: "Ensure you are logged in with a Trezor hardware wallet. Press Enter when ready."
+        wait_for: keypress
+      - prompt: "Check the main navigation menu. Are the Fiat, DEX, Bridge, and Bot menu items showing a disabled/restricted state (grayed out, lock icon, or tooltip)? (y/n)"
+        wait_for: confirmation
+      - prompt: "Try clicking one of the disabled items. Does a clear message explain the restriction for hardware wallets? (y/n)"
+        wait_for: confirmation
+
+  # =========================================================================
+  # PARTIAL BACKEND FAILURE — requires custom proxy/endpoint blocking
+  # =========================================================================
+
+  - id: MAN-ERR-002
+    source: GW-MAN-ERR-002
+    title: "Partial backend failure isolation"
+    reason: "Requires endpoint-specific failure simulation (proxy/firewall)"
+    platforms: [all]
+    tags: [network, error_handling]
+    checklist:
+      - "[ ] Trigger failure in one module endpoint"
+      - "[ ] Unaffected modules still functional"
+      - "[ ] Failed module recovers after service restore"
+    interactive_steps:
+      - prompt: "Set up a proxy or firewall rule to block a specific API endpoint (e.g., DEX orderbook). Press Enter when the failure condition is active."
+        wait_for: keypress
+      - prompt: "With one module's endpoint failing, do other modules (wallet, settings, etc.) still function normally? (y/n)"
+        wait_for: confirmation
+      - prompt: "Restore the blocked endpoint. Does the failed module recover and function correctly? (y/n)"
+        wait_for: confirmation
+
+  # =========================================================================
+  # CROSS-PLATFORM — requires native app builds
+  # =========================================================================
+
+  - id: MAN-XPLAT-001
+    source: GW-MAN-XPLAT-001
+    title: "Core-flow parity across platforms"
+    reason: "Requires running on Android, iOS, macOS, Linux, Windows"
+    platforms: [web, Android, iOS, macOS, Linux, Windows]
+    tags: [cross_platform]
+    checklist:
+      - "[ ] Create wallet on each platform"
+      - "[ ] Fund DOC via faucet on each"
+      - "[ ] Send DOC on each"
+      - "[ ] Verify history on each"
+      - "[ ] Document any platform-specific blockers"
+    interactive_steps:
+      - prompt: "Which platform are you testing now? (type the name and press Enter)"
+        wait_for: keypress
+      - prompt: "Create a new wallet on this platform. Does wallet creation complete? (y/n)"
+        wait_for: confirmation
+      - prompt: "Enable DOC and use the faucet. Does the faucet work? (y/n)"
+        wait_for: confirmation
+      - prompt: "Send 0.001 DOC to a test address. Does the transaction complete? (y/n)"
+        wait_for: confirmation
+      - prompt: "Check transaction history. Does it show correctly? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-XPLAT-002
+    source: GW-MAN-XPLAT-002
+    title: "Platform permissions and input behavior"
+    reason: "Requires OS permission dialogs"
+    platforms: [all]
+    tags: [cross_platform]
+    checklist:
+      - "[ ] Trigger QR scan / export / notification permissions"
+      - "[ ] Deny permission — graceful handling"
+      - "[ ] Grant permission — action works"
+      - "[ ] Hardware back (Android) / keyboard shortcuts (desktop) work"
+    interactive_steps:
+      - prompt: "Trigger a permission request (QR scan, file export, etc.). DENY it. Does the app handle denial gracefully? (y/n)"
+        wait_for: confirmation
+      - prompt: "Trigger the same action and GRANT the permission. Does it work? (y/n)"
+        wait_for: confirmation
+      - prompt: "Test hardware back (Android) or keyboard shortcuts (desktop). Do they work? (y/n)"
+        wait_for: confirmation
+
+  # =========================================================================
+  # SCREEN READER — requires VoiceOver/TalkBack
+  # =========================================================================
+
+  - id: MAN-A11Y-002
+    source: GW-MAN-A11Y-002
+    title: "Screen reader labels and announcements"
+    reason: "Requires VoiceOver/TalkBack — cannot be automated"
+    platforms: [iOS, Android, desktop, web]
+    tags: [accessibility]
+    checklist:
+      - "[ ] Navigate key screens with screen reader"
+      - "[ ] Form fields have meaningful labels"
+      - "[ ] Validation errors announced"
+      - "[ ] Status changes (pending/confirmed) announced"
+      - "[ ] No unlabeled actionable controls"
+    interactive_steps:
+      - prompt: "Enable a screen reader (VoiceOver, TalkBack, NVDA). Navigate the dashboard. Press Enter when ready."
+        wait_for: keypress
+      - prompt: "Do form fields on the send screen have meaningful labels read by the screen reader? (y/n)"
+        wait_for: confirmation
+      - prompt: "Trigger a validation error. Is it announced by the screen reader? (y/n)"
+        wait_for: confirmation
+      - prompt: "Are there any unlabeled buttons or controls? (y/n = y means NO unlabeled controls)"
+        wait_for: confirmation
+
+  # =========================================================================
+  # NATIVE SECURITY — requires OS screenshot/app-switcher
+  # =========================================================================
+
+  - id: MAN-SEC-001b
+    source: GW-MAN-SEC-001
+    title: "Seed phrase — screenshot masking and background behavior"
+    reason: "Requires OS screenshot and app backgrounding (native behavior)"
+    platforms: [all]
+    tags: [security]
+    checklist:
+      - "[ ] Take screenshot while seed visible — masking policy applied"
+      - "[ ] Background app while seed visible — seed not exposed"
+      - "[ ] Return to app — seed screen state handled correctly"
+    interactive_steps:
+      - prompt: "Reveal the seed phrase (Settings > Security > View Seed, enter password)."
+        wait_for: keypress
+      - prompt: "Take an OS screenshot. Is the seed phrase masked/protected in the screenshot? (y/n)"
+        wait_for: confirmation
+      - prompt: "Background/minimize the app. Check the app-switcher preview. Is the seed hidden? (y/n)"
+        wait_for: confirmation
+      - prompt: "Return to the app. Is the seed screen handled correctly? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-SEC-002
+    source: GW-MAN-SEC-002
+    title: "Session auto-lock and app-switcher privacy"
+    reason: "Requires idle timeout and native app-switcher"
+    platforms: [all]
+    tags: [security]
+    checklist:
+      - "[ ] Set short inactivity timeout"
+      - "[ ] Leave idle until timeout — re-auth required"
+      - "[ ] App-switcher snapshot — no sensitive data visible"
+    interactive_steps:
+      - prompt: "Set the auto-lock timeout to the shortest option in Settings."
+        wait_for: keypress
+      - prompt: "Leave the app idle until the timeout triggers. Does it require re-authentication? (y/n)"
+        wait_for: confirmation
+      - prompt: "Check the app-switcher preview while sensitive data is on screen. Is it hidden? (y/n)"
+        wait_for: confirmation
+
+  # =========================================================================
+  # GRADE-B: Manual verification requiring real chain/market conditions
+  # =========================================================================
+
+  - id: MAN-VERIFY-CDET-001
+    source: GW-AUTO-CDET-001a
+    title: "Explorer link verification after address copy"
+    reason: "Explorer link correctness requires opening external browser"
+    tags: [wallet, verification]
+    checklist:
+      - "[ ] Explorer link opens correct network/address URL"
+    interactive_steps:
+      - prompt: "Click the explorer link on a coin detail page. Does it open the correct block explorer URL? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-VERIFY-CDET-002
+    source: GW-MAN-CDET-002
+    title: "Transaction pending to confirmed progression"
+    reason: "Requires waiting for real chain confirmations (1-5 min)"
+    tags: [wallet, verification]
+    checklist:
+      - "[ ] After sending DOC, watch for pending→confirmed in history"
+      - "[ ] Confirmed tx shows correct hash, amount, fee, timestamp"
+      - "[ ] Explorer link shows matching transaction"
+    interactive_steps:
+      - prompt: "After sending DOC, watch the history. Wait for pending→confirmed (1-5 min). Did status progress? (y/n)"
+        wait_for: confirmation
+      - prompt: "Does the confirmed tx show correct hash, amount, fee, timestamp? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-VERIFY-DEX-004
+    source: GW-MAN-DEX-004
+    title: "DEX partial fill observation"
+    reason: "Depends on external market activity and counterparty"
+    tags: [dex, verification]
+    checklist:
+      - "[ ] Place maker order with moderate size"
+      - "[ ] Wait for partial fill (requires counterparty)"
+      - "[ ] Cancel remaining — balances/locked funds reconcile"
+    interactive_steps:
+      - prompt: "Place a maker order (1 DOC). Wait for partial fill from a counterparty. Did it occur? (y/n/s to skip)"
+        wait_for: confirmation
+      - prompt: "If partially filled, cancel the remaining. Do balances reconcile? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-VERIFY-DEX-005
+    source: GW-MAN-DEX-005
+    title: "History export file verification"
+    reason: "Requires opening and inspecting exported file contents"
+    tags: [dex, verification]
+    checklist:
+      - "[ ] Export CSV/file from DEX history"
+      - "[ ] Open file — records match visible history"
+      - "[ ] Timestamp/decimal formatting correct"
+    interactive_steps:
+      - prompt: "Export a file from DEX history. Open it. Do records match the visible history? (y/n)"
+        wait_for: confirmation
+      - prompt: "Are timestamps and decimal values formatted correctly? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-VERIFY-FIAT-003
+    source: GW-MAN-FIAT-003
+    title: "Fiat checkout via provider webview"
+    reason: "Provider webview crosses domain boundary"
+    tags: [fiat, verification]
+    checklist:
+      - "[ ] Submit Buy Now — provider checkout launches"
+      - "[ ] Complete provider flow"
+      - "[ ] Return to app — success status shown"
+    interactive_steps:
+      - prompt: "Click Buy Now in the Fiat section. Does the provider checkout launch? (y/n)"
+        wait_for: confirmation
+      - prompt: "Complete the provider flow and return to the app. Is a success status shown? (y/n)"
+        wait_for: confirmation
+
+  - id: MAN-VERIFY-FIAT-004
+    source: GW-MAN-FIAT-004
+    title: "Fiat checkout closed/failed handling"
+    reason: "Closing provider window mid-flow is manual"
+    tags: [fiat, verification]
+    checklist:
+      - "[ ] Close provider dialog before completion"
+      - "[ ] Failure messaging shown, no stale state"
+      - "[ ] Retry works cleanly"
+    interactive_steps:
+      - prompt: "Start fiat checkout. Close the provider dialog BEFORE completing payment."
+        wait_for: keypress
+      - prompt: "Does the app show appropriate messaging (no stale state)? (y/n)"
+        wait_for: confirmation
+      - prompt: "Try starting checkout again. Does it work cleanly? (y/n)"
+        wait_for: confirmation
