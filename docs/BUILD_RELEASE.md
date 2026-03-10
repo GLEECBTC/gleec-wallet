@@ -14,12 +14,23 @@ Optionally, you can enable Firebase Analytics for the app. To do so, follow the 
 
 ## Build for Web
 
+### Standard build
+
 ```bash
 flutter pub get --enforce-lockfile
 flutter build web --csp --no-web-resources-cdn --no-pub
 ```
 
+### WebAssembly build (recommended)
+
+```bash
+flutter pub get --enforce-lockfile
+flutter build web --csp --no-web-resources-cdn --no-pub --wasm
+```
+
 The release version of the app will be located in `build/web` folder. Specifying the `--release` flag is not necessary, as it is the default behavior.
+
+WebAssembly builds require COEP/COOP headers on the hosting layer (see [WebAssembly hosting headers](#webassembly-hosting-headers)).
 
 ## Native builds
 
@@ -63,7 +74,7 @@ docker build -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:34
 docker build -f .docker/gleec-wallet-android.dockerfile . -t gleec/gleec-wallet
 # Build the app
 mkdir -p build
-docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build web --no-pub --release"
+docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build web --no-pub --release --wasm"
 ```
 
 ### Build for Android
@@ -83,3 +94,15 @@ docker build -f .docker/gleec-wallet-android.dockerfile . -t gleec/gleec-wallet
 mkdir -p build
 docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build apk --no-pub --release"
 ```
+
+## WebAssembly hosting headers
+
+For Flutter web `--wasm` builds with multi-threading, set these response headers:
+
+- `Cross-Origin-Embedder-Policy: credentialless` (or `require-corp`)
+- `Cross-Origin-Opener-Policy: same-origin`
+
+Project defaults already include these headers in:
+
+- `firebase.json` (Firebase Hosting)
+- `roles/nginx/templates/airdex.conf.j2` (nginx deployment template)

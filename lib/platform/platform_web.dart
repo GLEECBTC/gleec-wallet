@@ -1,25 +1,19 @@
+import 'dart:js_interop';
+
 @JS()
-library wasmlib;
-
-import 'package:js/js.dart';
-
-@JS('init_wasm')
-external dynamic initWasm();
+external JSPromise<JSAny?> initWasm();
 
 @JS('run_mm2')
-external Future<void> wasmRunMm2(
-  String params,
-  void Function(int, String) handleLog,
-);
+external JSPromise<JSAny?> wasmRunMm2(String params, JSFunction handleLog);
 
 @JS('mm2_status')
-external dynamic wasmMm2Status();
+external JSAny? wasmMm2Status();
 
 @JS('mm2_version')
 external String wasmVersion();
 
 @JS('rpc_request')
-external Future<dynamic> wasmRpc(String request);
+external JSPromise<JSAny?> wasmRpc(String request);
 
 @JS('reload_page')
 external void reloadPage();

@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:web_dex/bloc/cex_market_data/models/graph_cache.dart';
 import 'package:web_dex/bloc/cex_market_data/models/graph_type.dart';
 

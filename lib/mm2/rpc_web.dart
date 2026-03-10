@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:js_interop';
 
 import 'package:logging/logging.dart';
 import 'package:web_dex/mm2/rpc.dart';
@@ -12,7 +13,8 @@ class RPCWeb extends RPC {
   @override
   Future<dynamic> call(String reqStr) async {
     try {
-      final dynamic response = await wasmRpc(reqStr);
+      final JSAny? jsResponse = await wasmRpc(reqStr).toDart;
+      final dynamic response = jsResponse?.dartify();
 
       if (response == null) {
         throw Exception('Empty RPC response');

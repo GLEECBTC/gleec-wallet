@@ -1,7 +1,7 @@
 import 'dart:math' show Point;
 
 import 'package:decimal/decimal.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
     show
         CoinOhlc,
