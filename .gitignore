@@ -87,3 +87,7 @@ dist/
  
 # KDF generated binaries
 web/kdf/kdf/bin/
+
+# AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
+/.claude/skills/
+/.cursor/skills/
