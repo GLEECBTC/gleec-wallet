@@ -1,5 +1,6 @@
 import 'dart:async' show Timer;
 
+import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,7 +11,10 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/analytics/events/transaction_events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
+import 'package:web_dex/bloc/transaction_history/transaction_history_bloc.dart';
+import 'package:web_dex/bloc/transaction_history/transaction_history_event.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
@@ -54,6 +58,7 @@ class _WithdrawFormState extends State<WithdrawForm> {
   late final _sdk = context.read<KomodoDefiSdk>();
   bool _suppressPreviewError = false;
   late final _mm2Api = context.read<Mm2Api>();
+  Timer? _transactionRefreshTimer;
 
   @override
   void initState() {
@@ -70,6 +75,7 @@ class _WithdrawFormState extends State<WithdrawForm> {
 
   @override
   void dispose() {
+    _transactionRefreshTimer?.cancel();
     _formBloc.close();
     super.dispose();
   }
@@ -81,7 +87,9 @@ class _WithdrawFormState extends State<WithdrawForm> {
       child: MultiBlocListener(
         listeners: [
           BlocListener<WithdrawFormBloc, WithdrawFormState>(
-            listenWhen: (prev, curr) => prev.previewError != curr.previewError && curr.previewError != null,
+            listenWhen: (prev, curr) =>
+                prev.previewError != curr.previewError &&
+                curr.previewError != null,
             listener: (context, state) async {
               // If a preview failed and the user entered essentially their entire
               // spendable balance (but didn't select Max), offer to deduct the fee
@@ -104,8 +112,13 @@ class _WithdrawFormState extends State<WithdrawForm> {
                 return diff <= epsilon;
               }
 
-              if (spendable != null && entered != null && amountsMatchWithTolerance(entered, spendable)) {
-                if (mounted) setState(() { _suppressPreviewError = true; });
+              if (spendable != null &&
+                  entered != null &&
+                  amountsMatchWithTolerance(entered, spendable)) {
+                if (mounted)
+                  setState(() {
+                    _suppressPreviewError = true;
+                  });
                 final bloc = context.read<WithdrawFormBloc>();
                 final agreed = await showDialog<bool>(
                   context: context,
@@ -127,7 +140,10 @@ class _WithdrawFormState extends State<WithdrawForm> {
                   ),
                 );
 
-                if (mounted) setState(() { _suppressPreviewError = false; });
+                if (mounted)
+                  setState(() {
+                    _suppressPreviewError = false;
+                  });
 
                 if (agreed == true) {
                   bloc.add(const WithdrawFormMaxAmountEnabled(true));
@@ -150,6 +166,22 @@ class _WithdrawFormState extends State<WithdrawForm> {
                   hdType: walletType,
                 ),
               );
+
+              final coin = context
+                  .read<CoinsBloc>()
+                  .state
+                  .coins
+                  .values
+                  .firstWhereOrNull((coin) => coin.id == state.asset.id);
+              if (coin == null) return;
+
+              _transactionRefreshTimer?.cancel();
+              _transactionRefreshTimer = Timer(const Duration(seconds: 2), () {
+                if (!mounted) return;
+                context.read<TransactionHistoryBloc>().add(
+                  TransactionHistorySubscribe(coin: coin),
+                );
+              });
             },
           ),
           BlocListener<WithdrawFormBloc, WithdrawFormState>(
@@ -252,7 +284,9 @@ class WithdrawFormContent extends StatelessWidget {
   Widget _buildStep(WithdrawFormStep step) {
     switch (step) {
       case WithdrawFormStep.fill:
-        return WithdrawFormFillSection(suppressPreviewError: suppressPreviewError);
+        return WithdrawFormFillSection(
+          suppressPreviewError: suppressPreviewError,
+        );
       case WithdrawFormStep.confirm:
         return const WithdrawFormConfirmSection();
       case WithdrawFormStep.success:
@@ -569,7 +603,10 @@ class WithdrawResultDetails extends StatelessWidget {
 class WithdrawFormFillSection extends StatelessWidget {
   final bool suppressPreviewError;
 
-  const WithdrawFormFillSection({required this.suppressPreviewError, super.key});
+  const WithdrawFormFillSection({
+    required this.suppressPreviewError,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -633,7 +670,23 @@ class WithdrawFormFillSection extends StatelessWidget {
               ),
               amountError: state.amountError?.message,
             ),
-            if (state.isCustomFeeSupported) ...[
+            if (state.isPriorityFeeSupported) ...[
+              const SizedBox(height: 16),
+              WithdrawalPrioritySelector(
+                feeOptions: state.feeOptions,
+                selectedPriority: state.selectedFeePriority,
+                onPriorityChanged: (priority) {
+                  context.read<WithdrawFormBloc>().add(
+                    WithdrawFormFeePriorityChanged(priority),
+                  );
+                },
+                onCustomFeeSelected: () {
+                  context.read<WithdrawFormBloc>().add(
+                    const WithdrawFormCustomFeeEnabled(true),
+                  );
+                },
+              ),
+            ] else if (state.isCustomFeeSupported) ...[
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -646,33 +699,33 @@ class WithdrawFormFillSection extends StatelessWidget {
                   Text(LocaleKeys.customNetworkFee.tr()),
                 ],
               ),
-              if (state.isCustomFee && state.customFee != null) ...[
-                const SizedBox(height: 8),
-
-                FeeInfoInput(
-                  asset: state.asset,
-                  selectedFee: state.customFee!,
-                  isCustomFee: true, // indicates user can edit it
-                  onFeeSelected: (newFee) {
-                    context.read<WithdrawFormBloc>().add(
-                      WithdrawFormCustomFeeChanged(newFee!),
-                    );
-                  },
-                ),
-
-                // If the bloc has an error for custom fees:
-                if (state.customFeeError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      state.customFeeError!.message,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 12,
-                      ),
+            ],
+            if (state.isCustomFeeSupported &&
+                state.isCustomFee &&
+                state.customFee != null) ...[
+              const SizedBox(height: 8),
+              FeeInfoInput(
+                asset: state.asset,
+                selectedFee: state.customFee!,
+                isCustomFee: true, // indicates user can edit it
+                onFeeSelected: (newFee) {
+                  context.read<WithdrawFormBloc>().add(
+                    WithdrawFormCustomFeeChanged(newFee!),
+                  );
+                },
+              ),
+              // If the bloc has an error for custom fees:
+              if (state.customFeeError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    state.customFeeError!.message,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
                     ),
                   ),
-              ],
+                ),
             ],
             const SizedBox(height: 16),
             if (_isMemoSupportedProtocol(state.asset)) ...[

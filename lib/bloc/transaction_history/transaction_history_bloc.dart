@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/transaction_history/transaction_history_event.dart'
 import 'package:web_dex/bloc/transaction_history/transaction_history_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/model/coin_type.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -33,7 +34,28 @@ class TransactionHistoryBloc
   final Set<String> _processedTxIds = {};
   // Stable in-memory clock for transactions that arrive with a zero timestamp.
   // Ensures deterministic ordering of unconfirmed and just-confirmed items.
-  final Map<String, DateTime> _firstSeenAtById = {};
+  final Map<String, DateTime> _firstSeenAtByInternalId = {};
+
+  String _errorMessageFrom(Object error) {
+    if (error is SdkError) {
+      final localized = error.messageKey.tr(args: error.messageArgs);
+      return localized == error.messageKey ? error.fallbackMessage : localized;
+    }
+
+    if (error is ActivationFailedException && error.originalError is SdkError) {
+      final sdkError = error.originalError as SdkError;
+      final localized = sdkError.messageKey.tr(args: sdkError.messageArgs);
+      return localized == sdkError.messageKey
+          ? sdkError.fallbackMessage
+          : localized;
+    }
+
+    if (error is ActivationFailedException) {
+      return 'Asset activation failed: ${error.message}';
+    }
+
+    return LocaleKeys.somethingWrong.tr();
+  }
 
   @override
   Future<void> close() async {
@@ -65,7 +87,7 @@ class TransactionHistoryBloc
       await _historySubscription?.cancel();
       await _newTransactionsSubscription?.cancel();
       _processedTxIds.clear();
-      _firstSeenAtById.clear();
+      _firstSeenAtByInternalId.clear();
 
       add(const TransactionHistoryStartedLoading());
       final asset = _sdk.assets.available[event.coin.id];
@@ -87,27 +109,29 @@ class TransactionHistoryBloc
 
               // Merge incoming batch by internalId, updating confirmations and other fields
               final Map<String, Transaction> byId = {
-                for (final t in state.transactions) t.internalId: t,
+                for (final t in state.transactions)
+                  _transactionKey(t, event.coin): t,
               };
 
               for (final tx in newTransactions) {
                 final sanitized = tx.sanitize(myAddresses);
+                final key = _transactionKey(sanitized, event.coin);
                 // Capture first-seen time for stable ordering where timestamp may be zero
-                _firstSeenAtById.putIfAbsent(
+                _firstSeenAtByInternalId.putIfAbsent(
                   sanitized.internalId,
                   () => sanitized.timestamp.millisecondsSinceEpoch != 0
                       ? sanitized.timestamp
                       : DateTime.now(),
                 );
-                final existing = byId[sanitized.internalId];
+                final existing = byId[key];
                 if (existing == null) {
-                  byId[sanitized.internalId] = sanitized;
-                  _processedTxIds.add(sanitized.internalId);
+                  byId[key] = sanitized;
+                  _processedTxIds.add(key);
                   continue;
                 }
 
                 // Update existing entry with fresher data (confirmations, blockHeight, fee, memo)
-                byId[sanitized.internalId] = existing.copyWith(
+                byId[key] = existing.copyWith(
                   confirmations: sanitized.confirmations,
                   blockHeight: sanitized.blockHeight,
                   fee: sanitized.fee ?? existing.fee,
@@ -130,7 +154,7 @@ class TransactionHistoryBloc
             onError: (error) {
               add(
                 TransactionHistoryFailure(
-                  error: TextError(error: LocaleKeys.somethingWrong.tr()),
+                  error: TextError(error: _errorMessageFrom(error)),
                 ),
               );
             },
@@ -152,14 +176,11 @@ class TransactionHistoryBloc
         trace: s,
       );
 
-      String errorMessage;
-      if (e is ActivationFailedException) {
-        errorMessage = 'Asset activation failed: ${e.message}';
-      } else {
-        errorMessage = LocaleKeys.somethingWrong.tr();
-      }
-
-      add(TransactionHistoryFailure(error: TextError(error: errorMessage)));
+      add(
+        TransactionHistoryFailure(
+          error: TextError(error: _errorMessageFrom(e)),
+        ),
+      );
     }
   }
 
@@ -173,8 +194,9 @@ class TransactionHistoryBloc
         .listen(
           (newTransaction) {
             final sanitized = newTransaction.sanitize(myAddresses);
+            final key = _transactionKey(sanitized, coin);
             // Capture first-seen time once for stable ordering when timestamp is zero
-            _firstSeenAtById.putIfAbsent(
+            _firstSeenAtByInternalId.putIfAbsent(
               sanitized.internalId,
               () => sanitized.timestamp.millisecondsSinceEpoch != 0
                   ? sanitized.timestamp
@@ -183,14 +205,14 @@ class TransactionHistoryBloc
 
             // Merge single update by internalId
             final Map<String, Transaction> byId = {
-              for (final t in state.transactions) t.internalId: t,
+              for (final t in state.transactions) _transactionKey(t, coin): t,
             };
 
-            final existing = byId[sanitized.internalId];
+            final existing = byId[key];
             if (existing == null) {
-              byId[sanitized.internalId] = sanitized;
+              byId[key] = sanitized;
             } else {
-              byId[sanitized.internalId] = existing.copyWith(
+              byId[key] = existing.copyWith(
                 confirmations: sanitized.confirmations,
                 blockHeight: sanitized.blockHeight,
                 fee: sanitized.fee ?? existing.fee,
@@ -201,7 +223,7 @@ class TransactionHistoryBloc
               );
             }
 
-            _processedTxIds.add(sanitized.internalId);
+            _processedTxIds.add(key);
 
             final updatedTransactions = byId.values.toList()
               ..sort(_compareTransactions);
@@ -213,15 +235,10 @@ class TransactionHistoryBloc
             add(TransactionHistoryUpdated(transactions: updatedTransactions));
           },
           onError: (error) {
-            String errorMessage;
-            if (error is ActivationFailedException) {
-              errorMessage = 'Asset activation failed: ${error.message}';
-            } else {
-              errorMessage = LocaleKeys.somethingWrong.tr();
-            }
-
             add(
-              TransactionHistoryFailure(error: TextError(error: errorMessage)),
+              TransactionHistoryFailure(
+                error: TextError(error: _errorMessageFrom(error)),
+              ),
             );
           },
         );
@@ -248,13 +265,42 @@ class TransactionHistoryBloc
     emit(state.copyWith(loading: false, error: event.error));
   }
 
+  String _transactionKey(Transaction transaction, Coin coin) {
+    final bool useTxHash =
+        coin.type == CoinType.tendermint ||
+        coin.type == CoinType.tendermintToken;
+    final txHash = transaction.txHash;
+    if (useTxHash && txHash != null && txHash.isNotEmpty) {
+      return txHash;
+    }
+    return transaction.internalId;
+  }
+
   int _compareTransactions(Transaction left, Transaction right) {
     final unconfirmedTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
-    if (right.timestamp == unconfirmedTimestamp) {
-      return 1;
-    } else if (left.timestamp == unconfirmedTimestamp) {
+    final leftIsUnconfirmed = left.timestamp == unconfirmedTimestamp;
+    final rightIsUnconfirmed = right.timestamp == unconfirmedTimestamp;
+
+    if (leftIsUnconfirmed && rightIsUnconfirmed) {
+      final leftFirstSeen =
+          _firstSeenAtByInternalId[left.internalId] ?? unconfirmedTimestamp;
+      final rightFirstSeen =
+          _firstSeenAtByInternalId[right.internalId] ?? unconfirmedTimestamp;
+      final compareByFirstSeen = rightFirstSeen.compareTo(leftFirstSeen);
+      if (compareByFirstSeen != 0) {
+        return compareByFirstSeen;
+      }
+      return right.internalId.compareTo(left.internalId);
+    }
+
+    if (leftIsUnconfirmed) {
       return -1;
     }
+
+    if (rightIsUnconfirmed) {
+      return 1;
+    }
+
     return right.timestamp.compareTo(left.timestamp);
   }
 }

@@ -1,4 +1,5 @@
 import 'package:app_theme/app_theme.dart';
+import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,7 +36,30 @@ class _TransactionListRowState extends State<TransactionListRow> {
     return _isReceived ? Icons.arrow_circle_down : Icons.arrow_circle_up;
   }
 
-  bool get _isReceived => widget.transaction.amount.toDouble() > 0;
+  Decimal get _displayAmount {
+    final tx = widget.transaction;
+    final netChange = tx.amount;
+    if (netChange != Decimal.zero) {
+      return netChange;
+    }
+
+    final received = tx.balanceChanges.receivedByMe;
+    final spent = tx.balanceChanges.spentByMe;
+    if (received != Decimal.zero || spent != Decimal.zero) {
+      if (received >= spent) {
+        return received;
+      }
+      return -spent;
+    }
+
+    if (tx.balanceChanges.totalAmount != Decimal.zero) {
+      return tx.balanceChanges.totalAmount;
+    }
+
+    return Decimal.zero;
+  }
+
+  bool get _isReceived => _displayAmount > Decimal.zero;
 
   String get _sign {
     return _isReceived ? '+' : '-';
@@ -79,16 +103,12 @@ class _TransactionListRowState extends State<TransactionListRow> {
   Widget _buildAmountChangesMobile(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildBalanceChanges(),
-        _buildUsdChanges(),
-      ],
+      children: [_buildBalanceChanges(), _buildUsdChanges()],
     );
   }
 
   Widget _buildBalanceChanges() {
-    final String formatted =
-        formatDexAmt(widget.transaction.amount.toDouble().abs());
+    final String formatted = formatDexAmt(_displayAmount.toDouble().abs());
 
     return Row(
       children: [
@@ -178,9 +198,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
                 flex: 5,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildBalanceChangesMobile(context),
-                  ],
+                  children: [_buildBalanceChangesMobile(context)],
                 ),
               ),
               Expanded(
@@ -220,10 +238,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
           width: 60,
           child: Text(
             _isReceived ? LocaleKeys.receive.tr() : LocaleKeys.send.tr(),
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
           ),
         ),
         Expanded(flex: 4, child: _buildBalanceChanges()),
@@ -267,7 +282,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
   Widget _buildUsdChanges() {
     final coinsBloc = context.read<CoinsBloc>();
     final double? usdChanges = coinsBloc.state.getUsdPriceByAmount(
-      widget.transaction.amount.toString(),
+      _displayAmount.toString(),
       widget.coinAbbr,
     );
     return AutoScrollText(

@@ -16,6 +16,19 @@ class WithdrawMemoField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextStyle memoStyle =
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontFamilyFallback: const [
+            'Noto Sans',
+            'Roboto',
+            'Arial',
+            'sans-serif',
+          ],
+        ) ??
+        const TextStyle(
+          fontSize: 14,
+          fontFamilyFallback: ['Noto Sans', 'Roboto', 'Arial', 'sans-serif'],
+        );
     return UiTextFormField(
       key: const Key('withdraw-form-memo-field'),
       initialValue: memo,
@@ -29,6 +42,7 @@ class WithdrawMemoField extends StatelessWidget {
       counterText: '',
       hintText: LocaleKeys.memoOptional.tr(),
       hintTextStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      style: memoStyle,
     );
   }
 }

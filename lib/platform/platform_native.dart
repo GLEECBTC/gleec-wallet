@@ -9,7 +9,7 @@ Future<void> wasmRunMm2(
   void Function(int, String) handleLog,
 ) async {}
 dynamic wasmMm2Status() async {}
-dynamic wasmRpc(String request) async {}
+Future<dynamic> wasmRpc(String request) async {}
 
 String wasmVersion() => '';
 

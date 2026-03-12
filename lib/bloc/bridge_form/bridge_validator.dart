@@ -87,6 +87,10 @@ class BridgeValidator {
       );
     } else if (error is TradePreimageTransportError) {
       return DexFormError(error: LocaleKeys.notEnoughBalanceForGasError.tr());
+    } else if (error is TradePreimageNoSuchCoinError) {
+      return DexFormError(
+        error: LocaleKeys.connectionToServersFailing.tr(args: [error.coin]),
+      );
     } else if (error is TradePreimageVolumeTooLowError) {
       return DexFormError(
         error: LocaleKeys.lowTradeVolumeError.tr(

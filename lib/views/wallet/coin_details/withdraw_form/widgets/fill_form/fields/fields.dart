@@ -158,15 +158,19 @@ class CustomFeeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
-        return SwitchListTile(
-          title: Text(LocaleKeys.customFeeToggleTitle.tr()),
-          value: state.isCustomFee,
-          onChanged: (value) {
-            context.read<WithdrawFormBloc>().add(
-              WithdrawFormCustomFeeEnabled(value),
-            );
-          },
-          contentPadding: EdgeInsets.zero,
+        return Row(
+          children: [
+            UiSwitcher(
+              value: state.isCustomFee,
+              onChanged: (value) {
+                context.read<WithdrawFormBloc>().add(
+                  WithdrawFormCustomFeeEnabled(value),
+                );
+              },
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(LocaleKeys.customFeeToggleTitle.tr())),
+          ],
         );
       },
     );
@@ -499,15 +503,29 @@ class IbcTransferField extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
-        return SwitchListTile(
-          title: Text(LocaleKeys.ibcTransferFieldTitle.tr()),
-          subtitle: Text(LocaleKeys.ibcTransferFieldSubtitle.tr()),
-          value: state.isIbcTransfer,
-          onChanged: (value) {
-            context.read<WithdrawFormBloc>().add(
-              WithdrawFormIbcTransferEnabled(value),
-            );
-          },
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                UiSwitcher(
+                  value: state.isIbcTransfer,
+                  onChanged: (value) {
+                    context.read<WithdrawFormBloc>().add(
+                      WithdrawFormIbcTransferEnabled(value),
+                    );
+                  },
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(LocaleKeys.ibcTransferFieldTitle.tr())),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              LocaleKeys.ibcTransferFieldSubtitle.tr(),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         );
       },
     );

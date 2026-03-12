@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
@@ -11,7 +12,6 @@ import 'package:web_dex/analytics/events/cross_chain_events.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/swap.dart';
-import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -20,13 +20,14 @@ import 'package:web_dex/views/dex/entity_details/swap/swap_details_page.dart';
 import 'package:web_dex/views/dex/entity_details/taker_order/taker_order_details_page.dart';
 
 /// Distinguishes what entity the uuid represents
-enum TradingEntityKind {
-  order,
-  swap,
-}
+enum TradingEntityKind { order, swap }
 
 class TradingDetails extends StatefulWidget {
-  const TradingDetails({super.key, required this.uuid, this.kind = TradingEntityKind.swap});
+  const TradingDetails({
+    super.key,
+    required this.uuid,
+    this.kind = TradingEntityKind.swap,
+  });
 
   final String uuid;
   final TradingEntityKind kind;
@@ -36,29 +37,107 @@ class TradingDetails extends StatefulWidget {
 }
 
 class _TradingDetailsState extends State<TradingDetails> {
-  late Timer _statusTimer;
+  Timer? _statusTimer;
+  StreamSubscription<SwapStatusEvent>? _swapStatusSubscription;
+  StreamSubscription<OrderStatusEvent>? _orderStatusSubscription;
+
   Swap? _swapStatus;
   OrderStatus? _orderStatus;
+  bool _statusUpdateInProgress = false;
+  DateTime? _lastStatusUpdateAt;
   bool _loggedSuccess = false;
   bool _loggedFailure = false;
 
   @override
   void initState() {
+    super.initState();
+
     final myOrdersService = RepositoryProvider.of<MyOrdersService>(context);
     final dexRepository = RepositoryProvider.of<DexRepository>(context);
+    final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
 
-    _statusTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateStatus(dexRepository, myOrdersService);
+    _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _scheduleStatusUpdate(dexRepository, myOrdersService);
     });
 
-    super.initState();
+    _scheduleStatusUpdate(dexRepository, myOrdersService, force: true);
+    _initStreaming(sdk, dexRepository, myOrdersService).ignore();
   }
 
   @override
   void dispose() {
-    _statusTimer.cancel();
+    _statusTimer?.cancel();
+    _swapStatusSubscription?.cancel();
+    _orderStatusSubscription?.cancel();
 
     super.dispose();
+  }
+
+  Future<void> _initStreaming(
+    KomodoDefiSdk sdk,
+    DexRepository dexRepository,
+    MyOrdersService myOrdersService,
+  ) async {
+    try {
+      if (widget.kind == TradingEntityKind.swap) {
+        final subscription = await sdk.subscribeToSwapStatus();
+        if (!mounted) {
+          await subscription.cancel();
+          return;
+        }
+
+        _swapStatusSubscription = subscription;
+        _swapStatusSubscription?.onData((event) {
+          if (event.uuid != widget.uuid) return;
+          _scheduleStatusUpdate(dexRepository, myOrdersService);
+        });
+      } else {
+        final subscription = await sdk.subscribeToOrderStatus();
+        if (!mounted) {
+          await subscription.cancel();
+          return;
+        }
+
+        _orderStatusSubscription = subscription;
+        _orderStatusSubscription?.onData((event) {
+          if (event.uuid != widget.uuid) return;
+          _scheduleStatusUpdate(dexRepository, myOrdersService);
+        });
+      }
+    } catch (e, s) {
+      log(
+        'Failed to initialize trading details stream for ${widget.kind}',
+        path: 'TradingDetails._initStreaming',
+        trace: s,
+        isError: true,
+      );
+    }
+  }
+
+  void _scheduleStatusUpdate(
+    DexRepository dexRepository,
+    MyOrdersService myOrdersService, {
+    bool force = false,
+  }) {
+    if (_statusUpdateInProgress) return;
+
+    final lastUpdateAt = _lastStatusUpdateAt;
+    if (!force &&
+        lastUpdateAt != null &&
+        DateTime.now().difference(lastUpdateAt) <
+            const Duration(milliseconds: 500)) {
+      return;
+    }
+
+    _statusUpdateInProgress = true;
+    () async {
+      try {
+        await _updateStatus(dexRepository, myOrdersService);
+        _lastStatusUpdateAt = DateTime.now();
+      } finally {
+        _statusUpdateInProgress = false;
+      }
+    }().ignore();
   }
 
   @override
@@ -105,8 +184,8 @@ class _TradingDetailsState extends State<TradingDetails> {
     DexRepository dexRepository,
     MyOrdersService myOrdersService,
   ) async {
-    Swap? swapStatus = null;
-    OrderStatus? orderStatus = null;
+    Swap? swapStatus;
+    OrderStatus? orderStatus;
     try {
       if (widget.kind == TradingEntityKind.swap) {
         swapStatus = await dexRepository.getSwapStatus(widget.uuid);
@@ -116,7 +195,8 @@ class _TradingDetailsState extends State<TradingDetails> {
     } catch (e, s) {
       log(
         e.toString(),
-        path: 'trading_details =>_updateStatus ${widget.kind} error | uuid=${widget.uuid}',
+        path:
+            'trading_details =>_updateStatus ${widget.kind} error | uuid=${widget.uuid}',
         trace: s,
         isError: true,
       );

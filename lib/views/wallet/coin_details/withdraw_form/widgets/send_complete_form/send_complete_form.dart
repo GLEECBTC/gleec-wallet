@@ -57,15 +57,17 @@ class SendCompleteForm extends StatelessWidget {
                           color: theme.custom.headerFloatBoxColor,
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      SelectableText(
-                        '\$${state.usdAmountPrice ?? 0}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: theme.custom.headerFloatBoxColor,
+                      if (state.usdAmountPrice != null) ...[
+                        const SizedBox(height: 5),
+                        SelectableText(
+                          '\$${state.usdAmountPrice}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: theme.custom.headerFloatBoxColor,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                   if (state.hasTransactionError)
@@ -101,9 +103,7 @@ class _SendCompleteError extends StatelessWidget {
       child: Text(
         error.message,
         textAlign: TextAlign.left,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.error,
-        ),
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
       ),
     );
   }
@@ -134,7 +134,7 @@ class _TransactionHash extends StatelessWidget {
             title: '${LocaleKeys.fee.tr()}:',
             value:
                 '${truncateDecimal(feeValue, decimalRange)} ${Coin.normalizeAbbr(feeCoin)}',
-            usdPrice: usdFeePrice ?? 0,
+            usdPrice: usdFeePrice,
             isWarningShown: isFeePriceExpensive,
           ),
           const SizedBox(height: 21),

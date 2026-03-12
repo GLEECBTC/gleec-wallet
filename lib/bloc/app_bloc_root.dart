@@ -234,11 +234,7 @@ class AppBlocRoot extends StatelessWidget {
             create: (context) => BridgeBloc(
               kdfSdk: komodoDefiSdk,
               dexRepository: dexRepository,
-              bridgeRepository: BridgeRepository(
-                mm2Api,
-                komodoDefiSdk,
-                coinsRepository,
-              ),
+              bridgeRepository: BridgeRepository(mm2Api, coinsRepository),
               coinsRepository: coinsRepository,
               analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
             ),
