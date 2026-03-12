@@ -53,38 +53,46 @@ class _CoinsManagerListWrapperState extends State<CoinsManagerListWrapper> {
       child: BlocBuilder<CoinsManagerBloc, CoinsManagerState>(
         builder: (BuildContext context, CoinsManagerState state) {
           final bool isAddAssets = state.action == CoinsManagerAction.add;
+          final double bottomInset = isMobile
+              ? MediaQuery.of(context).viewInsets.bottom
+              : 0.0;
 
-          return Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
-              CoinsManagerFilters(isMobile: isMobile),
-              if (!isMobile)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: CoinsManagerListHeader(
-                    sortData: state.sortData,
-                    isAddAssets: isAddAssets,
-                    onSortChange: _onSortChange,
+          return AnimatedPadding(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                CoinsManagerFilters(isMobile: isMobile),
+                if (!isMobile)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: CoinsManagerListHeader(
+                      sortData: state.sortData,
+                      isAddAssets: isAddAssets,
+                      onSortChange: _onSortChange,
+                    ),
+                  ),
+                SizedBox(height: isMobile ? 4.0 : 14.0),
+                const CoinsManagerSelectedTypesList(),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: CoinsManagerList(
+                          coinList: state.coins,
+                          isAddAssets: isAddAssets,
+                          onCoinSelect: _onCoinSelect,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   ),
                 ),
-              SizedBox(height: isMobile ? 4.0 : 14.0),
-              const CoinsManagerSelectedTypesList(),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: CoinsManagerList(
-                        coinList: state.coins,
-                        isAddAssets: isAddAssets,
-                        onCoinSelect: _onCoinSelect,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -95,23 +103,22 @@ class _CoinsManagerListWrapperState extends State<CoinsManagerListWrapper> {
     context.read<CoinsManagerBloc>().add(CoinsManagerSortChanged(sortData));
   }
 
-  void _onRemovalStateChanged(
-    BuildContext context,
-    CoinsManagerState state,
-  ) {
+  void _onRemovalStateChanged(BuildContext context, CoinsManagerState state) {
     final removalState = state.removalState;
     if (removalState == null) return;
 
     final bloc = context.read<CoinsManagerBloc>();
     final coin = removalState.coin;
-    final childCoinTickers =
-        removalState.childCoins.map((c) => c.abbr).toList();
+    final childCoinTickers = removalState.childCoins
+        .map((c) => c.abbr)
+        .toList();
     final requiresParentConfirmation =
         coin.parentCoin == null && childCoinTickers.isNotEmpty;
 
     if (removalState.hasActiveSwap) {
-      _informationPopup.text =
-          LocaleKeys.coinDisableSpan1.tr(args: [removalState.coin.abbr]);
+      _informationPopup.text = LocaleKeys.coinDisableSpan1.tr(
+        args: [removalState.coin.abbr],
+      );
       _informationPopup.show();
       bloc.add(const CoinsManagerCoinRemovalCancelled());
       return;
@@ -160,10 +167,7 @@ class _CoinsManagerListWrapperState extends State<CoinsManagerListWrapper> {
     }
   }
 
-  void _onErrorMessageChanged(
-    BuildContext context,
-    CoinsManagerState state,
-  ) {
+  void _onErrorMessageChanged(BuildContext context, CoinsManagerState state) {
     final errorMessage = state.errorMessage;
     if (errorMessage != null) {
       _informationPopup.text = errorMessage;

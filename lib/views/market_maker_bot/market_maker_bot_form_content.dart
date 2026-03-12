@@ -1,4 +1,5 @@
 import 'package:app_theme/app_theme.dart';
+import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,7 +7,6 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/analytics/events/market_bot_events.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_trade_form/market_maker_trade_form_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
@@ -27,9 +27,14 @@ import 'package:web_dex/views/market_maker_bot/update_interval_dropdown.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 
 class MarketMakerBotFormContent extends StatefulWidget {
-  const MarketMakerBotFormContent({required this.coins, super.key});
+  const MarketMakerBotFormContent({
+    required this.sellCoins,
+    required this.buyCoins,
+    super.key,
+  });
 
-  final List<Coin> coins;
+  final List<Coin> sellCoins;
+  final List<Coin> buyCoins;
 
   @override
   State<MarketMakerBotFormContent> createState() =>
@@ -45,7 +50,8 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
 
   @override
   void didUpdateWidget(MarketMakerBotFormContent oldWidget) {
-    if (oldWidget.coins != widget.coins) {
+    if (oldWidget.sellCoins != widget.sellCoins ||
+        oldWidget.buyCoins != widget.buyCoins) {
       final formBloc = context.read<MarketMakerTradeFormBloc>();
       if (formBloc.state.sellCoin.value == null) {
         _setSellCoinToDefaultCoin();
@@ -77,7 +83,7 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
                       key: const Key('$keyPrefix-sell-select'),
                       sellCoin: state.sellCoin,
                       sellAmount: state.sellAmount,
-                      coins: _coinsWithUsdBalance(widget.coins),
+                      coins: _coinsWithUsdBalance(widget.sellCoins),
                       minimumTradeVolume: state.minimumTradeVolume,
                       maximumTradeVolume: state.maximumTradeVolume,
                       onItemSelected: _onSelectSellCoin,
@@ -88,7 +94,7 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
                       key: const Key('$keyPrefix-buy-select'),
                       buyCoin: state.buyCoin,
                       buyAmount: state.buyAmount,
-                      coins: _filteredCoinsList(state.sellCoin.value),
+                      coins: _filteredBuyCoinsList(state.sellCoin.value),
                       onItemSelected: _onBuyCoinSelected,
                     ),
                   ),
@@ -131,7 +137,8 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
                   const SizedBox(height: 12),
                   if (state.tradePreImageError != null)
                     ImportantNote(
-                      text: state.tradePreImageError?.textWithMin(
+                      text:
+                          state.tradePreImageError?.textWithMin(
                             state.sellCoin.value,
                             state.buyCoin.value,
                             state.minTradingVolume?.toString(),
@@ -200,16 +207,20 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
   }
 
   void _setSellCoinToDefaultCoin() {
-    final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
-    final defaultCoin = coinsRepository.getCoin(defaultDexCoin);
+    final availableSellCoins = _coinsWithUsdBalance(widget.sellCoins);
+    final defaultCoin = availableSellCoins.firstWhereOrNull(
+      (coin) => coin.abbr == defaultDexCoin,
+    );
+    final fallbackCoin = availableSellCoins.firstOrNull;
     final tradeFormBloc = context.read<MarketMakerTradeFormBloc>();
-    if (defaultCoin != null && tradeFormBloc.state.sellCoin.value == null) {
-      tradeFormBloc.add(MarketMakerTradeFormSellCoinChanged(defaultCoin));
+    final nextSellCoin = defaultCoin ?? fallbackCoin;
+    if (nextSellCoin != null && tradeFormBloc.state.sellCoin.value == null) {
+      tradeFormBloc.add(MarketMakerTradeFormSellCoinChanged(nextSellCoin));
     }
   }
 
-  List<Coin> _filteredCoinsList(Coin? coin) {
-    return widget.coins.where((e) => e.abbr != coin?.abbr).toList();
+  List<Coin> _filteredBuyCoinsList(Coin? coin) {
+    return widget.buyCoins.where((e) => e.abbr != coin?.abbr).toList();
   }
 
   void _onTradeMarginChanged(String value) {

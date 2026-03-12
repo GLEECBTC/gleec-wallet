@@ -68,7 +68,19 @@ final class AppBootstrapper {
 
   /// Initialize settings and register analytics
   Future<void> _initializeSettings() async {
-    final stored = await SettingsRepository.loadStoredSettings();
+    var stored = await SettingsRepository.loadStoredSettings();
+    final mmSettings = stored.marketMakerBotSettings;
+    final shouldClearStoredMakerOrders =
+        !mmSettings.saveOrdersBetweenLaunches &&
+        mmSettings.tradeCoinPairConfigs.isNotEmpty;
+    if (shouldClearStoredMakerOrders) {
+      final clearedMmSettings = mmSettings.copyWith(
+        tradeCoinPairConfigs: const [],
+      );
+      stored = stored.copyWith(marketMakerBotSettings: clearedMmSettings);
+      await SettingsRepository().updateSettings(stored);
+    }
+
     _storedSettings = stored;
 
     // Register the unified analytics repository with GetIt

@@ -107,39 +107,54 @@ class TransactionHistoryBloc
             (newTransactions) {
               if (newTransactions.isEmpty) return;
 
-              // Merge incoming batch by internalId, updating confirmations and other fields
-              final Map<String, Transaction> byId = {
-                for (final t in state.transactions)
-                  _transactionKey(t, event.coin): t,
-              };
+              final Map<String, Transaction> byId = _transactionsByInternalId(
+                state.transactions,
+              );
+              final Map<String, String> internalIdByTxHash = _txHashIndex(
+                state.transactions,
+                event.coin,
+              );
 
               for (final tx in newTransactions) {
                 final sanitized = tx.sanitize(myAddresses);
-                final key = _transactionKey(sanitized, event.coin);
-                // Capture first-seen time for stable ordering where timestamp may be zero
-                _firstSeenAtByInternalId.putIfAbsent(
-                  sanitized.internalId,
-                  () => sanitized.timestamp.millisecondsSinceEpoch != 0
-                      ? sanitized.timestamp
-                      : DateTime.now(),
+                _rememberFirstSeen(sanitized);
+                final existingInternalId = _findExistingTransactionInternalId(
+                  byId: byId,
+                  internalIdByTxHash: internalIdByTxHash,
+                  transaction: sanitized,
+                  coin: event.coin,
                 );
-                final existing = byId[key];
+
+                if (existingInternalId != null &&
+                    existingInternalId != sanitized.internalId) {
+                  byId.remove(sanitized.internalId);
+                }
+
+                final canonicalInternalId =
+                    existingInternalId ?? sanitized.internalId;
+                final existing = byId[canonicalInternalId];
                 if (existing == null) {
-                  byId[key] = sanitized;
-                  _processedTxIds.add(key);
+                  byId[canonicalInternalId] = sanitized;
+                  _indexTransactionTxHash(
+                    internalIdByTxHash,
+                    transaction: sanitized,
+                    internalId: canonicalInternalId,
+                    coin: event.coin,
+                  );
+                  _processedTxIds.add(canonicalInternalId);
                   continue;
                 }
 
                 // Update existing entry with fresher data (confirmations, blockHeight, fee, memo)
-                byId[key] = existing.copyWith(
-                  confirmations: sanitized.confirmations,
-                  blockHeight: sanitized.blockHeight,
-                  fee: sanitized.fee ?? existing.fee,
-                  memo: sanitized.memo ?? existing.memo,
-                  // Update the timestamp to change date from "Now" once tx
-                  // is confirmed on the blockchain
-                  timestamp: sanitized.timestamp,
+                final merged = _mergeTransaction(existing, sanitized);
+                byId[canonicalInternalId] = merged;
+                _indexTransactionTxHash(
+                  internalIdByTxHash,
+                  transaction: merged,
+                  internalId: canonicalInternalId,
+                  coin: event.coin,
                 );
+                _processedTxIds.add(canonicalInternalId);
               }
 
               final updatedTransactions = byId.values.toList()
@@ -194,36 +209,50 @@ class TransactionHistoryBloc
         .listen(
           (newTransaction) {
             final sanitized = newTransaction.sanitize(myAddresses);
-            final key = _transactionKey(sanitized, coin);
-            // Capture first-seen time once for stable ordering when timestamp is zero
-            _firstSeenAtByInternalId.putIfAbsent(
-              sanitized.internalId,
-              () => sanitized.timestamp.millisecondsSinceEpoch != 0
-                  ? sanitized.timestamp
-                  : DateTime.now(),
+            _rememberFirstSeen(sanitized);
+
+            final Map<String, Transaction> byId = _transactionsByInternalId(
+              state.transactions,
+            );
+            final Map<String, String> internalIdByTxHash = _txHashIndex(
+              state.transactions,
+              coin,
+            );
+            final existingInternalId = _findExistingTransactionInternalId(
+              byId: byId,
+              internalIdByTxHash: internalIdByTxHash,
+              transaction: sanitized,
+              coin: coin,
             );
 
-            // Merge single update by internalId
-            final Map<String, Transaction> byId = {
-              for (final t in state.transactions) _transactionKey(t, coin): t,
-            };
+            if (existingInternalId != null &&
+                existingInternalId != sanitized.internalId) {
+              byId.remove(sanitized.internalId);
+            }
 
-            final existing = byId[key];
+            final canonicalInternalId =
+                existingInternalId ?? sanitized.internalId;
+            final existing = byId[canonicalInternalId];
             if (existing == null) {
-              byId[key] = sanitized;
+              byId[canonicalInternalId] = sanitized;
+              _indexTransactionTxHash(
+                internalIdByTxHash,
+                transaction: sanitized,
+                internalId: canonicalInternalId,
+                coin: coin,
+              );
             } else {
-              byId[key] = existing.copyWith(
-                confirmations: sanitized.confirmations,
-                blockHeight: sanitized.blockHeight,
-                fee: sanitized.fee ?? existing.fee,
-                memo: sanitized.memo ?? existing.memo,
-                // Update the timestamp to change date from "Now" once tx
-                // is confirmed on the blockchain
-                timestamp: sanitized.timestamp,
+              final merged = _mergeTransaction(existing, sanitized);
+              byId[canonicalInternalId] = merged;
+              _indexTransactionTxHash(
+                internalIdByTxHash,
+                transaction: merged,
+                internalId: canonicalInternalId,
+                coin: coin,
               );
             }
 
-            _processedTxIds.add(key);
+            _processedTxIds.add(canonicalInternalId);
 
             final updatedTransactions = byId.values.toList()
               ..sort(_compareTransactions);
@@ -265,15 +294,94 @@ class TransactionHistoryBloc
     emit(state.copyWith(loading: false, error: event.error));
   }
 
-  String _transactionKey(Transaction transaction, Coin coin) {
-    final bool useTxHash =
-        coin.type == CoinType.tendermint ||
-        coin.type == CoinType.tendermintToken;
-    final txHash = transaction.txHash;
-    if (useTxHash && txHash != null && txHash.isNotEmpty) {
-      return txHash;
+  void _rememberFirstSeen(Transaction transaction) {
+    _firstSeenAtByInternalId.putIfAbsent(
+      transaction.internalId,
+      () => transaction.timestamp.millisecondsSinceEpoch != 0
+          ? transaction.timestamp
+          : DateTime.now(),
+    );
+  }
+
+  Map<String, Transaction> _transactionsByInternalId(
+    Iterable<Transaction> transactions,
+  ) => {
+    for (final transaction in transactions) transaction.internalId: transaction,
+  };
+
+  Map<String, String> _txHashIndex(
+    Iterable<Transaction> transactions,
+    Coin coin,
+  ) {
+    if (!_usesTxHashLookup(coin)) return <String, String>{};
+
+    final byTxHash = <String, String>{};
+    for (final transaction in transactions) {
+      final txHash = transaction.txHash;
+      if (txHash != null && txHash.isNotEmpty) {
+        byTxHash[txHash] = transaction.internalId;
+      }
     }
-    return transaction.internalId;
+    return byTxHash;
+  }
+
+  String? _findExistingTransactionInternalId({
+    required Map<String, Transaction> byId,
+    required Map<String, String> internalIdByTxHash,
+    required Transaction transaction,
+    required Coin coin,
+  }) {
+    if (byId.containsKey(transaction.internalId)) {
+      return transaction.internalId;
+    }
+
+    if (!_usesTxHashLookup(coin)) {
+      return null;
+    }
+
+    final txHash = transaction.txHash;
+    if (txHash == null || txHash.isEmpty) {
+      return null;
+    }
+
+    return internalIdByTxHash[txHash];
+  }
+
+  void _indexTransactionTxHash(
+    Map<String, String> internalIdByTxHash, {
+    required Transaction transaction,
+    required String internalId,
+    required Coin coin,
+  }) {
+    if (!_usesTxHashLookup(coin)) {
+      return;
+    }
+
+    final txHash = transaction.txHash;
+    if (txHash == null || txHash.isEmpty) {
+      return;
+    }
+
+    internalIdByTxHash[txHash] = internalId;
+  }
+
+  bool _usesTxHashLookup(Coin coin) =>
+      coin.type == CoinType.tendermint || coin.type == CoinType.tendermintToken;
+
+  Transaction _mergeTransaction(Transaction existing, Transaction incoming) {
+    final incomingTxHash = incoming.txHash;
+    return existing.copyWith(
+      confirmations: incoming.confirmations,
+      blockHeight: incoming.blockHeight,
+      fee: incoming.fee ?? existing.fee,
+      memo: incoming.memo ?? existing.memo,
+      // Update the timestamp to change date from "Now" once tx
+      // is confirmed on the blockchain
+      timestamp: incoming.timestamp,
+      txHash: incomingTxHash != null && incomingTxHash.isNotEmpty
+          ? incomingTxHash
+          : existing.txHash,
+    );
   }
 
   int _compareTransactions(Transaction left, Transaction right) {

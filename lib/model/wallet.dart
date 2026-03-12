@@ -36,6 +36,8 @@ class Wallet {
         hasBackup: hasBackup,
         type: walletType,
         seedPhrase: '',
+        provenance: WalletProvenance.generated,
+        createdAt: DateTime.now(),
       ),
     );
   }
@@ -85,6 +87,8 @@ class WalletConfig {
     this.pubKey,
     this.type = WalletType.iguana,
     this.isLegacyWallet = false,
+    this.provenance = WalletProvenance.unknown,
+    this.createdAt,
   });
 
   factory WalletConfig.fromJson(Map<String, dynamic> json) {
@@ -98,6 +102,12 @@ class WalletConfig {
         json['activated_coins'] as List? ?? <String>[],
       ).toList(),
       hasBackup: json['has_backup'] as bool? ?? false,
+      provenance: WalletProvenance.fromJson(
+        json['wallet_provenance'] as String? ?? json['provenance'] as String?,
+      ),
+      createdAt: _parseCreatedAt(
+        json['wallet_created_at'] ?? json['created_at'],
+      ),
     );
   }
 
@@ -107,6 +117,8 @@ class WalletConfig {
   bool hasBackup;
   WalletType type;
   bool isLegacyWallet;
+  WalletProvenance provenance;
+  DateTime? createdAt;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -115,6 +127,8 @@ class WalletConfig {
       'pub_key': pubKey,
       'activated_coins': activatedCoins,
       'has_backup': hasBackup,
+      'provenance': provenance.name,
+      'created_at': createdAt?.millisecondsSinceEpoch,
     };
   }
 
@@ -128,6 +142,8 @@ class WalletConfig {
       // Preserve legacy flag when copying config; losing this flag breaks
       // legacy login flow and can hide the wallet from lists.
       isLegacyWallet: isLegacyWallet,
+      provenance: provenance,
+      createdAt: createdAt,
     );
   }
 
@@ -138,6 +154,8 @@ class WalletConfig {
     bool? hasBackup,
     WalletType? type,
     bool? isLegacyWallet,
+    WalletProvenance? provenance,
+    DateTime? createdAt,
   }) {
     return WalletConfig(
       seedPhrase: seedPhrase ?? this.seedPhrase,
@@ -146,7 +164,22 @@ class WalletConfig {
       hasBackup: hasBackup ?? this.hasBackup,
       type: type ?? this.type,
       isLegacyWallet: isLegacyWallet ?? this.isLegacyWallet,
+      provenance: provenance ?? this.provenance,
+      createdAt: createdAt ?? this.createdAt,
     );
+  }
+
+  static DateTime? _parseCreatedAt(dynamic value) {
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is String) {
+      final asInt = int.tryParse(value);
+      if (asInt != null) {
+        return DateTime.fromMillisecondsSinceEpoch(asInt);
+      }
+    }
+    return null;
   }
 }
 
@@ -173,11 +206,39 @@ enum WalletType {
   }
 }
 
+enum WalletProvenance {
+  generated,
+  imported,
+  unknown;
+
+  factory WalletProvenance.fromJson(String? value) {
+    switch (value) {
+      case 'generated':
+        return WalletProvenance.generated;
+      case 'imported':
+      case 'restored':
+      case 'migrated':
+        return WalletProvenance.imported;
+      default:
+        return WalletProvenance.unknown;
+    }
+  }
+}
+
 extension KdfUserWalletExtension on KdfUser {
   Wallet get wallet {
     final walletType = WalletType.fromJson(
       metadata['type'] as String? ?? 'iguana',
     );
+    final provenance = WalletProvenance.fromJson(
+      metadata['wallet_provenance'] as String?,
+    );
+    final createdAtRaw = metadata['wallet_created_at'];
+    final createdAt = createdAtRaw is int
+        ? DateTime.fromMillisecondsSinceEpoch(createdAtRaw)
+        : createdAtRaw is String && int.tryParse(createdAtRaw) != null
+        ? DateTime.fromMillisecondsSinceEpoch(int.parse(createdAtRaw))
+        : null;
     return Wallet(
       id: walletId.name,
       name: walletId.name,
@@ -188,6 +249,8 @@ extension KdfUserWalletExtension on KdfUser {
             metadata.valueOrNull<List<String>>('activated_coins') ?? [],
         hasBackup: metadata['has_backup'] as bool? ?? false,
         type: walletType,
+        provenance: provenance,
+        createdAt: createdAt,
       ),
     );
   }

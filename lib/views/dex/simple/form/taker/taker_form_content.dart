@@ -88,10 +88,7 @@ class _FormControls extends StatelessWidget {
             child: ConnectWalletWrapper(
               key: const Key('connect-wallet-taker-form'),
               eventType: WalletsManagerEventType.dex,
-              buttonSize: Size(
-                112,
-                isMobile ? 52 : 40,
-              ),
+              buttonSize: Size(112, isMobile ? 52 : 40),
               child: const TradeButton(),
             ),
           ),
@@ -124,7 +121,7 @@ class TradeButton extends StatelessWidget {
       builder: (context, systemHealthState) {
         final bool isSystemClockValid =
             systemHealthState is SystemHealthLoadSuccess &&
-                systemHealthState.isValid;
+            systemHealthState.isValid;
 
         final tradingStatusState = context.watch<TradingStatusBloc>().state;
         final takerState = context.watch<TakerBloc>().state;
@@ -151,10 +148,16 @@ class TradeButton extends StatelessWidget {
                     ? LocaleKeys.swapNow.tr()
                     : LocaleKeys.tradingDisabled.tr(),
                 prefix: inProgress ? const TradeButtonSpinner() : null,
+                child: _DexTradeButtonContent(
+                  text: isTradingEnabled
+                      ? LocaleKeys.swapNow.tr()
+                      : LocaleKeys.tradingDisabled.tr(),
+                  prefix: inProgress ? const TradeButtonSpinner() : null,
+                ),
                 onPressed: disabled || !isTradingEnabled
                     ? null
                     : () =>
-                        context.read<TakerBloc>().add(TakerFormSubmitClick()),
+                          context.read<TakerBloc>().add(TakerFormSubmitClick()),
                 height: isMobile ? 52 : 40,
               ),
             );
@@ -178,6 +181,29 @@ class TradeButtonSpinner extends StatelessWidget {
         strokeWidth: 1,
         color: theme.custom.defaultGradientButtonTextColor,
       ),
+    );
+  }
+}
+
+class _DexTradeButtonContent extends StatelessWidget {
+  const _DexTradeButtonContent({required this.text, this.prefix});
+
+  final String text;
+  final Widget? prefix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (prefix != null) prefix!,
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(text, maxLines: 1, textAlign: TextAlign.center),
+          ),
+        ),
+      ],
     );
   }
 }

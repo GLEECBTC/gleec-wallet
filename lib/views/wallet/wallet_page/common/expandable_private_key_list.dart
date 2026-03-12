@@ -95,6 +95,14 @@ class PrivateKeyAssetSection extends StatefulWidget {
 class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
   bool _isExpanded = false;
 
+  bool get _isSingleAddressAsset =>
+      widget.assetId.subClass == CoinSubClass.tendermint ||
+      widget.assetId.subClass == CoinSubClass.tendermintToken;
+
+  List<PrivateKey> get _displayKeys => _isSingleAddressAsset
+      ? widget.privateKeys.take(1).toList()
+      : widget.privateKeys;
+
   @override
   void initState() {
     super.initState();
@@ -122,43 +130,49 @@ class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
 
   @override
   Widget build(BuildContext context) {
-    final children = widget.privateKeys
-        .map(
-          (privateKey) => PrivateKeyListItem(
-            assetId: widget.assetId,
-            privateKey: privateKey,
-          ),
-        )
-        .toList();
-
     // Match the styling from ExpandableCoinListItem
     final horizontalPadding = 16.0;
     final verticalPadding = isMobile ? 16.0 : 22.0;
 
-    return CollapsibleCard(
-      key: PageStorageKey('private_key_${widget.assetId.id}'),
-      borderRadius: BorderRadius.circular(12),
-      headerPadding: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: verticalPadding,
-      ),
-      childrenMargin: EdgeInsets.symmetric(
-        horizontal: horizontalPadding,
-        vertical: verticalPadding,
-      ),
-      childrenDecoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      initiallyExpanded: _isExpanded,
-      onExpansionChanged: _handleExpansionChanged,
-      expansionControlPosition: ExpansionControlPosition.leading,
-      emptyChildrenBehavior: EmptyChildrenBehavior.disable,
-      isDense: true,
-      title: _buildTitle(context),
-      maintainState: true,
-      childrenDivider: const Divider(height: 1, indent: 16, endIndent: 16),
-      children: children,
+    return BlocSelector<SecuritySettingsBloc, SecuritySettingsState, bool>(
+      selector: (state) => state.showPrivateKeys,
+      builder: (context, showPrivateKeys) {
+        final children = _displayKeys
+            .map(
+              (privateKey) => PrivateKeyListItem(
+                assetId: widget.assetId,
+                privateKey: privateKey,
+                showPrivateKeys: showPrivateKeys,
+              ),
+            )
+            .toList();
+
+        return CollapsibleCard(
+          key: PageStorageKey('private_key_${widget.assetId.id}'),
+          borderRadius: BorderRadius.circular(12),
+          headerPadding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          childrenMargin: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: verticalPadding,
+          ),
+          childrenDecoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          initiallyExpanded: _isExpanded,
+          onExpansionChanged: _handleExpansionChanged,
+          expansionControlPosition: ExpansionControlPosition.leading,
+          emptyChildrenBehavior: EmptyChildrenBehavior.disable,
+          isDense: true,
+          title: _buildTitle(context),
+          maintainState: true,
+          childrenDivider: const Divider(height: 1, indent: 16, endIndent: 16),
+          children: children,
+        );
+      },
     );
   }
 
@@ -173,6 +187,7 @@ class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
   }
 
   Widget _buildMobileTitle(BuildContext context, ThemeData theme) {
+    final displayCount = _displayKeys.length;
     return Container(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -188,7 +203,7 @@ class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
               Text(widget.assetId.id, style: theme.textTheme.headlineMedium),
               // Key count - using bodySmall for 12px secondary text
               Text(
-                '${widget.privateKeys.length} key${widget.privateKeys.length > 1 ? 's' : ''}',
+                '$displayCount key${displayCount > 1 ? 's' : ''}',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -199,6 +214,7 @@ class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
   }
 
   Widget _buildDesktopTitle(BuildContext context, ThemeData theme) {
+    final displayCount = _displayKeys.length;
     return Container(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -220,7 +236,7 @@ class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
                         style: theme.textTheme.titleMedium,
                       ),
                       Text(
-                        '${widget.privateKeys.length} key${widget.privateKeys.length > 1 ? 's' : ''}',
+                        '$displayCount key${displayCount > 1 ? 's' : ''}',
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
@@ -236,163 +252,215 @@ class _PrivateKeyAssetSectionState extends State<PrivateKeyAssetSection> {
 }
 
 /// Widget for displaying a single private key with controls.
-class PrivateKeyListItem extends StatelessWidget {
+class PrivateKeyListItem extends StatefulWidget {
   const PrivateKeyListItem({
     super.key,
     required this.assetId,
     required this.privateKey,
+    required this.showPrivateKeys,
   });
 
   final AssetId assetId;
   final PrivateKey privateKey;
+  final bool showPrivateKeys;
+
+  @override
+  State<PrivateKeyListItem> createState() => _PrivateKeyListItemState();
+}
+
+class _PrivateKeyListItemState extends State<PrivateKeyListItem> {
+  bool _isPrivateKeyVisible = false;
+
+  @override
+  void didUpdateWidget(covariant PrivateKeyListItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.showPrivateKeys && _isPrivateKeyVisible) {
+      setState(() => _isPrivateKeyVisible = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<SecuritySettingsBloc, SecuritySettingsState, bool>(
-      selector: (state) => state.showPrivateKeys,
-      builder: (context, showPrivateKeys) {
-        final theme = Theme.of(context);
+    final theme = Theme.of(context);
+    final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+    );
+    final labelStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+      fontWeight: FontWeight.w600,
+    );
+    final valueStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontFamily: 'monospace',
+    );
+    final labelWidth = isMobile ? 90.0 : 120.0;
+    final canReveal = widget.showPrivateKeys;
+    final isVisible = canReveal && _isPrivateKeyVisible;
+    final derivationPath = widget.privateKey.hdInfo?.derivationPath;
 
-        final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
-          color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
-        );
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 12,
-              horizontal: 16,
-            ),
-            leading: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.key,
-                size: 16,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (privateKey.hdInfo?.derivationPath != null) ...[
-                  Text(
-                    'Path: ${privateKey.hdInfo!.derivationPath}',
-                    style: subtitleStyle,
-                  ),
-                  const SizedBox(height: 4),
-                ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: AutoScrollText(
-                        text: privateKey.publicKeyAddress,
-                        style: subtitleStyle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Material(
-                      color: Colors.transparent,
-                      child: IconButton(
-                        iconSize: 16,
-                        icon: const Icon(Icons.copy),
-                        onPressed: () {
-                          copyToClipBoard(context, privateKey.publicKeyAddress);
-                        },
-                        visualDensity: VisualDensity.compact,
-                        tooltip: 'Copy address',
-                      ),
-                    ),
-                  ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 12,
+          horizontal: 16,
+        ),
+        leading: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(Icons.key, size: 16, color: theme.colorScheme.primary),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (derivationPath != null) ...[
+              _buildDetailRow(
+                label: 'Path',
+                labelStyle: labelStyle,
+                labelWidth: labelWidth,
+                value: AutoScrollText(
+                  text: derivationPath,
+                  style: subtitleStyle?.copyWith(fontFamily: 'monospace'),
                 ),
-                if (privateKey.publicKeySecp256k1.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        '${LocaleKeys.pubkey.tr()}: ',
-                        style: subtitleStyle?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Expanded(
-                        child: AutoScrollText(
-                          text: privateKey.publicKeySecp256k1,
-                          style: subtitleStyle?.copyWith(
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Material(
-                        color: Colors.transparent,
-                        child: IconButton(
-                          iconSize: 16,
-                          icon: const Icon(Icons.copy),
-                          onPressed: () {
-                            copyToClipBoard(
-                              context,
-                              privateKey.publicKeySecp256k1,
-                            );
-                          },
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Copy pubkey',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: AutoScrollText(
-                        text: showPrivateKeys
-                            ? privateKey.privateKey
-                            : '*' * privateKey.privateKey.length,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Material(
-                      color: Colors.transparent,
-                      child: IconButton(
-                        iconSize: 16,
-                        icon: const Icon(Icons.copy),
-                        onPressed: () {
-                          copyToClipBoard(context, privateKey.privateKey);
-                          context.read<SecuritySettingsBloc>().add(
-                            const ShowPrivateKeysCopiedEvent(),
-                          );
-                        },
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                    Material(
-                      color: Colors.transparent,
-                      child: IconButton(
-                        iconSize: 16,
-                        icon: const Icon(Icons.qr_code),
-                        onPressed: () {
-                          _showQrDialog(context);
-                        },
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(height: 6),
+            ],
+            _buildDetailRow(
+              label: LocaleKeys.address.tr(),
+              labelStyle: labelStyle,
+              labelWidth: labelWidth,
+              value: AutoScrollText(
+                text: widget.privateKey.publicKeyAddress,
+                style: subtitleStyle,
+              ),
+              actions: [
+                IconButton(
+                  iconSize: 16,
+                  icon: const Icon(Icons.copy),
+                  onPressed: () {
+                    copyToClipBoard(
+                      context,
+                      widget.privateKey.publicKeyAddress,
+                    );
+                  },
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Copy address',
                 ),
               ],
             ),
-          ),
-        );
-      },
+            if (widget.privateKey.publicKeySecp256k1.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _buildDetailRow(
+                label: LocaleKeys.pubkey.tr(),
+                labelStyle: labelStyle,
+                labelWidth: labelWidth,
+                value: AutoScrollText(
+                  text: widget.privateKey.publicKeySecp256k1,
+                  style: subtitleStyle?.copyWith(fontFamily: 'monospace'),
+                ),
+                actions: [
+                  IconButton(
+                    iconSize: 16,
+                    icon: const Icon(Icons.copy),
+                    onPressed: () {
+                      copyToClipBoard(
+                        context,
+                        widget.privateKey.publicKeySecp256k1,
+                      );
+                    },
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Copy pubkey',
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 6),
+            _buildDetailRow(
+              label: 'Private key',
+              labelStyle: labelStyle,
+              labelWidth: labelWidth,
+              value: AutoScrollText(
+                text: isVisible
+                    ? widget.privateKey.privateKey
+                    : '*' * widget.privateKey.privateKey.length,
+                style: valueStyle,
+              ),
+              actions: [
+                IconButton(
+                  iconSize: 16,
+                  icon: Icon(
+                    isVisible
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                  onPressed: canReveal
+                      ? () {
+                          setState(
+                            () => _isPrivateKeyVisible = !_isPrivateKeyVisible,
+                          );
+                          if (_isPrivateKeyVisible) {
+                            context.read<SecuritySettingsBloc>().add(
+                              const ShowPrivateKeysCopiedEvent(),
+                            );
+                          }
+                        }
+                      : null,
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  iconSize: 16,
+                  icon: const Icon(Icons.copy),
+                  onPressed: canReveal
+                      ? () {
+                          copyToClipBoard(
+                            context,
+                            widget.privateKey.privateKey,
+                          );
+                          context.read<SecuritySettingsBloc>().add(
+                            const ShowPrivateKeysCopiedEvent(),
+                          );
+                        }
+                      : null,
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  iconSize: 16,
+                  icon: const Icon(Icons.qr_code),
+                  onPressed: canReveal ? _showQrDialog : null,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow({
+    required String label,
+    required TextStyle? labelStyle,
+    required double labelWidth,
+    required Widget value,
+    List<Widget> actions = const [],
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: labelWidth,
+          child: Text(label, style: labelStyle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: value),
+        if (actions.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Row(mainAxisSize: MainAxisSize.min, children: actions),
+        ],
+      ],
     );
   }
 
@@ -400,7 +468,7 @@ class PrivateKeyListItem extends StatelessWidget {
   ///
   /// **Security Note**: Only shown when private keys are visible and
   /// user explicitly requests it.
-  void _showQrDialog(BuildContext context) {
+  void _showQrDialog() {
     showDialog(
       context: context,
       builder: (context) {
@@ -420,7 +488,7 @@ class PrivateKeyListItem extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        assetId.id,
+                        widget.assetId.id,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       IconButton(
@@ -431,18 +499,18 @@ class PrivateKeyListItem extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (privateKey.hdInfo?.derivationPath != null) ...[
+                  if (widget.privateKey.hdInfo?.derivationPath != null) ...[
                     Text(
-                      'Path: ${privateKey.hdInfo!.derivationPath}',
+                      'Path: ${widget.privateKey.hdInfo!.derivationPath}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 8),
                   ],
                   const SizedBox(height: 16),
-                  QRCodeAddress(currentAddress: privateKey.privateKey),
+                  QRCodeAddress(currentAddress: widget.privateKey.privateKey),
                   const SizedBox(height: 16),
                   SelectableText(
-                    privateKey.privateKey,
+                    widget.privateKey.privateKey,
                     textAlign: TextAlign.center,
                     style: Theme.of(
                       context,

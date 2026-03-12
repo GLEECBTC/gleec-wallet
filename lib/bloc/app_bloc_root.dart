@@ -9,7 +9,6 @@ import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:universal_html/html.dart' as html;
 import 'package:web_dex/analytics/events.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
@@ -64,6 +63,7 @@ import 'package:web_dex/router/navigators/back_dispatcher.dart';
 import 'package:web_dex/router/parsers/root_route_parser.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/platform_web_api/platform_web_api.dart';
 import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -312,10 +312,12 @@ class _MyAppViewState extends State<_MyAppView> {
   late final RootRouteInformationParser _routeInformationParser;
   late final AirDexBackButtonDispatcher _airDexBackButtonDispatcher;
   late final DateTime _pageLoadStartTime;
+  late final PlatformWebApi _platformWebApi;
 
   @override
   void initState() {
     _pageLoadStartTime = DateTime.now();
+    _platformWebApi = PlatformWebApi();
     final coinsBloc = context.read<CoinsBloc>();
     _routeInformationParser = RootRouteInformationParser(coinsBloc);
     _airDexBackButtonDispatcher = AirDexBackButtonDispatcher(_routerDelegate);
@@ -366,20 +368,16 @@ class _MyAppViewState extends State<_MyAppView> {
   // web and native to avoid web-code in code concerning all platforms.
   Future<void> _hideAppLoader() async {
     if (kIsWeb) {
-      html.document.getElementById('main-content')?.style.display = 'block';
-
-      final loadingElement = html.document.getElementById('loading');
-
-      if (loadingElement == null) return;
+      _platformWebApi.setElementDisplay('main-content', 'block');
 
       // Trigger the zoom out animation.
-      loadingElement.classes.add('init_done');
+      _platformWebApi.addElementClass('loading', 'init_done');
 
       // Await 200ms so the user can see the animation.
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       // Remove the loading indicator.
-      loadingElement.remove();
+      _platformWebApi.removeElement('loading');
 
       final delay = DateTime.now()
           .difference(_pageLoadStartTime)

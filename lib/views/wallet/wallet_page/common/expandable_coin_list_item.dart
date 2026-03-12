@@ -9,9 +9,11 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_balance.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
@@ -28,6 +30,7 @@ class ExpandableCoinListItem extends StatefulWidget {
   final bool isSelected;
   final Color? backgroundColor;
   final VoidCallback? onTap;
+  final VoidCallback? onStatisticsTap;
 
   const ExpandableCoinListItem({
     super.key,
@@ -35,6 +38,7 @@ class ExpandableCoinListItem extends StatefulWidget {
     required this.pubkeys,
     required this.isSelected,
     this.onTap,
+    this.onStatisticsTap,
     this.backgroundColor,
   });
 
@@ -73,6 +77,9 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
   @override
   Widget build(BuildContext context) {
     final hasAddresses = widget.pubkeys?.keys.isNotEmpty ?? false;
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
     final sortedAddresses = hasAddresses
         ? (List.of(
             widget.pubkeys!.keys,
@@ -87,6 +94,7 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
                   isSwapAddress: pubkey == sortedAddresses.first,
                   onTap: widget.onTap,
                   onCopy: () => copyToClipBoard(context, pubkey.address),
+                  hideBalances: hideBalances,
                 ),
               )
               .toList()
@@ -119,7 +127,7 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
       expansionControlPosition: ExpansionControlPosition.leading,
       emptyChildrenBehavior: EmptyChildrenBehavior.disable,
       isDense: true,
-      title: _buildTitle(context),
+      title: _buildTitle(context, hideBalances),
       maintainState: true,
       childrenDivider: const Divider(height: 1, indent: 16, endIndent: 16),
       trailing: CoinMoreActionsButton(coin: widget.coin),
@@ -127,17 +135,22 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
     );
   }
 
-  Widget _buildTitle(BuildContext context) {
+  Widget _buildTitle(BuildContext context, bool hideBalances) {
     final theme = Theme.of(context);
 
     if (isMobile) {
-      return _buildMobileTitle(context, theme);
+      return _buildMobileTitle(context, theme, hideBalances);
     } else {
-      return _buildDesktopTitle(context, theme);
+      return _buildDesktopTitle(context, theme, hideBalances);
     }
   }
 
-  Widget _buildMobileTitle(BuildContext context, ThemeData theme) {
+  Widget _buildMobileTitle(
+    BuildContext context,
+    ThemeData theme,
+    bool hideBalances,
+  ) {
+    final statsTap = widget.onStatisticsTap;
     return Container(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -158,8 +171,9 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
                 ),
                 // Crypto balance - using bodySmall for 12px secondary text
                 AutoScrollText(
-                  text:
-                      '${doubleToString(widget.coin.balance(context.sdk) ?? 0)} ${widget.coin.abbr}',
+                  text: hideBalances
+                      ? '$maskedBalanceText ${widget.coin.abbr}'
+                      : '${doubleToString(widget.coin.balance(context.sdk) ?? 0)} ${widget.coin.abbr}',
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -169,52 +183,56 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
           // Right side: Price and trend info
           Expanded(
             flex: 7,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Current balance in USD - using headlineMedium for bold 16px text
-                if (widget.coin.lastKnownUsdBalance(context.sdk) != null)
-                  Text(
-                    '\$${NumberFormat("#,##0.00").format(widget.coin.lastKnownUsdBalance(context.sdk)!)}',
-                    style: theme.textTheme.headlineMedium,
+            child: InkWell(
+              onTap: statsTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Current balance in USD - using headlineMedium for bold 16px text
+                  _UsdBalanceText(
+                    coin: widget.coin,
+                    textStyle: theme.textTheme.headlineMedium,
                   ),
-                const SizedBox(height: 2),
-                // Trend percentage
-                BlocBuilder<CoinsBloc, CoinsState>(
-                  builder: (context, state) {
-                    final usdBalance = widget.coin.lastKnownUsdBalance(
-                      context.sdk,
-                    );
-                    if (usdBalance == null) {
-                      return const SizedBox.shrink();
-                    }
+                  const SizedBox(height: 2),
+                  // Trend percentage
+                  if (!hideBalances)
+                    BlocBuilder<CoinsBloc, CoinsState>(
+                      builder: (context, state) {
+                        final usdBalance = widget.coin.lastKnownUsdBalance(
+                          context.sdk,
+                        );
+                        if (usdBalance == null) {
+                          return const SizedBox.shrink();
+                        }
 
-                    final change24hPercent = usdBalance == 0.0
-                        ? 0.0
-                        : state.get24hChangeForAsset(widget.coin.id);
-                    // Calculate the 24h USD change value
-                    final change24hValue =
-                        change24hPercent != null && usdBalance > 0
-                        ? (change24hPercent * usdBalance / 100)
-                        : 0.0;
-                    final themeCustom =
-                        Theme.of(context).brightness == Brightness.dark
-                        ? Theme.of(context).extension<ThemeCustomDark>()!
-                        : Theme.of(context).extension<ThemeCustomLight>()!;
-                    return TrendPercentageText(
-                      percentage: change24hPercent,
-                      value: change24hValue,
-                      upColor: themeCustom.increaseColor,
-                      downColor: themeCustom.decreaseColor,
-                      valueFormatter: (value) =>
-                          NumberFormat.currency(symbol: '\$').format(value),
-                      iconSize: 12,
-                      spacing: 2,
-                      textStyle: theme.textTheme.bodySmall,
-                    );
-                  },
-                ),
-              ],
+                        final change24hPercent = usdBalance == 0.0
+                            ? 0.0
+                            : state.get24hChangeForAsset(widget.coin.id);
+                        // Calculate the 24h USD change value
+                        final change24hValue =
+                            change24hPercent != null && usdBalance > 0
+                            ? (change24hPercent * usdBalance / 100)
+                            : 0.0;
+                        final themeCustom =
+                            Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).extension<ThemeCustomDark>()!
+                            : Theme.of(context).extension<ThemeCustomLight>()!;
+                        return TrendPercentageText(
+                          percentage: change24hPercent,
+                          value: change24hValue,
+                          upColor: themeCustom.increaseColor,
+                          downColor: themeCustom.decreaseColor,
+                          valueFormatter: (value) =>
+                              NumberFormat.currency(symbol: '\$').format(value),
+                          iconSize: 12,
+                          spacing: 2,
+                          textStyle: theme.textTheme.bodySmall,
+                        );
+                      },
+                    ),
+                ],
+              ),
             ),
           ),
         ],
@@ -222,7 +240,12 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
     );
   }
 
-  Widget _buildDesktopTitle(BuildContext context, ThemeData theme) {
+  Widget _buildDesktopTitle(
+    BuildContext context,
+    ThemeData theme,
+    bool hideBalances,
+  ) {
+    final statsTap = widget.onStatisticsTap;
     return Container(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -234,40 +257,85 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
             child: CoinItem(coin: widget.coin, size: CoinItemSize.large),
           ),
           const Spacer(),
-          CoinBalance(coin: widget.coin),
-          BlocBuilder<CoinsBloc, CoinsState>(
-            builder: (context, state) {
-              final usdBalance = widget.coin.lastKnownUsdBalance(context.sdk);
-              if (usdBalance == null) {
-                return const SizedBox.shrink();
-              }
-
-              final change24hPercent = usdBalance == 0.0
-                  ? 0.0
-                  : state.get24hChangeForAsset(widget.coin.id);
-
-              // Calculate the 24h USD change value
-              final change24hValue = change24hPercent != null && usdBalance > 0
-                  ? (change24hPercent * usdBalance / 100)
-                  : 0.0;
-
-              final themeCustom =
-                  Theme.of(context).brightness == Brightness.dark
-                  ? Theme.of(context).extension<ThemeCustomDark>()!
-                  : Theme.of(context).extension<ThemeCustomLight>()!;
-              return TrendPercentageText(
-                percentage: change24hPercent,
-                value: change24hValue,
-                upColor: themeCustom.increaseColor,
-                downColor: themeCustom.decreaseColor,
-                valueFormatter: (value) =>
-                    NumberFormat.currency(symbol: '\$').format(value),
-              );
-            },
+          InkWell(
+            onTap: statsTap,
+            borderRadius: BorderRadius.circular(8),
+            child: CoinBalance(coin: widget.coin),
           ),
+          if (!hideBalances)
+            BlocBuilder<CoinsBloc, CoinsState>(
+              builder: (context, state) {
+                final usdBalance = widget.coin.lastKnownUsdBalance(context.sdk);
+                if (usdBalance == null) {
+                  return const SizedBox.shrink();
+                }
+
+                final change24hPercent = usdBalance == 0.0
+                    ? 0.0
+                    : state.get24hChangeForAsset(widget.coin.id);
+
+                // Calculate the 24h USD change value
+                final change24hValue =
+                    change24hPercent != null && usdBalance > 0
+                    ? (change24hPercent * usdBalance / 100)
+                    : 0.0;
+
+                final themeCustom =
+                    Theme.of(context).brightness == Brightness.dark
+                    ? Theme.of(context).extension<ThemeCustomDark>()!
+                    : Theme.of(context).extension<ThemeCustomLight>()!;
+                return InkWell(
+                  onTap: statsTap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: TrendPercentageText(
+                    percentage: change24hPercent,
+                    value: change24hValue,
+                    upColor: themeCustom.increaseColor,
+                    downColor: themeCustom.decreaseColor,
+                    valueFormatter: (value) =>
+                        NumberFormat.currency(symbol: '\$').format(value),
+                  ),
+                );
+              },
+            ),
           // const Spacer(),
         ],
       ),
+    );
+  }
+}
+
+class _UsdBalanceText extends StatelessWidget {
+  const _UsdBalanceText({required this.coin, this.textStyle});
+
+  final Coin coin;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
+    if (hideBalances) {
+      return Text('\$$maskedBalanceText', style: textStyle);
+    }
+
+    final balanceStream = context.sdk.balances.watchBalance(coin.id);
+    return BlocSelector<CoinsBloc, CoinsState, double?>(
+      selector: (state) => state.getPriceForAsset(coin.id)?.price?.toDouble(),
+      builder: (context, price) {
+        return StreamBuilder<BalanceInfo>(
+          stream: balanceStream,
+          builder: (context, snapshot) {
+            final balance = snapshot.data?.spendable.toDouble();
+            if (balance == null || price == null) {
+              return Text('--', style: textStyle);
+            }
+            final formatted = NumberFormat("#,##0.00").format(price * balance);
+            return Text('\$$formatted', style: textStyle);
+          },
+        );
+      },
     );
   }
 }
@@ -276,6 +344,7 @@ class _AddressRow extends StatelessWidget {
   final PubkeyInfo pubkey;
   final Coin coin;
   final bool isSwapAddress;
+  final bool hideBalances;
   final VoidCallback? onTap;
   final VoidCallback? onCopy;
 
@@ -283,6 +352,7 @@ class _AddressRow extends StatelessWidget {
     required this.pubkey,
     required this.coin,
     required this.isSwapAddress,
+    required this.hideBalances,
     required this.onTap,
     this.onCopy,
   });
@@ -344,7 +414,9 @@ class _AddressRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '${doubleToString(pubkey.balance.spendable.toDouble())} ${coin.abbr}',
+              hideBalances
+                  ? '$maskedBalanceText ${coin.abbr}'
+                  : '${doubleToString(pubkey.balance.spendable.toDouble())} ${coin.abbr}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),

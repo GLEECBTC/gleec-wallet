@@ -16,6 +16,7 @@ import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
@@ -25,6 +26,7 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
@@ -57,6 +59,7 @@ class CoinDetailsInfo extends StatefulWidget {
 class _CoinDetailsInfoState extends State<CoinDetailsInfo>
     with SingleTickerProviderStateMixin {
   Transaction? _selectedTransaction;
+  final ScrollController _scrollController = ScrollController();
 
   String? get _walletId =>
       RepositoryProvider.of<AuthBloc>(context).state.currentUser?.walletId.name;
@@ -131,6 +134,7 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
         selectedTransaction: _selectedTransaction,
         setPageType: widget.setPageType,
         setTransaction: _selectTransaction,
+        scrollController: _scrollController,
       );
     }
     return _DesktopContent(
@@ -138,6 +142,7 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
       selectedTransaction: _selectedTransaction,
       setPageType: widget.setPageType,
       setTransaction: _selectTransaction,
+      scrollController: _scrollController,
     );
   }
 
@@ -181,6 +186,7 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
   @override
   void dispose() {
     _coinAddressesBloc.close().ignore();
+    _scrollController.dispose();
     super.dispose();
   }
 }
@@ -191,12 +197,14 @@ class _DesktopContent extends StatelessWidget {
     required this.selectedTransaction,
     required this.setPageType,
     required this.setTransaction,
+    required this.scrollController,
   });
 
   final Coin coin;
   final Transaction? selectedTransaction;
   final void Function(CoinPageType) setPageType;
   final Function(Transaction?) setTransaction;
+  final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -207,22 +215,31 @@ class _DesktopContent extends StatelessWidget {
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(18.0),
       ),
-      child: CustomScrollView(
-        slivers: <Widget>[
-          if (selectedTransaction == null)
-            SliverToBoxAdapter(
-              child: _DesktopCoinDetails(coin: coin, setPageType: setPageType),
+      child: DexScrollbar(
+        scrollController: scrollController,
+        isMobile: isMobile,
+        child: CustomScrollView(
+          controller: scrollController,
+          slivers: <Widget>[
+            if (selectedTransaction == null)
+              SliverToBoxAdapter(
+                child: _DesktopCoinDetails(
+                  coin: coin,
+                  setPageType: setPageType,
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+            TransactionTable(
+              coin: coin,
+              selectedTransaction: selectedTransaction,
+              setTransaction: setTransaction,
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-          if (selectedTransaction == null)
-            CoinAddresses(coin: coin, setPageType: setPageType),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-          TransactionTable(
-            coin: coin,
-            selectedTransaction: selectedTransaction,
-            setTransaction: setTransaction,
-          ),
-        ],
+            if (selectedTransaction == null) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              CoinAddresses(coin: coin, setPageType: setPageType),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -286,35 +303,42 @@ class _MobileContent extends StatelessWidget {
     required this.selectedTransaction,
     required this.setPageType,
     required this.setTransaction,
+    required this.scrollController,
   });
 
   final Coin coin;
   final Transaction? selectedTransaction;
   final void Function(CoinPageType) setPageType;
   final Function(Transaction?) setTransaction;
+  final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: <Widget>[
-        if (selectedTransaction == null)
-          SliverToBoxAdapter(
-            child: _CoinDetailsInfoHeader(
-              coin: coin,
-              setPageType: setPageType,
-              context: context,
+    return DexScrollbar(
+      scrollController: scrollController,
+      isMobile: isMobile,
+      child: CustomScrollView(
+        controller: scrollController,
+        slivers: <Widget>[
+          if (selectedTransaction == null)
+            SliverToBoxAdapter(
+              child: _CoinDetailsInfoHeader(
+                coin: coin,
+                setPageType: setPageType,
+                context: context,
+              ),
             ),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          if (selectedTransaction == null)
+            CoinAddresses(coin: coin, setPageType: setPageType),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          TransactionTable(
+            coin: coin,
+            selectedTransaction: selectedTransaction,
+            setTransaction: setTransaction,
           ),
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-        if (selectedTransaction == null)
-          CoinAddresses(coin: coin, setPageType: setPageType),
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-        TransactionTable(
-          coin: coin,
-          selectedTransaction: selectedTransaction,
-          setTransaction: setTransaction,
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -505,20 +529,20 @@ class _CoinDetailsMarketMetricsTabBarState
           ),
         ),
         SizedBox(
-          height: 340,
+          height: isMobile ? 340 : 260,
           child: TabBarView(
             controller: _tabController,
             children: [
               if (isPortfolioGrowthSupported)
                 SizedBox(
                   width: double.infinity,
-                  height: 340,
+                  height: isMobile ? 340 : 260,
                   child: PortfolioGrowthChart(initialCoins: [widget.coin]),
                 ),
               if (isProfitLossSupported)
                 SizedBox(
                   width: double.infinity,
-                  height: 340,
+                  height: isMobile ? 340 : 260,
                   child: PortfolioProfitLossChart(initialCoins: [widget.coin]),
                 ),
             ],
@@ -536,8 +560,15 @@ class _Balance extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData themeData = Theme.of(context);
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
     final balance = coin.balance(context.sdk);
-    final value = balance == null ? null : doubleToString(balance);
+    final value = hideBalances
+        ? maskedBalanceText
+        : balance == null
+        ? null
+        : doubleToString(balance);
 
     return Column(
       crossAxisAlignment: isMobile

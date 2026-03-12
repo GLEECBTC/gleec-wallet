@@ -3,6 +3,7 @@ import 'package:app_theme/src/light/theme_custom_light.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/shared/constants.dart';
 
 /// Balance Summary Widget for mobile view
 class BalanceSummaryWidget extends StatelessWidget {
@@ -11,6 +12,7 @@ class BalanceSummaryWidget extends StatelessWidget {
   final double? changePercentage;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final bool hideBalances;
 
   const BalanceSummaryWidget({
     super.key,
@@ -19,6 +21,7 @@ class BalanceSummaryWidget extends StatelessWidget {
     required this.changePercentage,
     this.onTap,
     this.onLongPress,
+    this.hideBalances = false,
   });
 
   @override
@@ -43,13 +46,15 @@ class BalanceSummaryWidget extends StatelessWidget {
             // Total balance or placeholder
             totalBalance != null
                 ? Text(
-                    '\$${NumberFormat("#,##0.00").format(totalBalance!)}',
+                    hideBalances
+                        ? '\$${maskedBalanceText}'
+                        : '\$${NumberFormat("#,##0.00").format(totalBalance!)}',
                     style: theme.textTheme.headlineSmall,
                   )
                 : _BalancePlaceholder(),
             const SizedBox(height: 12),
             // Change indicator using TrendPercentageText or placeholder
-            totalBalance != null
+            totalBalance != null && !hideBalances
                 ? TrendPercentageText(
                     percentage: changePercentage,
                     upColor: themeCustom.increaseColor,

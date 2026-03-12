@@ -14,6 +14,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/hd_wallet_mode_preference.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -44,12 +45,16 @@ class _WalletLogInState extends State<WalletLogIn> {
   late bool _isHdMode;
   bool _isQuickLoginEnabled = false;
   KdfUser? _user;
+  bool? _storedHdPreference;
 
   @override
   void initState() {
     super.initState();
-    _isHdMode = widget.initialHdMode;
+    _isHdMode =
+        widget.initialHdMode ||
+        widget.wallet.config.type == WalletType.hdwallet;
     _isQuickLoginEnabled = widget.initialQuickLogin;
+    _loadHdModePreference();
     unawaited(_fetchKdfUser());
   }
 
@@ -61,11 +66,23 @@ class _WalletLogInState extends State<WalletLogIn> {
     );
 
     if (user != null) {
+      final fallbackHdMode =
+          widget.initialHdMode ||
+          user.wallet.config.type == WalletType.hdwallet;
       setState(() {
         _user = user;
-        _isHdMode = user.wallet.config.type == WalletType.hdwallet;
+        _isHdMode = _storedHdPreference ?? fallbackHdMode;
       });
     }
+  }
+
+  Future<void> _loadHdModePreference() async {
+    final storedPreference = await readHdWalletModePreference(widget.wallet.id);
+    if (!mounted || storedPreference == null) return;
+    setState(() {
+      _storedHdPreference = storedPreference;
+      _isHdMode = storedPreference;
+    });
   }
 
   @override
@@ -147,6 +164,9 @@ class _WalletLogInState extends State<WalletLogIn> {
                     value: _isHdMode,
                     onChanged: (value) {
                       setState(() => _isHdMode = value);
+                      unawaited(
+                        storeHdWalletModePreference(widget.wallet.id, value),
+                      );
                     },
                   ),
                   const SizedBox(height: 24),
@@ -286,14 +306,18 @@ class _PasswordTextFieldState extends State<PasswordTextField> {
 
     // Find common prefix
     int start = 0;
-    while (start < before.length && start < after.length && before[start] == after[start]) {
+    while (start < before.length &&
+        start < after.length &&
+        before[start] == after[start]) {
       start++;
     }
 
     // Find common suffix
     int endBefore = before.length - 1;
     int endAfter = after.length - 1;
-    while (endBefore >= start && endAfter >= start && before[endBefore] == after[endAfter]) {
+    while (endBefore >= start &&
+        endAfter >= start &&
+        before[endBefore] == after[endAfter]) {
       endBefore--;
       endAfter--;
     }

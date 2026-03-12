@@ -8,6 +8,9 @@ server
     }
   location / {
        root /var/www/flutterapp/{{ deploy_branch }}/build/web/;
+       # Required headers for Flutter WebAssembly multi-threading support
+       add_header Cross-Origin-Embedder-Policy credentialless;
+       add_header Cross-Origin-Opener-Policy same-origin;
       }
   ssl_certificate /etc/letsencrypt/live/node.dragonhound.info/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/node.dragonhound.info/privkey.pem;

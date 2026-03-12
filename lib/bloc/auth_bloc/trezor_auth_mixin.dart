@@ -65,13 +65,15 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
     switch (authState.status) {
       case AuthenticationStatus.initializing:
         return AuthBlocState.trezorInitializing(
-          message: authState.message ?? LocaleKeys.trezorInitializingMessage.tr(),
+          message:
+              authState.message ?? LocaleKeys.trezorInitializingMessage.tr(),
           taskId: authState.taskId,
         );
       case AuthenticationStatus.waitingForDevice:
         return AuthBlocState.trezorInitializing(
           message:
-              authState.message ?? LocaleKeys.trezorWaitingForDeviceMessage.tr(),
+              authState.message ??
+              LocaleKeys.trezorWaitingForDeviceMessage.tr(),
           taskId: authState.taskId,
         );
       case AuthenticationStatus.waitingForDeviceConfirmation:
@@ -83,12 +85,15 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
         );
       case AuthenticationStatus.pinRequired:
         return AuthBlocState.trezorPinRequired(
-          message: authState.message ?? LocaleKeys.trezorPinRequiredMessage.tr(),
+          message:
+              authState.message ?? LocaleKeys.trezorPinRequiredMessage.tr(),
           taskId: authState.taskId!,
         );
       case AuthenticationStatus.passphraseRequired:
         return AuthBlocState.trezorPassphraseRequired(
-          message: authState.message ?? LocaleKeys.trezorPassphraseRequiredMessage.tr(),
+          message:
+              authState.message ??
+              LocaleKeys.trezorPassphraseRequiredMessage.tr(),
           taskId: authState.taskId!,
         );
       case AuthenticationStatus.authenticating:
@@ -96,11 +101,9 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
       case AuthenticationStatus.completed:
         return _setupTrezorWallet(authState);
       case AuthenticationStatus.error:
+        final mappedError = _mapTrezorErrorMessage(authState.error);
         return AuthBlocState.error(
-          AuthException(
-            authState.error ?? LocaleKeys.trezorAuthFailedMessage.tr(),
-            type: AuthExceptionType.generalAuthError,
-          ),
+          AuthException(mappedError, type: AuthExceptionType.generalAuthError),
         );
       case AuthenticationStatus.cancelled:
         return AuthBlocState.error(
@@ -110,6 +113,23 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
           ),
         );
     }
+  }
+
+  String _mapTrezorErrorMessage(String? errorMessage) {
+    if (errorMessage == null || errorMessage.trim().isEmpty) {
+      return LocaleKeys.trezorAuthFailedMessage.tr();
+    }
+
+    final normalized = errorMessage.toLowerCase();
+    if (normalized.contains('cancel')) {
+      return LocaleKeys.trezorAuthCancelledMessage.tr();
+    }
+    if (normalized.contains('invalid pin') ||
+        (normalized.contains('pin') && normalized.contains('invalid'))) {
+      return LocaleKeys.trezorErrorInvalidPin.tr();
+    }
+
+    return errorMessage;
   }
 
   /// Sets up the Trezor wallet after successful authentication.

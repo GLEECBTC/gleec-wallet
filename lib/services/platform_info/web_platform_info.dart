@@ -1,4 +1,4 @@
-import 'package:web/web.dart' show window;
+import 'package:web/web.dart' as web;
 import 'package:web_dex/services/platform_info/platform_info.dart';
 import 'package:web_dex/shared/utils/browser_helpers.dart';
 
@@ -10,9 +10,7 @@ class WebPlatformInfo extends PlatformInfo with MemoizedPlatformInfoMixin {
   BrowserInfo get browserInfo => _browserInfo ??= BrowserInfoParser.get();
 
   @override
-  // Exclude for mav compilation because it shows string is nullable
-  // ignore: unnecessary_non_null_assertion
-  String computeOsLanguage() => window.navigator.language!;
+  String computeOsLanguage() => web.window.navigator.language;
 
   @override
   String computePlatform() =>

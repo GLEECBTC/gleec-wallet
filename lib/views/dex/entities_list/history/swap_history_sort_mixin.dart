@@ -41,23 +41,21 @@ mixin SwapHistorySortingMixin {
   }
 
   List<Swap> _sortByStatus(List<Swap> swaps, SortDirection sortDirection) {
+    if (sortDirection == SortDirection.none) {
+      return swaps;
+    }
+
+    int statusRank(Swap swap) => swap.isFailed ? 1 : 0;
+
     swaps.sort((first, second) {
-      switch (sortDirection) {
-        case SortDirection.increase:
-          if (first.isFailed) {
-            return second.isFailed ? -1 : 1;
-          } else {
-            return second.isFailed ? 1 : -1;
-          }
-        case SortDirection.decrease:
-          if (first.isCompleted) {
-            return second.isCompleted ? -1 : 1;
-          } else {
-            return second.isCompleted ? 1 : -1;
-          }
-        case SortDirection.none:
-          return -1;
+      final firstRank = statusRank(first);
+      final secondRank = statusRank(second);
+
+      if (sortDirection == SortDirection.increase) {
+        return firstRank.compareTo(secondRank);
       }
+
+      return secondRank.compareTo(firstRank);
     });
     return swaps;
   }
@@ -92,8 +90,9 @@ mixin SwapHistorySortingMixin {
     List<Swap> swaps, {
     required SortDirection sortDirection,
   }) {
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     swaps.sort(
       (first, second) => sortByDouble(
         tradingEntitiesBloc.getPriceFromAmount(
@@ -129,11 +128,8 @@ mixin SwapHistorySortingMixin {
     required SortDirection sortDirection,
   }) {
     swaps.sort(
-      (first, second) => sortByBool(
-        first.isTaker,
-        second.isTaker,
-        sortDirection,
-      ),
+      (first, second) =>
+          sortByBool(first.isTaker, second.isTaker, sortDirection),
     );
     return swaps;
   }

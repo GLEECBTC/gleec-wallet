@@ -41,6 +41,23 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                 .isEnabled;
             final SettingsBloc settings = context.read<SettingsBloc>();
             final currentWallet = state.currentUser?.wallet;
+            final bool isHardwareWallet = currentWallet?.isHW == true;
+
+            String tradingTooltipMessage() {
+              if (isHardwareWallet) {
+                return LocaleKeys.trezorWalletOnlyTooltip.tr();
+              }
+              if (!tradingEnabled) {
+                return LocaleKeys.tradingDisabledTooltip.tr();
+              }
+              return '';
+            }
+
+            String walletOnlyTooltipMessage() {
+              return isHardwareWallet
+                  ? LocaleKeys.trezorWalletOnlyTooltip.tr()
+                  : '';
+            }
 
             return Container(
               height: double.infinity,
@@ -78,19 +95,20 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                 MainMenuValue.wallet,
                               ),
                             ),
-                            DesktopMenuDesktopItem(
-                              key: const Key('main-menu-fiat'),
-                              enabled: currentWallet?.isHW != true,
-                              menu: MainMenuValue.fiat,
-                              onTap: onTapItem,
-                              isSelected: _checkSelectedItem(
-                                MainMenuValue.fiat,
+                            Tooltip(
+                              message: walletOnlyTooltipMessage(),
+                              child: DesktopMenuDesktopItem(
+                                key: const Key('main-menu-fiat'),
+                                enabled: currentWallet?.isHW != true,
+                                menu: MainMenuValue.fiat,
+                                onTap: onTapItem,
+                                isSelected: _checkSelectedItem(
+                                  MainMenuValue.fiat,
+                                ),
                               ),
                             ),
                             Tooltip(
-                              message: tradingEnabled
-                                  ? ''
-                                  : LocaleKeys.tradingDisabledTooltip.tr(),
+                              message: tradingTooltipMessage(),
                               child: DesktopMenuDesktopItem(
                                 key: const Key('main-menu-dex'),
                                 enabled: currentWallet?.isHW != true,
@@ -102,9 +120,7 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                               ),
                             ),
                             Tooltip(
-                              message: tradingEnabled
-                                  ? ''
-                                  : LocaleKeys.tradingDisabledTooltip.tr(),
+                              message: tradingTooltipMessage(),
                               child: DesktopMenuDesktopItem(
                                 key: const Key('main-menu-bridge'),
                                 enabled: currentWallet?.isHW != true,
@@ -117,9 +133,7 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                             ),
                             if (isMMBotEnabled && isAuthenticated)
                               Tooltip(
-                                message: tradingEnabled
-                                    ? ''
-                                    : LocaleKeys.tradingDisabledTooltip.tr(),
+                                message: tradingTooltipMessage(),
                                 child: DesktopMenuDesktopItem(
                                   key: const Key('main-menu-market-maker-bot'),
                                   enabled: currentWallet?.isHW != true,

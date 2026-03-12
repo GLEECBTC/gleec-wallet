@@ -8,6 +8,7 @@ When building the Gleec Wallet for production, **always** use the following flag
 --enforce-lockfile  # When running 'flutter pub get'
 --no-pub            # When running 'flutter build'
 --no-web-resources-cdn  # When building for web
+--wasm              # Recommended for Flutter web WASM builds
 ```
 
 ## Security Justification
@@ -69,7 +70,7 @@ For web builds:
 
 ```bash
 flutter pub get --enforce-lockfile
-flutter build web --csp --no-web-resources-cdn --no-pub
+flutter build web --csp --no-web-resources-cdn --no-pub --wasm
 ```
 
 For Docker builds:

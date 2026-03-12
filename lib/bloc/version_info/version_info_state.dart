@@ -22,6 +22,7 @@ class VersionInfoLoaded extends VersionInfoState {
   const VersionInfoLoaded({
     required this.appVersion,
     required this.commitHash,
+    this.buildDate,
     this.apiCommitHash,
     this.currentCoinsCommit,
     this.latestCoinsCommit,
@@ -29,6 +30,7 @@ class VersionInfoLoaded extends VersionInfoState {
 
   final String? appVersion;
   final String? commitHash;
+  final String? buildDate;
   final String? apiCommitHash;
   final String? currentCoinsCommit;
   final String? latestCoinsCommit;
@@ -36,6 +38,7 @@ class VersionInfoLoaded extends VersionInfoState {
   VersionInfoLoaded copyWith({
     ValueGetter<String?>? appVersion,
     ValueGetter<String?>? commitHash,
+    ValueGetter<String?>? buildDate,
     ValueGetter<String?>? apiCommitHash,
     ValueGetter<String?>? currentCoinsCommit,
     ValueGetter<String?>? latestCoinsCommit,
@@ -43,6 +46,7 @@ class VersionInfoLoaded extends VersionInfoState {
     return VersionInfoLoaded(
       appVersion: appVersion?.call() ?? this.appVersion,
       commitHash: commitHash?.call() ?? this.commitHash,
+      buildDate: buildDate?.call() ?? this.buildDate,
       apiCommitHash: apiCommitHash?.call() ?? this.apiCommitHash,
       currentCoinsCommit: currentCoinsCommit?.call() ?? this.currentCoinsCommit,
       latestCoinsCommit: latestCoinsCommit?.call() ?? this.latestCoinsCommit,
@@ -53,6 +57,7 @@ class VersionInfoLoaded extends VersionInfoState {
   List<Object?> get props => [
     appVersion,
     commitHash,
+    buildDate,
     apiCommitHash,
     currentCoinsCommit,
     latestCoinsCommit,

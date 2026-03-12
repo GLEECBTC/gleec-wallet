@@ -7,19 +7,22 @@ class NftTxnMobileFilterCard extends StatelessWidget {
   final String svgPath;
   final VoidCallback onTap;
   final bool isSelected;
+  final Color? accentColor;
   const NftTxnMobileFilterCard({
     super.key,
     required this.title,
     required this.svgPath,
     required this.onTap,
     this.isSelected = false,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).extension<ColorSchemeExtension>()!;
     final textScheme = Theme.of(context).extension<TextThemeExtension>()!;
-    final color = isSelected ? colorScheme.surf : colorScheme.s70;
+    final Color inactiveColor = accentColor ?? colorScheme.s70;
+    final color = isSelected ? colorScheme.surf : inactiveColor;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -34,17 +37,11 @@ class NftTxnMobileFilterCard extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              title,
-              style: textScheme.bodyS.copyWith(color: color),
-            ),
+            Text(title, style: textScheme.bodyS.copyWith(color: color)),
             const SizedBox(width: 8),
             SvgPicture.asset(
               svgPath,
-              colorFilter: ColorFilter.mode(
-                color,
-                BlendMode.srcIn,
-              ),
+              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
               width: 24,
               height: 24,
             ),

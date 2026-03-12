@@ -1,7 +1,10 @@
 import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/coin_type.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -68,6 +71,9 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
     final balance = coin.balance(context.sdk) ?? 0.0;
     final bool isZeroBalance = balance == 0.0;
     final Color balanceColor = isZeroBalance
@@ -89,9 +95,8 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(right: 20.0),
-              child: Switch(
+              child: UiSwitcher(
                 value: isSelected,
-                splashRadius: 18,
                 onChanged: (_) => onSelect(),
               ),
             ),
@@ -105,8 +110,10 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
                       color: protocolColor,
@@ -122,7 +129,9 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: theme
-                            .custom.coinsManagerTheme.listItemProtocolTextColor,
+                            .custom
+                            .coinsManagerTheme
+                            .listItemProtocolTextColor,
                       ),
                     ),
                   ),
@@ -137,7 +146,9 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
                   children: [
                     Flexible(
                       child: AutoScrollText(
-                        text: isZeroBalance
+                        text: hideBalances
+                            ? maskedBalanceText
+                            : isZeroBalance
                             ? formatAmt(balance)
                             : formatDexAmt(coin.balance),
                         style: TextStyle(
@@ -164,14 +175,6 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              '(',
-                              style: TextStyle(
-                                color: balanceColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
                             Flexible(
                               child: CoinFiatBalance(
                                 coin,
@@ -181,14 +184,6 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),
-                              ),
-                            ),
-                            Text(
-                              ')',
-                              style: TextStyle(
-                                color: balanceColor,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -224,6 +219,9 @@ class _CoinsManagerListItemMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
     final balance = coin.balance(context.sdk) ?? 0.0;
     final bool isZeroBalance = balance == 0.0;
     final Color balanceColor = isZeroBalance
@@ -252,14 +250,18 @@ class _CoinsManagerListItemMobile extends StatelessWidget {
               onChanged: (_) => onSelect(),
             ),
             const SizedBox(width: 8),
-            Expanded(child: CoinItem(coin: coin, size: CoinItemSize.large)),
+            Expanded(
+              child: CoinItem(coin: coin, size: CoinItemSize.large),
+            ),
             if (!isAddAssets)
               Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   AutoScrollText(
-                    text: isZeroBalance
+                    text: hideBalances
+                        ? maskedBalanceText
+                        : isZeroBalance
                         ? formatAmt(balance)
                         : formatDexAmt(balance),
                     style: TextStyle(
@@ -272,14 +274,6 @@ class _CoinsManagerListItemMobile extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text(
-                        '(',
-                        style: TextStyle(
-                          color: balanceColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                       Flexible(
                         child: CoinFiatBalance(
                           coin,
@@ -289,14 +283,6 @@ class _CoinsManagerListItemMobile extends StatelessWidget {
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
-                        ),
-                      ),
-                      Text(
-                        ')',
-                        style: TextStyle(
-                          color: balanceColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],

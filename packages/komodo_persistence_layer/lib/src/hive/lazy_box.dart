@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 
 import '../persistence_provider.dart';
 
@@ -10,22 +10,16 @@ import '../persistence_provider.dart';
 /// implement the [ObjectWithPrimaryKey] interface.
 class HiveLazyBoxProvider<K, T extends ObjectWithPrimaryKey<K>>
     extends PersistenceProvider<K, T> {
-  HiveLazyBoxProvider({
-    required this.name,
-  });
+  HiveLazyBoxProvider({required this.name});
 
-  HiveLazyBoxProvider.init({
-    required this.name,
-    required LazyBox<T> box,
-  }) : _box = box;
+  HiveLazyBoxProvider.init({required this.name, required LazyBox<T> box})
+    : _box = box;
 
   final String name;
   LazyBox<T>? _box;
 
   static Future<HiveLazyBoxProvider<K, T>>
-      create<K, T extends ObjectWithPrimaryKey<K>>({
-    required String name,
-  }) async {
+  create<K, T extends ObjectWithPrimaryKey<K>>({required String name}) async {
     final LazyBox<T> box = await Hive.openLazyBox<T>(name);
     return HiveLazyBoxProvider<K, T>.init(name: name, box: box);
   }
@@ -52,8 +46,9 @@ class HiveLazyBoxProvider<K, T extends ObjectWithPrimaryKey<K>>
   Future<List<T?>> getAll() async {
     _box ??= await Hive.openLazyBox<T>(name);
 
-    final Iterable<Future<T?>> valueFutures =
-        _box!.keys.map((dynamic key) => _box!.get(key as K));
+    final Iterable<Future<T?>> valueFutures = _box!.keys.map(
+      (dynamic key) => _box!.get(key as K),
+    );
     final List<T?> result = await Future.wait<T?>(valueFutures);
     return result;
   }

@@ -1,5 +1,5 @@
-import 'dart:io' show exit
-    if (dart.library.html) 'window_close_handler_exit_stub.dart' show exit;
+import 'dart:io'
+    if (dart.library.js_interop) 'window_close_handler_exit_stub.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -56,10 +56,12 @@ class _WindowCloseHandlerState extends State<WindowCloseHandler>
       // standard window closing, then manually trigger exit via SystemNavigator
       FlutterWindowClose.setWindowShouldCloseHandler(() async {
         final shouldClose = await _handleWindowClose();
-        
+
         // On Linux, if user confirmed, we need to manually exit instead of letting
         // flutter_window_close handle it, to avoid GTK cleanup issues
-        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux && shouldClose) {
+        if (!kIsWeb &&
+            defaultTargetPlatform == TargetPlatform.linux &&
+            shouldClose) {
           // Hide window immediately
           // Then exit after a short delay to allow any final cleanup
           Future.delayed(const Duration(milliseconds: 200), () {
@@ -68,7 +70,7 @@ class _WindowCloseHandlerState extends State<WindowCloseHandler>
           // Return false to prevent flutter_window_close from closing the window
           return false;
         }
-        
+
         return shouldClose;
       });
     } else if (kIsWeb) {

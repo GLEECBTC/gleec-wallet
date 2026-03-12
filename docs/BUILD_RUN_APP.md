@@ -104,11 +104,31 @@ Run in release mode:
 flutter run -d chrome --release
 ```
 
+Run with WebAssembly:
+
+```bash
+flutter run -d chrome --wasm
+```
+
+Run with WebAssembly in release mode:
+
+```bash
+flutter run -d chrome --wasm --release
+```
+
 Running on web-server (useful for testing/debugging in different browsers):
 
 ```bash
 flutter run -d web-server --web-port=8080
 ```
+
+Running on web-server with WebAssembly:
+
+```bash
+flutter run -d web-server --web-port=8080 --wasm
+```
+
+`--wasm` builds require COEP/COOP headers in deployment. See `docs/BUILD_RELEASE.md`.
 
 ## Desktop
 

@@ -42,6 +42,7 @@ class VersionInfoBloc extends Bloc<VersionInfoEvent, VersionInfoState> {
     final commitHash = packageInformation.commitHash != null
         ? _tryParseCommitHash(packageInformation.commitHash!)
         : null;
+    final buildDate = packageInformation.buildDate;
 
     _logger.info(
       'Basic app info retrieved - Version: $appVersion, '
@@ -51,6 +52,7 @@ class VersionInfoBloc extends Bloc<VersionInfoEvent, VersionInfoState> {
     var currentInfo = VersionInfoLoaded(
       appVersion: appVersion,
       commitHash: commitHash,
+      buildDate: buildDate,
     );
     emit(currentInfo);
 

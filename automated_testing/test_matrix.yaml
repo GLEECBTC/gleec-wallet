@@ -1,0 +1,2807 @@
+# =============================================================================
+# Gleec Wallet — Skyvern Automated Test Matrix (Web Only)
+# =============================================================================
+#
+# Converted from GLEEC_WALLET_MANUAL_TEST_CASES.md for the Skyvern + Ollama
+# vision-based QA runner. Only Grade-A (fully automatable) and Grade-B
+# (partially automatable UI steps) tests are included.
+#
+# Platform scope: Web (Chrome) — Flutter canvas-rendered application.
+# Test assets:    DOC/MARTY testnet coins via in-app faucet.
+#
+# IMPORTANT: Before running, fill in the values under `test_data` with
+# your actual environment-specific addresses, seeds, and credentials.
+#
+# =============================================================================
+
+config:
+  base_url: "https://app.gleecwallet.com"     # Or your QA staging URL
+  default_engine: "skyvern-2.0"
+  max_steps_per_test: 30
+  timeout_per_test: 180
+  screenshot_on_complete: true
+  video_recording: true
+
+# ---------------------------------------------------------------------------
+# TEST DATA — Fill these in with your QA environment values
+# ---------------------------------------------------------------------------
+test_data:
+  wallet_password: "QaTestPass!2026"
+  wallet_password_weak: "abc"
+  import_seed_12: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+  doc_recipient_address: "RPDPE1XqGuHXSJn9q6VAaGDoRVMEwAYjT3"
+  marty_recipient_address: "RQCyFA4cAyjpfzcCGnxNxC4YTQsRDVPzec"
+  invalid_address: "RThisIsNotAValidAddress12345"
+  wrong_network_address: "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18"
+  evm_token_contract: "0xReplaceMeWithTestTokenContract"  # Replace with a real testnet ERC-20 contract for your environment
+  self_address: "WILL_BE_CAPTURED_DURING_TEST"
+  alt_doc_address: "RKXzCCaT5ukqnyJBKTr9KyEpCBHR8itEFd"
+  alt_marty_address: "RD8WeYCaBQSx9e6mH5hX51uZ5FxNyirawj"
+
+# ---------------------------------------------------------------------------
+# SETUP — Runs before each test to ensure logged-in state
+# ---------------------------------------------------------------------------
+setup:
+  prompt: |
+    This is a Flutter web app rendered on an HTML canvas. Identify all elements visually.
+    Wait 3 seconds for the app to fully load after the page appears.
+
+    If you see a login screen with a password field:
+      Enter the password 'QaTestPass!2026' in the password field.
+      Click the login or unlock button.
+      Wait until a dashboard or home screen with coin balances or a wallet overview appears.
+
+    If you see a welcome screen with 'Create Wallet' and 'Import Wallet' buttons:
+      COMPLETE — the app is at the initial state and no login is needed for this test.
+
+    If you already see a dashboard with coin balances:
+      COMPLETE — already logged in.
+
+    COMPLETE when the dashboard or wallet overview is visible.
+  success_criteria: "App is either on the dashboard (logged in) or the welcome screen"
+
+# =============================================================================
+# TESTS — Ordered by execution dependency and priority
+# =============================================================================
+tests:
+
+  # ===========================================================================
+  # PHASE 1: AUTH + WALLET LIFECYCLE (P0)
+  # ===========================================================================
+
+  - id: GW-AUTO-AUTH-001a
+    name: "Create wallet — password and seed display"
+    source_manual_id: GW-MAN-AUTH-001
+    tags: [auth, critical, smoke, p0]
+    max_steps: 25
+    timeout: 240
+    steps:
+      - action: |
+          Look for a button labeled 'Create Wallet' or 'Create New Wallet' on the welcome screen.
+          Click it.
+        checkpoint: "A password entry form appears with at least one password input field"
+      - action: |
+          Enter 'QaTestPass!2026' into the password field.
+          If there is a 'Confirm Password' or second password field, enter the same password there.
+          Click the continue, next, or create button.
+        checkpoint: "A seed phrase screen appears showing 12 or 24 words arranged in a grid or numbered list"
+      - action: |
+          Read all the seed words displayed on screen. Do NOT click continue or next yet.
+          Look for any warning text about backing up the seed phrase.
+        checkpoint: "Seed words are visible on screen with a warning about backup"
+      - action: |
+          Look for a 'Continue', 'Next', 'I have backed up', or similar button.
+          If there is a checkbox saying 'I have backed up my seed' or similar, check it first.
+          Then click the continue/next button.
+        checkpoint: "Either a seed confirmation challenge appears (asking to select words in order) or the dashboard loads"
+    expected_result: "Wallet creation reaches seed display and progresses to confirmation or dashboard"
+    extraction_schema:
+      type: object
+      properties:
+        seed_words_visible:
+          type: boolean
+          description: "Whether seed words were displayed on screen"
+        seed_word_count:
+          type: integer
+          description: "Number of seed words shown (12 or 24)"
+        reached_confirmation_or_dashboard:
+          type: boolean
+          description: "Whether the flow progressed past seed display"
+
+  - id: GW-AUTO-AUTH-001b
+    name: "Create wallet — complete seed confirmation"
+    source_manual_id: GW-MAN-AUTH-001
+    tags: [auth, critical, smoke, p0]
+    max_steps: 30
+    timeout: 300
+    prompt: |
+      You are completing the wallet creation flow for a Gleec Wallet.
+      If you see a seed confirmation challenge (asking you to select or enter specific seed words
+      in a certain order), complete it by clicking the correct words in the correct order.
+      The words should be visible on screen as clickable chips or buttons.
+
+      If you see the dashboard already, COMPLETE — no confirmation was needed.
+
+      After completing the confirmation, look for a 'Done', 'Finish', or similar button and click it.
+
+      COMPLETE when the main dashboard or home screen appears showing coin balances,
+      a wallet overview, or a coin list.
+    expected_result: "Dashboard is visible after completing seed confirmation"
+    extraction_schema:
+      type: object
+      properties:
+        dashboard_visible:
+          type: boolean
+          description: "Whether the dashboard/home screen loaded"
+        confirmation_challenge_present:
+          type: boolean
+          description: "Whether a seed confirmation challenge was shown"
+
+  - id: GW-AUTO-AUTH-003
+    name: "Import wallet from valid 12-word seed"
+    source_manual_id: GW-MAN-AUTH-003
+    tags: [auth, critical, p0]
+    max_steps: 30
+    timeout: 300
+    steps:
+      - action: |
+          If on the welcome screen, click 'Import Wallet' or 'Restore Wallet'.
+          If on the dashboard already, open the wallet manager (usually in a sidebar,
+          top-left menu, or account icon), and look for 'Import' or 'Add Wallet' > 'Import'.
+        checkpoint: "A seed phrase input screen appears with text fields or a text area for entering words"
+      - action: |
+          Enter the following 12-word seed phrase into the input fields:
+          abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about
+
+          If there are 12 separate input fields, enter one word per field in order.
+          If there is a single text area, paste the entire phrase with spaces between words.
+        checkpoint: "All 12 seed words are entered in the input fields"
+      - action: |
+          If a password field is shown, enter 'QaTestPass!2026' as the password.
+          If a confirm password field is shown, enter the same password again.
+          Click the 'Import', 'Restore', 'Continue', or 'Submit' button.
+        checkpoint: "Either a loading/syncing indicator appears or the dashboard loads"
+      - action: |
+          Wait for the import to complete. Look for the dashboard or home screen.
+          If you see a coin list or wallet overview, the import succeeded.
+        checkpoint: "The dashboard is visible with a coin list or wallet overview"
+    expected_result: "Wallet imported successfully and dashboard shows with coin list"
+    extraction_schema:
+      type: object
+      properties:
+        import_succeeded:
+          type: boolean
+          description: "Whether the wallet import completed"
+        dashboard_visible:
+          type: boolean
+          description: "Whether the dashboard loaded after import"
+
+  - id: GW-AUTO-AUTH-004
+    name: "Invalid password attempts and lockout feedback"
+    source_manual_id: GW-MAN-AUTH-004
+    tags: [auth, critical, security, p0]
+    max_steps: 20
+    prompt: |
+      You should be on the login/unlock screen with a password field.
+      If not, look for a logout option in settings and log out first.
+
+      Enter the wrong password 'WrongPassword1' and click the login/unlock button.
+      Observe any error message that appears.
+
+      Enter another wrong password 'WrongPassword2' and click login again.
+      Observe any updated error message or lockout/cooldown indicator.
+
+      Enter a third wrong password 'WrongPassword3' and click login.
+      Look for any lockout message, cooldown timer, or additional security warning.
+
+      COMPLETE after the third failed attempt. Report all error messages you see.
+    expected_result: "Error messages shown for wrong passwords; possible lockout after multiple attempts"
+    extraction_schema:
+      type: object
+      properties:
+        error_messages:
+          type: array
+          items:
+            type: string
+          description: "All error messages shown during failed login attempts"
+        lockout_triggered:
+          type: boolean
+          description: "Whether a lockout or cooldown was triggered"
+        lockout_message:
+          type: string
+          description: "Text of any lockout/cooldown message shown"
+
+  # ===========================================================================
+  # PHASE 2: WALLET MANAGER (P0/P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-WAL-001
+    name: "Create second wallet + rename + switch"
+    source_manual_id: GW-MAN-WAL-001
+    tags: [wallet, critical, p0]
+    max_steps: 30
+    steps:
+      - action: |
+          From the dashboard, open the wallet manager. Look for a wallet icon,
+          account selector, sidebar menu, or dropdown in the top area of the screen.
+          Click it to open the wallet list or wallet management area.
+        checkpoint: "A wallet list or wallet manager panel is visible"
+      - action: |
+          Look for a 'Create Wallet', 'Add Wallet', or '+' button and click it.
+          If prompted, choose 'Create New' (not import).
+          Enter a password if required ('QaTestPass!2026').
+          Complete any seed backup flow shown (read words, confirm if needed).
+        checkpoint: "A second wallet has been created and appears in the wallet list"
+      - action: |
+          Look for a rename, edit, or pencil icon next to one of the wallet names.
+          If found, click it and rename the wallet to 'QA-Wallet-Primary'.
+          If no inline rename exists, look in a wallet settings/detail screen.
+        checkpoint: "One wallet is now named 'QA-Wallet-Primary' or a rename action was attempted"
+      - action: |
+          Switch between the wallets by clicking on the other wallet in the list.
+          Observe that the dashboard content or coin balances change to reflect the selected wallet.
+        checkpoint: "The dashboard or balance display changed after switching wallets"
+    expected_result: "Two wallets exist, rename works, switching updates dashboard context"
+    extraction_schema:
+      type: object
+      properties:
+        second_wallet_created:
+          type: boolean
+        rename_successful:
+          type: boolean
+        switch_changed_content:
+          type: boolean
+        wallet_count:
+          type: integer
+
+  - id: GW-AUTO-WAL-002
+    name: "Delete wallet with cancel and confirm"
+    source_manual_id: GW-MAN-WAL-002
+    tags: [wallet, critical, security, p0]
+    max_steps: 25
+    steps:
+      - action: |
+          Open the wallet manager. You should see at least two wallets.
+          Look for a delete, trash, or remove icon/option on the non-active wallet.
+          Click it.
+        checkpoint: "A confirmation dialog appears asking to confirm wallet deletion"
+      - action: |
+          Click 'Cancel', 'No', or the X button to dismiss the confirmation dialog.
+          Verify the wallet is still listed in the wallet manager.
+        checkpoint: "The wallet is still present in the wallet list after canceling"
+      - action: |
+          Click the delete/remove option again for the same wallet.
+          This time click 'Confirm', 'Delete', or 'Yes' to proceed.
+        checkpoint: "The wallet has been removed from the list"
+    expected_result: "Cancel preserves wallet; confirm removes it"
+    extraction_schema:
+      type: object
+      properties:
+        cancel_preserved_wallet:
+          type: boolean
+        confirm_deleted_wallet:
+          type: boolean
+        remaining_wallet_count:
+          type: integer
+
+  # ===========================================================================
+  # PHASE 3: COIN MANAGEMENT + DASHBOARD (P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-COIN-001
+    name: "Enable test coins and activate DOC/MARTY"
+    source_manual_id: GW-MAN-COIN-001
+    tags: [coin, smoke, p1, prerequisite]
+    max_steps: 25
+    steps:
+      - action: |
+          Navigate to Settings. Look for a gear icon, 'Settings' in the sidebar menu,
+          or an account/settings option in the navigation.
+        checkpoint: "The settings page or settings menu is visible"
+      - action: |
+          Look for a toggle or switch labeled 'Test Coins', 'Show Test Coins',
+          'Enable Test Coins', or 'Testnet'. Enable/turn on this toggle.
+          If it is already enabled, proceed.
+        checkpoint: "Test coins toggle is in the ON/enabled state"
+      - action: |
+          Navigate to the Coin Manager, Coins list, or 'Add Coins' section.
+          Search for 'DOC' using any search or filter bar.
+          If DOC appears, activate/enable it by clicking its toggle or add button.
+        checkpoint: "DOC coin is now activated and appears in the active coins list"
+      - action: |
+          Search for 'MARTY' in the same coin manager.
+          Activate/enable MARTY.
+        checkpoint: "MARTY coin is now activated and appears in the active coins list"
+    expected_result: "Test coins toggle is on; DOC and MARTY are both activated"
+    extraction_schema:
+      type: object
+      properties:
+        test_coins_enabled:
+          type: boolean
+        doc_activated:
+          type: boolean
+        marty_activated:
+          type: boolean
+
+  - id: GW-AUTO-COIN-002
+    name: "Search, activate, deactivate coin with filter"
+    source_manual_id: GW-MAN-COIN-002
+    tags: [coin, p1]
+    max_steps: 20
+    prompt: |
+      Navigate to the Coin Manager or coin list from the dashboard.
+
+      If there is a search or filter bar, type 'MARTY' in it.
+      Verify that MARTY appears in the results.
+
+      If MARTY is currently deactivated/disabled, click its toggle or add button to activate it.
+      If there is an 'active only' or 'enabled only' filter option, select it.
+      Verify MARTY appears in the filtered list.
+
+      Now deactivate MARTY by clicking its toggle or remove button.
+      Verify MARTY is no longer in the 'active only' filtered list.
+      Clear any filters.
+
+      COMPLETE when you have confirmed MARTY can be activated and deactivated and
+      the filter reflects the current state.
+    expected_result: "MARTY activates/deactivates correctly and filters reflect state"
+    extraction_schema:
+      type: object
+      properties:
+        search_found_marty:
+          type: boolean
+        marty_toggleable:
+          type: boolean
+        filter_reflected_state:
+          type: boolean
+
+  - id: GW-AUTO-DASH-001
+    name: "Hide balances and hide zero balances toggles"
+    source_manual_id: GW-MAN-DASH-001
+    tags: [dashboard, p1, smoke]
+    max_steps: 20
+    prompt: |
+      Navigate to the main dashboard or wallet overview.
+      You should see a list of coins with balance amounts.
+
+      Look for a 'Hide Balances' toggle, eye icon, or privacy button on the dashboard.
+      Click it to hide/mask balances.
+      Verify that balance amounts are replaced with asterisks, dots, dashes, or a hidden indicator.
+
+      Now look for a 'Hide Zero Balances' toggle or similar option.
+      If found, enable it.
+      Verify that coins with 0 balance are no longer shown in the list.
+
+      Restore both toggles to their original state (show balances, show all coins).
+
+      COMPLETE when both toggles have been tested and restored.
+    expected_result: "Balances can be hidden/shown; zero-balance coins can be filtered"
+    extraction_schema:
+      type: object
+      properties:
+        hide_balances_works:
+          type: boolean
+        balances_masked_indicator:
+          type: string
+          description: "What replaced the balance values (e.g., '***', '---', etc.)"
+        hide_zero_balances_works:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 4: FAUCET FUNDING (P0 — prerequisite for money movement tests)
+  # ===========================================================================
+
+  - id: GW-AUTO-SEND-001
+    name: "Faucet funding for DOC and MARTY"
+    source_manual_id: GW-MAN-SEND-001
+    tags: [send, critical, smoke, p0, prerequisite]
+    max_steps: 25
+    timeout: 240
+    steps:
+      - action: |
+          Navigate to the DOC coin page by clicking on 'DOC' in the dashboard coin list
+          or navigating to the DOC details/overview screen.
+        checkpoint: "The DOC coin detail page is visible showing the DOC balance and/or address"
+      - action: |
+          Look for a 'Faucet', 'Get Test Coins', 'Request Funds', or tap icon that
+          triggers the in-app faucet for DOC. Click it.
+          Wait 5 seconds for the response.
+        checkpoint: "A success message, toast, or snackbar appears confirming the faucet request"
+      - action: |
+          Navigate back to the dashboard, then open the MARTY coin page by clicking
+          on 'MARTY' in the coin list.
+        checkpoint: "The MARTY coin detail page is visible"
+      - action: |
+          Look for the same faucet/request button on the MARTY page. Click it.
+          Wait 5 seconds for the response.
+        checkpoint: "A success message appears for the MARTY faucet request"
+    expected_result: "Both DOC and MARTY faucet requests succeeded"
+    extraction_schema:
+      type: object
+      properties:
+        doc_faucet_success:
+          type: boolean
+        doc_faucet_message:
+          type: string
+        marty_faucet_success:
+          type: boolean
+        marty_faucet_message:
+          type: string
+
+  - id: GW-AUTO-SEND-002a
+    name: "Faucet cooldown/denied handling"
+    source_manual_id: GW-MAN-SEND-002
+    tags: [send, critical, p0]
+    max_steps: 15
+    prompt: |
+      Navigate to the DOC coin page.
+      Look for the faucet/request button and click it again immediately.
+      You should see a cooldown, denied, rate-limited, or 'already requested' message.
+
+      Report the exact text of any message shown.
+
+      COMPLETE when you have observed the cooldown/denied response.
+    expected_result: "Cooldown or denied message is shown for rapid repeat faucet request"
+    extraction_schema:
+      type: object
+      properties:
+        cooldown_message_shown:
+          type: boolean
+        message_text:
+          type: string
+
+  # ===========================================================================
+  # PHASE 5: SEND / WITHDRAW (P0)
+  # ===========================================================================
+
+  - id: GW-AUTO-SEND-003
+    name: "DOC send happy path"
+    source_manual_id: GW-MAN-SEND-003
+    tags: [send, critical, smoke, p0]
+    max_steps: 25
+    timeout: 240
+    steps:
+      - action: |
+          Navigate to the DOC coin page and find the 'Send', 'Withdraw', or arrow-up button.
+          Click it to open the send form.
+        checkpoint: "A send form is visible with fields for recipient address and amount"
+      - action: |
+          Enter the recipient address 'RPDPE1XqGuHXSJn9q6VAaGDoRVMEwAYjT3' into the address/recipient field.
+          Enter the amount '0.01' into the amount field.
+        checkpoint: "Both fields are filled with the entered values"
+      - action: |
+          Click 'Next', 'Preview', 'Review', or 'Continue' to see the transaction summary.
+          Look for a confirmation screen showing the amount, recipient, and fee.
+        checkpoint: "A transaction summary or confirmation screen is visible showing amount, address, and fee"
+      - action: |
+          Click 'Confirm', 'Send', or 'Submit' to broadcast the transaction.
+          Wait 5 seconds for confirmation feedback.
+        checkpoint: "A success message, pending transaction indicator, or transaction hash is shown"
+    expected_result: "Transaction submitted with success confirmation and visible in pending/history"
+    extraction_schema:
+      type: object
+      properties:
+        transaction_submitted:
+          type: boolean
+        success_or_pending_message:
+          type: string
+        fee_displayed:
+          type: string
+        transaction_hash:
+          type: string
+          description: "Transaction hash if visible"
+
+  - id: GW-AUTO-SEND-004
+    name: "Address validation — invalid and wrong-network"
+    source_manual_id: GW-MAN-SEND-004
+    tags: [send, critical, p0]
+    max_steps: 20
+    steps:
+      - action: |
+          Navigate to DOC send screen. Enter the invalid address 'RThisIsNotAValidAddress12345'
+          in the recipient field. Enter amount '0.01'. Click send/next/continue.
+        checkpoint: "A red error message appears mentioning invalid address, wrong format, or similar"
+      - action: |
+          Clear the address field. Enter the Ethereum address '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18'
+          which is a wrong-network address for DOC. Click send/next/continue.
+        checkpoint: "An error message appears about unsupported address format or wrong network"
+    expected_result: "Both invalid and wrong-network addresses are blocked with error messages"
+    extraction_schema:
+      type: object
+      properties:
+        invalid_address_blocked:
+          type: boolean
+        invalid_address_error:
+          type: string
+        wrong_network_blocked:
+          type: boolean
+        wrong_network_error:
+          type: string
+
+  - id: GW-AUTO-SEND-005
+    name: "Amount validation — zero, too small, exceeds balance"
+    source_manual_id: GW-MAN-SEND-005
+    tags: [send, critical, boundary, p0]
+    max_steps: 25
+    steps:
+      - action: |
+          Navigate to DOC send screen. Enter a valid DOC address in the recipient field.
+          Enter '0' as the amount. Click send/next/continue.
+        checkpoint: "An error message appears about amount being zero or must be greater than zero"
+      - action: |
+          Clear the amount field. Enter '0.000000001' as the amount (extremely small).
+          Click send/next/continue.
+        checkpoint: "An error message about minimum amount or insufficient value appears"
+      - action: |
+          Clear the amount field. Enter '999999999' as the amount (far exceeds balance).
+          Click send/next/continue.
+        checkpoint: "An error about insufficient funds or balance exceeded appears"
+    expected_result: "Zero, sub-minimum, and over-balance amounts all blocked with errors"
+    extraction_schema:
+      type: object
+      properties:
+        zero_amount_error:
+          type: string
+        tiny_amount_error:
+          type: string
+        exceeds_balance_error:
+          type: string
+
+  # ===========================================================================
+  # PHASE 6: DEX (P0)
+  # ===========================================================================
+
+  - id: GW-AUTO-DEX-001
+    name: "Maker limit order creation"
+    source_manual_id: GW-MAN-DEX-001
+    tags: [dex, critical, smoke, p0]
+    max_steps: 25
+    steps:
+      - action: |
+          Navigate to the DEX section from the main menu or sidebar.
+          Look for 'DEX', 'Exchange', 'Trade', or 'Swap' in the navigation.
+        checkpoint: "The DEX trading interface is visible with pair selectors and order forms"
+      - action: |
+          Select the trading pair DOC/MARTY. Look for a pair selector or dropdown
+          and choose DOC as the base and MARTY as the quote (or vice versa if that is how they are listed).
+        checkpoint: "DOC/MARTY pair is selected and the orderbook or trading form reflects this pair"
+      - action: |
+          Look for a 'Maker', 'Limit', or 'Place Order' option.
+          Enter a price of '1' (1 DOC = 1 MARTY or similar).
+          Enter an amount of '0.1' in the amount field.
+        checkpoint: "Price and amount fields are filled"
+      - action: |
+          Click 'Place Order', 'Submit', 'Create Order', or similar button.
+          Wait 5 seconds for confirmation.
+        checkpoint: "Order creation is confirmed with a success message or the order appears in an 'Open Orders' section"
+    expected_result: "Maker order created and visible in open orders"
+    extraction_schema:
+      type: object
+      properties:
+        order_created:
+          type: boolean
+        order_visible_in_list:
+          type: boolean
+        order_details:
+          type: object
+          properties:
+            pair:
+              type: string
+            price:
+              type: string
+            amount:
+              type: string
+
+  - id: GW-AUTO-DEX-003
+    name: "DEX validation — invalid inputs"
+    source_manual_id: GW-MAN-DEX-003
+    tags: [dex, critical, boundary, p0]
+    max_steps: 20
+    steps:
+      - action: |
+          On the DEX trading screen with DOC/MARTY pair selected, enter '0' as the amount.
+          Click the submit/place order button.
+        checkpoint: "An error message about zero or invalid amount appears"
+      - action: |
+          Clear the amount field. Enter '999999999' as the amount (exceeds available balance).
+          Click submit/place order.
+        checkpoint: "An error about insufficient funds or balance appears"
+    expected_result: "Zero and over-balance DEX orders are blocked with validation messages"
+    extraction_schema:
+      type: object
+      properties:
+        zero_amount_blocked:
+          type: boolean
+        zero_amount_error:
+          type: string
+        insufficient_funds_blocked:
+          type: boolean
+        insufficient_funds_error:
+          type: string
+
+  # ===========================================================================
+  # PHASE 7: BRIDGE (P0)
+  # ===========================================================================
+
+  - id: GW-AUTO-BRDG-001
+    name: "Bridge transfer happy path"
+    source_manual_id: GW-MAN-BRDG-001
+    tags: [bridge, critical, smoke, p0]
+    max_steps: 25
+    timeout: 240
+    steps:
+      - action: |
+          Navigate to the Bridge section from the main menu or sidebar.
+          Look for 'Bridge', 'Cross-chain', or a bridge icon in the navigation.
+        checkpoint: "The bridge interface is visible with source/destination selectors"
+      - action: |
+          Select a supported source coin and destination. If DOC has a bridge route,
+          select DOC as source. Look for available destination chains/coins and select one.
+          Enter a valid amount like '0.1'.
+        checkpoint: "Source, destination, and amount are all filled in"
+      - action: |
+          If a destination address field is shown, enter a valid recipient address.
+          Click 'Preview', 'Next', or 'Review' to see the bridge transfer summary.
+        checkpoint: "A summary showing amount, fees, estimated time, and route is displayed"
+      - action: |
+          Click 'Confirm', 'Bridge', or 'Submit' to initiate the bridge transfer.
+          Wait 5 seconds for confirmation.
+        checkpoint: "A success confirmation, pending status, or bridge tracking screen appears"
+    expected_result: "Bridge transfer initiated with confirmation"
+    extraction_schema:
+      type: object
+      properties:
+        bridge_initiated:
+          type: boolean
+        status_message:
+          type: string
+        fee_displayed:
+          type: string
+
+  - id: GW-AUTO-BRDG-002
+    name: "Unsupported bridge pair validation"
+    source_manual_id: GW-MAN-BRDG-002
+    tags: [bridge, critical, p0]
+    max_steps: 15
+    prompt: |
+      Navigate to the Bridge section.
+      Try to select a combination of source and destination that is not supported.
+      Look for grayed-out options, 'not available', 'unsupported', or similar indicators.
+
+      If all combinations appear available, try entering an amount and see if any
+      pair-specific validation message appears.
+
+      COMPLETE when you have identified how the bridge handles unsupported pairs.
+    expected_result: "Unsupported pairs are blocked or marked unavailable"
+    extraction_schema:
+      type: object
+      properties:
+        unsupported_handling_exists:
+          type: boolean
+        blocking_message:
+          type: string
+
+  - id: GW-AUTO-BRDG-003
+    name: "Bridge amount boundaries"
+    source_manual_id: GW-MAN-BRDG-003
+    tags: [bridge, critical, boundary, p0]
+    max_steps: 20
+    prompt: |
+      Navigate to the Bridge section and select a supported pair.
+
+      Enter an extremely small amount like '0.0000001' and observe if a minimum
+      amount error appears.
+
+      Clear and enter '999999999' (exceeds balance) and observe the error.
+
+      Look for any displayed minimum or maximum amount on the bridge form
+      and report those values.
+
+      COMPLETE after testing both boundaries.
+    expected_result: "Below-min and above-balance bridge amounts are blocked"
+    extraction_schema:
+      type: object
+      properties:
+        min_amount_error:
+          type: string
+        exceeds_balance_error:
+          type: string
+        displayed_min_amount:
+          type: string
+        displayed_max_amount:
+          type: string
+
+  # ===========================================================================
+  # PHASE 8: NFT (P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-NFT-001
+    name: "NFT list, details, and history"
+    source_manual_id: GW-MAN-NFT-001
+    tags: [nft, p1]
+    max_steps: 20
+    prompt: |
+      Navigate to the NFT section from the main menu or sidebar.
+
+      If NFT is disabled or hidden, COMPLETE and report that NFT is not available.
+
+      If the NFT section opens, observe the NFT list. Report how many NFTs are shown.
+      If any NFTs exist, click on the first one to open its detail page.
+      Look for name, image, collection, and any history or transaction entries.
+      Navigate back to the NFT list.
+
+      If filters are available (collection, status, date), try applying one.
+
+      COMPLETE after viewing the NFT list and at least one detail page (if items exist).
+    expected_result: "NFT section accessible with list and detail views"
+    extraction_schema:
+      type: object
+      properties:
+        nft_section_available:
+          type: boolean
+        nft_count:
+          type: integer
+        detail_view_loaded:
+          type: boolean
+        filters_available:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 9: SETTINGS (P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-SET-002
+    name: "Analytics/privacy toggles"
+    source_manual_id: GW-MAN-SET-002
+    tags: [settings, security, p1]
+    max_steps: 15
+    prompt: |
+      Navigate to Settings.
+      Look for any toggles related to 'Analytics', 'Diagnostics', 'Usage Data',
+      'Privacy', or 'Telemetry'.
+
+      Toggle each one off then on (or on then off) and verify the toggle state updates
+      visually when clicked.
+
+      Report the names and current states of all privacy-related toggles found.
+
+      COMPLETE after toggling available privacy settings.
+    expected_result: "Privacy/analytics toggles are interactive and state changes visually"
+    extraction_schema:
+      type: object
+      properties:
+        toggles_found:
+          type: array
+          items:
+            type: object
+            properties:
+              toggle_name:
+                type: string
+              responds_to_click:
+                type: boolean
+
+  - id: GW-AUTO-SET-003
+    name: "Test coin toggle impact"
+    source_manual_id: GW-MAN-SET-003
+    tags: [settings, smoke, p1]
+    max_steps: 20
+    steps:
+      - action: |
+          Navigate to Settings and find the 'Test Coins' toggle.
+          Turn it OFF.
+        checkpoint: "Test coins toggle is in the OFF/disabled state"
+      - action: |
+          Navigate to the Coin Manager or coins list.
+          Search for 'DOC'. Observe whether DOC appears in the list.
+        checkpoint: "DOC is NOT visible in the coin list when test coins are disabled"
+      - action: |
+          Go back to Settings and turn the Test Coins toggle ON.
+        checkpoint: "Test coins toggle is back in the ON/enabled state"
+      - action: |
+          Return to the Coin Manager and search for 'DOC' again.
+        checkpoint: "DOC is now visible in the coin list"
+    expected_result: "DOC visibility toggles with the test coins setting"
+    extraction_schema:
+      type: object
+      properties:
+        doc_hidden_when_off:
+          type: boolean
+        doc_visible_when_on:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 10: NAVIGATION (P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-NAV-001
+    name: "Main menu route integrity"
+    source_manual_id: GW-MAN-NAV-001
+    tags: [navigation, smoke, p1]
+    max_steps: 30
+    prompt: |
+      Starting from the dashboard/home screen, visit every main navigation item
+      one by one. Look for menu items or sidebar links such as:
+      Dashboard, Wallet, DEX/Exchange, Bridge, NFT, Settings, Market Maker/Bot, Fiat.
+
+      For each item:
+      1. Click it
+      2. Wait 3 seconds for the page to load
+      3. Note whether content loaded or an error/blank screen appeared
+      4. Use the browser back button or app back arrow to return
+
+      COMPLETE after visiting all available navigation items.
+    expected_result: "All main navigation items load content without errors"
+    extraction_schema:
+      type: object
+      properties:
+        tabs_visited:
+          type: array
+          items:
+            type: object
+            properties:
+              tab_name:
+                type: string
+              loaded_successfully:
+                type: boolean
+              error_visible:
+                type: boolean
+
+  - id: GW-AUTO-NAV-003
+    name: "Unsaved changes prompt on form exit"
+    source_manual_id: GW-MAN-NAV-003
+    tags: [navigation, p2]
+    max_steps: 20
+    prompt: |
+      Navigate to the DOC send screen.
+      Enter some text in the recipient address field (like 'test') and an amount ('0.5').
+      Do NOT click send/confirm.
+
+      Now click the browser back button or a navigation menu item to leave the page.
+
+      If a dialog appears asking 'Discard changes?', 'Leave this page?', or similar:
+        Click 'Stay', 'Cancel', or 'No' to remain on the page.
+        Verify your entered data is still present.
+        Then try to navigate away again and this time click 'Discard', 'Leave', or 'Yes'.
+
+      If no dialog appears, note that as well.
+
+      COMPLETE after testing the unsaved changes behavior.
+    expected_result: "Unsaved changes dialog appears and respects Stay/Discard choices"
+    extraction_schema:
+      type: object
+      properties:
+        dialog_appeared:
+          type: boolean
+        stay_preserved_data:
+          type: boolean
+        discard_exited_page:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 11: MARKET MAKER BOT (P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-BOT-001
+    name: "Create and start market maker bot"
+    source_manual_id: GW-MAN-BOT-001
+    tags: [bot, p1]
+    max_steps: 25
+    steps:
+      - action: |
+          Navigate to the Market Maker Bot section from the menu.
+          If the bot feature is disabled or hidden, COMPLETE and report it as unavailable.
+        checkpoint: "Bot management interface is visible with a create/add option"
+      - action: |
+          Click 'Create Bot', 'Add Bot', 'New', or similar button.
+          Select the DOC/MARTY pair.
+          Enter a spread value like '5' or '5%'.
+          Enter a volume or amount like '0.1'.
+        checkpoint: "Bot configuration form is filled with pair, spread, and volume"
+      - action: |
+          Click 'Save', 'Create', or 'Start' to create the bot.
+          If separate save and start actions exist, save first then start.
+        checkpoint: "The bot appears in the bot list with a 'Running', 'Active', or similar status"
+    expected_result: "Bot created and started with active status"
+    extraction_schema:
+      type: object
+      properties:
+        bot_feature_available:
+          type: boolean
+        bot_created:
+          type: boolean
+        bot_status:
+          type: string
+
+  - id: GW-AUTO-BOT-002
+    name: "Bot validation — invalid config"
+    source_manual_id: GW-MAN-BOT-002
+    tags: [bot, boundary, p1]
+    max_steps: 15
+    prompt: |
+      Navigate to the Bot creation form.
+
+      Try entering a spread of '0' or '-1' and observe any validation error.
+      Try entering a volume/amount of '0' and observe any validation error.
+      Try submitting without selecting a pair (if possible).
+
+      Report all validation messages seen.
+
+      COMPLETE after testing invalid bot configuration inputs.
+    expected_result: "Invalid bot config values are blocked with validation messages"
+    extraction_schema:
+      type: object
+      properties:
+        invalid_spread_error:
+          type: string
+        invalid_volume_error:
+          type: string
+        missing_pair_error:
+          type: string
+
+  # ===========================================================================
+  # PHASE 12: FIAT ON-RAMP (P0)
+  # ===========================================================================
+
+  - id: GW-AUTO-FIAT-001
+    name: "Fiat menu access and connect-wallet gating"
+    source_manual_id: GW-MAN-FIAT-001
+    tags: [fiat, smoke, p0]
+    max_steps: 15
+    prompt: |
+      Navigate to the Fiat section from the main menu.
+      Look for 'Fiat', 'Buy Crypto', 'Buy', or similar navigation item.
+
+      If the Fiat section loads, observe whether form fields are enabled.
+      Look for a currency selector, crypto asset selector, and amount field.
+
+      If a 'Connect Wallet' gate is shown, report it.
+
+      COMPLETE when you have observed the Fiat section state.
+    expected_result: "Fiat section is accessible and form state reflects auth state"
+    extraction_schema:
+      type: object
+      properties:
+        fiat_section_available:
+          type: boolean
+        form_fields_enabled:
+          type: boolean
+        connect_wallet_gate_shown:
+          type: boolean
+
+  - id: GW-AUTO-FIAT-002
+    name: "Fiat form validation — boundary amounts"
+    source_manual_id: GW-MAN-FIAT-002
+    tags: [fiat, critical, boundary, p0]
+    max_steps: 20
+    prompt: |
+      Navigate to the Fiat section. If fields are available:
+
+      Select a fiat currency (e.g., USD or EUR) and a crypto asset.
+      Enter '0.01' (likely below minimum) in the amount field and observe validation.
+      Enter '999999999' (above maximum) and observe validation.
+      Enter a valid amount like '50' and verify the form allows progression.
+
+      If payment method options exist, switch between them.
+
+      COMPLETE after testing boundary amounts.
+    expected_result: "Below-min and above-max fiat amounts are rejected with messages"
+    extraction_schema:
+      type: object
+      properties:
+        below_min_error:
+          type: string
+        above_max_error:
+          type: string
+        valid_amount_accepted:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 13: SECURITY SETTINGS (P0)
+  # ===========================================================================
+
+  - id: GW-AUTO-SECX-002
+    name: "Seed backup show and confirm lifecycle"
+    source_manual_id: GW-MAN-SECX-002
+    tags: [security, critical, p0]
+    max_steps: 25
+    steps:
+      - action: |
+          Navigate to Settings > Security. Look for 'Seed Phrase', 'Backup',
+          'View Seed', or 'Recovery Phrase' option.
+        checkpoint: "A seed/backup option is visible in security settings"
+      - action: |
+          Click on the seed/backup option. If a password prompt appears,
+          enter 'QaTestPass!2026' and submit.
+        checkpoint: "Seed words are displayed on screen (12 or 24 words)"
+      - action: |
+          If a 'Confirm Backup' or seed verification challenge is available, attempt it.
+          If the flow allows navigating away, go back to settings.
+        checkpoint: "Seed backup flow completed or navigation returned to settings"
+    expected_result: "Seed is protected behind password and displays correctly"
+    extraction_schema:
+      type: object
+      properties:
+        password_required:
+          type: boolean
+        seed_displayed:
+          type: boolean
+        seed_word_count:
+          type: integer
+
+  - id: GW-AUTO-SECX-004
+    name: "Change password flow"
+    source_manual_id: GW-MAN-SECX-004
+    tags: [security, critical, p0]
+    max_steps: 25
+    steps:
+      - action: |
+          Navigate to Settings > Security > Change Password.
+          Enter the wrong current password 'WrongOldPass' and a new password 'NewPass2026!'.
+          Click submit/save.
+        checkpoint: "An error message appears about incorrect current password"
+      - action: |
+          Clear the fields. Enter the correct current password 'QaTestPass!2026'.
+          Enter new password 'NewPass2026!' and confirm it.
+          Click submit/save.
+        checkpoint: "A success message appears confirming the password has been changed"
+      - action: |
+          IMPORTANT: Change the password back. Go to Change Password again.
+          Enter current password 'NewPass2026!' and new password 'QaTestPass!2026'.
+          Confirm and submit.
+        checkpoint: "Password has been reverted to the original for subsequent tests"
+    expected_result: "Wrong current password rejected; valid change succeeds; password reverted"
+    extraction_schema:
+      type: object
+      properties:
+        wrong_current_rejected:
+          type: boolean
+        password_changed:
+          type: boolean
+        password_reverted:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 14: CUSTOM TOKEN (P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-CTOK-001
+    name: "Import custom token happy path"
+    source_manual_id: GW-MAN-CTOK-001
+    tags: [custom_token, p1]
+    max_steps: 20
+    steps:
+      - action: |
+          Navigate to the Coin Manager. Look for an 'Import Token', 'Add Custom Token',
+          or similar option. Click it.
+        checkpoint: "A custom token import form appears with network selector and contract address field"
+      - action: |
+          Select an EVM network (e.g., Ethereum, BSC, or whatever is available).
+          Enter the contract address '0xReplaceMeWithTestTokenContract' in the contract field.
+          Click 'Fetch', 'Search', 'Load', or similar.
+        checkpoint: "Token metadata appears showing name, symbol, and/or decimals"
+      - action: |
+          Click 'Import', 'Add', 'Confirm', or similar to add the token.
+        checkpoint: "Token is added and appears in the coin list"
+    expected_result: "Custom token imported and visible in coin list"
+    extraction_schema:
+      type: object
+      properties:
+        token_fetched:
+          type: boolean
+        token_name:
+          type: string
+        token_symbol:
+          type: string
+        token_imported:
+          type: boolean
+
+  - id: GW-AUTO-CTOK-002
+    name: "Custom token — invalid contract handling"
+    source_manual_id: GW-MAN-CTOK-002
+    tags: [custom_token, p1]
+    max_steps: 15
+    prompt: |
+      Navigate to the custom token import form.
+      Select an EVM network.
+      Enter 'NotARealContract123' as the contract address.
+      Click fetch/search/load.
+
+      Observe the error message or not-found state.
+      Report the message shown.
+
+      COMPLETE after observing the error handling.
+    expected_result: "Invalid contract shows error/not-found message"
+    extraction_schema:
+      type: object
+      properties:
+        error_shown:
+          type: boolean
+        error_message:
+          type: string
+
+  # ===========================================================================
+  # PHASE 15: LOCALIZATION (P2)
+  # ===========================================================================
+
+  - id: GW-AUTO-L10N-001
+    name: "Translation completeness check"
+    source_manual_id: GW-MAN-L10N-001
+    tags: [l10n, p2]
+    max_steps: 25
+    prompt: |
+      Navigate to Settings and change the app language/locale to a non-English option
+      (e.g., the second language in the list).
+
+      After the language changes, navigate to the Dashboard, then to the Send screen,
+      then to Settings.
+
+      Look for any text that appears to be untranslated (still in English when
+      everything else is in the new language) or any text that looks like a raw
+      localization key (e.g., 'send.button.label' or 'error_invalid_address').
+
+      Report any untranslated strings found.
+
+      Change the language back to English before completing.
+
+      COMPLETE after checking three screens and reverting to English.
+    expected_result: "No raw localization keys visible; all text appears translated"
+    extraction_schema:
+      type: object
+      properties:
+        language_changed_to:
+          type: string
+        untranslated_strings_found:
+          type: array
+          items:
+            type: string
+        language_reverted:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 16: FEATURE GATING (P0/P1)
+  # ===========================================================================
+
+  - id: GW-AUTO-GATE-001
+    name: "Trading-disabled mode tooltips"
+    source_manual_id: GW-MAN-GATE-001
+    tags: [gating, p0]
+    max_steps: 15
+    prompt: |
+      Look at the main navigation/sidebar menu items.
+      Identify any menu items that appear disabled, grayed out, or marked with
+      a lock icon or 'disabled' indicator.
+
+      For each disabled item, hover over it (move cursor to it) and look for
+      a tooltip or popup message explaining why it is disabled.
+
+      Report which items are disabled and their tooltip text.
+
+      If no items appear disabled, report that all navigation items are active.
+
+      COMPLETE after checking all main navigation items.
+    expected_result: "Disabled features show explanatory tooltips; active features are accessible"
+    extraction_schema:
+      type: object
+      properties:
+        disabled_items:
+          type: array
+          items:
+            type: object
+            properties:
+              item_name:
+                type: string
+              tooltip_text:
+                type: string
+        all_active:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 17: SUPPORT, FEEDBACK, MISC (P2)
+  # ===========================================================================
+
+  - id: GW-AUTO-SUP-001
+    name: "Support page content and links"
+    source_manual_id: GW-MAN-SUP-001
+    tags: [support, p2]
+    max_steps: 15
+    prompt: |
+      Navigate to the Support, Help, or FAQ section from settings or the main menu.
+
+      Verify that content loads (FAQ items, support text, or help articles).
+      Look for any 'Contact', 'Email', or external support link and note the URL target.
+      Look for a 'My Coins Missing' or similar help dialog and open it if available.
+
+      COMPLETE when you have reviewed the support content.
+    expected_result: "Support page loads with content and functioning links"
+    extraction_schema:
+      type: object
+      properties:
+        support_page_loaded:
+          type: boolean
+        faq_content_visible:
+          type: boolean
+        contact_link_present:
+          type: boolean
+        missing_coins_dialog:
+          type: boolean
+
+  - id: GW-AUTO-FEED-001
+    name: "Feedback entry points"
+    source_manual_id: GW-MAN-FEED-001
+    tags: [feedback, p2]
+    max_steps: 15
+    prompt: |
+      Look for feedback entry points:
+      1. A 'Feedback' option in the Settings menu
+      2. A floating bug/feedback button on the screen (usually bottom-right corner)
+
+      If you find either, click it to open the feedback form.
+      If a feedback form opens, observe its fields (text input, screenshot option).
+      Close it without submitting.
+
+      COMPLETE after identifying available feedback entry points.
+    expected_result: "Feedback form accessible from at least one entry point"
+    extraction_schema:
+      type: object
+      properties:
+        settings_feedback_found:
+          type: boolean
+        floating_button_found:
+          type: boolean
+        feedback_form_opened:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 18: ADVANCED SETTINGS + WALLET (P1/P2)
+  # ===========================================================================
+
+  - id: GW-AUTO-SETX-001
+    name: "Weak-password toggle enforcement"
+    source_manual_id: GW-MAN-SETX-001
+    tags: [settings, security, p1]
+    max_steps: 20
+    prompt: |
+      Navigate to Settings > Advanced or Security settings.
+      Look for a toggle labeled 'Allow Weak Password', 'Weak Password', or similar.
+
+      If found, turn it OFF (disallow weak passwords).
+      Then attempt to create or import a wallet using the weak password 'abc'.
+      Observe if the app blocks you with a password strength error.
+
+      Then go back and turn the toggle ON (allow weak passwords).
+      Retry with the same weak password 'abc' and observe if it is now accepted.
+
+      IMPORTANT: Cancel the wallet creation after testing — don't actually create
+      a wallet with a weak password.
+
+      COMPLETE after testing both toggle states.
+    expected_result: "Weak password blocked when toggle is off, accepted when on"
+    extraction_schema:
+      type: object
+      properties:
+        weak_password_toggle_found:
+          type: boolean
+        blocked_when_off:
+          type: boolean
+        accepted_when_on:
+          type: boolean
+
+  - id: GW-AUTO-SETX-007
+    name: "Reset activated coins for wallet"
+    source_manual_id: GW-MAN-SETX-007
+    tags: [settings, recovery, p2]
+    max_steps: 15
+    prompt: |
+      Navigate to Settings > Advanced.
+      Look for 'Reset Activated Coins', 'Reset Coins', or similar option.
+
+      If found, click it. A wallet selector or confirmation dialog should appear.
+      Click 'Cancel' or dismiss the dialog without confirming.
+
+      Then open it again, select a wallet if prompted, and confirm the reset.
+      Observe the completion message.
+
+      COMPLETE after testing cancel and confirm paths.
+    expected_result: "Reset operation has cancel/confirm safety and shows completion message"
+    extraction_schema:
+      type: object
+      properties:
+        reset_option_found:
+          type: boolean
+        cancel_preserved_state:
+          type: boolean
+        reset_completed:
+          type: boolean
+        completion_message:
+          type: string
+
+  - id: GW-AUTO-WALX-001
+    name: "Wallet overview cards and privacy toggle"
+    source_manual_id: GW-MAN-WALX-001
+    tags: [wallet, p1]
+    max_steps: 15
+    prompt: |
+      Navigate to the wallet overview or dashboard.
+      Look for overview cards showing: current balance, total investment,
+      profit/loss, or portfolio value.
+
+      If a privacy/eye icon is visible near the cards, click it to toggle privacy mode.
+      Observe if the values are masked/hidden.
+      Click it again to reveal the values.
+
+      COMPLETE after testing the privacy toggle on overview cards.
+    expected_result: "Overview cards display and privacy toggle masks/reveals values"
+    extraction_schema:
+      type: object
+      properties:
+        overview_cards_visible:
+          type: boolean
+        card_types:
+          type: array
+          items:
+            type: string
+        privacy_toggle_works:
+          type: boolean
+
+  - id: GW-AUTO-WADDR-001
+    name: "Multi-address display and controls"
+    source_manual_id: GW-MAN-WADDR-001
+    tags: [wallet, p1]
+    max_steps: 20
+    prompt: |
+      Navigate to a coin detail page (e.g., DOC).
+      Look for an 'Addresses' section, tab, or expandable area.
+
+      If multiple addresses are shown, try any available controls:
+      - 'Hide zero balance addresses' toggle
+      - 'Expand all' / 'Collapse all' button
+      - Copy button (click the copy icon next to an address)
+      - QR code button (click to view QR)
+
+      Report which controls are available and whether they respond to clicks.
+
+      COMPLETE after reviewing the address controls.
+    expected_result: "Address list displays with interactive controls"
+    extraction_schema:
+      type: object
+      properties:
+        multiple_addresses_shown:
+          type: boolean
+        address_count:
+          type: integer
+        controls_found:
+          type: array
+          items:
+            type: string
+          description: "Names of controls found (hide-zero, expand, copy, qr, faucet)"
+
+  - id: GW-AUTO-WADDR-002
+    name: "Create new address"
+    source_manual_id: GW-MAN-WADDR-002
+    tags: [wallet, p1]
+    max_steps: 15
+    steps:
+      - action: |
+          On the coin addresses section, look for a 'Create New Address', 'Generate Address',
+          or '+' button.
+        checkpoint: "A create/generate address button is visible"
+      - action: |
+          Click the create button. If a confirmation dialog appears, confirm it.
+          Wait 3 seconds for the new address to be generated.
+        checkpoint: "A new address appears in the address list that was not there before"
+    expected_result: "New address generated and visible in the list"
+    extraction_schema:
+      type: object
+      properties:
+        new_address_created:
+          type: boolean
+        address_list_updated:
+          type: boolean
+
+  - id: GW-AUTO-SECX-003
+    name: "Unban pubkeys operation"
+    source_manual_id: GW-MAN-SECX-003
+    tags: [security, p1]
+    max_steps: 15
+    prompt: |
+      Navigate to Settings > Security.
+      Look for 'Unban Pubkeys', 'Unban', or 'Banned Keys' option.
+
+      If found, click it. Observe any progress indicator, results dialog,
+      or snackbar message showing counts of unbanned keys or a no-op result.
+
+      If not found, report that the option is not available.
+
+      COMPLETE after executing or locating the unban option.
+    expected_result: "Unban operation runs and shows results or is not applicable"
+    extraction_schema:
+      type: object
+      properties:
+        unban_option_found:
+          type: boolean
+        operation_result:
+          type: string
+          description: "Success message, count of unbanned keys, or no-op message"
+
+  - id: GW-AUTO-GATE-003
+    name: "NFT menu disabled state and route safety"
+    source_manual_id: GW-MAN-GATE-003
+    tags: [gating, p1]
+    max_steps: 15
+    prompt: |
+      Look at the main navigation menu. Find the NFT menu item.
+
+      If NFT appears disabled (grayed out, has a lock icon, or shows a disabled tooltip):
+        Hover over it and report the tooltip text.
+        Try clicking it anyway and report what happens.
+
+      If NFT appears enabled, click it and verify the NFT section loads.
+
+      COMPLETE after checking the NFT menu item state.
+    expected_result: "NFT disabled state is clear with tooltip; or NFT section loads normally"
+    extraction_schema:
+      type: object
+      properties:
+        nft_menu_state:
+          type: string
+          description: "enabled, disabled, or hidden"
+        tooltip_text:
+          type: string
+        click_result:
+          type: string
+
+
+  # ===========================================================================
+  # PHASE 19: MISSING GRADE-A TESTS
+  # ===========================================================================
+
+  - id: GW-AUTO-COIN-003
+    name: "Deactivate coin with balance — warning and restore"
+    source_manual_id: GW-MAN-COIN-003
+    tags: [coin, p1]
+    max_steps: 20
+    steps:
+      - action: |
+          Navigate to the Coin Manager. Find DOC in the active coins list.
+          DOC should have a non-zero balance from earlier faucet funding.
+        checkpoint: "DOC is visible in the active coins list with a balance > 0"
+      - action: |
+          Click the toggle or remove button next to DOC to deactivate it.
+          A warning dialog should appear about deactivating a coin with a balance.
+        checkpoint: "A warning dialog is shown mentioning the coin has a balance"
+      - action: |
+          Click 'Cancel' or 'No' to dismiss the warning. DOC should remain active.
+        checkpoint: "DOC is still in the active coins list"
+      - action: |
+          Click deactivate again. This time confirm the deactivation.
+          Then re-activate DOC by finding it in the inactive list and enabling it.
+        checkpoint: "DOC is back in the active coins list"
+    expected_result: "Warning shown for balance coin; cancel preserves; reactivation works"
+    extraction_schema:
+      type: object
+      properties:
+        warning_shown:
+          type: boolean
+        cancel_preserved:
+          type: boolean
+        reactivation_successful:
+          type: boolean
+
+  - id: GW-AUTO-NFT-002
+    name: "NFT send happy path"
+    source_manual_id: GW-MAN-NFT-002
+    tags: [nft, p1]
+    max_steps: 25
+    timeout: 240
+    steps:
+      - action: |
+          Navigate to the NFT section. If no NFTs are available, COMPLETE and
+          report that no NFTs exist for testing.
+          If NFTs exist, click on the first NFT to open its detail page.
+        checkpoint: "NFT detail page is visible with name, image, and a send/transfer option"
+      - action: |
+          Click the 'Send', 'Transfer', or share icon on the NFT detail page.
+          A send form should appear with a recipient address field.
+        checkpoint: "NFT send form is visible with a recipient address field"
+      - action: |
+          Enter a valid recipient address 'RPDPE1XqGuHXSJn9q6VAaGDoRVMEwAYjT3' in the
+          recipient field. Click 'Send', 'Confirm', or 'Transfer'.
+          If a confirmation dialog appears, confirm it.
+        checkpoint: "A success message, pending indicator, or transaction hash is shown"
+    expected_result: "NFT transfer initiated with confirmation"
+    extraction_schema:
+      type: object
+      properties:
+        nfts_available:
+          type: boolean
+        transfer_initiated:
+          type: boolean
+        status_message:
+          type: string
+
+  - id: GW-AUTO-NFT-003
+    name: "NFT send failure — invalid recipient"
+    source_manual_id: GW-MAN-NFT-003
+    tags: [nft, p1]
+    max_steps: 20
+    steps:
+      - action: |
+          Navigate to an NFT detail page and open the send/transfer form.
+          If no NFTs exist, COMPLETE and report not applicable.
+        checkpoint: "NFT send form is visible"
+      - action: |
+          Enter an invalid address 'RThisIsNotAValidAddress12345' in the recipient field.
+          Click send/transfer.
+        checkpoint: "An error message appears about the invalid address"
+      - action: |
+          Clear the address field and enter an empty string or leave it blank.
+          Click send/transfer.
+        checkpoint: "An error message appears about a required address field"
+    expected_result: "Invalid and empty addresses are blocked with error messages"
+    extraction_schema:
+      type: object
+      properties:
+        invalid_address_blocked:
+          type: boolean
+        invalid_address_error:
+          type: string
+        empty_address_blocked:
+          type: boolean
+
+  - id: GW-AUTO-L10N-003
+    name: "Locale-specific date and number formatting"
+    source_manual_id: GW-MAN-L10N-003
+    tags: [l10n, p2]
+    max_steps: 25
+    prompt: |
+      Navigate to Settings and change the language to a locale that uses
+      different number/date formatting (e.g., German or French if available,
+      which uses commas for decimals and dots for thousands).
+
+      After the language changes:
+      1. Navigate to the Dashboard and look at any displayed balance amounts.
+         Check if the decimal separator matches the locale convention.
+      2. Navigate to a coin detail page with transaction history.
+         Look at any dates displayed and check if they use the locale format
+         (e.g., DD.MM.YYYY for German, DD/MM/YYYY for French).
+      3. Report the formatting you observe.
+
+      Change the language back to English before completing.
+
+      COMPLETE after checking number and date formatting.
+    expected_result: "Numbers and dates reflect the selected locale formatting"
+    extraction_schema:
+      type: object
+      properties:
+        locale_selected:
+          type: string
+        decimal_separator_observed:
+          type: string
+        date_format_observed:
+          type: string
+        language_reverted:
+          type: boolean
+
+  - id: GW-AUTO-CTOK-003
+    name: "Cancel/back from custom token import — no side effects"
+    source_manual_id: GW-MAN-CTOK-003
+    tags: [custom_token, p1]
+    max_steps: 15
+    steps:
+      - action: |
+          Navigate to the custom token import form.
+          Select an EVM network and enter any contract address text.
+        checkpoint: "The import form has some entered data"
+      - action: |
+          Click 'Back', 'Cancel', or navigate away from the import form
+          using the back arrow or a navigation menu item.
+        checkpoint: "The import form is no longer visible; you are back on the coin list or previous page"
+      - action: |
+          Navigate to the coin list and verify that no new unknown token
+          was added during the cancelled import.
+        checkpoint: "The coin list is unchanged — no partially imported token is present"
+    expected_result: "Cancelling import leaves no side effects in the coin list"
+    extraction_schema:
+      type: object
+      properties:
+        cancel_successful:
+          type: boolean
+        no_side_effects:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 20: GRADE-B AUTOMATED PORTIONS
+  # ===========================================================================
+  # These tests cover only the UI-automatable steps of Grade-B cases.
+  # The manual_verification_note field explains what must be checked by a human.
+  # ===========================================================================
+
+  - id: GW-AUTO-AUTH-002a
+    name: "Login and logout cycle (within session)"
+    source_manual_id: GW-MAN-AUTH-002
+    tags: [auth, p1]
+    max_steps: 20
+    manual_verification_note: "Session persistence after app restart must be tested manually (MAN-AUTH-002b)"
+    steps:
+      - action: |
+          If on the dashboard, navigate to Settings and look for a 'Logout',
+          'Sign Out', or 'Lock' option. Click it.
+        checkpoint: "The login/unlock screen or welcome screen is visible"
+      - action: |
+          Log back in by entering the password 'QaTestPass!2026' and clicking
+          the login/unlock button.
+        checkpoint: "The dashboard is visible again after logging in"
+    expected_result: "Logout returns to login screen; re-login restores dashboard"
+    extraction_schema:
+      type: object
+      properties:
+        logout_successful:
+          type: boolean
+        relogin_successful:
+          type: boolean
+
+  - id: GW-AUTO-DEX-002a
+    name: "Taker order form and submission attempt"
+    source_manual_id: GW-MAN-DEX-002
+    tags: [dex, p1]
+    max_steps: 20
+    manual_verification_note: "Actual taker execution depends on orderbook liquidity — verify manually if fill occurs"
+    prompt: |
+      Navigate to the DEX section and select the DOC/MARTY pair.
+
+      Look for a 'Taker', 'Market', 'Swap', or 'Simple' tab/mode.
+      If available, switch to it.
+
+      Enter an amount of '0.01' in the sell/amount field.
+      Observe if a matching order or price is shown from the orderbook.
+
+      If a 'Swap', 'Trade', or 'Submit' button is available and enabled, click it.
+      Wait 5 seconds and report the result.
+
+      If no orderbook liquidity exists, the form may show 'No orders available'
+      or the button may be disabled. Report this state.
+
+      COMPLETE after observing the taker form behavior.
+    expected_result: "Taker form loads with pair; shows orderbook state or allows submission"
+    extraction_schema:
+      type: object
+      properties:
+        taker_form_available:
+          type: boolean
+        orderbook_has_liquidity:
+          type: boolean
+        submission_result:
+          type: string
+
+  - id: GW-AUTO-DEX-004a
+    name: "Cancel open maker order"
+    source_manual_id: GW-MAN-DEX-004
+    tags: [dex, p1]
+    max_steps: 20
+    manual_verification_note: "Partial fill depends on external market activity — verify manually"
+    steps:
+      - action: |
+          Navigate to the DEX section. Look for an 'Open Orders', 'My Orders',
+          or 'Active Orders' tab or section.
+        checkpoint: "Open orders section is visible"
+      - action: |
+          If any open orders exist, click the cancel button (X, trash, or 'Cancel')
+          on one of them. If a confirmation dialog appears, confirm it.
+        checkpoint: "The order is removed from the open orders list or a cancellation message appears"
+    expected_result: "Open order can be cancelled successfully"
+    extraction_schema:
+      type: object
+      properties:
+        orders_visible:
+          type: boolean
+        cancel_successful:
+          type: boolean
+        cancel_message:
+          type: string
+
+  - id: GW-AUTO-DEX-005a
+    name: "Swap history filtering"
+    source_manual_id: GW-MAN-DEX-005
+    tags: [dex, p1]
+    max_steps: 20
+    manual_verification_note: "File export verification requires filesystem access — verify manually (MAN-VERIFY-DEX-005)"
+    prompt: |
+      Navigate to the DEX section and find the 'History', 'Swap History',
+      or 'Completed' tab/section.
+
+      If history entries exist:
+      1. Try any available filters (date range, pair, status).
+      2. Verify that filtering changes the displayed entries.
+      3. If a sort option exists (by date, amount), try it.
+      4. Look for an 'Export' or download button. Report if it exists.
+
+      If no history exists, report that.
+
+      COMPLETE after testing available filters.
+    expected_result: "History view loads; filters change displayed results"
+    extraction_schema:
+      type: object
+      properties:
+        history_entries_exist:
+          type: boolean
+        filters_available:
+          type: array
+          items:
+            type: string
+        export_button_exists:
+          type: boolean
+
+  - id: GW-AUTO-CDET-001a
+    name: "Coin detail — address display, copy, QR"
+    source_manual_id: GW-MAN-CDET-001
+    tags: [wallet, p1]
+    max_steps: 20
+    manual_verification_note: "Clipboard content and explorer link correctness must be verified manually (MAN-VERIFY-CDET-001)"
+    steps:
+      - action: |
+          Navigate to the DOC coin detail page.
+          Look for the receiving address displayed on the page.
+        checkpoint: "A wallet address starting with 'R' is visible on the coin detail page"
+      - action: |
+          Look for a copy button (clipboard icon) next to the address.
+          Click it. Observe any 'Copied' toast or feedback.
+        checkpoint: "A 'Copied' or clipboard confirmation message appears"
+      - action: |
+          Look for a QR code button or icon. Click it.
+          A QR code image should appear in a dialog or overlay.
+        checkpoint: "A QR code is displayed"
+      - action: |
+          Close the QR dialog and look for an explorer link button.
+          If present, note its location but do not click (external navigation).
+        checkpoint: "Explorer link button identified or noted as absent"
+    expected_result: "Address visible with copy, QR, and explorer link controls"
+    extraction_schema:
+      type: object
+      properties:
+        address_displayed:
+          type: boolean
+        copy_feedback_shown:
+          type: boolean
+        qr_code_displayed:
+          type: boolean
+        explorer_link_exists:
+          type: boolean
+
+  - id: GW-AUTO-CDET-002a
+    name: "Transaction list view and detail"
+    source_manual_id: GW-MAN-CDET-002
+    tags: [wallet, p1]
+    max_steps: 20
+    manual_verification_note: "Pending→confirmed progression and explorer link require real chain time (MAN-VERIFY-CDET-002)"
+    prompt: |
+      Navigate to the DOC coin detail page.
+      Look for a 'Transactions', 'History', or transaction list section.
+
+      If transactions exist:
+      1. Note the number of transactions visible.
+      2. Click on the first transaction to see its details.
+      3. Look for: amount, fee, date/time, transaction hash, status, addresses.
+      4. Navigate back to the transaction list.
+
+      Report the fields visible in the transaction detail.
+
+      COMPLETE after reviewing the transaction list and one detail entry.
+    expected_result: "Transaction list loads; detail view shows amount, hash, status"
+    extraction_schema:
+      type: object
+      properties:
+        transactions_exist:
+          type: boolean
+        transaction_count:
+          type: integer
+        detail_fields_visible:
+          type: array
+          items:
+            type: string
+
+  - id: GW-AUTO-CDET-003a
+    name: "Price chart rendering"
+    source_manual_id: GW-MAN-CDET-003
+    tags: [wallet, p1]
+    max_steps: 15
+    manual_verification_note: "Offline fallback behavior requires network toggle — verify manually"
+    prompt: |
+      Navigate to a coin detail page that is likely to have price data
+      (e.g., KMD, BTC, ETH, or any major coin if active).
+
+      Look for a price chart, graph, or chart area on the page.
+
+      If a chart is visible:
+      1. Report whether it shows price data with a line or candlestick graph.
+      2. Look for time range selectors (1D, 1W, 1M, 1Y, All) and click one.
+      3. Report if the chart updates when switching time ranges.
+
+      If no chart is visible, report that.
+
+      COMPLETE after checking chart functionality.
+    expected_result: "Price chart renders with data; time range selectors work"
+    extraction_schema:
+      type: object
+      properties:
+        chart_visible:
+          type: boolean
+        chart_has_data:
+          type: boolean
+        time_ranges_work:
+          type: boolean
+
+  - id: GW-AUTO-SEC-001a
+    name: "Seed phrase reveal (password-gated)"
+    source_manual_id: GW-MAN-SEC-001
+    tags: [security, p1]
+    max_steps: 20
+    manual_verification_note: "Screenshot masking and app-backgrounding behavior are manual (MAN-SEC-001b)"
+    steps:
+      - action: |
+          Navigate to Settings > Security. Look for 'View Seed', 'Show Seed',
+          'Recovery Phrase', or 'Backup Seed' option. Click it.
+        checkpoint: "A password prompt appears before showing the seed"
+      - action: |
+          Enter the password 'QaTestPass!2026' and submit.
+        checkpoint: "Seed words (12 or 24) are now displayed on screen"
+      - action: |
+          Navigate back or close the seed view. Verify the seed is no longer visible.
+        checkpoint: "Seed words are no longer displayed after navigating away"
+    expected_result: "Seed is password-gated and hidden after navigation"
+    extraction_schema:
+      type: object
+      properties:
+        password_required:
+          type: boolean
+        seed_displayed_after_auth:
+          type: boolean
+        seed_hidden_on_exit:
+          type: boolean
+
+  - id: GW-AUTO-SET-001a
+    name: "Theme and language switching"
+    source_manual_id: GW-MAN-SET-001
+    tags: [settings, p1]
+    max_steps: 20
+    manual_verification_note: "Persistence after app restart is manual (MAN-SET-004)"
+    prompt: |
+      Navigate to Settings.
+
+      Look for a theme switcher (Light/Dark mode toggle).
+      If found, switch to the opposite theme. Observe if the background
+      and text colors change. Switch back.
+
+      Look for a language/locale selector.
+      If found, switch to a different language briefly.
+      Verify the UI text changes. Switch back to English.
+
+      Report which settings were available and functional.
+
+      COMPLETE after testing available appearance settings.
+    expected_result: "Theme and/or language changes take effect immediately"
+    extraction_schema:
+      type: object
+      properties:
+        theme_toggle_found:
+          type: boolean
+        theme_change_visible:
+          type: boolean
+        language_selector_found:
+          type: boolean
+        language_change_visible:
+          type: boolean
+
+  - id: GW-AUTO-BOT-003a
+    name: "Edit, stop, and restart market maker bot"
+    source_manual_id: GW-MAN-BOT-003
+    tags: [bot, p1]
+    max_steps: 25
+    manual_verification_note: "Persistence after app restart is manual"
+    steps:
+      - action: |
+          Navigate to the Market Maker Bot section.
+          If a running bot exists, look for an edit button or settings icon.
+          Click it to open the bot configuration.
+        checkpoint: "Bot configuration/edit form is visible"
+      - action: |
+          Change the spread value slightly (e.g., from 5 to 6) and save.
+        checkpoint: "Configuration saved with updated spread value"
+      - action: |
+          Look for a 'Stop' or 'Pause' button on the bot. Click it.
+        checkpoint: "Bot status changes to 'Stopped', 'Paused', or similar"
+      - action: |
+          Click 'Start', 'Resume', or 'Restart' to reactivate the bot.
+        checkpoint: "Bot status returns to 'Running' or 'Active'"
+    expected_result: "Bot can be edited, stopped, and restarted"
+    extraction_schema:
+      type: object
+      properties:
+        edit_successful:
+          type: boolean
+        stop_successful:
+          type: boolean
+        restart_successful:
+          type: boolean
+
+  - id: GW-AUTO-SECX-001a
+    name: "Private key export UI"
+    source_manual_id: GW-MAN-SECX-001
+    tags: [security, p1]
+    max_steps: 20
+    manual_verification_note: "Actual download/share action may cross browser boundary — verify file manually"
+    steps:
+      - action: |
+          Navigate to a coin detail page (e.g., DOC).
+          Look for a 'Private Key', 'Export Key', or key icon option.
+          If not on the coin page, check Settings > Security.
+        checkpoint: "A private key export option is found"
+      - action: |
+          Click the export option. If a password prompt appears,
+          enter 'QaTestPass!2026' and submit.
+        checkpoint: "The private key is displayed on screen or a download/copy option appears"
+      - action: |
+          If a copy button is available, click it. Look for copy confirmation.
+          Navigate away to ensure the key is no longer visible.
+        checkpoint: "Key is hidden after navigating away"
+    expected_result: "Private key export is password-gated and displayed securely"
+    extraction_schema:
+      type: object
+      properties:
+        export_option_found:
+          type: boolean
+        password_required:
+          type: boolean
+        key_displayed:
+          type: boolean
+
+  - id: GW-AUTO-SETX-002a
+    name: "Trading bot master toggles"
+    source_manual_id: GW-MAN-SETX-002
+    tags: [settings, p1]
+    max_steps: 15
+    manual_verification_note: "Whether a running bot actually stops on disable requires active bot verification"
+    prompt: |
+      Navigate to Settings > Advanced or Trading settings.
+      Look for toggles related to the Market Maker Bot feature:
+      'Enable Trading Bot', 'Market Maker', or similar.
+
+      If found, toggle it off then on. Observe any confirmation dialog
+      or immediate state change.
+
+      Report the toggle names, their current states, and whether they
+      respond to clicks.
+
+      COMPLETE after testing bot-related toggles.
+    expected_result: "Bot toggles are interactive and state changes visually"
+    extraction_schema:
+      type: object
+      properties:
+        bot_toggles_found:
+          type: boolean
+        toggle_names:
+          type: array
+          items:
+            type: string
+        toggles_respond:
+          type: boolean
+
+  - id: GW-AUTO-SETX-004a
+    name: "View and copy swap data"
+    source_manual_id: GW-MAN-SETX-004
+    tags: [settings, p2]
+    max_steps: 15
+    manual_verification_note: "File export requires filesystem access — verify manually"
+    prompt: |
+      Navigate to Settings > Advanced.
+      Look for 'Show Swap Data', 'Swap Export', or similar option.
+
+      If found, click it. Observe if swap data is displayed in a dialog,
+      text area, or expandable section.
+
+      If a 'Copy' button is available, click it and observe copy feedback.
+
+      Report what is displayed.
+
+      COMPLETE after reviewing the swap data view.
+    expected_result: "Swap data is viewable in settings with copy option"
+    extraction_schema:
+      type: object
+      properties:
+        swap_data_option_found:
+          type: boolean
+        data_displayed:
+          type: boolean
+        copy_button_exists:
+          type: boolean
+
+  - id: GW-AUTO-WALX-002a
+    name: "Wallet overview tabs — Assets, Growth, PnL"
+    source_manual_id: GW-MAN-WALX-002
+    tags: [wallet, p1]
+    max_steps: 20
+    manual_verification_note: "Logged-out fallback behavior requires logout — verify manually"
+    prompt: |
+      Navigate to the wallet overview or dashboard.
+      Look for tabs or toggle buttons labeled 'Assets', 'Growth',
+      'Profit & Loss', 'PnL', 'Portfolio', or similar.
+
+      If tabs exist:
+      1. Click each tab and verify that content changes.
+      2. Report the tab names and whether each loaded content.
+
+      If a chart is shown on any tab, note its type (line, bar, etc.).
+
+      COMPLETE after visiting all available overview tabs.
+    expected_result: "Overview tabs switch content correctly"
+    extraction_schema:
+      type: object
+      properties:
+        tabs_found:
+          type: array
+          items:
+            type: string
+        all_tabs_load_content:
+          type: boolean
+
+  - id: GW-AUTO-RWD-001a
+    name: "Rewards section view"
+    source_manual_id: GW-MAN-RWD-001
+    tags: [wallet, p2]
+    max_steps: 15
+    manual_verification_note: "Actual reward claim depends on KMD reward availability — verify manually"
+    prompt: |
+      Navigate to the KMD coin detail page (if KMD is active).
+      Look for a 'Rewards', 'Claim Rewards', or similar section.
+
+      If found:
+      1. Observe if a reward amount or status is displayed.
+      2. If a 'Claim' or 'Collect' button exists, note whether it is
+         enabled or disabled.
+      3. If a refresh button exists, click it.
+
+      If KMD is not active or rewards are not visible, report that.
+
+      COMPLETE after reviewing the rewards section.
+    expected_result: "Rewards section accessible with status display"
+    extraction_schema:
+      type: object
+      properties:
+        rewards_section_found:
+          type: boolean
+        reward_amount_displayed:
+          type: boolean
+        claim_button_state:
+          type: string
+          description: "enabled, disabled, or not_found"
+
+  - id: GW-AUTO-BREF-001a
+    name: "Bitrefill widget visibility"
+    source_manual_id: GW-MAN-BREF-001
+    tags: [fiat, p2]
+    max_steps: 15
+    manual_verification_note: "Bitrefill widget interaction crosses domain boundaries — verify manually"
+    prompt: |
+      Navigate to the Fiat or Buy Crypto section.
+      Look for a 'Bitrefill', 'Gift Cards', or third-party widget/button.
+
+      If found, report its location and label.
+      Click it and observe what happens (embedded widget, external redirect, etc.).
+
+      If not found, check Settings for any Bitrefill toggle or option.
+
+      COMPLETE after locating the Bitrefill entry point.
+    expected_result: "Bitrefill option is visible and clickable"
+    extraction_schema:
+      type: object
+      properties:
+        bitrefill_found:
+          type: boolean
+        location:
+          type: string
+        click_result:
+          type: string
+
+  - id: GW-AUTO-ZHTL-001a
+    name: "ZHTLC activation dialog"
+    source_manual_id: GW-MAN-ZHTL-001
+    tags: [coin, p2]
+    max_steps: 20
+    manual_verification_note: "Logout during activation must be tested manually"
+    prompt: |
+      Navigate to the Coin Manager and search for a ZHTLC coin
+      (e.g., ARRR, ZOMBIE, or any privacy coin marked as ZHTLC).
+
+      If a ZHTLC coin is found:
+      1. Click to activate it.
+      2. Observe if a special activation dialog or progress indicator appears
+         (ZHTLC coins typically require extended activation time).
+      3. Report the dialog content and any estimated time shown.
+      4. If the activation takes too long, note the progress state.
+
+      If no ZHTLC coin is found, report that.
+
+      COMPLETE after observing the ZHTLC activation flow.
+    expected_result: "ZHTLC activation shows progress dialog with estimated time"
+    extraction_schema:
+      type: object
+      properties:
+        zhtlc_coin_found:
+          type: boolean
+        activation_dialog_shown:
+          type: boolean
+        estimated_time_displayed:
+          type: string
+        activation_started:
+          type: boolean
+
+  # ===========================================================================
+  # PHASE 21: COMPOSITE TESTS — formerly manual, now automated via
+  # Playwright (browser-level offline, viewport, lifecycle) + Skyvern
+  # ===========================================================================
+
+  # --- NETWORK MANIPULATION TESTS ---
+
+  - id: GW-AUTO-DASH-002
+    name: "Balance refresh + offline indicator"
+    source_manual_id: GW-MAN-DASH-002
+    tags: [dashboard, network, composite]
+    timeout: 300
+    expected_result: "Offline indicator shown when network disabled; recovery on re-enable"
+    phases:
+      - type: skyvern
+        action: "Verify dashboard loads with coin balances"
+        prompt: |
+          Navigate to the dashboard. Verify coin balances are visible and
+          the page is fully loaded. Report the page state.
+        expected: "Dashboard with balances visible"
+      - type: playwright
+        action: set_offline
+      - type: os_call
+        action: wait
+        args: {seconds: 5}
+      - type: skyvern
+        action: "Check for offline indicator"
+        prompt: |
+          Look at the current screen. Is there an offline indicator, error
+          banner, connection warning, or any visual cue that the app has lost
+          connectivity? Report what you see.
+        expected: "Offline indicator or error banner visible"
+      - type: playwright
+        action: set_online
+      - type: os_call
+        action: wait
+        args: {seconds: 10}
+      - type: skyvern
+        action: "Verify recovery after network restore"
+        prompt: |
+          The network has been restored. Check if the dashboard has recovered:
+          are balances visible again? Is there still an offline indicator?
+          Report the current state.
+        expected: "Dashboard recovered with balances visible"
+
+  - id: GW-AUTO-SEND-006
+    name: "Interrupted send + duplicate prevention"
+    source_manual_id: GW-MAN-SEND-006
+    tags: [send, network, critical, composite]
+    timeout: 360
+    expected_result: "Send initiated; network kill shows pending; recovery reconciles; no duplicates"
+    phases:
+      - type: skyvern
+        action: "Navigate to DOC send and fill form"
+        prompt: |
+          Navigate to the DOC coin page and open the send form.
+          Enter recipient address 'RPDPE1XqGuHXSJn9q6VAaGDoRVMEwAYjT3'
+          and amount '0.001'. Click Send/Confirm to submit.
+          Wait 2 seconds. Report the current state (pending, submitted, etc.).
+        expected: "Transaction submitted or pending"
+      - type: playwright
+        action: set_offline
+      - type: os_call
+        action: wait
+        args: {seconds: 5}
+      - type: skyvern
+        action: "Observe pending state during outage"
+        prompt: |
+          The network is now disabled. Look at the screen. Is there a pending
+          transaction indicator, error message, or offline warning?
+          Report exactly what you see.
+        expected: "Pending state or error visible"
+      - type: playwright
+        action: set_online
+      - type: os_call
+        action: wait
+        args: {seconds: 15}
+      - type: skyvern
+        action: "Verify recovery and no duplicate"
+        prompt: |
+          Network is restored. Navigate to the DOC transaction history.
+          Check if the transaction status has reconciled (confirmed or failed).
+          Count how many instances of this transaction appear.
+          Report status and count.
+        expected: "Transaction reconciled, exactly 1 instance"
+
+  - id: GW-AUTO-ERR-001
+    name: "Global network outage messaging"
+    source_manual_id: GW-MAN-ERR-001
+    tags: [error_handling, network, composite]
+    timeout: 300
+    expected_result: "Offline indicators on all screens; recovery with no stale spinners"
+    phases:
+      - type: playwright
+        action: set_offline
+      - type: os_call
+        action: wait
+        args: {seconds: 5}
+      - type: skyvern
+        action: "Check offline state across screens"
+        prompt: |
+          The network is disabled. Navigate through these screens in order:
+          Dashboard, DEX, Bridge, Settings.
+          For each screen, report whether you see an offline indicator, error
+          message, or spinner. Note any crashes or blank screens.
+        expected: "Offline indicators on screens, no crashes"
+      - type: playwright
+        action: set_online
+      - type: os_call
+        action: wait
+        args: {seconds: 15}
+      - type: skyvern
+        action: "Verify full recovery"
+        prompt: |
+          Network is restored. Check Dashboard, DEX, Bridge screens.
+          Are they showing live data again? Are there any stale spinners
+          or error messages still stuck on screen?
+          Report the state of each screen.
+        expected: "All screens recovered, no stale spinners"
+
+  - id: GW-AUTO-ERR-003
+    name: "Stale-state reconciliation after offline"
+    source_manual_id: GW-MAN-ERR-003
+    tags: [error_handling, network, composite]
+    timeout: 360
+    expected_result: "After network restore, local state matches authoritative state"
+    phases:
+      - type: skyvern
+        action: "Initiate a transaction"
+        prompt: |
+          Navigate to DOC send. Enter recipient 'RKXzCCaT5ukqnyJBKTr9KyEpCBHR8itEFd'
+          and amount '0.001'. Click send/confirm.
+        expected: "Transaction submitted"
+      - type: playwright
+        action: set_offline
+      - type: os_call
+        action: wait
+        args: {seconds: 10}
+      - type: playwright
+        action: set_online
+      - type: os_call
+        action: wait
+        args: {seconds: 20}
+      - type: skyvern
+        action: "Check state reconciliation"
+        prompt: |
+          Navigate to DOC transaction history. Check the latest transaction.
+          Is its status resolved (confirmed or failed, not stuck on pending)?
+          Are there any duplicate or ghost entries?
+          Report transaction count and status.
+        expected: "Transaction reconciled, no duplicates"
+
+  # --- APP LIFECYCLE TESTS (browser restart simulation) ---
+
+  - id: GW-AUTO-AUTH-002b
+    name: "Session persistence across app restart"
+    source_manual_id: GW-MAN-AUTH-002
+    tags: [auth, lifecycle, composite]
+    timeout: 300
+    expected_result: "Remember-me persists session; logout clears it"
+    phases:
+      - type: skyvern
+        action: "Log in with remember-me enabled"
+        prompt: |
+          Log in to the wallet with password 'QaTestPass!2026'.
+          If there is a 'Remember Me', 'Remember Wallet', or 'Stay Logged In'
+          checkbox or toggle, enable it before logging in.
+          Wait until the dashboard loads.
+        expected: "Logged in with remember-me enabled"
+      - type: playwright
+        action: restart_session
+      - type: skyvern
+        action: "Check session after restart"
+        prompt: |
+          The browser was closed and reopened (simulating app restart).
+          What do you see? Is there a quick-login prompt, auto-login,
+          or are you on the full login screen?
+          Report the current state.
+        expected: "Session restored or quick-login available"
+      - type: skyvern
+        action: "Log out and verify session clear"
+        prompt: |
+          If logged in, go to Settings and click Logout.
+          Verify you are on the login/welcome screen.
+        expected: "Logged out"
+      - type: playwright
+        action: restart_session
+      - type: skyvern
+        action: "Verify session cleared after logout+restart"
+        prompt: |
+          After logout and app restart, what do you see?
+          Is it the full login screen with no auto-login?
+        expected: "Full login screen, no auto-login"
+
+  - id: GW-AUTO-WAL-003
+    name: "Wallet selection persistence across restart"
+    source_manual_id: GW-MAN-WAL-003
+    tags: [wallet, lifecycle, composite]
+    timeout: 300
+    expected_result: "Selected wallet persists after restart"
+    phases:
+      - type: skyvern
+        action: "Switch to a non-default wallet"
+        prompt: |
+          Open the wallet manager. If multiple wallets exist, switch to
+          a non-default wallet. Note its name. If only one wallet exists,
+          note the wallet name.
+          Report the active wallet name.
+        expected: "Wallet selected and name noted"
+        extraction_schema:
+          type: object
+          properties:
+            wallet_name: {type: string}
+      - type: playwright
+        action: restart_session
+      - type: skyvern
+        action: "Verify wallet persisted"
+        prompt: |
+          After app restart, log in if needed with password 'QaTestPass!2026'.
+          Check which wallet is active. Report the active wallet name.
+        expected: "Same wallet is active after restart"
+        extraction_schema:
+          type: object
+          properties:
+            wallet_name: {type: string}
+
+  - id: GW-AUTO-DASH-003
+    name: "Dashboard preferences persist across restart"
+    source_manual_id: GW-MAN-DASH-003
+    tags: [dashboard, lifecycle, composite]
+    timeout: 300
+    expected_result: "Dashboard customizations persist after logout and restart"
+    phases:
+      - type: skyvern
+        action: "Customize dashboard"
+        prompt: |
+          On the dashboard, toggle 'Hide Balances' (or similar privacy toggle) ON.
+          If a 'Hide Zero Balances' toggle exists, enable it too.
+          Note which toggles you changed.
+        expected: "Dashboard customized"
+      - type: skyvern
+        action: "Logout and re-login"
+        prompt: |
+          Navigate to Settings and click Logout. Then log back in with
+          password 'QaTestPass!2026'. Check the dashboard.
+          Are the toggles still in the state you set them?
+        expected: "Dashboard preferences preserved after re-login"
+      - type: playwright
+        action: restart_session
+      - type: skyvern
+        action: "Verify after restart"
+        prompt: |
+          After app restart, log in with 'QaTestPass!2026'.
+          Check the dashboard toggles. Are they still in the customized state?
+        expected: "Dashboard preferences preserved after restart"
+
+  - id: GW-AUTO-SET-004
+    name: "Settings persistence across logout/restart"
+    source_manual_id: GW-MAN-SET-004
+    tags: [settings, lifecycle, composite]
+    timeout: 300
+    expected_result: "Settings persist after logout and app restart"
+    phases:
+      - type: skyvern
+        action: "Change multiple settings"
+        prompt: |
+          Navigate to Settings. Change at least 2 settings:
+          1. Toggle test coins ON (if off) or OFF (if on).
+          2. Toggle any privacy/analytics setting.
+          Note the settings you changed and their new states.
+        expected: "Settings changed"
+      - type: skyvern
+        action: "Logout and re-login, verify"
+        prompt: |
+          Logout via Settings > Logout. Log back in with 'QaTestPass!2026'.
+          Navigate to Settings. Are the settings you changed still in the
+          new state? Report each setting and its current value.
+        expected: "Settings preserved after re-login"
+      - type: playwright
+        action: restart_session
+      - type: skyvern
+        action: "Verify after restart"
+        prompt: |
+          After restart, log in with 'QaTestPass!2026'. Check Settings.
+          Are the changed settings still in the new state?
+        expected: "Settings preserved after restart"
+
+  - id: GW-AUTO-FIAT-005
+    name: "Fiat form reset across logout"
+    source_manual_id: GW-MAN-FIAT-005
+    tags: [fiat, lifecycle, composite]
+    timeout: 240
+    expected_result: "Fiat form resets cleanly after logout and re-login"
+    phases:
+      - type: skyvern
+        action: "Partially fill fiat form"
+        prompt: |
+          Navigate to the Fiat section. Select a currency and enter an amount
+          like '100'. Do NOT submit. Note what you entered.
+        expected: "Fiat form partially filled"
+      - type: skyvern
+        action: "Logout and re-login, check fiat"
+        prompt: |
+          Logout via Settings. Log back in with 'QaTestPass!2026'.
+          Navigate to the Fiat section. Is the form clean/empty,
+          or does it still have the previous values?
+        expected: "Fiat form re-initialized cleanly"
+
+  - id: GW-AUTO-QLOG-001
+    name: "Quick-login persistence across restart"
+    source_manual_id: GW-MAN-QLOG-001
+    tags: [auth, lifecycle, composite]
+    timeout: 300
+    expected_result: "Quick-login prompt appears after restart when remember-me is on"
+    phases:
+      - type: skyvern
+        action: "Enable remember-me and log out"
+        prompt: |
+          Log in with 'QaTestPass!2026' with the remember-me option enabled.
+          Once on the dashboard, go to Settings and logout.
+        expected: "Logged in with remember-me, then logged out"
+      - type: playwright
+        action: restart_session
+      - type: skyvern
+        action: "Check for quick-login prompt"
+        prompt: |
+          After app restart, look at the screen. Is there a quick-login prompt
+          showing the remembered wallet? Or a password-only screen?
+          Report what you see.
+        expected: "Quick-login or remembered wallet prompt appears"
+
+  # --- DEEP LINK TEST ---
+
+  - id: GW-AUTO-NAV-002
+    name: "Deep link handling with auth gating"
+    source_manual_id: GW-MAN-NAV-002
+    tags: [navigation, security, composite]
+    timeout: 240
+    expected_result: "Deep link while logged out enforces auth; redirect after login"
+    phases:
+      - type: skyvern
+        action: "Ensure logged out"
+        prompt: |
+          If you see a dashboard, navigate to Settings and click Logout.
+          If already on the login/welcome screen, COMPLETE.
+        expected: "On login screen"
+      - type: playwright
+        action: navigate
+        args: {url_suffix: "#/dex"}
+      - type: skyvern
+        action: "Check auth gating on deep link"
+        prompt: |
+          A direct URL to the DEX page was opened while logged out.
+          What do you see? Are you on the login screen (auth gating enforced)?
+          Or did the DEX page load without login?
+        expected: "Auth gating enforced, login required"
+      - type: skyvern
+        action: "Login and check redirect"
+        prompt: |
+          Log in with 'QaTestPass!2026'. After login, which page loaded?
+          Are you on the DEX page (intended deep link destination) or
+          the default dashboard?
+        expected: "Redirected to DEX after login"
+
+  # --- RESPONSIVE / BREAKPOINT TESTS ---
+
+  - id: GW-AUTO-RESP-001
+    name: "Responsive breakpoint behavior"
+    source_manual_id: GW-MAN-RESP-001
+    tags: [responsive, composite]
+    timeout: 360
+    expected_result: "Layout adapts correctly at mobile, tablet, and desktop breakpoints"
+    phases:
+      - type: playwright
+        action: set_viewport
+        args: {width: 375, height: 812}
+      - type: skyvern
+        action: "Check mobile layout"
+        prompt: |
+          The viewport is now mobile width (375px). Look at the dashboard.
+          Are navigation, coin cards, and action buttons all visible and
+          properly stacked? Is there a hamburger menu or bottom nav?
+          Report any overflow, cutoff, or broken layout.
+        expected: "Mobile layout renders correctly"
+      - type: playwright
+        action: set_viewport
+        args: {width: 768, height: 1024}
+      - type: skyvern
+        action: "Check tablet layout"
+        prompt: |
+          The viewport is now tablet width (768px). Does the layout adapt?
+          Is there more content visible than at mobile width?
+          Report the layout style (sidebar visible? cards in grid?).
+        expected: "Tablet layout adapts correctly"
+      - type: playwright
+        action: set_viewport
+        args: {width: 1440, height: 900}
+      - type: skyvern
+        action: "Check desktop layout"
+        prompt: |
+          The viewport is now desktop width (1440px). Is the full layout
+          displayed with sidebar, main content area, and proper spacing?
+          Report any issues.
+        expected: "Desktop layout fully displayed"
+
+  - id: GW-AUTO-RESP-002
+    name: "Form state retention during viewport resize"
+    source_manual_id: GW-MAN-RESP-002
+    tags: [responsive, composite]
+    timeout: 240
+    expected_result: "Form data preserved after viewport resize"
+    phases:
+      - type: skyvern
+        action: "Fill form with test data"
+        prompt: |
+          Navigate to the DOC send screen. Enter recipient address
+          'RPDPE1XqGuHXSJn9q6VAaGDoRVMEwAYjT3' and amount '0.5'.
+          Do NOT submit. Report that the form is filled.
+        expected: "Form filled with test data"
+      - type: playwright
+        action: set_viewport
+        args: {width: 375, height: 812}
+      - type: os_call
+        action: wait
+        args: {seconds: 3}
+      - type: skyvern
+        action: "Check form after resize"
+        prompt: |
+          The viewport was just resized to mobile width. Check the send form.
+          Is the recipient address and amount still filled in?
+          Was there any accidental submission?
+          Report the form state.
+        expected: "Form data preserved after resize"
+      - type: playwright
+        action: set_viewport
+        args: {width: 1440, height: 900}
+
+  # --- CLOCK MANIPULATION ---
+
+  - id: GW-AUTO-WARN-001
+    name: "Clock warning banner under invalid time"
+    source_manual_id: GW-MAN-WARN-001
+    tags: [system_health, composite]
+    timeout: 240
+    expected_result: "No banner with valid clock; warning banner with invalid clock"
+    phases:
+      - type: skyvern
+        action: "Check with valid clock"
+        prompt: |
+          Navigate to the DEX or Bridge section. Is there any clock warning
+          banner or time-related warning message visible on screen?
+          Report what you see.
+        expected: "No clock warning banner"
+      - type: playwright
+        action: mock_clock
+        args: {offset_hours: 8760}
+      - type: skyvern
+        action: "Check with invalid clock"
+        prompt: |
+          The system clock has been mocked to a future date. Reload the page
+          and navigate to the DEX or Bridge. Is there now a clock warning
+          banner or time synchronization warning visible?
+          Report any warning text.
+        expected: "Clock warning banner appears"
+      - type: playwright
+        action: reset_clock
+
+  # --- FILESYSTEM OPERATIONS ---
+
+  - id: GW-AUTO-SETX-003
+    name: "Export/import maker orders JSON"
+    source_manual_id: GW-MAN-SETX-003
+    tags: [settings, filesystem, composite]
+    timeout: 300
+    expected_result: "Export creates valid JSON; import succeeds"
+    phases:
+      - type: skyvern
+        action: "Navigate to export option"
+        prompt: |
+          Navigate to Settings > Advanced. Find the 'Export Maker Orders'
+          or similar export option. Report its exact label and location.
+        expected: "Export option found"
+      - type: playwright
+        action: capture_download
+        args: {click_text: "Export"}
+      - type: skyvern
+        action: "Verify export and try import"
+        prompt: |
+          If an export was triggered, navigate to the import option.
+          If an import/upload button exists, report its label.
+          If there is a text area for pasting JSON, report that.
+        expected: "Import option identified"
+
+  - id: GW-AUTO-SETX-006
+    name: "Download logs"
+    source_manual_id: GW-MAN-SETX-006
+    tags: [settings, filesystem, composite]
+    timeout: 240
+    expected_result: "Log file downloads successfully"
+    phases:
+      - type: skyvern
+        action: "Navigate to download logs"
+        prompt: |
+          Navigate to Settings > Advanced. Find the 'Download Logs' or
+          'Export Logs' option. Report its exact label.
+        expected: "Download logs option found"
+      - type: playwright
+        action: capture_download
+        args: {click_text: "Download"}
+
+  # --- CLIPBOARD VERIFICATION ---
+
+  - id: GW-AUTO-SEC-003
+    name: "Clipboard verification after address copy"
+    source_manual_id: GW-MAN-SEC-003
+    tags: [security, clipboard, composite]
+    timeout: 240
+    expected_result: "Copied address matches displayed address"
+    phases:
+      - type: skyvern
+        action: "Copy wallet address"
+        prompt: |
+          Navigate to the DOC coin detail page. Find the receiving address.
+          Click the copy button (clipboard icon) next to the address.
+          Report the address text you see on screen.
+        expected: "Address copied"
+        extraction_schema:
+          type: object
+          properties:
+            displayed_address: {type: string}
+      - type: os_call
+        action: read_clipboard
+      - type: skyvern
+        action: "Verify clipboard matches"
+        prompt: |
+          Report the displayed DOC address on screen one more time.
+        expected: "Address confirmed"
+
+  # --- KEYBOARD ACCESSIBILITY ---
+
+  - id: GW-AUTO-A11Y-001
+    name: "Keyboard-only navigation audit"
+    source_manual_id: GW-MAN-A11Y-001
+    tags: [accessibility, composite]
+    timeout: 300
+    expected_result: "All elements reachable via Tab; no keyboard traps; logical focus order"
+    phases:
+      - type: playwright
+        action: navigate
+      - type: os_call
+        action: wait
+        args: {seconds: 5}
+      - type: playwright
+        action: keyboard_audit
+        args: {max_tabs: 80}
+
+  # --- CONTRAST / ACCESSIBILITY AUDIT ---
+
+  - id: GW-AUTO-A11Y-003
+    name: "Contrast and accessibility audit (axe-core)"
+    source_manual_id: GW-MAN-A11Y-003
+    tags: [accessibility, composite]
+    timeout: 180
+    expected_result: "No critical or serious accessibility violations"
+    phases:
+      - type: playwright
+        action: navigate
+      - type: os_call
+        action: wait
+        args: {seconds: 5}
+      - type: playwright
+        action: accessibility_audit
+
+  # --- REMAINING NETWORK TESTS (DEX, Bridge) ---
+
+  - id: GW-AUTO-DEX-006
+    name: "DEX recovery after network drop"
+    source_manual_id: GW-MAN-DEX-006
+    tags: [dex, network, composite]
+    timeout: 360
+    expected_result: "DEX orders/history reconcile after network drop and restore"
+    phases:
+      - type: skyvern
+        action: "Place a maker order"
+        prompt: |
+          Navigate to the DEX. Select DOC/MARTY pair. Place a maker order
+          with price '1' and amount '0.01'. Wait for order confirmation.
+        expected: "Order placed"
+      - type: playwright
+        action: set_offline
+      - type: os_call
+        action: wait
+        args: {seconds: 8}
+      - type: playwright
+        action: set_online
+      - type: os_call
+        action: wait
+        args: {seconds: 15}
+      - type: skyvern
+        action: "Check DEX state after recovery"
+        prompt: |
+          Navigate to DEX > Open Orders and History.
+          Is the order still present? Are there duplicates or ghost orders?
+          Report order count and statuses.
+        expected: "No duplicate or ghost orders"
+
+  - id: GW-AUTO-BRDG-004
+    name: "Bridge failure/recovery after network drop"
+    source_manual_id: GW-MAN-BRDG-004
+    tags: [bridge, network, composite]
+    timeout: 360
+    expected_result: "Bridge history reflects correct status after network recovery"
+    phases:
+      - type: skyvern
+        action: "Initiate bridge transfer"
+        prompt: |
+          Navigate to Bridge. Select a supported pair and enter a small amount.
+          Click confirm to initiate the transfer. Report the initial status.
+        expected: "Bridge transfer initiated"
+      - type: playwright
+        action: set_offline
+      - type: os_call
+        action: wait
+        args: {seconds: 8}
+      - type: playwright
+        action: set_online
+      - type: os_call
+        action: wait
+        args: {seconds: 20}
+      - type: skyvern
+        action: "Check bridge history after recovery"
+        prompt: |
+          Navigate to bridge history. Check the latest transfer status.
+          Is it resolved (completed/failed) or stuck? Any duplicates?
+        expected: "Bridge status reconciled"
+
+  - id: GW-AUTO-SETX-005
+    name: "Import swaps from JSON"
+    source_manual_id: GW-MAN-SETX-005
+    tags: [settings, filesystem, composite]
+    timeout: 240
+    expected_result: "Valid JSON imports; malformed JSON shows error"
+    phases:
+      - type: skyvern
+        action: "Navigate to import swaps"
+        prompt: |
+          Navigate to Settings > Advanced. Find 'Import Swaps' or
+          'Paste Swap Data' option. If a text area is shown, enter the
+          text 'not valid json' and click import/submit.
+          Report the error message shown.
+        expected: "Error shown for invalid JSON"
+      - type: skyvern
+        action: "Try valid empty array"
+        prompt: |
+          Clear the text area and enter '[]' (empty JSON array).
+          Click import/submit. Report the result (error, success, or no-op).
+        expected: "Empty array handled gracefully"
+
+# =============================================================================
+# REGRESSION PACKS (tag-based filtering)
+# =============================================================================
+#
+# Smoke Pack:     python -m runner.runner --tag smoke
+# Critical Pack:  python -m runner.runner --tag critical
+# P0 Pack:        python -m runner.runner --tag p0
+# Full Pack:      python -m runner.runner   (no filter)
+# Composite:      python -m runner.runner --tag composite
+# With manual:    python -m runner.runner --include-manual
+# Manual only:    python -m runner.runner --manual-only
+#
+# =============================================================================
