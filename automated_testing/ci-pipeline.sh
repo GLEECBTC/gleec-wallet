@@ -18,6 +18,7 @@ MATRIX="${MATRIX:-test_matrix.yaml}"
 ARTIFACTS_DIR="${CI_ARTIFACTS_DIR:-results}"
 
 echo "=== Gleec QA CI Pipeline ==="
+mkdir -p "$ARTIFACTS_DIR"
 
 # ---------------------------------------------------------------------------
 # Infrastructure
@@ -37,8 +38,11 @@ sleep 10
 # Smoke gate (fast, blocks deployment on failure)
 # ---------------------------------------------------------------------------
 echo "[smoke] Running smoke gate..."
-python -m runner.runner --matrix "$MATRIX" --tag smoke --single
-SMOKE_EXIT=$?
+if python -m runner.runner --matrix "$MATRIX" --tag smoke --single; then
+    SMOKE_EXIT=0
+else
+    SMOKE_EXIT=$?
+fi
 
 if [ $SMOKE_EXIT -eq 2 ]; then
     echo "[smoke] INFRASTRUCTURE FAILURE — aborting pipeline"
@@ -58,15 +62,16 @@ echo "[smoke] Smoke gate passed (exit=$SMOKE_EXIT)"
 # Full suite (with retries and majority vote)
 # ---------------------------------------------------------------------------
 echo "[full] Running full automated suite..."
-python -m runner.runner --matrix "$MATRIX"
-FULL_EXIT=$?
+if python -m runner.runner --matrix "$MATRIX"; then
+    FULL_EXIT=0
+else
+    FULL_EXIT=$?
+fi
 
 # ---------------------------------------------------------------------------
 # Collect artifacts
 # ---------------------------------------------------------------------------
 echo "[artifacts] Collecting reports..."
-mkdir -p "$ARTIFACTS_DIR"
-
 LATEST_RUN=$(ls -td results/run_* 2>/dev/null | head -1)
 if [ -n "$LATEST_RUN" ]; then
     cp "$LATEST_RUN/report.html" "$ARTIFACTS_DIR/" 2>/dev/null || true

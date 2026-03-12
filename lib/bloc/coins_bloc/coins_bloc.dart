@@ -236,14 +236,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   ) async {
     _updateBalancesTimer?.cancel();
     _updateBalancesTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
-      // Most active assets are already covered by live balance watchers.
-      // Keep this timer as a low-frequency fallback for non-streaming gaps.
-      if (_coinsRepo.hasActiveBalanceWatchers) {
+      final missingWatcherCount = _coinsRepo
+          .countMissingBalanceWatchersForActiveWalletCoins(state.walletCoins);
+      if (missingWatcherCount == 0) {
         return;
       }
       if (kDebugElectrumLogs) {
         _log.info(
-          '[POLLING] Triggering fallback balance refresh (every 3 minutes)',
+          '[POLLING] Triggering fallback balance refresh (every 3 minutes) '
+          'for $missingWatcherCount active assets without live watchers',
         );
       }
       add(CoinsBalancesRefreshed());

@@ -83,6 +83,22 @@ class CoinsRepo {
   final Map<AssetId, StreamSubscription<BalanceInfo>> _balanceWatchers = {};
   bool get hasActiveBalanceWatchers => _balanceWatchers.isNotEmpty;
 
+  bool hasMissingBalanceWatchersForActiveWalletCoins(
+    Map<String, Coin> walletCoins,
+  ) {
+    return countMissingBalanceWatchersForActiveWalletCoins(walletCoins) > 0;
+  }
+
+  int countMissingBalanceWatchersForActiveWalletCoins(
+    Map<String, Coin> walletCoins,
+  ) {
+    final activeAssetIds = walletCoins.values
+        .where((coin) => coin.isActive)
+        .map((coin) => coin.id)
+        .toSet();
+    return _kdfSdk.balances.countMissingWatchersForAssets(activeAssetIds);
+  }
+
   /// Hack used to broadcast activated/deactivated coins to the CoinsBloc to
   /// update the status of the coins in the UI layer. This is needed as there
   /// are direct references to [CoinsRepo] that activate/deactivate coins
@@ -123,27 +139,56 @@ class CoinsRepo {
 
   /// Subscribe to balance updates for an asset using the SDK's balance manager
   void _subscribeToBalanceUpdates(Asset asset) {
-    // Cancel any existing subscription for this asset
-    _balanceWatchers[asset.id]?.cancel();
+    final assetId = asset.id;
 
-    if (_tradingStatusService.isAssetBlocked(asset.id)) {
-      _log.info('Asset ${asset.id.id} is blocked. Skipping balance updates.');
+    // Cancel any existing subscription for this asset
+    _balanceWatchers[assetId]?.cancel();
+    _balanceWatchers.remove(assetId);
+
+    if (_tradingStatusService.isAssetBlocked(assetId)) {
+      _log.info('Asset ${assetId.id} is blocked. Skipping balance updates.');
       return;
     }
 
-    // Start a new subscription
-    _balanceWatchers[asset.id] = _kdfSdk.balances.watchBalance(asset.id).listen(
-      (balanceInfo) {
-        // Update the balance cache with the new values
-        _balancesCache[asset.id.id] = (
-          balance: balanceInfo.total.toDouble(),
-          spendable: balanceInfo.spendable.toDouble(),
-        );
+    StreamSubscription<BalanceInfo>? watcher;
 
-        // Broadcast updated coin for UI to refresh via bloc
-        _broadcastBalanceChange(_assetToCoinWithoutAddress(asset));
-      },
-    );
+    // Start a new subscription
+    watcher = _kdfSdk.balances
+        .watchBalance(assetId)
+        .listen(
+          (balanceInfo) {
+            // Update the balance cache with the new values
+            _balancesCache[assetId.id] = (
+              balance: balanceInfo.total.toDouble(),
+              spendable: balanceInfo.spendable.toDouble(),
+            );
+
+            // Broadcast updated coin for UI to refresh via bloc
+            _broadcastBalanceChange(_assetToCoinWithoutAddress(asset));
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            _log.warning(
+              'Balance watcher failed for ${assetId.id}; fallback polling will cover this asset',
+              error,
+              stackTrace,
+            );
+            final current = _balanceWatchers[assetId];
+            if (watcher != null && identical(current, watcher)) {
+              _balanceWatchers.remove(assetId);
+            }
+          },
+          onDone: () {
+            _log.info(
+              'Balance watcher ended for ${assetId.id}; fallback polling will cover this asset',
+            );
+            final current = _balanceWatchers[assetId];
+            if (watcher != null && identical(current, watcher)) {
+              _balanceWatchers.remove(assetId);
+            }
+          },
+          cancelOnError: true,
+        );
+    _balanceWatchers[assetId] = watcher;
   }
 
   void flushCache() {

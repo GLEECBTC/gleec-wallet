@@ -67,6 +67,7 @@ class ArrrActivationService {
         _activateArrrInternal(asset, initialConfig: initialConfig).whenComplete(
           () {
             _ongoingActivations.remove(asset.id);
+            _cancelledActivations.remove(asset.id);
           },
         );
     _ongoingActivations[asset.id] = activationFuture;
@@ -291,8 +292,12 @@ class ArrrActivationService {
 
   Future<void> _cacheActivationError(
     AssetId assetId,
-    String errorMessage,
-  ) async {
+    String errorMessage, {
+    bool allowCancelledWrite = false,
+  }) async {
+    if (!allowCancelledWrite && _isActivationCancelled(assetId)) {
+      return;
+    }
     await _activationCacheMutex.protectWrite(() async {
       _activationCache[assetId] = ArrrActivationStatusError(
         assetId: assetId,
@@ -327,8 +332,16 @@ class ArrrActivationService {
   Future<void> cancelActivation(AssetId assetId) async {
     _log.info('Cancelling activation for ${assetId.id}');
     _cancelledActivations.add(assetId);
+    _sdk.assets.cancelActivation(
+      assetId,
+      reason: 'Activation cancelled by user',
+    );
     cancelConfiguration(assetId);
-    await _cacheActivationError(assetId, 'Activation cancelled by user');
+    await _cacheActivationError(
+      assetId,
+      'Activation cancelled by user',
+      allowCancelledWrite: true,
+    );
   }
 
   /// Submit configuration for a pending request
@@ -453,7 +466,8 @@ class ArrrActivationService {
   /// Clean up all user-specific state when user signs out
   Future<void> _cleanupOnSignOut() async {
     _log.info('User signed out - cleaning up active ZHTLC activations');
-    _cancelledActivations.clear();
+    final cancelledAssetIds = await _markActiveAssetsAsCancelled();
+    _cancelSdkActivations(cancelledAssetIds);
 
     // Cancel all pending configuration requests
     final pendingAssets = _configCompleters.keys.toList();
@@ -477,7 +491,8 @@ class ArrrActivationService {
     });
 
     _log.info(
-      'Cleanup completed - cancelled ${pendingAssets.length} pending configs and cleared ${activeAssets.length} activation statuses',
+      'Cleanup completed - marked ${cancelledAssetIds.length} assets as cancelled, '
+      'cancelled ${pendingAssets.length} pending configs and cleared ${activeAssets.length} activation statuses',
     );
   }
 
@@ -543,7 +558,14 @@ class ArrrActivationService {
   void dispose() {
     // Mark as disposing to prevent new operations
     _isDisposing = true;
-    _cancelledActivations.clear();
+
+    final cancelledAssetIds = <AssetId>{
+      ..._ongoingActivations.keys,
+      ..._configCompleters.keys,
+      ..._activationCache.keys,
+    };
+    _cancelledActivations.addAll(cancelledAssetIds);
+    _cancelSdkActivations(cancelledAssetIds);
 
     // Cancel auth subscription first
     _authSubscription?.cancel();
@@ -562,8 +584,32 @@ class ArrrActivationService {
     }
   }
 
+  Future<Set<AssetId>> _markActiveAssetsAsCancelled() async {
+    final cancelledAssetIds = <AssetId>{
+      ..._ongoingActivations.keys,
+      ..._configCompleters.keys,
+    };
+
+    final cachedAssets = await _activationCacheMutex.protectRead(
+      () async => _activationCache.keys.toList(),
+    );
+    cancelledAssetIds.addAll(cachedAssets);
+    _cancelledActivations.addAll(cancelledAssetIds);
+
+    return cancelledAssetIds;
+  }
+
   bool _isActivationCancelled(AssetId assetId) {
     return _cancelledActivations.contains(assetId);
+  }
+
+  void _cancelSdkActivations(Set<AssetId> assetIds) {
+    for (final assetId in assetIds) {
+      _sdk.assets.cancelActivation(
+        assetId,
+        reason: 'Activation cancelled due to auth/session cleanup',
+      );
+    }
   }
 }
 

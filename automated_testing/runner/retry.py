@@ -67,17 +67,23 @@ def should_stop_early(attempts: list[AttemptResult], max_attempts: int) -> bool:
     """Determine if remaining retries can be skipped.
 
     Early exit conditions:
-    - First 2 attempts both PASS → skip remaining
-    - All attempts so far are ERROR (infra issue) and at least 2 done → stop
+    - Any status has already reached the required majority for max_attempts
+    - No status can still reach majority with remaining attempts
     """
-    if len(attempts) < 2:
+    if not attempts:
         return False
 
-    pass_count = sum(1 for a in attempts if a.status == "PASS")
-    if pass_count >= 2:
+    counts = Counter(a.status for a in attempts)
+    majority = max_attempts // 2 + 1
+    completed = len(attempts)
+    remaining_attempts = max(0, max_attempts - completed)
+
+    leading_count = counts.most_common(1)[0][1]
+    if leading_count >= majority:
         return True
 
-    if all(a.status == "ERROR" for a in attempts):
+    # Even if all remaining attempts match the current leader, majority is impossible.
+    if leading_count + remaining_attempts < majority:
         return True
 
     return False
