@@ -1,12 +1,13 @@
 import 'dart:math';
 
 import 'package:hive_ce/hive.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/models/graph_cache.dart';
 import 'package:web_dex/bloc/cex_market_data/models/graph_type.dart';
 
 class GraphCacheAdapter extends TypeAdapter<GraphCache> {
   @override
-  final int typeId = 17;
+  final int typeId = graphCacheAdapterTypeId;
 
   @override
   GraphCache read(BinaryReader reader) {

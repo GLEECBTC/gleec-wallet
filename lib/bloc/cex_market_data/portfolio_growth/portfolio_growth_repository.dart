@@ -13,6 +13,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_persistence_layer/komodo_persistence_layer.dart';
 import 'package:logging/logging.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/mock_portfolio_growth_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
@@ -57,7 +58,7 @@ class PortfolioGrowthRepository {
     return PortfolioGrowthRepository(
       transactionHistoryRepo: transactionHistoryRepo,
       cacheProvider: HiveLazyBoxProvider<String, GraphCache>(
-        name: GraphType.balanceGrowth.tableName,
+        name: balanceGrowthCacheBoxName,
       ),
       coinsRepository: coinsRepository,
       sdk: sdk,
@@ -79,9 +80,12 @@ class PortfolioGrowthRepository {
   final _log = Logger('PortfolioGrowthRepository');
 
   static Future<void> ensureInitialized() async {
-    Hive
-      ..registerAdapter(GraphCacheAdapter())
-      ..registerAdapter(PointAdapter());
+    if (!Hive.isAdapterRegistered(graphCacheAdapterTypeId)) {
+      Hive.registerAdapter(GraphCacheAdapter());
+    }
+    if (!Hive.isAdapterRegistered(pointAdapterTypeId)) {
+      Hive.registerAdapter(PointAdapter());
+    }
   }
 
   /// Get the growth chart for a coin based on the transactions

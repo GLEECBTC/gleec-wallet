@@ -6,6 +6,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_persistence_layer/komodo_persistence_layer.dart';
 import 'package:logging/logging.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/demo_profit_loss_repository.dart';
@@ -33,7 +34,7 @@ class ProfitLossRepository {
   factory ProfitLossRepository.withDefaults({
     required TransactionHistoryRepo transactionHistoryRepo,
     required KomodoDefiSdk sdk,
-    String cacheTableName = 'profit_loss',
+    String cacheTableName = profitLossCacheBoxName,
     PerformanceMode? demoMode,
   }) {
     if (demoMode != null) {
@@ -62,10 +63,15 @@ class ProfitLossRepository {
   final _log = Logger('profit-loss-repository');
 
   static Future<void> ensureInitialized() async {
-    Hive
-      ..registerAdapter(FiatValueAdapter())
-      ..registerAdapter(ProfitLossAdapter())
-      ..registerAdapter(ProfitLossCacheAdapter());
+    if (!Hive.isAdapterRegistered(fiatValueAdapterTypeId)) {
+      Hive.registerAdapter(FiatValueAdapter());
+    }
+    if (!Hive.isAdapterRegistered(profitLossAdapterTypeId)) {
+      Hive.registerAdapter(ProfitLossAdapter());
+    }
+    if (!Hive.isAdapterRegistered(profitLossCacheAdapterTypeId)) {
+      Hive.registerAdapter(ProfitLossCacheAdapter());
+    }
   }
 
   Future<void> clearCache() async {
