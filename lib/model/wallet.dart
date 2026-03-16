@@ -227,18 +227,9 @@ enum WalletProvenance {
 
 extension KdfUserWalletExtension on KdfUser {
   Wallet get wallet {
-    final walletType = WalletType.fromJson(
-      metadata['type'] as String? ?? 'iguana',
-    );
-    final provenance = WalletProvenance.fromJson(
-      metadata['wallet_provenance'] as String?,
-    );
-    final createdAtRaw = metadata['wallet_created_at'];
-    final createdAt = createdAtRaw is int
-        ? DateTime.fromMillisecondsSinceEpoch(createdAtRaw)
-        : createdAtRaw is String && int.tryParse(createdAtRaw) != null
-        ? DateTime.fromMillisecondsSinceEpoch(int.parse(createdAtRaw))
-        : null;
+    final walletType = _walletTypeFromMetadataOrAuth(this);
+    final provenance = _walletProvenanceFromMetadata(this);
+    final createdAt = _walletCreatedAtFromMetadata(this);
     return Wallet(
       id: walletId.name,
       name: walletId.name,
@@ -259,4 +250,41 @@ extension KdfUserWalletExtension on KdfUser {
 extension KdfSdkWalletExtension on KomodoDefiSdk {
   Future<Iterable<Wallet>> get wallets async =>
       (await auth.getUsers()).map((user) => user.wallet);
+}
+
+WalletType _walletTypeFromMetadataOrAuth(KdfUser user) {
+  final metadataType = user.metadata['type'];
+  if (metadataType is String && metadataType.isNotEmpty) {
+    return WalletType.fromJson(metadataType);
+  }
+
+  return user.walletId.isHd ? WalletType.hdwallet : WalletType.iguana;
+}
+
+WalletProvenance _walletProvenanceFromMetadata(KdfUser user) {
+  final metadataProvenance = user.metadata['wallet_provenance'];
+  if (metadataProvenance is String && metadataProvenance.isNotEmpty) {
+    return WalletProvenance.fromJson(metadataProvenance);
+  }
+
+  final isImported = user.metadata['isImported'];
+  if (isImported is bool) {
+    return isImported ? WalletProvenance.imported : WalletProvenance.generated;
+  }
+
+  return WalletProvenance.unknown;
+}
+
+DateTime? _walletCreatedAtFromMetadata(KdfUser user) {
+  final createdAtRaw = user.metadata['wallet_created_at'];
+  if (createdAtRaw is int) {
+    return DateTime.fromMillisecondsSinceEpoch(createdAtRaw);
+  }
+  if (createdAtRaw is String) {
+    final createdAtMs = int.tryParse(createdAtRaw);
+    if (createdAtMs != null) {
+      return DateTime.fromMillisecondsSinceEpoch(createdAtMs);
+    }
+  }
+  return null;
 }
