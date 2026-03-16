@@ -26,6 +26,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_request.dart';
 import 'package:web_dex/model/cex_price.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/withdraw_details/withdraw_details.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -66,6 +67,8 @@ class CoinsRepo {
   final ArrrActivationService _arrrActivationService;
 
   final _log = Logger('CoinsRepo');
+  static const _unsupportedTrezorSiaMessage =
+      'SIA is not supported for Trezor wallets in this release.';
 
   /// { acc: { abbr: address }}, used in Fiat Page
   final Map<String, Map<String, String>> _addressCache = {};
@@ -380,6 +383,26 @@ class CoinsRepo {
       final coinIdList = assets.map((e) => e.id.id).join(', ');
       _log.warning('No wallet signed in. Skipping activation of [$coinIdList]');
       return;
+    }
+
+    final walletType = (await _kdfSdk.currentWallet())?.config.type;
+    if (walletType == WalletType.trezor) {
+      final unsupportedAssetIds = assets
+          .where((asset) => asset.id.subClass == CoinSubClass.sia)
+          .map((asset) => asset.id.id)
+          .toList();
+      if (unsupportedAssetIds.isNotEmpty) {
+        _log.warning(
+          'Skipping unsupported Trezor SIA activation for '
+          '${unsupportedAssetIds.join(', ')}: $_unsupportedTrezorSiaMessage',
+        );
+      }
+      assets = assets
+          .where((asset) => asset.id.subClass != CoinSubClass.sia)
+          .toList();
+      if (assets.isEmpty) {
+        return;
+      }
     }
 
     // Debug logging for activation

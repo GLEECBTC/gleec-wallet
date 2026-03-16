@@ -24,6 +24,8 @@ import 'package:decimal/decimal.dart';
 
 class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   static final Logger _logger = Logger('WithdrawFormBloc');
+  static const _unsupportedSiaHardwareWalletMessage =
+      'SIA is not supported for hardware wallets in this release.';
   final KomodoDefiSdk _sdk;
   final WalletType? _walletType;
 
@@ -586,6 +588,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.hasValidationErrors) return;
+    if (_isUnsupportedSiaHardwareWalletFlow) {
+      emit(
+        state.copyWith(
+          previewError: () =>
+              TextError(error: _unsupportedSiaHardwareWalletMessage),
+          isSending: false,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+      return;
+    }
 
     try {
       emit(
@@ -647,6 +660,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.hasValidationErrors) return;
+    if (_isUnsupportedSiaHardwareWalletFlow) {
+      emit(
+        state.copyWith(
+          transactionError: () =>
+              TextError(error: _unsupportedSiaHardwareWalletMessage),
+          isSending: false,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+      return;
+    }
 
     try {
       emit(
@@ -732,6 +756,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       );
     }
   }
+
+  bool get _isUnsupportedSiaHardwareWalletFlow =>
+      _walletType == WalletType.trezor && state.asset.protocol is SiaProtocol;
 
   void _onCancelled(
     WithdrawFormCancelled event,
