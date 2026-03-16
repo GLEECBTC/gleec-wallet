@@ -52,13 +52,13 @@ class SendConfirmForm extends StatelessWidget {
               SendConfirmItem(
                 title: '${LocaleKeys.amount.tr()}:',
                 value: amountString,
-                usdPrice: state.usdAmountPrice ?? 0,
+                usdPrice: state.usdAmountPrice,
               ),
               const SizedBox(height: 26),
               SendConfirmItem(
                 title: '${LocaleKeys.fee.tr()}:',
                 value: feeString ?? '',
-                usdPrice: state.usdFeePrice ?? 0,
+                usdPrice: state.usdFeePrice,
                 isWarningShown: isFeePriceExpensive,
               ),
               if (state.memo != null)

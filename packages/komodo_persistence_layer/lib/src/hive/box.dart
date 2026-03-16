@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 
 import '../persistence_provider.dart';
 
@@ -10,22 +10,15 @@ import '../persistence_provider.dart';
 /// implement the [ObjectWithPrimaryKey] interface.
 class HiveBoxProvider<K, T extends ObjectWithPrimaryKey<K>>
     extends PersistenceProvider<K, T> {
-  HiveBoxProvider({
-    required this.name,
-  });
+  HiveBoxProvider({required this.name});
 
-  HiveBoxProvider.init({
-    required this.name,
-    required Box<T> box,
-  }) : _box = box;
+  HiveBoxProvider.init({required this.name, required Box<T> box}) : _box = box;
 
   final String name;
   Box<T>? _box;
 
   static Future<HiveBoxProvider<K, T>>
-      create<K, T extends ObjectWithPrimaryKey<K>>({
-    required String name,
-  }) async {
+  create<K, T extends ObjectWithPrimaryKey<K>>({required String name}) async {
     final Box<T> box = await Hive.openBox<T>(name);
     return HiveBoxProvider<K, T>.init(name: name, box: box);
   }

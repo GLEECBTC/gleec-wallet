@@ -2,7 +2,7 @@ void reloadPage() {}
 
 bool canLogin(String? _) => true;
 
-dynamic initWasm() async {}
+Future<dynamic> initWasm() async {}
 
 Future<void> wasmRunMm2(
   String params,

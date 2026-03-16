@@ -11,6 +11,7 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/coin_utils.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -28,12 +29,14 @@ class ActiveCoinsList extends StatelessWidget {
     required this.searchPhrase,
     required this.withBalance,
     required this.onCoinItemTap,
+    this.onStatisticsTap,
     this.arrrActivationService,
   });
 
   final String searchPhrase;
   final bool withBalance;
   final Function(Coin) onCoinItemTap;
+  final void Function(Coin)? onStatisticsTap;
   final ArrrActivationService? arrrActivationService;
 
   @override
@@ -99,6 +102,9 @@ class ActiveCoinsList extends StatelessWidget {
                     pubkeys: state.pubkeys[coin.abbr],
                     isSelected: false,
                     onTap: () => onCoinItemTap(coin),
+                    onStatisticsTap: onStatisticsTap == null
+                        ? null
+                        : () => onStatisticsTap!(coin),
                   ),
                 );
               },
@@ -111,6 +117,9 @@ class ActiveCoinsList extends StatelessWidget {
 
   Iterable<Coin> _getDisplayedCoins(Iterable<Coin> coins, KomodoDefiSdk sdk) =>
       filterCoinsByPhrase(coins, searchPhrase).where((Coin coin) {
+        if (!coin.isActive && !coin.isActivating) {
+          return false;
+        }
         if (withBalance) {
           return (coin.lastKnownBalance(sdk)?.total ?? Decimal.zero) >
               Decimal.zero;
@@ -215,6 +224,9 @@ class AddressBalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -280,7 +292,9 @@ class AddressBalanceCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${formatBalance(pubkey.balance.spendable.toBigInt())} ${coin.abbr}',
+                      hideBalances
+                          ? '$maskedBalanceText ${coin.abbr}'
+                          : '${formatBalance(pubkey.balance.spendable.toBigInt())} ${coin.abbr}',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -343,6 +357,13 @@ class _AddressFiatBalance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
+    if (hideBalances) {
+      return Text(maskedBalanceText, style: style);
+    }
+
     final sdk = context.sdk;
     final price = sdk.marketData.priceIfKnown(coin.id);
 

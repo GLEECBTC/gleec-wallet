@@ -6,9 +6,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-import 'package:web_dex/dispatchers/popup_dispatcher.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/shared/widgets/connect_wallet/connect_wallet_wrapper.dart';
 import 'package:web_dex/shared/widgets/logout_popup.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
@@ -17,33 +16,23 @@ const double minWidth = 100;
 const double maxWidth = 350;
 
 class AccountSwitcher extends StatefulWidget {
-  const AccountSwitcher({Key? key}) : super(key: key);
+  const AccountSwitcher({super.key});
 
   @override
   State<AccountSwitcher> createState() => _AccountSwitcherState();
 }
 
 class _AccountSwitcherState extends State<AccountSwitcher> {
-  late PopupDispatcher _logOutPopupManager;
   bool _isOpen = false;
-  @override
-  void initState() {
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _logOutPopupManager = PopupDispatcher(
-        context: scaffoldKey.currentContext ?? context,
-        popupContent: LogOutPopup(
-          onConfirm: () => _logOutPopupManager.close(),
-          onCancel: () => _logOutPopupManager.close(),
-        ),
-      );
-    });
-    super.initState();
-  }
 
-  @override
-  void dispose() {
-    _logOutPopupManager.close();
-    super.dispose();
+  Future<void> _showLogoutDialog() async {
+    await AppDialog.showWithCallback<void>(
+      context: context,
+      width: 320,
+      barrierDismissible: true,
+      childBuilder: (closeDialog) =>
+          LogOutPopup(onConfirm: closeDialog, onCancel: closeDialog),
+    );
   }
 
   @override
@@ -56,16 +45,17 @@ class _AccountSwitcherState extends State<AccountSwitcher> {
         isOpen: _isOpen,
         onSwitch: (isOpen) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
             setState(() => _isOpen = isOpen);
           });
         },
         switcher: const _AccountSwitcher(),
         dropdown: _AccountDropdown(
-          onTap: () {
-            _logOutPopupManager.show();
-            setState(() {
-              _isOpen = false;
-            });
+          onTap: () async {
+            if (mounted) {
+              setState(() => _isOpen = false);
+            }
+            await _showLogoutDialog();
           },
         ),
       ),
@@ -78,7 +68,6 @@ class _AccountSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentWallet = context.read<AuthBloc>().state.currentUser?.wallet;
     return Container(
       constraints: const BoxConstraints(minWidth: minWidth),
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
@@ -91,7 +80,7 @@ class _AccountSwitcher extends StatelessWidget {
               return Container(
                 constraints: const BoxConstraints(maxWidth: maxWidth),
                 child: Text(
-                  currentWallet?.name ?? '',
+                  state.currentUser?.walletId.name ?? '',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
@@ -113,17 +102,16 @@ class _AccountSwitcher extends StatelessWidget {
 }
 
 class _AccountDropdown extends StatelessWidget {
-  final VoidCallback onTap;
   const _AccountDropdown({required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: Border.all(
-          color: theme.custom.specificButtonBorderColor,
-        ),
+        border: Border.all(color: theme.custom.specificButtonBorderColor),
       ),
       constraints: const BoxConstraints(minWidth: minWidth, maxWidth: maxWidth),
       child: InkWell(
@@ -138,7 +126,9 @@ class _AccountDropdown extends StatelessWidget {
                 child: Text(
                   LocaleKeys.logOut.tr(),
                   style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -158,8 +148,9 @@ class _AccountIcon extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(2.0),
       decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Theme.of(context).colorScheme.tertiary),
+        shape: BoxShape.circle,
+        color: Theme.of(context).colorScheme.tertiary,
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: SvgPicture.asset(

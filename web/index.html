@@ -138,7 +138,7 @@
             alt="GLEEC Wallet is starting... Please wait." />
     </div>
     <script
-        async="false">window.addEventListener("DOMContentLoaded", (d => { console.log("DOM fully loaded and parsed"), window.init_wasm && !0 !== window.is_mm2_preload_busy && (window.is_mm2_preload_busy = !0, window.init_wasm().then((() => { window.is_mm2_preloaded = !0 })).finally((() => { window.is_mm2_preload_busy = !1 }))) }))</script>
+        async="false">window.addEventListener("DOMContentLoaded", (d => { const initWasm = window.kdf && window.kdf.init_wasm ? window.kdf.init_wasm : window.init_wasm; console.log("DOM fully loaded and parsed"), initWasm && !0 !== window.is_mm2_preload_busy && (window.is_mm2_preload_busy = !0, initWasm().then((() => { window.is_mm2_preloaded = !0 })).finally((() => { window.is_mm2_preload_busy = !1 }))) }))</script>
     <!-- App -->
     <div id="main-content" style="position:absolute;width:100%;height:100%;display:none">
         <!-- Flutter app will be injected here -->

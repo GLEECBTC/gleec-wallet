@@ -32,6 +32,7 @@ class ArrrActivationService {
 
   /// Track ongoing activation flows per asset to prevent duplicate runs
   final Map<AssetId, Future<ArrrActivationResult>> _ongoingActivations = {};
+  final Set<AssetId> _cancelledActivations = <AssetId>{};
 
   /// Subscription to auth state changes
   StreamSubscription<KdfUser?>? _authSubscription;
@@ -66,6 +67,7 @@ class ArrrActivationService {
         _activateArrrInternal(asset, initialConfig: initialConfig).whenComplete(
           () {
             _ongoingActivations.remove(asset.id);
+            _cancelledActivations.remove(asset.id);
           },
         );
     _ongoingActivations[asset.id] = activationFuture;
@@ -76,6 +78,8 @@ class ArrrActivationService {
     Asset asset, {
     ZhtlcUserConfig? initialConfig,
   }) async {
+    _cancelledActivations.remove(asset.id);
+
     var config = initialConfig ?? await _getOrRequestConfiguration(asset.id);
 
     if (config == null) {
@@ -154,6 +158,10 @@ class ArrrActivationService {
     try {
       final result = await retry<ArrrActivationResult>(
         () async {
+          if (_isActivationCancelled(asset.id)) {
+            throw _ActivationCancelledException();
+          }
+
           attempt += 1;
           _log.info(
             'Starting ARRR activation attempt $attempt for ${asset.id.id}',
@@ -165,6 +173,9 @@ class ArrrActivationService {
           await for (final activationProgress in _sdk.assets.activateAsset(
             asset,
           )) {
+            if (_isActivationCancelled(asset.id)) {
+              throw _ActivationCancelledException();
+            }
             await _cacheActivationProgress(asset.id, activationProgress);
             lastActivationProgress = activationProgress;
           }
@@ -187,6 +198,7 @@ class ArrrActivationService {
           }
 
           final errorMessage =
+              lastActivationProgress?.sdkError?.fallbackMessage ??
               lastActivationProgress?.errorMessage ??
               'Unknown activation error';
           throw _RetryableZhtlcActivationException(errorMessage);
@@ -196,6 +208,7 @@ class ArrrActivationService {
           initialDelay: const Duration(seconds: 5),
           maxDelay: const Duration(seconds: 30),
         ),
+        shouldRetry: (error) => error is _RetryableZhtlcActivationException,
         onRetry: (currentAttempt, error, delay) {
           _log.warning(
             'ARRR activation attempt $currentAttempt for ${asset.id.id} failed. '
@@ -205,6 +218,10 @@ class ArrrActivationService {
       );
 
       return result;
+    } on _ActivationCancelledException {
+      _log.info('ARRR activation cancelled by user for ${asset.id.id}');
+      await _cacheActivationError(asset.id, 'Activation cancelled by user');
+      return const ArrrActivationResultError('Activation cancelled by user');
     } catch (e, stackTrace) {
       _log.severe(
         'ARRR activation failed after $maxAttempts attempts for ${asset.id.id}',
@@ -246,6 +263,9 @@ class ArrrActivationService {
     AssetId assetId,
     ActivationProgress progress,
   ) async {
+    if (_isActivationCancelled(assetId)) {
+      return;
+    }
     await _activationCacheMutex.protectWrite(() async {
       final current = _activationCache[assetId];
       if (current is ArrrActivationStatusInProgress) {
@@ -259,6 +279,9 @@ class ArrrActivationService {
   }
 
   Future<void> _cacheActivationComplete(AssetId assetId) async {
+    if (_isActivationCancelled(assetId)) {
+      return;
+    }
     await _activationCacheMutex.protectWrite(() async {
       _activationCache[assetId] = ArrrActivationStatusCompleted(
         assetId: assetId,
@@ -269,8 +292,12 @@ class ArrrActivationService {
 
   Future<void> _cacheActivationError(
     AssetId assetId,
-    String errorMessage,
-  ) async {
+    String errorMessage, {
+    bool allowCancelledWrite = false,
+  }) async {
+    if (!allowCancelledWrite && _isActivationCancelled(assetId)) {
+      return;
+    }
     await _activationCacheMutex.protectWrite(() async {
       _activationCache[assetId] = ArrrActivationStatusError(
         assetId: assetId,
@@ -299,6 +326,21 @@ class ArrrActivationService {
   Future<void> clearActivationStatus(AssetId assetId) async {
     await _activationCacheMutex.protectWrite(
       () async => _activationCache.remove(assetId),
+    );
+  }
+
+  Future<void> cancelActivation(AssetId assetId) async {
+    _log.info('Cancelling activation for ${assetId.id}');
+    _cancelledActivations.add(assetId);
+    _sdk.assets.cancelActivation(
+      assetId,
+      reason: 'Activation cancelled by user',
+    );
+    cancelConfiguration(assetId);
+    await _cacheActivationError(
+      assetId,
+      'Activation cancelled by user',
+      allowCancelledWrite: true,
     );
   }
 
@@ -424,6 +466,8 @@ class ArrrActivationService {
   /// Clean up all user-specific state when user signs out
   Future<void> _cleanupOnSignOut() async {
     _log.info('User signed out - cleaning up active ZHTLC activations');
+    final cancelledAssetIds = await _markActiveAssetsAsCancelled();
+    _cancelSdkActivations(cancelledAssetIds);
 
     // Cancel all pending configuration requests
     final pendingAssets = _configCompleters.keys.toList();
@@ -447,7 +491,8 @@ class ArrrActivationService {
     });
 
     _log.info(
-      'Cleanup completed - cancelled ${pendingAssets.length} pending configs and cleared ${activeAssets.length} activation statuses',
+      'Cleanup completed - marked ${cancelledAssetIds.length} assets as cancelled, '
+      'cancelled ${pendingAssets.length} pending configs and cleared ${activeAssets.length} activation statuses',
     );
   }
 
@@ -456,10 +501,7 @@ class ArrrActivationService {
   /// 1. Cancel any ongoing activation tasks for the asset
   /// 2. Disable the coin if it's currently active
   /// 3. Store the new configuration
-  Future<void> updateZhtlcConfig(
-    Asset asset,
-    ZhtlcUserConfig newConfig,
-  ) async {
+  Future<void> updateZhtlcConfig(Asset asset, ZhtlcUserConfig newConfig) async {
     if (_isDisposing || _configRequestController.isClosed) {
       throw StateError('ArrrActivationService has been disposed');
     }
@@ -517,6 +559,14 @@ class ArrrActivationService {
     // Mark as disposing to prevent new operations
     _isDisposing = true;
 
+    final cancelledAssetIds = <AssetId>{
+      ..._ongoingActivations.keys,
+      ..._configCompleters.keys,
+      ..._activationCache.keys,
+    };
+    _cancelledActivations.addAll(cancelledAssetIds);
+    _cancelSdkActivations(cancelledAssetIds);
+
     // Cancel auth subscription first
     _authSubscription?.cancel();
 
@@ -533,6 +583,34 @@ class ArrrActivationService {
       _configRequestController.close();
     }
   }
+
+  Future<Set<AssetId>> _markActiveAssetsAsCancelled() async {
+    final cancelledAssetIds = <AssetId>{
+      ..._ongoingActivations.keys,
+      ..._configCompleters.keys,
+    };
+
+    final cachedAssets = await _activationCacheMutex.protectRead(
+      () async => _activationCache.keys.toList(),
+    );
+    cancelledAssetIds.addAll(cachedAssets);
+    _cancelledActivations.addAll(cancelledAssetIds);
+
+    return cancelledAssetIds;
+  }
+
+  bool _isActivationCancelled(AssetId assetId) {
+    return _cancelledActivations.contains(assetId);
+  }
+
+  void _cancelSdkActivations(Set<AssetId> assetIds) {
+    for (final assetId in assetIds) {
+      _sdk.assets.cancelActivation(
+        assetId,
+        reason: 'Activation cancelled due to auth/session cleanup',
+      );
+    }
+  }
 }
 
 class _RetryableZhtlcActivationException implements Exception {
@@ -542,6 +620,13 @@ class _RetryableZhtlcActivationException implements Exception {
 
   @override
   String toString() => 'RetryableZhtlcActivationException: $message';
+}
+
+class _ActivationCancelledException implements Exception {
+  const _ActivationCancelledException();
+
+  @override
+  String toString() => 'Activation cancelled by user';
 }
 
 /// Configuration request model for UI handling

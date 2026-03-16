@@ -11,9 +11,12 @@ import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/balance_summary_widget.dart';
 
@@ -52,6 +55,9 @@ class _WalletOverviewState extends State<WalletOverview> {
     final themeCustom = Theme.of(context).brightness == Brightness.dark
         ? Theme.of(context).extension<ThemeCustomDark>()!
         : Theme.of(context).extension<ThemeCustomLight>()!;
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
 
     return BlocBuilder<CoinsBloc, CoinsState>(
       builder: (context, state) {
@@ -106,7 +112,7 @@ class _WalletOverviewState extends State<WalletOverview> {
                   changeAmount: totalChange24h,
                   changePercentage: percentageChange24h,
                   onTap: widget.onAssetsPressed,
-                  onLongPress: totalBalance != null
+                  onLongPress: totalBalance != null && !hideBalances
                       ? () {
                           final formattedValue = NumberFormat.currency(
                             symbol: '\$',
@@ -114,6 +120,7 @@ class _WalletOverviewState extends State<WalletOverview> {
                           copyToClipBoard(context, formattedValue);
                         }
                       : null,
+                  hideBalances: hideBalances,
                 );
               },
             ),
@@ -122,8 +129,11 @@ class _WalletOverviewState extends State<WalletOverview> {
               key: const Key('overview-current-value'),
               caption: Text(LocaleKeys.yourBalance.tr()),
               value: totalBalance,
+              valueText: hideBalances && totalBalance != null
+                  ? '\$$maskedBalanceText'
+                  : null,
               onTap: widget.onAssetsPressed,
-              onLongPress: totalBalance != null
+              onLongPress: totalBalance != null && !hideBalances
                   ? () {
                       final formattedValue = NumberFormat.currency(
                         symbol: '\$',
@@ -131,7 +141,7 @@ class _WalletOverviewState extends State<WalletOverview> {
                       copyToClipBoard(context, formattedValue);
                     }
                   : null,
-              trendWidget: totalBalance != null
+              trendWidget: totalBalance != null && !hideBalances
                   ? BlocBuilder<PortfolioGrowthBloc, PortfolioGrowthState>(
                       builder: (context, state) {
                         final double totalChange =
@@ -163,8 +173,12 @@ class _WalletOverviewState extends State<WalletOverview> {
             value: totalBalance != null
                 ? (stateWithData?.totalInvestment.value)
                 : null,
+            valueText: hideBalances && totalBalance != null
+                ? '\$$maskedBalanceText'
+                : null,
             onTap: widget.onPortfolioGrowthPressed,
-            onLongPress: totalBalance != null && stateWithData != null
+            onLongPress:
+                totalBalance != null && stateWithData != null && !hideBalances
                 ? () {
                     final formattedValue = NumberFormat.currency(
                       symbol: '\$',
@@ -191,8 +205,12 @@ class _WalletOverviewState extends State<WalletOverview> {
             value: totalBalance != null
                 ? (stateWithData?.profitAmount.value)
                 : null,
+            valueText: hideBalances && totalBalance != null
+                ? '\$$maskedBalanceText'
+                : null,
             onTap: widget.onPortfolioProfitLossPressed,
-            onLongPress: totalBalance != null && stateWithData != null
+            onLongPress:
+                totalBalance != null && stateWithData != null && !hideBalances
                 ? () {
                     final formattedValue = NumberFormat.currency(
                       symbol: '\$',
@@ -200,7 +218,8 @@ class _WalletOverviewState extends State<WalletOverview> {
                     copyToClipBoard(context, formattedValue);
                   }
                 : null,
-            trendWidget: totalBalance != null && stateWithData != null
+            trendWidget:
+                totalBalance != null && stateWithData != null && !hideBalances
                 ? TrendPercentageText(
                     percentage: stateWithData.profitIncreasePercentage,
                     upColor: themeCustom.increaseColor,
@@ -214,15 +233,35 @@ class _WalletOverviewState extends State<WalletOverview> {
         ];
 
         if (isMobile) {
-          return StatisticsCarousel(cards: statisticCards);
-        } else {
-          return Row(
-            spacing: 24,
-            children: statisticCards.map((card) {
-              return Expanded(child: card);
-            }).toList(),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: _BalancePrivacyToggleButton(hideBalances: hideBalances),
+              ),
+              const SizedBox(height: 8),
+              StatisticsCarousel(cards: statisticCards),
+            ],
           );
         }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: _BalancePrivacyToggleButton(hideBalances: hideBalances),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              spacing: 24,
+              children: statisticCards.map((card) {
+                return Expanded(child: card);
+              }).toList(),
+            ),
+          ],
+        );
       },
     );
   }
@@ -256,6 +295,30 @@ class _WalletOverviewState extends State<WalletOverview> {
     }
 
     return total != 0 ? 0.01 : 0;
+  }
+}
+
+class _BalancePrivacyToggleButton extends StatelessWidget {
+  const _BalancePrivacyToggleButton({required this.hideBalances});
+
+  final bool hideBalances;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: const Key('wallet-overview-privacy-toggle'),
+      tooltip: LocaleKeys.hideBalancesTitle.tr(),
+      icon: Icon(
+        hideBalances
+            ? Icons.visibility_off_outlined
+            : Icons.visibility_outlined,
+      ),
+      onPressed: () {
+        context.read<SettingsBloc>().add(
+          HideBalancesChanged(hideBalances: !hideBalances),
+        );
+      },
+    );
   }
 }
 

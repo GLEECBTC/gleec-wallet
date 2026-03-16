@@ -1,3 +1,19 @@
+/// Legacy RPC error type enum.
+///
+/// This enum is deprecated. Use the typed error type enums from
+/// `package:komodo_defi_rpc_methods` instead. These are auto-generated
+/// from the KDF source and provide comprehensive coverage of all error types.
+///
+/// For example:
+/// - [AccountRpcErrorType] for account-related errors
+/// - [WithdrawErrorType] for withdrawal errors
+/// - [SwapStartErrorType] for swap errors
+///
+/// See [KdfErrorRegistry] for automatic error parsing into typed exceptions.
+@Deprecated(
+  'Use typed error type enums from package:komodo_defi_rpc_methods instead. '
+  'See mm2_rpc_exceptions.dart for available error types.',
+)
 enum RpcErrorType {
   alreadyStarted,
   alreadyStopped,

@@ -19,6 +19,7 @@ const String storedSettingsKeyV2 = 'komodo_wallet_settings_v2';
 const String storedAnalyticsSettingsKey = 'analytics_settings';
 const String storedMarketMakerSettingsKey = 'market_maker_settings';
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
+const String hdWalletModePreferenceKey = 'wallet_hd_mode_preference';
 
 // anchor: protocols support
 const String ercTxHistoryUrl = 'https://etherscan.gleec.com/api';
@@ -32,6 +33,7 @@ const int contactDetailsMaxLength = 100;
 // Maximum allowed length for passwords across the app
 // TODO: Mirror this limit in the SDK validation and any backend API constraints
 const int passwordMaxLength = 128;
+const String maskedBalanceText = '****';
 final RegExp discordUsernameRegex = RegExp(r'^[a-zA-Z0-9._]{2,32}$');
 final RegExp telegramUsernameRegex = RegExp(r'^[a-zA-Z0-9_]{5,32}$');
 final RegExp matrixIdRegex = RegExp(

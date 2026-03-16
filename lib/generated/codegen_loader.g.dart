@@ -86,6 +86,8 @@ abstract class LocaleKeys {
   static const portfolio = 'portfolio';
   static const editList = 'editList';
   static const withBalance = 'withBalance';
+  static const hideBalancesTitle = 'hideBalancesTitle';
+  static const hideBalancesSubtitle = 'hideBalancesSubtitle';
   static const balance = 'balance';
   static const transactions = 'transactions';
   static const send = 'send';
@@ -408,6 +410,8 @@ abstract class LocaleKeys {
   static const trezorErrorInvalidPin = 'trezorErrorInvalidPin';
   static const trezorSelectTitle = 'trezorSelectTitle';
   static const trezorSelectSubTitle = 'trezorSelectSubTitle';
+  static const trezorWalletOnlyTooltip = 'trezorWalletOnlyTooltip';
+  static const trezorWalletOnlyNotice = 'trezorWalletOnlyNotice';
   static const trezorBrowserUnsupported = 'trezorBrowserUnsupported';
   static const trezorTransactionInProgressMessage =
       'trezorTransactionInProgressMessage';
@@ -463,6 +467,7 @@ abstract class LocaleKeys {
   static const passwordContainsTheWordPassword =
       'passwordContainsTheWordPassword';
   static const passwordTooShort = 'passwordTooShort';
+  static const passwordTooLong = 'passwordTooLong';
   static const passwordMissingDigit = 'passwordMissingDigit';
   static const passwordMissingLowercase = 'passwordMissingLowercase';
   static const passwordMissingUppercase = 'passwordMissingUppercase';
@@ -522,6 +527,9 @@ abstract class LocaleKeys {
   static const hdWalletModeSwitchTitle = 'hdWalletModeSwitchTitle';
   static const hdWalletModeSwitchSubtitle = 'hdWalletModeSwitchSubtitle';
   static const hdWalletModeSwitchTooltip = 'hdWalletModeSwitchTooltip';
+  static const multiAddressWalletNoticeTitle = 'multiAddressWalletNoticeTitle';
+  static const multiAddressWalletNoticeDescription =
+      'multiAddressWalletNoticeDescription';
   static const noActiveWallet = 'noActiveWallet';
   static const memo = 'memo';
   static const gasPriceGwei = 'gasPriceGwei';
@@ -594,8 +602,11 @@ abstract class LocaleKeys {
   static const useCustomSeedOrWif = 'useCustomSeedOrWif';
   static const cancelOrder = 'cancelOrder';
   static const version = 'version';
+  static const buildDate = 'buildDate';
   static const copyAddressToClipboard = 'copyAddressToClipboard';
   static const copiedAddressToClipboard = 'copiedAddressToClipboard';
+  static const copyUuid = 'copyUuid';
+  static const copiedUuidToClipboard = 'copiedUuidToClipboard';
   static const createdAt = 'createdAt';
   static const coin = 'coin';
   static const token = 'token';
@@ -639,6 +650,8 @@ abstract class LocaleKeys {
   static const trezorImportFailed = 'trezorImportFailed';
   static const faucetFailureTitle = 'faucetFailureTitle';
   static const faucetLoadingTitle = 'faucetLoadingTitle';
+  static const faucetLoadingMessage = 'faucetLoadingMessage';
+  static const faucetLoadingSubtitle = 'faucetLoadingSubtitle';
   static const faucetInitialTitle = 'faucetInitialTitle';
   static const faucetUnknownErrorMessage = 'faucetUnknownErrorMessage';
   static const faucetLinkToTransaction = 'faucetLinkToTransaction';
@@ -778,6 +791,8 @@ abstract class LocaleKeys {
   static const creating = 'creating';
   static const createAddress = 'createAddress';
   static const hideZeroBalanceAddresses = 'hideZeroBalanceAddresses';
+  static const showAllAddresses = 'showAllAddresses';
+  static const showLessAddresses = 'showLessAddresses';
   static const important = 'important';
   static const trend = 'trend';
   static const growth = 'growth';

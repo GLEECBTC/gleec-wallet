@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/orderbook_depth/orderbook_depth_response.dart';
@@ -10,11 +9,14 @@ import 'package:web_dex/model/typedef.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class BridgeRepository {
-  BridgeRepository(this._mm2Api, this._kdfSdk, this._coinsRepository);
+  BridgeRepository(this._mm2Api, this._coinsRepository);
 
   final Mm2Api _mm2Api;
-  final KomodoDefiSdk _kdfSdk;
   final CoinsRepo _coinsRepository;
+
+  static const Duration _depthCacheTtl = Duration(seconds: 10);
+  final Map<String, _DepthCacheEntry> _depthCache = {};
+  final Map<String, Future<List<OrderBookDepth>?>> _depthInFlight = {};
 
   Future<CoinsByTicker?> getSellCoins(CoinsByTicker? tickers) async {
     if (tickers == null) return null;
@@ -22,8 +24,10 @@ class BridgeRepository {
     final List<OrderBookDepth>? depths = await _getDepths(tickers);
     if (depths == null) return null;
 
-    final CoinsByTicker sellCoins =
-        tickers.entries.fold({}, (previousValue, entry) {
+    final CoinsByTicker sellCoins = tickers.entries.fold({}, (
+      previousValue,
+      entry,
+    ) {
       final List<Coin> coins = previousValue[entry.key] ?? [];
       final List<OrderBookDepth> tickerDepths = depths
           .where(
@@ -57,11 +61,13 @@ class BridgeRepository {
     coins = removeWalletOnly(coins);
 
     final CoinsByTicker coinsByTicker = convertToCoinsByTicker(coins);
-    final CoinsByTicker multiProtocolCoins =
-        removeSingleProtocol(coinsByTicker);
+    final CoinsByTicker multiProtocolCoins = removeSingleProtocol(
+      coinsByTicker,
+    );
 
-    final List<OrderBookDepth>? orderBookDepths =
-        await _getDepths(multiProtocolCoins);
+    final List<OrderBookDepth>? orderBookDepths = await _getDepths(
+      multiProtocolCoins,
+    );
 
     if (orderBookDepths == null || orderBookDepths.isEmpty) {
       return multiProtocolCoins;
@@ -75,20 +81,49 @@ class BridgeRepository {
 
   Future<List<OrderBookDepth>?> _getDepths(CoinsByTicker coinsByTicker) async {
     final List<List<String>> depthsPairs = _getDepthsPairs(coinsByTicker);
+    if (depthsPairs.isEmpty) return null;
 
-    List<OrderBookDepth>? orderBookDepths =
-        await _getNotEmptyDepths(depthsPairs);
-    if (orderBookDepths?.isEmpty ?? true) {
-      orderBookDepths = await _frequentRequestDepth(depthsPairs);
+    final cacheKey = _getDepthPairsCacheKey(depthsPairs);
+    final cached = _depthCache[cacheKey];
+    if (cached != null &&
+        DateTime.now().difference(cached.cachedAt) < _depthCacheTtl) {
+      return cached.depths;
     }
 
-    return orderBookDepths;
+    final inFlight = _depthInFlight[cacheKey];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final requestFuture = () async {
+      List<OrderBookDepth>? orderBookDepths = await _getNotEmptyDepths(
+        depthsPairs,
+      );
+      if (orderBookDepths?.isEmpty ?? true) {
+        orderBookDepths = await _frequentRequestDepth(depthsPairs);
+      }
+
+      if (orderBookDepths != null) {
+        _depthCache[cacheKey] = _DepthCacheEntry(
+          depths: orderBookDepths,
+          cachedAt: DateTime.now(),
+        );
+      }
+      return orderBookDepths;
+    }();
+
+    _depthInFlight[cacheKey] = requestFuture;
+    try {
+      return await requestFuture;
+    } finally {
+      _depthInFlight.remove(cacheKey);
+    }
   }
 
   Future<List<OrderBookDepth>?> _frequentRequestDepth(
     List<List<String>> depthsPairs,
   ) async {
-    int attempts = 5;
+    int attempts = 3;
     List<OrderBookDepth>? orderBookDepthsLocal;
 
     if (depthsPairs.isEmpty) {
@@ -101,7 +136,7 @@ class BridgeRepository {
         return orderBookDepthsLocal;
       }
       attempts -= 1;
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 800));
     }
     return null;
   }
@@ -109,8 +144,8 @@ class BridgeRepository {
   Future<List<OrderBookDepth>?> _getNotEmptyDepths(
     List<List<String>> pairs,
   ) async {
-    final OrderBookDepthResponse? depthResponse =
-        await _mm2Api.getOrderBookDepth(pairs, _coinsRepository);
+    final OrderBookDepthResponse? depthResponse = await _mm2Api
+        .getOrderBookDepth(pairs, _coinsRepository);
 
     return depthResponse?.list
         .where((d) => d.bids != 0 || d.asks != 0)
@@ -118,13 +153,10 @@ class BridgeRepository {
   }
 
   List<List<String>> _getDepthsPairs(CoinsByTicker coins) {
-    return coins.values.fold<List<List<String>>>(
-      [],
-      (previousValue, entry) {
-        previousValue.addAll(_createPairs(entry));
-        return previousValue;
-      },
-    );
+    return coins.values.fold<List<List<String>>>([], (previousValue, entry) {
+      previousValue.addAll(_createPairs(entry));
+      return previousValue;
+    });
   }
 
   List<List<String>> _createPairs(List<Coin> group) {
@@ -138,4 +170,19 @@ class BridgeRepository {
     }
     return pairs;
   }
+
+  String _getDepthPairsCacheKey(List<List<String>> pairs) {
+    final normalizedPairs = pairs.map((pair) {
+      final sorted = List<String>.of(pair)..sort();
+      return '${sorted[0]}/${sorted[1]}';
+    }).toList()..sort();
+    return normalizedPairs.join('|');
+  }
+}
+
+class _DepthCacheEntry {
+  _DepthCacheEntry({required this.depths, required this.cachedAt});
+
+  final List<OrderBookDepth> depths;
+  final DateTime cachedAt;
 }

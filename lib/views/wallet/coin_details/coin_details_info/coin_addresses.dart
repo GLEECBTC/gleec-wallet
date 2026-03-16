@@ -12,9 +12,11 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_type_tag.dart';
@@ -24,7 +26,6 @@ import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/coin_details/receive/trezor_new_address_confirmation.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
-import 'package:web_dex/views/wallet/common/address_text.dart';
 
 class CoinAddresses extends StatefulWidget {
   const CoinAddresses({
@@ -42,6 +43,9 @@ class CoinAddresses extends StatefulWidget {
 
 class _CoinAddressesState extends State<CoinAddresses> {
   // No need to store a reference to the bloc since we don't manage its lifecycle
+  bool _showAllAddresses = false;
+
+  int get _collapsedLimit => isMobile ? 3 : 5;
 
   @override
   void dispose() {
@@ -71,6 +75,20 @@ class _CoinAddressesState extends State<CoinAddresses> {
             }
           },
           builder: (context, state) {
+            final errorMessage = state.errorMessage?.trim();
+            final addresses = state.addresses
+                .where(
+                  (address) =>
+                      !state.hideZeroBalance ||
+                      address.balance.spendable != Decimal.zero,
+                )
+                .toList();
+            final bool hasMore = addresses.length > _collapsedLimit;
+            final bool showAll = _showAllAddresses || !hasMore;
+            final List<PubkeyInfo> visibleAddresses = showAll
+                ? addresses
+                : addresses.take(_collapsedLimit).toList();
+
             return SliverToBoxAdapter(
               child: Column(
                 children: [
@@ -93,13 +111,9 @@ class _CoinAddressesState extends State<CoinAddresses> {
                                 state.cantCreateNewAddressReasons,
                           ),
                           const SizedBox(height: 12),
-                          ...state.addresses.asMap().entries.map((entry) {
+                          ...visibleAddresses.asMap().entries.map((entry) {
                             final index = entry.key;
                             final address = entry.value;
-                            if (state.hideZeroBalance &&
-                                address.balance.spendable == Decimal.zero) {
-                              return const SizedBox();
-                            }
 
                             return AddressCard(
                               address: address,
@@ -108,6 +122,22 @@ class _CoinAddressesState extends State<CoinAddresses> {
                               setPageType: widget.setPageType,
                             );
                           }),
+                          if (hasMore)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _showAllAddresses = !_showAllAddresses;
+                                  });
+                                },
+                                child: Text(
+                                  _showAllAddresses
+                                      ? LocaleKeys.showLessAddresses.tr()
+                                      : LocaleKeys.showAllAddresses.tr(),
+                                ),
+                              ),
+                            ),
                           if (state.status == FormStatus.submitting)
                             const Padding(
                               padding: EdgeInsets.symmetric(vertical: 20.0),
@@ -121,8 +151,11 @@ class _CoinAddressesState extends State<CoinAddresses> {
                               ),
                               child: Center(
                                 child: ErrorDisplay(
-                                  message: LocaleKeys.somethingWrong.tr(),
-                                  detailedMessage: state.errorMessage,
+                                  message:
+                                      (errorMessage != null &&
+                                          errorMessage.isNotEmpty)
+                                      ? errorMessage
+                                      : LocaleKeys.somethingWrong.tr(),
                                 ),
                               ),
                             ),
@@ -208,74 +241,63 @@ class AddressCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12.0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
       color: theme.custom.dexPageTheme.emptyPlace,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 4.0,
-          horizontal: 16.0,
-        ),
-        leading: isMobile ? null : AddressIcon(address: address.address),
-        title: isMobile
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      AddressIcon(address: address.address),
-                      const SizedBox(width: 8),
-                      Flexible(child: AddressText(address: address.address)),
-                      const SizedBox(width: 8),
-                      if (coin.id.hasFaucet)
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minWidth: 80,
-                            maxWidth: isMobile ? 100 : 160,
-                          ),
-                          child: FaucetButton(
-                            coinAbbr: coin.abbr,
-                            address: address,
-                          ),
-                        ),
-                      SwapAddressTag(address: address),
-                      const SizedBox(width: 8),
-                      AddressCopyButton(
-                        address: address.address,
-                        coinAbbr: coin.abbr,
-                      ),
-                      QrButton(coin: coin, address: address),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _Balance(address: address, coin: coin),
-                ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        child: isMobile
+            ? _MobileAddressContent(
+                address: address,
+                coin: coin,
+                onShowFullAddress: () => _showFullAddressDialog(context),
               )
-            : SizedBox(
-                width: double.infinity,
-                child: Row(
-                  children: [
-                    Flexible(child: AddressText(address: address.address)),
-                    const SizedBox(width: 8),
-                    AddressCopyButton(
-                      address: address.address,
-                      coinAbbr: coin.abbr,
-                    ),
-                    QrButton(coin: coin, address: address),
-                    if (coin.id.hasFaucet)
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: 80,
-                          maxWidth: isMobile ? 100 : 160,
-                        ),
-                        child: FaucetButton(
-                          coinAbbr: coin.abbr,
-                          address: address,
-                        ),
-                      ),
-                    SwapAddressTag(address: address),
-                  ],
-                ),
+            : _DesktopAddressContent(
+                address: address,
+                coin: coin,
+                onShowFullAddress: () => _showFullAddressDialog(context),
               ),
-        trailing: isMobile ? null : _Balance(address: address, coin: coin),
       ),
+    );
+  }
+
+  void _showFullAddressDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(LocaleKeys.address.tr()),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    address.address,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: LocaleKeys.copyAddressToClipboard.tr(
+                    args: [coin.abbr],
+                  ),
+                  icon: const Icon(Icons.copy_rounded),
+                  onPressed: () => copyToClipBoard(
+                    context,
+                    address.address,
+                    LocaleKeys.copiedAddressToClipboard.tr(args: [coin.abbr]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleKeys.close.tr()),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -288,14 +310,146 @@ class _Balance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hideBalances = context.select(
+      (SettingsBloc bloc) => bloc.state.hideBalances,
+    );
     final balance = address.balance.total.toDouble();
     final price = coin.lastKnownUsdPrice(context.sdk);
     final usdValue = price == null ? null : price * balance;
-    final fiat = formatUsdValue(usdValue);
+    final fiat = hideBalances ? maskedBalanceText : formatUsdValue(usdValue);
 
     return Text(
-      '${doubleToString(balance)} ${abbr2Ticker(coin.abbr)} ($fiat)',
+      hideBalances
+          ? '${maskedBalanceText} ${abbr2Ticker(coin.abbr)} ($fiat)'
+          : '${doubleToString(balance)} ${abbr2Ticker(coin.abbr)} ($fiat)',
       style: TextStyle(fontSize: isMobile ? 12 : 14),
+    );
+  }
+}
+
+class _MobileAddressContent extends StatelessWidget {
+  const _MobileAddressContent({
+    required this.address,
+    required this.coin,
+    required this.onShowFullAddress,
+  });
+
+  final PubkeyInfo address;
+  final Coin coin;
+  final VoidCallback onShowFullAddress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AddressIcon(address: address.address),
+            const SizedBox(width: 8),
+            Expanded(
+              child: InkWell(
+                onTap: onShowFullAddress,
+                child: TruncatedMiddleText(
+                  address.address,
+                  style:
+                      Theme.of(context).textTheme.bodyMedium ??
+                      const TextStyle(fontSize: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            AddressCopyButton(address: address.address, coinAbbr: coin.abbr),
+            QrButton(coin: coin, address: address),
+            if (coin.id.hasFaucet)
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 80, maxWidth: 160),
+                child: FaucetButton(coinAbbr: coin.abbr, address: address),
+              ),
+            SwapAddressTag(address: address),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _Balance(address: address, coin: coin),
+      ],
+    );
+  }
+}
+
+class _DesktopAddressContent extends StatelessWidget {
+  const _DesktopAddressContent({
+    required this.address,
+    required this.coin,
+    required this.onShowFullAddress,
+  });
+
+  final PubkeyInfo address;
+  final Coin coin;
+  final VoidCallback onShowFullAddress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        AddressIcon(address: address.address),
+        const SizedBox(width: 12),
+        Expanded(
+          child: InkWell(
+            onTap: onShowFullAddress,
+            child: TruncatedMiddleText(
+              address.address,
+              style:
+                  Theme.of(context).textTheme.bodyMedium ??
+                  const TextStyle(fontSize: 14),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 220,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                AddressCopyButton(
+                  address: address.address,
+                  coinAbbr: coin.abbr,
+                ),
+                QrButton(coin: coin, address: address),
+                if (coin.id.hasFaucet)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 80,
+                      maxWidth: 160,
+                    ),
+                    child: FaucetButton(coinAbbr: coin.abbr, address: address),
+                  ),
+                SwapAddressTag(address: address),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 140),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _Balance(address: address, coin: coin),
+          ),
+        ),
+      ],
     );
   }
 }

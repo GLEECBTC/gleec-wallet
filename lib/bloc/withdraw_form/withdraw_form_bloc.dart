@@ -1,7 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
@@ -10,6 +12,7 @@ import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/kdf_error_display.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:collection/collection.dart';
 
@@ -20,6 +23,7 @@ export 'package:web_dex/bloc/withdraw_form/withdraw_form_step.dart';
 import 'package:decimal/decimal.dart';
 
 class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
+  static final Logger _logger = Logger('WithdrawFormBloc');
   final KomodoDefiSdk _sdk;
   final WalletType? _walletType;
 
@@ -44,6 +48,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormMaxAmountEnabled>(_onMaxAmountEnabled);
     on<WithdrawFormCustomFeeEnabled>(_onCustomFeeEnabled);
     on<WithdrawFormCustomFeeChanged>(_onFeeChanged);
+    on<WithdrawFormFeePriorityChanged>(_onFeePriorityChanged);
     on<WithdrawFormMemoChanged>(_onMemoChanged);
     on<WithdrawFormIbcTransferEnabled>(_onIbcTransferEnabled);
     on<WithdrawFormIbcChannelChanged>(_onIbcChannelChanged);
@@ -52,9 +57,58 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormCancelled>(_onCancelled);
     on<WithdrawFormReset>(_onReset);
     on<WithdrawFormSourcesLoadRequested>(_onSourcesLoadRequested);
+    on<WithdrawFormFeeOptionsRequested>(_onFeeOptionsRequested);
     on<WithdrawFormConvertAddressRequested>(_onConvertAddress);
 
     add(const WithdrawFormSourcesLoadRequested());
+    add(const WithdrawFormFeeOptionsRequested());
+  }
+
+  String _formatErrorMessage(Object error, {String? fallbackPrefix}) {
+    String resolvedMessage;
+
+    if (error is MmRpcException) {
+      resolvedMessage = error.localizedMessage;
+    } else if (error is GeneralErrorResponse) {
+      resolvedMessage = error.localizedMessage;
+    } else if (error is SdkError) {
+      final localized = error.messageKey.tr(args: error.messageArgs);
+      resolvedMessage = localized == error.messageKey
+          ? error.fallbackMessage
+          : localized;
+    } else {
+      resolvedMessage = error.toString();
+    }
+
+    final message = _normalizeCommonErrors(resolvedMessage);
+    return fallbackPrefix == null ? message : '$fallbackPrefix: $message';
+  }
+
+  String _normalizeCommonErrors(String message) {
+    final normalized = message.toLowerCase();
+
+    if (normalized.contains('insufficient') &&
+        (normalized.contains('gas') || normalized.contains('fee'))) {
+      return LocaleKeys.notEnoughBalanceForGasError.tr();
+    }
+
+    if (normalized.contains('insufficient funds') ||
+        normalized.contains('not sufficient balance')) {
+      return 'kdfErrorNotSufficientBalance'.tr();
+    }
+
+    if (normalized.contains('failed to fetch') ||
+        normalized.contains('network error') ||
+        normalized.contains('timed out') ||
+        normalized.contains('timeout')) {
+      return 'kdfErrorTransport'.tr();
+    }
+
+    if (message.trim().isEmpty) {
+      return LocaleKeys.somethingWrong.tr();
+    }
+
+    return message;
   }
 
   Future<void> _onSourcesLoadRequested(
@@ -111,15 +165,33 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   FeeInfo? _getDefaultFee() {
     final protocol = state.asset.protocol;
     if (protocol is Erc20Protocol) {
-      return FeeInfo.ethGas(
+      return FeeInfo.ethGasEip1559(
         coin: state.asset.id.id,
-        gasPrice: Decimal.one,
+        maxFeePerGas: Decimal.parse('0.00000002'),
+        maxPriorityFeePerGas: Decimal.parse('0.000000001'),
         gas: 21000,
       );
-    } else if (protocol is UtxoProtocol) {
+    }
+    if (protocol is QtumProtocol) {
+      return FeeInfo.qrc20Gas(
+        coin: state.asset.id.id,
+        gasPrice: Decimal.parse('0.00000040'),
+        gasLimit: 250000,
+      );
+    }
+    if (protocol is TendermintProtocol) {
+      return FeeInfo.cosmosGas(
+        coin: state.asset.id.id,
+        gasPrice: Decimal.parse('0.025'),
+        gasLimit: 200000,
+      );
+    }
+    if (protocol is UtxoProtocol) {
+      final decimals = state.asset.id.chainId.decimals ?? 8;
+      final feeAtomic = protocol.txFee ?? 10000;
       return FeeInfo.utxoFixed(
         coin: state.asset.id.id,
-        amount: Decimal.fromInt(protocol.txFee ?? 10000),
+        amount: _atomicToDecimal(feeAtomic, decimals),
       );
     }
     return null;
@@ -294,10 +366,28 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     }
   }
 
-  void _onMaxAmountEnabled(
+  Future<void> _onMaxAmountEnabled(
     WithdrawFormMaxAmountEnabled event,
     Emitter<WithdrawFormState> emit,
-  ) {
+  ) async {
+    if (event.isEnabled && state.asset.id.parentId != null) {
+      final parentId = state.asset.id.parentId!;
+      final parentBalance =
+          _sdk.balances.lastKnown(parentId) ??
+          await _sdk.balances.getBalance(parentId);
+
+      if (parentBalance.spendable == Decimal.zero) {
+        emit(
+          state.copyWith(
+            isMaxAmount: false,
+            amountError: () =>
+                TextError(error: LocaleKeys.notEnoughBalanceForGasError.tr()),
+          ),
+        );
+        return;
+      }
+    }
+
     final balance =
         state.selectedSourceAddress?.balance ?? state.pubkeys?.balance;
     final maxAmount = event.isEnabled
@@ -318,12 +408,16 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormCustomFeeEnabled event,
     Emitter<WithdrawFormState> emit,
   ) {
+    final defaultPriority =
+        state.selectedFeePriority ??
+        (state.feeOptions != null ? WithdrawalFeeLevel.medium : null);
     // If enabling custom fees, set a default fee or reuse from `_getDefaultFee()`
     emit(
       state.copyWith(
         isCustomFee: event.isEnabled,
         customFee: event.isEnabled ? () => _getDefaultFee() : () => null,
         customFeeError: () => null,
+        selectedFeePriority: () => event.isEnabled ? null : defaultPriority,
       ),
     );
   }
@@ -333,12 +427,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) {
     try {
-      // Validate the new fee, e.g. if it's EthGas => check gasPrice, gas > 0, etc.
-      if (event.fee is FeeInfoEthGas) {
-        _validateEvmFee(event.fee as FeeInfoEthGas);
-      } else if (event.fee is FeeInfoUtxoFixed) {
-        _validateUtxoFee(event.fee as FeeInfoUtxoFixed);
-      }
+      _validateFee(event.fee);
       emit(
         state.copyWith(customFee: () => event.fee, customFeeError: () => null),
       );
@@ -349,19 +438,104 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     }
   }
 
-  void _validateEvmFee(FeeInfoEthGas fee) {
-    if (fee.gasPrice <= Decimal.zero) {
-      throw Exception('Gas price must be greater than 0');
-    }
-    if (fee.gas <= 0) {
-      throw Exception('Gas limit must be greater than 0');
+  void _onFeePriorityChanged(
+    WithdrawFormFeePriorityChanged event,
+    Emitter<WithdrawFormState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        selectedFeePriority: () => event.priority,
+        isCustomFee: false,
+        customFee: () => null,
+        customFeeError: () => null,
+      ),
+    );
+  }
+
+  Future<void> _onFeeOptionsRequested(
+    WithdrawFormFeeOptionsRequested event,
+    Emitter<WithdrawFormState> emit,
+  ) async {
+    try {
+      final feeOptions = await _sdk.withdrawals.getFeeOptions(
+        state.asset.id.id,
+      );
+      final shouldSelectDefault =
+          !state.isCustomFee &&
+          state.selectedFeePriority == null &&
+          feeOptions != null;
+      emit(
+        state.copyWith(
+          feeOptions: () => feeOptions,
+          selectedFeePriority: () => shouldSelectDefault
+              ? WithdrawalFeeLevel.medium
+              : state.selectedFeePriority,
+        ),
+      );
+    } catch (_) {
+      emit(state.copyWith(feeOptions: () => null));
     }
   }
 
-  void _validateUtxoFee(FeeInfoUtxoFixed fee) {
-    if (fee.amount <= Decimal.zero) {
-      throw Exception('Fee amount must be greater than 0');
-    }
+  void _validateFee(FeeInfo fee) {
+    fee.map(
+      utxoFixed: (utxo) {
+        if (utxo.amount <= Decimal.zero) {
+          throw Exception('Fee amount must be greater than 0');
+        }
+      },
+      utxoPerKbyte: (utxo) {
+        if (utxo.amount <= Decimal.zero) {
+          throw Exception('Fee amount must be greater than 0');
+        }
+      },
+      ethGas: (eth) {
+        if (eth.gasPrice <= Decimal.zero) {
+          throw Exception('Gas price must be greater than 0');
+        }
+        if (eth.gas <= 0) {
+          throw Exception('Gas limit must be greater than 0');
+        }
+      },
+      ethGasEip1559: (eth) {
+        if (eth.maxFeePerGas <= Decimal.zero ||
+            eth.maxPriorityFeePerGas <= Decimal.zero) {
+          throw Exception('Gas fee values must be greater than 0');
+        }
+        if (eth.gas <= 0) {
+          throw Exception('Gas limit must be greater than 0');
+        }
+      },
+      qrc20Gas: (qrc) {
+        if (qrc.gasPrice <= Decimal.zero) {
+          throw Exception('Gas price must be greater than 0');
+        }
+        if (qrc.gasLimit <= 0) {
+          throw Exception('Gas limit must be greater than 0');
+        }
+      },
+      cosmosGas: (cosmos) {
+        if (cosmos.gasPrice <= Decimal.zero) {
+          throw Exception('Gas price must be greater than 0');
+        }
+        if (cosmos.gasLimit <= 0) {
+          throw Exception('Gas limit must be greater than 0');
+        }
+      },
+      tendermint: (tendermint) {
+        if (tendermint.amount <= Decimal.zero) {
+          throw Exception('Fee amount must be greater than 0');
+        }
+        if (tendermint.gasLimit <= 0) {
+          throw Exception('Gas limit must be greater than 0');
+        }
+      },
+      sia: (sia) {
+        if (sia.amount <= Decimal.zero) {
+          throw Exception('Fee amount must be greater than 0');
+        }
+      },
+    );
   }
 
   void _onMemoChanged(
@@ -445,16 +619,22 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         try {
           await FdMonitorService().logDetailedStatus();
           final stats = await FdMonitorService().getCurrentCount();
-          print('FD stats at withdrawal preview failure for ${state.asset.id.id}: $stats');
-        } catch (fdError) {
-          print('Failed to capture FD stats: $fdError');
+          _logger.info(
+            'FD stats at withdrawal preview failure for ${state.asset.id.id}: $stats',
+          );
+        } catch (fdError, fdStackTrace) {
+          _logger.warning('Failed to capture FD stats', fdError, fdStackTrace);
         }
       }
-      
+
       emit(
         state.copyWith(
-          previewError: () =>
-              TextError(error: 'Failed to generate preview: $e'),
+          previewError: () => TextError(
+            error: _formatErrorMessage(
+              e,
+              fallbackPrefix: 'Failed to generate preview',
+            ),
+          ),
           isSending: false,
           isAwaitingTrezorConfirmation: false,
         ),
@@ -494,6 +674,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           result = progress.withdrawalResult;
           break;
         } else if (progress.status == WithdrawalStatus.error) {
+          if (progress.sdkError != null) {
+            throw progress.sdkError!;
+          }
           throw Exception(progress.errorMessage ?? 'Broadcast failed');
         }
         // Continue for in-progress states
@@ -504,7 +687,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           state.copyWith(
             isSending: false,
             transactionError: () => TextError(
-              error: 'Withdrawal did not complete: no result received.'
+              error: 'Withdrawal did not complete: no result received.',
             ),
             isAwaitingTrezorConfirmation: false,
           ),
@@ -529,15 +712,19 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         try {
           await FdMonitorService().logDetailedStatus();
           final stats = await FdMonitorService().getCurrentCount();
-          print('FD stats at withdrawal submission failure for ${state.asset.id.id}: $stats');
-        } catch (fdError) {
-          print('Failed to capture FD stats: $fdError');
+          _logger.info(
+            'FD stats at withdrawal submission failure for ${state.asset.id.id}: $stats',
+          );
+        } catch (fdError, fdStackTrace) {
+          _logger.warning('Failed to capture FD stats', fdError, fdStackTrace);
         }
       }
-      
+
       emit(
         state.copyWith(
-          transactionError: () => TextError(error: 'Transaction failed: $e'),
+          transactionError: () => TextError(
+            error: _formatErrorMessage(e, fallbackPrefix: 'Transaction failed'),
+          ),
           step: WithdrawFormStep.failed,
           isSending: false,
           isAwaitingTrezorConfirmation: false,
@@ -608,6 +795,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ),
       );
     }
+  }
+
+  Decimal _atomicToDecimal(int amount, int decimals) {
+    if (decimals <= 0) return Decimal.fromInt(amount);
+    final scale = Decimal.parse('1${'0' * decimals}');
+    return (Decimal.fromInt(amount) / scale).toDecimal();
   }
 }
 

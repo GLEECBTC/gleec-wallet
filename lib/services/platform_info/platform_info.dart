@@ -1,6 +1,6 @@
 // ignore: always_use_package_imports
 import 'stub.dart'
-    if (dart.library.html) 'web_platform_info.dart'
+    if (dart.library.js_interop) 'web_platform_info.dart'
     if (dart.library.io) 'native_platform_info.dart';
 
 enum PlatformType {

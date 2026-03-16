@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 class UiDropdown extends StatefulWidget {
@@ -43,7 +44,7 @@ class _UiDropdownState extends State<UiDropdown> with WidgetsBindingObserver {
         _switcherOffset = renderObject.localToGlobal(Offset.zero);
       }
       _tooltipWrapper = _buildTooltipWrapper();
-      
+
       if (widget.isOpen) _open();
     });
 
@@ -107,21 +108,25 @@ class _UiDropdownState extends State<UiDropdown> with WidgetsBindingObserver {
             bottom: 0,
             child: Material(
               color: Colors.transparent,
-              child: InkWell(
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                hoverColor: Colors.transparent,
-                onTap: () => _switch(),
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    _close();
+                  }
+                },
+                child: InkWell(
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  onTap: () => _switch(),
+                ),
               ),
             ),
           ),
           Positioned(
             top: (_top ?? 0) + 10,
             right: _right,
-            child: Material(
-              color: Colors.transparent,
-              child: widget.dropdown,
-            ),
+            child: Material(color: Colors.transparent, child: widget.dropdown),
           ),
         ],
       ),

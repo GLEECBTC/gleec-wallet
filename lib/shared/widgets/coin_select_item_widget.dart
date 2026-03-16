@@ -75,11 +75,7 @@ class CoinSelectItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Use the text color from textTheme since onSurface is misused as a
-    // background color in this codebase.
-    final textColor =
-        theme.textTheme.bodyMedium?.color ??
-        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+    final textColor = theme.colorScheme.onSurface;
 
     final baseTextStyle =
         theme.textTheme.bodyMedium ??
@@ -87,24 +83,31 @@ class CoinSelectItemWidget extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      child: Row(
-        children: [
-          if (leading != null)
-            Padding(padding: const EdgeInsets.only(right: 12), child: leading!)
-          else
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: AssetLogo.ofTicker(coinId, size: 20),
-            ),
-          Expanded(
-            child: DefaultTextStyle(
-              style: baseTextStyle.copyWith(color: textColor),
-              child: title ?? Text(name),
-            ),
+      child: IconTheme(
+        data: theme.iconTheme.copyWith(color: textColor),
+        child: DefaultTextStyle(
+          style: baseTextStyle.copyWith(color: textColor),
+          child: Row(
+            children: [
+              if (leading != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: leading!,
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: AssetLogo.ofTicker(coinId, size: 20),
+                ),
+              Expanded(child: title ?? Text(name)),
+              if (trailing != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: trailing!,
+                ),
+            ],
           ),
-          if (trailing != null)
-            Padding(padding: const EdgeInsets.only(left: 8), child: trailing!),
-        ],
+        ),
       ),
     );
   }

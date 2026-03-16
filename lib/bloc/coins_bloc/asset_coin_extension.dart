@@ -108,6 +108,8 @@ extension CoinTypeExtension on CoinSubClass {
         return CoinType.sbch;
       case CoinSubClass.erc20:
         return CoinType.erc20;
+      case CoinSubClass.grc20:
+        return CoinType.erc20;
       case CoinSubClass.krc20:
         return CoinType.krc20;
       case CoinSubClass.zhtlc:
@@ -141,6 +143,7 @@ extension CoinTypeExtension on CoinSubClass {
       case CoinSubClass.hecoChain:
       case CoinSubClass.rskSmartBitcoin:
       case CoinSubClass.erc20:
+      case CoinSubClass.grc20:
         return true;
       default:
         return false;

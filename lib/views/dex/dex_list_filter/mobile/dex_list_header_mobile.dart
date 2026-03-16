@@ -52,16 +52,27 @@ class DexListHeaderMobile extends StatelessWidget {
               const SizedBox(width: 8),
             ],
             if (listType == DexListType.orders)
-              UiPrimaryButton(
-                text: LocaleKeys.cancelAll.tr(),
-                width: 100,
-                height: 30,
-                onPressed:
-                    onCancelAll ?? () => tradingEntitiesBloc.cancelAllOrders(),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+              PopupMenuButton<_DexListHeaderAction>(
+                icon: const Icon(Icons.more_vert, size: 20),
+                onSelected: (action) {
+                  switch (action) {
+                    case _DexListHeaderAction.cancelAll:
+                      (onCancelAll ??
+                          () => tradingEntitiesBloc.cancelAllOrders())();
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: _DexListHeaderAction.cancelAll,
+                    child: Text(
+                      LocaleKeys.cancelAll.tr(),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
           ],
         ),
@@ -355,3 +366,5 @@ class DexListHeaderMobile extends StatelessWidget {
     );
   }
 }
+
+enum _DexListHeaderAction { cancelAll }

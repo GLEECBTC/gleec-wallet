@@ -11,7 +11,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106
-  hive: ^2.2.3 # Changed from git to pub.dev because git dependencies are not allowed in published packages
+  hive_ce: ^2.11.3 # Community-maintained Hive package with WASM support
 
 dev_dependencies:
   lints: ^5.1.1

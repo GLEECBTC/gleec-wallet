@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 
 import 'persistence_provider.dart';
 
@@ -25,10 +25,7 @@ class PersistedStringAdapter extends TypeAdapter<PersistedString> {
     final Map<int, dynamic> fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return PersistedString(
-      fields[0] as String,
-      fields[1] as String,
-    );
+    return PersistedString(fields[0] as String, fields[1] as String);
   }
 
   @override

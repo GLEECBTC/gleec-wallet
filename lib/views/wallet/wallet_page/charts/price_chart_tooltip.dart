@@ -7,17 +7,21 @@ import 'package:web_dex/bloc/cex_market_data/price_chart/models/price_chart_data
 class PriceChartTooltip extends StatelessWidget {
   final Map<PriceChartSeriesPoint, CoinPriceInfo> dataPointCoinMap;
 
-  PriceChartTooltip({
-    Key? key,
-    required this.dataPointCoinMap,
-  }) : super(key: key);
+  PriceChartTooltip({Key? key, required this.dataPointCoinMap})
+    : super(key: key);
 
-  late final double? commonX = dataPointCoinMap.keys.every((element) =>
-          element.unixTimestamp == dataPointCoinMap.keys.first.unixTimestamp)
+  late final double? commonX =
+      dataPointCoinMap.keys.every(
+        (element) =>
+            element.unixTimestamp == dataPointCoinMap.keys.first.unixTimestamp,
+      )
       ? dataPointCoinMap.keys.first.unixTimestamp
       : null;
 
   String valueToString(double value) {
+    if (!value.isFinite) {
+      return '--';
+    }
     if (value.abs() > 1000) {
       return '\$${value.toStringAsFixed(2)}';
     } else {
@@ -35,13 +39,15 @@ class PriceChartTooltip extends StatelessWidget {
         children: [
           if (commonX != null) ...[
             Text(
-                // TODO! Dynamic based on selected period. Try share logic
-                // with parent widget.
+              // TODO! Dynamic based on selected period. Try share logic
+              // with parent widget.
 
-                // For 1M, use format with example of "June 12, 2023"
-                DateFormat('MMMM d, y').format(
-                    DateTime.fromMillisecondsSinceEpoch(commonX!.toInt())),
-                style: Theme.of(context).textTheme.labelMedium),
+              // For 1M, use format with example of "June 12, 2023"
+              DateFormat(
+                'MMMM d, y',
+              ).format(DateTime.fromMillisecondsSinceEpoch(commonX!.toInt())),
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
             const SizedBox(height: 4),
           ],
           if (isMultipleCoins)
@@ -55,10 +61,9 @@ class PriceChartTooltip extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     '${coin.name}: ${valueToString(data.usdValue)}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: Colors.white),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ],
               );

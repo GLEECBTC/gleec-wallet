@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 
 import '../fiat_value.dart';
 
@@ -12,10 +12,7 @@ class FiatValueAdapter extends TypeAdapter<FiatValue> {
     final Map<int, dynamic> fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return FiatValue(
-      currency: fields[0] as String,
-      value: fields[1] as double,
-    );
+    return FiatValue(currency: fields[0] as String, value: fields[1] as double);
   }
 
   @override

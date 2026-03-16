@@ -27,18 +27,31 @@ class TransactionHistoryBloc
 
   final KomodoDefiSdk _sdk;
   StreamSubscription<List<Transaction>>? _historySubscription;
-  StreamSubscription<Transaction>? _newTransactionsSubscription;
 
-  // TODO: Remove or move to SDK
-  final Set<String> _processedTxIds = {};
-  // Stable in-memory clock for transactions that arrive with a zero timestamp.
-  // Ensures deterministic ordering of unconfirmed and just-confirmed items.
-  final Map<String, DateTime> _firstSeenAtById = {};
+  String _errorMessageFrom(Object error) {
+    if (error is SdkError) {
+      final localized = error.messageKey.tr(args: error.messageArgs);
+      return localized == error.messageKey ? error.fallbackMessage : localized;
+    }
+
+    if (error is ActivationFailedException && error.originalError is SdkError) {
+      final sdkError = error.originalError as SdkError;
+      final localized = sdkError.messageKey.tr(args: sdkError.messageArgs);
+      return localized == sdkError.messageKey
+          ? sdkError.fallbackMessage
+          : localized;
+    }
+
+    if (error is ActivationFailedException) {
+      return 'Asset activation failed: ${error.message}';
+    }
+
+    return LocaleKeys.somethingWrong.tr();
+  }
 
   @override
   Future<void> close() async {
     await _historySubscription?.cancel();
-    await _newTransactionsSubscription?.cancel();
     return super.close();
   }
 
@@ -63,9 +76,6 @@ class TransactionHistoryBloc
 
     try {
       await _historySubscription?.cancel();
-      await _newTransactionsSubscription?.cancel();
-      _processedTxIds.clear();
-      _firstSeenAtById.clear();
 
       add(const TransactionHistoryStartedLoading());
       final asset = _sdk.assets.available[event.coin.id];
@@ -78,48 +88,16 @@ class TransactionHistoryBloc
           await _sdk.pubkeys.getPubkeys(asset);
       final myAddresses = pubkeys.keys.map((p) => p.address).toSet();
 
-      // Subscribe to historical transactions
+      Transaction sanitize(Transaction transaction) {
+        return transaction.sanitize(myAddresses);
+      }
+
+      // High-level merged stream from SDK handles history + live updates.
       _historySubscription = _sdk.transactions
-          .getTransactionsStreamed(asset)
+          .watchTransactionHistoryMerged(asset, transform: sanitize)
           .listen(
-            (newTransactions) {
-              if (newTransactions.isEmpty) return;
-
-              // Merge incoming batch by internalId, updating confirmations and other fields
-              final Map<String, Transaction> byId = {
-                for (final t in state.transactions) t.internalId: t,
-              };
-
-              for (final tx in newTransactions) {
-                final sanitized = tx.sanitize(myAddresses);
-                // Capture first-seen time for stable ordering where timestamp may be zero
-                _firstSeenAtById.putIfAbsent(
-                  sanitized.internalId,
-                  () => sanitized.timestamp.millisecondsSinceEpoch != 0
-                      ? sanitized.timestamp
-                      : DateTime.now(),
-                );
-                final existing = byId[sanitized.internalId];
-                if (existing == null) {
-                  byId[sanitized.internalId] = sanitized;
-                  _processedTxIds.add(sanitized.internalId);
-                  continue;
-                }
-
-                // Update existing entry with fresher data (confirmations, blockHeight, fee, memo)
-                byId[sanitized.internalId] = existing.copyWith(
-                  confirmations: sanitized.confirmations,
-                  blockHeight: sanitized.blockHeight,
-                  fee: sanitized.fee ?? existing.fee,
-                  memo: sanitized.memo ?? existing.memo,
-                  // Update the timestamp to change date from "Now" once tx
-                  // is confirmed on the blockchain
-                  timestamp: sanitized.timestamp,
-                );
-              }
-
-              final updatedTransactions = byId.values.toList()
-                ..sort(_compareTransactions);
+            (transactions) {
+              final updatedTransactions = transactions.toList(growable: true);
 
               if (event.coin.isErcType) {
                 _flagTransactions(updatedTransactions, event.coin);
@@ -130,18 +108,9 @@ class TransactionHistoryBloc
             onError: (error) {
               add(
                 TransactionHistoryFailure(
-                  error: TextError(error: LocaleKeys.somethingWrong.tr()),
+                  error: TextError(error: _errorMessageFrom(error)),
                 ),
               );
-            },
-            onDone: () {
-              if (state.error == null && state.loading) {
-                add(
-                  TransactionHistoryUpdated(transactions: state.transactions),
-                );
-              }
-              // Once historical load is complete, start watching for new transactions
-              _subscribeToNewTransactions(asset, event.coin, myAddresses);
             },
           );
     } catch (e, s) {
@@ -152,79 +121,12 @@ class TransactionHistoryBloc
         trace: s,
       );
 
-      String errorMessage;
-      if (e is ActivationFailedException) {
-        errorMessage = 'Asset activation failed: ${e.message}';
-      } else {
-        errorMessage = LocaleKeys.somethingWrong.tr();
-      }
-
-      add(TransactionHistoryFailure(error: TextError(error: errorMessage)));
+      add(
+        TransactionHistoryFailure(
+          error: TextError(error: _errorMessageFrom(e)),
+        ),
+      );
     }
-  }
-
-  void _subscribeToNewTransactions(
-    Asset asset,
-    Coin coin,
-    Set<String> myAddresses,
-  ) {
-    _newTransactionsSubscription = _sdk.transactions
-        .watchTransactions(asset)
-        .listen(
-          (newTransaction) {
-            final sanitized = newTransaction.sanitize(myAddresses);
-            // Capture first-seen time once for stable ordering when timestamp is zero
-            _firstSeenAtById.putIfAbsent(
-              sanitized.internalId,
-              () => sanitized.timestamp.millisecondsSinceEpoch != 0
-                  ? sanitized.timestamp
-                  : DateTime.now(),
-            );
-
-            // Merge single update by internalId
-            final Map<String, Transaction> byId = {
-              for (final t in state.transactions) t.internalId: t,
-            };
-
-            final existing = byId[sanitized.internalId];
-            if (existing == null) {
-              byId[sanitized.internalId] = sanitized;
-            } else {
-              byId[sanitized.internalId] = existing.copyWith(
-                confirmations: sanitized.confirmations,
-                blockHeight: sanitized.blockHeight,
-                fee: sanitized.fee ?? existing.fee,
-                memo: sanitized.memo ?? existing.memo,
-                // Update the timestamp to change date from "Now" once tx
-                // is confirmed on the blockchain
-                timestamp: sanitized.timestamp,
-              );
-            }
-
-            _processedTxIds.add(sanitized.internalId);
-
-            final updatedTransactions = byId.values.toList()
-              ..sort(_compareTransactions);
-
-            if (coin.isErcType) {
-              _flagTransactions(updatedTransactions, coin);
-            }
-
-            add(TransactionHistoryUpdated(transactions: updatedTransactions));
-          },
-          onError: (error) {
-            String errorMessage;
-            if (error is ActivationFailedException) {
-              errorMessage = 'Asset activation failed: ${error.message}';
-            } else {
-              errorMessage = LocaleKeys.somethingWrong.tr();
-            }
-
-            add(
-              TransactionHistoryFailure(error: TextError(error: errorMessage)),
-            );
-          },
-        );
   }
 
   void _onUpdated(
@@ -247,117 +149,11 @@ class TransactionHistoryBloc
   ) {
     emit(state.copyWith(loading: false, error: event.error));
   }
-
-  int _compareTransactions(Transaction left, Transaction right) {
-    final unconfirmedTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
-    if (right.timestamp == unconfirmedTimestamp) {
-      return 1;
-    } else if (left.timestamp == unconfirmedTimestamp) {
-      return -1;
-    }
-    return right.timestamp.compareTo(left.timestamp);
-  }
 }
-
-// Instance comparator now used; legacy top-level comparator removed.
 
 void _flagTransactions(List<Transaction> transactions, Coin coin) {
   if (!coin.isErcType) return;
   transactions.removeWhere(
     (tx) => tx.balanceChanges.totalAmount.toDouble() == 0.0,
   );
-}
-
-class Pagination {
-  Pagination({this.fromId, this.pageNumber});
-  final String? fromId;
-  final int? pageNumber;
-
-  Map<String, dynamic> toJson() => {
-    if (fromId != null) 'FromId': fromId,
-    if (pageNumber != null) 'PageNumber': pageNumber,
-  };
-}
-
-/// Represents different ways to paginate transaction history
-sealed class TransactionPagination {
-  const TransactionPagination();
-
-  /// Get the limit of transactions to return, if applicable
-  int? get limit;
-}
-
-/// Standard page-based pagination
-class PagePagination extends TransactionPagination {
-  const PagePagination({required this.pageNumber, required this.itemsPerPage});
-
-  final int pageNumber;
-  final int itemsPerPage;
-
-  @override
-  int get limit => itemsPerPage;
-}
-
-/// Pagination from a specific transaction ID
-class TransactionBasedPagination extends TransactionPagination {
-  const TransactionBasedPagination({
-    required this.fromId,
-    required this.itemCount,
-  });
-
-  final String fromId;
-  final int itemCount;
-
-  @override
-  int get limit => itemCount;
-}
-
-/// Pagination by block range
-class BlockRangePagination extends TransactionPagination {
-  const BlockRangePagination({
-    required this.fromBlock,
-    required this.toBlock,
-    this.maxItems,
-  });
-
-  final int fromBlock;
-  final int toBlock;
-  final int? maxItems;
-
-  @override
-  int? get limit => maxItems;
-}
-
-/// Pagination by timestamp range
-class TimestampRangePagination extends TransactionPagination {
-  const TimestampRangePagination({
-    required this.fromTimestamp,
-    required this.toTimestamp,
-    this.maxItems,
-  });
-
-  final DateTime fromTimestamp;
-  final DateTime toTimestamp;
-  final int? maxItems;
-
-  @override
-  int? get limit => maxItems;
-}
-
-/// Contract-specific pagination (e.g., for ERC20 token transfers)
-class ContractEventPagination extends TransactionPagination {
-  const ContractEventPagination({
-    required this.contractAddress,
-    required this.fromBlock,
-    this.toBlock,
-    this.maxItems,
-  });
-
-  final String contractAddress;
-  final int fromBlock;
-  final int? toBlock;
-  final int? maxItems;
-
-  @override
-  int? get limit => maxItems;
 }

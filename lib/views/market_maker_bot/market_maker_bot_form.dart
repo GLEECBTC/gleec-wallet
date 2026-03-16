@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/market_maker_bot/market_maker_trade_form/market_mak
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/orderbook/order.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/dex/orderbook/orderbook_view.dart';
 import 'package:web_dex/views/market_maker_bot/market_maker_bot_confirmation_form.dart';
 import 'package:web_dex/views/market_maker_bot/market_maker_bot_form_content.dart';
@@ -109,14 +110,26 @@ class _MakerFormDesktopLayoutState extends State<_MakerFormDesktopLayout> {
                 ),
                 child: BlocBuilder<CoinsBloc, CoinsState>(
                   builder: (context, state) {
-                    final coins = state.walletCoins.values
-                        .where((e) {
-                          final usdPrice = e.usdPrice?.price?.toDouble() ?? 0.0;
+                    final buyCoins = state.coins.values
+                        .where((coin) {
+                          final usdPrice =
+                              coin.lastKnownUsdPrice(context.sdk) ?? 0.0;
                           return usdPrice > 0;
                         })
                         .cast<Coin>()
                         .toList();
-                    return MarketMakerBotFormContent(coins: coins);
+                    final sellCoins = state.walletCoins.values
+                        .where((coin) {
+                          final usdPrice =
+                              coin.lastKnownUsdPrice(context.sdk) ?? 0.0;
+                          return usdPrice > 0;
+                        })
+                        .cast<Coin>()
+                        .toList();
+                    return MarketMakerBotFormContent(
+                      sellCoins: sellCoins,
+                      buyCoins: buyCoins,
+                    );
                   },
                 ),
               ),
@@ -172,14 +185,26 @@ class _MakerFormMobileLayoutState extends State<_MakerFormMobileLayout> {
           children: [
             BlocBuilder<CoinsBloc, CoinsState>(
               builder: (context, state) {
-                final coins = state.walletCoins.values
-                    .where((e) {
-                      final usdPrice = e.usdPrice?.price?.toDouble() ?? 0.0;
+                final buyCoins = state.coins.values
+                    .where((coin) {
+                      final usdPrice =
+                          coin.lastKnownUsdPrice(context.sdk) ?? 0.0;
                       return usdPrice > 0;
                     })
                     .cast<Coin>()
                     .toList();
-                return MarketMakerBotFormContent(coins: coins);
+                final sellCoins = state.walletCoins.values
+                    .where((coin) {
+                      final usdPrice =
+                          coin.lastKnownUsdPrice(context.sdk) ?? 0.0;
+                      return usdPrice > 0;
+                    })
+                    .cast<Coin>()
+                    .toList();
+                return MarketMakerBotFormContent(
+                  sellCoins: sellCoins,
+                  buyCoins: buyCoins,
+                );
               },
             ),
             const SizedBox(height: 22),

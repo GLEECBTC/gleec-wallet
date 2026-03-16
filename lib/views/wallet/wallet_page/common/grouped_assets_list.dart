@@ -66,6 +66,15 @@ class GroupedAssetsList extends StatelessWidget {
       groupedAssets.putIfAbsent(ticker, () => []).add(asset);
     }
 
+    for (final entry in groupedAssets.entries) {
+      entry.value.sort((a, b) {
+        final bool aIsParent = a.parentId == null;
+        final bool bIsParent = b.parentId == null;
+        if (aIsParent != bIsParent) return aIsParent ? -1 : 1;
+        return a.id.compareTo(b.id);
+      });
+    }
+
     return groupedAssets;
   }
 
@@ -77,8 +86,9 @@ class GroupedAssetsList extends StatelessWidget {
 
     return assets.where((asset) {
       final searchLower = searchPhrase.toLowerCase();
-      final isFound =
-          asset.toJson().toJsonString().toLowerCase().contains(searchLower);
+      final isFound = asset.toJson().toJsonString().toLowerCase().contains(
+        searchLower,
+      );
 
       return isFound;
     });

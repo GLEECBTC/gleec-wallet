@@ -13,11 +13,12 @@ import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/focusable_widget.dart';
 import 'package:web_dex/views/dex/entities_list/common/coin_amount_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/entity_item_status_wrapper.dart';
+import 'package:web_dex/views/dex/entities_list/common/swap_actions_menu.dart';
 import 'package:web_dex/views/dex/entities_list/common/trade_amount_desktop.dart';
 
 class HistoryItem extends StatefulWidget {
   const HistoryItem(this.swap, {Key? key, required this.onClick})
-      : super(key: key);
+    : super(key: key);
 
   final Swap swap;
   final VoidCallback onClick;
@@ -42,8 +43,9 @@ class _HistoryItemState extends State<HistoryItem> {
     final bool isSuccessful = !widget.swap.isFailed;
     final bool isTaker = widget.swap.isTaker;
     final bool isRecoverable = widget.swap.recoverable;
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,6 +73,7 @@ class _HistoryItemState extends State<HistoryItem> {
             child: isMobile
                 ? _HistoryItemMobile(
                     key: Key('swap-item-$uuid-mobile'),
+                    swap: widget.swap,
                     uuid: uuid,
                     isRecovering: _isRecovering,
                     buyAmount: buyAmount,
@@ -106,8 +109,9 @@ class _HistoryItemState extends State<HistoryItem> {
     setState(() {
       _isRecovering = true;
     });
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     await tradingEntitiesBloc.recoverFundsOfSwap(widget.swap.uuid);
     setState(() {
       _isRecovering = false;
@@ -149,8 +153,9 @@ class _HistoryItemDesktop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -169,7 +174,9 @@ class _HistoryItemDesktop extends StatelessWidget {
                           Icons.check,
                           size: 12,
                           color: theme
-                              .custom.dexPageTheme.successfulSwapStatusColor,
+                              .custom
+                              .dexPageTheme
+                              .successfulSwapStatusColor,
                         )
                       : Icon(
                           Icons.circle,
@@ -181,8 +188,10 @@ class _HistoryItemDesktop extends StatelessWidget {
                       ? theme.custom.dexPageTheme.successfulSwapStatusColor
                       : Theme.of(context).textTheme.bodyMedium?.color,
                   backgroundColor: isSuccessful
-                      ? theme.custom.dexPageTheme
-                          .successfulSwapStatusBackgroundColor
+                      ? theme
+                            .custom
+                            .dexPageTheme
+                            .successfulSwapStatusBackgroundColor
                       : Theme.of(context).colorScheme.surface,
                 ),
               ),
@@ -191,24 +200,15 @@ class _HistoryItemDesktop extends StatelessWidget {
         ),
         Expanded(
           key: Key('history-item-$uuid-sell-amount'),
-          child: TradeAmountDesktop(
-            coinAbbr: sellCoin,
-            amount: sellAmount,
-          ),
+          child: TradeAmountDesktop(coinAbbr: sellCoin, amount: sellAmount),
         ),
         Expanded(
-          child: TradeAmountDesktop(
-            coinAbbr: buyCoin,
-            amount: buyAmount,
-          ),
+          child: TradeAmountDesktop(coinAbbr: buyCoin, amount: buyAmount),
         ),
         Expanded(
           child: Text(
             formatAmt(
-              tradingEntitiesBloc.getPriceFromAmount(
-                sellAmount,
-                buyAmount,
-              ),
+              tradingEntitiesBloc.getPriceFromAmount(sellAmount, buyAmount),
             ),
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
           ),
@@ -216,10 +216,7 @@ class _HistoryItemDesktop extends StatelessWidget {
         Expanded(
           child: Text(
             date,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ),
         Expanded(
@@ -252,8 +249,10 @@ class _HistoryItemDesktop extends StatelessWidget {
                               color: Colors.orange,
                             )
                           : null,
-                      textStyle:
-                          const TextStyle(color: Colors.white, fontSize: 12),
+                      textStyle: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
                       onPressed: onRecoverPressed,
                     )
                   : const SizedBox(width: 80),
@@ -268,6 +267,7 @@ class _HistoryItemDesktop extends StatelessWidget {
 class _HistoryItemMobile extends StatelessWidget {
   const _HistoryItemMobile({
     Key? key,
+    required this.swap,
     required this.uuid,
     required this.isRecovering,
     required this.sellCoin,
@@ -278,6 +278,7 @@ class _HistoryItemMobile extends StatelessWidget {
     required this.date,
     required this.onRecoverPressed,
   }) : super(key: key);
+  final Swap swap;
   final String uuid;
   final bool isRecovering;
   final String sellCoin;
@@ -295,9 +296,8 @@ class _HistoryItemMobile extends StatelessWidget {
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Flexible(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -318,8 +318,11 @@ class _HistoryItemMobile extends StatelessWidget {
                 ],
               ),
             ),
-            onRecoverPressed != null
-                ? UiLightButton(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onRecoverPressed != null)
+                  UiLightButton(
                     width: 70,
                     height: 22,
                     prefix: isRecovering
@@ -328,21 +331,23 @@ class _HistoryItemMobile extends StatelessWidget {
                     backgroundColor:
                         theme.custom.dexPageTheme.failedSwapStatusColor,
                     text: isRecovering ? '' : LocaleKeys.recover.tr(),
-                    textStyle:
-                        const TextStyle(color: Colors.white, fontSize: 11),
+                    textStyle: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                    ),
                     onPressed: onRecoverPressed,
-                  )
-                : const SizedBox(),
+                  ),
+                if (onRecoverPressed != null) const SizedBox(width: 4),
+                SwapActionsMenu(swap: swap),
+              ],
+            ),
           ],
         ),
         Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Text(
             LocaleKeys.receive.tr(),
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
           ),
         ),
         Padding(
@@ -351,10 +356,7 @@ class _HistoryItemMobile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
-                child: CoinAmountMobile(
-                  coinAbbr: buyCoin,
-                  amount: buyAmount,
-                ),
+                child: CoinAmountMobile(coinAbbr: buyCoin, amount: buyAmount),
               ),
               Text(
                 date,

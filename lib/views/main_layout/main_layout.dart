@@ -106,6 +106,7 @@ class _MainLayoutState extends State<MainLayout> {
                   : null,
               floatingActionButton: MainLayoutFab(
                 showAddCoinButton:
+                    isMobile &&
                     routingState.selectedMenu == MainMenuValue.wallet &&
                     routingState.walletState.selectedCoin.isEmpty &&
                     routingState.walletState.action.isEmpty &&

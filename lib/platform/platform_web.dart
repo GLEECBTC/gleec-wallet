@@ -1,28 +1,50 @@
+import 'dart:js_interop';
+
+@JS('kdf')
+external _KdfBindings? get _kdfBindings;
+
 @JS()
-library wasmlib;
+extension type _KdfBindings._(JSObject _) implements JSObject {
+  @JS('init_wasm')
+  external JSPromise<JSAny?> initWasm();
 
-import 'package:js/js.dart';
+  @JS('run_mm2')
+  external JSPromise<JSAny?> runMm2(String params, JSFunction handleLog);
 
-@JS('init_wasm')
-external dynamic initWasm();
+  @JS('mm2_status')
+  external JSAny? mm2Status();
 
-@JS('run_mm2')
-external Future<void> wasmRunMm2(
-  String params,
-  void Function(int, String) handleLog,
-);
+  @JS('mm2_version')
+  external String mm2Version();
 
-@JS('mm2_status')
-external dynamic wasmMm2Status();
+  @JS('rpc_request')
+  external JSPromise<JSAny?> rpcRequest(String request);
 
-@JS('mm2_version')
-external String wasmVersion();
+  @JS('reload_page')
+  external void reloadPage();
+}
 
-@JS('rpc_request')
-external dynamic wasmRpc(String request);
+_KdfBindings _requireKdfBindings() {
+  final bindings = _kdfBindings;
+  if (bindings == null) {
+    throw StateError('KDF bootstrap is not loaded');
+  }
+  return bindings;
+}
 
-@JS('reload_page')
-external void reloadPage();
+JSPromise<JSAny?> initWasm() => _requireKdfBindings().initWasm();
+
+JSPromise<JSAny?> wasmRunMm2(String params, JSFunction handleLog) =>
+    _requireKdfBindings().runMm2(params, handleLog);
+
+JSAny? wasmMm2Status() => _requireKdfBindings().mm2Status();
+
+String wasmVersion() => _requireKdfBindings().mm2Version();
+
+JSPromise<JSAny?> wasmRpc(String request) =>
+    _requireKdfBindings().rpcRequest(request);
+
+void reloadPage() => _requireKdfBindings().reloadPage();
 
 @JS('changeTheme')
 external void changeHtmlTheme(int themeIndex);

@@ -103,7 +103,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       // Explicitly disconnect SSE on sign-out
       _log.info('User signed out, disconnecting SSE...');
       _kdfSdk.streaming.disconnect();
-      
+
       await _authChangesSubscription?.cancel();
       emit(AuthBlocState.initial());
     }
@@ -145,11 +145,11 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
 
       _log.info('Successfully logged in to wallet');
       emit(AuthBlocState.loggedIn(currentUser));
-      
+
       // Explicitly connect SSE after successful login
       _log.info('User authenticated, connecting SSE for streaming...');
       _kdfSdk.streaming.connectIfNeeded();
-      
+
       _listenToAuthStateChanges();
     } catch (e, s) {
       if (e is AuthException) {
@@ -222,6 +222,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         'Registered a new wallet, setting up metadata and logging in...',
       );
       await _kdfSdk.setWalletType(event.wallet.config.type);
+      await _kdfSdk.setWalletProvenance(WalletProvenance.generated);
+      await _kdfSdk.setWalletCreatedAt(DateTime.now());
       await _kdfSdk.confirmSeedBackup(hasBackup: false);
       // Filter out geo-blocked assets from default coins before adding to wallet
       final allowedDefaultCoins = _filterBlockedAssets(enabledByDefaultCoins);
@@ -314,6 +316,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         'Setting up wallet metadata and logging in...',
       );
       await _kdfSdk.setWalletType(workingWallet.config.type);
+      await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
+      await _kdfSdk.setWalletCreatedAt(DateTime.now());
       await _kdfSdk.confirmSeedBackup(
         hasBackup: workingWallet.config.hasBackup,
       );
@@ -464,7 +468,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           ? AuthorizeMode.logIn
           : AuthorizeMode.noLogin;
       add(AuthModeChanged(mode: event, currentUser: user));
-      
+
       // Tie SSE connection lifecycle to authentication state
       if (user != null) {
         // User authenticated - connect SSE for balance/tx history streaming
