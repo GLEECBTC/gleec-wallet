@@ -16,10 +16,15 @@ import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 /// Implementations should resolve token metadata and activate tokens so they
 /// become available to the user within the wallet.
 abstract class ICustomTokenImportRepository {
-  /// Fetch an [Asset] for a custom token on [network] using [address].
+  /// Fetch an [Asset] for a custom token on [network] using [address] and the
+  /// resolved parent [platformAsset].
   ///
   /// May return an existing known asset or construct a new one when absent.
-  Future<Asset> fetchCustomToken(AssetId networkId, String address);
+  Future<Asset> fetchCustomToken({
+    required CoinSubClass network,
+    required Asset platformAsset,
+    required String address,
+  });
 
   /// Import the provided custom token [asset] into the wallet (e.g. activate it).
   Future<void> importCustomToken(Asset asset);
@@ -46,56 +51,79 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
   final _log = Logger('KdfCustomTokenImportRepository');
 
   @override
-  Future<Asset> fetchCustomToken(AssetId networkId, String address) async {
-    final networkSubclass = networkId.subClass;
+  Future<Asset> fetchCustomToken({
+    required CoinSubClass network,
+    required Asset platformAsset,
+    required String address,
+  }) async {
+    _assertSupportedNetwork(network);
+    _assertPlatformAsset(network, platformAsset);
+
     final convertAddressResponse = await _kdfSdk.client.rpc.address
         .convertAddress(
           from: address,
-          coin: networkSubclass.ticker,
-          toFormat: AddressFormat.fromCoinSubClass(networkSubclass),
+          coin: platformAsset.id.id,
+          toFormat: AddressFormat.fromCoinSubClass(network),
         );
     final contractAddress = convertAddressResponse.address;
-    final knownCoin = _kdfSdk.assets.available.values.firstWhereOrNull(
-      (asset) =>
-          asset.contractAddress == contractAddress &&
-          asset.id.subClass == networkSubclass,
+    final knownCoin = _findKnownAssetByContract(
+      network: network,
+      platformAsset: platformAsset,
+      contractAddress: contractAddress,
     );
-    if (knownCoin == null) {
-      return _createNewCoin(contractAddress, networkId);
+    if (knownCoin != null) {
+      return knownCoin;
     }
 
-    return knownCoin;
+    return _createNewCoin(
+      contractAddress: contractAddress,
+      network: network,
+      platformAsset: platformAsset,
+    );
   }
 
-  Future<Asset> _createNewCoin(
-    String contractAddress,
-    AssetId networkId,
-  ) async {
-    final network = networkId.subClass;
-
+  Future<Asset> _createNewCoin({
+    required String contractAddress,
+    required CoinSubClass network,
+    required Asset platformAsset,
+  }) async {
     _log.info('Creating new coin for $contractAddress on $network');
     final response = await _kdfSdk.client.rpc.utility.getTokenInfo(
       contractAddress: contractAddress,
-      platform: network.ticker,
-      protocolType: network.tokenStandardSuffix ?? network.name.toUpperCase(),
+      platform: platformAsset.id.id,
+      protocolType: _protocolTypeFor(network),
     );
 
-    final platformAssets = _kdfSdk.assets.findAssetsByConfigId(network.ticker);
-    if (platformAssets.length != 1) {
-      throw Exception(
-        'Platform asset not found. ${platformAssets.length} '
-        'results returned.',
-      );
-    }
-
-    final platformAsset = platformAssets.single;
     final platformConfig = platformAsset.protocol.config;
     final String ticker = response.info.symbol;
-    final tokenApi = await fetchTokenInfoFromApi(network, contractAddress);
     final platformChainId = int.parse(
       platformAsset.id.chainId.formattedChainId,
     );
     final coinId = '$ticker-${network.tokenStandardSuffix}';
+    final conflictingAsset = _findExistingAssetByGeneratedId(
+      network: network,
+      platformAsset: platformAsset,
+      assetId: coinId,
+    );
+    if (conflictingAsset != null) {
+      if (_hasMatchingContract(
+        network: network,
+        existingContractAddress: conflictingAsset.contractAddress,
+        requestedContractAddress: contractAddress,
+      )) {
+        return conflictingAsset;
+      }
+
+      throw CustomTokenConflictException(
+        assetId: coinId,
+        network: network,
+        existingContractAddress: conflictingAsset.contractAddress ?? '',
+        requestedContractAddress: contractAddress,
+      );
+    }
+
+    final tokenApi = await fetchTokenInfoFromApi(network, contractAddress);
+
     final String? logoImageUrl =
         tokenApi?['image']?['large'] ??
         tokenApi?['image']?['small'] ??
@@ -148,6 +176,91 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
     }
 
     return newCoin;
+  }
+
+  void _assertSupportedNetwork(CoinSubClass network) {
+    if (network.tokenStandardSuffix == null ||
+        getNetworkApiName(network) == null) {
+      throw UnsupportedCustomTokenNetworkException(network);
+    }
+  }
+
+  void _assertPlatformAsset(CoinSubClass network, Asset platformAsset) {
+    if (!platformAsset.id.subClass.canBeParentOf(network)) {
+      throw ArgumentError.value(
+        platformAsset.id,
+        'platformAsset',
+        'is not a valid parent for ${network.formatted} tokens',
+      );
+    }
+  }
+
+  String _protocolTypeFor(CoinSubClass network) {
+    final protocolType = network.tokenStandardSuffix;
+    if (protocolType == null) {
+      throw UnsupportedCustomTokenNetworkException(network);
+    }
+    return protocolType;
+  }
+
+  Asset? _findKnownAssetByContract({
+    required CoinSubClass network,
+    required Asset platformAsset,
+    required String contractAddress,
+  }) {
+    return _kdfSdk.assets.available.values.firstWhereOrNull(
+      (asset) =>
+          asset.id.subClass == network &&
+          asset.id.parentId == platformAsset.id &&
+          _hasMatchingContract(
+            network: network,
+            existingContractAddress: asset.contractAddress,
+            requestedContractAddress: contractAddress,
+          ),
+    );
+  }
+
+  Asset? _findExistingAssetByGeneratedId({
+    required CoinSubClass network,
+    required Asset platformAsset,
+    required String assetId,
+  }) {
+    return _kdfSdk.assets.available.values.firstWhereOrNull(
+      (asset) =>
+          asset.id.id == assetId &&
+          asset.id.subClass == network &&
+          asset.id.parentId == platformAsset.id &&
+          asset.id.chainId.formattedChainId ==
+              platformAsset.id.chainId.formattedChainId,
+    );
+  }
+
+  bool _hasMatchingContract({
+    required CoinSubClass network,
+    required String? existingContractAddress,
+    required String requestedContractAddress,
+  }) {
+    if (existingContractAddress == null) {
+      return false;
+    }
+
+    return _normalizeContractAddress(
+          network: network,
+          contractAddress: existingContractAddress,
+        ) ==
+        _normalizeContractAddress(
+          network: network,
+          contractAddress: requestedContractAddress,
+        );
+  }
+
+  String _normalizeContractAddress({
+    required CoinSubClass network,
+    required String contractAddress,
+  }) {
+    return network == CoinSubClass.trc20
+        ? contractAddress
+        : contractAddress.toLowerCase();
   }
 
   @override

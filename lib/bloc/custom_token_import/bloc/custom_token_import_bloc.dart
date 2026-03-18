@@ -56,7 +56,7 @@ class CustomTokenImportBloc
         formErrorMessage: '',
         importStatus: FormStatus.initial,
         importErrorMessage: '',
-        evmNetworks: items,
+        supportedNetworks: items,
       ),
     );
   }
@@ -85,20 +85,25 @@ class CustomTokenImportBloc
     emit(state.copyWith(formStatus: FormStatus.submitting));
 
     Asset? tokenData;
+    var wasTokenAlreadyActivated = false;
     try {
-      final networkAsset = _sdk.getSdkAsset(state.network.ticker);
+      final platformAsset = _sdk.getSdkAsset(state.network.ticker);
 
       // Network (parent) asset must be active before attempting to fetch the
       // custom token data
       await _coinsRepo.activateAssetsSync(
-        [networkAsset],
+        [platformAsset],
         notifyListeners: false,
         addToWalletMetadata: false,
       );
 
       tokenData = await _repository.fetchCustomToken(
-        networkAsset.id,
-        state.address,
+        network: state.network,
+        platformAsset: platformAsset,
+        address: state.address,
+      );
+      wasTokenAlreadyActivated = await _coinsRepo.isAssetActivated(
+        tokenData.id,
       );
       await _coinsRepo.activateAssetsSync(
         [tokenData],
@@ -133,11 +138,11 @@ class CustomTokenImportBloc
         state.copyWith(
           formStatus: FormStatus.failure,
           tokenData: () => null,
-          formErrorMessage: e.toString(),
+          formErrorMessage: _formatImportError(e),
         ),
       );
     } finally {
-      if (tokenData != null) {
+      if (tokenData != null && !wasTokenAlreadyActivated) {
         // Activate to get balance, then deactivate to avoid confusion if the user
         // does not proceed with the import (exits the dialog).
         await _coinsRepo.deactivateCoinsSync([tokenData.toCoin()]);
@@ -197,10 +202,18 @@ class CustomTokenImportBloc
       emit(
         state.copyWith(
           importStatus: FormStatus.failure,
-          importErrorMessage: e.toString(),
+          importErrorMessage: _formatImportError(e),
         ),
       );
     }
+  }
+
+  String _formatImportError(Object error) {
+    return switch (error) {
+      final CustomTokenConflictException e => e.message,
+      final UnsupportedCustomTokenNetworkException e => e.message,
+      _ => error.toString(),
+    };
   }
 
   @override

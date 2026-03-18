@@ -223,7 +223,10 @@ abstract class BaseFiatProvider {
         return CoinType.utxo;
       case 'TRX':
       case 'TRON':
-        return coinSymbol == 'TRX' ? CoinType.trx : CoinType.trc20;
+        if (coinSymbol == null || coinSymbol == 'TRX') {
+          return CoinType.trx;
+        }
+        return CoinType.trc20;
       case 'ETH':
         return CoinType.erc20;
       case 'BSC':
