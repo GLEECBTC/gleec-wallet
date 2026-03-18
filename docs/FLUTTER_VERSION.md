@@ -15,7 +15,7 @@ See our guide on [Multiple Flutter Versions](MULTIPLE_FLUTTER_VERSIONS.md) for d
 While it's possible to pin your global Flutter installation to a specific version, **this approach is not recommended** due to:
 
 - Lack of isolation between projects
-- Known issues with `flutter pub get` when using Flutter 3.41.3
+- Known issues with `flutter pub get` when using Flutter 3.41.4
 - Difficulty switching between versions for different projects
 
 If you still choose to use this method, you can run:
