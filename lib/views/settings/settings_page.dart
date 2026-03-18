@@ -8,6 +8,8 @@ import 'package:web_dex/views/common/page_header/page_header.dart';
 import 'package:web_dex/views/common/pages/page_layout.dart';
 import 'package:web_dex/views/settings/widgets/common/settings_content_wrapper.dart';
 import 'package:web_dex/views/settings/widgets/general_settings/general_settings.dart';
+import 'package:web_dex/views/settings/widgets/kyc_policy_page/kyc_policy_page.dart';
+import 'package:web_dex/views/settings/widgets/privacy_notice_page/privacy_notice_page.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/security_settings_page.dart';
 import 'package:web_dex/views/settings/widgets/settings_menu/settings_menu.dart';
 import 'package:web_dex/views/settings/widgets/support_page/support_page.dart';
@@ -42,6 +44,10 @@ class SettingsPage extends StatelessWidget {
         return const GeneralSettings();
       case SettingsMenuValue.security:
         return SecuritySettingsPage(onBackPressed: _onBackButtonPressed);
+      case SettingsMenuValue.privacy:
+        return const PrivacyNoticePage();
+      case SettingsMenuValue.kycPolicy:
+        return const KycPolicyPage();
       case SettingsMenuValue.support:
         return SupportPage();
 
@@ -87,6 +93,8 @@ class _MobileContentLayout extends StatelessWidget {
       case SettingsMenuValue.security:
         return content;
       case SettingsMenuValue.general:
+      case SettingsMenuValue.privacy:
+      case SettingsMenuValue.kycPolicy:
       case SettingsMenuValue.support:
       case SettingsMenuValue.feedback:
         return PageLayout(
@@ -95,11 +103,7 @@ class _MobileContentLayout extends StatelessWidget {
             backText: '',
             onBackButtonPressed: _onBackButtonPressed,
           ),
-          content: Flexible(
-            child: SettingsContentWrapper(
-              child: content,
-            ),
-          ),
+          content: Flexible(child: SettingsContentWrapper(child: content)),
         );
       case SettingsMenuValue.none:
         throw Error();
@@ -115,8 +119,11 @@ class _DesktopLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTopSpace = selectedMenu != SettingsMenuValue.security &&
-        selectedMenu != SettingsMenuValue.support;
+    final isTopSpace =
+        selectedMenu != SettingsMenuValue.security &&
+        selectedMenu != SettingsMenuValue.support &&
+        selectedMenu != SettingsMenuValue.privacy &&
+        selectedMenu != SettingsMenuValue.kycPolicy;
 
     return PageLayout(
       content: Flexible(

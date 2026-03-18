@@ -33,8 +33,10 @@ class FileLoaderWeb implements FileLoader {
     required String data,
   }) async {
     final dataArray = web.TextEncoder().encode(data);
-    final blob =
-        web.Blob([dataArray].toJS, web.BlobPropertyBag(type: 'text/plain'));
+    final blob = web.Blob(
+      [dataArray].toJS,
+      web.BlobPropertyBag(type: 'text/plain'),
+    );
 
     final url = web.URL.createObjectURL(blob);
 
@@ -99,13 +101,19 @@ class FileLoaderWeb implements FileLoader {
 
       final encoder = web.TextEncoder();
       final dataArray = encoder.encode(data);
-      final blob =
-          web.Blob([dataArray].toJS, web.BlobPropertyBag(type: 'text/plain'));
+      final blob = web.Blob(
+        [dataArray].toJS,
+        web.BlobPropertyBag(type: 'text/plain'),
+      );
 
       final response = web.Response(blob);
+      final compressionStream = web.CompressionStream('gzip');
       final compressedResponse = web.Response(
         response.body!.pipeThrough(
-          web.CompressionStream('gzip') as web.ReadableWritablePair,
+          web.ReadableWritablePair(
+            readable: compressionStream.readable,
+            writable: compressionStream.writable,
+          ),
         ),
       );
 
@@ -148,23 +156,34 @@ class FileLoaderWeb implements FileLoader {
       }
 
       if (files.length == 1) {
-        final web.File? file = files.item(0);
+        final file = files.item(0);
+        if (file == null) {
+          onError('No file was selected.');
+          return;
+        }
         final reader = web.FileReader();
 
-        reader.onLoadEnd.listen((event) {
+        reader.onLoadEnd.listen((_) {
           final result = reader.result;
-          if (result case final String content) {
-            onUpload(file!.name, content);
+          if (result == null) {
+            onError('Failed to read ${file.name}.');
+            return;
           }
+
+          final dartResult = result.dartify();
+          if (dartResult case final String content) {
+            onUpload(file.name, content);
+            return;
+          }
+
+          onError('Unsupported file content returned for ${file.name}.');
         });
 
-        reader
-          ..onerror = (JSAny event) {
-            if (event is web.ErrorEvent) {
-              onError(event.message);
-            }
-          }.toJS
-          ..readAsText(file! as web.Blob);
+        reader.onerror = ((JSAny _) {
+          onError(reader.error?.message ?? 'Failed to read ${file.name}.');
+          return null;
+        }).toJS;
+        reader.readAsText(file);
       }
     });
   }

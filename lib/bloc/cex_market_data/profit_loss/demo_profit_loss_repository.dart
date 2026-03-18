@@ -1,5 +1,6 @@
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_persistence_layer/komodo_persistence_layer.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/generator.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/mock_transaction_history_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
@@ -19,7 +20,7 @@ class MockProfitLossRepository extends ProfitLossRepository {
   factory MockProfitLossRepository.withDefaults({
     required PerformanceMode performanceMode,
     required KomodoDefiSdk sdk,
-    String cacheTableName = 'mock_profit_loss',
+    String cacheTableName = mockProfitLossCacheBoxName,
   }) {
     return MockProfitLossRepository(
       profitLossCacheProvider: HiveLazyBoxProvider<String, ProfitLossCache>(

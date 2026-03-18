@@ -1,10 +1,11 @@
 import 'dart:math';
 
 import 'package:hive_ce/hive.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 
 class PointAdapter extends TypeAdapter<Point<double>> {
   @override
-  final int typeId = 18;
+  final int typeId = pointAdapterTypeId;
 
   @override
   Point<double> read(BinaryReader reader) {
