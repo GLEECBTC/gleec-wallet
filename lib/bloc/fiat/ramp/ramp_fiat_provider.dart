@@ -118,7 +118,7 @@ class RampFiatProvider extends BaseFiatProvider {
 
       return config.assets
           .map((asset) {
-            final coinType = getCoinType(asset.chain);
+            final coinType = getCoinType(asset.chain, coinSymbol: asset.symbol);
             if (coinType == null) {
               return null;
             }

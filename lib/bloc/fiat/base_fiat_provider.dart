@@ -109,6 +109,9 @@ abstract class BaseFiatProvider {
       case CoinType.utxo:
         // BTC, BCH, DOGE, LTC
         return currency.configSymbol;
+      case CoinType.trx:
+      case CoinType.trc20:
+        return 'TRX';
       case CoinType.erc20:
         return 'ETH';
       case CoinType.bep20:
@@ -200,7 +203,6 @@ abstract class BaseFiatProvider {
     // TERNOA
     // TERRA
     // TEZOS
-    // TRON
     // WAX
     // XCH
     // XDAI
@@ -212,13 +214,16 @@ abstract class BaseFiatProvider {
   }
 
   // TODO: migrate to SDK [CoinSubClass] ticker/formatted getters
-  CoinType? getCoinType(String chain) {
+  CoinType? getCoinType(String chain, {String? coinSymbol}) {
     switch (chain) {
       case 'BTC':
       case 'BCH':
       case 'DOGE':
       case 'LTC':
         return CoinType.utxo;
+      case 'TRX':
+      case 'TRON':
+        return coinSymbol == 'TRX' ? CoinType.trx : CoinType.trc20;
       case 'ETH':
         return CoinType.erc20;
       case 'BSC':

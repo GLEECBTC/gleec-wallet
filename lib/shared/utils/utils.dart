@@ -332,6 +332,7 @@ String abbr2Ticker(String abbr) {
   if (!abbr.contains('-') && !abbr.contains('_')) return abbr;
 
   const List<String> filteredSuffixes = [
+    'TRC20',
     'ERC20',
     'BEP20',
     'QRC20',
@@ -389,6 +390,9 @@ final Map<String, String> _abbr2TickerCache = {};
 
 Color getProtocolColor(CoinType type) {
   switch (type) {
+    case CoinType.trx:
+    case CoinType.trc20:
+      return const Color.fromRGBO(236, 4, 38, 1);
     case CoinType.zhtlc:
     case CoinType.utxo:
       return const Color.fromRGBO(233, 152, 60, 1);
@@ -442,6 +446,9 @@ bool hasTxHistorySupport(Coin coin) {
     case CoinType.ubiq:
     case CoinType.hrc20:
       return false;
+    case CoinType.trx:
+    case CoinType.trc20:
+      return true;
     case CoinType.krc20:
     case CoinType.tendermint:
     case CoinType.tendermintToken:
@@ -471,6 +478,9 @@ String getNativeExplorerUrlByCoin(Coin coin, String? address) {
   assert(!hasSupport);
 
   switch (coin.type) {
+    case CoinType.trx:
+    case CoinType.trc20:
+      return '${coin.explorerUrl}address/$coinAddress';
     case CoinType.sbch:
     case CoinType.tendermint:
       return '${coin.explorerUrl}address/$coinAddress';

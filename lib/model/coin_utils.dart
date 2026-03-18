@@ -141,6 +141,10 @@ String getCoinTypeName(CoinType type, [String? symbol]) {
     return 'Native';
   }
   switch (type) {
+    case CoinType.trx:
+      return 'TRON';
+    case CoinType.trc20:
+      return 'TRC-20';
     case CoinType.erc20:
       return 'ERC-20';
     case CoinType.bep20:
@@ -190,6 +194,10 @@ String getCoinTypeName(CoinType type, [String? symbol]) {
 
 bool isParentCoin(CoinType type, String symbol) {
   switch (type) {
+    case CoinType.trx:
+      return symbol == 'TRX';
+    case CoinType.trc20:
+      return false;
     case CoinType.utxo:
     case CoinType.tendermint:
       return true;

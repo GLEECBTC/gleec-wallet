@@ -45,10 +45,9 @@ class CustomTokenImportBloc
       (CoinType type) => type.toCoinSubClass(),
     );
     final items = CoinSubClass.values.where((CoinSubClass type) {
-      final isEvm = type.isEvmProtocol();
       final isAvailable = availableCoinTypes.contains(type);
       final isSupported = _repository.getNetworkApiName(type) != null;
-      return isEvm && isAvailable && isSupported;
+      return isAvailable && isSupported;
     }).toList()..sort((a, b) => a.name.compareTo(b.name));
 
     emit(

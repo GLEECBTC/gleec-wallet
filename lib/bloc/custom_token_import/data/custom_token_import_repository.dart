@@ -52,7 +52,7 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
         .convertAddress(
           from: address,
           coin: networkSubclass.ticker,
-          toFormat: AddressFormat.fromCoinSubClass(CoinSubClass.erc20),
+          toFormat: AddressFormat.fromCoinSubClass(networkSubclass),
         );
     final contractAddress = convertAddressResponse.address;
     final knownCoin = _kdfSdk.assets.available.values.firstWhereOrNull(
@@ -77,9 +77,7 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
     final response = await _kdfSdk.client.rpc.utility.getTokenInfo(
       contractAddress: contractAddress,
       platform: network.ticker,
-      protocolType:
-          CoinSubClass.erc20.tokenStandardSuffix ??
-          CoinSubClass.erc20.name.toUpperCase(),
+      protocolType: network.tokenStandardSuffix ?? network.name.toUpperCase(),
     );
 
     final platformAssets = _kdfSdk.assets.findAssetsByConfigId(network.ticker);
@@ -104,6 +102,28 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
         tokenApi?['image']?['thumb'];
 
     _log.info('Creating new coin for $coinId on $network');
+    final protocol = switch (network) {
+      CoinSubClass.trc20 =>
+        _buildTrc20Protocol(platformConfig).copyWithProtocolData(
+          coin: coinId,
+          type: network.tokenStandardSuffix,
+          chainId: platformChainId,
+          contractAddress: contractAddress,
+          platform: network.ticker,
+          logoImageUrl: logoImageUrl,
+          isCustomToken: true,
+        ),
+      _ => Erc20Protocol.fromJson(platformConfig).copyWithProtocolData(
+        coin: coinId,
+        type: network.tokenStandardSuffix,
+        chainId: platformChainId,
+        contractAddress: contractAddress,
+        platform: network.ticker,
+        logoImageUrl: logoImageUrl,
+        isCustomToken: true,
+      ),
+    };
+
     final newCoin = Asset(
       signMessagePrefix: null,
       id: AssetId(
@@ -120,15 +140,7 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
         parentId: platformAsset.id,
       ),
       isWalletOnly: false,
-      protocol: Erc20Protocol.fromJson(platformConfig).copyWithProtocolData(
-        coin: coinId,
-        type: network.tokenStandardSuffix,
-        chainId: platformChainId,
-        contractAddress: contractAddress,
-        platform: network.ticker,
-        logoImageUrl: logoImageUrl,
-        isCustomToken: true,
-      ),
+      protocol: protocol,
     );
 
     if (logoImageUrl != null && logoImageUrl.isNotEmpty) {
@@ -181,6 +193,8 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
   @override
   String? getNetworkApiName(CoinSubClass coinType) {
     switch (coinType) {
+      case CoinSubClass.trc20:
+        return 'tron'; // https://api.coingecko.com/api/v3/coins/tron/contract/TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
       case CoinSubClass.erc20:
         return 'ethereum'; // https://api.coingecko.com/api/v3/coins/ethereum/contract/0x56072C95FAA701256059aa122697B133aDEd9279
       case CoinSubClass.bep20:
@@ -247,5 +261,51 @@ extension on Erc20Protocol {
         },
     });
     return Erc20Protocol.fromJson(currentConfig);
+  }
+}
+
+Trc20Protocol _buildTrc20Protocol(JsonMap platformConfig) {
+  final config = JsonMap.from(platformConfig);
+  config['protocol'] = {
+    'type': 'TRC20',
+    'protocol_data': {
+      'platform': config.valueOrNull<String>('coin') ?? CoinSubClass.trx.ticker,
+      'contract_address': config.valueOrNull<String>('contract_address') ?? '',
+    },
+  };
+  config['contract_address'] =
+      config.valueOrNull<String>('contract_address') ?? '';
+  return Trc20Protocol.fromJson(config);
+}
+
+extension on Trc20Protocol {
+  Trc20Protocol copyWithProtocolData({
+    String? coin,
+    String? type,
+    String? contractAddress,
+    String? platform,
+    String? logoImageUrl,
+    bool? isCustomToken,
+    int? chainId,
+  }) {
+    final currentConfig = JsonMap.from(config);
+    currentConfig.addAll({
+      if (coin != null) 'coin': coin,
+      if (type != null) 'type': type,
+      if (chainId != null) 'chain_id': chainId,
+      if (platform != null) 'parent_coin': platform,
+      if (logoImageUrl != null) 'logo_image_url': logoImageUrl,
+      if (isCustomToken != null) 'is_custom_token': isCustomToken,
+      if (contractAddress != null) 'contract_address': contractAddress,
+      if (contractAddress != null || platform != null)
+        'protocol': {
+          'type': 'TRC20',
+          'protocol_data': {
+            'contract_address': contractAddress ?? this.contractAddress,
+            'platform': platform ?? this.platform,
+          },
+        },
+    });
+    return Trc20Protocol.fromJson(currentConfig);
   }
 }
