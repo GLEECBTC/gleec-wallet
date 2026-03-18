@@ -387,15 +387,20 @@ class CoinsRepo {
 
     final walletType = (await _kdfSdk.currentWallet())?.config.type;
     if (walletType == WalletType.trezor) {
-      final unsupportedAssetIds = assets
-          .where((asset) => asset.id.subClass == CoinSubClass.sia)
-          .map((asset) => asset.id.id)
-          .toList();
-      if (unsupportedAssetIds.isNotEmpty) {
+      final unsupportedSiaAssets =
+          assets.where((asset) => asset.id.subClass == CoinSubClass.sia);
+      if (unsupportedSiaAssets.isNotEmpty) {
         _log.warning(
           'Skipping unsupported Trezor SIA activation for '
-          '${unsupportedAssetIds.join(', ')}: $_unsupportedTrezorSiaMessage',
+          '${unsupportedSiaAssets.map((a) => a.id.id).join(', ')}: '
+          '$_unsupportedTrezorSiaMessage',
         );
+        for (final siaAsset in unsupportedSiaAssets) {
+          _broadcastAsset(
+            _assetToCoinWithoutAddress(siaAsset)
+                .copyWith(state: CoinState.suspended),
+          );
+        }
       }
       assets = assets
           .where((asset) => asset.id.subClass != CoinSubClass.sia)
