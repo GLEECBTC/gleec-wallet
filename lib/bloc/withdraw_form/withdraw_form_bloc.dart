@@ -530,6 +530,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           throw Exception('Gas limit must be greater than 0');
         }
       },
+      tron: (_) {
+        throw Exception('Custom TRON fees are not supported');
+      },
       sia: (sia) {
         if (sia.amount <= Decimal.zero) {
           throw Exception('Fee amount must be greater than 0');
