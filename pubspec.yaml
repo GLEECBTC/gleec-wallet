@@ -66,14 +66,14 @@ dependencies:
 
   ## ---- Dart.dev, Flutter.dev
   args: ^2.7.0 # dart.dev
-  flutter_markdown: ^0.7.7 # flutter.dev
+  flutter_markdown: ^0.7.7+1 # flutter.dev
   http: 1.4.0 # dart.dev
   intl: 0.20.2 # dart.dev
-  web: ^1.1.0 # dart.dev
+  web: ^1.1.1 # dart.dev
   url_launcher: 6.3.1 # flutter.dev
   crypto: 3.0.6 # dart.dev
   cross_file: 0.3.4+2 # flutter.dev
-  video_player: ^2.9.5 # flutter.dev
+  video_player: ^2.11.1 # flutter.dev
   logging: 1.3.0
   mutex: ^3.1.0
 
@@ -93,8 +93,8 @@ dependencies:
 
   # Upgraded Firebase, needs secure code review
 
-  firebase_analytics: ^11.4.5
-  firebase_core: ^3.13.0
+  firebase_analytics: ^11.6.0
+  firebase_core: ^3.15.2
 
   ## ---- Fluttercommunity.dev
 
@@ -120,10 +120,10 @@ dependencies:
   easy_localization: 3.0.7+1 # last reviewed 3.0.2 via https://github.com/GLEECBTC/gleec-wallet/pull/1106
 
   # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
-  hive_ce: ^2.11.3 # Community-maintained Hive package with WASM support
+  hive_ce: ^2.19.3 # Community-maintained Hive package with WASM support
 
   # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
-  hive_ce_flutter: ^2.3.1 # Flutter bindings for hive_ce
+  hive_ce_flutter: ^2.3.4 # Flutter bindings for hive_ce
 
   # Approved via https://github.com/GLEECBTC/gleec-wallet/pull/1106 (Outdated)
   badges: 3.1.2
@@ -148,16 +148,16 @@ dependencies:
     # ^0.1.1-dev.3 # Option 3: Pub.dev dependency
 
   bloc_concurrency: 0.3.0
-  file_picker: ^10.3.2
+  file_picker: ^10.3.10
 
   # TODO: review required - SDK integration
   path_provider: 2.1.5 # flutter.dev
-  shared_preferences: ^2.5.3 # flutter.dev
+  shared_preferences: ^2.5.4 # flutter.dev
   decimal: 3.2.1 # transitive dependency that is required to fix breaking changes in rational package
   rational: 2.2.3 # sdk depends on decimal ^3.0.2, which depends on rational ^2.0.0
   uuid: 4.5.1 # sdk depends on this version
-  flutter_bloc: ^9.1.0 # sdk depends on this version, and hosted instead of git reference
-  get_it: ^8.0.3 # sdk depends on this version, and hosted instead of git reference
+  flutter_bloc: ^9.1.1 # sdk depends on this version, and hosted instead of git reference
+  get_it: ^8.3.0 # sdk depends on this version, and hosted instead of git reference
 
   komodo_defi_sdk:
     path: sdk/packages/komodo_defi_sdk # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
@@ -183,13 +183,13 @@ dependencies:
     #   ref: dev
     # ^0.3.0+3 # Option 3: Pub.dev dependency
 
-  feedback: ^3.1.0
+  feedback: ^3.2.0
   ntp: ^2.0.0
-  matomo_tracker: ^6.0.0
-  flutter_window_close: ^1.2.0
+  matomo_tracker: ^6.1.0
+  flutter_window_close: ^1.3.0
 
 dev_dependencies:
-  test: ^1.24.1 # dart.dev
+  test: ^1.30.0 # dart.dev
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
