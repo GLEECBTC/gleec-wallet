@@ -4,6 +4,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 enum SettingsMenuValue {
   general,
   security,
+  privacy,
   support,
   feedback,
   none;
@@ -14,6 +15,8 @@ enum SettingsMenuValue {
         return LocaleKeys.settingsMenuGeneral.tr();
       case SettingsMenuValue.security:
         return LocaleKeys.settingsMenuSecurity.tr();
+      case SettingsMenuValue.privacy:
+        return LocaleKeys.settingsMenuPrivacy.tr();
       case SettingsMenuValue.support:
         return LocaleKeys.support.tr();
       case SettingsMenuValue.feedback:
@@ -29,6 +32,8 @@ enum SettingsMenuValue {
         return 'general';
       case SettingsMenuValue.security:
         return 'security';
+      case SettingsMenuValue.privacy:
+        return 'privacy';
       case SettingsMenuValue.support:
         return 'support';
       case SettingsMenuValue.feedback:

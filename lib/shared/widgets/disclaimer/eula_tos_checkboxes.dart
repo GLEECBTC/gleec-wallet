@@ -93,6 +93,7 @@ class _EulaTosCheckboxesState extends State<EulaTosCheckboxes> {
       AppDialog.showWithCallback<void>(
         context: context,
         useRootNavigator: false,
+        width: 640,
         childBuilder: (closeDialog) => Eula(onClose: closeDialog),
       ),
     );

@@ -37,9 +37,7 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
           materialPageContext = context;
           return GestureDetector(
             onTap: () => runDropdownDismiss(context),
-            child: MainLayout(
-              key: ValueKey('${routingState.selectedMenu}'),
-            ),
+            child: MainLayout(key: ValueKey('${routingState.selectedMenu}')),
           );
         },
       ),
@@ -247,6 +245,8 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
         return SettingsRoutePath.general();
       case SettingsMenuValue.security:
         return SettingsRoutePath.security();
+      case SettingsMenuValue.privacy:
+        return SettingsRoutePath.privacy();
       case SettingsMenuValue.support:
         return SettingsRoutePath.support();
       case SettingsMenuValue.feedback:
