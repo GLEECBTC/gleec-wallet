@@ -137,8 +137,12 @@ class _FakeAssetManager implements AssetManager {
 }
 
 class _FakeAuth implements KomodoDefiLocalAuth {
+  _FakeAuth({required this.user});
+
+  KdfUser? user;
+
   @override
-  Future<KdfUser?> get currentUser async => null;
+  Future<KdfUser?> get currentUser async => user;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -158,10 +162,15 @@ class _FakeSdk implements KomodoDefiSdk {
 }
 
 class _RollbackCall {
-  const _RollbackCall({required this.assets, required this.deleteCustomTokens});
+  const _RollbackCall({
+    required this.assets,
+    required this.deleteCustomTokens,
+    required this.removeWalletMetadataAssets,
+  });
 
   final List<Asset> assets;
   final Set<AssetId> deleteCustomTokens;
+  final Set<AssetId> removeWalletMetadataAssets;
 }
 
 class _FakeCoinsRepo implements CoinsRepo {
@@ -204,11 +213,16 @@ class _FakeCoinsRepo implements CoinsRepo {
   Future<void> rollbackPreviewAssets(
     Iterable<Asset> assets, {
     Set<AssetId> deleteCustomTokens = const {},
+    Set<AssetId> removeWalletMetadataAssets = const {},
     bool notifyListeners = false,
   }) async {
     final assetList = assets.toList();
     rollbackCalls.add(
-      _RollbackCall(assets: assetList, deleteCustomTokens: deleteCustomTokens),
+      _RollbackCall(
+        assets: assetList,
+        deleteCustomTokens: deleteCustomTokens,
+        removeWalletMetadataAssets: removeWalletMetadataAssets,
+      ),
     );
 
     for (final asset in assetList) {
@@ -294,6 +308,7 @@ void main() {
     late _FakeCustomTokenImportRepository repository;
     late _FakeAnalyticsRepo analyticsRepo;
     late AnalyticsBloc analyticsBloc;
+    late _FakeAuth auth;
     late CustomTokenImportBloc bloc;
 
     setUp(() {
@@ -314,10 +329,20 @@ void main() {
       repository = _FakeCustomTokenImportRepository()..fetchResult = tokenAsset;
       analyticsRepo = _FakeAnalyticsRepo();
       analyticsBloc = _createAnalyticsBloc(analyticsRepo);
+      auth = _FakeAuth(
+        user: KdfUser(
+          walletId: WalletId.fromName(
+            'test-wallet',
+            const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+          ),
+          isBip39Seed: true,
+          metadata: const {'activated_coins': <String>[]},
+        ),
+      );
       bloc = CustomTokenImportBloc(
         repository,
         coinsRepo,
-        _FakeSdk(assets: assetManager, auth: _FakeAuth()),
+        _FakeSdk(assets: assetManager, auth: auth),
         analyticsBloc,
       );
     });
@@ -382,6 +407,10 @@ void main() {
         expect(coinsRepo.rollbackCalls.single.deleteCustomTokens, {
           tokenAsset.id,
         });
+        expect(coinsRepo.rollbackCalls.single.removeWalletMetadataAssets, {
+          platformAsset.id,
+          tokenAsset.id,
+        });
         expect(assetManager.available.containsKey(tokenAsset.id), isFalse);
       },
     );
@@ -401,6 +430,11 @@ void main() {
 
     test('pre-existing preview asset is not deleted on reset', () async {
       assetManager.addAsset(tokenAsset);
+      auth.user = auth.user!.copyWith(
+        metadata: {
+          'activated_coins': <String>[platformAsset.id.id, tokenAsset.id.id],
+        },
+      );
       await _setTrc20Input(bloc);
       await _fetchPreview(bloc);
 
@@ -412,7 +446,35 @@ void main() {
 
       expect(coinsRepo.rollbackCalls, hasLength(1));
       expect(coinsRepo.rollbackCalls.single.deleteCustomTokens, isEmpty);
+      expect(
+        coinsRepo.rollbackCalls.single.removeWalletMetadataAssets,
+        isEmpty,
+      );
       expect(assetManager.available.containsKey(tokenAsset.id), isTrue);
+    });
+
+    test('preview rollback preserves saved parent metadata', () async {
+      auth.user = auth.user!.copyWith(
+        metadata: {
+          'activated_coins': <String>[platformAsset.id.id],
+        },
+      );
+      await _setTrc20Input(bloc);
+      await _fetchPreview(bloc);
+
+      final resetState = bloc.stream.firstWhere(
+        (state) => state.formStatus == FormStatus.initial,
+      );
+      bloc.add(const ResetFormStatusEvent());
+      await resetState;
+
+      expect(coinsRepo.rollbackCalls, hasLength(1));
+      expect(coinsRepo.rollbackCalls.single.deleteCustomTokens, {
+        tokenAsset.id,
+      });
+      expect(coinsRepo.rollbackCalls.single.removeWalletMetadataAssets, {
+        tokenAsset.id,
+      });
     });
 
     test(

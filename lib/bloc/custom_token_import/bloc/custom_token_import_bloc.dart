@@ -14,37 +14,50 @@ import 'package:web_dex/bloc/custom_token_import/bloc/custom_token_import_event.
 import 'package:web_dex/bloc/custom_token_import/bloc/custom_token_import_state.dart';
 import 'package:web_dex/bloc/custom_token_import/data/custom_token_import_repository.dart';
 import 'package:web_dex/model/coin_type.dart';
+import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 
 class _CustomTokenPreviewSession {
   const _CustomTokenPreviewSession({
     required this.platformAsset,
     required this.wasPlatformAlreadyActivated,
+    required this.wasPlatformAlreadyInWalletMetadata,
     this.tokenAsset,
     this.wasTokenAlreadyActivated = false,
+    this.wasTokenAlreadyInWalletMetadata = false,
     this.wasTokenAlreadyKnown = false,
   });
 
   final Asset platformAsset;
   final bool wasPlatformAlreadyActivated;
+  final bool wasPlatformAlreadyInWalletMetadata;
   final Asset? tokenAsset;
   final bool wasTokenAlreadyActivated;
+  final bool wasTokenAlreadyInWalletMetadata;
   final bool wasTokenAlreadyKnown;
 
   _CustomTokenPreviewSession copyWith({
     Asset? platformAsset,
     bool? wasPlatformAlreadyActivated,
+    bool? wasPlatformAlreadyInWalletMetadata,
     Asset? Function()? tokenAsset,
     bool? wasTokenAlreadyActivated,
+    bool? wasTokenAlreadyInWalletMetadata,
     bool? wasTokenAlreadyKnown,
   }) {
     return _CustomTokenPreviewSession(
       platformAsset: platformAsset ?? this.platformAsset,
       wasPlatformAlreadyActivated:
           wasPlatformAlreadyActivated ?? this.wasPlatformAlreadyActivated,
+      wasPlatformAlreadyInWalletMetadata:
+          wasPlatformAlreadyInWalletMetadata ??
+          this.wasPlatformAlreadyInWalletMetadata,
       tokenAsset: tokenAsset != null ? tokenAsset() : this.tokenAsset,
       wasTokenAlreadyActivated:
           wasTokenAlreadyActivated ?? this.wasTokenAlreadyActivated,
+      wasTokenAlreadyInWalletMetadata:
+          wasTokenAlreadyInWalletMetadata ??
+          this.wasTokenAlreadyInWalletMetadata,
       wasTokenAlreadyKnown: wasTokenAlreadyKnown ?? this.wasTokenAlreadyKnown,
     );
   }
@@ -122,6 +135,7 @@ class CustomTokenImportBloc
     emit(state.copyWith(formStatus: FormStatus.submitting));
 
     try {
+      final walletCoinIds = (await _sdk.getWalletCoinIds()).toSet();
       final platformAsset = _sdk.getSdkAsset(state.network.ticker);
       final wasPlatformAlreadyActivated = await _coinsRepo.isAssetActivated(
         platformAsset.id,
@@ -129,6 +143,9 @@ class CustomTokenImportBloc
       _previewSession = _CustomTokenPreviewSession(
         platformAsset: platformAsset,
         wasPlatformAlreadyActivated: wasPlatformAlreadyActivated,
+        wasPlatformAlreadyInWalletMetadata: walletCoinIds.contains(
+          platformAsset.id.id,
+        ),
       );
 
       // Network (parent) asset must be active before attempting to fetch the
@@ -153,6 +170,9 @@ class CustomTokenImportBloc
       _previewSession = _previewSession?.copyWith(
         tokenAsset: () => tokenData,
         wasTokenAlreadyActivated: wasTokenAlreadyActivated,
+        wasTokenAlreadyInWalletMetadata: walletCoinIds.contains(
+          tokenData.id.id,
+        ),
         wasTokenAlreadyKnown: wasTokenAlreadyKnown,
       );
       await _coinsRepo.activateAssetsSync(
@@ -272,20 +292,30 @@ class CustomTokenImportBloc
 
     final rollbackAssets = <Asset>[];
     final deleteCustomTokens = <AssetId>{};
+    final removeWalletMetadataAssets = <AssetId>{};
 
     final tokenAsset = previewSession.tokenAsset;
     if (tokenAsset != null && !previewSession.wasTokenAlreadyActivated) {
       rollbackAssets.add(tokenAsset);
-      if (!previewSession.wasTokenAlreadyKnown) {
+      if (!previewSession.wasTokenAlreadyInWalletMetadata) {
+        removeWalletMetadataAssets.add(tokenAsset.id);
+      }
+      if (!previewSession.wasTokenAlreadyKnown &&
+          !previewSession.wasTokenAlreadyInWalletMetadata) {
         deleteCustomTokens.add(tokenAsset.id);
       }
     }
 
     if (!previewSession.wasPlatformAlreadyActivated) {
       rollbackAssets.add(previewSession.platformAsset);
+      if (!previewSession.wasPlatformAlreadyInWalletMetadata) {
+        removeWalletMetadataAssets.add(previewSession.platformAsset.id);
+      }
     }
 
-    if (rollbackAssets.isEmpty && deleteCustomTokens.isEmpty) {
+    if (rollbackAssets.isEmpty &&
+        deleteCustomTokens.isEmpty &&
+        removeWalletMetadataAssets.isEmpty) {
       return;
     }
 
@@ -293,6 +323,7 @@ class CustomTokenImportBloc
       await _coinsRepo.rollbackPreviewAssets(
         rollbackAssets,
         deleteCustomTokens: deleteCustomTokens,
+        removeWalletMetadataAssets: removeWalletMetadataAssets,
       );
     } catch (e, s) {
       _log.warning('Failed to rollback preview activation state', e, s);

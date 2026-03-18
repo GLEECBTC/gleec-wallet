@@ -715,6 +715,7 @@ class CoinsRepo {
   Future<void> rollbackPreviewAssets(
     Iterable<Asset> assets, {
     Set<AssetId> deleteCustomTokens = const {},
+    Set<AssetId> removeWalletMetadataAssets = const {},
     bool notifyListeners = false,
   }) async {
     final uniqueAssets = Map<AssetId, Asset>.fromEntries(
@@ -748,16 +749,18 @@ class CoinsRepo {
       }
     }
 
-    try {
-      await _kdfSdk.removeActivatedCoins(
-        orderedAssets.map((asset) => asset.id.id).toList(),
-      );
-    } catch (e, s) {
-      _log.warning(
-        'Failed to remove preview assets from wallet metadata',
-        e,
-        s,
-      );
+    if (removeWalletMetadataAssets.isNotEmpty) {
+      try {
+        await _kdfSdk.removeActivatedCoins(
+          removeWalletMetadataAssets.map((assetId) => assetId.id).toList(),
+        );
+      } catch (e, s) {
+        _log.warning(
+          'Failed to remove preview assets from wallet metadata',
+          e,
+          s,
+        );
+      }
     }
 
     for (final assetId in deleteCustomTokens) {
