@@ -156,11 +156,13 @@ runs:
         fi
 
         # Run flutter build once to download coin icons and config files.
-        # Desktop builds also generate native assets under build/native_assets/<platform>,
-        # so the second build must reuse the same build directory.
+        # The second build must re-register them in AssetManifest.bin, so we
+        # wipe the build directory afterwards -- but preserve native_assets
+        # which desktop builds generate and need to reuse.
         echo ""
         flutter pub get --enforce-lockfile > /dev/null 2>&1 || true
         $BUILD_CMD > /dev/null 2>&1 || true
+        find build -mindepth 1 -maxdepth 1 ! -name 'native_assets' -exec rm -rf {} + 2>/dev/null || true
 
         # Run flutter build and capture its output
         flutter pub get --enforce-lockfile
