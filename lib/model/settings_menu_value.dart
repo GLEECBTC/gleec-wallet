@@ -5,6 +5,7 @@ enum SettingsMenuValue {
   general,
   security,
   privacy,
+  kycPolicy,
   support,
   feedback,
   none;
@@ -17,6 +18,8 @@ enum SettingsMenuValue {
         return LocaleKeys.settingsMenuSecurity.tr();
       case SettingsMenuValue.privacy:
         return LocaleKeys.settingsMenuPrivacy.tr();
+      case SettingsMenuValue.kycPolicy:
+        return LocaleKeys.settingsMenuKycPolicy.tr();
       case SettingsMenuValue.support:
         return LocaleKeys.support.tr();
       case SettingsMenuValue.feedback:
@@ -34,6 +37,8 @@ enum SettingsMenuValue {
         return 'security';
       case SettingsMenuValue.privacy:
         return 'privacy';
+      case SettingsMenuValue.kycPolicy:
+        return 'kyc';
       case SettingsMenuValue.support:
         return 'support';
       case SettingsMenuValue.feedback:

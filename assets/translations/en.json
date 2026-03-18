@@ -149,6 +149,7 @@
   "settingsMenuLanguage": "Change language",
   "settingsMenuSecurity": "Security",
   "settingsMenuPrivacy": "Privacy Notice",
+  "settingsMenuKycPolicy": "KYC Policy",
   "settingsMenuAbout": "About",
   "seedPhraseSettingControlsViewSeed": "View seed phrase",
   "seedPhraseSettingControlsDownloadSeed": "Download as file",

@@ -3,7 +3,7 @@
 **Gleec Pay LTD and its Affiliates**  
 (“Gleec”, “Gleec.com”, “The Company”, “we”, “us”, “our”)
 
-### **1. Purpose, Scope and Regulatory Context**
+### **1\. Purpose, Scope and Regulatory Context**
 
 This Know Your Customer (“KYC”) and Due Diligence Policy (the “Policy”) establishes the principles, standards, governance framework, and operational controls adopted by Gleec Pay LTD and all affiliated entities within the Gleec Group to prevent, detect, and mitigate the risks of money laundering, terrorist financing, sanctions violations, fraud, corruption, and other forms of financial and economic crime.
 
@@ -11,7 +11,7 @@ This Policy applies to all natural persons and legal entities, including users, 
 
 The Policy is designed to ensure compliance with all applicable anti-money laundering (“AML”), counter-terrorist financing (“CTF”), sanctions, and financial crime prevention laws and regulations in the jurisdictions in which the Company operates or provides Services. It aligns with internationally recognised standards and best practices, including the recommendations of the Financial Action Task Force (“FATF”), relevant EU Directives, and applicable national regulatory frameworks.
 
-### **2. Governance and Responsibility**
+### **2\. Governance and Responsibility**
 
 Ultimate responsibility for the implementation, oversight, and effectiveness of this Policy rests with the Board of Directors and Senior Management of the Company. The Board ensures that the Company maintains adequate systems, controls, and resources to manage financial crime risks proportionate to its business model, geographic footprint, and risk exposure.
 
@@ -19,7 +19,7 @@ Day-to-day responsibility for implementing and maintaining this Policy is delega
 
 All employees, officers, contractors, and relevant third parties involved in onboarding, customer interaction, transaction processing, or monitoring activities are required to comply with this Policy and supporting procedures.
 
-### **3. Risk-Based Approach**
+### **3\. Risk-Based Approach**
 
 #### **3.1 General Principles**
 
@@ -33,7 +33,7 @@ The Company identifies, assesses, and manages risks using a combination of quali
 
 Risk assessments are formally documented, subject to review, and retained in an auditable manner.
 
-### **4. Client Risk Assessment and Categorisation**
+### **4\. Client Risk Assessment and Categorisation**
 
 #### **4.1 Initial Risk Assessment**
 
@@ -51,13 +51,13 @@ Certain indicators may result in immediate classification as high-risk, includin
 
 Risk scoring is not influenced by commercial considerations. The MLRO may override automated risk outcomes where justified, provided that the rationale is documented and approved.
 
-### **5. Business-Wide Risk Assessment**
+### **5\. Business-Wide Risk Assessment**
 
 The MLRO conducts a Business-Wide Risk Assessment (“BWRA”) covering all Gleec entities, Services, customer segments, products, and delivery channels. The BWRA identifies inherent and residual risks, evaluates the effectiveness of controls, and informs policy updates, system enhancements, and monitoring priorities.
 
 The BWRA is reviewed at least annually and whenever material changes occur and is reported to Senior Management and the Board of Directors.
 
-### **6. Client Acceptance Policy**
+### **6\. Client Acceptance Policy**
 
 #### **6.1 General Acceptance Principles**
 
@@ -69,13 +69,13 @@ Account activation and continued access to the Services are conditional upon the
 
 The Company does not onboard or maintain relationships with sanctioned persons or entities, clients linked to prohibited jurisdictions or industries, individuals involved in serious criminal activity, clients with unverifiable identity or ownership, clients providing false or misleading information, or entities with anonymous or unidentifiable beneficial owners.
 
-### **7. Politically Exposed Persons (PEPs)**
+### **7\. Politically Exposed Persons (PEPs)**
 
 All relationships involving PEPs, their family members, or close associates are subject to Enhanced Due Diligence (“EDD”). This includes identification and verification of PEP status, MLRO and senior management approval, verification of source of wealth and source of funds, enhanced transaction monitoring, and more frequent reviews.
 
 Former PEPs remain subject to enhanced measures for a minimum of 12 months, extendable based on risk.
 
-### **8. Customer Due Diligence (CDD)**
+### **8\. Customer Due Diligence (CDD)**
 
 #### **8.1 CDD Measures**
 
@@ -91,22 +91,22 @@ Sumsub is fully integrated into the Company’s onboarding, risk assessment, and
 
 The use of Sumsub does not transfer regulatory responsibility. **Ultimate responsibility for KYC compliance, due diligence decisions, risk classifications, and regulatory adherence remains with the Company at all times**. The Company maintains appropriate oversight, governance, and validation of all KYC activities performed through Sumsub and ensures that the KYC platform provider meets required standards of security, data protection, reliability, and regulatory compliance.
 
-### **9. Enhanced Due Diligence (EDD)**
+### **9\. Enhanced Due Diligence (EDD)**
 
 Enhanced Due Diligence is applied where higher risk is identified and may include additional identity and ownership verification, detailed analysis of source of wealth and source of funds, enhanced transaction scrutiny, justification of activity, and senior management approval prior to onboarding or continuation of the relationship.
 
-### **10. Source of Wealth and Source of Funds**
+### **10\. Source of Wealth and Source of Funds**
 
 The Company verifies the legitimacy of source of wealth and source of funds using a risk-based approach and may request documentary evidence appropriate to the client’s risk profile, jurisdiction, and activity. All documentation is reviewed for authenticity, consistency, and plausibility.
 
-### **11. Ongoing Monitoring and Periodic Reviews**
+### **11\. Ongoing Monitoring and Periodic Reviews**
 
 All client relationships are subject to continuous transaction monitoring and periodic review based on risk classification. Reviews occur at least every 36 months for low-risk clients, 24 months for medium-risk clients, and 12 months for high-risk clients, or earlier where triggered by material changes, sanctions updates, PEP status changes, or suspicious activity.
 
-### **12. Record Keeping and Audit Trail**
+### **12\. Record Keeping and Audit Trail**
 
 The Company maintains complete, accurate, and retrievable records of KYC data, client risk assessments, monitoring activities, decisions, approvals, and escalations. Records are retained in accordance with applicable legal and regulatory requirements and are made available for internal audit and regulatory inspection.
 
-### **13. Policy Review and Updates**
+### **13\. Policy Review and Updates**
 
 This Policy is reviewed at least annually and updated as necessary to reflect regulatory developments, emerging risks, changes in business activities, and industry best practices.

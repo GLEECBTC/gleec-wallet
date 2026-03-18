@@ -155,6 +155,7 @@ abstract class LocaleKeys {
   static const settingsMenuLanguage = 'settingsMenuLanguage';
   static const settingsMenuSecurity = 'settingsMenuSecurity';
   static const settingsMenuPrivacy = 'settingsMenuPrivacy';
+  static const settingsMenuKycPolicy = 'settingsMenuKycPolicy';
   static const settingsMenuAbout = 'settingsMenuAbout';
   static const seedPhraseSettingControlsViewSeed =
       'seedPhraseSettingControlsViewSeed';
