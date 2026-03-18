@@ -58,12 +58,8 @@ class CustomTokenImportDialogState extends State<CustomTokenImportDialog> {
           controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            ImportFormPage(
-              onNextPage: goToNextPage,
-            ),
-            ImportSubmitPage(
-              onPreviousPage: goToPreviousPage,
-            ),
+            ImportFormPage(onNextPage: goToNextPage),
+            ImportSubmitPage(onPreviousPage: goToPreviousPage),
           ],
         ),
       ),
@@ -105,12 +101,7 @@ class BasePage extends StatelessWidget {
                   splashRadius: 20,
                 ),
               if (onBackPressed != null) const SizedBox(width: 16),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                ),
-              ),
+              Text(title, style: const TextStyle(fontSize: 18)),
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.close),
@@ -173,9 +164,7 @@ class ImportFormPage extends StatelessWidget {
                     Expanded(
                       child: Text(
                         LocaleKeys.importTokenWarning.tr(),
-                        style: const TextStyle(
-                          fontSize: 14,
-                        ),
+                        style: const TextStyle(fontSize: 14),
                       ),
                     ),
                   ],
@@ -183,13 +172,13 @@ class ImportFormPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               DropdownButtonFormField<CoinSubClass>(
-                value: state.network,
+                initialValue: state.network,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: LocaleKeys.selectNetwork.tr(),
                   border: const OutlineInputBorder(),
                 ),
-                items: state.evmNetworks.map((CoinSubClass coinSubClass) {
+                items: state.supportedNetworks.map((CoinSubClass coinSubClass) {
                   return DropdownMenuItem<CoinSubClass>(
                     value: coinSubClass,
                     child: Text(coinSubClass.formatted),
@@ -198,9 +187,9 @@ class ImportFormPage extends StatelessWidget {
                 onChanged: !initialState
                     ? null
                     : (CoinSubClass? value) {
-                        context
-                            .read<CustomTokenImportBloc>()
-                            .add(UpdateNetworkEvent(value));
+                        context.read<CustomTokenImportBloc>().add(
+                          UpdateNetworkEvent(value),
+                        );
                       },
               ),
               const SizedBox(height: 24),
@@ -208,9 +197,9 @@ class ImportFormPage extends StatelessWidget {
                 controller: addressController,
                 enabled: initialState,
                 onChanged: (value) {
-                  context
-                      .read<CustomTokenImportBloc>()
-                      .add(UpdateAddressEvent(value));
+                  context.read<CustomTokenImportBloc>().add(
+                    UpdateAddressEvent(value),
+                  );
                 },
                 decoration: InputDecoration(
                   labelText: LocaleKeys.tokenContractAddress.tr(),
@@ -221,9 +210,9 @@ class ImportFormPage extends StatelessWidget {
               UiPrimaryButton(
                 onPressed: isSubmitEnabled
                     ? () {
-                        context
-                            .read<CustomTokenImportBloc>()
-                            .add(const SubmitFetchCustomTokenEvent());
+                        context.read<CustomTokenImportBloc>().add(
+                          const SubmitFetchCustomTokenEvent(),
+                        );
                       }
                     : null,
                 child: state.formStatus == FormStatus.initial
@@ -259,16 +248,17 @@ class ImportSubmitPage extends StatelessWidget {
         final newCoinUsdBalance =
             '\$${formatAmt(state.coinBalanceUsd.toDouble())}';
 
-        final isSubmitEnabled = state.importStatus != FormStatus.submitting &&
+        final isSubmitEnabled =
+            state.importStatus != FormStatus.submitting &&
             state.importStatus != FormStatus.success &&
             newCoin != null;
 
         return BasePage(
           title: LocaleKeys.importCustomToken.tr(),
           onBackPressed: () {
-            context
-                .read<CustomTokenImportBloc>()
-                .add(const ResetFormStatusEvent());
+            context.read<CustomTokenImportBloc>().add(
+              const ResetFormStatusEvent(),
+            );
             onPreviousPage();
           },
           child: Column(
@@ -285,9 +275,7 @@ class ImportSubmitPage extends StatelessWidget {
                             height: 250,
                             filterQuality: FilterQuality.high,
                           ),
-                          Text(
-                            LocaleKeys.tokenNotFound.tr(),
-                          ),
+                          Text(LocaleKeys.tokenNotFound.tr()),
                         ],
                       ),
                     ),
@@ -298,10 +286,7 @@ class ImportSubmitPage extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          AssetLogo.ofId(
-                            newCoin.id,
-                            size: 80,
-                          ),
+                          AssetLogo.ofId(newCoin.id, size: 80),
                           const SizedBox(height: 12),
                           Text(
                             newCoin.id.id,
@@ -310,10 +295,9 @@ class ImportSubmitPage extends StatelessWidget {
                           const SizedBox(height: 32),
                           Text(
                             LocaleKeys.balance.tr(),
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      color: Colors.grey,
-                                    ),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -338,12 +322,13 @@ class ImportSubmitPage extends StatelessWidget {
                     UiPrimaryButton(
                       onPressed: isSubmitEnabled
                           ? () {
-                              context
-                                  .read<CustomTokenImportBloc>()
-                                  .add(const SubmitImportCustomTokenEvent());
+                              context.read<CustomTokenImportBloc>().add(
+                                const SubmitImportCustomTokenEvent(),
+                              );
                             }
                           : null,
-                      child: state.importStatus == FormStatus.submitting ||
+                      child:
+                          state.importStatus == FormStatus.submitting ||
                               state.importStatus == FormStatus.success
                           ? const UiSpinner(color: Colors.white)
                           : Text(LocaleKeys.importToken.tr()),

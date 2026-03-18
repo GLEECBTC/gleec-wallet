@@ -121,9 +121,11 @@ class Coin extends Equatable {
   bool get isTxMemoSupported =>
       type == CoinType.tendermint || type == CoinType.tendermintToken;
 
-  bool get isCustomFeeSupported {
-    return type != CoinType.tendermintToken && type != CoinType.tendermint;
-  }
+  bool get isCustomFeeSupported =>
+      type != CoinType.tendermintToken &&
+      type != CoinType.tendermint &&
+      type != CoinType.trx &&
+      type != CoinType.trc20;
 
   static bool checkSegwitByAbbr(String abbr) => abbr.contains('-segwit');
   static String normalizeAbbr(String abbr) => abbr.replaceAll('-segwit', '');
