@@ -1,14 +1,16 @@
-import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/material.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
 class WalletListItem extends StatelessWidget {
-  const WalletListItem({Key? key, required this.wallet, required this.onClick})
-    : super(key: key);
+  const WalletListItem({
+    super.key,
+    required this.wallet,
+    required this.onClick,
+  });
   final Wallet wallet;
   final void Function(Wallet, WalletsManagerExistWalletAction) onClick;
 
@@ -60,12 +62,14 @@ class WalletListItem extends StatelessWidget {
                   runSpacing: 4,
                   children: [
                     _MetaTag(label: _walletTypeLabel(wallet.config.type)),
-                    _MetaTag(
-                      label: _walletProvenanceLabel(wallet.config.provenance),
-                    ),
-                    _MetaTag(
-                      label: _walletCreatedLabel(wallet.config.createdAt),
-                    ),
+                    if (wallet.config.provenance != WalletProvenance.unknown)
+                      _MetaTag(
+                        label: _walletProvenanceLabel(wallet.config.provenance),
+                      ),
+                    if (wallet.config.createdAt != null)
+                      _MetaTag(
+                        label: _walletCreatedLabel(wallet.config.createdAt!),
+                      ),
                   ],
                 ),
               ],
@@ -97,12 +101,11 @@ class WalletListItem extends StatelessWidget {
     return switch (provenance) {
       WalletProvenance.generated => 'Generated',
       WalletProvenance.imported => 'Imported',
-      WalletProvenance.unknown => LocaleKeys.unknown.tr(),
+      WalletProvenance.unknown => '',
     };
   }
 
-  String _walletCreatedLabel(DateTime? createdAt) {
-    if (createdAt == null) return LocaleKeys.unknown.tr();
+  String _walletCreatedLabel(DateTime createdAt) {
     return DateFormat('yyyy-MM-dd').format(createdAt);
   }
 }

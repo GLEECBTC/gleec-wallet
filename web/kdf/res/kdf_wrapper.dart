@@ -8,11 +8,19 @@ import 'dart:async';
 // This is a web-specific file, so it's safe to ignore this warning
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart';
+
+@JS('mm2_main')
+external JSAny? _mm2MainJs(String conf, JSFunction logCallback);
+
+@JS('mm2_main_status')
+external JSAny? _mm2MainStatusJs();
+
+@JS('mm2_stop')
+external JSAny? _mm2StopJs();
 
 class KdfPlugin {
   static void registerWith(Registrar registrar) {
@@ -62,7 +70,7 @@ class KdfPlugin {
 
     final completer = Completer<void>();
 
-    final script = (document.createElement('script') as HTMLScriptElement)
+    final script = HTMLScriptElement()
       ..src = 'kdf/kdflib.js'
       ..onload = () {
         _libraryLoaded = true;
@@ -82,15 +90,12 @@ class KdfPlugin {
 
     try {
       final jsCallback = logCallback.toJS;
-      final jsResponse = globalContext.callMethod(
-        'mm2_main'.toJS,
-        [conf.toJS, jsCallback].toJS,
-      );
+      final jsResponse = _mm2MainJs(conf, jsCallback);
       if (jsResponse == null) {
         throw Exception('mm2_main call returned null');
       }
 
-      final dynamic dartResponse = (jsResponse as JSAny?).dartify();
+      final dynamic dartResponse = jsResponse.dartify();
       if (dartResponse == null) {
         throw Exception('Failed to convert mm2_main response to Dart');
       }
@@ -106,13 +111,13 @@ class KdfPlugin {
       throw StateError('KDF library not loaded. Call ensureLoaded() first.');
     }
 
-    final jsResult = globalContext.callMethod('mm2_main_status'.toJS);
+    final jsResult = _mm2MainStatusJs();
     return jsResult.dartify()! as int;
   }
 
   Future<int> _mm2Stop() async {
     await _ensureLoaded();
-    final jsResult = globalContext.callMethod('mm2_stop'.toJS);
+    final jsResult = _mm2StopJs();
     return jsResult.dartify()! as int;
   }
 }
