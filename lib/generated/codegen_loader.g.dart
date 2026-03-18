@@ -154,6 +154,8 @@ abstract class LocaleKeys {
   static const settingsMenuGeneral = 'settingsMenuGeneral';
   static const settingsMenuLanguage = 'settingsMenuLanguage';
   static const settingsMenuSecurity = 'settingsMenuSecurity';
+  static const settingsMenuPrivacy = 'settingsMenuPrivacy';
+  static const settingsMenuKycPolicy = 'settingsMenuKycPolicy';
   static const settingsMenuAbout = 'settingsMenuAbout';
   static const seedPhraseSettingControlsViewSeed =
       'seedPhraseSettingControlsViewSeed';
@@ -667,6 +669,7 @@ abstract class LocaleKeys {
   static const transactionsEmptyDescription = 'transactionsEmptyDescription';
   static const transactionsNoLoginCAT = 'transactionsNoLoginCAT';
   static const loadingError = 'loadingError';
+  static const legalDocumentLoadError = 'legalDocumentLoadError';
   static const tryAgainButton = 'tryAgainButton';
   static const contractAddress = 'contractAddress';
   static const tokenID = 'tokenID';

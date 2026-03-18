@@ -33,6 +33,7 @@ import 'package:web_dex/sdk/widgets/window_close_handler.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/services/feedback/app_feedback_wrapper.dart';
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/constants.dart';
@@ -126,6 +127,10 @@ Future<void> main() async {
             RepositoryProvider.value(value: sparklineRepository),
             RepositoryProvider.value(value: tradingStatusRepository),
             RepositoryProvider.value(value: tradingStatusService),
+            RepositoryProvider<LegalDocumentsRepository>(
+              create: (_) => LegalDocumentsRepository(),
+              dispose: (repository) => repository.dispose(),
+            ),
           ],
           child: const MyApp(),
         ),

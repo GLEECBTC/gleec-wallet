@@ -14,9 +14,9 @@ class WalletRoutePath implements AppRoutePath {
   WalletRoutePath.wallet() : location = '/${firstUriSegment.wallet}';
 
   WalletRoutePath.coinDetails(this.abbr)
-      : location = '/${firstUriSegment.wallet}/${abbr.toLowerCase()}';
+    : location = '/${firstUriSegment.wallet}/${abbr.toLowerCase()}';
   WalletRoutePath.action(this.action)
-      : location = '/${firstUriSegment.wallet}/$action';
+    : location = '/${firstUriSegment.wallet}/$action';
 
   String abbr = '';
   String action = '';
@@ -26,11 +26,9 @@ class WalletRoutePath implements AppRoutePath {
 }
 
 class FiatRoutePath implements AppRoutePath {
-  FiatRoutePath.fiat()
-      : location = '/${firstUriSegment.fiat}',
-        uuid = '';
+  FiatRoutePath.fiat() : location = '/${firstUriSegment.fiat}', uuid = '';
   FiatRoutePath.swapDetails(this.action, this.uuid)
-      : location = '/${firstUriSegment.fiat}/trading_details/$uuid';
+    : location = '/${firstUriSegment.fiat}/trading_details/$uuid';
 
   @override
   final String location;
@@ -61,17 +59,18 @@ class DexRoutePath implements AppRoutePath {
     if (toAmount.isNotEmpty) queryParams.add('to_amount=$toAmount');
     if (orderType.isNotEmpty) queryParams.add('order_type=$orderType');
 
-    final String queryString =
-        queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
+    final String queryString = queryParams.isNotEmpty
+        ? '?${queryParams.join('&')}'
+        : '';
     return '/${firstUriSegment.dex}$queryString';
   }
 
   DexRoutePath.swapDetails(this.action, this.uuid)
-      : fromCurrency = '',
-        fromAmount = '',
-        toCurrency = '',
-        toAmount = '',
-        orderType = '';
+    : fromCurrency = '',
+      fromAmount = '',
+      toCurrency = '',
+      toAmount = '',
+      orderType = '';
 
   final String uuid;
   DexAction action = DexAction.none;
@@ -84,11 +83,9 @@ class DexRoutePath implements AppRoutePath {
 }
 
 class BridgeRoutePath implements AppRoutePath {
-  BridgeRoutePath.bridge()
-      : location = '/${firstUriSegment.bridge}',
-        uuid = '';
+  BridgeRoutePath.bridge() : location = '/${firstUriSegment.bridge}', uuid = '';
   BridgeRoutePath.swapDetails(this.action, this.uuid)
-      : location = '/${firstUriSegment.bridge}/trading_details/$uuid';
+    : location = '/${firstUriSegment.bridge}/trading_details/$uuid';
 
   @override
   final String location;
@@ -98,20 +95,20 @@ class BridgeRoutePath implements AppRoutePath {
 
 class NftRoutePath implements AppRoutePath {
   NftRoutePath.nfts()
-      : location = '/${firstUriSegment.nfts}',
-        uuid = '',
-        pageState = NFTSelectedState.none;
+    : location = '/${firstUriSegment.nfts}',
+      uuid = '',
+      pageState = NFTSelectedState.none;
   NftRoutePath.nftDetails(this.uuid, bool isSend)
-      : location = '/${firstUriSegment.nfts}/$uuid',
-        pageState = isSend ? NFTSelectedState.send : NFTSelectedState.details;
+    : location = '/${firstUriSegment.nfts}/$uuid',
+      pageState = isSend ? NFTSelectedState.send : NFTSelectedState.details;
   NftRoutePath.nftReceive()
-      : location = '/${firstUriSegment.nfts}/receive',
-        uuid = '',
-        pageState = NFTSelectedState.receive;
+    : location = '/${firstUriSegment.nfts}/receive',
+      uuid = '',
+      pageState = NFTSelectedState.receive;
   NftRoutePath.nftTransactions()
-      : location = '/${firstUriSegment.nfts}/transactions',
-        pageState = NFTSelectedState.transactions,
-        uuid = '';
+    : location = '/${firstUriSegment.nfts}/transactions',
+      pageState = NFTSelectedState.transactions,
+      uuid = '';
 
   @override
   final String location;
@@ -121,10 +118,10 @@ class NftRoutePath implements AppRoutePath {
 
 class MarketMakerBotRoutePath implements AppRoutePath {
   MarketMakerBotRoutePath.marketMakerBot()
-      : location = '/${firstUriSegment.marketMakerBot}',
-        uuid = '';
+    : location = '/${firstUriSegment.marketMakerBot}',
+      uuid = '';
   MarketMakerBotRoutePath.swapDetails(this.action, this.uuid)
-      : location = '/${firstUriSegment.marketMakerBot}/trading_details/$uuid';
+    : location = '/${firstUriSegment.marketMakerBot}/trading_details/$uuid';
 
   @override
   final String location;
@@ -134,23 +131,29 @@ class MarketMakerBotRoutePath implements AppRoutePath {
 
 class SettingsRoutePath implements AppRoutePath {
   SettingsRoutePath.root()
-      : location = '/${firstUriSegment.settings}',
-        selectedMenu = SettingsMenuValue.none;
+    : location = '/${firstUriSegment.settings}',
+      selectedMenu = SettingsMenuValue.none;
   SettingsRoutePath.general()
-      : location = '/${firstUriSegment.settings}/general',
-        selectedMenu = SettingsMenuValue.general;
+    : location = '/${firstUriSegment.settings}/general',
+      selectedMenu = SettingsMenuValue.general;
   SettingsRoutePath.security()
-      : location = '/${firstUriSegment.settings}/security',
-        selectedMenu = SettingsMenuValue.security;
+    : location = '/${firstUriSegment.settings}/security',
+      selectedMenu = SettingsMenuValue.security;
+  SettingsRoutePath.privacy()
+    : location = '/${firstUriSegment.settings}/privacy',
+      selectedMenu = SettingsMenuValue.privacy;
+  SettingsRoutePath.kyc()
+    : location = '/${firstUriSegment.settings}/kyc',
+      selectedMenu = SettingsMenuValue.kycPolicy;
   SettingsRoutePath.passwordUpdate()
-      : location = '/${firstUriSegment.settings}/security/passwordUpdate',
-        selectedMenu = SettingsMenuValue.security;
+    : location = '/${firstUriSegment.settings}/security/passwordUpdate',
+      selectedMenu = SettingsMenuValue.security;
   SettingsRoutePath.support()
-      : location = '/${firstUriSegment.settings}/support',
-        selectedMenu = SettingsMenuValue.support;
+    : location = '/${firstUriSegment.settings}/support',
+      selectedMenu = SettingsMenuValue.support;
   SettingsRoutePath.feedback()
-      : location = '/${firstUriSegment.settings}/feedback',
-        selectedMenu = SettingsMenuValue.feedback;
+    : location = '/${firstUriSegment.settings}/feedback',
+      selectedMenu = SettingsMenuValue.feedback;
 
   @override
   final String location;
