@@ -15,7 +15,7 @@ class CustomTokenImportState extends Equatable {
     required this.coin,
     required this.coinBalance,
     required this.coinBalanceUsd,
-    required this.evmNetworks,
+    required this.supportedNetworks,
   });
 
   CustomTokenImportState.defaults({
@@ -26,9 +26,9 @@ class CustomTokenImportState extends Equatable {
     this.formErrorMessage = '',
     this.importErrorMessage = '',
     this.coin,
-    this.evmNetworks = const [],
-  })  : coinBalance = Decimal.zero,
-        coinBalanceUsd = Decimal.zero;
+    this.supportedNetworks = const [],
+  }) : coinBalance = Decimal.zero,
+       coinBalanceUsd = Decimal.zero;
 
   final FormStatus formStatus;
   final FormStatus importStatus;
@@ -39,7 +39,7 @@ class CustomTokenImportState extends Equatable {
   final Asset? coin;
   final Decimal coinBalance;
   final Decimal coinBalanceUsd;
-  final Iterable<CoinSubClass> evmNetworks;
+  final Iterable<CoinSubClass> supportedNetworks;
 
   CustomTokenImportState copyWith({
     FormStatus? formStatus,
@@ -51,7 +51,7 @@ class CustomTokenImportState extends Equatable {
     Asset? Function()? tokenData,
     Decimal? tokenBalance,
     Decimal? tokenBalanceUsd,
-    Iterable<CoinSubClass>? evmNetworks,
+    Iterable<CoinSubClass>? supportedNetworks,
   }) {
     return CustomTokenImportState(
       formStatus: formStatus ?? this.formStatus,
@@ -61,7 +61,7 @@ class CustomTokenImportState extends Equatable {
       formErrorMessage: formErrorMessage ?? this.formErrorMessage,
       importErrorMessage: importErrorMessage ?? this.importErrorMessage,
       coin: tokenData?.call() ?? coin,
-      evmNetworks: evmNetworks ?? this.evmNetworks,
+      supportedNetworks: supportedNetworks ?? this.supportedNetworks,
       coinBalance: tokenBalance ?? coinBalance,
       coinBalanceUsd: tokenBalanceUsd ?? coinBalanceUsd,
     );
@@ -69,14 +69,14 @@ class CustomTokenImportState extends Equatable {
 
   @override
   List<Object?> get props => [
-        formStatus,
-        importStatus,
-        network,
-        address,
-        formErrorMessage,
-        importErrorMessage,
-        coin,
-        coinBalance,
-        evmNetworks,
-      ];
+    formStatus,
+    importStatus,
+    network,
+    address,
+    formErrorMessage,
+    importErrorMessage,
+    coin,
+    coinBalance,
+    supportedNetworks,
+  ];
 }

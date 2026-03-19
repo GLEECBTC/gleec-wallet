@@ -1,15 +1,21 @@
 import 'dart:async';
+import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
 import 'platform_web_api.dart';
+
+@JS()
+extension type _StyledElement._(web.Element _) implements web.Element {
+  external web.CSSStyleDeclaration get style;
+}
 
 class PlatformWebApiWeb implements PlatformWebApi {
   @override
   void setElementDisplay(String elementId, String display) {
     final element = web.document.getElementById(elementId);
     if (element != null) {
-      (element as web.HTMLElement).style.display = display;
+      _StyledElement._(element).style.display = display;
     }
   }
 

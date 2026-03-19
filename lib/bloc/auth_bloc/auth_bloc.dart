@@ -138,7 +138,13 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           allowWeakPassword: weakPasswordsAllowed,
         ),
       );
-      final KdfUser? currentUser = await _kdfSdk.auth.currentUser;
+      KdfUser? currentUser = await _kdfSdk.auth.currentUser;
+      if (currentUser == null) {
+        return emit(AuthBlocState.error(AuthException.notSignedIn()));
+      }
+
+      await _repairMissingWalletMetadata(currentUser);
+      currentUser = await _kdfSdk.auth.currentUser;
       if (currentUser == null) {
         return emit(AuthBlocState.error(AuthException.notSignedIn()));
       }
@@ -498,5 +504,27 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     _log.info('Import supported assets: ${supportedAssets.join(', ')}');
 
     return supportedAssets.toList();
+  }
+
+  Future<void> _repairMissingWalletMetadata(KdfUser user) async {
+    if (_isMissingMetadataStringValue(user.metadata['type'])) {
+      final walletType = user.walletId.isHd
+          ? WalletType.hdwallet
+          : WalletType.iguana;
+      await _kdfSdk.setWalletType(walletType);
+    }
+
+    if (_isMissingMetadataStringValue(user.metadata['wallet_provenance'])) {
+      final isImported = user.metadata['isImported'];
+      if (isImported is bool) {
+        await _kdfSdk.setWalletProvenance(
+          isImported ? WalletProvenance.imported : WalletProvenance.generated,
+        );
+      }
+    }
+  }
+
+  bool _isMissingMetadataStringValue(dynamic value) {
+    return value == null || value is String && value.trim().isEmpty;
   }
 }

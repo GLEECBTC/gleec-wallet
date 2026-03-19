@@ -1,9 +1,10 @@
 import 'package:hive_ce/hive.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/profit_loss_cache.dart';
 
 class ProfitLossCacheAdapter extends TypeAdapter<ProfitLossCache> {
   @override
-  final int typeId = 14;
+  final int typeId = profitLossCacheAdapterTypeId;
 
   @override
   ProfitLossCache read(BinaryReader reader) {

@@ -1,10 +1,11 @@
 import 'package:hive_ce/hive.dart';
+import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 
 import '../fiat_value.dart';
 
 class FiatValueAdapter extends TypeAdapter<FiatValue> {
   @override
-  final int typeId = 16;
+  final int typeId = fiatValueAdapterTypeId;
 
   @override
   FiatValue read(BinaryReader reader) {
