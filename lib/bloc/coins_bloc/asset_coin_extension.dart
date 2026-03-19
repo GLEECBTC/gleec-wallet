@@ -68,6 +68,10 @@ extension AssetCoinExtension on Asset {
 extension CoinTypeExtension on CoinSubClass {
   CoinType toCoinType() {
     switch (this) {
+      case CoinSubClass.trx:
+        return CoinType.trx;
+      case CoinSubClass.trc20:
+        return CoinType.trc20;
       case CoinSubClass.base:
         return CoinType.base20;
       case CoinSubClass.ftm20:
@@ -128,6 +132,9 @@ extension CoinTypeExtension on CoinSubClass {
     switch (this) {
       case CoinSubClass.base:
         return true;
+      case CoinSubClass.trx:
+      case CoinSubClass.trc20:
+        return false;
       case CoinSubClass.avx20:
       case CoinSubClass.bep20:
       case CoinSubClass.ftm20:
@@ -158,6 +165,10 @@ extension CoinTypeExtension on CoinSubClass {
 extension CoinSubClassExtension on CoinType {
   CoinSubClass toCoinSubClass() {
     switch (this) {
+      case CoinType.trx:
+        return CoinSubClass.trx;
+      case CoinType.trc20:
+        return CoinSubClass.trc20;
       case CoinType.base20:
         return CoinSubClass.base;
       case CoinType.ftm20:

@@ -21,11 +21,13 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/bloc_response.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/disable_coin/disable_coin_req.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_errors.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_request.dart';
 import 'package:web_dex/model/cex_price.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/withdraw_details/withdraw_details.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -66,6 +68,8 @@ class CoinsRepo {
   final ArrrActivationService _arrrActivationService;
 
   final _log = Logger('CoinsRepo');
+  static const _unsupportedTrezorSiaMessage =
+      'SIA is not supported for Trezor wallets in this release.';
 
   /// { acc: { abbr: address }}, used in Fiat Page
   final Map<String, Map<String, String>> _addressCache = {};
@@ -380,6 +384,31 @@ class CoinsRepo {
       final coinIdList = assets.map((e) => e.id.id).join(', ');
       _log.warning('No wallet signed in. Skipping activation of [$coinIdList]');
       return;
+    }
+
+    final walletType = (await _kdfSdk.currentWallet())?.config.type;
+    if (walletType == WalletType.trezor) {
+      final unsupportedSiaAssets =
+          assets.where((asset) => asset.id.subClass == CoinSubClass.sia);
+      if (unsupportedSiaAssets.isNotEmpty) {
+        _log.warning(
+          'Skipping unsupported Trezor SIA activation for '
+          '${unsupportedSiaAssets.map((a) => a.id.id).join(', ')}: '
+          '$_unsupportedTrezorSiaMessage',
+        );
+        for (final siaAsset in unsupportedSiaAssets) {
+          _broadcastAsset(
+            _assetToCoinWithoutAddress(siaAsset)
+                .copyWith(state: CoinState.suspended),
+          );
+        }
+      }
+      assets = assets
+          .where((asset) => asset.id.subClass != CoinSubClass.sia)
+          .toList();
+      if (assets.isEmpty) {
+        return;
+      }
     }
 
     // Debug logging for activation
@@ -702,6 +731,74 @@ class CoinsRepo {
       ...childCancelFutures,
       removeMetadataFuture,
     ]);
+    _invalidateActivatedAssetsCache();
+  }
+
+  /// Performs a full rollback for preview-only asset activations.
+  ///
+  /// Unlike [deactivateCoinsSync], this disables the assets in MM2 so
+  /// temporary preview activations do not remain active for the rest of the
+  /// session. This should only be used for short-lived preview flows where a
+  /// real rollback is required.
+  Future<void> rollbackPreviewAssets(
+    Iterable<Asset> assets, {
+    Set<AssetId> deleteCustomTokens = const {},
+    Set<AssetId> removeWalletMetadataAssets = const {},
+    bool notifyListeners = false,
+  }) async {
+    final uniqueAssets = Map<AssetId, Asset>.fromEntries(
+      assets.map((asset) => MapEntry(asset.id, asset)),
+    );
+    if (uniqueAssets.isEmpty) {
+      return;
+    }
+
+    final orderedAssets = uniqueAssets.values.toList()
+      ..sort((a, b) {
+        final aPriority = a.id.parentId == null ? 1 : 0;
+        final bPriority = b.id.parentId == null ? 1 : 0;
+        return aPriority.compareTo(bPriority);
+      });
+
+    for (final asset in orderedAssets) {
+      await _balanceWatchers[asset.id]?.cancel();
+      _balanceWatchers.remove(asset.id);
+
+      try {
+        if (await isAssetActivated(asset.id, forceRefresh: true)) {
+          await _mm2.call(DisableCoinReq(coin: asset.id.id));
+        }
+      } catch (e, s) {
+        _log.warning('Failed to disable preview asset ${asset.id.id}', e, s);
+      }
+
+      if (notifyListeners) {
+        _broadcastAsset(asset.toCoin().copyWith(state: CoinState.inactive));
+      }
+    }
+
+    if (removeWalletMetadataAssets.isNotEmpty) {
+      try {
+        await _kdfSdk.removeActivatedCoins(
+          removeWalletMetadataAssets.map((assetId) => assetId.id).toList(),
+        );
+      } catch (e, s) {
+        _log.warning(
+          'Failed to remove preview assets from wallet metadata',
+          e,
+          s,
+        );
+      }
+    }
+
+    for (final assetId in deleteCustomTokens) {
+      try {
+        await _kdfSdk.deleteCustomToken(assetId);
+      } catch (e, s) {
+        _log.warning('Failed to delete preview custom token $assetId', e, s);
+      }
+    }
+
     _invalidateActivatedAssetsCache();
   }
 

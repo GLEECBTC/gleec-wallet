@@ -21,9 +21,7 @@ const String coinsAssetsPath = 'packages/komodo_defi_framework/assets';
 final Uri discordSupportChannelUrl = Uri.parse(
   'mailto:info@gleec.com?subject=GLEEC%20Wallet%20Support',
 );
-final Uri discordInviteUrl = Uri.parse(
-  'https://www.gleec.com/contact',
-);
+final Uri discordInviteUrl = Uri.parse('https://www.gleec.com/contact');
 
 /// Const to define if Bitrefill integration is enabled in the app.
 const bool isBitrefillIntegrationEnabled = false;
@@ -79,6 +77,7 @@ Map<String, int> priorityCoinsAbbrMap = {
   'USDT-ERC20': 80,
   'USDT-PLG20': 80,
   'USDT-BEP20': 80,
+  'USDT-TRC20': 80,
 
   // Rank 4: XRP (~$145 billion)
   'XRP': 70,
@@ -119,6 +118,7 @@ const List<String> unauthenticatedUserPriorityTickers = [
   'BTC',
   'KMD',
   'ETH',
+  'TRX',
   'BNB',
   'LTC',
   'DASH',

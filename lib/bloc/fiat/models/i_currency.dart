@@ -124,12 +124,17 @@ class CryptoCurrency extends ICurrency {
 
   @override
   String getAbbr() {
+    if (symbol.contains('-')) {
+      return symbol;
+    }
+
     // TODO: look into a better way to do this when migrating to the SDK
     // Providers return "ETH" with chain type "ERC20", resultning in abbr of
     // "ETH-ERC20", which is not how it is stored in our coins configuration
     // files. "ETH" is the expected abbreviation, which would just be `symbol`.
     if (chainType == CoinType.utxo ||
         (chainType == CoinType.tendermint && symbol == 'ATOM') ||
+        (chainType == CoinType.trx && symbol == 'TRX') ||
         (chainType == CoinType.erc20 && symbol == 'ETH') ||
         (chainType == CoinType.bep20 && symbol == 'BNB') ||
         (chainType == CoinType.avx20 && symbol == 'AVAX') ||
