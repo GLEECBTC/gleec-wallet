@@ -15,6 +15,7 @@ import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/coin_utils.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/views/wallet/coins_manager/coins_manager_helpers.dart';
@@ -68,13 +69,17 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
   ) async {
     final List<FilterFunction> filters = [];
 
-    final mergedCoinsList = _mergeCoinLists(
+    final originalCoins = await _filterUnsupportedHardwareCoins(
       await _getOriginalCoinList(
         _coinsRepo,
         event.action,
         cachedKnownCoinsMap: _cachedKnownCoinsMap,
         cachedWalletCoins: _cachedWalletCoins,
       ),
+      event.action,
+    );
+    final mergedCoinsList = _mergeCoinLists(
+      originalCoins,
       state.coins,
     ).toList();
 
@@ -86,8 +91,15 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
       state.selectedCoins,
       event.action,
     );
+    final visibleSelectedCoins = await _filterUnsupportedHardwareCoins(
+      selectedCoins,
+      event.action,
+    );
 
-    final uniqueCombinedList = <Coin>{...mergedCoinsList, ...selectedCoins};
+    final uniqueCombinedList = <Coin>{
+      ...mergedCoinsList,
+      ...visibleSelectedCoins,
+    };
 
     final testFilteredCoins = await _filterTestCoinsIfNeeded(
       uniqueCombinedList.toList(),
@@ -111,7 +123,7 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
       state.copyWith(
         coins: sortedCoins.unique((coin) => coin.id),
         action: event.action,
-        selectedCoins: selectedCoins,
+        selectedCoins: visibleSelectedCoins,
       ),
     );
   }
@@ -147,11 +159,14 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
     _cachedTestCoinsEnabled =
         (await _settingsRepository.loadSettings()).testCoinsEnabled;
 
-    final List<Coin> coins = await _getOriginalCoinList(
-      _coinsRepo,
+    final List<Coin> coins = await _filterUnsupportedHardwareCoins(
+      await _getOriginalCoinList(
+        _coinsRepo,
+        event.action,
+        cachedKnownCoinsMap: _cachedKnownCoinsMap,
+        cachedWalletCoins: _cachedWalletCoins,
+      ),
       event.action,
-      cachedKnownCoinsMap: _cachedKnownCoinsMap,
-      cachedWalletCoins: _cachedWalletCoins,
     );
 
     // Add wallet coins to selected coins if in add mode so that they
@@ -164,9 +179,13 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
           : <Coin>[],
       event.action,
     );
+    final visibleSelectedCoins = await _filterUnsupportedHardwareCoins(
+      selectedCoins,
+      event.action,
+    );
 
     final filteredCoins = await _filterTestCoinsIfNeeded(
-      {...coins, ...selectedCoins}.toList(),
+      {...coins, ...visibleSelectedCoins}.toList(),
     );
     final sortedCoins = _sortCoins(filteredCoins, event.action, state.sortData);
 
@@ -174,7 +193,7 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
       state.copyWith(
         coins: sortedCoins.unique((coin) => coin.id),
         action: event.action,
-        selectedCoins: selectedCoins,
+        selectedCoins: visibleSelectedCoins,
       ),
     );
   }
@@ -185,9 +204,7 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
   ) {
     final List<CoinSubClass> newTypes =
         state.selectedCoinTypes.contains(event.type)
-            ? state.selectedCoinTypes
-                .where((type) => type != event.type)
-                .toList()
+        ? state.selectedCoinTypes.where((type) => type != event.type).toList()
         : [...state.selectedCoinTypes, event.type];
 
     emit(state.copyWith(selectedCoinTypes: newTypes));
@@ -249,10 +266,12 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
       } on ZhtlcActivationCancelled {
         // Revert optimistic selection and show a friendly message
         selectedCoins.remove(coin);
-        emit(state.copyWith(
-          selectedCoins: selectedCoins.toList(),
-          errorMessage: 'Activation canceled.',
-        ));
+        emit(
+          state.copyWith(
+            selectedCoins: selectedCoins.toList(),
+            errorMessage: 'Activation canceled.',
+          ),
+        );
         return;
       }
     } else {
@@ -358,10 +377,24 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
 
   List<Coin> _filterByType(List<Coin> coins) {
     return coins
-        .where(
-          (coin) => state.selectedCoinTypes.contains(coin.id.subClass),
-        )
+        .where((coin) => state.selectedCoinTypes.contains(coin.id.subClass))
         .toList();
+  }
+
+  Future<List<Coin>> _filterUnsupportedHardwareCoins(
+    List<Coin> coins,
+    CoinsManagerAction action,
+  ) async {
+    if (action != CoinsManagerAction.add) {
+      return coins;
+    }
+
+    final currentWalletType = (await _sdk.auth.currentUser)?.wallet.config.type;
+    if (currentWalletType != WalletType.trezor) {
+      return coins;
+    }
+
+    return coins.where((coin) => coin.id.subClass != CoinSubClass.sia).toList();
   }
 
   /// Merges wallet coins into selected coins list when in add mode
@@ -383,8 +416,9 @@ class CoinsManagerBloc extends Bloc<CoinsManagerEvent, CoinsManagerState> {
       // This ensures toggles remain OFF if auto-activation was bypassed.
       if (walletCoin.id.subClass == CoinSubClass.zhtlc) {
         try {
-          final saved =
-              await _sdk.activationConfigService.getSavedZhtlc(walletCoin.id);
+          final saved = await _sdk.activationConfigService.getSavedZhtlc(
+            walletCoin.id,
+          );
           if (saved == null) {
             continue;
           }
