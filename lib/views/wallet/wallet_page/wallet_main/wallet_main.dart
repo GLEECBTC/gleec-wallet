@@ -62,6 +62,8 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
   StreamSubscription<Wallet?>? _walletSubscription;
   late TabController _tabController;
   int _activeTabIndex = 0;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   late final Stopwatch _walletListStopwatch;
   bool _walletHalfLogged = false;
@@ -105,6 +107,8 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
     _walletSubscription?.cancel();
     _popupDispatcher?.close();
     _popupDispatcher = null;
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
@@ -278,8 +282,13 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
   }
 
   void _onSearchChange(String searchKey) {
+    final normalizedSearchKey = searchKey.toLowerCase();
+    if (_searchKey == normalizedSearchKey) {
+      return;
+    }
+
     setState(() {
-      _searchKey = searchKey.toLowerCase();
+      _searchKey = normalizedSearchKey;
     });
   }
 
@@ -307,6 +316,8 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
           SliverPersistentHeader(
             pinned: true,
             delegate: _SliverSearchBarDelegate(
+              searchController: _searchController,
+              searchFocusNode: _searchFocusNode,
               withBalance: context
                   .watch<SettingsBloc>()
                   .state
@@ -514,14 +525,18 @@ class _MultiAddressWalletNotice extends StatelessWidget {
 
 class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
   _SliverSearchBarDelegate({
+    required this.searchController,
+    required this.searchFocusNode,
     required this.withBalance,
     required this.onSearchChange,
     required this.onWithBalanceChange,
     required this.mode,
   });
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
   final bool withBalance;
-  final Function(String) onSearchChange;
-  final Function(bool) onWithBalanceChange;
+  final ValueChanged<String> onSearchChange;
+  final ValueChanged<bool> onWithBalanceChange;
   final AuthorizeMode mode;
 
   @override
@@ -546,6 +561,8 @@ class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
       height: (maxExtent - shrinkOffset).clamp(minExtent, maxExtent),
       child: WalletManageSection(
         withBalance: withBalance,
+        searchController: searchController,
+        searchFocusNode: searchFocusNode,
         onSearchChange: onSearchChange,
         onWithBalanceChange: onWithBalanceChange,
         mode: mode,
@@ -557,7 +574,10 @@ class _SliverSearchBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_SliverSearchBarDelegate oldDelegate) {
-    return withBalance != oldDelegate.withBalance || mode != oldDelegate.mode;
+    return withBalance != oldDelegate.withBalance ||
+        mode != oldDelegate.mode ||
+        searchController != oldDelegate.searchController ||
+        searchFocusNode != oldDelegate.searchFocusNode;
   }
 }
 

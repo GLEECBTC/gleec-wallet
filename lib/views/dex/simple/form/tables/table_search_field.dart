@@ -4,20 +4,30 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
 class TableSearchField extends StatelessWidget {
-  const TableSearchField({Key? key, required this.onChanged, this.height = 44})
-      : super(key: key);
-  final Function(String) onChanged;
+  const TableSearchField({
+    super.key,
+    required this.onChanged,
+    this.height = 44,
+    this.controller,
+    this.focusNode,
+  });
+  final ValueChanged<String> onChanged;
   final double height;
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
-    final style =
-        Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12);
+    final style = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontSize: 12);
 
     return SizedBox(
       height: height,
       child: TextField(
         key: const Key('search-field'),
+        controller: controller,
+        focusNode: focusNode,
         onChanged: onChanged,
         autofocus: isDesktop,
         decoration: InputDecoration(
