@@ -248,11 +248,14 @@ class _WalletOverviewState extends State<WalletOverview> {
           return StatisticsCarousel(cards: statisticCards);
         }
 
-        return Row(
-          spacing: 24,
-          children: statisticCards.map((card) {
-            return Expanded(child: card);
-          }).toList(),
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 24,
+            children: statisticCards.map((card) {
+              return Expanded(child: card);
+            }).toList(),
+          ),
         );
       },
     );
