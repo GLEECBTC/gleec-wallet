@@ -359,6 +359,10 @@ class _MyAppViewState extends State<_MyAppView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
+    if (!kEnableCoinIconPrecache) {
+      return;
+    }
+
     final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
     _precacheCoinIcons(sdk).ignore();
   }
