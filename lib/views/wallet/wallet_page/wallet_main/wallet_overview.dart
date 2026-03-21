@@ -121,13 +121,25 @@ class _WalletOverviewState extends State<WalletOverview> {
                         }
                       : null,
                   hideBalances: hideBalances,
+                  onToggleHideBalances: () {
+                    context.read<SettingsBloc>().add(
+                      HideBalancesChanged(hideBalances: !hideBalances),
+                    );
+                  },
                 );
               },
             ),
           ] else ...[
             StatisticCard(
               key: const Key('overview-current-value'),
-              caption: Text(LocaleKeys.yourBalance.tr()),
+              caption: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(LocaleKeys.yourBalance.tr()),
+                  const SizedBox(width: 4),
+                  _BalancePrivacyToggleButton(hideBalances: hideBalances),
+                ],
+              ),
               value: totalBalance,
               valueText: hideBalances && totalBalance != null
                   ? '\$$maskedBalanceText'
@@ -233,34 +245,14 @@ class _WalletOverviewState extends State<WalletOverview> {
         ];
 
         if (isMobile) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: _BalancePrivacyToggleButton(hideBalances: hideBalances),
-              ),
-              const SizedBox(height: 8),
-              StatisticsCarousel(cards: statisticCards),
-            ],
-          );
+          return StatisticsCarousel(cards: statisticCards);
         }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: _BalancePrivacyToggleButton(hideBalances: hideBalances),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              spacing: 24,
-              children: statisticCards.map((card) {
-                return Expanded(child: card);
-              }).toList(),
-            ),
-          ],
+        return Row(
+          spacing: 24,
+          children: statisticCards.map((card) {
+            return Expanded(child: card);
+          }).toList(),
         );
       },
     );
@@ -308,6 +300,10 @@ class _BalancePrivacyToggleButton extends StatelessWidget {
     return IconButton(
       key: const Key('wallet-overview-privacy-toggle'),
       tooltip: LocaleKeys.hideBalancesTitle.tr(),
+      iconSize: 20,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
       icon: Icon(
         hideBalances
             ? Icons.visibility_off_outlined
