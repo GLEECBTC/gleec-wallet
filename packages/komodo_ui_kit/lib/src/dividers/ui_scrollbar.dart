@@ -6,11 +6,11 @@ class DexScrollbar extends StatefulWidget {
   final ScrollController scrollController;
 
   const DexScrollbar({
-    Key? key,
+    super.key,
     required this.child,
     required this.scrollController,
     this.isMobile = false,
-  }) : super(key: key);
+  });
 
   @override
   DexScrollbarState createState() => DexScrollbarState();
@@ -22,25 +22,61 @@ class DexScrollbarState extends State<DexScrollbar> {
   @override
   void initState() {
     super.initState();
-    widget.scrollController.addListener(_checkScrollbarVisibility);
+    _attachControllerListener(widget.scrollController);
+    _scheduleVisibilityCheck();
+  }
+
+  @override
+  void didUpdateWidget(covariant DexScrollbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollController == widget.scrollController) {
+      return;
+    }
+
+    _detachControllerListener(oldWidget.scrollController);
+    _attachControllerListener(widget.scrollController);
+    _scheduleVisibilityCheck();
   }
 
   void _checkScrollbarVisibility() {
     if (!mounted || !widget.scrollController.hasClients) return;
 
     final maxScroll = widget.scrollController.position.maxScrollExtent;
-    final newVisibility = maxScroll > 0;
+    _updateScrollbarVisibility(maxScroll > 0);
+  }
 
-    if (isScrollbarVisible != newVisibility) {
-      setState(() {
-        isScrollbarVisible = newVisibility;
-      });
+  void _updateScrollbarVisibility(bool visible) {
+    if (isScrollbarVisible == visible) {
+      return;
     }
+
+    setState(() {
+      isScrollbarVisible = visible;
+    });
+  }
+
+  bool _onScrollMetricsChanged(ScrollMetricsNotification notification) {
+    _updateScrollbarVisibility(notification.metrics.maxScrollExtent > 0);
+    return false;
+  }
+
+  void _attachControllerListener(ScrollController controller) {
+    controller.addListener(_checkScrollbarVisibility);
+  }
+
+  void _detachControllerListener(ScrollController controller) {
+    controller.removeListener(_checkScrollbarVisibility);
+  }
+
+  void _scheduleVisibilityCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkScrollbarVisibility();
+    });
   }
 
   @override
   void dispose() {
-    widget.scrollController.removeListener(_checkScrollbarVisibility);
+    _detachControllerListener(widget.scrollController);
     super.dispose();
   }
 
@@ -48,30 +84,23 @@ class DexScrollbarState extends State<DexScrollbar> {
   Widget build(BuildContext context) {
     if (widget.isMobile) return widget.child;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _checkScrollbarVisibility();
-        });
+    final double rightPadding = isScrollbarVisible ? 10 : 0;
 
-        return isScrollbarVisible
-            ? Scrollbar(
-                thumbVisibility: true,
-                trackVisibility: true,
-                thickness: 5,
-                controller: widget.scrollController,
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(
-                    context,
-                  ).copyWith(scrollbars: false),
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: widget.child,
-                  ),
-                ),
-              )
-            : widget.child;
-      },
+    return Scrollbar(
+      thumbVisibility: isScrollbarVisible,
+      trackVisibility: isScrollbarVisible,
+      thickness: 5,
+      controller: widget.scrollController,
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: _onScrollMetricsChanged,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: Padding(
+            padding: EdgeInsets.only(right: rightPadding),
+            child: widget.child,
+          ),
+        ),
+      ),
     );
   }
 }
