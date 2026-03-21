@@ -49,6 +49,7 @@ class WalletOverview extends StatefulWidget {
 
 class _WalletOverviewState extends State<WalletOverview> {
   bool _logged = false;
+  static const double _desktopCaptionHeight = 20;
 
   @override
   Widget build(BuildContext context) {
@@ -121,13 +122,28 @@ class _WalletOverviewState extends State<WalletOverview> {
                         }
                       : null,
                   hideBalances: hideBalances,
+                  onToggleHideBalances: () {
+                    context.read<SettingsBloc>().add(
+                      HideBalancesChanged(hideBalances: !hideBalances),
+                    );
+                  },
                 );
               },
             ),
           ] else ...[
             StatisticCard(
               key: const Key('overview-current-value'),
-              caption: Text(LocaleKeys.yourBalance.tr()),
+              caption: SizedBox(
+                height: _desktopCaptionHeight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(LocaleKeys.yourBalance.tr()),
+                    const SizedBox(width: 4),
+                    _BalancePrivacyToggleButton(hideBalances: hideBalances),
+                  ],
+                ),
+              ),
               value: totalBalance,
               valueText: hideBalances && totalBalance != null
                   ? '\$$maskedBalanceText'
@@ -169,7 +185,13 @@ class _WalletOverviewState extends State<WalletOverview> {
           ],
           StatisticCard(
             key: const Key('overview-all-time-investment'),
-            caption: Text(LocaleKeys.allTimeInvestment.tr()),
+            caption: SizedBox(
+              height: _desktopCaptionHeight,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(LocaleKeys.allTimeInvestment.tr()),
+              ),
+            ),
             value: totalBalance != null
                 ? (stateWithData?.totalInvestment.value)
                 : null,
@@ -201,7 +223,13 @@ class _WalletOverviewState extends State<WalletOverview> {
           ),
           StatisticCard(
             key: const Key('overview-all-time-profit'),
-            caption: Text(LocaleKeys.allTimeProfit.tr()),
+            caption: SizedBox(
+              height: _desktopCaptionHeight,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(LocaleKeys.allTimeProfit.tr()),
+              ),
+            ),
             value: totalBalance != null
                 ? (stateWithData?.profitAmount.value)
                 : null,
@@ -233,34 +261,14 @@ class _WalletOverviewState extends State<WalletOverview> {
         ];
 
         if (isMobile) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: _BalancePrivacyToggleButton(hideBalances: hideBalances),
-              ),
-              const SizedBox(height: 8),
-              StatisticsCarousel(cards: statisticCards),
-            ],
-          );
+          return StatisticsCarousel(cards: statisticCards);
         }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: _BalancePrivacyToggleButton(hideBalances: hideBalances),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              spacing: 24,
-              children: statisticCards.map((card) {
-                return Expanded(child: card);
-              }).toList(),
-            ),
-          ],
+        return Row(
+          spacing: 24,
+          children: statisticCards.map((card) {
+            return Expanded(child: card);
+          }).toList(),
         );
       },
     );
@@ -305,19 +313,23 @@ class _BalancePrivacyToggleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      key: const Key('wallet-overview-privacy-toggle'),
-      tooltip: LocaleKeys.hideBalancesTitle.tr(),
-      icon: Icon(
-        hideBalances
-            ? Icons.visibility_off_outlined
-            : Icons.visibility_outlined,
+    return Tooltip(
+      message: LocaleKeys.hideBalancesTitle.tr(),
+      child: InkResponse(
+        key: const Key('wallet-overview-privacy-toggle'),
+        radius: 16,
+        onTap: () {
+          context.read<SettingsBloc>().add(
+            HideBalancesChanged(hideBalances: !hideBalances),
+          );
+        },
+        child: Icon(
+          hideBalances
+              ? Icons.visibility_off_outlined
+              : Icons.visibility_outlined,
+          size: 20,
+        ),
       ),
-      onPressed: () {
-        context.read<SettingsBloc>().add(
-          HideBalancesChanged(hideBalances: !hideBalances),
-        );
-      },
     );
   }
 }

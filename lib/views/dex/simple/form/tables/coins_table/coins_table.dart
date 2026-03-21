@@ -10,8 +10,8 @@ class CoinsTable extends StatefulWidget {
     required this.onSelect,
     this.maxHeight = 300,
     this.head,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   final Function(Coin) onSelect;
   final Widget? head;
@@ -22,13 +22,17 @@ class CoinsTable extends StatefulWidget {
 }
 
 class _CoinsTableState extends State<CoinsTable> {
-  String? _searchTerm;
+  String _searchTerm = '';
   late final Debouncer _searchDebouncer;
+  late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
 
   @override
   void initState() {
     super.initState();
     _searchDebouncer = Debouncer(duration: const Duration(milliseconds: 200));
+    _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
   }
 
   @override
@@ -44,15 +48,10 @@ class _CoinsTableState extends State<CoinsTable> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TableSearchField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
                 height: 30,
-                onChanged: (String value) {
-                  final nextValue = value;
-                  _searchDebouncer.run(() {
-                    if (!mounted) return;
-                    if (_searchTerm == nextValue) return;
-                    setState(() => _searchTerm = nextValue);
-                  });
-                },
+                onChanged: (_) => _searchDebouncer.run(_updateSearchTerm),
               ),
             ),
             const SizedBox(height: 5),
@@ -70,6 +69,21 @@ class _CoinsTableState extends State<CoinsTable> {
   @override
   void dispose() {
     _searchDebouncer.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _updateSearchTerm() {
+    if (!mounted) {
+      return;
+    }
+
+    final nextValue = _searchController.text;
+    if (_searchTerm == nextValue) {
+      return;
+    }
+
+    setState(() => _searchTerm = nextValue);
   }
 }
