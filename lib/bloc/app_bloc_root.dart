@@ -396,19 +396,19 @@ class _MyAppViewState extends State<_MyAppView> {
     }
   }
 
-  Completer<void>? _currentPrecacheOperation;
+  Future<void>? _currentPrecacheOperation;
 
-  Future<void> _precacheCoinIcons(KomodoDefiSdk sdk) async {
-    if (_currentPrecacheOperation != null &&
-        !_currentPrecacheOperation!.isCompleted) {
-      // completeError throws an uncaught exception, which causes the UI
-      // tests to fail when switching between light and dark theme
-      log('New request to precache icons started.');
-      _currentPrecacheOperation!.complete();
+  Future<void> _precacheCoinIcons(KomodoDefiSdk sdk) {
+    final currentPrecacheOperation = _currentPrecacheOperation;
+    if (currentPrecacheOperation != null) {
+      log('Coin icon precache already started, reusing existing operation.');
+      return currentPrecacheOperation;
     }
 
-    _currentPrecacheOperation = Completer<void>();
+    return _currentPrecacheOperation = _runCoinIconPrecache(sdk);
+  }
 
+  Future<void> _runCoinIconPrecache(KomodoDefiSdk sdk) async {
     try {
       final stopwatch = Stopwatch()..start();
       final availableAssetIds = sdk.assets.available.keys.where(
@@ -421,7 +421,6 @@ class _MyAppViewState extends State<_MyAppView> {
         // not mounted and return early with error.
         // ignore: use_build_context_synchronously
         // if (context.findRenderObject() == null) {
-        //   _currentPrecacheOperation!.completeError('Build context is stale.');
         //   return;
         // }
 
@@ -431,8 +430,6 @@ class _MyAppViewState extends State<_MyAppView> {
           assetId,
         ).onError((_, __) => debugPrint('Error precaching coin icon $assetId'));
       }
-
-      _currentPrecacheOperation!.complete();
 
       if (!mounted) return;
       context.read<AnalyticsBloc>().logEvent(
@@ -444,7 +441,7 @@ class _MyAppViewState extends State<_MyAppView> {
       );
     } catch (e) {
       log('Error precaching coin icons: $e');
-      _currentPrecacheOperation!.completeError(e);
+      rethrow;
     }
   }
 }
