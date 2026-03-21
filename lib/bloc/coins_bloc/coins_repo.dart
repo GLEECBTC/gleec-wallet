@@ -581,6 +581,13 @@ class CoinsRepo {
     }
   }
 
+  /// Adds the given assets (and their parent coins) to wallet metadata.
+  ///
+  /// This is exposed so callers can batch-write metadata before launching
+  /// parallel activations with `addToWalletMetadata: false`.
+  Future<void> addAssetsToWalletMetadata(Iterable<AssetId> assets) =>
+      _addAssetsToWalletMetdata(assets);
+
   Future<void> _addAssetsToWalletMetdata(Iterable<AssetId> assets) async {
     final parentIds = <String>{};
     for (final assetId in assets) {

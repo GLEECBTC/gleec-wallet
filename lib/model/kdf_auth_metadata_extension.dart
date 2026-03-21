@@ -97,40 +97,35 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
 
   /// Adds new coin/asset IDs to the current user's activated coins list.
   ///
-  /// This method merges the provided [coins] with the existing activated coins,
-  /// ensuring no duplicates. The merged list is then stored in user metadata.
+  /// This method atomically merges the provided [coins] with the existing
+  /// activated coins, ensuring no duplicates and no lost writes under
+  /// concurrent calls.
   ///
-  /// If no user is currently signed in, the operation will complete but have no effect.
+  /// If no user is currently signed in, the operation will throw.
   ///
   /// [coins] - An iterable of coin/asset configuration IDs to add.
   Future<void> addActivatedCoins(Iterable<String> coins) async {
-    final existingCoins =
-        (await auth.currentUser)?.metadata.valueOrNull<List<String>>(
-          'activated_coins',
-        ) ??
-        [];
-
-    final mergedCoins = <dynamic>{...existingCoins, ...coins}.toList();
-    await auth.setOrRemoveActiveUserKeyValue('activated_coins', mergedCoins);
+    await auth.updateActiveUserKeyValue('activated_coins', (current) {
+      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
+      return <String>{...existing, ...coins}.toList();
+    });
   }
 
   /// Removes specified coin/asset IDs from the current user's activated coins list.
   ///
-  /// This method removes all occurrences of the provided [coins] from the user's
-  /// activated coins list and updates the stored metadata.
+  /// This method atomically removes all occurrences of the provided [coins]
+  /// from the user's activated coins list, ensuring no lost writes under
+  /// concurrent calls.
   ///
-  /// If no user is currently signed in, the operation will complete but have no effect.
+  /// If no user is currently signed in, the operation will throw.
   ///
   /// [coins] - A list of coin/asset configuration IDs to remove.
   Future<void> removeActivatedCoins(List<String> coins) async {
-    final existingCoins =
-        (await auth.currentUser)?.metadata.valueOrNull<List<String>>(
-          'activated_coins',
-        ) ??
-        [];
-
-    existingCoins.removeWhere((coin) => coins.contains(coin));
-    await auth.setOrRemoveActiveUserKeyValue('activated_coins', existingCoins);
+    await auth.updateActiveUserKeyValue('activated_coins', (current) {
+      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
+      final updated = existing.where((c) => !coins.contains(c)).toList();
+      return updated.isEmpty ? null : updated;
+    });
   }
 
   /// Sets the seed backup confirmation status for the current user.

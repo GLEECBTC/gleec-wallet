@@ -549,8 +549,20 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       );
     }
 
+    // Batch-write all asset IDs to wallet metadata in a single call before
+    // launching parallel activations. This avoids N concurrent read-modify-write
+    // cycles on the same metadata key which caused last-write-wins data loss.
+    await _coinsRepo.addAssetsToWalletMetadata(
+      coinsToActivate.map((asset) => asset.id),
+    );
+
     final enableFutures = coinsToActivate
-        .map((asset) => _coinsRepo.activateAssetsSync([asset]))
+        .map(
+          (asset) => _coinsRepo.activateAssetsSync(
+            [asset],
+            addToWalletMetadata: false,
+          ),
+        )
         .toList();
 
     // Ignore the return type here and let the broadcast handle the state updates as
