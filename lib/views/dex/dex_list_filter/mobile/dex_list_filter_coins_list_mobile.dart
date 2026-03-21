@@ -14,12 +14,12 @@ import 'package:web_dex/views/dex/dex_helpers.dart';
 
 class DexListFilterCoinsList extends StatefulWidget {
   const DexListFilterCoinsList({
-    Key? key,
     required this.isSellCoin,
     required this.anotherCoin,
     required this.onCoinSelect,
     required this.listType,
-  }) : super(key: key);
+    super.key,
+  });
   final DexListType listType;
   final bool isSellCoin;
   final String? anotherCoin;
@@ -31,6 +31,22 @@ class DexListFilterCoinsList extends StatefulWidget {
 
 class _DexListFilterCoinsListState extends State<DexListFilterCoinsList> {
   String _searchPhrase = '';
+  late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +56,8 @@ class _DexListFilterCoinsListState extends State<DexListFilterCoinsList> {
         mainAxisSize: MainAxisSize.min,
         children: [
           UiTextFormField(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
             hintText: LocaleKeys.searchAssets.tr(),
             autofocus: true,
             onChanged: (String? searchPhrase) {
@@ -67,8 +85,9 @@ class _DexListFilterCoinsListState extends State<DexListFilterCoinsList> {
   }
 
   Widget _buildSwapCoinList() {
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     return StreamBuilder<List<Swap>>(
       stream: tradingEntitiesBloc.outSwaps,
       initialData: tradingEntitiesBloc.swaps,
@@ -86,8 +105,9 @@ class _DexListFilterCoinsListState extends State<DexListFilterCoinsList> {
   }
 
   Widget _buildOrderCoinList() {
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     return StreamBuilder<List<MyOrder>>(
       stream: tradingEntitiesBloc.outMyOrders,
       initialData: tradingEntitiesBloc.myOrders,
@@ -102,14 +122,15 @@ class _DexListFilterCoinsListState extends State<DexListFilterCoinsList> {
   }
 
   Widget _buildCoinList(Map<String, List<String>> coinAbbrMap) {
-    final List<String> coinAbbrList = (_searchPhrase.isEmpty
-            ? coinAbbrMap.keys.toList()
-            : coinAbbrMap.keys.where(
-                (String coinAbbr) =>
-                    coinAbbr.toLowerCase().contains(_searchPhrase),
-              ))
-        .where((abbr) => abbr != widget.anotherCoin)
-        .toList();
+    final List<String> coinAbbrList =
+        (_searchPhrase.isEmpty
+                ? coinAbbrMap.keys.toList()
+                : coinAbbrMap.keys.where(
+                    (String coinAbbr) =>
+                        coinAbbr.toLowerCase().contains(_searchPhrase),
+                  ))
+            .where((abbr) => abbr != widget.anotherCoin)
+            .toList();
 
     final int lastIndex = coinAbbrList.length - 1;
 

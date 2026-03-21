@@ -18,7 +18,7 @@ import 'package:web_dex/views/dex/simple/form/tables/nothing_found.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 
 class BridgeTickersList extends StatefulWidget {
-  const BridgeTickersList({required this.onSelect, Key? key}) : super(key: key);
+  const BridgeTickersList({required this.onSelect, super.key});
 
   final Function(Coin) onSelect;
 
@@ -27,13 +27,23 @@ class BridgeTickersList extends StatefulWidget {
 }
 
 class _BridgeTickersListState extends State<BridgeTickersList> {
-  String? _searchTerm;
+  String _searchTerm = '';
+  late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
 
   @override
   void initState() {
-    context.read<BridgeBloc>().add(const BridgeUpdateTickers());
-
     super.initState();
+    _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
+    context.read<BridgeBloc>().add(const BridgeUpdateTickers());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -64,6 +74,8 @@ class _BridgeTickersListState extends State<BridgeTickersList> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                 child: BorderLessSearchField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
                   onChanged: (String value) {
                     if (_searchTerm == value) return;
 
@@ -116,8 +128,8 @@ class _BridgeTickersListState extends State<BridgeTickersList> {
             .where((coin) => tradingState.canTradeAssets([coin.id]))
             .toList();
 
-        if (_searchTerm != null && _searchTerm!.isNotEmpty) {
-          final String searchTerm = _searchTerm!.toLowerCase();
+        if (_searchTerm.isNotEmpty) {
+          final String searchTerm = _searchTerm.toLowerCase();
           coinsList.removeWhere((t) {
             if (t.abbr.toLowerCase().contains(searchTerm)) return false;
             if (t.name.toLowerCase().contains(searchTerm)) return false;

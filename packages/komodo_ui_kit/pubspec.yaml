@@ -31,6 +31,8 @@ dependencies:
     # ^0.3.0+3 # Option 3: Pub.dev dependency
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   flutter_lints: ^5.0.0 # flutter.dev
 
 flutter:
