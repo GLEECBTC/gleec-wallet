@@ -14,6 +14,8 @@ class WalletManageSection extends StatelessWidget {
   const WalletManageSection({
     required this.mode,
     required this.withBalance,
+    required this.searchController,
+    required this.searchFocusNode,
     required this.onSearchChange,
     required this.onWithBalanceChange,
     required this.pinned,
@@ -22,8 +24,10 @@ class WalletManageSection extends StatelessWidget {
   });
   final bool withBalance;
   final AuthorizeMode mode;
-  final Function(bool) onWithBalanceChange;
-  final Function(String) onSearchChange;
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
+  final ValueChanged<bool> onWithBalanceChange;
+  final ValueChanged<String> onSearchChange;
   final bool pinned;
   final double collapseProgress;
 
@@ -49,7 +53,11 @@ class WalletManageSection extends StatelessWidget {
                 Container(
                   alignment: Alignment.centerLeft,
                   constraints: const BoxConstraints(maxWidth: 300),
-                  child: WalletManagerSearchField(onChange: onSearchChange),
+                  child: WalletManagerSearchField(
+                    controller: searchController,
+                    focusNode: searchFocusNode,
+                    onChange: onSearchChange,
+                  ),
                 ),
                 if (isAuthenticated) ...[
                   // const Spacer(),
@@ -86,7 +94,11 @@ class WalletManageSection extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: WalletManagerSearchField(onChange: onSearchChange),
+                child: WalletManagerSearchField(
+                  controller: searchController,
+                  focusNode: searchFocusNode,
+                  onChange: onSearchChange,
+                ),
               ),
             ],
           ),
@@ -115,9 +127,9 @@ class WalletManageSection extends StatelessWidget {
   }
 
   void _onAddAssetsPress(BuildContext context) {
-    context
-        .read<CoinsManagerBloc>()
-        .add(const CoinsManagerCoinsListReset(CoinsManagerAction.add));
+    context.read<CoinsManagerBloc>().add(
+      const CoinsManagerCoinsListReset(CoinsManagerAction.add),
+    );
     routingState.walletState.action = coinsManagerRouteAction.addAssets;
   }
 }
@@ -130,7 +142,7 @@ class CoinsWithBalanceCheckbox extends StatelessWidget {
   });
 
   final bool withBalance;
-  final Function(bool) onWithBalanceChange;
+  final ValueChanged<bool> onWithBalanceChange;
 
   @override
   Widget build(BuildContext context) {
@@ -142,10 +154,7 @@ class CoinsWithBalanceCheckbox extends StatelessWidget {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 1,
-          ),
+          side: BorderSide(color: Theme.of(context).dividerColor, width: 1),
         ),
         child: Container(
           alignment: Alignment.center,
