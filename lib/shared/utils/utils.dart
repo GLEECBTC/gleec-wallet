@@ -540,12 +540,18 @@ String? assertString(dynamic value) {
 int? assertInt(dynamic value) {
   if (value == null) return null;
 
-  switch (value.runtimeType) {
-    case String:
-      return int.parse(value as String);
-    default:
-      return value as int?;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+
+  if (value is String) {
+    final intValue = int.tryParse(value);
+    if (intValue != null) return intValue;
+
+    final numValue = num.tryParse(value);
+    if (numValue != null) return numValue.toInt();
   }
+
+  return null;
 }
 
 double assertDouble(dynamic value) {

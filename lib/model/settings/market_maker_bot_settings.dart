@@ -36,9 +36,10 @@ class MarketMakerBotSettings extends Equatable {
     if (json == null) return MarketMakerBotSettings.initial();
 
     final bool? enabled = json['is_market_maker_bot_enabled'] as bool?;
-    final int refresh = (json['bot_refresh_rate'] is int)
-        ? json['bot_refresh_rate'] as int
-        : int.tryParse('${json['bot_refresh_rate']}') ?? 60;
+    final dynamic refreshRaw = json['bot_refresh_rate'];
+    final int refresh = (refreshRaw is num)
+        ? refreshRaw.toInt()
+        : int.tryParse('$refreshRaw') ?? 60;
 
     final dynamic configsRaw = json['trade_coin_pair_configs'];
     final List<TradeCoinPairConfig> configs = (configsRaw is List)

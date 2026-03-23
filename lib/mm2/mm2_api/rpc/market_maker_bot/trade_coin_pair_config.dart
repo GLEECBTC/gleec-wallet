@@ -147,16 +147,16 @@ class TradeCoinPairConfig extends Equatable {
       maxVolume: json['max_volume'] != null
           ? TradeVolume.fromJson(json['max_volume'] as Map<String, dynamic>)
           : null,
-      minBasePriceUsd: json['min_base_price'] as double?,
-      minRelPriceUsd: json['min_rel_price'] as double?,
-      minPairPrice: json['min_pair_price'] as double?,
+      minBasePriceUsd: (json['min_base_price'] as num?)?.toDouble(),
+      minRelPriceUsd: (json['min_rel_price'] as num?)?.toDouble(),
+      minPairPrice: (json['min_pair_price'] as num?)?.toDouble(),
       spread: json['spread'] as String,
-      baseConfs: json['base_confs'] as int?,
+      baseConfs: (json['base_confs'] as num?)?.toInt(),
       baseNota: json['base_nota'] as bool?,
-      relConfs: json['rel_confs'] as int?,
+      relConfs: (json['rel_confs'] as num?)?.toInt(),
       relNota: json['rel_nota'] as bool?,
       enable: json['enable'] as bool,
-      priceElapsedValidity: json['price_elapsed_validity'] as int?,
+      priceElapsedValidity: (json['price_elapsed_validity'] as num?)?.toInt(),
       checkLastBidirectionalTradeThreshHold:
           json['check_last_bidirectional_trade_thresh_hold'] as bool?,
     );
@@ -224,28 +224,28 @@ class TradeCoinPairConfig extends Equatable {
       priceElapsedValidity: priceElapsedValidity ?? this.priceElapsedValidity,
       checkLastBidirectionalTradeThreshHold:
           checkLastBidirectionalTradeThreshHold ??
-              this.checkLastBidirectionalTradeThreshHold,
+          this.checkLastBidirectionalTradeThreshHold,
     );
   }
 
   @override
   List<Object?> get props => [
-        name,
-        baseCoinId,
-        relCoinId,
-        maxBalancePerTrade,
-        minVolume,
-        maxVolume,
-        minBasePriceUsd,
-        minRelPriceUsd,
-        minPairPrice,
-        spread,
-        baseConfs,
-        baseNota,
-        relConfs,
-        relNota,
-        enable,
-        priceElapsedValidity,
-        checkLastBidirectionalTradeThreshHold,
-      ];
+    name,
+    baseCoinId,
+    relCoinId,
+    maxBalancePerTrade,
+    minVolume,
+    maxVolume,
+    minBasePriceUsd,
+    minRelPriceUsd,
+    minPairPrice,
+    spread,
+    baseConfs,
+    baseNota,
+    relConfs,
+    relNota,
+    enable,
+    priceElapsedValidity,
+    checkLastBidirectionalTradeThreshHold,
+  ];
 }

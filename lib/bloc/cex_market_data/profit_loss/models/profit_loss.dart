@@ -60,15 +60,15 @@ class ProfitLoss extends Equatable {
 
   factory ProfitLoss.fromJson(Map<String, dynamic> json) {
     return ProfitLoss(
-      profitLoss: (json['profit_loss'] as double?) ?? 0.0,
+      profitLoss: (json['profit_loss'] as num?)?.toDouble() ?? 0.0,
       coin: json['coin'] ?? '',
       fiatPrice: FiatValue.fromJson(json['fiat_value'] as Map<String, dynamic>),
       internalId: json['internal_id'] as String,
-      myBalanceChange: json['my_balance_change'] as double,
-      receivedAmountFiatPrice: json['received_by_me'] as double,
-      spentAmountFiatPrice: json['spent_by_me'] as double,
+      myBalanceChange: (json['my_balance_change'] as num).toDouble(),
+      receivedAmountFiatPrice: (json['received_by_me'] as num).toDouble(),
+      spentAmountFiatPrice: (json['spent_by_me'] as num).toDouble(),
       timestamp: DateTime.parse(json['timestamp']),
-      totalAmount: json['total_amount'] as double,
+      totalAmount: (json['total_amount'] as num).toDouble(),
       txHash: json['tx_hash'] as String,
     );
   }
@@ -135,15 +135,15 @@ class ProfitLoss extends Equatable {
 
   @override
   List<Object?> get props => [
-        profitLoss,
-        coin,
-        fiatPrice,
-        internalId,
-        myBalanceChange,
-        receivedAmountFiatPrice,
-        spentAmountFiatPrice,
-        timestamp,
-        totalAmount,
-        txHash,
-      ];
+    profitLoss,
+    coin,
+    fiatPrice,
+    internalId,
+    myBalanceChange,
+    receivedAmountFiatPrice,
+    spentAmountFiatPrice,
+    timestamp,
+    totalAmount,
+    txHash,
+  ];
 }

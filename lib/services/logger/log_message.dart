@@ -55,7 +55,7 @@ class LogMessage {
       platform: json['platform'] as String,
       osLanguage: json['os_language'] as String,
       screenSize: json['screen_size'] as String,
-      timestamp: json['timestamp'] as int,
+      timestamp: (json['timestamp'] as num).toInt(),
       message: json['message'] as String,
       path: json['path'] as String?,
       date: json['date'] as String,

@@ -3,8 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class FdMonitorService {
-  static const MethodChannel _channel =
-      MethodChannel('com.komodo.wallet/fd_monitor');
+  static const MethodChannel _channel = MethodChannel(
+    'com.komodo.wallet/fd_monitor',
+  );
 
   static FdMonitorService? _instance;
 
@@ -44,17 +45,13 @@ class FdMonitorService {
         'message': 'FD monitoring not available on this platform',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Unexpected error: $e',
-      };
+      return {'success': false, 'message': 'Unexpected error: $e'};
     }
   }
 
   Future<Map<String, dynamic>> stop() async {
     try {
-      final result =
-          await _channel.invokeMethod<Map<Object?, Object?>>('stop');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>('stop');
 
       if (result != null) {
         _isMonitoring = false;
@@ -74,17 +71,15 @@ class FdMonitorService {
         'message': 'FD monitoring not available on this platform',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Unexpected error: $e',
-      };
+      return {'success': false, 'message': 'Unexpected error: $e'};
     }
   }
 
   Future<FdMonitorStats?> getCurrentCount() async {
     try {
-      final result =
-          await _channel.invokeMethod<Map<Object?, Object?>>('getCurrentCount');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'getCurrentCount',
+      );
 
       if (result != null) {
         return FdMonitorStats.fromMap(Map<String, dynamic>.from(result));
@@ -104,8 +99,9 @@ class FdMonitorService {
 
   Future<Map<String, dynamic>> logDetailedStatus() async {
     try {
-      final result =
-          await _channel.invokeMethod<Map<Object?, Object?>>('logDetailedStatus');
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'logDetailedStatus',
+      );
 
       if (result != null) {
         return Map<String, dynamic>.from(result);
@@ -124,10 +120,7 @@ class FdMonitorService {
         'message': 'FD monitoring not available on this platform',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Unexpected error: $e',
-      };
+      return {'success': false, 'message': 'Unexpected error: $e'};
     }
   }
 
@@ -157,10 +150,10 @@ class FdMonitorStats {
 
   factory FdMonitorStats.fromMap(Map<String, dynamic> map) {
     return FdMonitorStats(
-      openCount: map['openCount'] as int? ?? 0,
-      tableSize: map['tableSize'] as int? ?? 0,
-      softLimit: map['softLimit'] as int? ?? 0,
-      hardLimit: map['hardLimit'] as int? ?? 0,
+      openCount: (map['openCount'] as num?)?.toInt() ?? 0,
+      tableSize: (map['tableSize'] as num?)?.toInt() ?? 0,
+      softLimit: (map['softLimit'] as num?)?.toInt() ?? 0,
+      hardLimit: (map['hardLimit'] as num?)?.toInt() ?? 0,
       percentUsed: (map['percentUsed'] as num?)?.toDouble() ?? 0.0,
       timestamp: map['timestamp'] as String? ?? '',
     );

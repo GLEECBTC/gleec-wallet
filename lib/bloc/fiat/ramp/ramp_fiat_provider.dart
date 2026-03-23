@@ -289,7 +289,7 @@ class RampFiatProvider extends BaseFiatProvider {
       ).toString(),
       'coin_amount': getFormattedCryptoAmount(
         response[paymentMethod.id]['cryptoAmount'] as String,
-        asset['decimals'] as int,
+        (asset['decimals'] as num).toInt(),
       ),
     };
 

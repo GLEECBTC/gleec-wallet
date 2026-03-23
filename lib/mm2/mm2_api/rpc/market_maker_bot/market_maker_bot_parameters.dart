@@ -27,7 +27,7 @@ class MarketMakerBotParameters extends Equatable {
   factory MarketMakerBotParameters.fromJson(Map<String, dynamic> json) =>
       MarketMakerBotParameters(
         priceUrl: json['price_url'] as String?,
-        botRefreshRate: json['bot_refresh_rate'] as int?,
+        botRefreshRate: (json['bot_refresh_rate'] as num?)?.toInt(),
         tradeCoinPairs: json['cfg'] == null
             ? null
             : (json['cfg'] as Map<String, dynamic>).map(
@@ -36,10 +36,10 @@ class MarketMakerBotParameters extends Equatable {
       );
 
   Map<String, dynamic> toJson() => {
-        'price_url': priceUrl,
-        'bot_refresh_rate': botRefreshRate,
-        'cfg': tradeCoinPairs?.map((k, e) => MapEntry(k, e.toJson())) ?? {},
-      }..removeWhere((_, value) => value == null);
+    'price_url': priceUrl,
+    'bot_refresh_rate': botRefreshRate,
+    'cfg': tradeCoinPairs?.map((k, e) => MapEntry(k, e.toJson())) ?? {},
+  }..removeWhere((_, value) => value == null);
 
   MarketMakerBotParameters copyWith({
     String? priceUrl,

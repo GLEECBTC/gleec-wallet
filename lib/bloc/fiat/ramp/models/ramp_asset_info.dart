@@ -105,7 +105,7 @@ class RampAssetInfo {
       'logoUrl',
       'minPurchaseCryptoAmount',
       'networkFee',
-      'type'
+      'type',
     ];
 
     for (final field in requiredFields) {
@@ -117,18 +117,24 @@ class RampAssetInfo {
     // Validate types for critical fields
     if (json['price'] is! Map<String, dynamic>) {
       throw ArgumentError.value(
-          json['price'], 'price', 'Must be a JSON object');
+        json['price'],
+        'price',
+        'Must be a JSON object',
+      );
     }
 
-    if (json['decimals'] is! int) {
+    if (json['decimals'] is! num) {
       throw ArgumentError.value(
-          json['decimals'], 'decimals', 'Must be an integer');
+        json['decimals'],
+        'decimals',
+        'Must be an integer',
+      );
     }
 
     return RampAssetInfo(
       name: json['name'] as String,
       symbol: json['symbol'] as String,
-      decimals: json['decimals'] as int,
+      decimals: (json['decimals'] as num).toInt(),
       price: json['price'] as Map<String, dynamic>,
       minPurchaseAmount: json['minPurchaseAmount'] != null
           ? Decimal.tryParse(json['minPurchaseAmount'].toString())

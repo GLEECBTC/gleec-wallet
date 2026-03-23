@@ -14,8 +14,8 @@ class BinanceTimeProvider extends TimeProvider {
     this.timeout = const Duration(seconds: 2),
     this.maxRetries = 3,
     Logger? logger,
-  })  : _httpClient = httpClient ?? http.Client(),
-        _logger = logger ?? Logger('BinanceTimeProvider');
+  }) : _httpClient = httpClient ?? http.Client(),
+       _logger = logger ?? Logger('BinanceTimeProvider');
 
   /// The URL of the Binance time API
   final String url;
@@ -83,7 +83,7 @@ class BinanceTimeProvider extends TimeProvider {
     }
 
     final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
-    final serverTime = jsonData['serverTime'] as int?;
+    final serverTime = (jsonData['serverTime'] as num?)?.toInt();
 
     if (serverTime == null) {
       throw const FormatException(

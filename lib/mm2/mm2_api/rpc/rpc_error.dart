@@ -92,7 +92,7 @@ class RpcError extends Equatable {
         ? RpcErrorType.fromString(json['error_type'] as String)
         : null,
     errorData: json['error_data'] as String?,
-    id: json['id'] as int?,
+    id: (json['id'] as num?)?.toInt(),
   );
 
   final String? mmrpc;

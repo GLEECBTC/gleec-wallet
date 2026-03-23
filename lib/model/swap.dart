@@ -25,19 +25,22 @@ class Swap extends Equatable {
   });
 
   factory Swap.fromJson(Map<String, dynamic> json) {
-    final Rational makerAmount = fract2rat(json['maker_amount_fraction']) ??
+    final Rational makerAmount =
+        fract2rat(json['maker_amount_fraction']) ??
         Rational.parse(json['maker_amount'] ?? '0');
-    final Rational takerAmount = fract2rat(json['taker_amount_fraction']) ??
+    final Rational takerAmount =
+        fract2rat(json['taker_amount_fraction']) ??
         Rational.parse(json['taker_amount'] ?? '0');
-    final TradeSide type =
-        json['type'] == 'Taker' ? TradeSide.taker : TradeSide.maker;
+    final TradeSide type = json['type'] == 'Taker'
+        ? TradeSide.taker
+        : TradeSide.maker;
     return Swap(
       type: type,
       uuid: json['uuid'],
       myOrderUuid: json['my_order_uuid'] ?? '',
-      events: List<Map<String, dynamic>>.from(json['events'])
-          .map((e) => SwapEventItem.fromJson(e))
-          .toList(),
+      events: List<Map<String, dynamic>>.from(
+        json['events'],
+      ).map((e) => SwapEventItem.fromJson(e)).toList(),
       makerAmount: makerAmount,
       makerCoin: json['maker_coin'] ?? '',
       takerAmount: takerAmount,
@@ -92,10 +95,10 @@ class Swap extends Equatable {
   }
 
   bool get isCompleted => events.any(
-        (e) =>
-            e.event.type == successEvents.last ||
-            errorEvents.contains(e.event.type),
-      );
+    (e) =>
+        e.event.type == successEvents.last ||
+        errorEvents.contains(e.event.type),
+  );
 
   bool get isFailed =>
       events.firstWhereOrNull(
@@ -165,37 +168,35 @@ class Swap extends Equatable {
 
   @override
   List<Object?> get props => [
-        type,
-        uuid,
-        myOrderUuid,
-        events,
-        makerAmount,
-        makerCoin,
-        takerAmount,
-        takerCoin,
-        gui,
-        mmVersion,
-        successEvents,
-        errorEvents,
-        myInfo,
-        recoverable,
-      ];
+    type,
+    uuid,
+    myOrderUuid,
+    events,
+    makerAmount,
+    makerCoin,
+    takerAmount,
+    takerCoin,
+    gui,
+    mmVersion,
+    successEvents,
+    errorEvents,
+    myInfo,
+    recoverable,
+  ];
 }
 
 class SwapEventItem extends Equatable {
-  const SwapEventItem({
-    required this.timestamp,
-    required this.event,
-  });
+  const SwapEventItem({required this.timestamp, required this.event});
   factory SwapEventItem.fromJson(Map<String, dynamic> json) => SwapEventItem(
-        timestamp: json['timestamp'],
-        event: SwapEvent.fromJson(json['event']),
-      );
+    timestamp: assertInt(json['timestamp']) ?? 0,
+    event: SwapEvent.fromJson(json['event']),
+  );
   final int timestamp;
   final SwapEvent event;
 
-  String get eventDateTime => DateFormat('d MMMM y, H:m')
-      .format(DateTime.fromMillisecondsSinceEpoch(timestamp));
+  String get eventDateTime => DateFormat(
+    'd MMMM y, H:m',
+  ).format(DateTime.fromMillisecondsSinceEpoch(timestamp));
 
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{};
@@ -209,10 +210,7 @@ class SwapEventItem extends Equatable {
 }
 
 class SwapEvent extends Equatable {
-  const SwapEvent({
-    required this.type,
-    required this.data,
-  });
+  const SwapEvent({required this.type, required this.data});
 
   factory SwapEvent.fromJson(Map<String, dynamic> json) {
     return SwapEvent(
@@ -263,34 +261,38 @@ class SwapEventData extends Equatable {
   });
 
   factory SwapEventData.fromJson(Map<String, dynamic> json) => SwapEventData(
-        takerCoin: json['taker_coin'],
-        makerCoin: json['maker_coin'],
-        maker: json['maker'],
-        myPersistentPub: json['my_persistent_pub'],
-        lockDuration: json['lock_duration'],
-        makerAmount: double.tryParse(json['maker_amount'] ?? ''),
-        takerAmount: double.tryParse(json['taker_amount'] ?? ''),
-        makerPaymentConfirmations: json['maker_payment_confirmations'],
-        makerPaymentRequiresNota: json['maker_payment_requires_nota'],
-        takerPaymentConfirmations: json['taker_payment_confirmations'],
-        takerPaymentRequiresNota: json['taker_payment_requires_nota'],
-        takerPaymentLock: json['taker_payment_lock'],
-        uuid: json['uuid'],
-        startedAt: json['started_at'],
-        makerPaymentWait: json['maker_payment_wait'],
-        makerCoinStartBlock: json['maker_coin_start_block'],
-        takerCoinStartBlock: json['taker_coin_start_block'],
-        feeToSendTakerFee: json['fee_to_send_taker_fee'] != null
-            ? TradeFee.fromJson(json['fee_to_send_taker_fee'])
-            : null,
-        takerPaymentTradeFee: json['taker_payment_trade_fee'] != null
-            ? TradeFee.fromJson(json['taker_payment_trade_fee'])
-            : null,
-        makerPaymentSpendTradeFee: json['maker_payment_spend_trade_fee'] != null
-            ? TradeFee.fromJson(json['maker_payment_spend_trade_fee'])
-            : null,
-        txHash: json['tx_hash'] ?? json['transaction']?['tx_hash'],
-      );
+    takerCoin: json['taker_coin'],
+    makerCoin: json['maker_coin'],
+    maker: json['maker'],
+    myPersistentPub: json['my_persistent_pub'],
+    lockDuration: assertInt(json['lock_duration']),
+    makerAmount: json['maker_amount'] == null
+        ? null
+        : double.tryParse(json['maker_amount'].toString()),
+    takerAmount: json['taker_amount'] == null
+        ? null
+        : double.tryParse(json['taker_amount'].toString()),
+    makerPaymentConfirmations: assertInt(json['maker_payment_confirmations']),
+    makerPaymentRequiresNota: json['maker_payment_requires_nota'],
+    takerPaymentConfirmations: assertInt(json['taker_payment_confirmations']),
+    takerPaymentRequiresNota: json['taker_payment_requires_nota'],
+    takerPaymentLock: assertInt(json['taker_payment_lock']),
+    uuid: json['uuid'],
+    startedAt: assertInt(json['started_at']),
+    makerPaymentWait: assertInt(json['maker_payment_wait']),
+    makerCoinStartBlock: assertInt(json['maker_coin_start_block']),
+    takerCoinStartBlock: assertInt(json['taker_coin_start_block']),
+    feeToSendTakerFee: json['fee_to_send_taker_fee'] != null
+        ? TradeFee.fromJson(json['fee_to_send_taker_fee'])
+        : null,
+    takerPaymentTradeFee: json['taker_payment_trade_fee'] != null
+        ? TradeFee.fromJson(json['taker_payment_trade_fee'])
+        : null,
+    makerPaymentSpendTradeFee: json['maker_payment_spend_trade_fee'] != null
+        ? TradeFee.fromJson(json['maker_payment_spend_trade_fee'])
+        : null,
+    txHash: json['tx_hash'] ?? json['transaction']?['tx_hash'],
+  );
 
   final String? takerCoin;
   final String? makerCoin;
@@ -341,38 +343,31 @@ class SwapEventData extends Equatable {
 
   @override
   List<Object?> get props => [
-        takerCoin,
-        makerCoin,
-        maker,
-        myPersistentPub,
-        lockDuration,
-        makerAmount,
-        takerAmount,
-        makerPaymentConfirmations,
-        makerPaymentRequiresNota,
-        takerPaymentConfirmations,
-        takerPaymentRequiresNota,
-        takerPaymentLock,
-        uuid,
-        startedAt,
-        makerPaymentWait,
-        makerCoinStartBlock,
-        takerCoinStartBlock,
-        feeToSendTakerFee,
-        takerPaymentTradeFee,
-        makerPaymentSpendTradeFee,
-        txHash,
-      ];
+    takerCoin,
+    makerCoin,
+    maker,
+    myPersistentPub,
+    lockDuration,
+    makerAmount,
+    takerAmount,
+    makerPaymentConfirmations,
+    makerPaymentRequiresNota,
+    takerPaymentConfirmations,
+    takerPaymentRequiresNota,
+    takerPaymentLock,
+    uuid,
+    startedAt,
+    makerPaymentWait,
+    makerCoinStartBlock,
+    takerCoinStartBlock,
+    feeToSendTakerFee,
+    takerPaymentTradeFee,
+    makerPaymentSpendTradeFee,
+    txHash,
+  ];
 }
 
-enum SwapStatus {
-  successful,
-  negotiated,
-  ongoing,
-  matched,
-  matching,
-  failed,
-}
+enum SwapStatus { successful, negotiated, ongoing, matched, matching, failed }
 
 class TradeFee extends Equatable {
   const TradeFee({
@@ -384,7 +379,9 @@ class TradeFee extends Equatable {
   factory TradeFee.fromJson(Map<String, dynamic> json) {
     return TradeFee(
       coin: json['coin'],
-      amount: double.tryParse(json['amount'] ?? ''),
+      amount: json['amount'] == null
+          ? null
+          : double.tryParse(json['amount'].toString()),
       paidFromTradingVol: json['paid_from_trading_vol'],
     );
   }
@@ -418,9 +415,9 @@ class SwapMyInfo extends Equatable {
     return SwapMyInfo(
       myCoin: json['my_coin'],
       otherCoin: json['other_coin'],
-      myAmount: double.parse(json['my_amount']),
-      otherAmount: double.parse(json['other_amount']),
-      startedAt: json['started_at'],
+      myAmount: double.parse(json['my_amount'].toString()),
+      otherAmount: double.parse(json['other_amount'].toString()),
+      startedAt: assertInt(json['started_at']) ?? 0,
     );
   }
 
@@ -442,10 +439,10 @@ class SwapMyInfo extends Equatable {
 
   @override
   List<Object?> get props => [
-        myCoin,
-        otherCoin,
-        myAmount,
-        otherAmount,
-        startedAt,
-      ];
+    myCoin,
+    otherCoin,
+    myAmount,
+    otherAmount,
+    startedAt,
+  ];
 }

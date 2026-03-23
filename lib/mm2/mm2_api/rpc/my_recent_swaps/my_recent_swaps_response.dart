@@ -1,9 +1,8 @@
 import 'package:web_dex/model/swap.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 
 class MyRecentSwapsResponse {
-  MyRecentSwapsResponse({
-    required this.result,
-  });
+  MyRecentSwapsResponse({required this.result});
 
   factory MyRecentSwapsResponse.fromJson(Map<String, dynamic> json) =>
       MyRecentSwapsResponse(
@@ -14,9 +13,7 @@ class MyRecentSwapsResponse {
 
   MyRecentSwapsResponseResult result;
 
-  Map<String, dynamic> get toJson => <String, dynamic>{
-        'result': result.toJson,
-      };
+  Map<String, dynamic> get toJson => <String, dynamic>{'result': result.toJson};
 }
 
 class MyRecentSwapsResponseResult {
@@ -34,8 +31,8 @@ class MyRecentSwapsResponseResult {
   factory MyRecentSwapsResponseResult.fromJson(Map<String, dynamic> json) =>
       MyRecentSwapsResponseResult(
         fromUuid: json['from_uuid'] as String?,
-        limit: json['limit'] as int? ?? 0,
-        skipped: json['skipped'] as int? ?? 0,
+        limit: assertInt(json['limit']) ?? 0,
+        skipped: assertInt(json['skipped']) ?? 0,
         swaps: List<Swap>.from(
           (json['swaps'] as List? ?? <Swap>[])
               .where((dynamic x) => x != null)
@@ -43,10 +40,10 @@ class MyRecentSwapsResponseResult {
                 (dynamic x) => Swap.fromJson(x as Map<String, dynamic>? ?? {}),
               ),
         ),
-        total: json['total'] as int? ?? 0,
-        foundRecords: json['found_records'] as int? ?? 0,
-        pageNumber: json['page_number'] as int? ?? 0,
-        totalPages: json['total_pages'] as int? ?? 0,
+        total: assertInt(json['total']) ?? 0,
+        foundRecords: assertInt(json['found_records']) ?? 0,
+        pageNumber: assertInt(json['page_number']) ?? 0,
+        totalPages: assertInt(json['total_pages']) ?? 0,
       );
 
   String? fromUuid;
@@ -59,12 +56,12 @@ class MyRecentSwapsResponseResult {
   int foundRecords;
 
   Map<String, dynamic> get toJson => <String, dynamic>{
-        'from_uuid': fromUuid,
-        'limit': limit,
-        'skipped': skipped,
-        'swaps': List<dynamic>.from(
-          swaps.map<Map<String, dynamic>>((Swap x) => x.toJson()),
-        ),
-        'total': total,
-      };
+    'from_uuid': fromUuid,
+    'limit': limit,
+    'skipped': skipped,
+    'swaps': List<dynamic>.from(
+      swaps.map<Map<String, dynamic>>((Swap x) => x.toJson()),
+    ),
+    'total': total,
+  };
 }
