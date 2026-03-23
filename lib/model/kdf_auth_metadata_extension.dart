@@ -31,7 +31,8 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// If no user is signed in, returns an empty list.
   Future<List<String>> getWalletCoinIds() async {
     final user = await auth.currentUser;
-    return user?.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
+    if (user == null) return [];
+    return user.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
   }
 
   /// Returns the stored list of wallet assets resolved from configuration IDs.
