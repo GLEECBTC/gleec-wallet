@@ -31,7 +31,8 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// If no user is signed in, returns an empty list.
   Future<List<String>> getWalletCoinIds() async {
     final user = await auth.currentUser;
-    return user?.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
+    if (user == null) return [];
+    return user.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
   }
 
   /// Returns the stored list of wallet assets resolved from configuration IDs.
@@ -104,11 +105,11 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   ///
   /// [coins] - An iterable of coin/asset configuration IDs to add.
   Future<void> addActivatedCoins(Iterable<String> coins) async {
-    final existingCoins =
-        (await auth.currentUser)?.metadata.valueOrNull<List<String>>(
-          'activated_coins',
-        ) ??
-        [];
+    final user = await auth.currentUser;
+    final existingCoins = user == null
+        ? <String>[]
+        : user.metadata.valueOrNull<List<String>>('activated_coins') ??
+              <String>[];
 
     final mergedCoins = <dynamic>{...existingCoins, ...coins}.toList();
     await auth.setOrRemoveActiveUserKeyValue('activated_coins', mergedCoins);
@@ -123,11 +124,12 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   ///
   /// [coins] - A list of coin/asset configuration IDs to remove.
   Future<void> removeActivatedCoins(List<String> coins) async {
-    final existingCoins =
-        (await auth.currentUser)?.metadata.valueOrNull<List<String>>(
-          'activated_coins',
-        ) ??
-        [];
+    final user = await auth.currentUser;
+    final existingCoins = user == null
+        ? <String>[]
+        : List<String>.from(
+            user.metadata.valueOrNull<List<String>>('activated_coins') ?? [],
+          );
 
     existingCoins.removeWhere((coin) => coins.contains(coin));
     await auth.setOrRemoveActiveUserKeyValue('activated_coins', existingCoins);
