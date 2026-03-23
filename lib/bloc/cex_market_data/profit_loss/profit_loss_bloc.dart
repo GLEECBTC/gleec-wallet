@@ -33,7 +33,10 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       _onLoadPortfolioProfitLoss,
       transformer: restartable(),
     );
-    on<ProfitLossPortfolioPeriodChanged>(_onPortfolioPeriodChanged);
+    on<ProfitLossPortfolioPeriodChanged>(
+      _onPortfolioPeriodChanged,
+      transformer: restartable(),
+    );
     on<ProfitLossPortfolioChartClearRequested>(_onClearPortfolioProfitLoss);
   }
 
@@ -237,6 +240,19 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
   }
 
   /// Run periodic updates with exponential backoff strategy
+  bool _isStalePeriodicUpdate(Duration selectedPeriod, {String? stage}) {
+    if (state.selectedPeriod == selectedPeriod) {
+      return false;
+    }
+
+    final stageInfo = stage == null ? '' : ' ($stage)';
+    _log.fine(
+      'Skipping stale profit/loss periodic update$stageInfo: '
+      '$selectedPeriod -> ${state.selectedPeriod}.',
+    );
+    return true;
+  }
+
   Future<void> _runPeriodicUpdates(
     ProfitLossPortfolioChartLoadRequested event,
     Emitter<ProfitLossState> emit,
@@ -244,6 +260,9 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
     while (true) {
       if (isClosed || emit.isDone) {
         _log.fine('Stopping profit/loss periodic updates: bloc closed.');
+        break;
+      }
+      if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'loop-start')) {
         break;
       }
       try {
@@ -255,16 +274,28 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
           );
           break;
         }
+        if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'post-delay')) {
+          break;
+        }
 
         final supportedCoins = await event.coins.filterSupportedCoins();
         final activeCoins = await supportedCoins.removeInactiveCoins(_sdk);
+        if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'pre-fetch')) {
+          break;
+        }
         final updatedChartState = await _getProfitLossChart(
           event,
           activeCoins,
           useCache: false,
         );
+        if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'pre-emit')) {
+          break;
+        }
         emit(updatedChartState);
       } catch (error, stackTrace) {
+        if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'error')) {
+          break;
+        }
         _log.shout('Failed to load portfolio profit/loss', error, stackTrace);
         emit(
           ProfitLossLoadFailure(

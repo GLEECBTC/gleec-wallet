@@ -41,6 +41,44 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
   String? get walletId =>
       RepositoryProvider.of<AuthBloc>(context).state.currentUser?.walletId.name;
 
+  List<ChartData> _buildChartDataForSelectedPeriod({
+    required List<ChartData> sourceData,
+    required double minChartExtent,
+    required double maxChartExtent,
+  }) {
+    if (sourceData.isEmpty) {
+      return List.empty();
+    }
+
+    ChartData? boundaryPoint;
+    final filteredChartData = <ChartData>[];
+
+    for (final point in sourceData) {
+      if (point.x < minChartExtent) {
+        boundaryPoint = point;
+        continue;
+      }
+
+      if (point.x > maxChartExtent) {
+        break;
+      }
+
+      filteredChartData.add(point);
+    }
+
+    if (boundaryPoint != null) {
+      filteredChartData.insert(0, boundaryPoint);
+    }
+
+    if (filteredChartData.isNotEmpty) {
+      filteredChartData.add(
+        ChartData(x: maxChartExtent, y: filteredChartData.last.y),
+      );
+    }
+
+    return filteredChartData;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ProfitLossBloc, ProfitLossState>(
@@ -60,15 +98,16 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
         final isSuccess = state is PortfolioProfitLossChartLoadSuccess;
         final isUpdating =
             state is PortfolioProfitLossChartLoadSuccess && state.isUpdating;
-        final List<ChartData> chartData = isSuccess
+        final List<ChartData> sourceData = isSuccess
             ? state.profitLossChart
                   .map((point) => ChartData(x: point.x.toDouble(), y: point.y))
                   .toList()
             : List.empty();
-
-        if (chartData.isNotEmpty) {
-          chartData.add(ChartData(x: maxChartExtent, y: chartData.last.y));
-        }
+        final List<ChartData> chartData = _buildChartDataForSelectedPeriod(
+          sourceData: sourceData,
+          minChartExtent: minChartExtent,
+          maxChartExtent: maxChartExtent,
+        );
 
         final double rawTotalValue = isSuccess ? state.totalValue : 0.0;
         final double totalValue = rawTotalValue.isFinite ? rawTotalValue : 0.0;
@@ -125,7 +164,9 @@ class PortfolioProfitLossChartState extends State<PortfolioProfitLossChart> {
                 const Gap(16),
                 Expanded(
                   child: LineChart(
-                    key: const Key('portfolio_profit_loss_chart'),
+                    key: ValueKey<String>(
+                      'portfolio_profit_loss_chart_${state.selectedPeriod.inMilliseconds}',
+                    ),
                     rangeExtent: const ChartExtent.tight(),
                     elements: [
                       ChartDataSeries(
