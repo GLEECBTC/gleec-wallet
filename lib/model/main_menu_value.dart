@@ -3,8 +3,8 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 
 enum MainMenuValue {
   wallet,
-  fiat,
   dex,
+  fiat,
   bridge,
   marketMakerBot,
   nft,
@@ -80,9 +80,9 @@ enum MainMenuValue {
     switch (this) {
       case MainMenuValue.wallet:
         return 0;
-      case MainMenuValue.fiat:
-        return 1;
       case MainMenuValue.dex:
+        return 1;
+      case MainMenuValue.fiat:
         return 2;
       case MainMenuValue.bridge:
         return 3;
