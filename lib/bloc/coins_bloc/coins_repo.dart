@@ -388,8 +388,9 @@ class CoinsRepo {
 
     final walletType = (await _kdfSdk.currentWallet())?.config.type;
     if (walletType == WalletType.trezor) {
-      final unsupportedSiaAssets =
-          assets.where((asset) => asset.id.subClass == CoinSubClass.sia);
+      final unsupportedSiaAssets = assets.where(
+        (asset) => asset.id.subClass == CoinSubClass.sia,
+      );
       if (unsupportedSiaAssets.isNotEmpty) {
         _log.warning(
           'Skipping unsupported Trezor SIA activation for '
@@ -398,8 +399,9 @@ class CoinsRepo {
         );
         for (final siaAsset in unsupportedSiaAssets) {
           _broadcastAsset(
-            _assetToCoinWithoutAddress(siaAsset)
-                .copyWith(state: CoinState.suspended),
+            _assetToCoinWithoutAddress(
+              siaAsset,
+            ).copyWith(state: CoinState.suspended),
           );
         }
       }
@@ -854,7 +856,9 @@ class CoinsRepo {
     // Process assets with bounded parallelism to avoid overwhelming providers
     await _fetchAssetPricesInChunks(validAssets);
 
-    return _pricesCache;
+    return Map<String, CexPrice>.unmodifiable(
+      Map<String, CexPrice>.from(_pricesCache),
+    );
   }
 
   /// Processes assets in chunks with bounded parallelism to avoid

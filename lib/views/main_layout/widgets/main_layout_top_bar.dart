@@ -4,13 +4,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
-import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/release_options.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/balance_utils.dart';
 import 'package:web_dex/shared/utils/extensions/sdk_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/views/common/header/actions/account_switcher.dart';
@@ -39,9 +38,10 @@ class MainLayoutTopBar extends StatelessWidget {
         elevation: 0,
         leading: BlocBuilder<CoinsBloc, CoinsState>(
           builder: (context, state) {
-            final totalBalance = _getTotalBalance(
-              state.walletCoins.values,
-              context,
+            final totalBalance = computeWalletTotalUsd(
+              coins: state.walletCoins.values,
+              coinsState: state,
+              sdk: context.sdk,
             );
 
             if (totalBalance == null) {
@@ -53,7 +53,7 @@ class MainLayoutTopBar extends StatelessWidget {
               child: ActionTextButton(
                 text: LocaleKeys.balance.tr(),
                 secondaryText: hideBalances
-                    ? '\$${maskedBalanceText}'
+                    ? '\$$maskedBalanceText'
                     : '\$${formatAmt(totalBalance)}',
                 onTap: null,
               ),
@@ -65,27 +65,6 @@ class MainLayoutTopBar extends StatelessWidget {
         titleSpacing: 0,
       ),
     );
-  }
-
-  double? _getTotalBalance(Iterable<Coin> coins, BuildContext context) {
-    bool hasAnyUsdBalance = coins.any(
-      (coin) => coin.usdBalance(context.sdk) != null,
-    );
-
-    if (!hasAnyUsdBalance) {
-      return null;
-    }
-
-    double total = coins.fold(
-      0,
-      (prev, coin) => prev + (coin.usdBalance(context.sdk) ?? 0),
-    );
-
-    if (total > 0.01) {
-      return total;
-    }
-
-    return total != 0 ? 0.01 : 0;
   }
 
   List<Widget> _getHeaderActions(

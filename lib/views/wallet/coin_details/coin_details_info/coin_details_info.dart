@@ -563,65 +563,74 @@ class _Balance extends StatelessWidget {
     final hideBalances = context.select(
       (SettingsBloc bloc) => bloc.state.hideBalances,
     );
-    final balance = coin.balance(context.sdk);
-    final value = hideBalances
-        ? maskedBalanceText
-        : balance == null
-        ? null
-        : doubleToString(balance);
+    final initialBalance = context.sdk.balances.lastKnown(coin.id);
+    final balanceStream = context.sdk.balances.watchBalance(coin.id);
 
-    return Column(
-      crossAxisAlignment: isMobile
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (isMobile)
-          const SizedBox.shrink()
-        else
-          Text(
-            LocaleKeys.yourBalance.tr(),
-            style: themeData.textTheme.titleMedium!.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: theme.custom.headerFloatBoxColor,
-            ),
-          ),
-        Flexible(
-          child: Row(
-            mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
-            mainAxisAlignment: isMobile
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: [
-              Flexible(
-                child: AutoScrollText(
-                  key: const Key('coin-details-balance'),
-                  text: value ?? '',
-                  isSelectable: true,
-                  style: themeData.textTheme.titleMedium!.copyWith(
-                    fontSize: isMobile ? 25 : 22,
-                    fontWeight: FontWeight.w700,
-                    color: theme.custom.headerFloatBoxColor,
-                    height: 1.1,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 5),
+    return StreamBuilder<BalanceInfo>(
+      stream: balanceStream,
+      initialData: initialBalance,
+      builder: (context, snapshot) {
+        final balance = snapshot.data?.spendable.toDouble();
+        final value = hideBalances
+            ? maskedBalanceText
+            : balance == null
+            ? kBalancePlaceholder
+            : doubleToString(balance);
+
+        return Column(
+          crossAxisAlignment: isMobile
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isMobile)
+              const SizedBox.shrink()
+            else
               Text(
-                Coin.normalizeAbbr(coin.abbr),
-                style: themeData.textTheme.titleSmall!.copyWith(
-                  fontSize: isMobile ? 25 : 20,
+                LocaleKeys.yourBalance.tr(),
+                style: themeData.textTheme.titleMedium!.copyWith(
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: theme.custom.headerFloatBoxColor,
-                  height: 1.1,
                 ),
               ),
-            ],
-          ),
-        ),
-        if (!isMobile) _FiatBalance(coin: coin),
-      ],
+            Flexible(
+              child: Row(
+                mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+                mainAxisAlignment: isMobile
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: AutoScrollText(
+                      key: const Key('coin-details-balance'),
+                      text: value,
+                      isSelectable: true,
+                      style: themeData.textTheme.titleMedium!.copyWith(
+                        fontSize: isMobile ? 25 : 22,
+                        fontWeight: FontWeight.w700,
+                        color: theme.custom.headerFloatBoxColor,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    Coin.normalizeAbbr(coin.abbr),
+                    style: themeData.textTheme.titleSmall!.copyWith(
+                      fontSize: isMobile ? 25 : 20,
+                      fontWeight: FontWeight.w500,
+                      color: theme.custom.headerFloatBoxColor,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isMobile) _FiatBalance(coin: coin),
+          ],
+        );
+      },
     );
   }
 }

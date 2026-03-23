@@ -13,7 +13,6 @@ import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/model/cex_price.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/shared/utils/utils.dart';
 
 part 'coins_event.dart';
 part 'coins_state.dart';
@@ -326,11 +325,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     Emitter<CoinsState> emit,
   ) async {
     try {
-      final prices = await _coinsRepo.fetchCurrentPrices();
-      if (prices == null) {
+      final fetchedPrices = await _coinsRepo.fetchCurrentPrices();
+      if (fetchedPrices == null) {
         _log.severe('Coin prices list empty/null');
         return;
       }
+
+      final prices = Map<String, CexPrice>.unmodifiable(
+        Map<String, CexPrice>.from(fetchedPrices),
+      );
       final didPricesChange = !const MapEquality().equals(state.prices, prices);
       if (!didPricesChange) {
         _log.info('Coin prices list unchanged');
@@ -341,20 +344,19 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         final map = coins.map((key, coin) {
           // Use configSymbol to lookup for backwards compatibility with the old,
           // string-based price list (and fallback)
-          final price = prices[coin.id.symbol.configSymbol];
+          final price = prices[coin.id.symbol.configSymbol.toUpperCase()];
           if (price != null) {
             return MapEntry(key, coin.copyWith(usdPrice: price));
           }
           return MapEntry(key, coin);
         });
 
-        // .map already returns a new map, so we don't need to create a new map
-        return map.unmodifiable();
+        return Map<String, Coin>.unmodifiable(map);
       }
 
       emit(
         state.copyWith(
-          prices: prices.unmodifiable(),
+          prices: prices,
           coins: updateCoinsWithPrices(state.coins),
           walletCoins: updateCoinsWithPrices(state.walletCoins),
         ),
@@ -558,10 +560,9 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
     final enableFutures = coinsToActivate
         .map(
-          (asset) => _coinsRepo.activateAssetsSync(
-            [asset],
-            addToWalletMetadata: false,
-          ),
+          (asset) => _coinsRepo.activateAssetsSync([
+            asset,
+          ], addToWalletMetadata: false),
         )
         .toList();
 

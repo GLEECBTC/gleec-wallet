@@ -34,6 +34,9 @@ const int contactDetailsMaxLength = 100;
 // TODO: Mirror this limit in the SDK validation and any backend API constraints
 const int passwordMaxLength = 128;
 const String maskedBalanceText = '****';
+
+/// Shown when balance or fiat value is unavailable (e.g. still loading).
+const String kBalancePlaceholder = '--';
 final RegExp discordUsernameRegex = RegExp(r'^[a-zA-Z0-9._]{2,32}$');
 final RegExp telegramUsernameRegex = RegExp(r'^[a-zA-Z0-9_]{5,32}$');
 final RegExp matrixIdRegex = RegExp(

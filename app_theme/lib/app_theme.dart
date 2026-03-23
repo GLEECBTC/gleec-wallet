@@ -9,6 +9,8 @@ import 'src/new_theme/new_theme_dark.dart';
 import 'src/new_theme/new_theme_light.dart';
 import 'src/theme_global.dart';
 
+export 'src/dark/theme_custom_dark.dart';
+export 'src/light/theme_custom_light.dart';
 export 'src/new_theme/extensions/color_scheme_extension.dart';
 export 'src/new_theme/extensions/text_theme_extension.dart';
 

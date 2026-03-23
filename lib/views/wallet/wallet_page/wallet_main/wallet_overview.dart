@@ -1,5 +1,4 @@
-import 'package:app_theme/src/dark/theme_custom_dark.dart';
-import 'package:app_theme/src/light/theme_custom_light.dart';
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,14 +8,13 @@ import 'package:web_dex/analytics/events/portfolio_events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_bloc.dart';
-import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/balance_utils.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/wallet_page/wallet_main/balance_summary_widget.dart';
 
@@ -77,9 +75,10 @@ class _WalletOverviewState extends State<WalletOverview> {
         // Calculate the total balance from the SDK balances and market data
         // interfaces rather than the PortfolioGrowthBloc - limited coin
         // coverage and dependent on OHLC API request limits.
-        final double? totalBalance = _getTotalBalance(
-          state.walletCoins.values,
-          context,
+        final double? totalBalance = computeWalletTotalUsd(
+          coins: state.walletCoins.values,
+          coinsState: state,
+          sdk: context.sdk,
         );
 
         if (!_logged && stateWithData != null && totalBalance != null) {
@@ -279,30 +278,6 @@ class _WalletOverviewState extends State<WalletOverview> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [Padding(padding: EdgeInsets.all(20.0), child: UiSpinner())],
     );
-  }
-
-  // TODO: Migrate these values to a new/existing bloc e.g. PortfolioGrowthBloc
-  double? _getTotalBalance(Iterable<Coin> coins, BuildContext context) {
-    // Check if any coins have USD balance data available
-    bool hasAnyUsdBalance = coins.any(
-      (coin) => coin.usdBalance(context.sdk) != null,
-    );
-
-    // If no USD balance data is available, return null to show placeholder
-    if (!hasAnyUsdBalance) {
-      return null;
-    }
-
-    double total = coins.fold(
-      0,
-      (prev, coin) => prev + (coin.usdBalance(context.sdk) ?? 0),
-    );
-
-    if (total > 0.01) {
-      return total;
-    }
-
-    return total != 0 ? 0.01 : 0;
   }
 }
 

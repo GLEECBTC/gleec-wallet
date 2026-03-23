@@ -27,6 +27,7 @@ import 'tests/system_health/http_time_provider_test.dart';
 import 'tests/system_health/ntp_time_provider_test.dart';
 import 'tests/system_health/system_clock_repository_test.dart';
 import 'tests/system_health/time_provider_registry_test.dart';
+import 'tests/balance_utils/compute_wallet_total_usd_test.dart';
 import 'tests/utils/convert_double_to_string_test.dart';
 import 'tests/utils/convert_fract_rat_test.dart';
 import 'tests/utils/double_to_string_test.dart';
@@ -63,6 +64,7 @@ void main() {
   });
 
   group('Utils:', () {
+    testComputeWalletTotalUsd();
     // TODO: re-enable or migrate to the SDK
     testUsdBalanceFormatter();
     testGetFiatAmount();
