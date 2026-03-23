@@ -100,7 +100,7 @@ class KdfPlugin {
         throw Exception('Failed to convert mm2_main response to Dart');
       }
 
-      return dartResponse as int;
+      return (dartResponse as num).toInt();
     } catch (e) {
       throw Exception('Error in mm2_main: $e\nConfig: $conf');
     }
@@ -112,12 +112,12 @@ class KdfPlugin {
     }
 
     final jsResult = _mm2MainStatusJs();
-    return jsResult.dartify()! as int;
+    return (jsResult.dartify()! as num).toInt();
   }
 
   Future<int> _mm2Stop() async {
     await _ensureLoaded();
     final jsResult = _mm2StopJs();
-    return jsResult.dartify()! as int;
+    return (jsResult.dartify()! as num).toInt();
   }
 }
