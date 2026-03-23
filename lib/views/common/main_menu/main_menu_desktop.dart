@@ -96,18 +96,6 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                               ),
                             ),
                             Tooltip(
-                              message: walletOnlyTooltipMessage(),
-                              child: DesktopMenuDesktopItem(
-                                key: const Key('main-menu-fiat'),
-                                enabled: currentWallet?.isHW != true,
-                                menu: MainMenuValue.fiat,
-                                onTap: onTapItem,
-                                isSelected: _checkSelectedItem(
-                                  MainMenuValue.fiat,
-                                ),
-                              ),
-                            ),
-                            Tooltip(
                               message: tradingTooltipMessage(),
                               child: DesktopMenuDesktopItem(
                                 key: const Key('main-menu-dex'),
@@ -116,6 +104,18 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                 onTap: onTapItem,
                                 isSelected: _checkSelectedItem(
                                   MainMenuValue.dex,
+                                ),
+                              ),
+                            ),
+                            Tooltip(
+                              message: walletOnlyTooltipMessage(),
+                              child: DesktopMenuDesktopItem(
+                                key: const Key('main-menu-fiat'),
+                                enabled: currentWallet?.isHW != true,
+                                menu: MainMenuValue.fiat,
+                                onTap: onTapItem,
+                                isSelected: _checkSelectedItem(
+                                  MainMenuValue.fiat,
                                 ),
                               ),
                             ),
