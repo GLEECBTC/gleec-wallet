@@ -13,7 +13,7 @@ This release packages the current `dev` branch work for the next `main` update w
 
 ### SDK Updates (komodo-defi-sdk-flutter)
 
-This release integrates [komodo-defi-sdk v0.5.0](https://github.com/GLEECBTC/komodo-defi-sdk-flutter) with 30 non-merge commits bringing:
+This release integrates [komodo-defi-sdk v0.5.0](https://github.com/GLEECBTC/komodo-defi-sdk-flutter) with the audited SDK release changes bringing:
 
 - **TRON and TRC20 Asset Support** ([SDK#316](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/316)) - Add TRON/TRC20 coin models and activation support across the SDK stack.
 - **SIA Activation and Withdrawal Support** ([SDK#320](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/320)) - Add first-class SIA activation and withdrawal handling.
