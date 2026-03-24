@@ -334,6 +334,7 @@ String abbr2Ticker(String abbr) {
   const List<String> filteredSuffixes = [
     'TRC20',
     'ERC20',
+    'GRC20',
     'BEP20',
     'QRC20',
     'FTM20',
@@ -401,6 +402,8 @@ Color getProtocolColor(CoinType type) {
       return const Color(0xFF29F06F);
     case CoinType.erc20:
       return const Color.fromRGBO(108, 147, 237, 1);
+    case CoinType.grc20:
+      return const Color(0xFF8C41FF);
     case CoinType.smartChain:
       return const Color.fromRGBO(32, 22, 49, 1);
     case CoinType.bep20:
@@ -445,17 +448,16 @@ bool hasTxHistorySupport(Coin coin) {
     case CoinType.sbch:
     case CoinType.ubiq:
     case CoinType.hrc20:
-    // TRON/TRC20 are currently wallet-only in KDF and do not expose
-    // tx_history RPC support.
+      return false;
     case CoinType.trx:
     case CoinType.trc20:
-      return false;
     case CoinType.krc20:
     case CoinType.tendermint:
     case CoinType.tendermintToken:
     case CoinType.utxo:
     case CoinType.sia:
     case CoinType.erc20:
+    case CoinType.grc20:
     case CoinType.smartChain:
     case CoinType.bep20:
     case CoinType.qrc20:
@@ -498,6 +500,7 @@ String getNativeExplorerUrlByCoin(Coin coin, String? address) {
     case CoinType.utxo:
     case CoinType.smartChain:
     case CoinType.erc20:
+    case CoinType.grc20:
     case CoinType.bep20:
     case CoinType.qrc20:
     case CoinType.ftm20:

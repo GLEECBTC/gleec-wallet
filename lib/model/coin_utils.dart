@@ -147,6 +147,8 @@ String getCoinTypeName(CoinType type, [String? symbol]) {
       return 'TRC-20';
     case CoinType.erc20:
       return 'ERC-20';
+    case CoinType.grc20:
+      return 'GRC-20';
     case CoinType.bep20:
       return 'BEP-20';
     case CoinType.qrc20:
@@ -203,6 +205,8 @@ bool isParentCoin(CoinType type, String symbol) {
       return true;
     case CoinType.erc20:
       return symbol == 'ETH';
+    case CoinType.grc20:
+      return symbol == 'GLEECT';
     case CoinType.bep20:
       return symbol == 'BNB';
     case CoinType.avx20:
