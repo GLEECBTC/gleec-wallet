@@ -7,10 +7,10 @@ class HDWalletModeSwitch extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   const HDWalletModeSwitch({
-    Key? key,
     required this.value,
     required this.onChanged,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {

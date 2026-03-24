@@ -36,6 +36,11 @@ const bool isBitrefillIntegrationEnabled = false;
 ///! trading purposes where it is not legally compliant.
 const bool kShowTradingWarning = false;
 
+/// Controls whether the HD mode warning banner is shown on the wallet page.
+/// TODO: Replace this static flag with conditional visibility once we can
+/// determine whether the wallet has previously been used in legacy mode.
+const bool kShowHdWalletWarningBanner = false;
+
 const Duration kPerformanceLogInterval = Duration(minutes: 1);
 
 /// Enable debug logging for electrum connections and RPC methods.

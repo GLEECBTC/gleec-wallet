@@ -137,7 +137,9 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
         final isLoggedIn = authStateMode == AuthorizeMode.logIn;
         final walletType = authState.currentUser?.wallet.config.type;
         final showMultiAddressNotice =
-            isLoggedIn && walletType == WalletType.hdwallet;
+            kShowHdWalletWarningBanner &&
+            isLoggedIn &&
+            walletType == WalletType.hdwallet;
 
         return ZhtlcConfigurationHandler(
           child: PageLayout(
