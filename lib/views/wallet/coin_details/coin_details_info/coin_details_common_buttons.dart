@@ -256,11 +256,7 @@ class CoinDetailsReceiveButton extends StatelessWidget {
     );
 
     if (selectedAddress != null && context.mounted) {
-      showDialog(
-        context: context,
-        builder: (context) =>
-            PubkeyReceiveDialog(coin: coin, address: selectedAddress),
-      );
+      showPubkeyReceiveDialog(context, coin, selectedAddress);
     }
   }
 
@@ -288,68 +284,6 @@ class CoinDetailsReceiveButton extends StatelessWidget {
           ? null
           : () => _handleReceive(context),
       text: LocaleKeys.receive.tr(),
-    );
-  }
-}
-
-class AddressListItem extends StatelessWidget {
-  const AddressListItem({super.key, required this.address, required this.coin});
-
-  final PubkeyInfo address;
-  final Coin coin;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-              ),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.account_balance_wallet_outlined,
-                size: 18,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  address.formatted,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${address.balance.spendable} ${coin.displayName} available',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

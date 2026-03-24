@@ -12,15 +12,14 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart';
-import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 
 class TransactionDetails extends StatelessWidget {
   const TransactionDetails({
-    Key? key,
     required this.transaction,
     required this.onClose,
     required this.coin,
-  }) : super(key: key);
+    super.key,
+  });
 
   final Transaction transaction;
   final void Function() onClose;
@@ -160,69 +159,6 @@ class TransactionDetails extends StatelessWidget {
     return LocaleKeys.unknown.tr();
   }
 
-  Widget _buildAddress(
-    BuildContext context, {
-    required String title,
-    required String address,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Title with fixed flex
-          Expanded(
-            flex: 2,
-            child: Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(fontSize: 14),
-            ),
-          ),
-          // Address and copy button
-          Expanded(
-            flex: 5,
-            child: Row(
-              children: [
-                Expanded(
-                  child: AutoScrollText(
-                    text: address,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AddressCopyButton(address: address),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddresses(bool isMobile, BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildAddress(
-            context,
-            title: LocaleKeys.from.tr(),
-            address: transaction.from.first,
-          ),
-          _buildAddress(
-            context,
-            title: LocaleKeys.to.tr(),
-            address: transaction.to.first,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBalanceChanges(BuildContext context) {
     final String formatted = formatDexAmt(transaction.amount.toDouble().abs());
     final String sign = transaction.amount.toDouble() > 0 ? '+' : '-';
@@ -283,17 +219,32 @@ class TransactionDetails extends StatelessWidget {
 
   Widget _buildFee(BuildContext context) {
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
-
-    final String formattedFee = transaction.fee?.formatTotal() ?? '';
-    final double? usd = coinsRepository.getUsdPriceByAmount(
-      formattedFee,
-      _feeCoin,
-    );
-    final String formattedUsd = formatAmt(usd ?? 0);
-
     final String title = LocaleKeys.fees.tr();
-    final String value =
-        '- ${Coin.normalizeAbbr(_feeCoin)} $formattedFee (\$$formattedUsd)';
+
+    final String value;
+    final TextStyle? valueStyle;
+
+    if (transaction.fee == null) {
+      value = '\u2014';
+      valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      );
+    } else {
+      final String formattedFee = transaction.fee!.formatTotal();
+      final double? usd = coinsRepository.getUsdPriceByAmount(
+        formattedFee,
+        _feeCoin,
+      );
+      final String formattedUsd = formatAmt(usd ?? 0);
+      value =
+          '- ${Coin.normalizeAbbr(_feeCoin)} $formattedFee (\$$formattedUsd)';
+      valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: theme.custom.decreaseColor,
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 15.0),
@@ -315,14 +266,7 @@ class TransactionDetails extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(maxHeight: 35),
               alignment: Alignment.centerLeft,
-              child: SelectableText(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: theme.custom.decreaseColor,
-                ),
-              ),
+              child: SelectableText(value, style: valueStyle),
             ),
           ),
         ],
