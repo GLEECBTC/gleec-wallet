@@ -398,6 +398,7 @@ abstract class LocaleKeys {
   static const seedSettings = 'seedSettings';
   static const errorDescription = 'errorDescription';
   static const tryAgain = 'tryAgain';
+  static const errorTryAgainSupportHint = 'errorTryAgainSupportHint';
   static const customFeesWarning = 'customFeesWarning';
   static const fiatExchange = 'fiatExchange';
   static const bridgeExchange = 'bridgeExchange';
@@ -451,6 +452,7 @@ abstract class LocaleKeys {
   static const setMin = 'setMin';
   static const timeout = 'timeout';
   static const notEnoughBalanceForGasError = 'notEnoughBalanceForGasError';
+  static const cannotSendToSelf = 'cannotSendToSelf';
   static const notEnoughFundsError = 'notEnoughFundsError';
   static const dexErrorMessage = 'dexErrorMessage';
   static const dexUnableToStartSwap = 'dexUnableToStartSwap';
@@ -519,6 +521,19 @@ abstract class LocaleKeys {
   static const withdrawPreview = 'withdrawPreview';
   static const withdrawPreviewZhtlcNote = 'withdrawPreviewZhtlcNote';
   static const withdrawPreviewError = 'withdrawPreviewError';
+  static const withdrawTronBandwidthUsed = 'withdrawTronBandwidthUsed';
+  static const withdrawTronBandwidthFee = 'withdrawTronBandwidthFee';
+  static const withdrawTronBandwidthSource = 'withdrawTronBandwidthSource';
+  static const withdrawTronEnergyUsed = 'withdrawTronEnergyUsed';
+  static const withdrawTronEnergyFee = 'withdrawTronEnergyFee';
+  static const withdrawTronEnergySource = 'withdrawTronEnergySource';
+  static const withdrawTronFeeSummary = 'withdrawTronFeeSummary';
+  static const withdrawTronFeePaidIn = 'withdrawTronFeePaidIn';
+  static const withdrawTronBandwidthCovered = 'withdrawTronBandwidthCovered';
+  static const withdrawTronEnergyCovered = 'withdrawTronEnergyCovered';
+  static const withdrawTronResourceNotUsed = 'withdrawTronResourceNotUsed';
+  static const withdrawTronFeeSummaryCharged = 'withdrawTronFeeSummaryCharged';
+  static const withdrawTronFeeSummaryCovered = 'withdrawTronFeeSummaryCovered';
   static const txHistoryFetchError = 'txHistoryFetchError';
   static const txHistoryNoTransactions = 'txHistoryNoTransactions';
   static const maxGapLimitReached = 'maxGapLimitReached';

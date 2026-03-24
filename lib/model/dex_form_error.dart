@@ -8,6 +8,7 @@ class DexFormError implements TextError {
     this.type = DexFormErrorType.simple,
     this.isWarning = false,
     this.action,
+    this.technicalDetails,
   }) : id = const Uuid().v4();
 
   final DexFormErrorType type;
@@ -17,6 +18,9 @@ class DexFormError implements TextError {
 
   @override
   final String error;
+
+  @override
+  final String? technicalDetails;
 
   @override
   String get message => error;

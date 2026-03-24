@@ -58,6 +58,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormSubmitted>(_onSubmitted);
     on<WithdrawFormCancelled>(_onCancelled);
     on<WithdrawFormReset>(_onReset);
+    on<WithdrawFormStepReverted>(_onStepReverted);
     on<WithdrawFormSourcesLoadRequested>(_onSourcesLoadRequested);
     on<WithdrawFormFeeOptionsRequested>(_onFeeOptionsRequested);
     on<WithdrawFormConvertAddressRequested>(_onConvertAddress);
@@ -86,8 +87,36 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     return fallbackPrefix == null ? message : '$fallbackPrefix: $message';
   }
 
+  String _extractTechnicalDetails(Object error) {
+    if (error is SdkError) {
+      return error.fallbackMessage;
+    }
+    if (error is MmRpcException) {
+      return error.message ?? error.toString();
+    }
+    if (error is GeneralErrorResponse) {
+      return error.error ?? error.toString();
+    }
+    if (error is WithdrawalException) {
+      return error.message;
+    }
+    return error.toString();
+  }
+
+  TextError _buildTextError(Object error, {String? fallbackPrefix}) {
+    return TextError(
+      error: _formatErrorMessage(error, fallbackPrefix: fallbackPrefix),
+      technicalDetails: _extractTechnicalDetails(error),
+    );
+  }
+
   String _normalizeCommonErrors(String message) {
     final normalized = message.toLowerCase();
+
+    if (normalized.contains('cannot transfer') &&
+        normalized.contains('to yourself')) {
+      return LocaleKeys.cannotSendToSelf.tr();
+    }
 
     if (normalized.contains('insufficient') &&
         (normalized.contains('gas') || normalized.contains('fee'))) {
@@ -603,6 +632,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return;
     }
 
+    if (_isSelfTransfer) {
+      emit(
+        state.copyWith(
+          previewError: () =>
+              TextError(error: LocaleKeys.cannotSendToSelf.tr()),
+          isSending: false,
+        ),
+      );
+      return;
+    }
+
     try {
       emit(
         state.copyWith(
@@ -617,9 +657,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         emit(state.copyWith(isAwaitingTrezorConfirmation: true));
       }
 
-      final preview = await _sdk.withdrawals.previewWithdrawal(
-        state.toWithdrawParameters(),
-      );
+      final params = state.toWithdrawParameters();
+      final preview = await _sdk.withdrawals.previewWithdrawal(params);
 
       emit(
         state.copyWith(
@@ -645,12 +684,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
       emit(
         state.copyWith(
-          previewError: () => TextError(
-            error: _formatErrorMessage(
-              e,
-              fallbackPrefix: 'Failed to generate preview',
-            ),
-          ),
+          previewError: () =>
+              _buildTextError(e, fallbackPrefix: 'Failed to generate preview'),
           isSending: false,
           isAwaitingTrezorConfirmation: false,
         ),
@@ -749,9 +784,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
       emit(
         state.copyWith(
-          transactionError: () => TextError(
-            error: _formatErrorMessage(e, fallbackPrefix: 'Transaction failed'),
-          ),
+          transactionError: () =>
+              _buildTextError(e, fallbackPrefix: 'Transaction failed'),
           step: WithdrawFormStep.failed,
           isSending: false,
           isAwaitingTrezorConfirmation: false,
@@ -762,6 +796,13 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
   bool get _isUnsupportedSiaHardwareWalletFlow =>
       _walletType == WalletType.trezor && state.asset.protocol is SiaProtocol;
+
+  bool get _isSelfTransfer {
+    final source = state.selectedSourceAddress?.address;
+    final recipient = state.recipientAddress.trim();
+    if (source == null || recipient.isEmpty) return false;
+    return source == recipient;
+  }
 
   void _onCancelled(
     WithdrawFormCancelled event,
@@ -781,6 +822,26 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         amount: '0',
         pubkeys: state.pubkeys,
         selectedSourceAddress: state.pubkeys?.keys.first,
+      ),
+    );
+  }
+
+  void _onStepReverted(
+    WithdrawFormStepReverted event,
+    Emitter<WithdrawFormState> emit,
+  ) {
+    if (state.step != WithdrawFormStep.failed) return;
+
+    final nextStep = state.preview != null
+        ? WithdrawFormStep.confirm
+        : WithdrawFormStep.fill;
+
+    emit(
+      state.copyWith(
+        step: nextStep,
+        transactionError: () => null,
+        isSending: false,
+        isAwaitingTrezorConfirmation: false,
       ),
     );
   }

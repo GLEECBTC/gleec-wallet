@@ -482,12 +482,23 @@ class FailurePage extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                LocaleKeys.errorTryAgainSupportHint.tr(),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             OutlinedButton(
               onPressed: () => context.read<WithdrawFormBloc>().add(
                 const WithdrawFormCancelled(),
               ),
-              child: Text(LocaleKeys.tryAgain.tr()),
+              child: Text(LocaleKeys.tryAgainButton.tr()),
             ),
           ],
         );

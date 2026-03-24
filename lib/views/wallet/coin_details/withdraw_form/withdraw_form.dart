@@ -9,7 +9,9 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/analytics/events/transaction_events.dart';
+import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
+import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
@@ -29,7 +31,6 @@ import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_for
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fill_form_memo.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/trezor_withdraw_progress_dialog.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/withdraw_form_header.dart';
-import 'package:decimal/decimal.dart';
 import 'package:web_dex/views/wallet/coin_details/transactions/transaction_details.dart';
 
 bool _isMemoSupportedProtocol(Asset asset) {
@@ -115,10 +116,11 @@ class _WithdrawFormState extends State<WithdrawForm> {
               if (spendable != null &&
                   entered != null &&
                   amountsMatchWithTolerance(entered, spendable)) {
-                if (mounted)
+                if (mounted) {
                   setState(() {
                     _suppressPreviewError = true;
                   });
+                }
                 final bloc = context.read<WithdrawFormBloc>();
                 final agreed = await showDialog<bool>(
                   context: context,
@@ -140,10 +142,11 @@ class _WithdrawFormState extends State<WithdrawForm> {
                   ),
                 );
 
-                if (mounted)
+                if (mounted) {
                   setState(() {
                     _suppressPreviewError = false;
                   });
+                }
 
                 if (agreed == true) {
                   bloc.add(const WithdrawFormMaxAmountEnabled(true));
@@ -178,6 +181,7 @@ class _WithdrawFormState extends State<WithdrawForm> {
               _transactionRefreshTimer?.cancel();
               _transactionRefreshTimer = Timer(const Duration(seconds: 2), () {
                 if (!mounted) return;
+                if (!hasTxHistorySupport(coin)) return;
                 context.read<TransactionHistoryBloc>().add(
                   TransactionHistorySubscribe(coin: coin),
                 );
@@ -496,6 +500,14 @@ class WithdrawPreviewDetails extends StatelessWidget {
                     isAutoScrollEnabled: true,
                   ),
                 ],
+                if (preview.fee is FeeInfoTron) ...[
+                  const SizedBox(height: 16),
+                  _buildTronFeeDetails(
+                    context,
+                    preview.fee as FeeInfoTron,
+                    useRowLayout: useRowLayout,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (useRowLayout)
                   _buildRow(
@@ -556,6 +568,120 @@ class WithdrawPreviewDetails extends StatelessWidget {
         );
       },
     );
+  }
+
+  Widget _buildTronFeeDetails(
+    BuildContext context,
+    FeeInfoTron fee, {
+    required bool useRowLayout,
+  }) {
+    final labelStyle = Theme.of(context).textTheme.labelLarge;
+    final secondaryValueStyle = Theme.of(context).textTheme.bodySmall;
+    final totalFee = fee.totalFee;
+    final hasTrxFee = totalFee > Decimal.zero;
+    final bandwidthUsedLabel = LocaleKeys.withdrawTronBandwidthUsed.tr();
+    final bandwidthFeeLabel = LocaleKeys.withdrawTronBandwidthFee.tr();
+    final bandwidthSourceLabel = LocaleKeys.withdrawTronBandwidthSource.tr();
+    final energyUsedLabel = LocaleKeys.withdrawTronEnergyUsed.tr();
+    final energyFeeLabel = LocaleKeys.withdrawTronEnergyFee.tr();
+    final energySourceLabel = LocaleKeys.withdrawTronEnergySource.tr();
+    final feeSummaryLabel = LocaleKeys.withdrawTronFeeSummary.tr();
+    final paidInCoin = LocaleKeys.withdrawTronFeePaidIn.tr(args: [fee.coin]);
+    final bandwidthSource = fee.bandwidthFee > Decimal.zero
+        ? paidInCoin
+        : LocaleKeys.withdrawTronBandwidthCovered.tr();
+    final energySource = fee.energyUsed == 0
+        ? LocaleKeys.withdrawTronResourceNotUsed.tr()
+        : fee.energyFee > Decimal.zero
+        ? paidInCoin
+        : LocaleKeys.withdrawTronEnergyCovered.tr();
+
+    final bandwidthFeeString =
+        '${_formatDecimal(fee.bandwidthFee)} ${fee.coin}';
+    final energyFeeString = '${_formatDecimal(fee.energyFee)} ${fee.coin}';
+    final chargeSummary = hasTrxFee
+        ? LocaleKeys.withdrawTronFeeSummaryCharged.tr(
+            args: [_formatDecimal(totalFee), fee.coin],
+          )
+        : LocaleKeys.withdrawTronFeeSummaryCovered.tr(args: [fee.coin]);
+
+    if (useRowLayout) {
+      return Column(
+        children: [
+          _buildRow(bandwidthUsedLabel, Text('${fee.bandwidthUsed}')),
+          const SizedBox(height: 8),
+          _buildRow(bandwidthFeeLabel, Text(bandwidthFeeString)),
+          const SizedBox(height: 8),
+          _buildRow(
+            bandwidthSourceLabel,
+            Text(
+              bandwidthSource,
+              textAlign: TextAlign.right,
+              style: secondaryValueStyle,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildRow(energyUsedLabel, Text('${fee.energyUsed}')),
+          const SizedBox(height: 8),
+          _buildRow(energyFeeLabel, Text(energyFeeString)),
+          const SizedBox(height: 8),
+          _buildRow(
+            energySourceLabel,
+            Text(
+              energySource,
+              textAlign: TextAlign.right,
+              style: secondaryValueStyle,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildRow(
+            feeSummaryLabel,
+            Text(
+              chargeSummary,
+              textAlign: TextAlign.right,
+              style: secondaryValueStyle,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(bandwidthUsedLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text('${fee.bandwidthUsed}'),
+        const SizedBox(height: 8),
+        Text(bandwidthFeeLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text(bandwidthFeeString),
+        const SizedBox(height: 8),
+        Text(bandwidthSourceLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text(bandwidthSource, style: secondaryValueStyle),
+        const SizedBox(height: 8),
+        Text(energyUsedLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text('${fee.energyUsed}'),
+        const SizedBox(height: 8),
+        Text(energyFeeLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text(energyFeeString),
+        const SizedBox(height: 8),
+        Text(energySourceLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text(energySource, style: secondaryValueStyle),
+        const SizedBox(height: 8),
+        Text(feeSummaryLabel, style: labelStyle),
+        const SizedBox(height: 4),
+        Text(chargeSummary, style: secondaryValueStyle),
+      ],
+    );
+  }
+
+  String _formatDecimal(Decimal value, {int precision = 8}) {
+    return value.toStringAsFixed(precision).replaceAll(RegExp(r'\.?0+$'), '');
   }
 
   Widget _buildRow(String label, Widget value) {
@@ -741,8 +867,8 @@ class WithdrawFormFillSection extends StatelessWidget {
             // error state value.
             if (state.hasPreviewError && !suppressPreviewError)
               ErrorDisplay(
-                message: LocaleKeys.withdrawPreviewError.tr(),
-                detailedMessage: state.previewError!.message,
+                message: state.previewError!.message,
+                detailedMessage: state.previewError!.technicalDetails,
               ),
             const SizedBox(height: 16),
             PreviewWithdrawButton(
@@ -950,19 +1076,52 @@ class WithdrawResultCard extends StatelessWidget {
 class WithdrawFormFailedSection extends StatelessWidget {
   const WithdrawFormFailedSection({super.key});
 
+  static Future<void> _openSupportContact() async {
+    try {
+      await openUrl(discordInviteUrl);
+    } catch (_) {
+      // Avoid surfacing launch failures as another error state.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
+        final supportLink = TextButton(
+          onPressed: _openSupportContact,
+          child: Text(LocaleKeys.support.tr()),
+        );
+
+        final backButton = OutlinedButton(
+          onPressed: () => context.read<WithdrawFormBloc>().add(
+            const WithdrawFormStepReverted(),
+          ),
+          child: Text(LocaleKeys.back.tr()),
+        );
+
+        final tryAgainButton = FilledButton(
+          onPressed: () =>
+              context.read<WithdrawFormBloc>().add(const WithdrawFormReset()),
+          child: Text(LocaleKeys.tryAgainButton.tr()),
+        );
+
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
+            Center(
+              child: Icon(
+                Icons.error_outline,
+                size: 64,
+                color: theme.colorScheme.error,
+              ),
+            ),
             const SizedBox(height: 24),
             Text(
               LocaleKeys.transactionFailed.tr(),
-              style: theme.textTheme.headlineMedium?.copyWith(
+              style: theme.textTheme.headlineSmall?.copyWith(
                 color: theme.colorScheme.error,
               ),
               textAlign: TextAlign.center,
@@ -970,25 +1129,36 @@ class WithdrawFormFailedSection extends StatelessWidget {
             const SizedBox(height: 24),
             if (state.transactionError != null)
               WithdrawErrorCard(error: state.transactionError!),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                OutlinedButton(
-                  onPressed: () => context.read<WithdrawFormBloc>().add(
-                    const WithdrawFormStepReverted(),
-                  ),
-                  child: Text(LocaleKeys.back.tr()),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                LocaleKeys.errorTryAgainSupportHint.tr(),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(width: 16),
-                FilledButton(
-                  onPressed: () => context.read<WithdrawFormBloc>().add(
-                    const WithdrawFormReset(),
-                  ),
-                  child: Text(LocaleKeys.tryAgain.tr()),
-                ),
-              ],
+                textAlign: TextAlign.center,
+              ),
             ),
+            const SizedBox(height: 24),
+            if (isMobile) ...[
+              backButton,
+              const SizedBox(height: 12),
+              tryAgainButton,
+              const SizedBox(height: 8),
+              Center(child: supportLink),
+            ] else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: backButton),
+                  const SizedBox(width: 16),
+                  Expanded(child: tryAgainButton),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Center(child: supportLink),
+            ],
           ],
         );
       },
@@ -1005,6 +1175,12 @@ class WithdrawErrorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final rawDetails = error is TextError
+        ? (error as TextError).technicalDetails
+        : null;
+    final hasDistinctDetails =
+        rawDetails != null && rawDetails != error.message;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1017,17 +1193,20 @@ class WithdrawErrorCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             SelectableText(error.message, style: theme.textTheme.bodyMedium),
-            if (error is TextError) ...[
+            if (hasDistinctDetails) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
               ExpansionTile(
                 title: Text(LocaleKeys.technicalDetails.tr()),
                 children: [
-                  SelectableText(
-                    (error as TextError).error,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: 'Mono',
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      rawDetails,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'Mono',
+                      ),
                     ),
                   ),
                 ],

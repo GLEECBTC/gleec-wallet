@@ -43,11 +43,12 @@ class _SendErrorText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      LocaleKeys.tryAgain.tr(),
+      LocaleKeys.errorTryAgainSupportHint.tr(),
       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            color: Theme.of(context).colorScheme.error,
-          ),
+        fontSize: 14,
+        color: Theme.of(context).colorScheme.error,
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }
@@ -79,11 +80,9 @@ class _SendErrorBody extends StatelessWidget {
       // TODO: Confirm this is the correct error
       selector: (state) => state.transactionError,
       builder: (BuildContext context, error) {
-        final iconColor = Theme.of(context)
-            .textTheme
-            .bodyMedium
-            ?.color
-            ?.withValues(alpha: .7);
+        final iconColor = Theme.of(
+          context,
+        ).textTheme.bodyMedium?.color?.withValues(alpha: .7);
 
         return Material(
           color: theme.custom.buttonColorDefault,
@@ -103,11 +102,7 @@ class _SendErrorBody extends StatelessWidget {
                   children: [
                     Expanded(child: _MultilineText(error?.error ?? '')),
                     const SizedBox(width: 16),
-                    Icon(
-                      Icons.copy_rounded,
-                      color: iconColor,
-                      size: 22,
-                    ),
+                    Icon(Icons.copy_rounded, color: iconColor, size: 22),
                   ],
                 ),
               ),

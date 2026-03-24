@@ -165,7 +165,6 @@ class PortfolioGrowthBloc
         filteredEventCoins,
         delay: kActivationPollingInterval,
       );
-
       // Only remove inactivate/activating coins after an attempt to load the
       // cached chart, as the cached chart may contain inactive coins.
       await _loadChart(
@@ -196,9 +195,9 @@ class PortfolioGrowthBloc
     PortfolioGrowthLoadRequested event, {
     required bool useCache,
   }) async {
-    final activeCoins = await coins.removeInactiveCoins(_sdk);
+    final chartCoins = useCache ? coins : await coins.removeInactiveCoins(_sdk);
     final chart = await _portfolioGrowthRepository.getPortfolioGrowthChart(
-      activeCoins,
+      chartCoins,
       fiatCoinId: event.fiatCoinId,
       walletId: event.walletId,
       useCache: useCache,

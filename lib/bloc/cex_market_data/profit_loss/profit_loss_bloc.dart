@@ -61,8 +61,6 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       final supportedCoins = await event.coins.filterSupportedCoins();
       final filteredEventCoins = event.coins.withoutTestCoins();
       final initialActiveCoins = await supportedCoins.removeInactiveCoins(_sdk);
-      // Charts for individual coins (coin details) are parsed here as well,
-      // and should be hidden if not supported.
       if (supportedCoins.isEmpty && filteredEventCoins.length <= 1) {
         return emit(
           PortfolioProfitLossChartUnsupported(
@@ -78,8 +76,6 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       ).then(emit.call).catchError((Object error, StackTrace stackTrace) {
         const errorMessage = 'Failed to load CACHED portfolio profit/loss';
         _log.warning(errorMessage, error, stackTrace);
-        // ignore cached errors, as the periodic refresh attempts should recover
-        // at the cost of a longer first loading time.
       });
 
       // Fetch the un-cached version of the chart to update the cache.
@@ -97,10 +93,6 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
           useCache: false,
         ).then(emit.call).catchError((Object e, StackTrace s) {
           _log.severe('Failed to load uncached profit/loss chart', e, s);
-          // Ignore un-cached errors, as a transaction loading exception should not
-          // make the graph disappear with a load failure emit, as the cached data
-          // is already displayed. The periodic updates will still try to fetch the
-          // data and update the graph.
         });
       }
     } catch (error, stackTrace) {

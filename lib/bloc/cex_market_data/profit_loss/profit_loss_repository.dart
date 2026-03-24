@@ -163,7 +163,24 @@ class ProfitLossRepository {
     );
 
     if (transactions.isEmpty) {
-      _log.fine('No transactions found for ${coinId.id}, caching empty result');
+      _log.fine('No transactions found for ${coinId.id}');
+
+      final String compoundKey = ProfitLossCache.getPrimaryKey(
+        coinId: coinId.id,
+        fiatCurrency: fiatCoinId,
+        walletId: walletId,
+        isHdWallet: currentUser.isHd,
+      );
+      final existingCache = await _profitLossCacheProvider.get(compoundKey);
+      if (existingCache != null && existingCache.profitLosses.isNotEmpty) {
+        _log.fine(
+          'Keeping existing non-empty cache for ${coinId.id} '
+          '(${existingCache.profitLosses.length} entries) '
+          'instead of overwriting with empty transactions',
+        );
+        methodStopwatch.stop();
+        return existingCache.profitLosses;
+      }
 
       final cacheInsertStopwatch = Stopwatch()..start();
       await _profitLossCacheProvider.insert(

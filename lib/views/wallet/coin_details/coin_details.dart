@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/analytics/events/portfolio_events.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/coin_details/rewards/kmd_reward_claim_success.dart';
@@ -61,9 +62,13 @@ class _CoinDetailsState extends State<CoinDetails> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<TransactionHistoryBloc>(
-      create: (ctx) =>
-          TransactionHistoryBloc(sdk: ctx.read<KomodoDefiSdk>())
-            ..add(TransactionHistorySubscribe(coin: widget.coin)),
+      create: (ctx) {
+        final bloc = TransactionHistoryBloc(sdk: ctx.read<KomodoDefiSdk>());
+        if (hasTxHistorySupport(widget.coin)) {
+          bloc.add(TransactionHistorySubscribe(coin: widget.coin));
+        }
+        return bloc;
+      },
       child: BlocBuilder<CoinsBloc, CoinsState>(
         builder: (context, state) {
           return GestureDetector(
