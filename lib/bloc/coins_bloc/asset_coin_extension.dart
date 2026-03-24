@@ -24,6 +24,7 @@ extension AssetCoinExtension on Asset {
       platform: id.parentId?.id ?? platform ?? '',
       contractAddress: contractAddress ?? '',
     );
+    final explorerPattern = protocol.explorerPattern;
 
     return Coin(
       type: protocol.subClass.toCoinType(),
@@ -32,10 +33,9 @@ extension AssetCoinExtension on Asset {
       name: id.name,
       logoImageUrl: logoImageUrl ?? '',
       isCustomCoin: isCustomToken,
-      explorerUrl: config.valueOrNull<String>('explorer_url') ?? '',
-      explorerTxUrl: config.valueOrNull<String>('explorer_tx_url') ?? '',
-      explorerAddressUrl:
-          config.valueOrNull<String>('explorer_address_url') ?? '',
+      explorerUrl: explorerPattern.baseUrl?.toString() ?? '',
+      explorerTxUrl: explorerPattern.txPattern ?? '',
+      explorerAddressUrl: explorerPattern.addressPattern ?? '',
       protocolType: protocol.subClass.ticker,
       protocolData: protocolData,
       isTestCoin: protocol.isTestnet,

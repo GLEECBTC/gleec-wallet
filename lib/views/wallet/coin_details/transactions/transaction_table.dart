@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_bloc.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -167,12 +168,17 @@ class _IguanaCoinWithoutTxHistorySupport extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final address = context.select<CoinAddressesBloc, String?>((bloc) {
+      final addresses = bloc.state.addresses;
+      return addresses.isEmpty ? null : addresses.first.address;
+    });
+
     return Column(
       children: [
         Text(LocaleKeys.noTxSupportHidden.tr(), textAlign: TextAlign.center),
         Padding(
           padding: const EdgeInsets.only(top: 10.0),
-          child: LaunchNativeExplorerButton(coin: coin),
+          child: LaunchNativeExplorerButton(coin: coin, address: address),
         ),
       ],
     );

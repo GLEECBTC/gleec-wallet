@@ -6,22 +6,19 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class LaunchNativeExplorerButton extends StatelessWidget {
-  const LaunchNativeExplorerButton({
-    Key? key,
-    required this.coin,
-    this.address,
-  }) : super(key: key);
+  const LaunchNativeExplorerButton({Key? key, required this.coin, this.address})
+    : super(key: key);
   final Coin coin;
   final String? address;
 
   @override
   Widget build(BuildContext context) {
+    final url = getNativeExplorerUrlByCoin(coin, address);
+
     return UiPrimaryButton(
       width: 160,
       height: 30,
-      onPressed: () {
-        launchURLString(getNativeExplorerUrlByCoin(coin, address));
-      },
+      onPressed: url.isEmpty ? null : () => launchURLString(url),
       text: LocaleKeys.viewOnExplorer.tr(),
     );
   }

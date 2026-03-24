@@ -190,7 +190,7 @@ Map<String, dynamic>? rat2fract(Rational? rat, [bool toLog = true]) {
 String getTxExplorerUrl(Coin coin, String txHash) {
   final String explorerUrl = coin.explorerUrl;
   final String explorerTxUrl = coin.explorerTxUrl;
-  if (explorerUrl.isEmpty) return '';
+  if (explorerUrl.isEmpty || explorerTxUrl.isEmpty) return '';
 
   final hash =
       coin.type == CoinType.tendermint || coin.type == CoinType.tendermintToken
@@ -205,7 +205,7 @@ String getTxExplorerUrl(Coin coin, String txHash) {
 String getAddressExplorerUrl(Coin coin, String address) {
   final String explorerUrl = coin.explorerUrl;
   final String explorerAddressUrl = coin.explorerAddressUrl;
-  if (explorerUrl.isEmpty) return '';
+  if (explorerUrl.isEmpty || explorerAddressUrl.isEmpty) return '';
 
   return '$explorerUrl$explorerAddressUrl$address';
 }
@@ -445,10 +445,11 @@ bool hasTxHistorySupport(Coin coin) {
     case CoinType.sbch:
     case CoinType.ubiq:
     case CoinType.hrc20:
-      return false;
+    // TRON/TRC20 are currently wallet-only in KDF and do not expose
+    // tx_history RPC support.
     case CoinType.trx:
     case CoinType.trc20:
-      return true;
+      return false;
     case CoinType.krc20:
     case CoinType.tendermint:
     case CoinType.tendermintToken:
@@ -476,11 +477,15 @@ String getNativeExplorerUrlByCoin(Coin coin, String? address) {
   final bool hasSupport = hasTxHistorySupport(coin);
   final coinAddress = address ?? coin.address;
   assert(!hasSupport);
+  if (coinAddress == null || coinAddress.isEmpty || coin.explorerUrl.isEmpty) {
+    return '';
+  }
+
+  if (coin.explorerAddressUrl.isNotEmpty) {
+    return getAddressExplorerUrl(coin, coinAddress);
+  }
 
   switch (coin.type) {
-    case CoinType.trx:
-    case CoinType.trc20:
-      return '${coin.explorerUrl}address/$coinAddress';
     case CoinType.sbch:
     case CoinType.tendermint:
       return '${coin.explorerUrl}address/$coinAddress';
@@ -508,6 +513,8 @@ String getNativeExplorerUrlByCoin(Coin coin, String? address) {
     case CoinType.krc20:
     case CoinType.slp:
     case CoinType.sia:
+    case CoinType.trx:
+    case CoinType.trc20:
       return '${coin.explorerUrl}address/$coinAddress';
   }
 }

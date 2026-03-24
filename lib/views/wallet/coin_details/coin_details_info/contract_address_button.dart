@@ -15,18 +15,15 @@ class ContractAddressButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final contractAddress = coin.protocolData?.contractAddress ?? '';
+    final url = getAddressExplorerUrl(coin, contractAddress);
+
     return Material(
       color: Theme.of(context).textTheme.bodyMedium?.color?.withAlpha(5),
       borderRadius: BorderRadius.circular(7),
       child: InkWell(
         borderRadius: BorderRadius.circular(7),
-        onTap: coin.explorerUrl.isEmpty
-            ? null
-            : () {
-                launchURLString(
-                  '${coin.explorerUrl}address/${coin.protocolData?.contractAddress ?? ''}',
-                );
-              },
+        onTap: url.isEmpty ? null : () => launchURLString(url),
         child: isMobile
             ? _ContractAddressMobile(coin)
             : _ContractAddressDesktop(coin),
@@ -97,11 +94,7 @@ class _ContractAddressDesktop extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(
-            left: 13.0,
-            right: 13.0,
-            bottom: 5,
-          ),
+          padding: const EdgeInsets.only(left: 13.0, right: 13.0, bottom: 5),
           child: _ContractAddressValue(coin),
         ),
       ],
@@ -119,19 +112,14 @@ class _ContractAddressValue extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.max,
       children: [
-        AssetIcon.ofTicker(
-          coin.protocolData?.platform ?? '',
-          size: 12,
-        ),
-        const SizedBox(
-          width: 3,
-        ),
+        AssetIcon.ofTicker(coin.protocolData?.platform ?? '', size: 12),
+        const SizedBox(width: 3),
         Text(
           '${coin.protocolData?.platform ?? ''} ',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(fontWeight: FontWeight.w500, fontSize: 11),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w500,
+            fontSize: 11,
+          ),
         ),
         Flexible(
           child: TruncatedMiddleText(
@@ -177,14 +165,12 @@ class _ContractAddressTitle extends StatelessWidget {
     return Text(
       LocaleKeys.contractAddress.tr(),
       style: Theme.of(context).textTheme.titleSmall!.copyWith(
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-            color: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.color
-                ?.withValues(alpha: .45),
-          ),
+        fontSize: 9,
+        fontWeight: FontWeight.w500,
+        color: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.color?.withValues(alpha: .45),
+      ),
     );
   }
 }
