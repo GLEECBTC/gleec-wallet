@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:web_dex/common/screen.dart';
 
 const String mmRpcVersion = '2.0';
 // issue https://github.com/flutter/flutter/issues/19462#issuecomment-478284020
@@ -35,6 +36,10 @@ const bool isBitrefillIntegrationEnabled = false;
 ///! Platform and its legal entities do not condone the use of this app for
 ///! trading purposes where it is not legally compliant.
 const bool kShowTradingWarning = false;
+
+/// Controls whether startup coin icon precaching is enabled.
+/// Defaults to web-only via the compile-time platform constant.
+bool get kEnableCoinIconPrecache => kIsWeb && isMobile;
 
 const Duration kPerformanceLogInterval = Duration(minutes: 1);
 
