@@ -830,6 +830,20 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormStepReverted event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.step == WithdrawFormStep.confirm) {
+      emit(
+        state.copyWith(
+          step: WithdrawFormStep.fill,
+          preview: () => null,
+          previewError: () => null,
+          transactionError: () => null,
+          isSending: false,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+      return;
+    }
+
     if (state.step != WithdrawFormStep.failed) return;
 
     final nextStep = state.preview != null
