@@ -471,10 +471,12 @@ class CoinsRepo {
     for (final asset in assets) {
       final coin = _assetToCoinWithoutAddress(asset);
       try {
-        // Check if asset is already activated to avoid SDK exception.
-        // The SDK throws an exception when trying to activate an already-activated
-        // asset, so we need this manual check to prevent unnecessary retries.
-        final isAlreadyActivated = await isAssetActivated(asset.id);
+        // Force-refresh activation state here to avoid racing on stale cache
+        // reads before attempting a coordinated activation.
+        final isAlreadyActivated = await isAssetActivated(
+          asset.id,
+          forceRefresh: true,
+        );
 
         if (isAlreadyActivated) {
           _log.info(
@@ -488,12 +490,9 @@ class CoinsRepo {
           // Use retry with exponential backoff for activation
           await retry<void>(
             () async {
-              final progress = await _kdfSdk.assets.activateAsset(asset).last;
-              if (!progress.isSuccess) {
-                throw Exception(
-                  progress.errorMessage ??
-                      'Activation failed for ${asset.id.id}',
-                );
+              final didActivate = await _kdfSdk.ensureAssetActivated(asset);
+              if (!didActivate) {
+                throw Exception('Activation failed for ${asset.id.id}');
               }
             },
             maxAttempts: maxRetryAttempts,
@@ -591,12 +590,10 @@ class CoinsRepo {
       _addAssetsToWalletMetdata(assets);
 
   Future<void> _addAssetsToWalletMetdata(Iterable<AssetId> assets) async {
-    final parentIds = <String>{};
-    for (final assetId in assets) {
-      if (assetId.parentId != null) {
-        parentIds.add(assetId.parentId!.id);
-      }
-    }
+    final parentIds = assets
+        .where((assetId) => assetId.parentId != null)
+        .map((assetId) => assetId.parentId!.id)
+        .toSet();
 
     if (assets.isNotEmpty || parentIds.isNotEmpty) {
       final allIdsToAdd = <String>{...assets.map((e) => e.id), ...parentIds};
