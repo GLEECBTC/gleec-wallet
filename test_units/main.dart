@@ -31,6 +31,7 @@ import 'tests/balance_utils/compute_wallet_total_usd_test.dart';
 import 'tests/utils/convert_double_to_string_test.dart';
 import 'tests/utils/convert_fract_rat_test.dart';
 import 'tests/utils/double_to_string_test.dart';
+import 'tests/utils/explorer_url_test.dart';
 import 'tests/utils/get_fiat_amount_tests.dart';
 import 'tests/utils/get_usd_balance_test.dart';
 import 'tests/utils/ipfs_gateway_manager_test.dart';
@@ -69,6 +70,7 @@ void main() {
     testUsdBalanceFormatter();
     testGetFiatAmount();
     testCustomDoubleToString();
+    testExplorerUrlHelpers();
     testRatToFracAndViseVersa();
 
     testDoubleToString();

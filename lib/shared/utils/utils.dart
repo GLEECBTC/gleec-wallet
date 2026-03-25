@@ -190,16 +190,22 @@ Map<String, dynamic>? rat2fract(Rational? rat, [bool toLog = true]) {
 String getTxExplorerUrl(Coin coin, String txHash) {
   final String explorerUrl = coin.explorerUrl;
   final String explorerTxUrl = coin.explorerTxUrl;
-  if (explorerUrl.isEmpty || explorerTxUrl.isEmpty) return '';
+  if (explorerUrl.isEmpty) return '';
 
   final hash =
       coin.type == CoinType.tendermint || coin.type == CoinType.tendermintToken
       ? txHash.toUpperCase()
       : txHash;
 
-  return coin.need0xPrefixForTxHash && !hash.startsWith('0x')
-      ? '$explorerUrl${explorerTxUrl}0x$hash'
-      : '$explorerUrl$explorerTxUrl$hash';
+  final normalizedHash = coin.need0xPrefixForTxHash && !hash.startsWith('0x')
+      ? '0x$hash'
+      : hash;
+
+  if (explorerTxUrl.isEmpty) {
+    return '$explorerUrl$normalizedHash';
+  }
+
+  return '$explorerUrl$explorerTxUrl$normalizedHash';
 }
 
 String getAddressExplorerUrl(Coin coin, String address) {
