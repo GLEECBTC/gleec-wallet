@@ -239,6 +239,10 @@ Future<List<DexFormError>> activateCoinIfNeeded(
 
   _activationInFlight.add(coin.abbr);
   try {
+    // Gate auto-activation until CoinsBloc completes initial activation
+    await coinsRepository.waitForInitialActivationToComplete(
+      timeout: const Duration(seconds: 30),
+    );
     // sdk handles parent activation logic, so simply call
     // activation here
     await coinsRepository.activateCoinsSync([coin]);

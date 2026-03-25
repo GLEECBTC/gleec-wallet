@@ -121,6 +121,10 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
 
       // Activate the asset via CoinsRepo to ensure broadcasts reach CoinsBloc
       final asset = event.selectedCoin.toAsset(_sdk);
+      // Gate until initial activation completes to avoid duplicate tasks
+      await _coinsRepo.waitForInitialActivationToComplete(
+        timeout: const Duration(seconds: 30),
+      );
       await _coinsRepo.activateAssetsSync([asset]);
       // TODO: increase the max delay in the SDK or make it adjustable
       AssetPubkeys? assetPubkeys = _sdk.pubkeys.lastKnown(asset.id);
