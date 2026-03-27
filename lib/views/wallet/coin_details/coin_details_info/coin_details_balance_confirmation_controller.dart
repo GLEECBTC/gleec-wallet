@@ -39,6 +39,7 @@ class CoinDetailsBalanceConfirmationController extends ChangeNotifier {
   Future<void> bootstrap() async {
     if (_isDisposed || _isConfirmed || _isBootstrapInFlight) return;
 
+    var didSucceed = false;
     _isBootstrapInFlight = true;
     _notifyListenersIfAlive();
 
@@ -47,6 +48,7 @@ class CoinDetailsBalanceConfirmationController extends ChangeNotifier {
       if (_isDisposed) return;
       _latestBalance = balance;
       _isConfirmed = true;
+      didSucceed = true;
     } catch (_) {
       // Best effort. Startup errors are handled with bounded retries.
     } finally {
@@ -55,6 +57,10 @@ class CoinDetailsBalanceConfirmationController extends ChangeNotifier {
       if (!_isDisposed) {
         _notifyListenersIfAlive();
       }
+    }
+
+    if (!didSucceed && !_isDisposed && !_isConfirmed) {
+      unawaited(_scheduleStartupRetry());
     }
   }
 
@@ -71,6 +77,10 @@ class CoinDetailsBalanceConfirmationController extends ChangeNotifier {
   }
 
   Future<void> onStartupStreamError() async {
+    await _scheduleStartupRetry();
+  }
+
+  Future<void> _scheduleStartupRetry() async {
     if (_isDisposed || _isConfirmed) return;
     if (_startupRetryAttempts >= maxStartupRetries) return;
 
