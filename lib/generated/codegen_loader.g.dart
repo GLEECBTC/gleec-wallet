@@ -521,6 +521,11 @@ abstract class LocaleKeys {
   static const withdrawPreview = 'withdrawPreview';
   static const withdrawPreviewZhtlcNote = 'withdrawPreviewZhtlcNote';
   static const withdrawPreviewError = 'withdrawPreviewError';
+  static const withdrawDestination = 'withdrawDestination';
+  static const withdrawNetworkDetails = 'withdrawNetworkDetails';
+  static const withdrawHighFee = 'withdrawHighFee';
+  static const withdrawPreviewExpiresIn = 'withdrawPreviewExpiresIn';
+  static const withdrawPreviewRefreshing = 'withdrawPreviewRefreshing';
   static const withdrawTronBandwidthUsed = 'withdrawTronBandwidthUsed';
   static const withdrawTronBandwidthFee = 'withdrawTronBandwidthFee';
   static const withdrawTronBandwidthSource = 'withdrawTronBandwidthSource';
@@ -540,6 +545,7 @@ abstract class LocaleKeys {
   static const withdrawTronPreviewRefreshFailed =
       'withdrawTronPreviewRefreshFailed';
   static const withdrawTronPreviewRegenerate = 'withdrawTronPreviewRegenerate';
+  static const withdrawAwaitingConfirmations = 'withdrawAwaitingConfirmations';
   static const txHistoryFetchError = 'txHistoryFetchError';
   static const txHistoryNoTransactions = 'txHistoryNoTransactions';
   static const maxGapLimitReached = 'maxGapLimitReached';
