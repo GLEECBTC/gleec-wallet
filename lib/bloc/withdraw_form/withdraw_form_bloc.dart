@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
@@ -157,8 +156,32 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormState requestState,
     WithdrawFormState currentState,
   ) {
-    return requestState.toWithdrawParameters() ==
-        currentState.toWithdrawParameters();
+    final requestParams = requestState.toWithdrawParameters();
+    final currentParams = currentState.toWithdrawParameters();
+    if (requestParams == currentParams) {
+      return true;
+    }
+
+    if (_isBackgroundFeePriorityDefault(requestState, currentState)) {
+      final requestWithDefaultFeePriority = requestState.copyWith(
+        selectedFeePriority: () => currentState.selectedFeePriority,
+      );
+      return requestWithDefaultFeePriority.toWithdrawParameters() ==
+          currentParams;
+    }
+
+    return false;
+  }
+
+  bool _isBackgroundFeePriorityDefault(
+    WithdrawFormState requestState,
+    WithdrawFormState currentState,
+  ) {
+    return !requestState.isCustomFee &&
+        !currentState.isCustomFee &&
+        requestState.selectedFeePriority == null &&
+        currentState.selectedFeePriority == WithdrawalFeeLevel.medium &&
+        currentState.feeOptions != null;
   }
 
   void _emitPreviewState(
@@ -211,54 +234,15 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     _startTronPreviewTimer(nextState);
   }
 
-  TextError _buildPreviewRefreshError(Object error) {
+  String _formatErrorMessage(Object error) {
+    final resolved = formatKdfUserFacingError(error);
+    return _normalizeCommonErrors(resolved);
+  }
+
+  TextError _buildTextError(Object error) {
     return TextError(
-      error:
-          '${LocaleKeys.withdrawTronPreviewRefreshFailed.tr()} ${_formatErrorMessage(error)}',
-      technicalDetails: _extractTechnicalDetails(error),
-    );
-  }
-
-  String _formatErrorMessage(Object error, {String? fallbackPrefix}) {
-    String resolvedMessage;
-
-    if (error is MmRpcException) {
-      resolvedMessage = error.localizedMessage;
-    } else if (error is GeneralErrorResponse) {
-      resolvedMessage = error.localizedMessage;
-    } else if (error is SdkError) {
-      final localized = error.messageKey.tr(args: error.messageArgs);
-      resolvedMessage = localized == error.messageKey
-          ? error.fallbackMessage
-          : localized;
-    } else {
-      resolvedMessage = error.toString();
-    }
-
-    final message = _normalizeCommonErrors(resolvedMessage);
-    return fallbackPrefix == null ? message : '$fallbackPrefix: $message';
-  }
-
-  String _extractTechnicalDetails(Object error) {
-    if (error is SdkError) {
-      return error.fallbackMessage;
-    }
-    if (error is MmRpcException) {
-      return error.message ?? error.toString();
-    }
-    if (error is GeneralErrorResponse) {
-      return error.error ?? error.toString();
-    }
-    if (error is WithdrawalException) {
-      return error.message;
-    }
-    return error.toString();
-  }
-
-  TextError _buildTextError(Object error, {String? fallbackPrefix}) {
-    return TextError(
-      error: _formatErrorMessage(error, fallbackPrefix: fallbackPrefix),
-      technicalDetails: _extractTechnicalDetails(error),
+      error: _formatErrorMessage(error),
+      technicalDetails: extractKdfTechnicalDetails(error),
     );
   }
 
@@ -339,7 +323,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     } catch (e) {
       emit(
         state.copyWith(
-          networkError: () => TextError(error: 'Failed to load addresses: $e'),
+          networkError: () => TextError(
+            error: _formatErrorMessage(e),
+            technicalDetails: extractKdfTechnicalDetails(e),
+          ),
         ),
       );
     }
@@ -472,8 +459,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       emit(
         state.copyWith(
           recipientAddress: event.address.trim(),
-          recipientAddressError: () =>
-              TextError(error: 'Address validation failed: $e'),
+          recipientAddressError: () => TextError(
+            error: _formatErrorMessage(e),
+            technicalDetails: extractKdfTechnicalDetails(e),
+          ),
           isMixedCaseAddress: false,
         ),
       );
@@ -853,8 +842,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
       emit(
         state.copyWith(
-          previewError: () =>
-              _buildTextError(e, fallbackPrefix: 'Failed to generate preview'),
+          previewError: () => _buildTextError(e),
           isSending: false,
           isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
@@ -964,7 +952,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isPreviewRefreshing: false,
           isPreviewExpired: true,
           previewSecondsRemaining: () => 0,
-          confirmStepError: () => _buildPreviewRefreshError(e),
+          confirmStepError: () => _buildTextError(e),
           isAwaitingTrezorConfirmation: false,
         ),
       );
@@ -1087,8 +1075,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
       emit(
         state.copyWith(
-          transactionError: () =>
-              _buildTextError(e, fallbackPrefix: 'Transaction failed'),
+          transactionError: () => _buildTextError(e),
           step: WithdrawFormStep.failed,
           isSending: false,
           isPreviewRefreshing: false,
@@ -1246,8 +1233,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     } catch (e) {
       emit(
         state.copyWith(
-          recipientAddressError: () =>
-              TextError(error: 'Failed to convert address: $e'),
+          recipientAddressError: () => TextError(
+            error: _formatErrorMessage(e),
+            technicalDetails: extractKdfTechnicalDetails(e),
+          ),
           isSending: false,
         ),
       );

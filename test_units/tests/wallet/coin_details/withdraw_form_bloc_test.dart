@@ -451,6 +451,64 @@ void testWithdrawFormBloc() {
     );
 
     test(
+      'preview completion survives fee priority defaulting during request',
+      () async {
+        final asset = _assetFromConfig(_utxoConfig());
+        final feeOptionsCompleter = Completer<WithdrawalFeeOptions?>();
+        final previewCompleter = Completer<WithdrawalPreview>();
+        final expectedFeeOptions = _utxoFeeOptions(asset.id.id);
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) => previewCompleter.future,
+          getFeeOptionsHandler: (_) => feeOptionsCompleter.future,
+        );
+        final bloc = WithdrawFormBloc(
+          asset: asset,
+          sdk: _FakeSdk(
+            addresses: _FakeAddressOperations(),
+            withdrawals: withdrawals,
+            pubkeys: _FakePubkeyManager({asset.id: _assetPubkeys(asset)}),
+            balances: _FakeBalanceManager({asset.id: _balance('5')}),
+          ),
+          mm2Api: _FakeMm2Api(),
+        );
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+
+        final sendingState = bloc.stream.firstWhere((state) => state.isSending);
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await sendingState;
+
+        feeOptionsCompleter.complete(expectedFeeOptions);
+        final feeDefaultedState = await bloc.stream.firstWhere(
+          (state) =>
+              state.isSending &&
+              state.selectedFeePriority == WithdrawalFeeLevel.medium,
+        );
+
+        previewCompleter.complete(
+          _utxoPreview(
+            assetId: asset.id.id,
+            txHash: 'preview-1',
+            toAddress: 'recipient-1',
+            timestamp: 1,
+          ),
+        );
+
+        final confirmState = await bloc.stream.firstWhere(
+          (state) =>
+              state.step == WithdrawFormStep.confirm &&
+              state.preview?.txHash == 'preview-1',
+        );
+
+        expect(withdrawals.previewRequests.single.feePriority, isNull);
+        expect(feeDefaultedState.feeOptions, expectedFeeOptions);
+        expect(confirmState.feeOptions, expectedFeeOptions);
+        expect(confirmState.selectedFeePriority, WithdrawalFeeLevel.medium);
+      },
+    );
+
+    test(
       'stale preview results are discarded after request inputs change',
       () async {
         final asset = _assetFromConfig(_utxoConfig());

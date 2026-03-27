@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
 import 'package:mutex/mutex.dart';
 import 'package:web_dex/mm2/mm2.dart';
+import 'package:web_dex/shared/utils/kdf_error_display.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/disable_coin/disable_coin_req.dart';
 
 import 'arrr_config.dart';
@@ -118,7 +119,7 @@ class ArrrActivationService {
           e,
           stackTrace,
         );
-        return ArrrActivationResultError('Failed to request configuration: $e');
+        return ArrrActivationResultError(formatKdfUserFacingError(e));
       }
 
       try {

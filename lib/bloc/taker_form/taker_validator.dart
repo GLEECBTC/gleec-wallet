@@ -16,6 +16,7 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/data_from_service.dart';
 import 'package:web_dex/model/dex_form_error.dart';
 import 'package:web_dex/model/text_error.dart';
+import 'package:web_dex/shared/utils/kdf_error_display.dart';
 import 'package:web_dex/model/trade_preimage.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -333,7 +334,10 @@ class TakerValidator {
         isError: true,
       );
       return DataFromService(
-        error: TextError(error: 'Failed to request trade preimage'),
+        error: TextError(
+          error: formatKdfUserFacingError(e),
+          technicalDetails: extractKdfTechnicalDetails(e),
+        ),
       );
     }
   }

@@ -14,6 +14,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/kdf_error_display.dart';
 
 part 'portfolio_growth_event.dart';
 part 'portfolio_growth_state.dart';
@@ -354,7 +355,10 @@ class PortfolioGrowthBloc
         );
         emit(
           GrowthChartLoadFailure(
-            error: TextError(error: 'Failed to load portfolio growth'),
+            error: TextError(
+              error: formatKdfUserFacingError(error),
+              technicalDetails: extractKdfTechnicalDetails(error),
+            ),
             selectedPeriod: event.selectedPeriod,
             totalCoins: totalCoins,
             coinsWithKnownBalance: coinsWithKnownBalance,

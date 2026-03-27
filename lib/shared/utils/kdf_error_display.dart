@@ -1,5 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
+// ignore: implementation_imports -- not exported from komodo_defi_sdk public API
+import 'package:komodo_defi_sdk/src/activation/activation_exceptions.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 
 /// Extension on [MmRpcException] providing localized user-friendly messages.
 ///
@@ -68,4 +72,62 @@ extension GeneralErrorLocalizedMessage on GeneralErrorResponse {
 
     return translated;
   }
+}
+
+/// Resolves [error] to a single user-facing string using the same mapping as
+/// [KdfErrorLocalizedMessage] / [GeneralErrorLocalizedMessage] where applicable,
+/// plus [SdkError] locale keys and a few common wrapper types.
+String formatKdfUserFacingError(Object error) {
+  if (error is MmRpcException) {
+    return error.localizedMessage;
+  }
+  if (error is GeneralErrorResponse) {
+    return error.localizedMessage;
+  }
+  if (error is SdkError) {
+    final localized = error.messageKey.tr(args: error.messageArgs);
+    return localized == error.messageKey ? error.fallbackMessage : localized;
+  }
+  if (error is WithdrawalException) {
+    return error.message;
+  }
+  if (error is ActivationFailedException) {
+    final original = error.originalError;
+    if (original != null) {
+      return formatKdfUserFacingError(original);
+    }
+    return error.message;
+  }
+
+  final raw = error.toString().trim();
+  if (raw.isEmpty) {
+    return LocaleKeys.somethingWrong.tr();
+  }
+
+  const exceptionPrefix = 'Exception: ';
+  if (raw.startsWith(exceptionPrefix)) {
+    final message = raw.substring(exceptionPrefix.length).trim();
+    if (message.isNotEmpty) {
+      return message;
+    }
+  }
+
+  return raw;
+}
+
+/// Technical detail string for expandable error UI (mirrors withdraw-form logic).
+String extractKdfTechnicalDetails(Object error) {
+  if (error is SdkError) {
+    return error.fallbackMessage;
+  }
+  if (error is MmRpcException) {
+    return error.message ?? error.toString();
+  }
+  if (error is GeneralErrorResponse) {
+    return error.error ?? error.toString();
+  }
+  if (error is WithdrawalException) {
+    return error.message;
+  }
+  return error.toString();
 }

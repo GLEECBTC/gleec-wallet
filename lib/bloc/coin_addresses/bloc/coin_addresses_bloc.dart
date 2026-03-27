@@ -228,37 +228,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       return LocaleKeys.connectionToServersFailing.tr(args: [assetId]);
     }
 
-    if (error is SdkError) {
-      return _localizedSdkError(error);
-    }
-
-    if (error is MmRpcException) {
-      return error.localizedMessage;
-    }
-
-    if (error is GeneralErrorResponse) {
-      return error.localizedMessage;
-    }
-
-    final raw = error.toString().trim();
-    if (raw.isEmpty) {
-      return LocaleKeys.somethingWrong.tr();
-    }
-
-    const exceptionPrefix = 'Exception: ';
-    if (raw.startsWith(exceptionPrefix)) {
-      final message = raw.substring(exceptionPrefix.length).trim();
-      if (message.isNotEmpty) {
-        return message;
-      }
-    }
-
-    return raw;
-  }
-
-  String _localizedSdkError(SdkError error) {
-    final localized = error.messageKey.tr(args: error.messageArgs);
-    return localized == error.messageKey ? error.fallbackMessage : localized;
+    return formatKdfUserFacingError(error);
   }
 
   bool _isNetworkLikeError(Object error) {

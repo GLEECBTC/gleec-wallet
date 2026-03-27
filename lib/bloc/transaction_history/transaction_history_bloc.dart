@@ -1,17 +1,15 @@
 import 'dart:async';
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:komodo_defi_sdk/src/activation/activation_exceptions.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_event.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_state.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
+import 'package:web_dex/shared/utils/kdf_error_display.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class TransactionHistoryBloc
@@ -28,26 +26,7 @@ class TransactionHistoryBloc
   final KomodoDefiSdk _sdk;
   StreamSubscription<List<Transaction>>? _historySubscription;
 
-  String _errorMessageFrom(Object error) {
-    if (error is SdkError) {
-      final localized = error.messageKey.tr(args: error.messageArgs);
-      return localized == error.messageKey ? error.fallbackMessage : localized;
-    }
-
-    if (error is ActivationFailedException && error.originalError is SdkError) {
-      final sdkError = error.originalError as SdkError;
-      final localized = sdkError.messageKey.tr(args: sdkError.messageArgs);
-      return localized == sdkError.messageKey
-          ? sdkError.fallbackMessage
-          : localized;
-    }
-
-    if (error is ActivationFailedException) {
-      return 'Asset activation failed: ${error.message}';
-    }
-
-    return LocaleKeys.somethingWrong.tr();
-  }
+  String _errorMessageFrom(Object error) => formatKdfUserFacingError(error);
 
   @override
   Future<void> close() async {
