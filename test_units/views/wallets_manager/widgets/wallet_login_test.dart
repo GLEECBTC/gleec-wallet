@@ -32,12 +32,17 @@ void main() {
             ),
           ),
         );
+        await tester.pump();
+        // Avoid focused-field clipboard paste heuristic so the test does not depend
+        // on platform clipboard async behavior.
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pump();
 
         // Simulate password manager input (multi-character change)
         controller.text = 'mypassword123';
 
-        // Wait for the auto-submit timer to trigger
         await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump();
 
         expect(submitCalled, true);
       },

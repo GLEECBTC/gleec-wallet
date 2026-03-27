@@ -36,16 +36,17 @@ void testRatToFracAndViseVersa() {
   });
 
   test('fract2rat handles very large integers without precision loss', () {
-    // 10^50 / 10^20 = 10^30
+    // 10^50 / 10^20 = 10^30; Rational normalizes to lowest terms.
     final numer = '100000000000000000000000000000000000000000000000000';
     final denom = '100000000000000000000';
     final rat = fract2rat({'numer': numer, 'denom': denom}, false)!;
-    expect(rat.numerator, BigInt.parse(numer));
-    expect(rat.denominator, BigInt.parse(denom));
-    // Ensure round-trip
+    final expectedValue = Rational(BigInt.parse(numer), BigInt.parse(denom));
+    expect(rat, expectedValue);
+    expect(rat.numerator, BigInt.parse('1000000000000000000000000000000'));
+    expect(rat.denominator, BigInt.one);
     final back = rat2fract(rat, false)!;
-    expect(back['numer'], numer);
-    expect(back['denom'], denom);
+    expect(back['numer'], '1000000000000000000000000000000');
+    expect(back['denom'], '1');
   });
 
   test('fract2rat correctly parses strings that would overflow double', () {

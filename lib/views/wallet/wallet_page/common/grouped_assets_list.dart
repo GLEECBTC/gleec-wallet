@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/views/wallet/wallet_page/common/asset_ticker_group_sort.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/grouped_asset_ticker_item.dart';
 
 /// A widget that displays a list of assets grouped by their ticker symbols.
@@ -67,12 +68,7 @@ class GroupedAssetsList extends StatelessWidget {
     }
 
     for (final entry in groupedAssets.entries) {
-      entry.value.sort((a, b) {
-        final bool aIsParent = a.parentId == null;
-        final bool bIsParent = b.parentId == null;
-        if (aIsParent != bIsParent) return aIsParent ? -1 : 1;
-        return a.id.compareTo(b.id);
-      });
+      sortAssetIdsWithinTickerGroup(entry.value);
     }
 
     return groupedAssets;

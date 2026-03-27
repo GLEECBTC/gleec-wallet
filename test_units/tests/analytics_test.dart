@@ -12,27 +12,25 @@ void main() {
 
     test('AnalyticsRepository implements AnalyticsRepo', () {
       final repo = AnalyticsRepository(testSettings);
+      addTearDown(() async => repo.dispose());
       expect(repo, isA<AnalyticsRepo>());
     });
 
     test('AnalyticsRepository has correct initialization state', () {
       final repo = AnalyticsRepository(testSettings);
+      addTearDown(() async => repo.dispose());
 
       // Initially should not be initialized (async initialization)
       expect(repo.isInitialized, false);
       expect(repo.isEnabled, false);
     });
 
-    testWidgets('AnalyticsRepository can send test event', (
-      WidgetTester tester,
-    ) async {
+    test('AnalyticsRepository can send test event', () async {
       final repo = AnalyticsRepository(testSettings);
+      addTearDown(() async => repo.dispose());
 
-      // Create a test event
       final testEvent = TestAnalyticsEvent();
-
-      // This should not throw an exception
-      expect(() => repo.queueEvent(testEvent), returnsNormally);
+      await repo.queueEvent(testEvent);
     });
   });
 }

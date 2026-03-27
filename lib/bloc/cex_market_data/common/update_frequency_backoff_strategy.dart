@@ -9,7 +9,7 @@ class UpdateFrequencyBackoffStrategy {
     this.maxInterval = const Duration(hours: 1),
   });
 
-  /// The base interval for the first attempts (default: 2 minutes)
+  /// The base interval for the first attempts (default: 1 minute)
   final Duration baseInterval;
   
   /// The maximum interval to backoff to (default: 1 hour)

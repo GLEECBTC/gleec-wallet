@@ -1,16 +1,69 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
     show AssetChainId, AssetId, CoinSubClass;
 import 'package:komodo_defi_types/src/assets/asset_symbol.dart';
 import 'package:rational/rational.dart';
+import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
+import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/best_orders/best_orders.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/cex_price.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/coin_type.dart';
 import 'package:web_dex/views/dex/simple/form/tables/table_utils.dart';
+
+class _TableTestCoinsRepo implements CoinsRepo {
+  _TableTestCoinsRepo(this._byAbbr);
+
+  final Map<String, Coin> _byAbbr;
+
+  @override
+  Coin? getCoin(String abbr) => _byAbbr[abbr];
+
+  @override
+  double? getUsdPriceForAmount(num amount, String coinAbbr) => 0;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _UnrestrictedTradingStatusBloc implements TradingStatusBloc {
+  @override
+  TradingStatusState get state => TradingStatusLoadSuccess();
+
+  @override
+  Stream<TradingStatusState> get stream =>
+      Stream<TradingStatusState>.value(state).asBroadcastStream();
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  void add(TradingStatusEvent event) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+Widget _wrapForTableUtilsTest({
+  required Map<String, Coin> coinsForRepo,
+  required Widget child,
+}) {
+  return MultiRepositoryProvider(
+    providers: [
+      RepositoryProvider<CoinsRepo>.value(
+        value: _TableTestCoinsRepo(coinsForRepo),
+      ),
+    ],
+    child: BlocProvider<TradingStatusBloc>.value(
+      value: _UnrestrictedTradingStatusBloc(),
+      child: child,
+    ),
+  );
+}
 
 Coin _buildCoin(
   String abbr, {
@@ -75,7 +128,7 @@ void main() {
       final btc = _buildCoin('BTC', usdPrice: 30_000);
       final kmd = _buildCoin('KMD', usdPrice: 1);
       final coins = {'BTC': btc, 'KMD': kmd};
-      final coinLookup = (String abbr) => coins[abbr];
+      Coin? coinLookup(String abbr) => coins[abbr];
 
       final orders = <String, List<BestOrder>>{
         'BTC-KMD': [_buildOrder('BTC', 1)],
@@ -91,15 +144,18 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Builder(
-            builder: (context) {
-              caches = buildOrderCoinCaches(
-                context,
-                orders,
-                coinLookup: coinLookup,
-              );
-              return const SizedBox.shrink();
-            },
+          home: _wrapForTableUtilsTest(
+            coinsForRepo: coins,
+            child: Builder(
+              builder: (context) {
+                caches = buildOrderCoinCaches(
+                  context,
+                  orders,
+                  coinLookup: coinLookup,
+                );
+                return const SizedBox.shrink();
+              },
+            ),
           ),
         ),
       );
@@ -119,7 +175,7 @@ void main() {
       final kmd = _buildCoin('KMD', usdPrice: 1, walletOnly: true);
       final tbtc = _buildCoin('TBTC', usdPrice: 25_000, isTestCoin: true);
       final coins = {'BTC': btc, 'KMD': kmd, 'TBTC': tbtc};
-      final coinLookup = (String abbr) => coins[abbr];
+      Coin? coinLookup(String abbr) => coins[abbr];
 
       final orders = <String, List<BestOrder>>{
         'BTC-KMD': [_buildOrder('BTC', 1)],
@@ -131,18 +187,21 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Builder(
-            builder: (context) {
-              sorted = prepareOrdersForTable(
-                context,
-                orders,
-                null,
-                AuthorizeMode.noLogin,
-                testCoinsEnabled: false,
-                coinLookup: coinLookup,
-              );
-              return const SizedBox.shrink();
-            },
+          home: _wrapForTableUtilsTest(
+            coinsForRepo: coins,
+            child: Builder(
+              builder: (context) {
+                sorted = prepareOrdersForTable(
+                  context,
+                  orders,
+                  null,
+                  AuthorizeMode.noLogin,
+                  testCoinsEnabled: false,
+                  coinLookup: coinLookup,
+                );
+                return const SizedBox.shrink();
+              },
+            ),
           ),
         ),
       );
@@ -204,17 +263,20 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Builder(
-            builder: (context) {
-              prepareOrdersForTable(
-                context,
-                orders,
-                null,
-                AuthorizeMode.noLogin,
-                coinLookup: optimisedLookup,
-              );
-              return const SizedBox.shrink();
-            },
+          home: _wrapForTableUtilsTest(
+            coinsForRepo: coins,
+            child: Builder(
+              builder: (context) {
+                prepareOrdersForTable(
+                  context,
+                  orders,
+                  null,
+                  AuthorizeMode.noLogin,
+                  coinLookup: optimisedLookup,
+                );
+                return const SizedBox.shrink();
+              },
+            ),
           ),
         ),
       );

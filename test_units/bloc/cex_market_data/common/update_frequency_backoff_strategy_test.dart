@@ -14,39 +14,39 @@ void main() {
     });
 
     test('should return base interval for first two attempts', () {
-      expect(strategy.getCurrentInterval(), const Duration(minutes: 2));
-      expect(strategy.getNextInterval(), const Duration(minutes: 2));
+      expect(strategy.getCurrentInterval(), const Duration(minutes: 1));
+      expect(strategy.getNextInterval(), const Duration(minutes: 1));
       expect(strategy.attemptCount, 1);
-      
-      expect(strategy.getCurrentInterval(), const Duration(minutes: 2));
-      expect(strategy.getNextInterval(), const Duration(minutes: 2));
+
+      expect(strategy.getCurrentInterval(), const Duration(minutes: 1));
+      expect(strategy.getNextInterval(), const Duration(minutes: 1));
       expect(strategy.attemptCount, 2);
     });
 
     test('should double interval for next pair of attempts', () {
       // Skip first two attempts
-      strategy.getNextInterval(); // 2 min
-      strategy.getNextInterval(); // 2 min
-      
-      expect(strategy.getCurrentInterval(), const Duration(minutes: 4));
-      expect(strategy.getNextInterval(), const Duration(minutes: 4));
+      strategy.getNextInterval(); // 1 min
+      strategy.getNextInterval(); // 1 min
+
+      expect(strategy.getCurrentInterval(), const Duration(minutes: 2));
+      expect(strategy.getNextInterval(), const Duration(minutes: 2));
       expect(strategy.attemptCount, 3);
-      
-      expect(strategy.getCurrentInterval(), const Duration(minutes: 4));
-      expect(strategy.getNextInterval(), const Duration(minutes: 4));
+
+      expect(strategy.getCurrentInterval(), const Duration(minutes: 2));
+      expect(strategy.getNextInterval(), const Duration(minutes: 2));
       expect(strategy.attemptCount, 4);
     });
 
-    test('should follow exponential backoff pattern: 2,2,4,4,8,8,16,16', () {
+    test('should follow exponential backoff pattern: 1,1,2,2,4,4,8,8', () {
       final expectedIntervals = [
-        const Duration(minutes: 2), // attempt 0
-        const Duration(minutes: 2), // attempt 1
-        const Duration(minutes: 4), // attempt 2
-        const Duration(minutes: 4), // attempt 3
-        const Duration(minutes: 8), // attempt 4
-        const Duration(minutes: 8), // attempt 5
-        const Duration(minutes: 16), // attempt 6
-        const Duration(minutes: 16), // attempt 7
+        const Duration(minutes: 1), // attempt 0
+        const Duration(minutes: 1), // attempt 1
+        const Duration(minutes: 2), // attempt 2
+        const Duration(minutes: 2), // attempt 3
+        const Duration(minutes: 4), // attempt 4
+        const Duration(minutes: 4), // attempt 5
+        const Duration(minutes: 8), // attempt 6
+        const Duration(minutes: 8), // attempt 7
       ];
 
       for (int i = 0; i < expectedIntervals.length; i++) {
@@ -78,15 +78,15 @@ void main() {
       strategy.getNextInterval();
       strategy.getNextInterval();
       strategy.getNextInterval();
-      
+
       expect(strategy.attemptCount, 3);
-      expect(strategy.getCurrentInterval(), const Duration(minutes: 4));
-      
+      expect(strategy.getCurrentInterval(), const Duration(minutes: 2));
+
       // Reset
       strategy.reset();
-      
+
       expect(strategy.attemptCount, 0);
-      expect(strategy.getCurrentInterval(), const Duration(minutes: 2));
+      expect(strategy.getCurrentInterval(), const Duration(minutes: 1));
     });
 
     test('should always return true for shouldUpdateCache', () {
@@ -100,40 +100,40 @@ void main() {
     test('should preview next intervals without changing state', () {
       // Start at attempt count 0
       expect(strategy.attemptCount, 0);
-      
+
       final preview = strategy.previewNextIntervals(6);
-      
+
       // State should be unchanged
       expect(strategy.attemptCount, 0);
-      
+
       // Preview should show correct intervals
       expect(preview, [
-        const Duration(minutes: 2), // attempt 0
-        const Duration(minutes: 2), // attempt 1
-        const Duration(minutes: 4), // attempt 2
-        const Duration(minutes: 4), // attempt 3
-        const Duration(minutes: 8), // attempt 4
-        const Duration(minutes: 8), // attempt 5
+        const Duration(minutes: 1), // attempt 0
+        const Duration(minutes: 1), // attempt 1
+        const Duration(minutes: 2), // attempt 2
+        const Duration(minutes: 2), // attempt 3
+        const Duration(minutes: 4), // attempt 4
+        const Duration(minutes: 4), // attempt 5
       ]);
     });
 
     test('should preview intervals from current position', () {
       // Advance to attempt 2
-      strategy.getNextInterval(); // 2 min
-      strategy.getNextInterval(); // 2 min
-      
+      strategy.getNextInterval(); // 1 min
+      strategy.getNextInterval(); // 1 min
+
       expect(strategy.attemptCount, 2);
-      
+
       final preview = strategy.previewNextIntervals(4);
-      
+
       // Should show intervals starting from attempt 2
       expect(preview, [
-        const Duration(minutes: 4), // attempt 2
-        const Duration(minutes: 4), // attempt 3
-        const Duration(minutes: 8), // attempt 4
-        const Duration(minutes: 8), // attempt 5
+        const Duration(minutes: 2), // attempt 2
+        const Duration(minutes: 2), // attempt 3
+        const Duration(minutes: 4), // attempt 4
+        const Duration(minutes: 4), // attempt 5
       ]);
-      
+
       // State should be unchanged
       expect(strategy.attemptCount, 2);
     });
