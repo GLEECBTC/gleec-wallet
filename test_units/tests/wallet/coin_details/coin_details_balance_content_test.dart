@@ -37,7 +37,7 @@ Widget _buildTestWidget({
   );
 }
 
-void main() {
+void testCoinDetailsBalanceContent() {
   group('CoinDetailsBalanceContent', () {
     testWidgets(
       'desktop ghost state suppresses fiat balance until confirmation',
@@ -60,4 +60,8 @@ void main() {
       },
     );
   });
+}
+
+void main() {
+  testCoinDetailsBalanceContent();
 }

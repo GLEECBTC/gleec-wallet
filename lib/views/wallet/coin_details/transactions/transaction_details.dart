@@ -18,12 +18,16 @@ class TransactionDetails extends StatelessWidget {
     required this.transaction,
     required this.onClose,
     required this.coin,
+    this.usdPriceResolver,
+    this.onLaunchExplorer,
     super.key,
   });
 
   final Transaction transaction;
   final void Function() onClose;
   final Coin coin;
+  final double? Function(num amount, String coinAbbr)? usdPriceResolver;
+  final void Function(String url)? onLaunchExplorer;
 
   @override
   Widget build(BuildContext context) {
@@ -162,11 +166,15 @@ class TransactionDetails extends StatelessWidget {
   Widget _buildBalanceChanges(BuildContext context) {
     final String formatted = formatDexAmt(transaction.amount.toDouble().abs());
     final String sign = transaction.amount.toDouble() > 0 ? '+' : '-';
-    final coinsBloc = RepositoryProvider.of<CoinsRepo>(context);
-    final double? usd = coinsBloc.getUsdPriceForAmount(
-      transaction.amount.toDouble().abs(),
-      transaction.assetId.id,
-    );
+    final double? usd =
+        usdPriceResolver?.call(
+          transaction.amount.toDouble().abs(),
+          transaction.assetId.id,
+        ) ??
+        RepositoryProvider.of<CoinsRepo>(context).getUsdPriceForAmount(
+          transaction.amount.toDouble().abs(),
+          transaction.assetId.id,
+        );
     final String formattedUsd = formatAmt(usd ?? 0);
     final String value =
         '$sign $formatted ${Coin.normalizeAbbr(transaction.assetId.id)} (\$$formattedUsd)';
@@ -197,7 +205,12 @@ class TransactionDetails extends StatelessWidget {
             color: theme.custom.defaultGradientButtonTextColor,
           ),
           onPressed: () {
-            launchURLString(getTxExplorerUrl(coin, transaction.txHash ?? ''));
+            final url = getTxExplorerUrl(coin, transaction.txHash ?? '');
+            if (onLaunchExplorer != null) {
+              onLaunchExplorer!(url);
+              return;
+            }
+            launchURLString(url);
           },
           text: LocaleKeys.viewOnExplorer.tr(),
         ),
@@ -218,7 +231,6 @@ class TransactionDetails extends StatelessWidget {
   }
 
   Widget _buildFee(BuildContext context) {
-    final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
     final String title = LocaleKeys.fees.tr();
 
     final String value;
@@ -233,10 +245,11 @@ class TransactionDetails extends StatelessWidget {
     } else {
       final fee = transaction.fee!;
       final String feeAmount = formatDexAmt(fee.totalFee.toDouble());
-      final double? usd = coinsRepository.getUsdPriceForAmount(
-        fee.totalFee.toDouble(),
-        _feeCoin,
-      );
+      final double? usd =
+          usdPriceResolver?.call(fee.totalFee.toDouble(), _feeCoin) ??
+          RepositoryProvider.of<CoinsRepo>(
+            context,
+          ).getUsdPriceForAmount(fee.totalFee.toDouble(), _feeCoin);
       final String formattedUsd = formatAmt(usd ?? 0);
       value = '- ${Coin.normalizeAbbr(_feeCoin)} $feeAmount (\$$formattedUsd)';
       valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(

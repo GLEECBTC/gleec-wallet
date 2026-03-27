@@ -57,7 +57,7 @@ Widget _buildTestWidget(WithdrawFormBloc bloc) {
   );
 }
 
-void main() {
+void testWithdrawFormFillSection() {
   group('WithdrawFormFillSection', () {
     testWidgets('locks editable controls while preview is sending', (
       tester,
@@ -107,4 +107,8 @@ void main() {
       expect(lockWidget.ignoring, isFalse);
     });
   });
+}
+
+void main() {
+  testWithdrawFormFillSection();
 }

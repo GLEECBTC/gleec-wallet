@@ -8,7 +8,7 @@ BalanceInfo _balance(int amount) {
   return BalanceInfo(total: value, spendable: value, unspendable: Decimal.zero);
 }
 
-void main() {
+void testCoinDetailsBalanceConfirmationController() {
   group('CoinDetailsBalanceConfirmationController', () {
     test(
       'keeps cached startup balance unconfirmed until bootstrap succeeds',
@@ -108,4 +108,8 @@ void main() {
       expect(controller.latestBalance, isNull);
     });
   });
+}
+
+void main() {
+  testCoinDetailsBalanceConfirmationController();
 }

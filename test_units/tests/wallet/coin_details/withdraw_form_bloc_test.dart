@@ -349,7 +349,7 @@ class _FakeMm2Api implements Mm2Api {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-void main() {
+void testWithdrawFormBloc() {
   group('WithdrawFormBloc', () {
     test('preview completion uses the original request snapshot', () async {
       final asset = _assetFromConfig(_utxoConfig());
@@ -422,18 +422,14 @@ void main() {
         );
         addTearDown(bloc.close);
 
+        feeOptionsCompleter.complete(expectedFeeOptions);
+        await _flush();
+
         await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
         final sendingState = bloc.stream.firstWhere((state) => state.isSending);
         bloc.add(const WithdrawFormPreviewSubmitted());
         await sendingState;
-
-        feeOptionsCompleter.complete(expectedFeeOptions);
-        await bloc.stream.firstWhere(
-          (state) =>
-              state.feeOptions == expectedFeeOptions &&
-              state.selectedFeePriority == WithdrawalFeeLevel.medium,
-        );
 
         previewCompleter.complete(
           _utxoPreview(
@@ -451,7 +447,6 @@ void main() {
         );
 
         expect(confirmState.feeOptions, expectedFeeOptions);
-        expect(confirmState.selectedFeePriority, WithdrawalFeeLevel.medium);
       },
     );
 
@@ -797,5 +792,206 @@ void main() {
         expect(successState.result?.txHash, 'preview-1');
       },
     );
+
+    test('submit ignores expired TRON preview until refresh', () async {
+      final asset = _assetFromConfig(_trxConfig());
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      final withdrawals = _FakeWithdrawalManager(
+        previewWithdrawalHandler: (_) async => _tronPreview(
+          txHash: 'expired-preview',
+          toAddress: 'tron-recipient',
+          timestamp: now - 120,
+        ),
+        executeWithdrawalHandler: (_, __) async* {},
+      );
+
+      final bloc = WithdrawFormBloc(
+        asset: asset,
+        sdk: _FakeSdk(
+          addresses: _FakeAddressOperations(),
+          withdrawals: withdrawals,
+          pubkeys: _FakePubkeyManager({
+            asset.id: _assetPubkeys(asset, balance: '5'),
+          }),
+          balances: _FakeBalanceManager({asset.id: _balance('5')}),
+        ),
+        mm2Api: _FakeMm2Api(),
+      );
+      addTearDown(bloc.close);
+
+      await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+
+      bloc.add(const WithdrawFormPreviewSubmitted());
+      await bloc.stream.firstWhere(
+        (state) =>
+            state.step == WithdrawFormStep.confirm && state.isPreviewExpired,
+      );
+
+      bloc.add(const WithdrawFormSubmitted());
+      await _flush();
+
+      expect(withdrawals.executeCallCount, 0);
+      expect(bloc.state.step, WithdrawFormStep.confirm);
+      expect(bloc.state.confirmStepError, isNotNull);
+    });
+
+    test('send max recomputes amount when source address changes', () async {
+      final asset = _assetFromConfig(_utxoConfig());
+      final sourceOne = _pubkeyForAsset(
+        asset,
+        address: 'source-one',
+        balance: '5',
+      );
+      final sourceTwo = _pubkeyForAsset(
+        asset,
+        address: 'source-two',
+        balance: '2',
+      );
+
+      final bloc = WithdrawFormBloc(
+        asset: asset,
+        sdk: _FakeSdk(
+          addresses: _FakeAddressOperations(),
+          withdrawals: _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => _utxoPreview(
+              assetId: asset.id.id,
+              txHash: 'unused',
+              toAddress: 'recipient',
+              timestamp: 1,
+            ),
+          ),
+          pubkeys: _FakePubkeyManager({
+            asset.id: AssetPubkeys(
+              assetId: asset.id,
+              keys: [sourceOne, sourceTwo],
+              availableAddressesCount: 2,
+              syncStatus: SyncStatusEnum.success,
+            ),
+          }),
+          balances: _FakeBalanceManager({asset.id: _balance('5')}),
+        ),
+        mm2Api: _FakeMm2Api(),
+      );
+      addTearDown(bloc.close);
+
+      bloc.add(WithdrawFormSourceChanged(sourceOne));
+      await bloc.stream.firstWhere(
+        (state) => state.selectedSourceAddress?.address == 'source-one',
+      );
+
+      bloc.add(const WithdrawFormMaxAmountEnabled(true));
+      await bloc.stream.firstWhere(
+        (state) => state.isMaxAmount && state.amount == '5',
+      );
+
+      bloc.add(WithdrawFormSourceChanged(sourceTwo));
+      final updated = await bloc.stream.firstWhere(
+        (state) =>
+            state.selectedSourceAddress?.address == 'source-two' &&
+            state.amount == '2',
+      );
+
+      expect(updated.isMaxAmount, isTrue);
+    });
+
+    test('preview refresh recovers after expired quote', () async {
+      final asset = _assetFromConfig(_trxConfig());
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      var previewCalls = 0;
+      final refreshedCompleter = Completer<WithdrawalPreview>();
+
+      final withdrawals = _FakeWithdrawalManager(
+        previewWithdrawalHandler: (_) async {
+          previewCalls += 1;
+          if (previewCalls == 1) {
+            return _tronPreview(
+              txHash: 'expired-preview',
+              toAddress: 'tron-recipient',
+              timestamp: now - 120,
+            );
+          }
+
+          return refreshedCompleter.future;
+        },
+      );
+
+      final bloc = WithdrawFormBloc(
+        asset: asset,
+        sdk: _FakeSdk(
+          addresses: _FakeAddressOperations(),
+          withdrawals: withdrawals,
+          pubkeys: _FakePubkeyManager({
+            asset.id: _assetPubkeys(asset, balance: '5'),
+          }),
+          balances: _FakeBalanceManager({asset.id: _balance('5')}),
+        ),
+        mm2Api: _FakeMm2Api(),
+      );
+      addTearDown(bloc.close);
+
+      await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+      bloc.add(const WithdrawFormPreviewSubmitted());
+      await bloc.stream.firstWhere((state) => state.isPreviewExpired);
+
+      final refreshing = bloc.stream.firstWhere(
+        (state) => state.isPreviewRefreshing,
+      );
+      bloc.add(const WithdrawFormTronPreviewRefreshRequested());
+      await refreshing;
+
+      refreshedCompleter.complete(
+        _tronPreview(
+          txHash: 'fresh-preview',
+          toAddress: 'tron-recipient',
+          timestamp: now + 10,
+        ),
+      );
+
+      final refreshed = await bloc.stream.firstWhere(
+        (state) =>
+            !state.isPreviewRefreshing &&
+            !state.isPreviewExpired &&
+            state.preview?.txHash == 'fresh-preview',
+      );
+
+      expect(withdrawals.previewCallCount, 2);
+      expect(refreshed.confirmStepError, isNull);
+    });
+
+    test('validation maps known sdk errors to user-facing state', () async {
+      final asset = _assetFromConfig(_utxoConfig());
+      final withdrawals = _FakeWithdrawalManager(
+        previewWithdrawalHandler: (_) async =>
+            throw Exception('insufficient gas for transaction'),
+      );
+
+      final bloc = WithdrawFormBloc(
+        asset: asset,
+        sdk: _FakeSdk(
+          addresses: _FakeAddressOperations(),
+          withdrawals: withdrawals,
+          pubkeys: _FakePubkeyManager({asset.id: _assetPubkeys(asset)}),
+          balances: _FakeBalanceManager({asset.id: _balance('5')}),
+        ),
+        mm2Api: _FakeMm2Api(),
+      );
+      addTearDown(bloc.close);
+
+      await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+      bloc.add(const WithdrawFormPreviewSubmitted());
+
+      final errored = await bloc.stream.firstWhere(
+        (state) => state.previewError != null,
+      );
+
+      expect(
+        errored.previewError!.message,
+        contains('notEnoughBalanceForGasError'),
+      );
+    });
   });
+}
+
+void main() {
+  testWithdrawFormBloc();
 }

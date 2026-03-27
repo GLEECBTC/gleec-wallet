@@ -1,4 +1,4 @@
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'tests/encryption/encrypt_data_test.dart';
 import 'tests/formatter/compare_dex_to_cex_tests.dart';
@@ -29,6 +29,15 @@ import 'tests/system_health/system_clock_repository_test.dart';
 import 'tests/system_health/time_provider_registry_test.dart';
 import 'tests/balance_utils/compute_wallet_total_usd_test.dart';
 import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
+import 'tests/wallet/coin_details/coin_details_balance_confirmation_controller_test.dart';
+import 'tests/wallet/coin_details/coin_details_balance_content_test.dart';
+import 'tests/wallet/coin_details/kmd_rewards_logic_test.dart';
+import 'tests/wallet/coin_details/receive_address_faucet_widget_test.dart';
+import 'tests/wallet/coin_details/rewards_widget_test.dart';
+import 'tests/wallet/coin_details/transaction_details_logic_test.dart';
+import 'tests/wallet/coin_details/transaction_views_widget_test.dart';
+import 'tests/wallet/coin_details/withdraw_form_bloc_test.dart';
+import 'tests/wallet/coin_details/withdraw_form_fill_section_test.dart';
 import 'tests/utils/convert_double_to_string_test.dart';
 import 'tests/utils/convert_fract_rat_test.dart';
 import 'tests/utils/double_to_string_test.dart';
@@ -104,5 +113,17 @@ void main() {
     testHttpTimeProvider();
     testNtpTimeProvider();
     testTimeProviderRegistry();
+  });
+
+  group('CoinDetails:', () {
+    testWithdrawFormBloc();
+    testCoinDetailsBalanceConfirmationController();
+    testCoinDetailsBalanceContent();
+    testWithdrawFormFillSection();
+    testTransactionDetailsLogic();
+    testKmdRewardsLogic();
+    testRewardsWidgets();
+    testTransactionViewsWidgets();
+    testReceiveAddressFaucetWidgets();
   });
 }
