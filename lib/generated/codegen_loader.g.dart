@@ -527,6 +527,8 @@ abstract class LocaleKeys {
   static const withdrawTronEnergyUsed = 'withdrawTronEnergyUsed';
   static const withdrawTronEnergyFee = 'withdrawTronEnergyFee';
   static const withdrawTronEnergySource = 'withdrawTronEnergySource';
+  static const withdrawTronAccountActivationFee =
+      'withdrawTronAccountActivationFee';
   static const withdrawTronFeeSummary = 'withdrawTronFeeSummary';
   static const withdrawTronFeePaidIn = 'withdrawTronFeePaidIn';
   static const withdrawTronBandwidthCovered = 'withdrawTronBandwidthCovered';
@@ -534,6 +536,10 @@ abstract class LocaleKeys {
   static const withdrawTronResourceNotUsed = 'withdrawTronResourceNotUsed';
   static const withdrawTronFeeSummaryCharged = 'withdrawTronFeeSummaryCharged';
   static const withdrawTronFeeSummaryCovered = 'withdrawTronFeeSummaryCovered';
+  static const withdrawTronPreviewExpired = 'withdrawTronPreviewExpired';
+  static const withdrawTronPreviewRefreshFailed =
+      'withdrawTronPreviewRefreshFailed';
+  static const withdrawTronPreviewRegenerate = 'withdrawTronPreviewRegenerate';
   static const txHistoryFetchError = 'txHistoryFetchError';
   static const txHistoryNoTransactions = 'txHistoryNoTransactions';
   static const maxGapLimitReached = 'maxGapLimitReached';
@@ -663,6 +669,13 @@ abstract class LocaleKeys {
   static const accessHiddenWallet = 'accessHiddenWallet';
   static const passphraseIsEmpty = 'passphraseIsEmpty';
   static const selectWalletType = 'selectWalletType';
+  static const walletImportTypeHdLabel = 'walletImportTypeHdLabel';
+  static const walletImportTypeHdDescription = 'walletImportTypeHdDescription';
+  static const walletImportTypeLegacyLabel = 'walletImportTypeLegacyLabel';
+  static const walletImportTypeLegacyDescription =
+      'walletImportTypeLegacyDescription';
+  static const walletImportTypeHdDisabledHint =
+      'walletImportTypeHdDisabledHint';
   static const trezorNoAddresses = 'trezorNoAddresses';
   static const trezorImportFailed = 'trezorImportFailed';
   static const faucetFailureTitle = 'faucetFailureTitle';
@@ -775,7 +788,18 @@ abstract class LocaleKeys {
   static const expertMode = 'expertMode';
   static const testCoins = 'testCoins';
   static const enableTradingBot = 'enableTradingBot';
+  static const saveOrders = 'saveOrders';
+  static const saveOrdersRestartHint = 'saveOrdersRestartHint';
+  static const exportMakerOrders = 'exportMakerOrders';
+  static const importMakerOrders = 'importMakerOrders';
+  static const noMakerOrdersToExport = 'noMakerOrdersToExport';
+  static const makerOrdersExportSuccess = 'makerOrdersExportSuccess';
+  static const makerOrdersExportFailed = 'makerOrdersExportFailed';
+  static const makerOrdersImportSuccess = 'makerOrdersImportSuccess';
+  static const makerOrdersImportFailed = 'makerOrdersImportFailed';
   static const enableTestCoins = 'enableTestCoins';
+  static const diagnosticLogging = 'diagnosticLogging';
+  static const enableDiagnosticLogging = 'enableDiagnosticLogging';
   static const makeMarket = 'makeMarket';
   static const custom = 'custom';
   static const edit = 'edit';
@@ -888,4 +912,126 @@ abstract class LocaleKeys {
   static const zhtlcAdvancedConfigurationHint =
       'zhtlcAdvancedConfigurationHint';
   static const zhtlcConfigButton = 'zhtlcConfigButton';
+  static const kdfErrorGeneric = 'kdfErrorGeneric';
+  static const kdfErrorNotSufficientBalance = 'kdfErrorNotSufficientBalance';
+  static const kdfErrorNotSufficientPlatformBalanceForFee =
+      'kdfErrorNotSufficientPlatformBalanceForFee';
+  static const kdfErrorZeroBalanceToWithdrawMax =
+      'kdfErrorZeroBalanceToWithdrawMax';
+  static const kdfErrorAmountTooLow = 'kdfErrorAmountTooLow';
+  static const kdfErrorNotEnoughNftsAmount = 'kdfErrorNotEnoughNftsAmount';
+  static const kdfErrorInvalidAddress = 'kdfErrorInvalidAddress';
+  static const kdfErrorFromAddressNotFound = 'kdfErrorFromAddressNotFound';
+  static const kdfErrorUnexpectedFromAddress = 'kdfErrorUnexpectedFromAddress';
+  static const kdfErrorMyAddressNotNftOwner = 'kdfErrorMyAddressNotNftOwner';
+  static const kdfErrorNoSuchCoin = 'kdfErrorNoSuchCoin';
+  static const kdfErrorCoinNotFound = 'kdfErrorCoinNotFound';
+  static const kdfErrorCoinNotSupported = 'kdfErrorCoinNotSupported';
+  static const kdfErrorCoinIsNotActive = 'kdfErrorCoinIsNotActive';
+  static const kdfErrorCoinDoesntSupportWithdraw =
+      'kdfErrorCoinDoesntSupportWithdraw';
+  static const kdfErrorCoinDoesntSupportNftWithdraw =
+      'kdfErrorCoinDoesntSupportNftWithdraw';
+  static const kdfErrorNftProtocolNotSupported =
+      'kdfErrorNftProtocolNotSupported';
+  static const kdfErrorContractTypeDoesntSupportNft =
+      'kdfErrorContractTypeDoesntSupportNft';
+  static const kdfErrorTransport = 'kdfErrorTransport';
+  static const kdfErrorTimeout = 'kdfErrorTimeout';
+  static const kdfErrorTaskTimedOut = 'kdfErrorTaskTimedOut';
+  static const kdfErrorInvalidResponse = 'kdfErrorInvalidResponse';
+  static const kdfErrorUnreachableNodes = 'kdfErrorUnreachableNodes';
+  static const kdfErrorAtLeastOneNodeRequired =
+      'kdfErrorAtLeastOneNodeRequired';
+  static const kdfErrorClientConnectionFailed =
+      'kdfErrorClientConnectionFailed';
+  static const kdfErrorConnectToNodeError = 'kdfErrorConnectToNodeError';
+  static const kdfErrorActivationFailed = 'kdfErrorActivationFailed';
+  static const kdfErrorCouldNotFetchBalance = 'kdfErrorCouldNotFetchBalance';
+  static const kdfErrorUnsupportedChain = 'kdfErrorUnsupportedChain';
+  static const kdfErrorChainIdNotSet = 'kdfErrorChainIdNotSet';
+  static const kdfErrorNoChainIdSet = 'kdfErrorNoChainIdSet';
+  static const kdfErrorInvalidFeePolicy = 'kdfErrorInvalidFeePolicy';
+  static const kdfErrorInvalidFee = 'kdfErrorInvalidFee';
+  static const kdfErrorInvalidGasApiConfig = 'kdfErrorInvalidGasApiConfig';
+  static const kdfErrorNameTooLong = 'kdfErrorNameTooLong';
+  static const kdfErrorDescriptionTooLong = 'kdfErrorDescriptionTooLong';
+  static const kdfErrorNoSuchAccount = 'kdfErrorNoSuchAccount';
+  static const kdfErrorNoEnabledAccount = 'kdfErrorNoEnabledAccount';
+  static const kdfErrorAccountExistsAlready = 'kdfErrorAccountExistsAlready';
+  static const kdfErrorUnknownAccount = 'kdfErrorUnknownAccount';
+  static const kdfErrorLoadingAccount = 'kdfErrorLoadingAccount';
+  static const kdfErrorSavingAccount = 'kdfErrorSavingAccount';
+  static const kdfErrorHwError = 'kdfErrorHwError';
+  static const kdfErrorHwContextNotInitialized =
+      'kdfErrorHwContextNotInitialized';
+  static const kdfErrorCoinDoesntSupportTrezor =
+      'kdfErrorCoinDoesntSupportTrezor';
+  static const kdfErrorInvalidHardwareWalletCall =
+      'kdfErrorInvalidHardwareWalletCall';
+  static const kdfErrorNotSupported = 'kdfErrorNotSupported';
+  static const kdfErrorVolumeTooLow = 'kdfErrorVolumeTooLow';
+  static const kdfErrorMyRecentSwapsError = 'kdfErrorMyRecentSwapsError';
+  static const kdfErrorSwapInfoNotAvailable = 'kdfErrorSwapInfoNotAvailable';
+  static const kdfErrorInvalidRequest = 'kdfErrorInvalidRequest';
+  static const kdfErrorInvalidPayload = 'kdfErrorInvalidPayload';
+  static const kdfErrorInvalidMemo = 'kdfErrorInvalidMemo';
+  static const kdfErrorInvalidConfiguration = 'kdfErrorInvalidConfiguration';
+  static const kdfErrorPrivKeyPolicyNotAllowed =
+      'kdfErrorPrivKeyPolicyNotAllowed';
+  static const kdfErrorUnexpectedDerivationMethod =
+      'kdfErrorUnexpectedDerivationMethod';
+  static const kdfErrorActionNotAllowed = 'kdfErrorActionNotAllowed';
+  static const kdfErrorUnexpectedUserAction = 'kdfErrorUnexpectedUserAction';
+  static const kdfErrorBroadcastExpected = 'kdfErrorBroadcastExpected';
+  static const kdfErrorDbError = 'kdfErrorDbError';
+  static const kdfErrorWalletStorageError = 'kdfErrorWalletStorageError';
+  static const kdfErrorHDWalletStorageError = 'kdfErrorHDWalletStorageError';
+  static const kdfErrorInternal = 'kdfErrorInternal';
+  static const kdfErrorInternalError = 'kdfErrorInternalError';
+  static const kdfErrorUnsupportedError = 'kdfErrorUnsupportedError';
+  static const kdfErrorSigningError = 'kdfErrorSigningError';
+  static const kdfErrorSystemTimeError = 'kdfErrorSystemTimeError';
+  static const kdfErrorNumConversError = 'kdfErrorNumConversError';
+  static const kdfErrorIOError = 'kdfErrorIOError';
+  static const kdfErrorRpcError = 'kdfErrorRpcError';
+  static const kdfErrorRpcTaskError = 'kdfErrorRpcTaskError';
+  static const kdfErrorInvalidBip44Chain = 'kdfErrorInvalidBip44Chain';
+  static const kdfErrorBip32Error = 'kdfErrorBip32Error';
+  static const kdfErrorInvalidPath = 'kdfErrorInvalidPath';
+  static const kdfErrorInvalidPathToAddress = 'kdfErrorInvalidPathToAddress';
+  static const kdfErrorDeserializingDerivationPath =
+      'kdfErrorDeserializingDerivationPath';
+  static const kdfErrorInvalidSwapContractAddr =
+      'kdfErrorInvalidSwapContractAddr';
+  static const kdfErrorInvalidFallbackSwapContract =
+      'kdfErrorInvalidFallbackSwapContract';
+  static const kdfErrorCustomTokenError = 'kdfErrorCustomTokenError';
+  static const kdfErrorGetNftInfoError = 'kdfErrorGetNftInfoError';
+  static const kdfErrorMetamaskError = 'kdfErrorMetamaskError';
+  static const kdfErrorWalletConnectError = 'kdfErrorWalletConnectError';
+  static const sdk_errors_network_unavailable =
+      'sdk_errors.network_unavailable';
+  static const sdk_errors_timeout = 'sdk_errors.timeout';
+  static const sdk_errors_invalid_response = 'sdk_errors.invalid_response';
+  static const sdk_errors_insufficient_funds = 'sdk_errors.insufficient_funds';
+  static const sdk_errors_insufficient_gas = 'sdk_errors.insufficient_gas';
+  static const sdk_errors_zero_balance = 'sdk_errors.zero_balance';
+  static const sdk_errors_amount_too_low = 'sdk_errors.amount_too_low';
+  static const sdk_errors_invalid_address = 'sdk_errors.invalid_address';
+  static const sdk_errors_invalid_fee = 'sdk_errors.invalid_fee';
+  static const sdk_errors_invalid_memo = 'sdk_errors.invalid_memo';
+  static const sdk_errors_asset_not_activated =
+      'sdk_errors.asset_not_activated';
+  static const sdk_errors_activation_failed = 'sdk_errors.activation_failed';
+  static const sdk_errors_user_cancelled = 'sdk_errors.user_cancelled';
+  static const sdk_errors_hardware_failure = 'sdk_errors.hardware_failure';
+  static const sdk_errors_not_supported = 'sdk_errors.not_supported';
+  static const sdk_errors_auth_invalid_credentials =
+      'sdk_errors.auth_invalid_credentials';
+  static const sdk_errors_auth_unauthorized = 'sdk_errors.auth_unauthorized';
+  static const sdk_errors_auth_wallet_not_found =
+      'sdk_errors.auth_wallet_not_found';
+  static const sdk_errors_general = 'sdk_errors.general';
+  static const sdk_errors = 'sdk_errors';
 }

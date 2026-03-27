@@ -78,28 +78,34 @@ class CoinsState extends Equatable {
     return getPriceForAsset(assetId)?.change24h?.toDouble();
   }
 
-  /// Calculates the USD price for a given amount of a coin
-  ///
-  /// [amount] The amount of the coin as a string
-  /// [coinAbbr] The abbreviation/symbol of the coin
+  /// Calculates the USD price for a given numeric [amount] of [coinAbbr].
   ///
   /// Returns null if:
   /// - The coin is not found in the state
-  /// - The amount cannot be parsed to a double
   /// - The coin does not have a USD price
   ///
   /// Note: This will be migrated to use the SDK's price functionality in the future.
   /// See the MarketDataManager in the SDK for the new implementation.
-  @Deprecated('Use sdk.prices.fiatPrice(assetId) * amount instead')
-  double? getUsdPriceByAmount(String amount, String coinAbbr) {
+  double? getUsdPriceForAmount(num amount, String coinAbbr) {
     final Coin? coin = coins[coinAbbr];
-    final double? parsedAmount = double.tryParse(amount);
+    final double parsedAmount = amount.toDouble();
     final CexPrice? cexPrice = prices[coinAbbr.toUpperCase()];
     final double? usdPrice = cexPrice?.price?.toDouble();
 
-    if (coin == null || usdPrice == null || parsedAmount == null) {
+    if (coin == null || usdPrice == null) {
       return null;
     }
     return parsedAmount * usdPrice;
+  }
+
+  /// Backward-compatible string overload.
+  @Deprecated(
+    'Use getUsdPriceForAmount(num amount, String coinAbbr) to avoid '
+    'string-parsing bugs from display-formatted values.',
+  )
+  double? getUsdPriceByAmount(String amount, String coinAbbr) {
+    final double? parsedAmount = double.tryParse(amount);
+    if (parsedAmount == null) return null;
+    return getUsdPriceForAmount(parsedAmount, coinAbbr);
   }
 }

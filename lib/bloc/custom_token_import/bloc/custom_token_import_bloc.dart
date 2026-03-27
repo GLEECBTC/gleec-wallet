@@ -187,8 +187,8 @@ class CustomTokenImportBloc
 
       final balanceInfo = await _coinsRepo.tryGetBalanceInfo(tokenData.id);
       final balance = balanceInfo.spendable;
-      final usdBalance = _coinsRepo.getUsdPriceByAmount(
-        balance.toString(),
+      final usdBalance = _coinsRepo.getUsdPriceForAmount(
+        balance.toDouble(),
         tokenData.id.id,
       );
 

@@ -163,8 +163,8 @@ class TransactionDetails extends StatelessWidget {
     final String formatted = formatDexAmt(transaction.amount.toDouble().abs());
     final String sign = transaction.amount.toDouble() > 0 ? '+' : '-';
     final coinsBloc = RepositoryProvider.of<CoinsRepo>(context);
-    final double? usd = coinsBloc.getUsdPriceByAmount(
-      formatted,
+    final double? usd = coinsBloc.getUsdPriceForAmount(
+      transaction.amount.toDouble().abs(),
       transaction.assetId.id,
     );
     final String formattedUsd = formatAmt(usd ?? 0);
@@ -231,14 +231,14 @@ class TransactionDetails extends StatelessWidget {
         fontWeight: FontWeight.w500,
       );
     } else {
-      final String formattedFee = transaction.fee!.formatTotal();
-      final double? usd = coinsRepository.getUsdPriceByAmount(
-        formattedFee,
+      final fee = transaction.fee!;
+      final String feeAmount = formatDexAmt(fee.totalFee.toDouble());
+      final double? usd = coinsRepository.getUsdPriceForAmount(
+        fee.totalFee.toDouble(),
         _feeCoin,
       );
       final String formattedUsd = formatAmt(usd ?? 0);
-      value =
-          '- ${Coin.normalizeAbbr(_feeCoin)} $formattedFee (\$$formattedUsd)';
+      value = '- ${Coin.normalizeAbbr(_feeCoin)} $feeAmount (\$$formattedUsd)';
       valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
         fontSize: 14,
         fontWeight: FontWeight.w500,

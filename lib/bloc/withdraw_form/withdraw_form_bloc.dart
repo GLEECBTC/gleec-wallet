@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
@@ -26,8 +28,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   static final Logger _logger = Logger('WithdrawFormBloc');
   static const _unsupportedSiaHardwareWalletMessage =
       'SIA is not supported for hardware wallets in this release.';
+
   final KomodoDefiSdk _sdk;
   final WalletType? _walletType;
+  Timer? _tronPreviewTimer;
 
   WithdrawFormBloc({
     required Asset asset,
@@ -56,6 +60,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormIbcChannelChanged>(_onIbcChannelChanged);
     on<WithdrawFormPreviewSubmitted>(_onPreviewSubmitted);
     on<WithdrawFormSubmitted>(_onSubmitted);
+    on<WithdrawFormTronPreviewTicked>(_onTronPreviewTicked);
+    on<WithdrawFormTronPreviewRefreshRequested>(_onTronPreviewRefreshRequested);
     on<WithdrawFormCancelled>(_onCancelled);
     on<WithdrawFormReset>(_onReset);
     on<WithdrawFormStepReverted>(_onStepReverted);
@@ -65,6 +71,125 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
     add(const WithdrawFormSourcesLoadRequested());
     add(const WithdrawFormFeeOptionsRequested());
+  }
+
+  bool _isTronAsset(Asset asset) =>
+      asset.protocol is TrxProtocol || asset.protocol is Trc20Protocol;
+
+  void _cancelTronPreviewTimer() {
+    _tronPreviewTimer?.cancel();
+    _tronPreviewTimer = null;
+  }
+
+  DateTime? _buildPreviewExpiryAt(
+    WithdrawFormState state,
+    WithdrawalPreview preview,
+  ) {
+    if (!_isTronAsset(state.asset)) {
+      return null;
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(
+      preview.timestamp * 1000,
+      isUtc: true,
+    ).add(
+      const Duration(seconds: WithdrawFormState.tronPreviewExpirationSeconds),
+    );
+  }
+
+  int _calculatePreviewSecondsRemaining(DateTime expiryAt) {
+    final remainingMs = expiryAt
+        .difference(DateTime.now().toUtc())
+        .inMilliseconds;
+    if (remainingMs <= 0) {
+      return 0;
+    }
+
+    return (remainingMs / 1000).ceil();
+  }
+
+  void _startTronPreviewTimer(WithdrawFormState state) {
+    _cancelTronPreviewTimer();
+
+    if (!_isTronAsset(state.asset) ||
+        state.step != WithdrawFormStep.confirm ||
+        state.preview == null ||
+        state.previewExpiresAt == null ||
+        state.isPreviewExpired) {
+      return;
+    }
+
+    _tronPreviewTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      add(const WithdrawFormTronPreviewTicked());
+    });
+  }
+
+  TextError? _previewGuardError() {
+    if (_isUnsupportedSiaHardwareWalletFlow) {
+      return TextError(error: _unsupportedSiaHardwareWalletMessage);
+    }
+
+    if (_isSelfTransfer) {
+      return TextError(error: LocaleKeys.cannotSendToSelf.tr());
+    }
+
+    return null;
+  }
+
+  Future<WithdrawalPreview> _generatePreview(
+    WithdrawFormState currentState,
+    Emitter<WithdrawFormState> emit,
+  ) async {
+    if (_walletType == WalletType.trezor) {
+      emit(currentState.copyWith(isAwaitingTrezorConfirmation: true));
+    }
+
+    final params = currentState.toWithdrawParameters();
+    return _sdk.withdrawals.previewWithdrawal(params);
+  }
+
+  void _emitPreviewState(
+    Emitter<WithdrawFormState> emit,
+    WithdrawalPreview preview, {
+    required bool moveToConfirm,
+  }) {
+    final expiryAt = _buildPreviewExpiryAt(state, preview);
+    final secondsRemaining = expiryAt == null
+        ? null
+        : _calculatePreviewSecondsRemaining(expiryAt);
+    final isExpired = secondsRemaining != null && secondsRemaining <= 0;
+    final nextState = state.copyWith(
+      preview: () => preview,
+      step: moveToConfirm ? WithdrawFormStep.confirm : state.step,
+      previewError: () => null,
+      transactionError: () => null,
+      confirmStepError: () => isExpired
+          ? TextError(error: LocaleKeys.withdrawTronPreviewExpired.tr())
+          : null,
+      isSending: false,
+      isPreviewRefreshing: false,
+      isPreviewExpired: isExpired,
+      previewExpiresAt: () => expiryAt,
+      previewSecondsRemaining: () => secondsRemaining,
+      isAwaitingTrezorConfirmation: false,
+    );
+
+    emit(nextState);
+
+    if (isExpired) {
+      _cancelTronPreviewTimer();
+      return;
+    }
+
+    _startTronPreviewTimer(nextState);
+  }
+
+  TextError _buildPreviewRefreshError(Object error) {
+    return TextError(
+      error:
+          '${LocaleKeys.withdrawTronPreviewRefreshFailed.tr()} ${_formatErrorMessage(error)}',
+      technicalDetails: _extractTechnicalDetails(error),
+    );
   }
 
   String _formatErrorMessage(Object error, {String? fallbackPrefix}) {
@@ -620,55 +745,39 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.hasValidationErrors) return;
-    if (_isUnsupportedSiaHardwareWalletFlow) {
+    final guardError = _previewGuardError();
+    if (guardError != null) {
       emit(
         state.copyWith(
-          previewError: () =>
-              TextError(error: _unsupportedSiaHardwareWalletMessage),
+          previewError: () => guardError,
           isSending: false,
           isAwaitingTrezorConfirmation: false,
-        ),
-      );
-      return;
-    }
-
-    if (_isSelfTransfer) {
-      emit(
-        state.copyWith(
-          previewError: () =>
-              TextError(error: LocaleKeys.cannotSendToSelf.tr()),
-          isSending: false,
         ),
       );
       return;
     }
 
     try {
+      _cancelTronPreviewTimer();
+
       emit(
         state.copyWith(
           isSending: true,
           previewError: () => null,
+          confirmStepError: () => null,
+          isPreviewRefreshing: false,
+          isPreviewExpired: false,
+          previewExpiresAt: () => null,
+          previewSecondsRemaining: () => null,
           isAwaitingTrezorConfirmation: false,
         ),
       );
 
-      // For Trezor wallets, the preview generation might require user interaction
-      if (_walletType == WalletType.trezor) {
-        emit(state.copyWith(isAwaitingTrezorConfirmation: true));
-      }
-
-      final params = state.toWithdrawParameters();
-      final preview = await _sdk.withdrawals.previewWithdrawal(params);
-
-      emit(
-        state.copyWith(
-          preview: () => preview,
-          step: WithdrawFormStep.confirm,
-          isSending: false,
-          isAwaitingTrezorConfirmation: false,
-        ),
-      );
+      final preview = await _generatePreview(state, emit);
+      _emitPreviewState(emit, preview, moveToConfirm: true);
     } catch (e) {
+      _cancelTronPreviewTimer();
+
       // Capture FD snapshot when KDF withdrawal preview fails
       if (PlatformTuner.isIOS) {
         try {
@@ -687,6 +796,103 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           previewError: () =>
               _buildTextError(e, fallbackPrefix: 'Failed to generate preview'),
           isSending: false,
+          isPreviewRefreshing: false,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+    }
+  }
+
+  void _onTronPreviewTicked(
+    WithdrawFormTronPreviewTicked event,
+    Emitter<WithdrawFormState> emit,
+  ) {
+    if (!_isTronAsset(state.asset) ||
+        state.step != WithdrawFormStep.confirm ||
+        state.preview == null) {
+      _cancelTronPreviewTimer();
+      return;
+    }
+
+    final expiryAt = state.previewExpiresAt;
+    if (expiryAt == null) {
+      _cancelTronPreviewTimer();
+      return;
+    }
+
+    final secondsRemaining = _calculatePreviewSecondsRemaining(expiryAt);
+    if (secondsRemaining > 0) {
+      if (secondsRemaining != state.previewSecondsRemaining) {
+        emit(
+          state.copyWith(
+            previewSecondsRemaining: () => secondsRemaining,
+            isPreviewExpired: false,
+          ),
+        );
+      }
+      return;
+    }
+
+    _cancelTronPreviewTimer();
+    if (state.isPreviewRefreshing) {
+      return;
+    }
+
+    emit(
+      state.copyWith(previewSecondsRemaining: () => 0, isPreviewExpired: true),
+    );
+    add(const WithdrawFormTronPreviewRefreshRequested(isAutomatic: true));
+  }
+
+  Future<void> _onTronPreviewRefreshRequested(
+    WithdrawFormTronPreviewRefreshRequested event,
+    Emitter<WithdrawFormState> emit,
+  ) async {
+    if (!_isTronAsset(state.asset) ||
+        state.step != WithdrawFormStep.confirm ||
+        state.preview == null ||
+        state.isSending ||
+        state.isPreviewRefreshing) {
+      return;
+    }
+
+    final guardError = _previewGuardError();
+    if (guardError != null) {
+      emit(
+        state.copyWith(
+          isPreviewRefreshing: false,
+          isPreviewExpired: true,
+          previewSecondsRemaining: () => 0,
+          confirmStepError: () => guardError,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+      return;
+    }
+
+    try {
+      _cancelTronPreviewTimer();
+
+      emit(
+        state.copyWith(
+          isPreviewRefreshing: true,
+          isPreviewExpired: true,
+          previewSecondsRemaining: () => 0,
+          confirmStepError: () => null,
+          transactionError: () => null,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+
+      final preview = await _generatePreview(state, emit);
+      _emitPreviewState(emit, preview, moveToConfirm: false);
+    } catch (e) {
+      emit(
+        state.copyWith(
+          isPreviewRefreshing: false,
+          isPreviewExpired: true,
+          previewSecondsRemaining: () => 0,
+          confirmStepError: () => _buildPreviewRefreshError(e),
           isAwaitingTrezorConfirmation: false,
         ),
       );
@@ -710,11 +916,30 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return;
     }
 
+    if (_isTronAsset(state.asset) &&
+        (state.isPreviewRefreshing ||
+            state.isPreviewExpired ||
+            state.previewSecondsRemaining == null ||
+            state.previewSecondsRemaining == 0 ||
+            state.hasConfirmStepError)) {
+      emit(
+        state.copyWith(
+          confirmStepError: () =>
+              TextError(error: LocaleKeys.withdrawTronPreviewExpired.tr()),
+          isSending: false,
+        ),
+      );
+      return;
+    }
+
     try {
+      _cancelTronPreviewTimer();
+
       emit(
         state.copyWith(
           isSending: true,
           transactionError: () => null,
+          confirmStepError: () => null,
           // No second device interaction is needed on confirm
           isAwaitingTrezorConfirmation: false,
         ),
@@ -764,11 +989,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           // Clear cached preview after successful broadcast
           preview: () => null,
           isSending: false,
+          previewExpiresAt: () => null,
+          previewSecondsRemaining: () => null,
+          isPreviewExpired: false,
+          isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
         ),
       );
       return;
     } catch (e) {
+      _cancelTronPreviewTimer();
+
       // Capture FD snapshot when KDF withdrawal submission fails
       if (PlatformTuner.isIOS) {
         try {
@@ -788,6 +1019,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
               _buildTextError(e, fallbackPrefix: 'Transaction failed'),
           step: WithdrawFormStep.failed,
           isSending: false,
+          isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
         ),
       );
@@ -814,6 +1046,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   void _onReset(WithdrawFormReset event, Emitter<WithdrawFormState> emit) {
+    _cancelTronPreviewTimer();
     emit(
       WithdrawFormState(
         asset: state.asset,
@@ -831,13 +1064,19 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) {
     if (state.step == WithdrawFormStep.confirm) {
+      _cancelTronPreviewTimer();
       emit(
         state.copyWith(
           step: WithdrawFormStep.fill,
           preview: () => null,
           previewError: () => null,
           transactionError: () => null,
+          confirmStepError: () => null,
           isSending: false,
+          previewExpiresAt: () => null,
+          previewSecondsRemaining: () => null,
+          isPreviewExpired: false,
+          isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
         ),
       );
@@ -850,11 +1089,48 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ? WithdrawFormStep.confirm
         : WithdrawFormStep.fill;
 
+    if (nextStep == WithdrawFormStep.confirm &&
+        _isTronAsset(state.asset) &&
+        state.preview != null) {
+      final expiryAt = _buildPreviewExpiryAt(state, state.preview!);
+      final secondsRemaining = expiryAt == null
+          ? null
+          : _calculatePreviewSecondsRemaining(expiryAt);
+      final isExpired = secondsRemaining != null && secondsRemaining <= 0;
+
+      emit(
+        state.copyWith(
+          step: nextStep,
+          transactionError: () => null,
+          confirmStepError: () => isExpired
+              ? TextError(error: LocaleKeys.withdrawTronPreviewExpired.tr())
+              : null,
+          isSending: false,
+          previewExpiresAt: () => expiryAt,
+          previewSecondsRemaining: () => secondsRemaining,
+          isPreviewExpired: isExpired,
+          isPreviewRefreshing: false,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+
+      if (!isExpired) {
+        _startTronPreviewTimer(state);
+      }
+      return;
+    }
+
+    _cancelTronPreviewTimer();
     emit(
       state.copyWith(
         step: nextStep,
         transactionError: () => null,
+        confirmStepError: () => null,
         isSending: false,
+        previewExpiresAt: () => null,
+        previewSecondsRemaining: () => null,
+        isPreviewExpired: false,
+        isPreviewRefreshing: false,
         isAwaitingTrezorConfirmation: false,
       ),
     );
@@ -906,6 +1182,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     if (decimals <= 0) return Decimal.fromInt(amount);
     final scale = Decimal.parse('1${'0' * decimals}');
     return (Decimal.fromInt(amount) / scale).toDecimal();
+  }
+
+  @override
+  Future<void> close() {
+    _cancelTronPreviewTimer();
+    return super.close();
   }
 }
 

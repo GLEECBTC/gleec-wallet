@@ -2,7 +2,6 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -77,7 +76,7 @@ class SendCompleteForm extends StatelessWidget {
             ),
             if (state.result?.txHash != null)
               _TransactionHash(
-                feeValue: feeValue!.formatTotal(),
+                feeValue: feeValue!.totalFee.toString(),
                 feeCoin: feeValue.coin,
                 txHash: state.result!.txHash,
                 usdFeePrice: state.usdFeePrice,

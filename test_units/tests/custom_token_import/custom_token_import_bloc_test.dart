@@ -199,7 +199,14 @@ class _FakeCoinsRepo implements CoinsRepo {
   }
 
   @override
-  double? getUsdPriceByAmount(String amount, String coinAbbr) => 12.5;
+  double? getUsdPriceForAmount(num amount, String coinAbbr) => 12.5;
+
+  @override
+  double? getUsdPriceByAmount(String amount, String coinAbbr) {
+    final parsed = double.tryParse(amount);
+    if (parsed == null) return null;
+    return getUsdPriceForAmount(parsed, coinAbbr);
+  }
 
   @override
   Future<bool> isAssetActivated(

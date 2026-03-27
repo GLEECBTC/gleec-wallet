@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +38,7 @@ import 'package:web_dex/views/common/pages/page_layout.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_growth_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_profit_loss_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_balance_confirmation_controller.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_common_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info_fiat.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
@@ -553,9 +556,87 @@ class _CoinDetailsMarketMetricsTabBarState
   }
 }
 
-class _Balance extends StatelessWidget {
+class _Balance extends StatefulWidget {
   const _Balance({required this.coin});
   final Coin coin;
+
+  @override
+  State<_Balance> createState() => _BalanceState();
+}
+
+class _BalanceState extends State<_Balance> {
+  static const int _maxStartupRetries = 2;
+
+  late final CoinDetailsBalanceConfirmationController _confirmationController;
+  StreamSubscription<BalanceInfo>? _balanceSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    final sdk = context.sdk;
+    _confirmationController = CoinDetailsBalanceConfirmationController(
+      initialBalance: sdk.balances.lastKnown(widget.coin.id),
+      fetchConfirmedBalance: () => sdk.balances.getBalance(widget.coin.id),
+      maxStartupRetries: _maxStartupRetries,
+    );
+
+    _balanceSubscription = sdk.balances
+        .watchBalance(widget.coin.id)
+        .listen(
+          _confirmationController.onStreamBalance,
+          onError: (Object _, StackTrace __) {
+            unawaited(_confirmationController.onStartupStreamError());
+          },
+        );
+
+    unawaited(_confirmationController.bootstrap());
+  }
+
+  @override
+  void dispose() {
+    _balanceSubscription?.cancel();
+    _confirmationController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildGhostValue(ThemeData themeData) {
+    final style = themeData.textTheme.titleMedium?.copyWith(
+      fontSize: isMobile ? 25 : 22,
+      fontWeight: FontWeight.w700,
+      color: theme.custom.headerFloatBoxColor,
+      height: 1.1,
+    );
+
+    return Row(
+      mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment: isMobile
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      children: [
+        Container(
+          key: const Key('coin-details-balance'),
+          width: isMobile ? 120 : 132,
+          height: isMobile ? 30 : 24,
+          decoration: BoxDecoration(
+            color: (style?.color ?? themeData.colorScheme.onSurface).withValues(
+              alpha: 0.22,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          Coin.normalizeAbbr(widget.coin.abbr),
+          style: themeData.textTheme.titleSmall!.copyWith(
+            fontSize: isMobile ? 25 : 20,
+            fontWeight: FontWeight.w500,
+            color: theme.custom.headerFloatBoxColor.withValues(alpha: 0.75),
+            height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -563,16 +644,17 @@ class _Balance extends StatelessWidget {
     final hideBalances = context.select(
       (SettingsBloc bloc) => bloc.state.hideBalances,
     );
-    final initialBalance = context.sdk.balances.lastKnown(coin.id);
-    final balanceStream = context.sdk.balances.watchBalance(coin.id);
 
-    return StreamBuilder<BalanceInfo>(
-      stream: balanceStream,
-      initialData: initialBalance,
-      builder: (context, snapshot) {
-        final balance = snapshot.data?.spendable.toDouble();
+    return ListenableBuilder(
+      listenable: _confirmationController,
+      builder: (context, _) {
+        final showGhost = !hideBalances && !_confirmationController.isConfirmed;
+        final balance = _confirmationController.latestBalance?.spendable
+            .toDouble();
         final value = hideBalances
             ? maskedBalanceText
+            : showGhost
+            ? ''
             : balance == null
             ? kBalancePlaceholder
             : doubleToString(balance);
@@ -595,39 +677,43 @@ class _Balance extends StatelessWidget {
                 ),
               ),
             Flexible(
-              child: Row(
-                mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
-                mainAxisAlignment: isMobile
-                    ? MainAxisAlignment.center
-                    : MainAxisAlignment.start,
-                children: [
-                  Flexible(
-                    child: AutoScrollText(
-                      key: const Key('coin-details-balance'),
-                      text: value,
-                      isSelectable: true,
-                      style: themeData.textTheme.titleMedium!.copyWith(
-                        fontSize: isMobile ? 25 : 22,
-                        fontWeight: FontWeight.w700,
-                        color: theme.custom.headerFloatBoxColor,
-                        height: 1.1,
-                      ),
+              child: showGhost
+                  ? _buildGhostValue(themeData)
+                  : Row(
+                      mainAxisSize: isMobile
+                          ? MainAxisSize.max
+                          : MainAxisSize.min,
+                      mainAxisAlignment: isMobile
+                          ? MainAxisAlignment.center
+                          : MainAxisAlignment.start,
+                      children: [
+                        Flexible(
+                          child: AutoScrollText(
+                            key: const Key('coin-details-balance'),
+                            text: value,
+                            isSelectable: true,
+                            style: themeData.textTheme.titleMedium!.copyWith(
+                              fontSize: isMobile ? 25 : 22,
+                              fontWeight: FontWeight.w700,
+                              color: theme.custom.headerFloatBoxColor,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          Coin.normalizeAbbr(widget.coin.abbr),
+                          style: themeData.textTheme.titleSmall!.copyWith(
+                            fontSize: isMobile ? 25 : 20,
+                            fontWeight: FontWeight.w500,
+                            color: theme.custom.headerFloatBoxColor,
+                            height: 1.1,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    Coin.normalizeAbbr(coin.abbr),
-                    style: themeData.textTheme.titleSmall!.copyWith(
-                      fontSize: isMobile ? 25 : 20,
-                      fontWeight: FontWeight.w500,
-                      color: theme.custom.headerFloatBoxColor,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
             ),
-            if (!isMobile) _FiatBalance(coin: coin),
+            if (!isMobile) _FiatBalance(coin: widget.coin),
           ],
         );
       },

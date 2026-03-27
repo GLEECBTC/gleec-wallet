@@ -52,6 +52,16 @@ class WithdrawFormSubmitted extends WithdrawFormEvent {
   const WithdrawFormSubmitted();
 }
 
+class WithdrawFormTronPreviewTicked extends WithdrawFormEvent {
+  const WithdrawFormTronPreviewTicked();
+}
+
+class WithdrawFormTronPreviewRefreshRequested extends WithdrawFormEvent {
+  final bool isAutomatic;
+
+  const WithdrawFormTronPreviewRefreshRequested({this.isAutomatic = false});
+}
+
 class WithdrawFormCancelled extends WithdrawFormEvent {
   const WithdrawFormCancelled();
 }

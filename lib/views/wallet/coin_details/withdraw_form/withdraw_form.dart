@@ -585,6 +585,9 @@ class WithdrawPreviewDetails extends StatelessWidget {
     final energyUsedLabel = LocaleKeys.withdrawTronEnergyUsed.tr();
     final energyFeeLabel = LocaleKeys.withdrawTronEnergyFee.tr();
     final energySourceLabel = LocaleKeys.withdrawTronEnergySource.tr();
+    final accountActivationFeeLabel = LocaleKeys
+        .withdrawTronAccountActivationFee
+        .tr();
     final feeSummaryLabel = LocaleKeys.withdrawTronFeeSummary.tr();
     final paidInCoin = LocaleKeys.withdrawTronFeePaidIn.tr(args: [fee.coin]);
     final bandwidthSource = fee.bandwidthFee > Decimal.zero
@@ -599,6 +602,9 @@ class WithdrawPreviewDetails extends StatelessWidget {
     final bandwidthFeeString =
         '${_formatDecimal(fee.bandwidthFee)} ${fee.coin}';
     final energyFeeString = '${_formatDecimal(fee.energyFee)} ${fee.coin}';
+    final accountActivationFeeString = fee.accountCreationFee == null
+        ? null
+        : '${_formatDecimal(fee.accountCreationFee!)} ${fee.coin}';
     final chargeSummary = hasTrxFee
         ? LocaleKeys.withdrawTronFeeSummaryCharged.tr(
             args: [_formatDecimal(totalFee), fee.coin],
@@ -624,6 +630,13 @@ class WithdrawPreviewDetails extends StatelessWidget {
           _buildRow(energyUsedLabel, Text('${fee.energyUsed}')),
           const SizedBox(height: 8),
           _buildRow(energyFeeLabel, Text(energyFeeString)),
+          if (accountActivationFeeString != null) ...[
+            const SizedBox(height: 8),
+            _buildRow(
+              accountActivationFeeLabel,
+              Text(accountActivationFeeString),
+            ),
+          ],
           const SizedBox(height: 8),
           _buildRow(
             energySourceLabel,
@@ -668,6 +681,12 @@ class WithdrawPreviewDetails extends StatelessWidget {
         Text(energyFeeLabel, style: labelStyle),
         const SizedBox(height: 4),
         Text(energyFeeString),
+        if (accountActivationFeeString != null) ...[
+          const SizedBox(height: 8),
+          Text(accountActivationFeeLabel, style: labelStyle),
+          const SizedBox(height: 4),
+          Text(accountActivationFeeString),
+        ],
         const SizedBox(height: 8),
         Text(energySourceLabel, style: labelStyle),
         const SizedBox(height: 4),
@@ -908,6 +927,15 @@ class WithdrawFormFillSection extends StatelessWidget {
 class WithdrawFormConfirmSection extends StatelessWidget {
   const WithdrawFormConfirmSection({super.key});
 
+  String _buildSubmitLabel(WithdrawFormState state) {
+    final baseLabel = LocaleKeys.send.tr();
+    if (!state.isTronAsset || state.previewSecondsRemaining == null) {
+      return baseLabel;
+    }
+
+    return '$baseLabel (${state.previewSecondsRemaining}s)';
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
@@ -916,17 +944,37 @@ class WithdrawFormConfirmSection extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
+        final hasExpiredPreviewAction =
+            state.isTronAsset &&
+            !state.isPreviewRefreshing &&
+            (state.isPreviewExpired || state.hasConfirmStepError);
+        final isSubmitDisabled =
+            state.isSending ||
+            state.isPreviewRefreshing ||
+            (state.isTronAsset &&
+                (state.previewSecondsRemaining == null ||
+                    state.previewSecondsRemaining == 0));
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             WithdrawPreviewDetails(preview: state.preview!),
+            if (state.confirmStepError != null) ...[
+              const SizedBox(height: 16),
+              Text(
+                state.confirmStepError!.message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => context.read<WithdrawFormBloc>().add(
-                      const WithdrawFormCancelled(),
+                      const WithdrawFormStepReverted(),
                     ),
                     child: Text(LocaleKeys.back.tr()),
                   ),
@@ -934,20 +982,30 @@ class WithdrawFormConfirmSection extends StatelessWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: FilledButton(
-                    onPressed: state.isSending
+                    onPressed: hasExpiredPreviewAction
+                        ? () {
+                            context.read<WithdrawFormBloc>().add(
+                              const WithdrawFormTronPreviewRefreshRequested(),
+                            );
+                          }
+                        : isSubmitDisabled
                         ? null
                         : () {
                             context.read<WithdrawFormBloc>().add(
                               const WithdrawFormSubmitted(),
                             );
                           },
-                    child: state.isSending
+                    child: state.isSending || state.isPreviewRefreshing
                         ? const SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Text(LocaleKeys.send.tr()),
+                        : Text(
+                            hasExpiredPreviewAction
+                                ? LocaleKeys.withdrawTronPreviewRegenerate.tr()
+                                : _buildSubmitLabel(state),
+                          ),
                   ),
                 ),
               ],

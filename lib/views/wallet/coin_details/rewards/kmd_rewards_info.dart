@@ -170,9 +170,7 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
                                   ?.withValues(alpha: 0.4),
                             ),
                           ),
-                          const SizedBox(
-                            height: 30.0,
-                          ),
+                          const SizedBox(height: 30.0),
                           UiBorderButton(
                             width: 160,
                             height: 38,
@@ -204,19 +202,16 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
   }
 
   Widget _buildMessage() {
-    final String message =
-        _successMessage.isEmpty ? _errorMessage : _successMessage;
+    final String message = _successMessage.isEmpty
+        ? _errorMessage
+        : _successMessage;
 
     return message.isEmpty
         ? const SizedBox.shrink()
         : Container(
             margin: const EdgeInsets.only(top: 20),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: _messageColor,
-              ),
-            ),
+            decoration: BoxDecoration(border: Border.all(color: _messageColor)),
             child: SelectableText(
               message,
               style: TextStyle(color: _messageColor),
@@ -380,8 +375,10 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
               alignment: const Alignment(-1, 0),
               child: Text(
                 LocaleKeys.status.tr(),
-                style:
-                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),
@@ -418,16 +415,17 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
     });
 
     context.read<AnalyticsBloc>().logEvent(
-          RewardClaimInitiatedEventData(
-            asset: widget.coin.abbr,
-            expectedRewardAmount: _totalReward ?? 0,
-          ),
-        );
+      RewardClaimInitiatedEventData(
+        asset: widget.coin.abbr,
+        expectedRewardAmount: _totalReward ?? 0,
+      ),
+    );
 
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
     final kmdRewardsBloc = RepositoryProvider.of<KmdRewardsBloc>(context);
-    final BlocResponse<String, BaseError> response =
-        await kmdRewardsBloc.claim(context);
+    final BlocResponse<String, BaseError> response = await kmdRewardsBloc.claim(
+      context,
+    );
     final BaseError? error = response.error;
     if (error != null) {
       setState(() {
@@ -435,11 +433,11 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
         _errorMessage = error.message;
       });
       context.read<AnalyticsBloc>().logEvent(
-            RewardClaimFailureEventData(
-              asset: widget.coin.abbr,
-              failReason: error.message,
-            ),
-          );
+        RewardClaimFailureEventData(
+          asset: widget.coin.abbr,
+          failReason: error.message,
+        ),
+      );
       return;
     }
 
@@ -447,20 +445,24 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
     context.read<CoinsBloc>().add(CoinsBalancesRefreshed());
     await _updateInfoUntilSuccessOrTimeOut(30000);
 
-    final String reward =
-        doubleToString(double.tryParse(response.result!) ?? 0);
-    final double? usdPrice =
-        coinsRepository.getUsdPriceByAmount(response.result!, 'KMD');
+    final String reward = doubleToString(
+      double.tryParse(response.result!) ?? 0,
+    );
+    final rewardAmount = double.tryParse(response.result!) ?? 0;
+    final double? usdPrice = coinsRepository.getUsdPriceForAmount(
+      rewardAmount,
+      'KMD',
+    );
     final String formattedUsdPrice = cutTrailingZeros(formatAmt(usdPrice ?? 0));
     setState(() {
       _isClaiming = false;
     });
     context.read<AnalyticsBloc>().logEvent(
-          RewardClaimSuccessEventData(
-            asset: widget.coin.abbr,
-            rewardAmount: double.tryParse(response.result!) ?? 0,
-          ),
-        );
+      RewardClaimSuccessEventData(
+        asset: widget.coin.abbr,
+        rewardAmount: rewardAmount,
+      ),
+    );
     widget.onSuccess(reward, formattedUsdPrice);
   }
 
@@ -479,8 +481,9 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
 
   Future<void> _updateInfoUntilSuccessOrTimeOut(int timeOut) async {
     _updateTimer ??= DateTime.now().millisecondsSinceEpoch;
-    final List<KmdRewardItem> prevRewards =
-        List.from(_rewards ?? <KmdRewardItem>[]);
+    final List<KmdRewardItem> prevRewards = List.from(
+      _rewards ?? <KmdRewardItem>[],
+    );
 
     await _updateRewardsInfo();
 
@@ -502,8 +505,10 @@ class _KmdRewardsInfoState extends State<KmdRewardsInfo> {
     final kmdRewardsBloc = RepositoryProvider.of<KmdRewardsBloc>(context);
     final double? total = await kmdRewardsBloc.getTotal(context);
     final List<KmdRewardItem> currentRewards = await kmdRewardsBloc.getInfo();
-    final double? totalUsd =
-        coinsRepository.getUsdPriceByAmount((total ?? 0).toString(), 'KMD');
+    final double? totalUsd = coinsRepository.getUsdPriceForAmount(
+      total ?? 0,
+      'KMD',
+    );
 
     if (!mounted) return;
     setState(() {

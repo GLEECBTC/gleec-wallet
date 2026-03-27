@@ -808,15 +808,36 @@ class CoinsRepo {
     _invalidateActivatedAssetsCache();
   }
 
-  double? getUsdPriceByAmount(String amount, String coinAbbr) {
+  /// Calculates USD value for a numeric [amount] of [coinAbbr].
+  ///
+  /// Prefer this method over [getUsdPriceByAmount] to avoid string parsing
+  /// issues (e.g. accidentally passing display-formatted values like
+  /// `"1.1 TRX"`).
+  double? getUsdPriceForAmount(num amount, String coinAbbr) {
     final Coin? coin = getCoin(coinAbbr);
-    final double? parsedAmount = double.tryParse(amount);
+    final double parsedAmount = amount.toDouble();
     final double? usdPrice = coin?.usdPrice?.price?.toDouble();
 
-    if (coin == null || usdPrice == null || parsedAmount == null) {
+    if (coin == null || usdPrice == null) {
       return null;
     }
     return parsedAmount * usdPrice;
+  }
+
+  @Deprecated(
+    'Use getUsdPriceForAmount(num amount, String coinAbbr) to avoid '
+    'string-parsing bugs from display-formatted values.',
+  )
+  double? getUsdPriceByAmount(String amount, String coinAbbr) {
+    final double? parsedAmount = double.tryParse(amount);
+    if (parsedAmount == null) {
+      _log.warning(
+        'Invalid amount "$amount" passed to getUsdPriceByAmount for $coinAbbr. '
+        'Use getUsdPriceForAmount() with a numeric value.',
+      );
+      return null;
+    }
+    return getUsdPriceForAmount(parsedAmount, coinAbbr);
   }
 
   /// Fetches current prices for a broad set of assets

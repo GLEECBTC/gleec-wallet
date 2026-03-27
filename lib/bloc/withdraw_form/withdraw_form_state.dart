@@ -8,6 +8,8 @@ import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 
 class WithdrawFormState extends Equatable {
+  static const int tronPreviewExpirationSeconds = 60;
+
   final Asset asset;
   final AssetPubkeys? pubkeys;
   final WithdrawFormStep step;
@@ -43,7 +45,15 @@ class WithdrawFormState extends Equatable {
   // Network/Transaction errors
   final TextError? previewError; // Errors during preview generation
   final TextError? transactionError; // Errors during transaction submission
+  final TextError?
+  confirmStepError; // Errors while refreshing an expired TRON preview
   final TextError? networkError; // Network connectivity errors
+
+  // TRON confirm preview lifetime
+  final DateTime? previewExpiresAt;
+  final int? previewSecondsRemaining;
+  final bool isPreviewExpired;
+  final bool isPreviewRefreshing;
 
   bool get isCustomFeeSupported =>
       asset.protocol is UtxoProtocol ||
@@ -56,8 +66,12 @@ class WithdrawFormState extends Equatable {
       asset.protocol is QtumProtocol ||
       asset.protocol is TendermintProtocol;
 
+  bool get isTronAsset =>
+      asset.protocol is TrxProtocol || asset.protocol is Trc20Protocol;
+
   bool get hasPreviewError => previewError != null;
   bool get hasTransactionError => transactionError != null;
+  bool get hasConfirmStepError => confirmStepError != null;
   bool get hasAddressError => recipientAddressError != null;
   bool get hasValidationErrors =>
       hasAddressError ||
@@ -133,7 +147,12 @@ class WithdrawFormState extends Equatable {
     this.ibcChannelError,
     this.previewError,
     this.transactionError,
+    this.confirmStepError,
     this.networkError,
+    this.previewExpiresAt,
+    this.previewSecondsRemaining,
+    this.isPreviewExpired = false,
+    this.isPreviewRefreshing = false,
   });
 
   WithdrawFormState copyWith({
@@ -164,7 +183,12 @@ class WithdrawFormState extends Equatable {
     ValueGetter<TextError?>? ibcChannelError,
     ValueGetter<TextError?>? previewError,
     ValueGetter<TextError?>? transactionError,
+    ValueGetter<TextError?>? confirmStepError,
     ValueGetter<TextError?>? networkError,
+    ValueGetter<DateTime?>? previewExpiresAt,
+    ValueGetter<int?>? previewSecondsRemaining,
+    bool? isPreviewExpired,
+    bool? isPreviewRefreshing,
   }) {
     return WithdrawFormState(
       asset: asset ?? this.asset,
@@ -207,7 +231,18 @@ class WithdrawFormState extends Equatable {
       transactionError: transactionError != null
           ? transactionError()
           : this.transactionError,
+      confirmStepError: confirmStepError != null
+          ? confirmStepError()
+          : this.confirmStepError,
       networkError: networkError != null ? networkError() : this.networkError,
+      previewExpiresAt: previewExpiresAt != null
+          ? previewExpiresAt()
+          : this.previewExpiresAt,
+      previewSecondsRemaining: previewSecondsRemaining != null
+          ? previewSecondsRemaining()
+          : this.previewSecondsRemaining,
+      isPreviewExpired: isPreviewExpired ?? this.isPreviewExpired,
+      isPreviewRefreshing: isPreviewRefreshing ?? this.isPreviewRefreshing,
     );
   }
 
@@ -230,6 +265,7 @@ class WithdrawFormState extends Equatable {
       ibcSourceChannel: ibcChannel?.isNotEmpty == true
           ? int.tryParse(ibcChannel!.trim())
           : null,
+      expirationSeconds: isTronAsset ? tronPreviewExpirationSeconds : null,
       isMax: isMaxAmount,
     );
   }
@@ -269,6 +305,11 @@ class WithdrawFormState extends Equatable {
     ibcChannelError,
     previewError,
     transactionError,
+    confirmStepError,
     networkError,
+    previewExpiresAt,
+    previewSecondsRemaining,
+    isPreviewExpired,
+    isPreviewRefreshing,
   ];
 }

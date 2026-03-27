@@ -12,7 +12,6 @@ import 'package:web_dex/shared/ui/custom_tooltip.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
-import 'package:web_dex/views/wallet/common/address_text.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class TransactionListRow extends StatefulWidget {
@@ -281,8 +280,8 @@ class _TransactionListRowState extends State<TransactionListRow> {
 
   Widget _buildUsdChanges() {
     final coinsBloc = context.read<CoinsBloc>();
-    final double? usdChanges = coinsBloc.state.getUsdPriceByAmount(
-      _displayAmount.toString(),
+    final double? usdChanges = coinsBloc.state.getUsdPriceForAmount(
+      _displayAmount.toDouble(),
       widget.coinAbbr,
     );
     return AutoScrollText(
