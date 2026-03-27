@@ -151,7 +151,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (_walletType == WalletType.trezor) {
-      emit(requestState.copyWith(isAwaitingTrezorConfirmation: true));
+      emit(state.copyWith(isAwaitingTrezorConfirmation: true));
     }
 
     final params = requestState.toWithdrawParameters();

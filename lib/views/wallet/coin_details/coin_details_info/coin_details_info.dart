@@ -693,12 +693,25 @@ class CoinDetailsBalanceContent extends StatelessWidget {
 class _BalanceState extends State<_Balance> {
   static const int _maxStartupRetries = 2;
 
-  late final CoinDetailsBalanceConfirmationController _confirmationController;
+  late CoinDetailsBalanceConfirmationController _confirmationController;
   StreamSubscription<BalanceInfo>? _balanceSubscription;
 
   @override
   void initState() {
     super.initState();
+    _initBindings();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Balance oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coin.id != widget.coin.id) {
+      _tearDownBindings();
+      _initBindings();
+    }
+  }
+
+  void _initBindings() {
     final sdk = context.sdk;
     _confirmationController = CoinDetailsBalanceConfirmationController(
       initialBalance: sdk.balances.lastKnown(widget.coin.id),
@@ -718,10 +731,15 @@ class _BalanceState extends State<_Balance> {
     unawaited(_confirmationController.bootstrap());
   }
 
+  void _tearDownBindings() {
+    _balanceSubscription?.cancel();
+    _balanceSubscription = null;
+    _confirmationController.dispose();
+  }
+
   @override
   void dispose() {
-    _balanceSubscription?.cancel();
-    _confirmationController.dispose();
+    _tearDownBindings();
     super.dispose();
   }
 
