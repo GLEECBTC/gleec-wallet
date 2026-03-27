@@ -148,12 +148,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
   Future<WithdrawalPreview> _generatePreview(
     WithdrawFormState requestState,
-    Emitter<WithdrawFormState> emit,
   ) async {
-    if (_walletType == WalletType.trezor) {
-      emit(state.copyWith(isAwaitingTrezorConfirmation: true));
-    }
-
     final params = requestState.toWithdrawParameters();
     return _sdk.withdrawals.previewWithdrawal(params);
   }
@@ -802,11 +797,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isPreviewExpired: false,
           previewExpiresAt: () => null,
           previewSecondsRemaining: () => null,
-          isAwaitingTrezorConfirmation: false,
+          isAwaitingTrezorConfirmation: _walletType == WalletType.trezor,
         ),
       );
 
-      final preview = await _generatePreview(requestState, emit);
+      final preview = await _generatePreview(requestState);
       _emitPreviewState(emit, requestState, preview, moveToConfirm: true);
     } catch (e) {
       _cancelTronPreviewTimer();
@@ -914,11 +909,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           previewSecondsRemaining: () => 0,
           confirmStepError: () => null,
           transactionError: () => null,
-          isAwaitingTrezorConfirmation: false,
+          isAwaitingTrezorConfirmation: _walletType == WalletType.trezor,
         ),
       );
 
-      final preview = await _generatePreview(requestState, emit);
+      final preview = await _generatePreview(requestState);
       _emitPreviewState(emit, requestState, preview, moveToConfirm: false);
     } catch (e) {
       emit(
