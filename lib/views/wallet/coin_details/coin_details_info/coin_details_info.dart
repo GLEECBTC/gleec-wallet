@@ -142,7 +142,8 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
         scrollController: _scrollController,
         transactionsSectionKey: _transactionsSectionKey,
         addressesSectionKey: _addressesSectionKey,
-        onScrollToSection: _scrollToSection,
+        onShowTransactions: _scrollToTransactions,
+        onShowAddresses: _scrollToAddresses,
       );
     }
     return _DesktopContent(
@@ -153,7 +154,8 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
       scrollController: _scrollController,
       transactionsSectionKey: _transactionsSectionKey,
       addressesSectionKey: _addressesSectionKey,
-      onScrollToSection: _scrollToSection,
+      onShowTransactions: _scrollToTransactions,
+      onShowAddresses: _scrollToAddresses,
     );
   }
 
@@ -193,6 +195,11 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
     );
   }
 
+  Future<void> _scrollToTransactions() =>
+      _scrollToSection(_transactionsSectionKey);
+
+  Future<void> _scrollToAddresses() => _scrollToSection(_addressesSectionKey);
+
   void _onBackButtonPressed() {
     if (_haveTransaction) {
       _selectTransaction(null);
@@ -225,7 +232,8 @@ class _DesktopContent extends StatelessWidget {
     required this.scrollController,
     required this.transactionsSectionKey,
     required this.addressesSectionKey,
-    required this.onScrollToSection,
+    required this.onShowTransactions,
+    required this.onShowAddresses,
   });
 
   final Coin coin;
@@ -235,7 +243,8 @@ class _DesktopContent extends StatelessWidget {
   final ScrollController scrollController;
   final GlobalKey transactionsSectionKey;
   final GlobalKey addressesSectionKey;
-  final Future<void> Function(GlobalKey) onScrollToSection;
+  final Future<void> Function() onShowTransactions;
+  final Future<void> Function() onShowAddresses;
 
   @override
   Widget build(BuildContext context) {
@@ -257,9 +266,8 @@ class _DesktopContent extends StatelessWidget {
                 child: _DesktopCoinDetails(
                   coin: coin,
                   setPageType: setPageType,
-                  transactionsSectionKey: transactionsSectionKey,
-                  addressesSectionKey: addressesSectionKey,
-                  onScrollToSection: onScrollToSection,
+                  onShowTransactions: onShowTransactions,
+                  onShowAddresses: onShowAddresses,
                 ),
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
@@ -288,16 +296,14 @@ class _DesktopCoinDetails extends StatelessWidget {
   const _DesktopCoinDetails({
     required this.coin,
     required this.setPageType,
-    required this.transactionsSectionKey,
-    required this.addressesSectionKey,
-    required this.onScrollToSection,
+    required this.onShowTransactions,
+    required this.onShowAddresses,
   });
 
   final Coin coin;
   final void Function(CoinPageType) setPageType;
-  final GlobalKey transactionsSectionKey;
-  final GlobalKey addressesSectionKey;
-  final Future<void> Function(GlobalKey) onScrollToSection;
+  final Future<void> Function() onShowTransactions;
+  final Future<void> Function() onShowAddresses;
 
   @override
   Widget build(BuildContext context) {
@@ -340,9 +346,8 @@ class _DesktopCoinDetails extends StatelessWidget {
           const Gap(12),
           _SectionAnchorChips(
             isMobile: false,
-            transactionsSectionKey: transactionsSectionKey,
-            addressesSectionKey: addressesSectionKey,
-            onScrollToSection: onScrollToSection,
+            onShowTransactions: onShowTransactions,
+            onShowAddresses: onShowAddresses,
           ),
           const Gap(16),
           _CoinDetailsMarketMetricsTabBar(coin: coin),
@@ -361,7 +366,8 @@ class _MobileContent extends StatelessWidget {
     required this.scrollController,
     required this.transactionsSectionKey,
     required this.addressesSectionKey,
-    required this.onScrollToSection,
+    required this.onShowTransactions,
+    required this.onShowAddresses,
   });
 
   final Coin coin;
@@ -371,7 +377,8 @@ class _MobileContent extends StatelessWidget {
   final ScrollController scrollController;
   final GlobalKey transactionsSectionKey;
   final GlobalKey addressesSectionKey;
-  final Future<void> Function(GlobalKey) onScrollToSection;
+  final Future<void> Function() onShowTransactions;
+  final Future<void> Function() onShowAddresses;
 
   @override
   Widget build(BuildContext context) {
@@ -387,9 +394,8 @@ class _MobileContent extends StatelessWidget {
                 coin: coin,
                 setPageType: setPageType,
                 context: context,
-                transactionsSectionKey: transactionsSectionKey,
-                addressesSectionKey: addressesSectionKey,
-                onScrollToSection: onScrollToSection,
+                onShowTransactions: onShowTransactions,
+                onShowAddresses: onShowAddresses,
               ),
             ),
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
@@ -417,17 +423,15 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
     required this.coin,
     required this.setPageType,
     required this.context,
-    required this.transactionsSectionKey,
-    required this.addressesSectionKey,
-    required this.onScrollToSection,
+    required this.onShowTransactions,
+    required this.onShowAddresses,
   });
 
   final Coin coin;
   final void Function(CoinPageType p1) setPageType;
   final BuildContext context;
-  final GlobalKey transactionsSectionKey;
-  final GlobalKey addressesSectionKey;
-  final Future<void> Function(GlobalKey) onScrollToSection;
+  final Future<void> Function() onShowTransactions;
+  final Future<void> Function() onShowAddresses;
 
   @override
   Widget build(BuildContext context) {
@@ -464,9 +468,8 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
           ),
           _SectionAnchorChips(
             isMobile: true,
-            transactionsSectionKey: transactionsSectionKey,
-            addressesSectionKey: addressesSectionKey,
-            onScrollToSection: onScrollToSection,
+            onShowTransactions: onShowTransactions,
+            onShowAddresses: onShowAddresses,
           ),
           const SizedBox(height: 12),
           _CoinDetailsMarketMetricsTabBar(coin: coin),
@@ -479,15 +482,13 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
 class _SectionAnchorChips extends StatelessWidget {
   const _SectionAnchorChips({
     required this.isMobile,
-    required this.transactionsSectionKey,
-    required this.addressesSectionKey,
-    required this.onScrollToSection,
+    required this.onShowTransactions,
+    required this.onShowAddresses,
   });
 
   final bool isMobile;
-  final GlobalKey transactionsSectionKey;
-  final GlobalKey addressesSectionKey;
-  final Future<void> Function(GlobalKey) onScrollToSection;
+  final Future<void> Function() onShowTransactions;
+  final Future<void> Function() onShowAddresses;
 
   @override
   Widget build(BuildContext context) {
@@ -509,14 +510,14 @@ class _SectionAnchorChips extends StatelessWidget {
             label: Text(LocaleKeys.transactions.tr(), style: chipLabelStyle),
             backgroundColor: chipBackground,
             side: BorderSide.none,
-            onPressed: () => onScrollToSection(transactionsSectionKey),
+            onPressed: onShowTransactions,
           ),
           ActionChip(
             avatar: const Icon(Icons.account_balance_wallet_outlined, size: 18),
             label: Text(LocaleKeys.addresses.tr(), style: chipLabelStyle),
             backgroundColor: chipBackground,
             side: BorderSide.none,
-            onPressed: () => onScrollToSection(addressesSectionKey),
+            onPressed: onShowAddresses,
           ),
         ],
       ),
