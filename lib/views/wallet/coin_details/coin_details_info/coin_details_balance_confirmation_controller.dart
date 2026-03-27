@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
@@ -64,11 +63,8 @@ class CoinDetailsBalanceConfirmationController extends ChangeNotifier {
 
     _latestBalance = balance;
 
-    if (!_isConfirmed) {
-      final hasNonZeroValue = balance.spendable > Decimal.zero;
-      if (hasNonZeroValue || _hasCompletedBootstrapAttempt) {
-        _isConfirmed = true;
-      }
+    if (!_isConfirmed && _hasCompletedBootstrapAttempt) {
+      _isConfirmed = true;
     }
 
     _notifyListenersIfAlive();

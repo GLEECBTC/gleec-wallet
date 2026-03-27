@@ -564,6 +564,132 @@ class _Balance extends StatefulWidget {
   State<_Balance> createState() => _BalanceState();
 }
 
+class CoinDetailsBalanceContent extends StatelessWidget {
+  const CoinDetailsBalanceContent({
+    required this.coin,
+    required this.hideBalances,
+    required this.isConfirmed,
+    required this.latestBalance,
+    this.fiatBalance,
+    super.key,
+  });
+
+  final Coin coin;
+  final bool hideBalances;
+  final bool isConfirmed;
+  final BalanceInfo? latestBalance;
+  final Widget? fiatBalance;
+
+  Widget _buildGhostValue(ThemeData themeData) {
+    final style = themeData.textTheme.titleMedium?.copyWith(
+      fontSize: isMobile ? 25 : 22,
+      fontWeight: FontWeight.w700,
+      color: theme.custom.headerFloatBoxColor,
+      height: 1.1,
+    );
+
+    return Row(
+      mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment: isMobile
+          ? MainAxisAlignment.center
+          : MainAxisAlignment.start,
+      children: [
+        Container(
+          key: const Key('coin-details-balance'),
+          width: isMobile ? 120 : 132,
+          height: isMobile ? 30 : 24,
+          decoration: BoxDecoration(
+            color: (style?.color ?? themeData.colorScheme.onSurface).withValues(
+              alpha: 0.22,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          Coin.normalizeAbbr(coin.abbr),
+          style: themeData.textTheme.titleSmall!.copyWith(
+            fontSize: isMobile ? 25 : 20,
+            fontWeight: FontWeight.w500,
+            color: theme.custom.headerFloatBoxColor.withValues(alpha: 0.75),
+            height: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeData = Theme.of(context);
+    final showGhost = !hideBalances && !isConfirmed;
+    final balance = latestBalance?.spendable.toDouble();
+    final value = hideBalances
+        ? maskedBalanceText
+        : showGhost
+        ? ''
+        : balance == null
+        ? kBalancePlaceholder
+        : doubleToString(balance);
+
+    return Column(
+      crossAxisAlignment: isMobile
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isMobile)
+          const SizedBox.shrink()
+        else
+          Text(
+            LocaleKeys.yourBalance.tr(),
+            style: themeData.textTheme.titleMedium!.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: theme.custom.headerFloatBoxColor,
+            ),
+          ),
+        Flexible(
+          child: showGhost
+              ? _buildGhostValue(themeData)
+              : Row(
+                  mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+                  mainAxisAlignment: isMobile
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
+                  children: [
+                    Flexible(
+                      child: AutoScrollText(
+                        key: const Key('coin-details-balance'),
+                        text: value,
+                        isSelectable: true,
+                        style: themeData.textTheme.titleMedium!.copyWith(
+                          fontSize: isMobile ? 25 : 22,
+                          fontWeight: FontWeight.w700,
+                          color: theme.custom.headerFloatBoxColor,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      Coin.normalizeAbbr(coin.abbr),
+                      style: themeData.textTheme.titleSmall!.copyWith(
+                        fontSize: isMobile ? 25 : 20,
+                        fontWeight: FontWeight.w500,
+                        color: theme.custom.headerFloatBoxColor,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+        if (!isMobile && !showGhost) fiatBalance ?? _FiatBalance(coin: coin),
+      ],
+    );
+  }
+}
+
 class _BalanceState extends State<_Balance> {
   static const int _maxStartupRetries = 2;
 
@@ -599,124 +725,20 @@ class _BalanceState extends State<_Balance> {
     super.dispose();
   }
 
-  Widget _buildGhostValue(ThemeData themeData) {
-    final style = themeData.textTheme.titleMedium?.copyWith(
-      fontSize: isMobile ? 25 : 22,
-      fontWeight: FontWeight.w700,
-      color: theme.custom.headerFloatBoxColor,
-      height: 1.1,
-    );
-
-    return Row(
-      mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
-      mainAxisAlignment: isMobile
-          ? MainAxisAlignment.center
-          : MainAxisAlignment.start,
-      children: [
-        Container(
-          key: const Key('coin-details-balance'),
-          width: isMobile ? 120 : 132,
-          height: isMobile ? 30 : 24,
-          decoration: BoxDecoration(
-            color: (style?.color ?? themeData.colorScheme.onSurface).withValues(
-              alpha: 0.22,
-            ),
-            borderRadius: BorderRadius.circular(6),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          Coin.normalizeAbbr(widget.coin.abbr),
-          style: themeData.textTheme.titleSmall!.copyWith(
-            fontSize: isMobile ? 25 : 20,
-            fontWeight: FontWeight.w500,
-            color: theme.custom.headerFloatBoxColor.withValues(alpha: 0.75),
-            height: 1.1,
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final ThemeData themeData = Theme.of(context);
     final hideBalances = context.select(
       (SettingsBloc bloc) => bloc.state.hideBalances,
     );
 
     return ListenableBuilder(
       listenable: _confirmationController,
-      builder: (context, _) {
-        final showGhost = !hideBalances && !_confirmationController.isConfirmed;
-        final balance = _confirmationController.latestBalance?.spendable
-            .toDouble();
-        final value = hideBalances
-            ? maskedBalanceText
-            : showGhost
-            ? ''
-            : balance == null
-            ? kBalancePlaceholder
-            : doubleToString(balance);
-
-        return Column(
-          crossAxisAlignment: isMobile
-              ? CrossAxisAlignment.center
-              : CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isMobile)
-              const SizedBox.shrink()
-            else
-              Text(
-                LocaleKeys.yourBalance.tr(),
-                style: themeData.textTheme.titleMedium!.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: theme.custom.headerFloatBoxColor,
-                ),
-              ),
-            Flexible(
-              child: showGhost
-                  ? _buildGhostValue(themeData)
-                  : Row(
-                      mainAxisSize: isMobile
-                          ? MainAxisSize.max
-                          : MainAxisSize.min,
-                      mainAxisAlignment: isMobile
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [
-                        Flexible(
-                          child: AutoScrollText(
-                            key: const Key('coin-details-balance'),
-                            text: value,
-                            isSelectable: true,
-                            style: themeData.textTheme.titleMedium!.copyWith(
-                              fontSize: isMobile ? 25 : 22,
-                              fontWeight: FontWeight.w700,
-                              color: theme.custom.headerFloatBoxColor,
-                              height: 1.1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          Coin.normalizeAbbr(widget.coin.abbr),
-                          style: themeData.textTheme.titleSmall!.copyWith(
-                            fontSize: isMobile ? 25 : 20,
-                            fontWeight: FontWeight.w500,
-                            color: theme.custom.headerFloatBoxColor,
-                            height: 1.1,
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-            if (!isMobile) _FiatBalance(coin: widget.coin),
-          ],
-        );
-      },
+      builder: (context, _) => CoinDetailsBalanceContent(
+        coin: widget.coin,
+        hideBalances: hideBalances,
+        isConfirmed: _confirmationController.isConfirmed,
+        latestBalance: _confirmationController.latestBalance,
+      ),
     );
   }
 }

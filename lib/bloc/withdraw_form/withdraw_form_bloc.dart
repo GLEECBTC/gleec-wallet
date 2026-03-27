@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
@@ -48,7 +49,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
            amount: '0',
          ),
        ) {
-    on<WithdrawFormRecipientChanged>(_onRecipientChanged);
+    on<WithdrawFormRecipientChanged>(
+      _onRecipientChanged,
+      transformer: restartable(),
+    );
     on<WithdrawFormAmountChanged>(_onAmountChanged);
     on<WithdrawFormSourceChanged>(_onSourceChanged);
     on<WithdrawFormMaxAmountEnabled>(_onMaxAmountEnabled);
@@ -58,10 +62,16 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormMemoChanged>(_onMemoChanged);
     on<WithdrawFormIbcTransferEnabled>(_onIbcTransferEnabled);
     on<WithdrawFormIbcChannelChanged>(_onIbcChannelChanged);
-    on<WithdrawFormPreviewSubmitted>(_onPreviewSubmitted);
-    on<WithdrawFormSubmitted>(_onSubmitted);
+    on<WithdrawFormPreviewSubmitted>(
+      _onPreviewSubmitted,
+      transformer: droppable(),
+    );
+    on<WithdrawFormSubmitted>(_onSubmitted, transformer: droppable());
     on<WithdrawFormTronPreviewTicked>(_onTronPreviewTicked);
-    on<WithdrawFormTronPreviewRefreshRequested>(_onTronPreviewRefreshRequested);
+    on<WithdrawFormTronPreviewRefreshRequested>(
+      _onTronPreviewRefreshRequested,
+      transformer: droppable(),
+    );
     on<WithdrawFormCancelled>(_onCancelled);
     on<WithdrawFormReset>(_onReset);
     on<WithdrawFormStepReverted>(_onStepReverted);
@@ -137,30 +147,31 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   Future<WithdrawalPreview> _generatePreview(
-    WithdrawFormState currentState,
+    WithdrawFormState requestState,
     Emitter<WithdrawFormState> emit,
   ) async {
     if (_walletType == WalletType.trezor) {
-      emit(currentState.copyWith(isAwaitingTrezorConfirmation: true));
+      emit(requestState.copyWith(isAwaitingTrezorConfirmation: true));
     }
 
-    final params = currentState.toWithdrawParameters();
+    final params = requestState.toWithdrawParameters();
     return _sdk.withdrawals.previewWithdrawal(params);
   }
 
   void _emitPreviewState(
     Emitter<WithdrawFormState> emit,
+    WithdrawFormState requestState,
     WithdrawalPreview preview, {
     required bool moveToConfirm,
   }) {
-    final expiryAt = _buildPreviewExpiryAt(state, preview);
+    final expiryAt = _buildPreviewExpiryAt(requestState, preview);
     final secondsRemaining = expiryAt == null
         ? null
         : _calculatePreviewSecondsRemaining(expiryAt);
     final isExpired = secondsRemaining != null && secondsRemaining <= 0;
-    final nextState = state.copyWith(
+    final nextState = requestState.copyWith(
       preview: () => preview,
-      step: moveToConfirm ? WithdrawFormStep.confirm : state.step,
+      step: moveToConfirm ? WithdrawFormStep.confirm : requestState.step,
       previewError: () => null,
       transactionError: () => null,
       confirmStepError: () => isExpired
@@ -357,6 +368,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormRecipientChanged event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
+
     try {
       final trimmedAddress = event.address.trim();
 
@@ -387,6 +400,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
             asset: state.asset,
             address: result.convertedAddress,
           );
+          if (state.isSending ||
+              state.step != WithdrawFormStep.fill ||
+              state.recipientAddress != trimmedAddress) {
+            return;
+          }
           final isMixedCaseAdddress = result.convertedAddress != trimmedAddress;
 
           if (validationResult.isValid) {
@@ -409,6 +427,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         asset: state.asset,
         address: trimmedAddress,
       );
+      if (state.isSending ||
+          state.step != WithdrawFormStep.fill ||
+          state.recipientAddress != trimmedAddress) {
+        return;
+      }
       if (!validationResult.isValid) {
         emit(
           state.copyWith(
@@ -450,6 +473,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormAmountChanged event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     if (state.isMaxAmount) return;
 
     try {
@@ -501,6 +525,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormSourceChanged event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     final balance = event.address.balance;
     final updatedAmount = state.isMaxAmount
         ? balance.spendable.toString()
@@ -526,6 +551,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormMaxAmountEnabled event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     if (event.isEnabled && state.asset.id.parentId != null) {
       final parentId = state.asset.id.parentId!;
       final parentBalance =
@@ -564,6 +590,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormCustomFeeEnabled event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     final defaultPriority =
         state.selectedFeePriority ??
         (state.feeOptions != null ? WithdrawalFeeLevel.medium : null);
@@ -582,6 +609,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormCustomFeeChanged event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     try {
       _validateFee(event.fee);
       emit(
@@ -598,6 +626,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormFeePriorityChanged event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     emit(
       state.copyWith(
         selectedFeePriority: () => event.priority,
@@ -701,6 +730,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormMemoChanged event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     emit(state.copyWith(memo: () => event.memo));
   }
 
@@ -708,6 +738,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormIbcTransferEnabled event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     emit(
       state.copyWith(
         isIbcTransfer: event.isEnabled,
@@ -721,6 +752,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormIbcChannelChanged event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     if (event.channel.isEmpty) {
       emit(
         state.copyWith(
@@ -744,11 +776,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormPreviewSubmitted event,
     Emitter<WithdrawFormState> emit,
   ) async {
-    if (state.hasValidationErrors) return;
+    final requestState = state;
+    if (requestState.hasValidationErrors) return;
     final guardError = _previewGuardError();
     if (guardError != null) {
       emit(
-        state.copyWith(
+        requestState.copyWith(
           previewError: () => guardError,
           isSending: false,
           isAwaitingTrezorConfirmation: false,
@@ -761,7 +794,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       _cancelTronPreviewTimer();
 
       emit(
-        state.copyWith(
+        requestState.copyWith(
           isSending: true,
           previewError: () => null,
           confirmStepError: () => null,
@@ -773,8 +806,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ),
       );
 
-      final preview = await _generatePreview(state, emit);
-      _emitPreviewState(emit, preview, moveToConfirm: true);
+      final preview = await _generatePreview(requestState, emit);
+      _emitPreviewState(emit, requestState, preview, moveToConfirm: true);
     } catch (e) {
       _cancelTronPreviewTimer();
 
@@ -792,7 +825,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       }
 
       emit(
-        state.copyWith(
+        requestState.copyWith(
           previewError: () =>
               _buildTextError(e, fallbackPrefix: 'Failed to generate preview'),
           isSending: false,
@@ -848,18 +881,19 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormTronPreviewRefreshRequested event,
     Emitter<WithdrawFormState> emit,
   ) async {
-    if (!_isTronAsset(state.asset) ||
-        state.step != WithdrawFormStep.confirm ||
-        state.preview == null ||
-        state.isSending ||
-        state.isPreviewRefreshing) {
+    final requestState = state;
+    if (!_isTronAsset(requestState.asset) ||
+        requestState.step != WithdrawFormStep.confirm ||
+        requestState.preview == null ||
+        requestState.isSending ||
+        requestState.isPreviewRefreshing) {
       return;
     }
 
     final guardError = _previewGuardError();
     if (guardError != null) {
       emit(
-        state.copyWith(
+        requestState.copyWith(
           isPreviewRefreshing: false,
           isPreviewExpired: true,
           previewSecondsRemaining: () => 0,
@@ -874,7 +908,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       _cancelTronPreviewTimer();
 
       emit(
-        state.copyWith(
+        requestState.copyWith(
           isPreviewRefreshing: true,
           isPreviewExpired: true,
           previewSecondsRemaining: () => 0,
@@ -884,11 +918,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ),
       );
 
-      final preview = await _generatePreview(state, emit);
-      _emitPreviewState(emit, preview, moveToConfirm: false);
+      final preview = await _generatePreview(requestState, emit);
+      _emitPreviewState(emit, requestState, preview, moveToConfirm: false);
     } catch (e) {
       emit(
-        state.copyWith(
+        requestState.copyWith(
           isPreviewRefreshing: false,
           isPreviewExpired: true,
           previewSecondsRemaining: () => 0,
@@ -1063,6 +1097,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormStepReverted event,
     Emitter<WithdrawFormState> emit,
   ) {
+    if (state.isSending || state.isPreviewRefreshing) {
+      return;
+    }
+
     if (state.step == WithdrawFormStep.confirm) {
       _cancelTronPreviewTimer();
       emit(
@@ -1098,24 +1136,23 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           : _calculatePreviewSecondsRemaining(expiryAt);
       final isExpired = secondsRemaining != null && secondsRemaining <= 0;
 
-      emit(
-        state.copyWith(
-          step: nextStep,
-          transactionError: () => null,
-          confirmStepError: () => isExpired
-              ? TextError(error: LocaleKeys.withdrawTronPreviewExpired.tr())
-              : null,
-          isSending: false,
-          previewExpiresAt: () => expiryAt,
-          previewSecondsRemaining: () => secondsRemaining,
-          isPreviewExpired: isExpired,
-          isPreviewRefreshing: false,
-          isAwaitingTrezorConfirmation: false,
-        ),
+      final nextState = state.copyWith(
+        step: nextStep,
+        transactionError: () => null,
+        confirmStepError: () => isExpired
+            ? TextError(error: LocaleKeys.withdrawTronPreviewExpired.tr())
+            : null,
+        isSending: false,
+        previewExpiresAt: () => expiryAt,
+        previewSecondsRemaining: () => secondsRemaining,
+        isPreviewExpired: isExpired,
+        isPreviewRefreshing: false,
+        isAwaitingTrezorConfirmation: false,
       );
+      emit(nextState);
 
       if (!isExpired) {
-        _startTronPreviewTimer(state);
+        _startTronPreviewTimer(nextState);
       }
       return;
     }
@@ -1147,6 +1184,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormConvertAddressRequested event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
     if (state.isMixedCaseAddress) return;
 
     try {

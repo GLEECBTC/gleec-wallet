@@ -757,6 +757,7 @@ class WithdrawFormFillSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
+        final isEditingLocked = state.isSending;
         final isSourceInputEnabled =
             // Enabled if the asset has multiple source addresses or if there is
             // no selected address and pubkeys are available.
@@ -767,120 +768,129 @@ class WithdrawFormFillSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SourceAddressField(
-              asset: state.asset,
-              pubkeys: state.pubkeys,
-              selectedAddress: state.selectedSourceAddress,
-              isLoading: state.pubkeys?.isEmpty ?? true,
-              onChanged: isSourceInputEnabled
-                  ? (address) => address == null
-                        ? null
-                        : context.read<WithdrawFormBloc>().add(
-                            WithdrawFormSourceChanged(address),
-                          )
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            RecipientAddressWithNotification(
-              address: state.recipientAddress,
-              isMixedAddress: state.isMixedCaseAddress,
-              onChanged: (value) => context.read<WithdrawFormBloc>().add(
-                WithdrawFormRecipientChanged(value),
-              ),
-              onQrScanned: (value) => context.read<WithdrawFormBloc>().add(
-                WithdrawFormRecipientChanged(value),
-              ),
-              errorText: state.recipientAddressError == null
-                  ? null
-                  : () => state.recipientAddressError?.message,
-            ),
-            const SizedBox(height: 16),
-            if (state.asset.protocol is TendermintProtocol) ...[
-              const IbcTransferField(),
-              if (state.isIbcTransfer) ...[
-                const SizedBox(height: 16),
-                const IbcChannelField(),
-              ],
-              const SizedBox(height: 16),
-            ],
-            WithdrawAmountField(
-              asset: state.asset,
-              amount: state.amount,
-              isMaxAmount: state.isMaxAmount,
-              onChanged: (value) => context.read<WithdrawFormBloc>().add(
-                WithdrawFormAmountChanged(value),
-              ),
-              onMaxToggled: (value) => context.read<WithdrawFormBloc>().add(
-                WithdrawFormMaxAmountEnabled(value),
-              ),
-              amountError: state.amountError?.message,
-            ),
-            if (state.isPriorityFeeSupported) ...[
-              const SizedBox(height: 16),
-              WithdrawalPrioritySelector(
-                feeOptions: state.feeOptions,
-                selectedPriority: state.selectedFeePriority,
-                onPriorityChanged: (priority) {
-                  context.read<WithdrawFormBloc>().add(
-                    WithdrawFormFeePriorityChanged(priority),
-                  );
-                },
-                onCustomFeeSelected: () {
-                  context.read<WithdrawFormBloc>().add(
-                    const WithdrawFormCustomFeeEnabled(true),
-                  );
-                },
-              ),
-            ] else if (state.isCustomFeeSupported) ...[
-              const SizedBox(height: 16),
-              Row(
+            IgnorePointer(
+              key: const Key('withdraw-form-fill-input-lock'),
+              ignoring: isEditingLocked,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Checkbox(
-                    value: state.isCustomFee,
-                    onChanged: (enabled) => context
-                        .read<WithdrawFormBloc>()
-                        .add(WithdrawFormCustomFeeEnabled(enabled ?? false)),
+                  SourceAddressField(
+                    asset: state.asset,
+                    pubkeys: state.pubkeys,
+                    selectedAddress: state.selectedSourceAddress,
+                    isLoading: state.pubkeys?.isEmpty ?? true,
+                    onChanged: isSourceInputEnabled
+                        ? (address) => address == null
+                              ? null
+                              : context.read<WithdrawFormBloc>().add(
+                                  WithdrawFormSourceChanged(address),
+                                )
+                        : null,
                   ),
-                  Text(LocaleKeys.customNetworkFee.tr()),
+                  const SizedBox(height: 16),
+                  RecipientAddressWithNotification(
+                    address: state.recipientAddress,
+                    isMixedAddress: state.isMixedCaseAddress,
+                    onChanged: (value) => context.read<WithdrawFormBloc>().add(
+                      WithdrawFormRecipientChanged(value),
+                    ),
+                    onQrScanned: (value) => context
+                        .read<WithdrawFormBloc>()
+                        .add(WithdrawFormRecipientChanged(value)),
+                    errorText: state.recipientAddressError == null
+                        ? null
+                        : () => state.recipientAddressError?.message,
+                  ),
+                  const SizedBox(height: 16),
+                  if (state.asset.protocol is TendermintProtocol) ...[
+                    const IbcTransferField(),
+                    if (state.isIbcTransfer) ...[
+                      const SizedBox(height: 16),
+                      const IbcChannelField(),
+                    ],
+                    const SizedBox(height: 16),
+                  ],
+                  WithdrawAmountField(
+                    asset: state.asset,
+                    amount: state.amount,
+                    isMaxAmount: state.isMaxAmount,
+                    onChanged: (value) => context.read<WithdrawFormBloc>().add(
+                      WithdrawFormAmountChanged(value),
+                    ),
+                    onMaxToggled: (value) => context
+                        .read<WithdrawFormBloc>()
+                        .add(WithdrawFormMaxAmountEnabled(value)),
+                    amountError: state.amountError?.message,
+                  ),
+                  if (state.isPriorityFeeSupported) ...[
+                    const SizedBox(height: 16),
+                    WithdrawalPrioritySelector(
+                      feeOptions: state.feeOptions,
+                      selectedPriority: state.selectedFeePriority,
+                      onPriorityChanged: (priority) {
+                        context.read<WithdrawFormBloc>().add(
+                          WithdrawFormFeePriorityChanged(priority),
+                        );
+                      },
+                      onCustomFeeSelected: () {
+                        context.read<WithdrawFormBloc>().add(
+                          const WithdrawFormCustomFeeEnabled(true),
+                        );
+                      },
+                    ),
+                  ] else if (state.isCustomFeeSupported) ...[
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: state.isCustomFee,
+                          onChanged: (enabled) =>
+                              context.read<WithdrawFormBloc>().add(
+                                WithdrawFormCustomFeeEnabled(enabled ?? false),
+                              ),
+                        ),
+                        Text(LocaleKeys.customNetworkFee.tr()),
+                      ],
+                    ),
+                  ],
+                  if (state.isCustomFeeSupported &&
+                      state.isCustomFee &&
+                      state.customFee != null) ...[
+                    const SizedBox(height: 8),
+                    FeeInfoInput(
+                      asset: state.asset,
+                      selectedFee: state.customFee!,
+                      isCustomFee: true, // indicates user can edit it
+                      onFeeSelected: (newFee) {
+                        context.read<WithdrawFormBloc>().add(
+                          WithdrawFormCustomFeeChanged(newFee!),
+                        );
+                      },
+                    ),
+                    if (state.customFeeError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          state.customFeeError!.message,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                  const SizedBox(height: 16),
+                  if (_isMemoSupportedProtocol(state.asset)) ...[
+                    WithdrawMemoField(
+                      memo: state.memo,
+                      onChanged: (value) => context
+                          .read<WithdrawFormBloc>()
+                          .add(WithdrawFormMemoChanged(value)),
+                    ),
+                  ],
                 ],
               ),
-            ],
-            if (state.isCustomFeeSupported &&
-                state.isCustomFee &&
-                state.customFee != null) ...[
-              const SizedBox(height: 8),
-              FeeInfoInput(
-                asset: state.asset,
-                selectedFee: state.customFee!,
-                isCustomFee: true, // indicates user can edit it
-                onFeeSelected: (newFee) {
-                  context.read<WithdrawFormBloc>().add(
-                    WithdrawFormCustomFeeChanged(newFee!),
-                  );
-                },
-              ),
-              // If the bloc has an error for custom fees:
-              if (state.customFeeError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    state.customFeeError!.message,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-            ],
-            const SizedBox(height: 16),
-            if (_isMemoSupportedProtocol(state.asset)) ...[
-              WithdrawMemoField(
-                memo: state.memo,
-                onChanged: (value) => context.read<WithdrawFormBloc>().add(
-                  WithdrawFormMemoChanged(value),
-                ),
-              ),
-            ],
+            ),
             const SizedBox(height: 24),
             // TODO! Refactor to use Formz and replace with the appropriate
             // error state value.
@@ -973,9 +983,11 @@ class WithdrawFormConfirmSection extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => context.read<WithdrawFormBloc>().add(
-                      const WithdrawFormStepReverted(),
-                    ),
+                    onPressed: state.isSending || state.isPreviewRefreshing
+                        ? null
+                        : () => context.read<WithdrawFormBloc>().add(
+                            const WithdrawFormStepReverted(),
+                          ),
                     child: Text(LocaleKeys.back.tr()),
                   ),
                 ),

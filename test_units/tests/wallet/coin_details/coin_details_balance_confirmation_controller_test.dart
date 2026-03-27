@@ -34,7 +34,7 @@ void main() {
     );
 
     test(
-      'stream update confirms balance when it carries a non-zero amount',
+      'pre-bootstrap stream update stays unconfirmed even when cached value is non-zero',
       () {
         final controller = CoinDetailsBalanceConfirmationController(
           fetchConfirmedBalance: () async => _balance(0),
@@ -42,6 +42,25 @@ void main() {
 
         expect(controller.isConfirmed, isFalse);
 
+        controller.onStreamBalance(_balance(7));
+
+        expect(controller.isConfirmed, isFalse);
+        expect(controller.latestBalance?.spendable, Decimal.fromInt(7));
+      },
+    );
+
+    test(
+      'stream update confirms balance after a bootstrap attempt completes',
+      () async {
+        final controller = CoinDetailsBalanceConfirmationController(
+          fetchConfirmedBalance: () async {
+            throw StateError('temporary bootstrap failure');
+          },
+        );
+
+        expect(controller.isConfirmed, isFalse);
+
+        await controller.bootstrap();
         controller.onStreamBalance(_balance(7));
 
         expect(controller.isConfirmed, isTrue);
