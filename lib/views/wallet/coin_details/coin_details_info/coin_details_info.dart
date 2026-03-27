@@ -63,6 +63,8 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
     with SingleTickerProviderStateMixin {
   Transaction? _selectedTransaction;
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _transactionsSectionKey = GlobalKey();
+  final GlobalKey _addressesSectionKey = GlobalKey();
 
   String? get _walletId =>
       RepositoryProvider.of<AuthBloc>(context).state.currentUser?.walletId.name;
@@ -138,6 +140,9 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
         setPageType: widget.setPageType,
         setTransaction: _selectTransaction,
         scrollController: _scrollController,
+        transactionsSectionKey: _transactionsSectionKey,
+        addressesSectionKey: _addressesSectionKey,
+        onScrollToSection: _scrollToSection,
       );
     }
     return _DesktopContent(
@@ -146,6 +151,9 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
       setPageType: widget.setPageType,
       setTransaction: _selectTransaction,
       scrollController: _scrollController,
+      transactionsSectionKey: _transactionsSectionKey,
+      addressesSectionKey: _addressesSectionKey,
+      onScrollToSection: _scrollToSection,
     );
   }
 
@@ -169,6 +177,20 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
     setState(() {
       _selectedTransaction = tx;
     });
+  }
+
+  Future<void> _scrollToSection(GlobalKey sectionKey) async {
+    final targetContext = sectionKey.currentContext;
+    if (targetContext == null) {
+      return;
+    }
+
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+    );
   }
 
   void _onBackButtonPressed() {
@@ -201,6 +223,9 @@ class _DesktopContent extends StatelessWidget {
     required this.setPageType,
     required this.setTransaction,
     required this.scrollController,
+    required this.transactionsSectionKey,
+    required this.addressesSectionKey,
+    required this.onScrollToSection,
   });
 
   final Coin coin;
@@ -208,6 +233,9 @@ class _DesktopContent extends StatelessWidget {
   final void Function(CoinPageType) setPageType;
   final Function(Transaction?) setTransaction;
   final ScrollController scrollController;
+  final GlobalKey transactionsSectionKey;
+  final GlobalKey addressesSectionKey;
+  final Future<void> Function(GlobalKey) onScrollToSection;
 
   @override
   Widget build(BuildContext context) {
@@ -229,17 +257,25 @@ class _DesktopContent extends StatelessWidget {
                 child: _DesktopCoinDetails(
                   coin: coin,
                   setPageType: setPageType,
+                  transactionsSectionKey: transactionsSectionKey,
+                  addressesSectionKey: addressesSectionKey,
+                  onScrollToSection: onScrollToSection,
                 ),
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
             TransactionTable(
+              key: transactionsSectionKey,
               coin: coin,
               selectedTransaction: selectedTransaction,
               setTransaction: setTransaction,
             ),
             if (selectedTransaction == null) ...[
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
-              CoinAddresses(coin: coin, setPageType: setPageType),
+              CoinAddresses(
+                key: addressesSectionKey,
+                coin: coin,
+                setPageType: setPageType,
+              ),
             ],
           ],
         ),
@@ -249,10 +285,19 @@ class _DesktopContent extends StatelessWidget {
 }
 
 class _DesktopCoinDetails extends StatelessWidget {
-  const _DesktopCoinDetails({required this.coin, required this.setPageType});
+  const _DesktopCoinDetails({
+    required this.coin,
+    required this.setPageType,
+    required this.transactionsSectionKey,
+    required this.addressesSectionKey,
+    required this.onScrollToSection,
+  });
 
   final Coin coin;
   final void Function(CoinPageType) setPageType;
+  final GlobalKey transactionsSectionKey;
+  final GlobalKey addressesSectionKey;
+  final Future<void> Function(GlobalKey) onScrollToSection;
 
   @override
   Widget build(BuildContext context) {
@@ -292,6 +337,13 @@ class _DesktopCoinDetails extends StatelessWidget {
               coin: coin,
             ),
           ),
+          const Gap(12),
+          _SectionAnchorChips(
+            isMobile: false,
+            transactionsSectionKey: transactionsSectionKey,
+            addressesSectionKey: addressesSectionKey,
+            onScrollToSection: onScrollToSection,
+          ),
           const Gap(16),
           _CoinDetailsMarketMetricsTabBar(coin: coin),
         ],
@@ -307,6 +359,9 @@ class _MobileContent extends StatelessWidget {
     required this.setPageType,
     required this.setTransaction,
     required this.scrollController,
+    required this.transactionsSectionKey,
+    required this.addressesSectionKey,
+    required this.onScrollToSection,
   });
 
   final Coin coin;
@@ -314,6 +369,9 @@ class _MobileContent extends StatelessWidget {
   final void Function(CoinPageType) setPageType;
   final Function(Transaction?) setTransaction;
   final ScrollController scrollController;
+  final GlobalKey transactionsSectionKey;
+  final GlobalKey addressesSectionKey;
+  final Future<void> Function(GlobalKey) onScrollToSection;
 
   @override
   Widget build(BuildContext context) {
@@ -329,13 +387,21 @@ class _MobileContent extends StatelessWidget {
                 coin: coin,
                 setPageType: setPageType,
                 context: context,
+                transactionsSectionKey: transactionsSectionKey,
+                addressesSectionKey: addressesSectionKey,
+                onScrollToSection: onScrollToSection,
               ),
             ),
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
           if (selectedTransaction == null)
-            CoinAddresses(coin: coin, setPageType: setPageType),
+            CoinAddresses(
+              key: addressesSectionKey,
+              coin: coin,
+              setPageType: setPageType,
+            ),
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
           TransactionTable(
+            key: transactionsSectionKey,
             coin: coin,
             selectedTransaction: selectedTransaction,
             setTransaction: setTransaction,
@@ -351,11 +417,17 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
     required this.coin,
     required this.setPageType,
     required this.context,
+    required this.transactionsSectionKey,
+    required this.addressesSectionKey,
+    required this.onScrollToSection,
   });
 
   final Coin coin;
   final void Function(CoinPageType p1) setPageType;
   final BuildContext context;
+  final GlobalKey transactionsSectionKey;
+  final GlobalKey addressesSectionKey;
+  final Future<void> Function(GlobalKey) onScrollToSection;
 
   @override
   Widget build(BuildContext context) {
@@ -390,7 +462,62 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
               coin: coin,
             ),
           ),
+          _SectionAnchorChips(
+            isMobile: true,
+            transactionsSectionKey: transactionsSectionKey,
+            addressesSectionKey: addressesSectionKey,
+            onScrollToSection: onScrollToSection,
+          ),
+          const SizedBox(height: 12),
           _CoinDetailsMarketMetricsTabBar(coin: coin),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionAnchorChips extends StatelessWidget {
+  const _SectionAnchorChips({
+    required this.isMobile,
+    required this.transactionsSectionKey,
+    required this.addressesSectionKey,
+    required this.onScrollToSection,
+  });
+
+  final bool isMobile;
+  final GlobalKey transactionsSectionKey;
+  final GlobalKey addressesSectionKey;
+  final Future<void> Function(GlobalKey) onScrollToSection;
+
+  @override
+  Widget build(BuildContext context) {
+    final themeData = Theme.of(context);
+    final chipBackground = themeData.colorScheme.surfaceContainerHighest;
+    final chipLabelStyle = themeData.textTheme.labelMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+
+    return Align(
+      alignment: isMobile ? Alignment.center : Alignment.centerLeft,
+      child: Wrap(
+        alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ActionChip(
+            avatar: const Icon(Icons.receipt_long_outlined, size: 18),
+            label: Text(LocaleKeys.transactions.tr(), style: chipLabelStyle),
+            backgroundColor: chipBackground,
+            side: BorderSide.none,
+            onPressed: () => onScrollToSection(transactionsSectionKey),
+          ),
+          ActionChip(
+            avatar: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+            label: Text(LocaleKeys.addresses.tr(), style: chipLabelStyle),
+            backgroundColor: chipBackground,
+            side: BorderSide.none,
+            onPressed: () => onScrollToSection(addressesSectionKey),
+          ),
         ],
       ),
     );
