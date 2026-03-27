@@ -133,6 +133,22 @@ WithdrawalPreview _tronPreview({
   );
 }
 
+WithdrawalFeeOptions _utxoFeeOptions(String assetId) {
+  WithdrawalFeeOption option(WithdrawalFeeLevel priority, String amount) {
+    return WithdrawalFeeOption(
+      priority: priority,
+      feeInfo: FeeInfo.utxoFixed(coin: assetId, amount: Decimal.parse(amount)),
+    );
+  }
+
+  return WithdrawalFeeOptions(
+    coin: assetId,
+    low: option(WithdrawalFeeLevel.low, '0.00001'),
+    medium: option(WithdrawalFeeLevel.medium, '0.00002'),
+    high: option(WithdrawalFeeLevel.high, '0.00003'),
+  );
+}
+
 WithdrawalResult _resultFromPreview(WithdrawalPreview preview) {
   return WithdrawalResult(
     txHash: preview.txHash,
@@ -382,6 +398,152 @@ void main() {
       expect(confirmState.amount, '1');
       expect(confirmState.recipientAddress, 'recipient-1');
     });
+
+    test(
+      'preview completion preserves concurrent fee option updates',
+      () async {
+        final asset = _assetFromConfig(_utxoConfig());
+        final feeOptionsCompleter = Completer<WithdrawalFeeOptions?>();
+        final previewCompleter = Completer<WithdrawalPreview>();
+        final expectedFeeOptions = _utxoFeeOptions(asset.id.id);
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) => previewCompleter.future,
+          getFeeOptionsHandler: (_) => feeOptionsCompleter.future,
+        );
+        final bloc = WithdrawFormBloc(
+          asset: asset,
+          sdk: _FakeSdk(
+            addresses: _FakeAddressOperations(),
+            withdrawals: withdrawals,
+            pubkeys: _FakePubkeyManager({asset.id: _assetPubkeys(asset)}),
+            balances: _FakeBalanceManager({asset.id: _balance('5')}),
+          ),
+          mm2Api: _FakeMm2Api(),
+        );
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+
+        final sendingState = bloc.stream.firstWhere((state) => state.isSending);
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await sendingState;
+
+        feeOptionsCompleter.complete(expectedFeeOptions);
+        await bloc.stream.firstWhere(
+          (state) =>
+              state.feeOptions == expectedFeeOptions &&
+              state.selectedFeePriority == WithdrawalFeeLevel.medium,
+        );
+
+        previewCompleter.complete(
+          _utxoPreview(
+            assetId: asset.id.id,
+            txHash: 'preview-1',
+            toAddress: 'recipient-1',
+            timestamp: 1,
+          ),
+        );
+
+        final confirmState = await bloc.stream.firstWhere(
+          (state) =>
+              state.step == WithdrawFormStep.confirm &&
+              state.preview?.txHash == 'preview-1',
+        );
+
+        expect(confirmState.feeOptions, expectedFeeOptions);
+        expect(confirmState.selectedFeePriority, WithdrawalFeeLevel.medium);
+      },
+    );
+
+    test(
+      'stale preview results are discarded after request inputs change',
+      () async {
+        final asset = _assetFromConfig(_utxoConfig());
+        final previewCompleter = Completer<WithdrawalPreview>();
+        final initialPubkey = PubkeyInfo(
+          address: 'source-address-1',
+          derivationPath: "m/44'/141'/0'/0/0",
+          chain: 'external',
+          balance: _balance('5'),
+          coinTicker: asset.id.id,
+        );
+        final updatedPubkey = PubkeyInfo(
+          address: 'source-address-2',
+          derivationPath: "m/44'/141'/0'/0/1",
+          chain: 'external',
+          balance: _balance('5'),
+          coinTicker: asset.id.id,
+        );
+        final pubkeysByAssetId = <AssetId, AssetPubkeys>{
+          asset.id: AssetPubkeys(
+            assetId: asset.id,
+            keys: [initialPubkey],
+            availableAddressesCount: 1,
+            syncStatus: SyncStatusEnum.success,
+          ),
+        };
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) => previewCompleter.future,
+        );
+        final bloc = WithdrawFormBloc(
+          asset: asset,
+          sdk: _FakeSdk(
+            addresses: _FakeAddressOperations(),
+            withdrawals: withdrawals,
+            pubkeys: _FakePubkeyManager(pubkeysByAssetId),
+            balances: _FakeBalanceManager({asset.id: _balance('5')}),
+          ),
+          mm2Api: _FakeMm2Api(),
+        );
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+
+        final sendingState = bloc.stream.firstWhere((state) => state.isSending);
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await sendingState;
+
+        pubkeysByAssetId[asset.id] = AssetPubkeys(
+          assetId: asset.id,
+          keys: [updatedPubkey],
+          availableAddressesCount: 1,
+          syncStatus: SyncStatusEnum.success,
+        );
+        bloc.add(const WithdrawFormSourcesLoadRequested());
+        await bloc.stream.firstWhere(
+          (state) =>
+              state.selectedSourceAddress?.derivationPath ==
+              updatedPubkey.derivationPath,
+        );
+
+        previewCompleter.complete(
+          _utxoPreview(
+            assetId: asset.id.id,
+            txHash: 'preview-1',
+            toAddress: 'recipient-1',
+            timestamp: 1,
+          ),
+        );
+
+        final settledState = await bloc.stream.firstWhere(
+          (state) =>
+              !state.isSending &&
+              state.selectedSourceAddress?.derivationPath ==
+                  updatedPubkey.derivationPath,
+        );
+
+        expect(
+          withdrawals.previewRequests.single.from,
+          WithdrawalSource.hdDerivationPath(initialPubkey.derivationPath!),
+        );
+        expect(settledState.step, WithdrawFormStep.fill);
+        expect(settledState.preview, isNull);
+        expect(
+          settledState.selectedSourceAddress?.derivationPath,
+          updatedPubkey.derivationPath,
+        );
+      },
+    );
 
     test(
       'duplicate preview submissions are dropped while one is running',

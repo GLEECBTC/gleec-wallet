@@ -153,20 +153,41 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     return _sdk.withdrawals.previewWithdrawal(params);
   }
 
+  bool _matchesPreviewRequest(
+    WithdrawFormState requestState,
+    WithdrawFormState currentState,
+  ) {
+    return requestState.toWithdrawParameters() ==
+        currentState.toWithdrawParameters();
+  }
+
   void _emitPreviewState(
     Emitter<WithdrawFormState> emit,
     WithdrawFormState requestState,
     WithdrawalPreview preview, {
     required bool moveToConfirm,
   }) {
-    final expiryAt = _buildPreviewExpiryAt(requestState, preview);
+    final currentState = state;
+    if (!_matchesPreviewRequest(requestState, currentState)) {
+      emit(
+        currentState.copyWith(
+          isSending: false,
+          isPreviewRefreshing: false,
+          isAwaitingTrezorConfirmation: false,
+        ),
+      );
+      _cancelTronPreviewTimer();
+      return;
+    }
+
+    final expiryAt = _buildPreviewExpiryAt(currentState, preview);
     final secondsRemaining = expiryAt == null
         ? null
         : _calculatePreviewSecondsRemaining(expiryAt);
     final isExpired = secondsRemaining != null && secondsRemaining <= 0;
-    final nextState = requestState.copyWith(
+    final nextState = currentState.copyWith(
       preview: () => preview,
-      step: moveToConfirm ? WithdrawFormStep.confirm : requestState.step,
+      step: moveToConfirm ? WithdrawFormStep.confirm : currentState.step,
       previewError: () => null,
       transactionError: () => null,
       confirmStepError: () => isExpired
@@ -819,8 +840,19 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         }
       }
 
+      if (!_matchesPreviewRequest(requestState, state)) {
+        emit(
+          state.copyWith(
+            isSending: false,
+            isPreviewRefreshing: false,
+            isAwaitingTrezorConfirmation: false,
+          ),
+        );
+        return;
+      }
+
       emit(
-        requestState.copyWith(
+        state.copyWith(
           previewError: () =>
               _buildTextError(e, fallbackPrefix: 'Failed to generate preview'),
           isSending: false,
@@ -916,8 +948,19 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       final preview = await _generatePreview(requestState);
       _emitPreviewState(emit, requestState, preview, moveToConfirm: false);
     } catch (e) {
+      if (!_matchesPreviewRequest(requestState, state)) {
+        emit(
+          state.copyWith(
+            isSending: false,
+            isPreviewRefreshing: false,
+            isAwaitingTrezorConfirmation: false,
+          ),
+        );
+        return;
+      }
+
       emit(
-        requestState.copyWith(
+        state.copyWith(
           isPreviewRefreshing: false,
           isPreviewExpired: true,
           previewSecondsRemaining: () => 0,
