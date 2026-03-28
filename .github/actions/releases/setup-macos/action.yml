@@ -53,15 +53,11 @@ runs:
       run: |
         flutter pub get --enforce-lockfile
 
-        pushd sdk/packages/komodo_defi_framework
-        GITHUB_API_PUBLIC_READONLY_TOKEN="${{ github.token }}" dart run \
-          komodo_wallet_build_transformer \
-          --fetch_defi_api \
-          --artifact_output_package=komodo_defi_framework \
-          --config_output_path=app_build/build_config.json \
-          -i assets/transformer_invoker.txt \
-          -o assets/transformer_invoker.txt
-        popd
+        export GITHUB_API_PUBLIC_READONLY_TOKEN="${{ github.token }}"
+        # The first bundle run may update transformer-managed inputs and exit
+        # non-zero. Re-running picks up those updates, matching CI asset builds.
+        flutter build bundle --release --no-pub >/dev/null 2>&1 || true
+        flutter build bundle --release --no-pub
 
         cd macos
         pod install
