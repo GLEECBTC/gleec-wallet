@@ -80,10 +80,13 @@ jobs:
         id: build
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Disable code signing for macOS PR builds
-          CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'NO' || '' }}
-          CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'NO' || '' }}
-          EXPANDED_CODE_SIGN_IDENTITY: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '-' || '' }}
+          # Flutter only forwards Xcode overrides with the FLUTTER_XCODE_ prefix.
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'NO' || '' }}
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'NO' || '' }}
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '' || '' }}
+          FLUTTER_XCODE_CODE_SIGN_STYLE: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'Manual' || '' }}
+          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '' || '' }}
+          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '' || '' }}
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

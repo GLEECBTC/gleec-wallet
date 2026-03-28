@@ -25,6 +25,7 @@ class IntegrationTestRunner {
   final String testsDirectory;
 
   bool get isWeb => _args.device == 'web-server';
+  String get _browserDimension => _args.browserDimension.replaceAll(',', 'x');
 
   Future<void> runTest(String test) async {
     ProcessResult result;
@@ -106,14 +107,12 @@ class IntegrationTestRunner {
       '-d',
       _args.device,
       '--browser-dimension',
-      _args.browserDimension,
+      _browserDimension,
       '--${_args.displayMode}',
       '--${_args.runMode}',
       if (_args.runMode == 'profile') '--profile-memory=memory_profile.json',
       '--browser-name',
       _args.browserName,
-      '--web-renderer',
-      'canvaskit',
       '--${_args.pub ? '' : 'no-'}pub',
       '--${_args.keepRunning ? '' : 'no-'}keep-app-running',
       '--driver-port=${_args.driverPort}',

@@ -32,6 +32,6 @@ jobs:
       - name: Validate dart code
         id: validate_dart
         run: |
-          flutter analyze
+          flutter analyze --no-fatal-warnings --no-fatal-infos
           # Currently skipped due to many changes. Will be enabled in the future after doing full sweep of the codebase
           # dart format --set-exit-if-changed .

@@ -50,6 +50,16 @@ runs:
         xcodebuild -downloadPlatform iOS
         flutter pub get --enforce-lockfile
 
+        pushd sdk/packages/komodo_defi_framework
+        GITHUB_API_PUBLIC_READONLY_TOKEN="${{ github.token }}" dart run \
+          komodo_wallet_build_transformer \
+          --fetch_defi_api \
+          --artifact_output_package=komodo_defi_framework \
+          --config_output_path=app_build/build_config.json \
+          -i assets/transformer_invoker.txt \
+          -o assets/transformer_invoker.txt
+        popd
+
         cd ios
         pod install
 
