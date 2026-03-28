@@ -29,6 +29,13 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve SDK workspace dependencies
+        id: sdk_pub_get
+        run: |
+          pushd sdk
+          dart pub get
+          popd
+
       - name: Validate dart code
         id: validate_dart
         run: |

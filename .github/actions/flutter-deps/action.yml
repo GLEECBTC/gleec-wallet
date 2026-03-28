@@ -20,13 +20,3 @@ runs:
         rm -rf web/src/mm2/*
         rm -rf web/src/kdfi/*
         rm -rf web/dist/*
-
-    - name: Bootstrap SDK workspace
-      id: bootstrap_sdk
-      shell: bash
-      run: |
-        pushd sdk
-        dart pub get
-        dart run melos run indexes:generate --no-select
-        dart run melos run runners:generate --no-select
-        popd
