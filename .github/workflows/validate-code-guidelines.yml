@@ -32,7 +32,11 @@ jobs:
       - name: Resolve SDK workspace dependencies
         id: sdk_pub_get
         run: |
-          dart pub get --enforce-lockfile -C sdk
+          if [ -f sdk/pubspec.lock ]; then
+            dart pub get --enforce-lockfile -C sdk
+          else
+            dart pub get -C sdk
+          fi
 
       - name: Validate dart code
         id: validate_dart

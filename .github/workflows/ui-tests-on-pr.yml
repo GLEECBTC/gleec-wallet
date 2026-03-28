@@ -52,7 +52,7 @@ jobs:
         if: ${{ matrix.browser == 'chrome' }}
         uses: browser-actions/setup-chrome@v1
         with:
-          chrome-version: 116.0.5845.96
+          chrome-version: stable
           install-chromedriver: true
           install-dependencies: true
 
