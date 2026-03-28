@@ -32,9 +32,7 @@ jobs:
       - name: Resolve SDK workspace dependencies
         id: sdk_pub_get
         run: |
-          pushd sdk
-          dart pub get
-          popd
+          dart pub get --enforce-lockfile -C sdk
 
       - name: Validate dart code
         id: validate_dart
