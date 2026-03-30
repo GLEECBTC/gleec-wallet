@@ -8,6 +8,7 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/main_menu_value.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/hw_dialog_init.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/trezor_steps/trezor_dialog_error.dart';
@@ -19,16 +20,22 @@ import 'package:web_dex/views/common/hw_wallet_dialog/trezor_steps/trezor_dialog
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 
 class HardwareWalletsManager extends StatelessWidget {
-  const HardwareWalletsManager(
-      {super.key, required this.close, required this.eventType});
+  const HardwareWalletsManager({
+    super.key,
+    required this.close,
+    required this.onSuccess,
+    required this.eventType,
+  });
 
   final WalletsManagerEventType eventType;
   final VoidCallback close;
+  final void Function(Wallet) onSuccess;
 
   @override
   Widget build(BuildContext context) {
     return HardwareWalletsManagerView(
       close: close,
+      onSuccess: onSuccess,
       eventType: eventType,
     );
   }
@@ -39,9 +46,11 @@ class HardwareWalletsManagerView extends StatefulWidget {
     super.key,
     required this.eventType,
     required this.close,
+    required this.onSuccess,
   });
   final WalletsManagerEventType eventType;
   final VoidCallback close;
+  final void Function(Wallet) onSuccess;
 
   @override
   State<HardwareWalletsManagerView> createState() =>
@@ -50,6 +59,8 @@ class HardwareWalletsManagerView extends StatefulWidget {
 
 class _HardwareWalletsManagerViewState
     extends State<HardwareWalletsManagerView> {
+  bool _didHandleSuccessfulLogin = false;
+
   @override
   void initState() {
     context.read<AuthBloc>().add(AuthTrezorCancelled());
@@ -61,8 +72,12 @@ class _HardwareWalletsManagerViewState
     return BlocListener<AuthBloc, AuthBlocState>(
       listener: (context, state) {
         final status = state.status;
-        if (status == AuthenticationStatus.completed) {
-          _successfulTrezorLogin(context, state.currentUser!);
+        final user = state.currentUser;
+        if (status == AuthenticationStatus.completed &&
+            user != null &&
+            !_didHandleSuccessfulLogin) {
+          _didHandleSuccessfulLogin = true;
+          _successfulTrezorLogin(context, user);
         }
       },
       child: BlocSelector<AuthBloc, AuthBlocState, AuthException?>(
@@ -81,19 +96,19 @@ class _HardwareWalletsManagerViewState
   void _successfulTrezorLogin(BuildContext context, KdfUser kdfUser) {
     context.read<CoinsBloc>().add(CoinsSessionStarted(kdfUser));
     context.read<AnalyticsBloc>().logEvent(
-          walletsManagerEventsFactory.createEvent(
-              widget.eventType, WalletsManagerEventMethod.hardware),
-        );
+      walletsManagerEventsFactory.createEvent(
+        widget.eventType,
+        WalletsManagerEventMethod.hardware,
+      ),
+    );
 
     routingState.selectedMenu = MainMenuValue.wallet;
-    widget.close();
+    widget.onSuccess(kdfUser.wallet);
   }
 }
 
 class _HardwareWalletManagerPopupContent extends StatelessWidget {
-  const _HardwareWalletManagerPopupContent({
-    required this.widget,
-  });
+  const _HardwareWalletManagerPopupContent({required this.widget});
 
   final HardwareWalletsManagerView widget;
 
@@ -109,10 +124,7 @@ class _HardwareWalletManagerPopupContent extends StatelessWidget {
 
           case AuthenticationStatus.initializing:
           case AuthenticationStatus.authenticating:
-            return TrezorDialogInProgress(
-              initStatus,
-              onClose: widget.close,
-            );
+            return TrezorDialogInProgress(initStatus, onClose: widget.close);
 
           case AuthenticationStatus.pinRequired:
             return TrezorDialogPinPad(
@@ -126,9 +138,9 @@ class _HardwareWalletManagerPopupContent extends StatelessWidget {
           case AuthenticationStatus.passphraseRequired:
             return TrezorDialogSelectWallet(
               onComplete: (String passphrase) {
-                context
-                    .read<AuthBloc>()
-                    .add(AuthTrezorPassphraseProvided(passphrase));
+                context.read<AuthBloc>().add(
+                  AuthTrezorPassphraseProvided(passphrase),
+                );
               },
             );
 
