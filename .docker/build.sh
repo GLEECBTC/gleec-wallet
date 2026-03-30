@@ -54,6 +54,7 @@ docker build $PLATFORM_FLAG -f .docker/komodo-wallet-android.dockerfile . -t kom
 mkdir -p ./build
 
 COMMIT_HASH=$(git rev-parse --short HEAD | cut -c1-7)
+BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%MZ')
 
 # Only pass GITHUB_API_PUBLIC_READONLY_TOKEN as environment variable
 ENV_ARGS=""
@@ -68,8 +69,9 @@ if [ "$BUILD_TARGET" = "web" ]; then
 fi
 # Prepare build command with feedback service credentials
 BUILD_CMD="$BUILD_COMMAND"
-# Add commit hash to build command
+# Add commit hash and build date to build command
 BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"
+BUILD_CMD="$BUILD_CMD --dart-define=BUILD_DATE=$BUILD_DATE"
 
 # Check and add the shared Trello board and list IDs if they are available
 HAVE_TRELLO_IDS=false
