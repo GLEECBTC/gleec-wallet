@@ -247,6 +247,11 @@ class WithdrawFormState extends Equatable {
   }
 
   WithdrawParameters toWithdrawParameters() {
+    final derivationPath = selectedSourceAddress?.derivationPath;
+    final supportsHdSourceSelection =
+        asset.protocol.supportsMultipleAddresses &&
+        asset.protocol is! SiaProtocol;
+
     return WithdrawParameters(
       asset: asset.id.id,
       toAddress: recipientAddress,
@@ -255,10 +260,8 @@ class WithdrawFormState extends Equatable {
           : Decimal.parse(normalizeDecimalString(amount)),
       fee: isCustomFee ? customFee : null,
       feePriority: isCustomFee ? null : selectedFeePriority,
-      from: selectedSourceAddress?.derivationPath != null
-          ? WithdrawalSource.hdDerivationPath(
-              selectedSourceAddress!.derivationPath!,
-            )
+      from: supportsHdSourceSelection && derivationPath != null
+          ? WithdrawalSource.hdDerivationPath(derivationPath)
           : null,
       memo: memo,
       ibcTransfer: isIbcTransfer ? true : null,

@@ -8,6 +8,7 @@ import 'package:komodo_defi_sdk/src/withdrawals/withdrawal_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
+import 'package:web_dex/model/wallet.dart';
 
 Map<String, dynamic> _utxoConfig({
   String coin = 'KMD',
@@ -42,6 +43,21 @@ Map<String, dynamic> _trxConfig() => {
     'protocol_data': {'network': 'Mainnet'},
   },
   'nodes': <Map<String, dynamic>>[],
+};
+
+Map<String, dynamic> _siaConfig() => {
+  'coin': 'SC',
+  'type': 'SIA',
+  'name': 'Siacoin',
+  'fname': 'Siacoin',
+  'wallet_only': false,
+  'mm2': 1,
+  'chain_id': 2024,
+  'decimals': 24,
+  'required_confirmations': 1,
+  'nodes': const [
+    {'url': 'https://api.siascan.com/wallet/api'},
+  ],
 };
 
 BalanceInfo _balance(String amount) {
@@ -1046,6 +1062,88 @@ void testWithdrawFormBloc() {
         errored.previewError!.message,
         contains('notEnoughBalanceForGasError'),
       );
+    });
+
+    test(
+      'SIA preview omits source derivation path in request params',
+      () async {
+        final asset = _assetFromConfig(_siaConfig());
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => _utxoPreview(
+            assetId: asset.id.id,
+            txHash: 'preview-sia',
+            toAddress: 'recipient-1',
+            timestamp: 1,
+          ),
+        );
+
+        final bloc = WithdrawFormBloc(
+          asset: asset,
+          sdk: _FakeSdk(
+            addresses: _FakeAddressOperations(),
+            withdrawals: withdrawals,
+            pubkeys: _FakePubkeyManager({
+              asset.id: _assetPubkeys(asset, balance: '5'),
+            }),
+            balances: _FakeBalanceManager({asset.id: _balance('5')}),
+          ),
+          mm2Api: _FakeMm2Api(),
+        );
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await bloc.stream.firstWhere(
+          (state) => state.step == WithdrawFormStep.confirm,
+        );
+
+        expect(withdrawals.previewRequests.single.from, isNull);
+      },
+    );
+
+    test('Trezor blocks SIA preview and submit', () async {
+      final asset = _assetFromConfig(_siaConfig());
+      final withdrawals = _FakeWithdrawalManager(
+        previewWithdrawalHandler: (_) async => _utxoPreview(
+          assetId: asset.id.id,
+          txHash: 'preview-sia',
+          toAddress: 'recipient-1',
+          timestamp: 1,
+        ),
+      );
+
+      final bloc = WithdrawFormBloc(
+        asset: asset,
+        sdk: _FakeSdk(
+          addresses: _FakeAddressOperations(),
+          withdrawals: withdrawals,
+          pubkeys: _FakePubkeyManager({
+            asset.id: _assetPubkeys(asset, balance: '5'),
+          }),
+          balances: _FakeBalanceManager({asset.id: _balance('5')}),
+        ),
+        mm2Api: _FakeMm2Api(),
+        walletType: WalletType.trezor,
+      );
+      addTearDown(bloc.close);
+
+      await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+
+      bloc.add(const WithdrawFormPreviewSubmitted());
+      final previewBlocked = await bloc.stream.firstWhere(
+        (state) => state.previewError != null,
+      );
+
+      expect(previewBlocked.previewError?.message, contains('SIA is not'));
+      expect(withdrawals.previewCallCount, 0);
+
+      bloc.add(const WithdrawFormSubmitted());
+      final submitBlocked = await bloc.stream.firstWhere(
+        (state) => state.transactionError != null,
+      );
+
+      expect(submitBlocked.transactionError?.message, contains('SIA is not'));
+      expect(withdrawals.executeCallCount, 0);
     });
   });
 }
