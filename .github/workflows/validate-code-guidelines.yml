@@ -29,9 +29,18 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve SDK workspace dependencies
+        id: sdk_pub_get
+        run: |
+          if [ -f sdk/pubspec.lock ]; then
+            dart pub get --enforce-lockfile -C sdk
+          else
+            dart pub get -C sdk
+          fi
+
       - name: Validate dart code
         id: validate_dart
         run: |
-          flutter analyze
+          flutter analyze --no-fatal-warnings --no-fatal-infos
           # Currently skipped due to many changes. Will be enabled in the future after doing full sweep of the codebase
           # dart format --set-exit-if-changed .

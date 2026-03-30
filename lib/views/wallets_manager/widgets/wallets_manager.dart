@@ -6,7 +6,7 @@ import 'package:web_dex/views/wallets_manager/widgets/iguana_wallets_manager.dar
 
 class WalletsManager extends StatelessWidget {
   const WalletsManager({
-    Key? key,
+    super.key,
     required this.eventType,
     required this.walletType,
     required this.close,
@@ -14,7 +14,7 @@ class WalletsManager extends StatelessWidget {
     this.selectedWallet,
     this.initialHdMode = false,
     this.rememberMe = false,
-  }) : super(key: key);
+  });
   final WalletsManagerEventType eventType;
   final WalletType walletType;
   final VoidCallback close;
@@ -38,7 +38,11 @@ class WalletsManager extends StatelessWidget {
         );
 
       case WalletType.trezor:
-        return HardwareWalletsManager(close: close, eventType: eventType);
+        return HardwareWalletsManager(
+          close: close,
+          onSuccess: onSuccess,
+          eventType: eventType,
+        );
       case WalletType.keplr:
       case WalletType.metamask:
         return const SizedBox();

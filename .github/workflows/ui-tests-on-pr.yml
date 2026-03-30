@@ -50,11 +50,20 @@ jobs:
       - name: Install Chrome and chromedriver
         id: setup_chrome
         if: ${{ matrix.browser == 'chrome' }}
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@v2
         with:
-          chrome-version: 116.0.5845.96
+          chrome-version: stable
           install-chromedriver: true
           install-dependencies: true
+
+      - name: Print Chrome setup
+        id: print_chrome_setup
+        if: ${{ matrix.browser == 'chrome' }}
+        run: |
+          echo "Chrome path: ${{ steps.setup_chrome.outputs.chrome-path }}"
+          "${{ steps.setup_chrome.outputs.chrome-path }}" --version
+          echo "ChromeDriver path: ${{ steps.setup_chrome.outputs.chromedriver-path }}"
+          "${{ steps.setup_chrome.outputs.chromedriver-path }}" --version
 
       - name: Enable safaridriver (sudo) (MacOS)
         id: enable_safari
@@ -85,6 +94,7 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHROME_EXECUTABLE: ${{ matrix.browser == 'chrome' && steps.setup_chrome.outputs.chrome-path || '' }}
         run: |
           dart run_integration_tests.dart \
             -d ${{ matrix.display }} \

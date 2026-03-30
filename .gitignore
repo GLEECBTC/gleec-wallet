@@ -91,3 +91,6 @@ web/kdf/kdf/bin/
 # AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
 /.claude/skills/
 /.cursor/skills/
+/.nano-banana-config.json
+/generated_imgs
+/.1code

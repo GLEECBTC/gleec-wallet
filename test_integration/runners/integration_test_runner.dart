@@ -8,6 +8,8 @@ import 'app_data.dart';
 /// Runs integration tests for web or native apps using the `flutter drive`
 /// command.
 class IntegrationTestRunner {
+  static const _chromeExecutableEnvironmentKey = 'CHROME_EXECUTABLE';
+
   /// Runs integration tests for web or native apps using the `flutter drive`
   /// command.
   ///
@@ -25,6 +27,19 @@ class IntegrationTestRunner {
   final String testsDirectory;
 
   bool get isWeb => _args.device == 'web-server';
+  String get _browserDimension => _args.browserDimension.replaceAll(',', 'x');
+  String? get _chromeBinaryPath {
+    if (_args.browserName != 'chrome') {
+      return null;
+    }
+
+    final chromeBinary = Platform.environment[_chromeExecutableEnvironmentKey];
+    if (chromeBinary == null || chromeBinary.isEmpty) {
+      return null;
+    }
+
+    return chromeBinary;
+  }
 
   Future<void> runTest(String test) async {
     ProcessResult result;
@@ -106,14 +121,13 @@ class IntegrationTestRunner {
       '-d',
       _args.device,
       '--browser-dimension',
-      _args.browserDimension,
+      _browserDimension,
       '--${_args.displayMode}',
       '--${_args.runMode}',
       if (_args.runMode == 'profile') '--profile-memory=memory_profile.json',
       '--browser-name',
       _args.browserName,
-      '--web-renderer',
-      'canvaskit',
+      if (_chromeBinaryPath != null) '--chrome-binary=$_chromeBinaryPath',
       '--${_args.pub ? '' : 'no-'}pub',
       '--${_args.keepRunning ? '' : 'no-'}keep-app-running',
       '--driver-port=${_args.driverPort}',

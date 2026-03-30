@@ -8,8 +8,7 @@ import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 
 class TrezorDialogSelectWallet extends StatelessWidget {
-  const TrezorDialogSelectWallet({Key? key, required this.onComplete})
-    : super(key: key);
+  const TrezorDialogSelectWallet({super.key, required this.onComplete});
 
   final Function(String) onComplete;
 
@@ -111,6 +110,7 @@ class _TrezorHiddenWalletState extends State<_TrezorHiddenWallet> {
         autofocus: true,
         hintText: LocaleKeys.passphrase.tr(),
         keyboardType: TextInputType.text,
+        validationMode: InputValidationMode.lazy,
         autofillHints: const [AutofillHints.password],
         obscureText: _isObscured,
         maxLength: passwordMaxLength,

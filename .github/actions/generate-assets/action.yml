@@ -72,6 +72,8 @@ runs:
         fi
         # Export for subsequent steps
         echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
+        BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%MZ')
+        echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
     - name: Fetch packages and generate assets
       id: fetch_and_build
       shell: bash
@@ -101,8 +103,9 @@ runs:
         # Prepare build command with feedback service credentials
         BUILD_CMD="${{ inputs.BUILD_COMMAND }}"
 
-        # Add commit hash to build command
+        # Add commit hash and build date to build command
         BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"
+        BUILD_CMD="$BUILD_CMD --dart-define=BUILD_DATE=$BUILD_DATE"
 
         # Check and add the shared Trello board and list IDs if they are available
         HAVE_TRELLO_IDS=false

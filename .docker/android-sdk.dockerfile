@@ -41,7 +41,7 @@ RUN set -o xtrace \
     ruby-full ruby-bundler libstdc++6 libpulse0 libglu1-mesa locales lcov libsqlite3-dev --no-install-recommends \
     # For Linux build
     xz-utils acl \
-    clang cmake git lld \
+    binutils clang cmake git lld llvm \
     ninja-build pkg-config \
     libgtk-3-dev liblzma-dev \
     libstdc++-12-dev libsecret-1-dev \

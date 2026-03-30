@@ -292,7 +292,7 @@ komodo-qa-automation/
 # requirements.txt
 skyvern>=1.0.0
 pyyaml>=6.0
-pydantic>=2.0
+pydantic>=2.4.0
 httpx>=0.27.0
 ```
 
