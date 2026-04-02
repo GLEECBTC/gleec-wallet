@@ -183,6 +183,14 @@ dependencies:
     #   ref: dev
     # ^0.3.0+3 # Option 3: Pub.dev dependency
 
+  komodo_legacy_wallet_migration:
+    path: sdk/packages/komodo_legacy_wallet_migration # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
+    # git: # Option 2: Git dependency
+    #   url: https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
+    #   path: packages/komodo_legacy_wallet_migration
+    #   ref: dev
+    # ^0.1.0 # Option 3: Pub.dev dependency
+
   feedback: ^3.2.0
   ntp: ^2.0.0
   matomo_tracker: ^6.1.0

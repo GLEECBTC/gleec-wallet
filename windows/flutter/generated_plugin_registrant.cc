@@ -6,6 +6,7 @@
 
 #include "generated_plugin_registrant.h"
 
+#include <dargon2_flutter_desktop/dargon2_flutter_desktop_plugin.h>
 #include <firebase_core/firebase_core_plugin_c_api.h>
 #include <flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h>
 #include <flutter_secure_storage_windows/flutter_secure_storage_windows_plugin.h>
@@ -16,6 +17,8 @@
 #include <window_size/window_size_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
+  Dargon2FlutterDesktopPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("Dargon2FlutterDesktopPlugin"));
   FirebaseCorePluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FirebaseCorePluginCApi"));
   FlutterInappwebviewWindowsPluginCApiRegisterWithRegistrar(

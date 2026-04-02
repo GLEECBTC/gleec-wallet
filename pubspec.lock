@@ -185,6 +185,62 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.8"
+  dargon2_core:
+    dependency: transitive
+    description:
+      name: dargon2_core
+      sha256: a105fc3837782d02fff09a4aa355181c882962bf2a31c58f1905c401a6d1d6e5
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
+  dargon2_flutter:
+    dependency: transitive
+    description:
+      name: dargon2_flutter
+      sha256: "2ec4ed0cf5d80f92758ba2b2c600f237c35849aa723563ffe4c73e02d1904c0c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.3.0"
+  dargon2_flutter_desktop:
+    dependency: transitive
+    description:
+      name: dargon2_flutter_desktop
+      sha256: ca4a064f5b8e1fa1be62e5be50599567e13b68dca26eec31cbbc0928a276e777
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
+  dargon2_flutter_mobile:
+    dependency: transitive
+    description:
+      name: dargon2_flutter_mobile
+      sha256: "22b1b5229371c229cb55ca214262c6cb2189d40f7ef4ab87c1bea75bc2c582bf"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.3.0"
+  dargon2_flutter_platform_interface:
+    dependency: transitive
+    description:
+      name: dargon2_flutter_platform_interface
+      sha256: d9fa9193c7c263a57d53411ccac0339e353e5b199426d861f8649f31564eeef7
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
+  dargon2_flutter_web:
+    dependency: transitive
+    description:
+      name: dargon2_flutter_web
+      sha256: c2607b07047f2937fc8ee0845b7b19fd80c26bf87f122473ee3cf307b8bc3249
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
+  dargon2_interface:
+    dependency: transitive
+    description:
+      name: dargon2_interface
+      sha256: e352efec19afac3fba5b4c1d4833bec7825ac43bdec88f33117cd68dfccfca40
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   dbus:
     dependency: transitive
     description:
@@ -686,10 +742,10 @@ packages:
     dependency: transitive
     description:
       name: js
-      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
+      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.2"
+    version: "0.6.7"
   json_annotation:
     dependency: transitive
     description:
@@ -754,6 +810,13 @@ packages:
       relative: true
     source: path
     version: "0.4.0"
+  komodo_legacy_wallet_migration:
+    dependency: "direct main"
+    description:
+      path: "sdk/packages/komodo_legacy_wallet_migration"
+      relative: true
+    source: path
+    version: "0.1.0"
   komodo_ui:
     dependency: "direct main"
     description:
@@ -1277,6 +1340,46 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.0"
+  sqflite:
+    dependency: transitive
+    description:
+      name: sqflite
+      sha256: e2297b1da52f127bc7a3da11439985d9b536f75070f3325e62ada69a5c585d03
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_android:
+    dependency: transitive
+    description:
+      name: sqflite_android
+      sha256: "881e28efdcc9950fd8e9bb42713dcf1103e62a2e7168f23c9338d82db13dec40"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2+3"
+  sqflite_common:
+    dependency: transitive
+    description:
+      name: sqflite_common
+      sha256: "6ef422a4525ecc601db6c0a2233ff448c731307906e92cabc9ba292afaae16a6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.5.6"
+  sqflite_darwin:
+    dependency: transitive
+    description:
+      name: sqflite_darwin
+      sha256: "279832e5cde3fe99e8571879498c9211f3ca6391b0d818df4e17d9fff5c6ccb3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.2"
+  sqflite_platform_interface:
+    dependency: transitive
+    description:
+      name: sqflite_platform_interface
+      sha256: "8dd4515c7bdcae0a785b0062859336de775e8c65db81ae33dd5445f35be61920"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0"
   stack_trace:
     dependency: transitive
     description:
@@ -1317,6 +1420,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.1"
+  synchronized:
+    dependency: transitive
+    description:
+      name: synchronized
+      sha256: c254ade258ec8282947a0acbbc90b9575b4f19673533ee46f2f6e9b3aeefd7c0
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.0"
   term_glyph:
     dependency: transitive
     description:
