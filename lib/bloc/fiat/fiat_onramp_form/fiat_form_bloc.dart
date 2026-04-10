@@ -15,6 +15,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/fiat/base_fiat_provider.dart';
+import 'package:web_dex/bloc/fiat/fiat_default_preference.dart';
 import 'package:web_dex/bloc/fiat/fiat_order_status.dart';
 import 'package:web_dex/bloc/fiat/fiat_repository.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
@@ -22,7 +23,8 @@ import 'package:web_dex/bloc/fiat/models/models.dart';
 import 'package:web_dex/bloc/fiat/payment_status_type.dart';
 import 'package:web_dex/model/forms/fiat/currency_input.dart';
 import 'package:web_dex/model/forms/fiat/fiat_amount_input.dart';
-import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
+import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/utils/extensions/string_extensions.dart';
 import 'package:web_dex/views/fiat/webview_dialog.dart' show WebViewDialogMode;
 
@@ -34,14 +36,17 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
     required FiatRepository repository,
     required CoinsRepo coinsRepo,
     required KomodoDefiSdk sdk,
+    BaseStorage? storage,
     int pubkeysMaxRetryAttempts = 20,
     Duration pubkeysRetryDelay = const Duration(milliseconds: 500),
   }) : _fiatRepository = repository,
        _coinsRepo = coinsRepo,
        _sdk = sdk,
+       _storage = storage ?? getStorage(),
        _pubkeysMaxRetryAttempts = pubkeysMaxRetryAttempts,
        _pubkeysRetryDelay = pubkeysRetryDelay,
        super(FiatFormState.initial()) {
+    on<FiatFormDefaultFiatHydrationRequested>(_onDefaultFiatHydrationRequested);
     on<FiatFormFiatSelected>(_onFiatSelected);
     // Use restartable here since this is called for auth changes, which
     // can happen frequently and we want to avoid race conditions.
@@ -74,19 +79,36 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       _onOrderStatusWatchStarted,
       transformer: restartable(),
     );
+
+    add(const FiatFormDefaultFiatHydrationRequested());
   }
 
   final FiatRepository _fiatRepository;
   final CoinsRepo _coinsRepo;
   final KomodoDefiSdk _sdk;
+  final BaseStorage _storage;
   final int _pubkeysMaxRetryAttempts;
   final Duration _pubkeysRetryDelay;
   final _log = Logger('FiatFormBloc');
+
+  Future<void> _onDefaultFiatHydrationRequested(
+    FiatFormDefaultFiatHydrationRequested event,
+    Emitter<FiatFormState> emit,
+  ) async {
+    final storedFiat = await loadDefaultFiatPreference(_storage);
+    if (storedFiat == null ||
+        state.selectedFiat.value?.getAbbr() == storedFiat.getAbbr()) {
+      return;
+    }
+
+    emit(state.copyWith(selectedFiat: CurrencyInput.dirty(storedFiat)));
+  }
 
   Future<void> _onFiatSelected(
     FiatFormFiatSelected event,
     Emitter<FiatFormState> emit,
   ) async {
+    await persistDefaultFiatPreference(_storage, event.selectedFiat);
     emit(
       state.copyWith(
         selectedFiat: CurrencyInput.dirty(event.selectedFiat),
@@ -124,13 +146,11 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       await _coinsRepo.activateAssetsSync([asset]);
       // TODO: increase the max delay in the SDK or make it adjustable
       AssetPubkeys? assetPubkeys = _sdk.pubkeys.lastKnown(asset.id);
-      if (assetPubkeys == null) {
-        assetPubkeys = await retry<AssetPubkeys>(
-          () async => _sdk.pubkeys.getPubkeys(asset),
-          maxAttempts: _pubkeysMaxRetryAttempts,
-          backoffStrategy: ConstantBackoff(delay: _pubkeysRetryDelay),
-        );
-      }
+      assetPubkeys ??= await retry<AssetPubkeys>(
+        () async => _sdk.pubkeys.getPubkeys(asset),
+        maxAttempts: _pubkeysMaxRetryAttempts,
+        backoffStrategy: ConstantBackoff(delay: _pubkeysRetryDelay),
+      );
       final address = assetPubkeys.keys.firstOrNull;
 
       emit(
@@ -266,10 +286,9 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
     FiatFormResetRequested event,
     Emitter<FiatFormState> emit,
   ) {
-    final initialStateWithLists = FiatFormState.initial().copyWith(
-      fiatList: state.fiatList,
-      coinList: state.coinList,
-    );
+    final initialStateWithLists = FiatFormState.initial(
+      selectedFiat: state.selectedFiat.value,
+    ).copyWith(fiatList: state.fiatList, coinList: state.coinList);
     emit(_defaultPaymentMethods(initialStateWithLists));
   }
 
@@ -337,7 +356,31 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       coinList.removeWhere(
         (coin) => excludedAssetList.contains(coin.getAbbr()),
       );
-      emit(state.copyWith(fiatList: fiatList, coinList: coinList));
+
+      final currentSelectedFiat = state.selectedFiat.value;
+      final resolvedSelectedFiat =
+          fiatList.firstWhereOrNull(
+            (fiat) => fiat.getAbbr() == currentSelectedFiat?.getAbbr(),
+          ) ??
+          fiatList.firstWhereOrNull(
+            (fiat) => fiat.getAbbr() == FiatCurrency.usd().getAbbr(),
+          ) ??
+          fiatList.firstOrNull;
+
+      if (resolvedSelectedFiat != null &&
+          resolvedSelectedFiat.getAbbr() != currentSelectedFiat?.getAbbr()) {
+        await persistDefaultFiatPreference(_storage, resolvedSelectedFiat);
+      }
+
+      emit(
+        state.copyWith(
+          fiatList: fiatList,
+          coinList: coinList,
+          selectedFiat: resolvedSelectedFiat == null
+              ? null
+              : CurrencyInput.dirty(resolvedSelectedFiat),
+        ),
+      );
     } catch (e, s) {
       _log.shout('Error loading currency list', e, s);
       emit(

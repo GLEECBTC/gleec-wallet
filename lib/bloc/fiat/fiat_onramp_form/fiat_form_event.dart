@@ -8,6 +8,10 @@ sealed class FiatFormEvent extends Equatable {
   List<Object?> get props => [];
 }
 
+final class FiatFormDefaultFiatHydrationRequested extends FiatFormEvent {
+  const FiatFormDefaultFiatHydrationRequested();
+}
+
 /// Event emitted when a payment status message is received from the on-ramp provider.
 final class FiatFormPaymentStatusMessageReceived extends FiatFormEvent {
   const FiatFormPaymentStatusMessageReceived(this.message);
@@ -69,7 +73,7 @@ final class FiatFormModeUpdated extends FiatFormEvent {
 
   /// Constructor that creates a mode update event from a tab index.
   FiatFormModeUpdated.fromTabIndex(int tabIndex)
-      : mode = FiatMode.fromTabIndex(tabIndex);
+    : mode = FiatMode.fromTabIndex(tabIndex);
 
   final FiatMode mode;
 
