@@ -68,6 +68,9 @@ final class AppBootstrapper {
 
   /// Initialize settings and register analytics
   Future<void> _initializeSettings() async {
+    final storage = getStorage();
+    await LegacyAppSettingsMigrationService(storage: storage).migrateIfNeeded();
+
     var stored = await SettingsRepository.loadStoredSettings();
     final mmSettings = stored.marketMakerBotSettings;
     final shouldClearStoredMakerOrders =

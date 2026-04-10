@@ -8,6 +8,9 @@ import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
     show ZhtlcSyncParams;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
     show
+        KomodoDefiSdk,
+        ZhtlcRecurringSyncMode,
+        ZhtlcRecurringSyncPolicy,
         ZhtlcUserConfig,
         ZcashParamsDownloader,
         ZcashParamsDownloaderFactory,
@@ -18,7 +21,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
-enum ZhtlcSyncType { earliest, height, date }
+enum ZhtlcSyncType { recentTransactions, earliest, height, date }
 
 /// Shows ZHTLC configuration dialog similar to handleZhtlcConfigDialog from SDK example
 /// This is bad practice (UI logic in utils), but necessary for now because of
@@ -27,6 +30,13 @@ Future<ZhtlcUserConfig?> confirmZhtlcConfiguration(
   BuildContext context, {
   required Asset asset,
 }) async {
+  final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+  final initialConfig = await sdk.activationConfigService.getSavedZhtlc(
+    asset.id,
+  );
+  if (!context.mounted) {
+    return null;
+  }
   String? prefilledZcashPath;
 
   if (ZcashParamsDownloaderFactory.requiresDownload) {
@@ -36,6 +46,9 @@ Future<ZhtlcUserConfig?> confirmZhtlcConfiguration(
 
       final areAvailable = await downloader.areParamsAvailable();
       if (!areAvailable) {
+        if (!context.mounted) {
+          return null;
+        }
         final downloadResult = await _showZcashDownloadDialog(
           context,
           downloader,
@@ -62,12 +75,16 @@ Future<ZhtlcUserConfig?> confirmZhtlcConfiguration(
     }
   }
 
+  if (!context.mounted) {
+    return null;
+  }
   return showDialog<ZhtlcUserConfig?>(
     context: context,
     barrierDismissible: false,
     builder: (context) => ZhtlcConfigurationDialog(
       asset: asset,
       prefilledZcashPath: prefilledZcashPath,
+      initialConfig: initialConfig,
     ),
   );
 }
@@ -78,10 +95,12 @@ class ZhtlcConfigurationDialog extends StatefulWidget {
     super.key,
     required this.asset,
     this.prefilledZcashPath,
+    this.initialConfig,
   });
 
   final Asset asset;
   final String? prefilledZcashPath;
+  final ZhtlcUserConfig? initialConfig;
 
   @override
   State<ZhtlcConfigurationDialog> createState() =>
@@ -104,12 +123,17 @@ class _ZhtlcConfigurationDialogState extends State<ZhtlcConfigurationDialog> {
 
     // On web, use './zcash-params' as default, otherwise use prefilledZcashPath
     // TODO: get from config factory constructor, or move to constants
-    final defaultZcashPath = kIsWeb
-        ? './zcash-params'
-        : widget.prefilledZcashPath;
+    final defaultZcashPath =
+        widget.prefilledZcashPath ??
+        widget.initialConfig?.zcashParamsPath ??
+        (kIsWeb ? './zcash-params' : null);
     zcashPathController = TextEditingController(text: defaultZcashPath);
-    blocksPerIterController = TextEditingController(text: '1000');
-    intervalMsController = TextEditingController(text: '200');
+    blocksPerIterController = TextEditingController(
+      text: '${widget.initialConfig?.scanBlocksPerIteration ?? 1000}',
+    );
+    intervalMsController = TextEditingController(
+      text: '${widget.initialConfig?.scanIntervalMs ?? 200}',
+    );
 
     _subscribeToAuthChanges();
   }
@@ -133,10 +157,15 @@ class _ZhtlcConfigurationDialogState extends State<ZhtlcConfigurationDialog> {
       return;
     }
 
-    // Create sync params based on type
+    // Build both pieces:
+    // - recurringSyncPolicy: persisted user preference for future reconfigures.
+    // - syncParams: one-shot override for the next activation only.
+    // Later activations omit sync_params unless the user reconfigures again,
+    // allowing backend-side resume/default sync behavior.
     final syncState = _syncFormKey.currentState;
+    final recurringSyncPolicy = syncState?.buildRecurringSyncPolicy();
     final syncParams = syncState?.buildSyncParams();
-    if (syncParams == null) {
+    if (recurringSyncPolicy == null || syncParams == null) {
       return;
     }
 
@@ -145,6 +174,7 @@ class _ZhtlcConfigurationDialogState extends State<ZhtlcConfigurationDialog> {
       scanBlocksPerIteration:
           int.tryParse(blocksPerIterController.text) ?? 1000,
       scanIntervalMs: int.tryParse(intervalMsController.text) ?? 0,
+      recurringSyncPolicy: recurringSyncPolicy,
       syncParams: syncParams,
     );
     Navigator.of(context).pop(result);
@@ -177,7 +207,16 @@ class _ZhtlcConfigurationDialogState extends State<ZhtlcConfigurationDialog> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                _SyncForm(key: _syncFormKey),
+                _SyncForm(
+                  key: _syncFormKey,
+                  initialPolicy:
+                      widget.initialConfig?.recurringSyncPolicy ??
+                      (widget.initialConfig?.syncParams == null
+                          ? null
+                          : ZhtlcRecurringSyncPolicy.fromSyncParams(
+                              widget.initialConfig!.syncParams!,
+                            )),
+                ),
                 const SizedBox(height: 24),
                 _AdvancedConfigurationSection(
                   showAdvancedConfig: _showAdvancedConfig,
@@ -313,7 +352,9 @@ class _AdvancedConfigurationWarning extends StatelessWidget {
 }
 
 class _SyncForm extends StatefulWidget {
-  const _SyncForm({super.key});
+  const _SyncForm({super.key, this.initialPolicy});
+
+  final ZhtlcRecurringSyncPolicy? initialPolicy;
 
   @override
   State<_SyncForm> createState() => _SyncFormState();
@@ -321,16 +362,14 @@ class _SyncForm extends StatefulWidget {
 
 class _SyncFormState extends State<_SyncForm> {
   late final TextEditingController _syncValueController;
-  ZhtlcSyncType _syncType = ZhtlcSyncType.date;
+  ZhtlcSyncType _syncType = ZhtlcSyncType.recentTransactions;
   DateTime? _selectedDate;
 
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateTime.now().subtract(const Duration(days: 2));
-    _syncValueController = TextEditingController(
-      text: _formatDate(_selectedDate!),
-    );
+    _applyInitialPolicy(widget.initialPolicy);
+    _syncValueController = TextEditingController(text: _initialSyncValue());
   }
 
   @override
@@ -339,10 +378,12 @@ class _SyncFormState extends State<_SyncForm> {
     super.dispose();
   }
 
-  ZhtlcSyncParams? buildSyncParams() {
+  ZhtlcRecurringSyncPolicy? buildRecurringSyncPolicy() {
     switch (_syncType) {
+      case ZhtlcSyncType.recentTransactions:
+        return ZhtlcRecurringSyncPolicy.recentTransactions();
       case ZhtlcSyncType.earliest:
-        return ZhtlcSyncParams.earliest();
+        return ZhtlcRecurringSyncPolicy.earliest();
       case ZhtlcSyncType.height:
         final rawValue = _syncValueController.text.trim();
         final parsedValue = int.tryParse(rawValue);
@@ -350,13 +391,32 @@ class _SyncFormState extends State<_SyncForm> {
           _showSnackBar(LocaleKeys.zhtlcInvalidBlockHeight.tr());
           return null;
         }
-        return ZhtlcSyncParams.height(parsedValue);
+        return ZhtlcRecurringSyncPolicy.height(parsedValue);
       case ZhtlcSyncType.date:
         if (_selectedDate == null) {
           return null;
         }
-        final unixTimestamp = _selectedDate!.millisecondsSinceEpoch ~/ 1000;
-        return ZhtlcSyncParams.date(unixTimestamp);
+        return ZhtlcRecurringSyncPolicy.date(
+          _selectedDate!.millisecondsSinceEpoch ~/ 1000,
+        );
+    }
+  }
+
+  ZhtlcSyncParams? buildSyncParams() {
+    final recurringPolicy = buildRecurringSyncPolicy();
+    if (recurringPolicy == null) {
+      return null;
+    }
+
+    switch (_syncType) {
+      case ZhtlcSyncType.recentTransactions:
+        return recurringPolicy.toSyncParams();
+      case ZhtlcSyncType.earliest:
+        return ZhtlcSyncParams.earliest();
+      case ZhtlcSyncType.height:
+        return ZhtlcSyncParams.height(recurringPolicy.height!);
+      case ZhtlcSyncType.date:
+        return ZhtlcSyncParams.date(recurringPolicy.unixTimestamp!);
     }
   }
 
@@ -365,6 +425,44 @@ class _SyncFormState extends State<_SyncForm> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  void _applyInitialPolicy(ZhtlcRecurringSyncPolicy? initialPolicy) {
+    switch (initialPolicy?.mode) {
+      case ZhtlcRecurringSyncMode.earliest:
+        _syncType = ZhtlcSyncType.earliest;
+        _selectedDate = null;
+        return;
+      case ZhtlcRecurringSyncMode.height:
+        _syncType = ZhtlcSyncType.height;
+        _selectedDate = null;
+        return;
+      case ZhtlcRecurringSyncMode.date:
+        _syncType = ZhtlcSyncType.date;
+        _selectedDate = DateTime.fromMillisecondsSinceEpoch(
+          (initialPolicy?.unixTimestamp ?? 0) * 1000,
+          isUtc: true,
+        );
+        return;
+      case ZhtlcRecurringSyncMode.recentTransactions:
+      case null:
+        _syncType = ZhtlcSyncType.recentTransactions;
+        _selectedDate = DateTime.now().subtract(const Duration(days: 2));
+        return;
+    }
+  }
+
+  String _initialSyncValue() {
+    switch (widget.initialPolicy?.mode) {
+      case ZhtlcRecurringSyncMode.height:
+        return '${widget.initialPolicy?.height ?? ''}';
+      case ZhtlcRecurringSyncMode.date:
+        return _selectedDate == null ? '' : _formatDate(_selectedDate!);
+      case ZhtlcRecurringSyncMode.earliest:
+      case ZhtlcRecurringSyncMode.recentTransactions:
+      case null:
+        return '';
     }
   }
 
@@ -429,6 +527,8 @@ class _SyncFormState extends State<_SyncForm> {
 
   String _syncTypeLabel(ZhtlcSyncType type) {
     switch (type) {
+      case ZhtlcSyncType.recentTransactions:
+        return LocaleKeys.zhtlcRecentTransactionsOption.tr();
       case ZhtlcSyncType.earliest:
         return LocaleKeys.zhtlcEarliestSaplingOption.tr();
       case ZhtlcSyncType.height:
@@ -438,7 +538,8 @@ class _SyncFormState extends State<_SyncForm> {
     }
   }
 
-  bool get _shouldShowValueField => _syncType != ZhtlcSyncType.earliest;
+  bool get _shouldShowValueField =>
+      _syncType == ZhtlcSyncType.height || _syncType == ZhtlcSyncType.date;
 
   bool get _isDate => _syncType == ZhtlcSyncType.date;
 
@@ -659,8 +760,12 @@ class _ZcashDownloadProgressDialogState
           onPressed: () async {
             if (!dialogClosed) {
               dialogClosed = true;
+              final navigator = Navigator.of(context);
               await widget.downloader.cancelDownload();
-              Navigator.of(context).pop(false); // Cancelled
+              if (!mounted) {
+                return;
+              }
+              navigator.pop(false); // Cancelled
             }
           },
           child: Text(LocaleKeys.cancel.tr()),

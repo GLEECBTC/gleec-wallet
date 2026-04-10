@@ -20,6 +20,7 @@ const String storedAnalyticsSettingsKey = 'analytics_settings';
 const String storedMarketMakerSettingsKey = 'market_maker_settings';
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
 const String hdWalletModePreferenceKey = 'wallet_hd_mode_preference';
+const String defaultFiatPreferenceKey = 'default_fiat_preference_v1';
 
 // anchor: protocols support
 const String ercTxHistoryUrl = 'https://etherscan.gleec.com/api';

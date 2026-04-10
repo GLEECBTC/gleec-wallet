@@ -21,9 +21,9 @@ import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_creation.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
+import 'package:web_dex/views/wallets_manager/widgets/legacy_migration_compatibility_dialog.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_wrapper.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
-import 'package:web_dex/views/wallets_manager/widgets/wallet_rename_dialog.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallets_list.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallets_manager_controls.dart';
 
@@ -258,33 +258,50 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
       _rememberMe = rememberMe;
     });
 
-    // Async uniqueness check prior to dispatch
-    final repo = context.read<WalletsRepository>();
-    final uniquenessError = await repo.validateWalletNameUniqueness(name);
-    if (uniquenessError != null) {
-      if (mounted) setState(() => _isLoading = false);
-      final theme = Theme.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            uniquenessError,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onErrorContainer,
+    try {
+      // Async uniqueness check prior to dispatch
+      final repo = context.read<WalletsRepository>();
+      final uniquenessError = await repo.validateWalletNameUniqueness(name);
+      if (!mounted) return;
+      if (uniquenessError != null) {
+        setState(() => _isLoading = false);
+        final theme = Theme.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              uniquenessError,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
             ),
+            backgroundColor: theme.colorScheme.errorContainer,
           ),
-          backgroundColor: theme.colorScheme.errorContainer,
+        );
+        return;
+      }
+      final Wallet newWallet = Wallet.fromName(
+        name: name,
+        walletType: walletType ?? WalletType.iguana,
+      );
+
+      context.read<AuthBloc>().add(
+        AuthRegisterRequested(wallet: newWallet, password: password),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Unexpected error during wallet creation: $error\n$stackTrace');
+      if (!mounted) return;
+      context.read<AuthBloc>().add(
+        AuthErrorReported(
+          AuthException(
+            error.toString(),
+            type: AuthExceptionType.generalAuthError,
+          ),
         ),
       );
-      return;
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-    final Wallet newWallet = Wallet.fromName(
-      name: name,
-      walletType: walletType ?? WalletType.iguana,
-    );
-
-    context.read<AuthBloc>().add(
-      AuthRegisterRequested(wallet: newWallet, password: password),
-    );
   }
 
   void _importWallet({
@@ -298,39 +315,56 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
       _rememberMe = rememberMe;
     });
 
-    final authBloc = context.read<AuthBloc>();
+    try {
+      final authBloc = context.read<AuthBloc>();
 
-    // Async uniqueness check prior to dispatch
-    final repo = context.read<WalletsRepository>();
-    final uniquenessError = await repo.validateWalletNameUniqueness(name);
-    if (uniquenessError != null) {
-      if (mounted) setState(() => _isLoading = false);
-      final theme = Theme.of(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            uniquenessError,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onErrorContainer,
+      // Async uniqueness check prior to dispatch
+      final repo = context.read<WalletsRepository>();
+      final uniquenessError = await repo.validateWalletNameUniqueness(name);
+      if (!mounted) return;
+      if (uniquenessError != null) {
+        setState(() => _isLoading = false);
+        final theme = Theme.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              uniquenessError,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
             ),
+            backgroundColor: theme.colorScheme.errorContainer,
           ),
-          backgroundColor: theme.colorScheme.errorContainer,
+        );
+        return;
+      }
+      final Wallet newWallet = Wallet.fromConfig(
+        name: name,
+        config: walletConfig,
+      );
+
+      authBloc.add(
+        AuthRestoreRequested(
+          wallet: newWallet,
+          password: password,
+          seed: walletConfig.seedPhrase,
         ),
       );
-      return;
+    } catch (error, stackTrace) {
+      debugPrint('Unexpected error during wallet import: $error\n$stackTrace');
+      if (!mounted) return;
+      context.read<AuthBloc>().add(
+        AuthErrorReported(
+          AuthException(
+            error.toString(),
+            type: AuthExceptionType.generalAuthError,
+          ),
+        ),
+      );
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-    final Wallet newWallet = Wallet.fromConfig(
-      name: name,
-      config: walletConfig,
-    );
-
-    authBloc.add(
-      AuthRestoreRequested(
-        wallet: newWallet,
-        password: password,
-        seed: walletConfig.seedPhrase,
-      ),
-    );
   }
 
   Future<void> _logInToWallet(
@@ -338,8 +372,6 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     Wallet wallet,
     bool rememberMe,
   ) async {
-    // Use a local variable to avoid mutating the original wallet reference
-    Wallet walletToUse = wallet.copy();
     setState(() {
       _isLoading = true;
       _rememberMe = rememberMe;
@@ -347,37 +379,88 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
 
     final walletsRepository = RepositoryProvider.of<WalletsRepository>(context);
     if (wallet.isLegacyWallet) {
-      final String? error = walletsRepository.validateWalletName(wallet.name);
-      if (error != null) {
-        final newName = await walletRenameDialog(
-          context,
-          initialName: wallet.name,
+      try {
+        final migration = await walletsRepository.prepareLegacyMigration(
+          sourceWallet: wallet,
+          legacyPassword: password,
         );
-        if (newName == null) {
-          if (mounted) setState(() => _isLoading = false);
+        if (!mounted) {
           return;
         }
-        // Re-validate after dialog to prevent TOCTOU conflicts
-        final postError = walletsRepository.validateWalletName(newName);
-        if (postError != null) {
-          if (mounted) setState(() => _isLoading = false);
+
+        if (migration.shouldRouteToExistingWallet) {
+          await _routeToExistingMigratedWallet(
+            walletsRepository: walletsRepository,
+            migratedWalletName: migration.alreadyMigratedWalletName!,
+          );
           return;
         }
-        // Persist legacy rename and update local instance
-        await walletsRepository.renameLegacyWallet(
-          walletId: wallet.id,
-          newName: newName,
+
+        String targetWalletName = migration.suggestedTargetWalletName;
+        String kdfPassword = password;
+        if (migration.needsCompatibilityPrompt) {
+          final compatibilityResult = await legacyMigrationCompatibilityDialog(
+            context,
+            walletsRepository: walletsRepository,
+            migration: migration,
+          );
+          if (compatibilityResult == null) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+            }
+            return;
+          }
+
+          targetWalletName = compatibilityResult.targetWalletName;
+          kdfPassword = compatibilityResult.kdfPassword ?? password;
+        }
+
+        if (!mounted) return;
+
+        final AnalyticsBloc analyticsBloc = context.read<AnalyticsBloc>();
+        final analyticsEvent = walletsManagerEventsFactory.createEvent(
+          widget.eventType,
+          WalletsManagerEventMethod.loginExisting,
         );
-        final String trimmed = newName.trim();
-        final Wallet updatedWallet = wallet.copyWith(name: trimmed);
-        // Update selected wallet for UI consistency without mutating the original instance
+        analyticsBloc.logEvent(analyticsEvent);
+
+        context.read<AuthBloc>().add(
+          AuthLegacyMigrationRequested(
+            sourceWallet: wallet,
+            legacyPassword: password,
+            kdfPassword: kdfPassword,
+            targetWalletName: targetWalletName,
+            seedPhrase: migration.seedPhrase,
+            requestedZhtlcCoinIds: migration.requestedZhtlcCoinIds,
+            zhtlcSyncPolicy: migration.zhtlcSyncPolicy,
+            legacyWalletExtras: migration.legacyWalletExtras,
+            legacyNativeSecrets: migration.nativeLegacySecrets,
+          ),
+        );
+      } on AuthException catch (error) {
+        if (!mounted) return;
+        context.read<AuthBloc>().add(AuthErrorReported(error));
         if (mounted) {
-          setState(() {
-            _selectedWallet = updatedWallet;
-          });
+          setState(() => _isLoading = false);
         }
-        walletToUse = updatedWallet;
+      } catch (error, stackTrace) {
+        debugPrint(
+          'Unexpected error during legacy login: $error\n$stackTrace',
+        );
+        if (!mounted) return;
+        context.read<AuthBloc>().add(
+          AuthErrorReported(
+            AuthException(
+              error.toString(),
+              type: AuthExceptionType.generalAuthError,
+            ),
+          ),
+        );
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
+      return;
     }
 
     if (!mounted) return;
@@ -390,7 +473,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     analyticsBloc.logEvent(analyticsEvent);
 
     context.read<AuthBloc>().add(
-      AuthSignInRequested(wallet: walletToUse, password: password),
+      AuthSignInRequested(wallet: wallet, password: password),
     );
 
     if (mounted) {
@@ -398,6 +481,38 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _routeToExistingMigratedWallet({
+    required WalletsRepository walletsRepository,
+    required String migratedWalletName,
+  }) async {
+    final migratedWallet = await walletsRepository.findWalletByName(
+      migratedWalletName,
+      includeLegacyWallets: false,
+    );
+    if (mounted && migratedWallet != null) {
+      setState(() {
+        _selectedWallet = migratedWallet;
+        _existWalletAction = WalletsManagerExistWalletAction.logIn;
+        _isLoading = false;
+      });
+    } else if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+
+    if (!mounted) return;
+
+    context.read<AuthBloc>().add(
+      AuthErrorReported(
+        AuthException(
+          LocaleKeys.legacyMigrationAlreadyMigrated.tr(),
+          type: AuthExceptionType.generalAuthError,
+        ),
+      ),
+    );
   }
 
   void _onLogIn() {

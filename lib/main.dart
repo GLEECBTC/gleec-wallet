@@ -8,6 +8,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:get_it/get_it.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart';
+import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -35,6 +36,7 @@ import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/services/feedback/app_feedback_wrapper.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
+import 'package:web_dex/services/initializer/legacy_app_settings_migration_service.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -81,6 +83,7 @@ Future<void> main() async {
     final tradingStatusService = TradingStatusService(tradingStatusRepository);
     await tradingStatusService.initialize();
     final arrrActivationService = ArrrActivationService(komodoDefiSdk, mm2);
+    final legacyNativeWalletMigration = KomodoLegacyWalletMigration();
 
     final coinsRepo = CoinsRepo(
       kdfSdk: komodoDefiSdk,
@@ -92,6 +95,7 @@ Future<void> main() async {
       komodoDefiSdk,
       mm2Api,
       getStorage(),
+      legacyNativeWalletMigration: legacyNativeWalletMigration,
     );
 
     // Start FD monitoring on iOS (works in both Debug and Release)
