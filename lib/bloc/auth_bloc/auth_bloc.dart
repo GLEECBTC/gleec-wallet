@@ -223,10 +223,15 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
 
     if (event.currentUser != null) {
       // After optimistic login, the SDK watcher fires with the bare user
-      // before the background finalizer persists metadata. Re-emitting would
-      // overwrite the richer optimistic state and cause UI flicker.
+      // before the background finalizer persists metadata. Suppress only if
+      // the incoming metadata carries no new or changed values; allow updates
+      // from finalizers (e.g. cleanup status, activated coins) through.
       if (state.status == AuthenticationStatus.completed &&
-          state.currentUser?.walletId == event.currentUser!.walletId) {
+          state.currentUser?.walletId == event.currentUser!.walletId &&
+          !_hasNewerMetadata(
+            event.currentUser!.metadata,
+            state.currentUser?.metadata ?? {},
+          )) {
         return;
       }
       emit(
@@ -657,6 +662,20 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         ),
       );
     } catch (e, s) {
+      // Registration may have succeeded before the failure (e.g. linkage
+      // metadata write). Sign out to avoid leaving SDK auth active while
+      // the UI shows an error state.
+      try {
+        if (await _kdfSdk.auth.isSignedIn()) {
+          await _kdfSdk.auth.signOut();
+        }
+      } catch (signOutError, signOutStack) {
+        _log.warning(
+          'Failed to roll back SDK session after migration failure',
+          signOutError,
+          signOutStack,
+        );
+      }
       await _emitAuthFailure(
         emit: emit,
         errorMsg: 'Failed to migrate legacy wallet ${event.sourceWallet.name}',
@@ -963,6 +982,22 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         );
       }
     }
+  }
+
+  /// Returns `true` if [incoming] contains at least one key whose value
+  /// differs from [current], or a key that [current] does not have at all.
+  /// Used to distinguish bare-user watcher re-emissions (no new data) from
+  /// post-login finalizer updates that carry meaningful metadata changes.
+  bool _hasNewerMetadata(
+    Map<String, dynamic> incoming,
+    Map<String, dynamic> current,
+  ) {
+    for (final entry in incoming.entries) {
+      if (!current.containsKey(entry.key) || current[entry.key] != entry.value) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool _isMissingMetadataStringValue(dynamic value) {
