@@ -625,31 +625,34 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
             _log.info('Cleaning up legacy wallet data');
             LegacyMigrationCleanupStatus cleanupStatus =
                 LegacyMigrationCleanupStatus.incomplete;
-            await _runNonCriticalRestoreStep(
-              warnings: warnings,
-              warningMessage:
-                  'Wallet migrated, but legacy data could not be fully '
-                  'removed.',
-              logMessage: 'Legacy wallet cleanup failed',
-              action: () async {
-                final cleanupOutcome = await _walletsRepository
-                    .cleanupMigratedLegacyWallet(
-                      wallet: event.sourceWallet,
-                      password: event.legacyPassword,
-                      nativeSecrets: event.legacyNativeSecrets,
-                    );
-                cleanupStatus = cleanupOutcome.isComplete
-                    ? LegacyMigrationCleanupStatus.complete
-                    : LegacyMigrationCleanupStatus.incomplete;
-              },
-            );
-            await _runNonCriticalRestoreStep(
-              warnings: warnings,
-              warningMessage:
-                  'Wallet migrated, but cleanup status could not be persisted.',
-              logMessage: 'Failed to persist legacy cleanup status',
-              action: () => _kdfSdk.setLegacyCleanupStatus(cleanupStatus),
-            );
+            try {
+              final cleanupOutcome = await _walletsRepository
+                  .cleanupMigratedLegacyWallet(
+                    wallet: event.sourceWallet,
+                    password: event.legacyPassword,
+                    nativeSecrets: event.legacyNativeSecrets,
+                  );
+              cleanupStatus = cleanupOutcome.isComplete
+                  ? LegacyMigrationCleanupStatus.complete
+                  : LegacyMigrationCleanupStatus.incomplete;
+            } catch (error, stackTrace) {
+              warnings.add(
+                'Wallet migrated, but legacy data could not be fully removed.',
+              );
+              _log.shout('Legacy wallet cleanup failed', error, stackTrace);
+            }
+            try {
+              await _kdfSdk.setLegacyCleanupStatus(cleanupStatus);
+            } catch (error, stackTrace) {
+              warnings.add(
+                'Wallet migrated, but cleanup status could not be persisted.',
+              );
+              _log.shout(
+                'Failed to persist legacy cleanup status',
+                error,
+                stackTrace,
+              );
+            }
 
             await _refreshWalletsAfterLegacyMutation();
             if (warnings.isNotEmpty) {
