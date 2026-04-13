@@ -883,7 +883,6 @@
   "legacyMigrationDescriptionNameAndPassword": "This legacy wallet needs a KDF-compatible name and a new KDF password before it can be migrated.",
   "legacyMigrationDescriptionNameOnly": "Confirm the KDF wallet name that will be used for this migrated wallet.",
   "legacyMigrationDescriptionPasswordOnly": "Your legacy password can unlock the source wallet, but it cannot be used as the new KDF wallet password.",
-  "legacyMigrationTargetNameError": "Name can contain only letters, numbers, and underscores (_).",
   "legacyMigrationAlreadyMigrated": "This wallet has already been migrated. Use the migrated wallet entry and its current password.",
 
   "kdfErrorGeneric": "An unexpected error occurred. Please try again.",

@@ -17,6 +17,14 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
   /// to authentication state changes.
   void _listenToAuthStateChanges();
 
+  /// Detaches `watchCurrentUser` while [AuthBloc] drives an explicit auth flow.
+  ///
+  /// Bloc 9 dispatches different event types concurrently; the SDK emits
+  /// transient `null` during `signIn` / `register` (e.g. `signOut`, KDF stop).
+  /// Without pausing, [AuthModeChanged] can preserve
+  /// [AuthenticationStatus.initializing] and leave the UI stuck loading.
+  Future<void> _pauseAuthUserWatcher();
+
   /// Filters out geo-blocked assets from a list of coin IDs.
   /// Implemented in [AuthBloc].
   List<String> _filterBlockedAssets(List<String> coinIds);
@@ -26,6 +34,7 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
     Emitter<AuthBlocState> emit,
   ) async {
     try {
+      await _pauseAuthUserWatcher();
       emit(AuthBlocState.loading());
 
       const authOptions = AuthOptions(

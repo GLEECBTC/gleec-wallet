@@ -30,11 +30,10 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       'Wallet restored, but some wallet metadata could not be updated.';
   static const String _assetMigrationWarning =
       'Wallet restored, but some wallet assets could not be migrated.';
-  static const String _postRestoreWarning =
-      'Wallet restored, but some post-restore steps failed.';
   static const String _alreadyMigratedWalletMessage =
       'This wallet appears to have already been migrated. '
       'Use the migrated wallet entry and its current password.';
+  static const Duration _postLoginStepTimeout = Duration(seconds: 5);
 
   /// Handles [AuthBlocEvent]s and emits [AuthBlocState]s.
   /// [_kdfSdk] is an instance of [KomodoDefiSdk] used for authentication.
@@ -96,6 +95,13 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     await super.close();
   }
 
+  /// See [TrezorAuthMixin._pauseAuthUserWatcher].
+  @override
+  Future<void> _pauseAuthUserWatcher() async {
+    await _authChangesSubscription?.cancel();
+    _authChangesSubscription = null;
+  }
+
   Future<bool> _areWeakPasswordsAllowed() async {
     final settings = await _settingsRepository.loadSettings();
     return settings.weakPasswordsAllowed;
@@ -106,6 +112,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     Emitter<AuthBlocState> emit,
   ) async {
     _log.info('Logging out from a wallet');
+    await _pauseAuthUserWatcher();
     emit(AuthBlocState.loading());
     try {
       await _kdfSdk.auth.signOut();
@@ -129,6 +136,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   ) async {
     try {
       if (event.wallet.isLegacyWallet) {
+        await _pauseAuthUserWatcher();
         emit(
           AuthBlocState.error(
             AuthException(
@@ -140,6 +148,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         return;
       }
 
+      await _pauseAuthUserWatcher();
       emit(AuthBlocState.loading());
 
       _log.info('Logging in to an existing wallet.');
@@ -200,7 +209,48 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthModeChanged event,
     Emitter<AuthBlocState> emit,
   ) async {
-    emit(AuthBlocState(mode: event.mode, currentUser: event.currentUser));
+    if (event.currentUser == null) {
+      final priorStatus = state.status;
+      if (priorStatus == AuthenticationStatus.initializing ||
+          priorStatus == AuthenticationStatus.authenticating) {
+        _log.fine(
+          'Ignoring null user from watcher during active auth flow '
+          '(status=$priorStatus)',
+        );
+        return;
+      }
+    }
+
+    if (event.currentUser != null) {
+      // After optimistic login, the SDK watcher fires with the bare user
+      // before the background finalizer persists metadata. Re-emitting would
+      // overwrite the richer optimistic state and cause UI flicker.
+      if (state.status == AuthenticationStatus.completed &&
+          state.currentUser?.walletId == event.currentUser!.walletId) {
+        return;
+      }
+      emit(
+        AuthBlocState(
+          mode: event.mode,
+          currentUser: event.currentUser,
+          authenticationState: AuthenticationState.completed(
+            event.currentUser!,
+          ),
+        ),
+      );
+    } else {
+      final priorAuthState = state.authenticationState;
+      final preserveErrorState =
+          priorAuthState?.status == AuthenticationStatus.error;
+      emit(
+        AuthBlocState(
+          mode: event.mode,
+          currentUser: null,
+          authenticationState: preserveErrorState ? priorAuthState : null,
+          authError: preserveErrorState ? state.authError : null,
+        ),
+      );
+    }
   }
 
   Future<void> _onErrorReported(
@@ -223,6 +273,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     Emitter<AuthBlocState> emit,
   ) async {
     try {
+      await _pauseAuthUserWatcher();
       emit(AuthBlocState.loading());
       if (await _didSignInExistingWallet(event.wallet, event.password)) {
         add(
@@ -236,7 +287,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
 
       _log.info('Registering a new wallet');
       final weakPasswordsAllowed = await _areWeakPasswordsAllowed();
-      await _kdfSdk.auth.register(
+      final currentUser = await _kdfSdk.auth.register(
         password: event.password,
         walletName: event.wallet.name,
         options: AuthOptions(
@@ -247,32 +298,56 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         ),
       );
 
-      _log.info(
-        'Registered a new wallet, setting up metadata and logging in...',
-      );
-      await _kdfSdk.setWalletType(event.wallet.config.type);
-      await _kdfSdk.setWalletProvenance(WalletProvenance.generated);
-      await _kdfSdk.setWalletCreatedAt(DateTime.now());
-      await _kdfSdk.confirmSeedBackup(hasBackup: false);
-      // Filter out geo-blocked assets from default coins before adding to wallet
       final allowedDefaultCoins = _filterBlockedAssets(enabledByDefaultCoins);
-      await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
-
-      final currentUser = await _kdfSdk.auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('Registration failed: user is not signed in');
-      }
-      emit(AuthBlocState.loggedIn(currentUser));
+      final optimisticUser = _buildOptimisticLoggedInUser(
+        currentUser,
+        walletType: event.wallet.config.type,
+        provenance: WalletProvenance.generated,
+        createdAt: DateTime.now(),
+        hasBackup: false,
+        activatedCoins: allowedDefaultCoins,
+      );
+      _emitLoggedInState(emit, optimisticUser);
       _listenToAuthStateChanges();
-    } catch (e, s) {
-      final errorMsg = 'Failed to register wallet ${event.wallet.name}';
-      _log.shout(errorMsg, e, s);
-      emit(
-        AuthBlocState.error(
-          AuthException(errorMsg, type: AuthExceptionType.generalAuthError),
+
+      unawaited(
+        _runPostLoginFinalizer(
+          context: 'wallet registration ${event.wallet.name}',
+          action: () async {
+            _log.info(
+              'Registered a new wallet, setting up metadata in background...',
+            );
+            await _runBoundedPostLoginStep(
+              logMessage: 'Failed to persist wallet type',
+              action: () => _kdfSdk.setWalletType(event.wallet.config.type),
+            );
+            await _runBoundedPostLoginStep(
+              logMessage: 'Failed to persist wallet provenance',
+              action: () =>
+                  _kdfSdk.setWalletProvenance(WalletProvenance.generated),
+            );
+            await _runBoundedPostLoginStep(
+              logMessage: 'Failed to persist wallet creation date',
+              action: () => _kdfSdk.setWalletCreatedAt(DateTime.now()),
+            );
+            await _runBoundedPostLoginStep(
+              logMessage: 'Failed to persist seed backup state',
+              action: () => _kdfSdk.confirmSeedBackup(hasBackup: false),
+            );
+            await _runBoundedPostLoginStep(
+              logMessage: 'Failed to persist default activated coins',
+              action: () => _kdfSdk.addActivatedCoins(allowedDefaultCoins),
+            );
+          },
         ),
       );
-      await _authChangesSubscription?.cancel();
+    } catch (e, s) {
+      await _emitAuthFailure(
+        emit: emit,
+        errorMsg: 'Failed to register wallet ${event.wallet.name}',
+        error: e,
+        stackTrace: s,
+      );
     }
   }
 
@@ -280,10 +355,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthRestoreRequested event,
     Emitter<AuthBlocState> emit,
   ) async {
-    final Set<String> warnings = <String>{};
-    bool walletRegistered = false;
-
     try {
+      await _pauseAuthUserWatcher();
       if (await _didSignInExistingWallet(event.wallet, event.password)) {
         add(
           AuthSignInRequested(wallet: event.wallet, password: event.password),
@@ -297,7 +370,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       emit(AuthBlocState.loading());
       _log.info('Restoring wallet from a seed');
       final weakPasswordsAllowed = await _areWeakPasswordsAllowed();
-      await _kdfSdk.auth.register(
+      final currentUser = await _kdfSdk.auth.register(
         password: event.password,
         walletName: event.wallet.name,
         mnemonic: Mnemonic.plaintext(event.seed),
@@ -308,85 +381,70 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           allowWeakPassword: weakPasswordsAllowed,
         ),
       );
-      walletRegistered = true;
-
-      _log.info(
-        'Successfully restored wallet from a seed. '
-        'Setting up wallet metadata and logging in...',
+      final allowedDefaultCoins = _filterBlockedAssets(enabledByDefaultCoins);
+      final availableWalletCoins = _filterOutUnsupportedCoins(
+        event.wallet.config.activatedCoins,
       );
-      await _runNonCriticalRestoreStep(
-        warnings: warnings,
-        warningMessage: _metadataMigrationWarning,
-        logMessage: 'Failed to update restored wallet metadata',
-        action: () async {
-          await _kdfSdk.setWalletType(event.wallet.config.type);
-          await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
-          await _kdfSdk.setWalletCreatedAt(DateTime.now());
-          await _kdfSdk.confirmSeedBackup(
-            hasBackup: event.wallet.config.hasBackup,
-          );
-        },
+      final allowedWalletCoins = _filterBlockedAssets(availableWalletCoins);
+      final optimisticUser = _buildOptimisticLoggedInUser(
+        currentUser,
+        walletType: event.wallet.config.type,
+        provenance: WalletProvenance.imported,
+        createdAt: DateTime.now(),
+        hasBackup: event.wallet.config.hasBackup,
+        activatedCoins: <String>{...allowedDefaultCoins, ...allowedWalletCoins},
       );
-      await _runNonCriticalRestoreStep(
-        warnings: warnings,
-        warningMessage: _assetMigrationWarning,
-        logMessage: 'Failed to migrate restored wallet assets',
-        action: () async {
-          final allowedDefaultCoins = _filterBlockedAssets(
-            enabledByDefaultCoins,
-          );
-          await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
-          if (event.wallet.config.activatedCoins.isNotEmpty) {
-            final availableWalletCoins = _filterOutUnsupportedCoins(
-              event.wallet.config.activatedCoins,
-            );
-            final allowedWalletCoins = _filterBlockedAssets(
-              availableWalletCoins,
-            );
-            await _kdfSdk.addActivatedCoins(allowedWalletCoins);
-          }
-        },
-      );
-
-      final currentUser = await _kdfSdk.auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('Restoration from seed failed: user is not signed in');
-      }
-
-      emit(
-        AuthBlocState.loggedIn(
-          currentUser,
-          message: warnings.isEmpty ? null : warnings.join(' '),
-        ),
-      );
+      _emitLoggedInState(emit, optimisticUser);
       _listenToAuthStateChanges();
-    } catch (e, s) {
-      if (walletRegistered) {
-        final currentUser = await _kdfSdk.auth.currentUser;
-        if (currentUser != null) {
-          warnings.add(_postRestoreWarning);
-          _log.shout(
-            'Wallet restored but post-restore steps were incomplete '
-            'for ${event.wallet.name}',
-            e,
-            s,
-          );
-          emit(
-            AuthBlocState.loggedIn(currentUser, message: warnings.join(' ')),
-          );
-          _listenToAuthStateChanges();
-          return;
-        }
-      }
 
-      final errorMsg = 'Failed to restore existing wallet ${event.wallet.name}';
-      _log.shout(errorMsg, e, s);
-      emit(
-        AuthBlocState.error(
-          AuthException(errorMsg, type: AuthExceptionType.generalAuthError),
+      unawaited(
+        _runPostLoginFinalizer(
+          context: 'wallet restore ${event.wallet.name}',
+          action: () async {
+            final Set<String> warnings = <String>{};
+            _log.info(
+              'Successfully restored wallet from a seed. '
+              'Finalizing metadata in background...',
+            );
+            await _runNonCriticalRestoreStep(
+              warnings: warnings,
+              warningMessage: _metadataMigrationWarning,
+              logMessage: 'Failed to update restored wallet metadata',
+              action: () async {
+                await _kdfSdk.setWalletType(event.wallet.config.type);
+                await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
+                await _kdfSdk.setWalletCreatedAt(DateTime.now());
+                await _kdfSdk.confirmSeedBackup(
+                  hasBackup: event.wallet.config.hasBackup,
+                );
+              },
+            );
+            await _runNonCriticalRestoreStep(
+              warnings: warnings,
+              warningMessage: _assetMigrationWarning,
+              logMessage: 'Failed to migrate restored wallet assets',
+              action: () async {
+                await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
+                if (allowedWalletCoins.isNotEmpty) {
+                  await _kdfSdk.addActivatedCoins(allowedWalletCoins);
+                }
+              },
+            );
+            if (warnings.isNotEmpty) {
+              _log.warning(
+                'Wallet restore completed with warnings: ${warnings.join(' ')}',
+              );
+            }
+          },
         ),
       );
-      await _authChangesSubscription?.cancel();
+    } catch (e, s) {
+      await _emitAuthFailure(
+        emit: emit,
+        errorMsg: 'Failed to restore existing wallet ${event.wallet.name}',
+        error: e,
+        stackTrace: s,
+      );
     }
   }
 
@@ -394,19 +452,25 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthLegacyMigrationRequested event,
     Emitter<AuthBlocState> emit,
   ) async {
-    final Set<String> warnings = <String>{};
-    bool walletRegistered = false;
-
     try {
+      await _pauseAuthUserWatcher();
       emit(AuthBlocState.loading());
+      _log.info(
+        'Starting legacy migration for ${event.sourceWallet.name} '
+        '-> ${event.targetWalletName}',
+      );
 
       final Wallet targetWallet = event.sourceWallet.copyWith(
         name: event.targetWalletName,
-        config: event.sourceWallet.config.copyWith(isLegacyWallet: false),
+        config: event.sourceWallet.config.copyWith(
+          isLegacyWallet: false,
+          type: WalletType.iguana,
+        ),
       );
 
       if (await _didSignInExistingWallet(targetWallet, event.kdfPassword)) {
         if (event.kdfPassword != event.legacyPassword) {
+          _log.info('Target wallet already exists with different password');
           emit(
             AuthBlocState.error(
               AuthException(
@@ -430,7 +494,14 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         return;
       }
 
-      await _kdfSdk.auth.register(
+      _log.info('Registering migrated wallet ${targetWallet.name}');
+      final weakPasswordsAllowed = await _areWeakPasswordsAllowed();
+      try {
+        await _kdfSdk.auth.ensureKdfHealthy();
+      } catch (e) {
+        _log.warning('Pre-register KDF health check failed: $e');
+      }
+      final currentUser = await _kdfSdk.auth.register(
         password: event.kdfPassword,
         walletName: targetWallet.name,
         mnemonic: Mnemonic.plaintext(event.seedPhrase),
@@ -438,136 +509,171 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           derivationMethod: targetWallet.config.type == WalletType.hdwallet
               ? DerivationMethod.hdWallet
               : DerivationMethod.iguana,
+          allowWeakPassword: weakPasswordsAllowed,
         ),
       );
-      walletRegistered = true;
-
-      final LegacyWalletSource source = event.sourceWallet.legacySource!;
       try {
-        await _kdfSdk.setMigratedLegacySource(
-          source: source,
-          cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
-        );
-      } catch (e) {
-        _log.warning(
-          'First attempt to write migration linkage metadata failed, retrying',
-          e,
-        );
-        await _kdfSdk.setMigratedLegacySource(
-          source: source,
-          cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
-        );
-      }
-
-      await _runNonCriticalRestoreStep(
-        warnings: warnings,
-        warningMessage: _metadataMigrationWarning,
-        logMessage: 'Failed to update migrated wallet metadata',
-        action: () async {
-          await _kdfSdk.setWalletType(targetWallet.config.type);
-          await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
-          await _kdfSdk.setWalletCreatedAt(DateTime.now());
-          await _kdfSdk.confirmSeedBackup(
-            hasBackup: targetWallet.config.hasBackup,
+        final LegacyWalletSource? linkageSource =
+            event.sourceWallet.legacySource;
+        if (linkageSource != null) {
+          await _kdfSdk.setMigratedLegacySource(
+            source: linkageSource,
+            cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
           );
-        },
-      );
-      await _runNonCriticalRestoreStep(
-        warnings: warnings,
-        warningMessage: _assetMigrationWarning,
-        logMessage: 'Failed to migrate legacy wallet assets',
-        action: () async {
-          final specialCasesResult = await _walletsRepository
-              .importPreparedLegacySpecialCases(
-                migration: PreparedLegacyMigration(
-                  sourceWallet: event.sourceWallet,
-                  seedPhrase: event.seedPhrase,
-                  nativeLegacySecrets: event.legacyNativeSecrets,
-                  suggestedTargetWalletName: event.targetWalletName,
-                  requiresNameConfirmation: false,
-                  requiresNewKdfPassword: false,
-                  requestedZhtlcCoinIds: event.requestedZhtlcCoinIds,
-                  zhtlcSyncPolicy: event.zhtlcSyncPolicy,
-                  legacyWalletExtras: event.legacyWalletExtras,
-                ),
-                baseActivatedCoinIds: targetWallet.config.activatedCoins,
-              );
-          if (specialCasesResult.warningMessage != null) {
-            warnings.add(specialCasesResult.warningMessage!);
-          }
-
-          final allowedDefaultCoins = _filterBlockedAssets(
-            enabledByDefaultCoins,
-          );
-          await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
-          if (specialCasesResult.walletCoinIdsToActivate.isNotEmpty) {
-            final availableWalletCoins = _filterOutUnsupportedCoins(
-              specialCasesResult.walletCoinIdsToActivate,
-            );
-            final allowedWalletCoins = _filterBlockedAssets(
-              availableWalletCoins,
-            );
-            await _kdfSdk.addActivatedCoins(allowedWalletCoins);
-          }
-        },
-      );
-
-      final cleanupOutcome = await _walletsRepository
-          .cleanupMigratedLegacyWallet(
-            wallet: event.sourceWallet,
-            password: event.legacyPassword,
-            nativeSecrets: event.legacyNativeSecrets,
-          );
-      final cleanupStatus =
-          event.sourceWallet.isNativeLegacyWallet && !cleanupOutcome.isComplete
-          ? LegacyMigrationCleanupStatus.incomplete
-          : LegacyMigrationCleanupStatus.complete;
-      await _kdfSdk.setLegacyCleanupStatus(cleanupStatus);
-
-      _walletsRepository.invalidateCache();
-
-      final currentUser = await _kdfSdk.auth.currentUser;
-      if (currentUser == null) {
-        throw Exception('Legacy migration failed: user is not signed in');
-      }
-
-      emit(
-        AuthBlocState.loggedIn(
-          currentUser,
-          message: warnings.isEmpty ? null : warnings.join(' '),
-        ),
-      );
-      _listenToAuthStateChanges();
-    } catch (e, s) {
-      _walletsRepository.invalidateCache();
-
-      if (walletRegistered) {
-        final currentUser = await _kdfSdk.auth.currentUser;
-        if (currentUser != null) {
-          warnings.add(_postRestoreWarning);
-          _log.shout(
-            'Legacy wallet migrated but post-migration steps were incomplete '
-            'for ${event.sourceWallet.name}',
-            e,
-            s,
-          );
-          emit(
-            AuthBlocState.loggedIn(currentUser, message: warnings.join(' ')),
-          );
-          _listenToAuthStateChanges();
-          return;
         }
+        if (event.legacyWalletExtras.isNotEmpty) {
+          await _kdfSdk.setLegacyWalletExtras(event.legacyWalletExtras);
+        }
+      } catch (error, stackTrace) {
+        _log.shout(
+          'Failed to persist legacy linkage or extras immediately after '
+          'register; background finalizer will retry',
+          error,
+          stackTrace,
+        );
       }
+      final baseActivatedCoins = <String>{
+        ..._filterBlockedAssets(enabledByDefaultCoins),
+        ..._filterBlockedAssets(
+          _filterOutUnsupportedCoins(targetWallet.config.activatedCoins),
+        ),
+      };
+      final optimisticUser = _buildOptimisticLoggedInUser(
+        currentUser,
+        walletType: targetWallet.config.type,
+        provenance: WalletProvenance.imported,
+        createdAt: DateTime.now(),
+        hasBackup: targetWallet.config.hasBackup,
+        activatedCoins: baseActivatedCoins,
+        migratedSource: event.sourceWallet.legacySource,
+        cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
+        legacyWalletExtras: event.legacyWalletExtras,
+      );
+      _emitLoggedInState(emit, optimisticUser);
+      _listenToAuthStateChanges();
 
-      final errorMsg =
-          'Failed to migrate legacy wallet ${event.sourceWallet.name}';
-      _log.shout(errorMsg, e, s);
-      emit(
-        AuthBlocState.error(
-          AuthException(errorMsg, type: AuthExceptionType.generalAuthError),
+      unawaited(
+        _runPostLoginFinalizer(
+          context: 'legacy migration ${event.sourceWallet.name}',
+          action: () async {
+            final Set<String> warnings = <String>{};
+            _log.info(
+              'Wallet registered, finishing legacy migration in background',
+            );
+
+            final LegacyWalletSource? source = event.sourceWallet.legacySource;
+            if (source != null) {
+              await _runBoundedPostLoginStep(
+                logMessage: 'Failed to write migration linkage metadata',
+                action: () => _kdfSdk.setMigratedLegacySource(
+                  source: source,
+                  cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
+                ),
+              );
+            }
+
+            await _runNonCriticalRestoreStep(
+              warnings: warnings,
+              warningMessage: _metadataMigrationWarning,
+              logMessage: 'Failed to update migrated wallet metadata',
+              action: () async {
+                await _kdfSdk.setWalletType(targetWallet.config.type);
+                await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
+                await _kdfSdk.setWalletCreatedAt(DateTime.now());
+                await _kdfSdk.confirmSeedBackup(
+                  hasBackup: targetWallet.config.hasBackup,
+                );
+              },
+            );
+
+            await _runNonCriticalRestoreStep(
+              warnings: warnings,
+              warningMessage: _assetMigrationWarning,
+              logMessage: 'Failed to migrate legacy wallet assets',
+              action: () async {
+                final specialCasesResult = await _walletsRepository
+                    .importPreparedLegacySpecialCases(
+                      migration: PreparedLegacyMigration(
+                        sourceWallet: event.sourceWallet,
+                        seedPhrase: event.seedPhrase,
+                        nativeLegacySecrets: event.legacyNativeSecrets,
+                        suggestedTargetWalletName: event.targetWalletName,
+                        requiresNameConfirmation: false,
+                        requiresNewKdfPassword: false,
+                        requestedZhtlcCoinIds: event.requestedZhtlcCoinIds,
+                        zhtlcSyncPolicy: event.zhtlcSyncPolicy,
+                        legacyWalletExtras: event.legacyWalletExtras,
+                      ),
+                      baseActivatedCoinIds: targetWallet.config.activatedCoins,
+                    );
+                if (specialCasesResult.warningMessage != null) {
+                  warnings.add(specialCasesResult.warningMessage!);
+                }
+
+                final allowedDefaultCoins = _filterBlockedAssets(
+                  enabledByDefaultCoins,
+                );
+                await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
+                if (specialCasesResult.walletCoinIdsToActivate.isNotEmpty) {
+                  final availableWalletCoins = _filterOutUnsupportedCoins(
+                    specialCasesResult.walletCoinIdsToActivate,
+                  );
+                  final allowedWalletCoins = _filterBlockedAssets(
+                    availableWalletCoins,
+                  );
+                  await _kdfSdk.addActivatedCoins(allowedWalletCoins);
+                }
+              },
+            );
+
+            _log.info('Cleaning up legacy wallet data');
+            LegacyMigrationCleanupStatus cleanupStatus =
+                LegacyMigrationCleanupStatus.incomplete;
+            await _runNonCriticalRestoreStep(
+              warnings: warnings,
+              warningMessage:
+                  'Wallet migrated, but legacy data could not be fully '
+                  'removed.',
+              logMessage: 'Legacy wallet cleanup failed',
+              action: () async {
+                final cleanupOutcome = await _walletsRepository
+                    .cleanupMigratedLegacyWallet(
+                      wallet: event.sourceWallet,
+                      password: event.legacyPassword,
+                      nativeSecrets: event.legacyNativeSecrets,
+                    );
+                cleanupStatus =
+                    event.sourceWallet.isNativeLegacyWallet &&
+                        !cleanupOutcome.isComplete
+                    ? LegacyMigrationCleanupStatus.incomplete
+                    : LegacyMigrationCleanupStatus.complete;
+              },
+            );
+            await _runNonCriticalRestoreStep(
+              warnings: warnings,
+              warningMessage:
+                  'Wallet migrated, but cleanup status could not be persisted.',
+              logMessage: 'Failed to persist legacy cleanup status',
+              action: () => _kdfSdk.setLegacyCleanupStatus(cleanupStatus),
+            );
+
+            await _refreshWalletsAfterLegacyMutation();
+            if (warnings.isNotEmpty) {
+              _log.warning(
+                'Legacy migration completed with warnings: '
+                '${warnings.join(' ')}',
+              );
+            }
+          },
         ),
       );
-      await _authChangesSubscription?.cancel();
+    } catch (e, s) {
+      await _emitAuthFailure(
+        emit: emit,
+        errorMsg: 'Failed to migrate legacy wallet ${event.sourceWallet.name}',
+        error: e,
+        stackTrace: s,
+      );
     }
   }
 
@@ -578,10 +684,113 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     required Future<void> Function() action,
   }) async {
     try {
-      await action();
+      await action().timeout(_postLoginStepTimeout);
     } catch (error, stackTrace) {
       warnings.add(warningMessage);
       _log.shout(logMessage, error, stackTrace);
+    }
+  }
+
+  Future<void> _runBoundedPostLoginStep({
+    required String logMessage,
+    required Future<void> Function() action,
+  }) async {
+    try {
+      await action().timeout(_postLoginStepTimeout);
+    } catch (error, stackTrace) {
+      _log.shout(logMessage, error, stackTrace);
+    }
+  }
+
+  KdfUser _buildOptimisticLoggedInUser(
+    KdfUser user, {
+    required WalletType walletType,
+    required WalletProvenance provenance,
+    required DateTime createdAt,
+    required bool hasBackup,
+    required Iterable<String> activatedCoins,
+    LegacyWalletSource? migratedSource,
+    LegacyMigrationCleanupStatus? cleanupStatus,
+    Map<String, dynamic>? legacyWalletExtras,
+  }) {
+    final metadata = Map<String, dynamic>.from(user.metadata);
+    metadata['type'] = walletType.name;
+    metadata['wallet_provenance'] = provenance.name;
+    metadata['wallet_created_at'] = createdAt.millisecondsSinceEpoch;
+    metadata['has_backup'] = hasBackup;
+    metadata['activated_coins'] = <String>{...activatedCoins}.toList();
+
+    if (migratedSource != null) {
+      metadata[legacySourceKindMetadataKey] = migratedSource.kind.name;
+      metadata[legacySourceWalletIdMetadataKey] =
+          migratedSource.originalWalletId;
+      metadata[legacySourceWalletNameMetadataKey] =
+          migratedSource.originalWalletName;
+      if (cleanupStatus != null) {
+        metadata[legacyCleanupStatusMetadataKey] = cleanupStatus.name;
+      }
+    }
+
+    if (legacyWalletExtras != null && legacyWalletExtras.isNotEmpty) {
+      metadata[legacyWalletExtrasMetadataKey] = Map<String, dynamic>.from(
+        legacyWalletExtras,
+      );
+    }
+
+    return user.copyWith(metadata: metadata);
+  }
+
+  void _emitLoggedInState(
+    Emitter<AuthBlocState> emit,
+    KdfUser user, {
+    String? message,
+  }) {
+    emit(AuthBlocState.loggedIn(user, message: message));
+    _kdfSdk.streaming.connectIfNeeded();
+  }
+
+  Future<void> _runPostLoginFinalizer({
+    required String context,
+    required Future<void> Function() action,
+  }) async {
+    try {
+      await action();
+    } catch (error, stackTrace) {
+      _log.shout(
+        'Post-login finalization failed for $context',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _emitAuthFailure({
+    required Emitter<AuthBlocState> emit,
+    required String errorMsg,
+    required Object error,
+    required StackTrace stackTrace,
+  }) async {
+    _log.shout(errorMsg, error, stackTrace);
+    emit(
+      AuthBlocState.error(
+        error is AuthException
+            ? error
+            : AuthException(errorMsg, type: AuthExceptionType.generalAuthError),
+      ),
+    );
+    await _authChangesSubscription?.cancel();
+  }
+
+  Future<void> _refreshWalletsAfterLegacyMutation() async {
+    _walletsRepository.invalidateCache();
+    try {
+      await _walletsRepository.refreshWallets();
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to refresh wallet list after legacy migration mutation',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -672,6 +881,11 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthLifecycleCheckRequested event,
     Emitter<AuthBlocState> emit,
   ) async {
+    if (state.isLoading) {
+      _log.info('Skipping lifecycle auth check while auth flow is loading');
+      return;
+    }
+
     // Ensure KDF is healthy before checking user state
     // This helps recover from situations where MM2 becomes unavailable
     // (e.g., after app backgrounding on mobile platforms)
@@ -682,7 +896,17 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       // Continue anyway - the health check is best-effort
     }
 
-    final currentUser = await _kdfSdk.auth.currentUser;
+    final KdfUser? currentUser;
+    try {
+      currentUser = await _kdfSdk.auth.currentUser;
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to read current user during lifecycle check',
+        error,
+        stackTrace,
+      );
+      return;
+    }
 
     // Do not emit any state if the user is currently attempting to log in.
     // TODO(takenagain)!: This is a temporary workaround to avoid emitting

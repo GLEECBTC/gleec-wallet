@@ -458,6 +458,12 @@ class _SyncFormState extends State<_SyncForm> {
       case ZhtlcRecurringSyncMode.height:
         return '${widget.initialPolicy?.height ?? ''}';
       case ZhtlcRecurringSyncMode.date:
+        final ts = widget.initialPolicy?.unixTimestamp;
+        if (ts != null) {
+          return _formatDate(
+            DateTime.fromMillisecondsSinceEpoch(ts * 1000, isUtc: true),
+          );
+        }
         return _selectedDate == null ? '' : _formatDate(_selectedDate!);
       case ZhtlcRecurringSyncMode.earliest:
       case ZhtlcRecurringSyncMode.recentTransactions:
@@ -538,6 +544,7 @@ class _SyncFormState extends State<_SyncForm> {
     }
   }
 
+  /// Height and date need a value; earliest and recentTransactions do not.
   bool get _shouldShowValueField =>
       _syncType == ZhtlcSyncType.height || _syncType == ZhtlcSyncType.date;
 

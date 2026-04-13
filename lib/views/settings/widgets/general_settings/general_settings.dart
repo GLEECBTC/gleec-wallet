@@ -17,7 +17,7 @@ import 'package:web_dex/views/settings/widgets/general_settings/settings_theme_s
 import 'package:web_dex/views/settings/widgets/general_settings/show_swap_data.dart';
 
 class GeneralSettings extends StatelessWidget {
-  const GeneralSettings({Key? key}) : super(key: key);
+  const GeneralSettings({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +48,10 @@ class GeneralSettings extends StatelessWidget {
         const SizedBox(height: 25),
         const SettingsManageDiagnosticLogging(),
         const SizedBox(height: 25),
-        const HiddenWithoutWallet(child: SettingsDownloadLogs()),
+        const HiddenWithoutWallet(
+          showWhenNoWalletInDebugMode: true,
+          child: SettingsDownloadLogs(),
+        ),
         const SizedBox(height: 25),
         const HiddenWithWallet(child: SettingsResetActivatedCoins()),
         const SizedBox(height: 25),

@@ -9,6 +9,7 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/analytics/events/user_acquisition_events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/common/screen.dart';
@@ -207,10 +208,12 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
           _buildContent(),
           if (_isLoading)
             Positioned.fill(
-              child: Container(
-                color: Colors.transparent,
-                alignment: Alignment.center,
-                child: const UiSpinner(),
+              child: AbsorbPointer(
+                child: Container(
+                  color: Colors.transparent,
+                  alignment: Alignment.center,
+                  child: const UiSpinner(),
+                ),
               ),
             ),
         ],
@@ -226,10 +229,12 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
           _buildContent(),
           if (_isLoading)
             Positioned.fill(
-              child: Container(
-                color: Colors.transparent,
-                alignment: Alignment.center,
-                child: const UiSpinner(),
+              child: AbsorbPointer(
+                child: Container(
+                  color: Colors.transparent,
+                  alignment: Alignment.center,
+                  child: const UiSpinner(),
+                ),
               ),
             ),
         ],
@@ -288,7 +293,9 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         AuthRegisterRequested(wallet: newWallet, password: password),
       );
     } catch (error, stackTrace) {
-      debugPrint('Unexpected error during wallet creation: $error\n$stackTrace');
+      debugPrint(
+        'Unexpected error during wallet creation: $error\n$stackTrace',
+      );
       if (!mounted) return;
       context.read<AuthBloc>().add(
         AuthErrorReported(
@@ -383,16 +390,12 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         final migration = await walletsRepository.prepareLegacyMigration(
           sourceWallet: wallet,
           legacyPassword: password,
+          allowWeakPassword: context
+              .read<SettingsBloc>()
+              .state
+              .weakPasswordsAllowed,
         );
         if (!mounted) {
-          return;
-        }
-
-        if (migration.shouldRouteToExistingWallet) {
-          await _routeToExistingMigratedWallet(
-            walletsRepository: walletsRepository,
-            migratedWalletName: migration.alreadyMigratedWalletName!,
-          );
           return;
         }
 
@@ -439,14 +442,25 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         );
       } on AuthException catch (error) {
         if (!mounted) return;
+        if (error.type == AuthExceptionType.legacyWalletAlreadyMigrated) {
+          final name = error.details?['migratedWalletName'];
+          if (name is String && name.isNotEmpty) {
+            await _routeToExistingMigratedWallet(
+              walletsRepository: walletsRepository,
+              migratedWalletName: name,
+            );
+          }
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
         context.read<AuthBloc>().add(AuthErrorReported(error));
         if (mounted) {
           setState(() => _isLoading = false);
         }
       } catch (error, stackTrace) {
-        debugPrint(
-          'Unexpected error during legacy login: $error\n$stackTrace',
-        );
+        debugPrint('Unexpected error during legacy login: $error\n$stackTrace');
         if (!mounted) return;
         context.read<AuthBloc>().add(
           AuthErrorReported(
@@ -491,28 +505,37 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
       migratedWalletName,
       includeLegacyWallets: false,
     );
-    if (mounted && migratedWallet != null) {
+    if (!mounted) return;
+
+    if (migratedWallet != null) {
       setState(() {
         _selectedWallet = migratedWallet;
         _existWalletAction = WalletsManagerExistWalletAction.logIn;
         _isLoading = false;
       });
-    } else if (mounted) {
+      context.read<AuthBloc>().add(
+        AuthErrorReported(
+          AuthException(
+            LocaleKeys.legacyMigrationAlreadyMigrated.tr(),
+            type: AuthExceptionType.legacyWalletAlreadyMigrated,
+            details: {'migratedWalletName': migratedWalletName},
+          ),
+        ),
+      );
+    } else {
       setState(() {
         _isLoading = false;
       });
-    }
-
-    if (!mounted) return;
-
-    context.read<AuthBloc>().add(
-      AuthErrorReported(
-        AuthException(
-          LocaleKeys.legacyMigrationAlreadyMigrated.tr(),
-          type: AuthExceptionType.generalAuthError,
+      context.read<AuthBloc>().add(
+        AuthErrorReported(
+          AuthException(
+            'Migrated wallet "$migratedWalletName" could not be found. '
+            'Please try logging in manually or restoring from your seed.',
+            type: AuthExceptionType.walletNotFound,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   void _onLogIn() {
@@ -538,11 +561,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         );
       }
       context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
-      // Update remembered wallet before closing the dialog to avoid using
-      // the context after the widget is disposed.
       unawaited(_updateRememberedWallet(currentUser));
-      // Complete autofill session only after a successful login so that
-      // password managers can save validated credentials.
       TextInput.finishAutofillContext(shouldSave: true);
       widget.onSuccess(currentWallet);
     }

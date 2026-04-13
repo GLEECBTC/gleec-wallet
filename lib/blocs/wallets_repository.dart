@@ -61,8 +61,6 @@ class LegacySpecialCaseImportResult {
 }
 
 class WalletsRepository {
-  static String get _legacyMigrationTargetNameError =>
-      LocaleKeys.legacyMigrationTargetNameError.tr();
   static const String _legacyPassphraseSavedKey = 'isPassphraseIsSaved';
   static const String _legacyZCoinActivationRequestedKeyPrefix =
       'z-coin-activation-requested-';
@@ -107,6 +105,8 @@ class WalletsRepository {
   final EncryptionTool _encryptionTool;
   final FileLoader _fileLoader;
   final ZcashParamsDownloader Function() _zcashParamsDownloaderFactory;
+  final StreamController<List<Wallet>> _walletsController =
+      StreamController<List<Wallet>>.broadcast();
 
   List<Wallet>? _cachedWallets;
   List<Wallet>? _cachedLegacyWallets;
@@ -120,6 +120,17 @@ class WalletsRepository {
   void invalidateCache() {
     _cachedWallets = null;
     _cachedLegacyWallets = null;
+  }
+
+  Stream<List<Wallet>> watchWallets() async* {
+    if (isCacheLoaded) {
+      yield _buildCombinedCachedWallets();
+    }
+    yield* _walletsController.stream;
+  }
+
+  Future<List<Wallet>> refreshWallets() async {
+    return getWallets();
   }
 
   Future<List<Wallet>> getWallets() async {
@@ -168,7 +179,9 @@ class WalletsRepository {
         (wallet) => !hiddenNativeWallets.contains(wallet),
       ),
     ];
-    return [..._cachedWallets!, ..._cachedLegacyWallets!];
+    final allWallets = _buildCombinedCachedWallets();
+    _emitWalletsUpdate(allWallets);
+    return allWallets;
   }
 
   Future<List<Wallet>> _getSharedPrefsLegacyWallets() async {
@@ -260,6 +273,7 @@ class WalletsRepository {
               candidate.id == wallet.id &&
               candidate.legacySource?.kind == wallet.legacySource?.kind,
         );
+        _emitCachedWalletsIfAvailable();
       }
       return;
     }
@@ -274,6 +288,7 @@ class WalletsRepository {
             candidate.id == wallet.id &&
             candidate.legacySource?.kind == wallet.legacySource?.kind,
       );
+      _emitCachedWalletsIfAvailable();
       return;
     }
 
@@ -283,6 +298,7 @@ class WalletsRepository {
         password: password,
       );
       _cachedWallets?.removeWhere((w) => w.name == wallet.name);
+      _emitCachedWalletsIfAvailable();
       return;
     } catch (e) {
       log(
@@ -398,6 +414,7 @@ class WalletsRepository {
   Future<PreparedLegacyMigration> prepareLegacyMigration({
     required Wallet sourceWallet,
     required String legacyPassword,
+    bool allowWeakPassword = false,
   }) async {
     if (!sourceWallet.isLegacyWallet) {
       throw AuthException.notFound();
@@ -410,18 +427,13 @@ class WalletsRepository {
       sdkWallets,
     );
     if (migratedWallet != null) {
-      return PreparedLegacyMigration(
-        sourceWallet: sourceWallet,
-        seedPhrase: '',
-        suggestedTargetWalletName: migratedWallet.name,
-        requiresNameConfirmation: false,
-        requiresNewKdfPassword: false,
-        alreadyMigratedWalletName: migratedWallet.name,
-      );
+      throw AuthException.legacyWalletAlreadyMigrated(migratedWallet.name);
     }
 
-    final bool requiresNewKdfPassword =
-        validatePassword(legacyPassword) != null;
+    final bool requiresNewKdfPassword = allowWeakPassword
+        ? checkPasswordRequirements(legacyPassword) ==
+              PasswordValidationError.tooLong
+        : validatePassword(legacyPassword) != null;
     final String sanitizedTargetName = sanitizeLegacyMigrationName(
       sourceWallet.name,
     );
@@ -608,14 +620,12 @@ class WalletsRepository {
     required String name,
     required Wallet sourceWallet,
   }) {
-    final String trimmedName = name.trim();
-    if (trimmedName != name || trimmedName.isEmpty || trimmedName.length > 40) {
-      return LocaleKeys.walletCreationNameLengthError.tr();
+    final formatError = validateWalletName(name);
+    if (formatError != null) {
+      return formatError;
     }
 
-    if (sanitizeLegacyMigrationName(trimmedName) != trimmedName) {
-      return _legacyMigrationTargetNameError;
-    }
+    final String trimmedName = name.trim();
 
     final Iterable<Wallet> existingWallets = <Wallet>[
       ...?_cachedWallets,
@@ -623,7 +633,7 @@ class WalletsRepository {
     ];
     final bool taken = existingWallets.any(
       (wallet) =>
-          wallet.name == trimmedName &&
+          wallet.name.trim() == trimmedName &&
           !_isSameWalletIdentity(wallet, sourceWallet),
     );
     if (taken) {
@@ -709,8 +719,26 @@ class WalletsRepository {
         _cachedLegacyWallets![index] = _cachedLegacyWallets![index].copyWith(
           name: trimmed,
         );
+        _emitCachedWalletsIfAvailable();
       }
     }
+  }
+
+  void _emitWalletsUpdate(List<Wallet> wallets) {
+    if (!_walletsController.isClosed) {
+      _walletsController.add(List<Wallet>.unmodifiable(wallets));
+    }
+  }
+
+  void _emitCachedWalletsIfAvailable() {
+    if (_cachedWallets == null || _cachedLegacyWallets == null) {
+      return;
+    }
+    _emitWalletsUpdate(_buildCombinedCachedWallets());
+  }
+
+  List<Wallet> _buildCombinedCachedWallets() {
+    return <Wallet>[...?_cachedWallets, ...?_cachedLegacyWallets];
   }
 
   /// Sanitizes a legacy wallet name for migration by replacing any
@@ -947,23 +975,28 @@ class WalletsRepository {
     return false;
   }
 
-  Future<String?> _ensureZcashParamsPath() async {
+  Future<String?> _ensureZcashParamsPath({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
     if (!ZcashParamsDownloaderFactory.requiresDownload) {
       return './zcash-params';
     }
 
     final downloader = _zcashParamsDownloaderFactory();
     try {
-      final alreadyAvailable = await downloader.areParamsAvailable();
+      final alreadyAvailable = await downloader.areParamsAvailable().timeout(
+        timeout,
+      );
       if (!alreadyAvailable) {
-        final result = await downloader.downloadParams();
-        if (result is! DownloadResultSuccess) {
-          return null;
-        }
-        return result.paramsPath;
+        log(
+          'Zcash params not yet downloaded; skipping during migration '
+          'to avoid blocking login',
+          path: 'wallets_repository => _ensureZcashParamsPath',
+        ).ignore();
+        return null;
       }
 
-      return await downloader.getParamsPath();
+      return await downloader.getParamsPath().timeout(timeout);
     } catch (error, stackTrace) {
       log(
         'Failed to ensure Zcash params availability: $error',

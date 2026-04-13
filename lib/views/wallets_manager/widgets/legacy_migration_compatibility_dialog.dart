@@ -1,7 +1,10 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
+import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -55,6 +58,7 @@ class _LegacyMigrationCompatibilityContentState
   final TextEditingController _kdfPasswordController = TextEditingController();
   String? _walletNameError;
   bool _isPasswordValid = false;
+  bool _confirmInProgress = false;
 
   @override
   void initState() {
@@ -107,14 +111,20 @@ class _LegacyMigrationCompatibilityContentState
           ],
           if (widget.migration.requiresNewKdfPassword) ...[
             const SizedBox(height: 20),
-            CreationPasswordFields(
-              key: const Key('legacy-migration-password-fields'),
-              passwordController: _kdfPasswordController,
-              forceStrictValidation: true,
-              onValidityChanged: (isValid) {
-                setState(() {
-                  _isPasswordValid = isValid;
-                });
+            BlocBuilder<SettingsBloc, SettingsState>(
+              buildWhen: (previous, current) =>
+                  previous.weakPasswordsAllowed != current.weakPasswordsAllowed,
+              builder: (context, state) {
+                return CreationPasswordFields(
+                  key: const Key('legacy-migration-password-fields'),
+                  passwordController: _kdfPasswordController,
+                  enforceStrongPassword: !state.weakPasswordsAllowed,
+                  onValidityChanged: (isValid) {
+                    setState(() {
+                      _isPasswordValid = isValid;
+                    });
+                  },
+                );
               },
             ),
           ],
@@ -155,6 +165,9 @@ class _LegacyMigrationCompatibilityContentState
   }
 
   bool get _canConfirm {
+    if (_confirmInProgress) {
+      return false;
+    }
     final bool nameValid =
         !widget.migration.requiresNameConfirmation || _walletNameError == null;
     final bool passwordValid =
@@ -173,12 +186,56 @@ class _LegacyMigrationCompatibilityContentState
     Navigator.of(context).pop(null);
   }
 
-  void _handleConfirm() {
+  Future<void> _handleConfirm() async {
+    if (_confirmInProgress) {
+      return;
+    }
+    final bool nameValid =
+        !widget.migration.requiresNameConfirmation || _walletNameError == null;
+    final bool passwordValid =
+        !widget.migration.requiresNewKdfPassword || _isPasswordValid;
+    if (!nameValid || !passwordValid) {
+      return;
+    }
+
+    final String targetName = widget.migration.requiresNameConfirmation
+        ? _walletNameController.text.trim()
+        : widget.migration.suggestedTargetWalletName;
+
+    if (widget.migration.requiresNameConfirmation) {
+      setState(() => _confirmInProgress = true);
+      final uniquenessError = await widget.walletsRepository
+          .validateWalletNameUniquenessForSource(
+            name: targetName,
+            excludedWallet: widget.migration.sourceWallet,
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _confirmInProgress = false);
+      if (uniquenessError != null) {
+        final theme = Theme.of(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              uniquenessError,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+            backgroundColor: theme.colorScheme.errorContainer,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pop(
       LegacyMigrationCompatibilityResult(
-        targetWalletName: widget.migration.requiresNameConfirmation
-            ? _walletNameController.text.trim()
-            : widget.migration.suggestedTargetWalletName,
+        targetWalletName: targetName,
         kdfPassword: widget.migration.requiresNewKdfPassword
             ? _kdfPasswordController.text
             : null,

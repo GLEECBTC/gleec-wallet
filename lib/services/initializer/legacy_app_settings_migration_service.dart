@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
 import 'package:web_dex/bloc/fiat/fiat_default_preference.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/model/stored_settings.dart';
@@ -15,14 +16,21 @@ class LegacyAppSettingsMigrationService {
     required BaseStorage storage,
     SettingsRepository? settingsRepository,
     DateTime Function()? nowProvider,
+    KomodoLegacyWalletMigration? legacyNativeWalletMigration,
   }) : _storage = storage,
        _settingsRepository =
            settingsRepository ?? SettingsRepository(storage: storage),
-       _nowProvider = nowProvider ?? DateTime.now;
+       _nowProvider = nowProvider ?? DateTime.now,
+       _legacyNativeWalletMigration = legacyNativeWalletMigration;
 
   final BaseStorage _storage;
   final SettingsRepository _settingsRepository;
   final DateTime Function() _nowProvider;
+
+  /// Held so [main] constructs a single [KomodoLegacyWalletMigration] before
+  /// settings migration; wire into imports when wallet-native keys are needed.
+  // ignore: unused_field
+  final KomodoLegacyWalletMigration? _legacyNativeWalletMigration;
 
   static const Map<String, String> _preservedLegacyExtras = <String, String>{
     'selectedFiat': 'selectedFiat',

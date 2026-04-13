@@ -73,17 +73,18 @@ Future<void> main() async {
     // Sparkline is dependent on Hive initialization, so we pass it on to the
     // bootstrapper here
     final sparklineRepository = SparklineRepository.defaultInstance();
+    final legacyNativeWalletMigration = KomodoLegacyWalletMigration();
     await AppBootstrapper.instance.ensureInitialized(
       komodoDefiSdk,
       mm2Api,
       sparklineRepository,
+      legacyNativeWalletMigration: legacyNativeWalletMigration,
     );
 
     final tradingStatusRepository = TradingStatusRepository(komodoDefiSdk);
     final tradingStatusService = TradingStatusService(tradingStatusRepository);
     await tradingStatusService.initialize();
     final arrrActivationService = ArrrActivationService(komodoDefiSdk, mm2);
-    final legacyNativeWalletMigration = KomodoLegacyWalletMigration();
 
     final coinsRepo = CoinsRepo(
       kdfSdk: komodoDefiSdk,

@@ -16,7 +16,6 @@ class PreparedLegacyMigration {
     this.zhtlcSyncPolicy,
     this.legacyWalletExtras = const <String, dynamic>{},
     this.nativeLegacySecrets,
-    this.alreadyMigratedWalletName,
   });
 
   final Wallet sourceWallet;
@@ -28,12 +27,7 @@ class PreparedLegacyMigration {
   final List<String> requestedZhtlcCoinIds;
   final ZhtlcRecurringSyncPolicy? zhtlcSyncPolicy;
   final Map<String, dynamic> legacyWalletExtras;
-  final String? alreadyMigratedWalletName;
 
   bool get needsCompatibilityPrompt =>
       requiresNameConfirmation || requiresNewKdfPassword;
-
-  bool get shouldRouteToExistingWallet =>
-      alreadyMigratedWalletName != null &&
-      alreadyMigratedWalletName!.isNotEmpty;
 }

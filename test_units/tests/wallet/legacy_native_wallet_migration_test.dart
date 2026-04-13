@@ -153,7 +153,6 @@ void main() {
         expect(prepared.suggestedTargetWalletName, 'LegacyWallet');
         expect(prepared.requiresNameConfirmation, isFalse);
         expect(prepared.requiresNewKdfPassword, isFalse);
-        expect(prepared.alreadyMigratedWalletName, isNull);
       },
     );
 
@@ -241,6 +240,39 @@ void main() {
     );
 
     test(
+      'prepareLegacyMigration does not require new KDF password when weak passwords '
+      'are allowed and legacy password is weak',
+      () async {
+        final sourceWallet = await _buildSharedPrefsLegacyWallet(
+          id: 'shared-1',
+          name: 'LegacyWallet',
+          password: 'weak',
+        );
+        final repository = WalletsRepository(
+          _FakeSdk(auth: _FakeAuth(users: const <KdfUser>[])),
+          _FakeMm2Api(),
+          _FakeStorage(
+            initialData: <String, dynamic>{
+              'all-wallets': <Map<String, dynamic>>[sourceWallet.toJson()],
+            },
+          ),
+          legacyNativeWalletMigration: _createMigration(
+            wallets: const <LegacyWalletRecord>[],
+          ),
+        );
+
+        final listedWallet = (await repository.getWallets()).single;
+        final prepared = await repository.prepareLegacyMigration(
+          sourceWallet: listedWallet,
+          legacyPassword: 'weak',
+          allowWeakPassword: true,
+        );
+
+        expect(prepared.requiresNewKdfPassword, isFalse);
+      },
+    );
+
+    test(
       'prepareLegacyMigration for native legacy wallets keeps compatible name and password',
       () async {
         final repository = WalletsRepository(
@@ -274,7 +306,6 @@ void main() {
         expect(prepared.suggestedTargetWalletName, 'NativeWallet');
         expect(prepared.requiresNameConfirmation, isFalse);
         expect(prepared.requiresNewKdfPassword, isFalse);
-        expect(prepared.alreadyMigratedWalletName, isNull);
       },
     );
 
@@ -412,6 +443,52 @@ void main() {
         expect(prepared.seedPhrase, _legacySeedPhrase);
         expect(prepared.requiresNewKdfPassword, isTrue);
         expect(prepared.requiresNameConfirmation, isFalse);
+
+        final preparedAllowWeak = await repository.prepareLegacyMigration(
+          sourceWallet: listedWallet,
+          legacyPassword: longPassword,
+          allowWeakPassword: true,
+        );
+        expect(preparedAllowWeak.requiresNewKdfPassword, isTrue);
+      },
+    );
+
+    test(
+      'validateLegacyMigrationTargetName allows spaces and hyphens like new wallet names',
+      () async {
+        final sourceWallet = await _buildSharedPrefsLegacyWallet(
+          id: 'shared-1',
+          name: 'Legacy Wallet!',
+          password: 'Strong1!A',
+        );
+        final repository = WalletsRepository(
+          _FakeSdk(auth: _FakeAuth(users: const <KdfUser>[])),
+          _FakeMm2Api(),
+          _FakeStorage(
+            initialData: <String, dynamic>{
+              'all-wallets': <Map<String, dynamic>>[sourceWallet.toJson()],
+            },
+          ),
+          legacyNativeWalletMigration: _createMigration(
+            wallets: const <LegacyWalletRecord>[],
+          ),
+        );
+
+        final listedWallet = (await repository.getWallets()).single;
+        expect(
+          repository.validateLegacyMigrationTargetName(
+            name: 'My KDF Wallet',
+            sourceWallet: listedWallet,
+          ),
+          isNull,
+        );
+        expect(
+          repository.validateLegacyMigrationTargetName(
+            name: 'My-KDF-Wallet',
+            sourceWallet: listedWallet,
+          ),
+          isNull,
+        );
       },
     );
 
@@ -454,14 +531,25 @@ void main() {
           ),
         );
 
-        final prepared = await repository.prepareLegacyMigration(
-          sourceWallet: sourceWallet,
-          legacyPassword: 'wrong-password',
+        await expectLater(
+          repository.prepareLegacyMigration(
+            sourceWallet: sourceWallet,
+            legacyPassword: 'wrong-password',
+          ),
+          throwsA(
+            isA<AuthException>()
+                .having(
+                  (e) => e.type,
+                  'type',
+                  AuthExceptionType.legacyWalletAlreadyMigrated,
+                )
+                .having(
+                  (e) => e.details?['migratedWalletName'],
+                  'migratedWalletName',
+                  'Legacy_Wallet_',
+                ),
+          ),
         );
-
-        expect(prepared.alreadyMigratedWalletName, 'Legacy_Wallet_');
-        expect(prepared.shouldRouteToExistingWallet, isTrue);
-        expect(prepared.seedPhrase, isEmpty);
       },
     );
 
@@ -504,8 +592,6 @@ void main() {
           legacyPassword: 'weak',
         );
 
-        expect(prepared.alreadyMigratedWalletName, isNull);
-        expect(prepared.shouldRouteToExistingWallet, isFalse);
         expect(prepared.suggestedTargetWalletName, 'Legacy_Wallet__1');
         expect(prepared.requiresNameConfirmation, isTrue);
         expect(prepared.requiresNewKdfPassword, isTrue);

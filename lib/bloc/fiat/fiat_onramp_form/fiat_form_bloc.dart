@@ -25,6 +25,7 @@ import 'package:web_dex/model/forms/fiat/currency_input.dart';
 import 'package:web_dex/model/forms/fiat/fiat_amount_input.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/extensions/string_extensions.dart';
 import 'package:web_dex/views/fiat/webview_dialog.dart' show WebViewDialogMode;
 
@@ -357,8 +358,16 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
         (coin) => excludedAssetList.contains(coin.getAbbr()),
       );
 
+      final storedFiat = await loadDefaultFiatPreference(_storage);
+      final FiatCurrency? fiatFromStoredPreference = storedFiat != null
+          ? fiatList.firstWhereOrNull(
+              (fiat) => fiat.getAbbr() == storedFiat.getAbbr(),
+            )
+          : null;
+
       final currentSelectedFiat = state.selectedFiat.value;
       final resolvedSelectedFiat =
+          fiatFromStoredPreference ??
           fiatList.firstWhereOrNull(
             (fiat) => fiat.getAbbr() == currentSelectedFiat?.getAbbr(),
           ) ??
@@ -367,8 +376,14 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
           ) ??
           fiatList.firstOrNull;
 
+      final rawStoredAbbr = await _storage.read(defaultFiatPreferenceKey);
+      final normalizedStoredAbbr = rawStoredAbbr is String
+          ? normalizeDefaultFiatPreferenceValue(rawStoredAbbr)
+          : null;
+      final resolvedAbbr = resolvedSelectedFiat?.getAbbr();
       if (resolvedSelectedFiat != null &&
-          resolvedSelectedFiat.getAbbr() != currentSelectedFiat?.getAbbr()) {
+          resolvedAbbr != null &&
+          resolvedAbbr != normalizedStoredAbbr) {
         await persistDefaultFiatPreference(_storage, resolvedSelectedFiat);
       }
 
