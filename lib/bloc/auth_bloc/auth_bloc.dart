@@ -512,25 +512,16 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           allowWeakPassword: weakPasswordsAllowed,
         ),
       );
-      try {
-        final LegacyWalletSource? linkageSource =
-            event.sourceWallet.legacySource;
-        if (linkageSource != null) {
-          await _kdfSdk.setMigratedLegacySource(
-            source: linkageSource,
-            cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
-          );
-        }
-        if (event.legacyWalletExtras.isNotEmpty) {
-          await _kdfSdk.setLegacyWalletExtras(event.legacyWalletExtras);
-        }
-      } catch (error, stackTrace) {
-        _log.shout(
-          'Failed to persist legacy linkage or extras immediately after '
-          'register; background finalizer will retry',
-          error,
-          stackTrace,
+      final LegacyWalletSource? linkageSource =
+          event.sourceWallet.legacySource;
+      if (linkageSource != null) {
+        await _kdfSdk.setMigratedLegacySource(
+          source: linkageSource,
+          cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
         );
+      }
+      if (event.legacyWalletExtras.isNotEmpty) {
+        await _kdfSdk.setLegacyWalletExtras(event.legacyWalletExtras);
       }
       final baseActivatedCoins = <String>{
         ..._filterBlockedAssets(enabledByDefaultCoins),
@@ -642,11 +633,9 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
                       password: event.legacyPassword,
                       nativeSecrets: event.legacyNativeSecrets,
                     );
-                cleanupStatus =
-                    event.sourceWallet.isNativeLegacyWallet &&
-                        !cleanupOutcome.isComplete
-                    ? LegacyMigrationCleanupStatus.incomplete
-                    : LegacyMigrationCleanupStatus.complete;
+                cleanupStatus = cleanupOutcome.isComplete
+                    ? LegacyMigrationCleanupStatus.complete
+                    : LegacyMigrationCleanupStatus.incomplete;
               },
             );
             await _runNonCriticalRestoreStep(
