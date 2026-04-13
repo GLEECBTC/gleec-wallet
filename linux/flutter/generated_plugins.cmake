@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  dargon2_flutter_desktop
   flutter_secure_storage_linux
   flutter_window_close
   url_launcher_linux
