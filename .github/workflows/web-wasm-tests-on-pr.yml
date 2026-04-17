@@ -1,0 +1,80 @@
+# Runs UI integration tests on Chrome in WebAssembly mode for pull requests
+name: UI Web WASM tests on PR
+run-name: ${{ github.actor }} is running UI web WASM tests on PR 🚀
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ui_wasm_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Setup GH Actions
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Chrome and chromedriver
+        id: setup_chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+          install-dependencies: true
+
+      - name: Print Chrome setup
+        id: print_chrome_setup
+        run: |
+          echo "Chrome path: ${{ steps.setup_chrome.outputs.chrome-path }}"
+          "${{ steps.setup_chrome.outputs.chrome-path }}" --version
+          echo "ChromeDriver path: ${{ steps.setup_chrome.outputs.chromedriver-path }}"
+          "${{ steps.setup_chrome.outputs.chromedriver-path }}" --version
+
+      - name: Install Flutter and dependencies
+        id: install_flutter
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        id: generate_assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate build
+        id: validate_build
+        uses: ./.github/actions/validate-build
+
+      - name: Test web UI on Chrome in WASM mode
+        id: integration_tests
+        continue-on-error: true
+        timeout-minutes: 60
+        env:
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHROME_EXECUTABLE: ${{ steps.setup_chrome.outputs.chrome-path }}
+        run: |
+          dart run_integration_tests.dart \
+            -D web-server \
+            -d headless \
+            -b 1600,1024 \
+            -n chrome \
+            -m profile \
+            --wasm
+
+      - name: Upload driver logs
+        id: upload_logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-chrome-wasm-logs
+          path: |
+            ./*.log
+            ./memory_profile.json
+          if-no-files-found: warn
+
+      - name: Fail workflow if tests failed
+        id: check_test_result
+        if: ${{ steps.integration_tests.outcome == 'failure' }}
+        run: exit 1

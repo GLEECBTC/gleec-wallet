@@ -10,11 +10,13 @@ import 'test_integration/runners/integration_test_runner.dart';
 
 Future<void> main(List<String> args) async {
   final ArgParser parser = _configureArgParser();
-  IntegrationTestArguments testArgs =
-      IntegrationTestArguments.fromArgs(parser.parse(args));
+  IntegrationTestArguments testArgs = IntegrationTestArguments.fromArgs(
+    parser.parse(args),
+  );
   // TODO!: re-enable suspended assets test when issues are figured out
-  final Set<String> testsList =
-      getTestsList(false); //testArgs.isWeb && testArgs.isChrome);
+  final Set<String> testsList = getTestsList(
+    false,
+  ); //testArgs.isWeb && testArgs.isChrome);
   bool didTestFail = false;
   WebBrowserDriver? driver;
   const testsWithUrlBlocking = [
@@ -42,8 +44,9 @@ Future<void> main(List<String> args) async {
 
   // Block electrum servers for the suspended assets test to force an
   // activation error for coins relient on the domain
-  final bool isUrlBlockedTest =
-      testsWithUrlBlocking.any((test) => testsList.contains(test));
+  final bool isUrlBlockedTest = testsWithUrlBlocking.any(
+    (test) => testsList.contains(test),
+  );
   if (testArgs.isWeb && testArgs.isChrome && isUrlBlockedTest) {
     await driver?.blockUrl('*.cipig.net');
     // `flutter pub get` is required between tests, since blocking domains
@@ -100,21 +103,14 @@ void _registerProcessSignalHandlers(WebBrowserDriver? driver) {
 // values are easy to find and modify
 ArgParser _configureArgParser() {
   final parser = ArgParser()
-    ..addFlag(
-      'help',
-      abbr: 'h',
-      help: 'Show help message and exit',
-    )
-    ..addFlag(
-      'verbose',
-      abbr: 'v',
-      help: 'Print verbose output',
-    )
+    ..addFlag('help', abbr: 'h', help: 'Show help message and exit')
+    ..addFlag('verbose', abbr: 'v', help: 'Print verbose output')
     ..addOption(
       'testToRun',
       abbr: 't',
       defaultsTo: '',
-      help: 'Specify a single testfile to run, if option is not used, '
+      help:
+          'Specify a single testfile to run, if option is not used, '
           'all available tests will be run instead; option usage '
           'example: -t "design_tests/theme_test.dart"',
     )
@@ -172,16 +168,15 @@ ArgParser _configureArgParser() {
       negatable: false,
       help: 'Run pub get before running each test group',
     )
+    ..addFlag('wasm', help: 'Compile web integration tests to WebAssembly')
     ..addFlag(
       'concurrent',
       abbr: 'c',
-      help: 'Run tests concurrently. This is not recommended with the current '
+      help:
+          'Run tests concurrently. This is not recommended with the current '
           'flutter build steps and transformers.',
     )
-    ..addFlag(
-      'keep-running',
-      abbr: 'k',
-    );
+    ..addFlag('keep-running', abbr: 'k');
   return parser;
 }
 
