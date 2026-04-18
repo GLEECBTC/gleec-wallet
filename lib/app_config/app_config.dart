@@ -26,6 +26,9 @@ final Uri discordInviteUrl = Uri.parse('https://www.gleec.com/contact');
 /// Const to define if Bitrefill integration is enabled in the app.
 const bool isBitrefillIntegrationEnabled = false;
 
+/// Controls whether asset icons are precached when the app starts.
+const bool isIconPrecachingEnabled = false;
+
 /// Const to define whether to show trading warning dialogs and notices.
 /// This can be used to control the display of trading-related warnings
 /// throughout the application.
