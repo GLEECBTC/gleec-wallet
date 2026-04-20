@@ -57,7 +57,7 @@ sudo pacman -R flutter   # for Arch
 
 2. Launch Flutter Sidekick
 
-3. Click on "Versions" in the sidebar and download Flutter version `3.41.4`
+3. Click on "Versions" in the sidebar and download Flutter version `3.41.7`
 
 4. Set this version as the global default by clicking the "Set as Global" button
 
@@ -92,11 +92,11 @@ sudo pacman -R flutter   # for Arch
    curl -fsSL https://fvm.app/install.sh | bash
    ```
 
-2. Install and use Flutter 3.41.4:
+2. Install and use Flutter 3.41.7:
 
    ```bash
-   fvm install 3.41.4
-   fvm global 3.41.4
+   fvm install 3.41.7
+   fvm global 3.41.7
    ```
 
 3. Add FVM's default Flutter version to your PATH by adding the following to your `~/.bashrc`, `~/.zshrc`, or equivalent:
@@ -131,11 +131,11 @@ sudo pacman -R flutter   # for Arch
    choco install fvm
    ```
 
-3. Install and use Flutter 3.41.4:
+3. Install and use Flutter 3.41.7:
 
    ```powershell
-   fvm install 3.41.4
-   fvm global 3.41.4
+   fvm install 3.41.7
+   fvm global 3.41.7
    ```
 
 4. Add FVM's Flutter version to your PATH:
@@ -158,7 +158,7 @@ To use a specific Flutter version for a project:
 2. Run:
 
    ```bash
-   fvm use 3.41.4
+   fvm use 3.41.7
    ```
 
 This will create a `.fvmrc` file in your project, which specifies the Flutter version to use for this project.

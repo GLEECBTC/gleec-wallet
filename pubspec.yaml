@@ -19,7 +19,7 @@ version: 0.9.4+0
 
 environment:
   sdk: ">=3.8.1 <4.0.0"
-  flutter: ">=3.41.4 <4.0.0"
+  flutter: ">=3.41.7 <4.0.0"
 
 workspace:
   - packages/komodo_ui_kit
