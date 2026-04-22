@@ -1,11 +1,11 @@
 {
-    "name": "GLEEC Wallet",
-    "short_name": "GLEEC Wallet",
+    "name": "Gleec Dex",
+    "short_name": "Gleec Dex",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#202337",
     "theme_color": "#8C41FF",
-    "description": "Non-Custodial Multi-Coin Wallet & DEX.",
+    "description": "Trade, store, send, receive, and access fiat on-ramp across multiple blockchains with Gleec Dex.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "related_applications": [
