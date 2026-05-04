@@ -125,6 +125,7 @@ class IntegrationTestRunner {
       '--${_args.displayMode}',
       '--${_args.runMode}',
       if (_args.runMode == 'profile') '--profile-memory=memory_profile.json',
+      if (_args.wasm) '--wasm',
       '--browser-name',
       _args.browserName,
       if (_chromeBinaryPath != null) '--chrome-binary=$_chromeBinaryPath',

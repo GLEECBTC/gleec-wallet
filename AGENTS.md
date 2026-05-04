@@ -23,7 +23,7 @@ dart format [files]
 
 ## Running Tests
 
-Unit tests and integration tests are currently failing. Instead of running tests to validate fixes, do a thorough code review of the changes and static analysis
+Run relevant tests to validate your changes. Prefer targeted unit and integration tests for the areas you touched, and use broader test runs when the change scope warrants it.
 
 ## Additional Documentation
 

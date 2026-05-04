@@ -5,6 +5,7 @@ class IntegrationTestArguments {
     required this.runHelp,
     required this.verbose,
     required this.pub,
+    required this.wasm,
     required this.testToRun,
     required this.browserDimension,
     required this.displayMode,
@@ -21,6 +22,7 @@ class IntegrationTestArguments {
       runHelp: results['help'] as bool,
       verbose: results['verbose'] as bool? ?? false,
       testToRun: results['testToRun'] as String,
+      wasm: results['wasm'] as bool? ?? false,
       browserDimension: results['browserDimension'] as String,
       displayMode: results['displayMode'] as String,
       device: results['device'] as String,
@@ -36,6 +38,7 @@ class IntegrationTestArguments {
   final bool runHelp;
   final bool verbose;
   final bool pub;
+  final bool wasm;
   final String testToRun;
   final String browserDimension;
   final String displayMode;
@@ -53,6 +56,7 @@ class IntegrationTestArguments {
     bool? runHelp,
     bool? verbose,
     bool? pub,
+    bool? wasm,
     String? testToRun,
     String? browserDimension,
     String? displayMode,
@@ -67,6 +71,7 @@ class IntegrationTestArguments {
       runHelp: runHelp ?? this.runHelp,
       verbose: verbose ?? this.verbose,
       pub: pub ?? this.pub,
+      wasm: wasm ?? this.wasm,
       testToRun: testToRun ?? this.testToRun,
       browserDimension: browserDimension ?? this.browserDimension,
       displayMode: displayMode ?? this.displayMode,

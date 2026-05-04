@@ -8,7 +8,7 @@ inputs:
   BUILD_COMMAND:
     description: "The flutter build command to run to generate assets for the deployment build"
     required: false
-    default: "flutter build web --no-pub --release"
+    default: "flutter build web --no-pub --release --wasm"
 
   # Optional Trello feedback provider configuration
   TRELLO_API_KEY:
