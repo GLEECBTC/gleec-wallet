@@ -704,70 +704,70 @@ packages:
       path: "sdk/packages/komodo_cex_market_data"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.0+1"
   komodo_coin_updates:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_coin_updates"
       relative: true
     source: path
-    version: "2.0.0"
+    version: "2.0.1"
   komodo_coins:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_coins"
       relative: true
     source: path
-    version: "0.3.2"
+    version: "0.3.2+1"
   komodo_defi_framework:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_defi_framework"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.4.1"
   komodo_defi_local_auth:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_defi_local_auth"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.4.1"
   komodo_defi_rpc_methods:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_defi_rpc_methods"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.5.0"
   komodo_defi_sdk:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_defi_sdk"
       relative: true
     source: path
-    version: "0.5.0"
+    version: "0.6.0"
   komodo_defi_types:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_defi_types"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.4.1"
   komodo_ui:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_ui"
       relative: true
     source: path
-    version: "0.3.1"
+    version: "0.3.2"
   komodo_wallet_build_transformer:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_wallet_build_transformer"
       relative: true
     source: path
-    version: "0.4.1"
+    version: "0.4.2"
   leak_tracker:
     dependency: transitive
     description:
