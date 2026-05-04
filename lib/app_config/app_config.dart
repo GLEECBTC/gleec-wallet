@@ -59,8 +59,8 @@ const double kSimulatedBestOrdersFailureRate = 0.5; // 50%
 // This information is here because it is not contextual and is branded.
 // Names of their own are not localized. Also, the application is initialized before
 // the localization package is initialized.
-String get appTitle => 'GLEEC Wallet | Non-Custodial Multi-Coin Wallet & DEX';
-String get appShortTitle => 'GLEEC Wallet';
+String get appTitle => 'Gleec Dex | Non-Custodial Multi-Coin Wallet & DEX';
+String get appShortTitle => 'Gleec Dex';
 
 Map<String, int> priorityCoinsAbbrMap = {
   // GLEEC has highest priority for GLEEC Wallet

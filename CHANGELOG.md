@@ -1,3 +1,27 @@
+# Gleec Wallet v0.9.5 Release Notes
+
+This release prepares the updated `0.9.4` release line for mobile publishing as `0.9.5`, keeping the web release history intact while integrating the final mobile-readiness SDK roll. Highlights include `komodo-defi-sdk v0.6.0`, legacy wallet migration support, hardened TRON/TRC20 and SIA handling, refreshed Gleec Dex branding, and release metadata/lockfile updates for reproducible native builds.
+
+## 🚀 New Features
+
+- **SDK 0.6.0 Integration** ([@CharlVS]) - Roll the SDK submodule to the published `komodo-defi-sdk v0.6.0` release, bringing the finalized mobile-readiness package set into the app.
+- **Legacy Wallet Migration Support** ([@CharlVS]) - Include the SDK-side migration package and auth/framework hooks for discovering, verifying, importing, and cleaning up legacy wallet data.
+- **TRON/TRC20 and SIA Readiness** ([@CharlVS]) - Pull in hardened TRON activation, transaction-history, explorer, and market-data handling alongside the finalized SIA activation and withdrawal strategy.
+
+## 🐛 Bug Fixes
+
+- **Balance, Fee, and Market Data Hardening** ([@CharlVS]) - Integrate SDK fixes for activation recovery, richer fee information, cached spot-price continuity, CoinGecko failure cooldowns, and numeric JSON compatibility.
+- **Gleec Dex Branding Refresh** ([@CharlVS], #3479) - Preserve the updated Gleec Dex title, app metadata, icons, social preview assets, and Ramp logo cache-busting changes already prepared on `dev`.
+- **Web Publishing Adjustment** ([@DeckerSU], #3476) - Keep the non-WASM web build path adjustment from `dev` so web publishing remains aligned with the current deployment target.
+
+## 🔧 Technical Improvements
+
+- **Release Metadata Refresh** ([@CharlVS]) - Move the app release name to `0.9.5+0` and refresh dependency resolution against the SDK `0.6.0` submodule.
+
+**Full Changelog**: [0.9.4...0.9.5](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.4...0.9.5)
+
+---
+
 # Gleec Wallet v0.9.4 Release Notes
 
 This release packages the current `dev` branch work for the next `main` update with broader asset support, a stronger web runtime, and a much larger polish pass across the wallet. Highlights include TRON and SIA flows on top of `komodo-defi-sdk v0.5.0`, Flutter Web WASM support, runtime-loaded legal documents, refreshed wallet and trading surfaces, and the QA/release infrastructure that came out of the documented polish program.
