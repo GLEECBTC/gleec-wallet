@@ -173,4 +173,77 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
       createdAt.millisecondsSinceEpoch,
     );
   }
+
+  /// Stores legacy-origin linkage metadata on the current user.
+  ///
+  /// All four metadata keys must be written for the migration linkage to be
+  /// recognised on next launch. If any individual write fails, this method
+  /// attempts to roll back the keys that were already written (best-effort)
+  /// before rethrowing so callers can decide how to recover.
+  Future<void> setMigratedLegacySource({
+    required LegacyWalletSource source,
+    required LegacyMigrationCleanupStatus cleanupStatus,
+  }) async {
+    final List<String> writtenKeys = <String>[];
+    try {
+      await auth.setOrRemoveActiveUserKeyValue(
+        legacySourceKindMetadataKey,
+        source.kind.name,
+      );
+      writtenKeys.add(legacySourceKindMetadataKey);
+
+      await auth.setOrRemoveActiveUserKeyValue(
+        legacySourceWalletIdMetadataKey,
+        source.originalWalletId,
+      );
+      writtenKeys.add(legacySourceWalletIdMetadataKey);
+
+      await auth.setOrRemoveActiveUserKeyValue(
+        legacySourceWalletNameMetadataKey,
+        source.originalWalletName,
+      );
+      writtenKeys.add(legacySourceWalletNameMetadataKey);
+
+      await setLegacyCleanupStatus(cleanupStatus);
+      writtenKeys.add(legacyCleanupStatusMetadataKey);
+    } catch (error, stackTrace) {
+      _walletMetadataLog.shout(
+        'Failed to write migration linkage metadata '
+        '(wrote ${writtenKeys.length}/4 keys: $writtenKeys). '
+        'Attempting rollback.',
+        error,
+        stackTrace,
+      );
+
+      for (final key in writtenKeys) {
+        try {
+          await auth.setOrRemoveActiveUserKeyValue(key, null);
+        } catch (rollbackError) {
+          _walletMetadataLog.warning(
+            'Rollback of metadata key "$key" failed: $rollbackError',
+          );
+        }
+      }
+
+      rethrow;
+    }
+  }
+
+  /// Updates only the legacy cleanup status metadata on the current user.
+  Future<void> setLegacyCleanupStatus(
+    LegacyMigrationCleanupStatus cleanupStatus,
+  ) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      legacyCleanupStatusMetadataKey,
+      cleanupStatus.name,
+    );
+  }
+
+  /// Stores hidden legacy wallet extras metadata on the current user.
+  Future<void> setLegacyWalletExtras(Map<String, dynamic> extras) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      legacyWalletExtrasMetadataKey,
+      extras.isEmpty ? null : extras,
+    );
+  }
 }

@@ -26,6 +26,12 @@ class AuthSignInRequested extends AuthBlocEvent {
   final String password;
 }
 
+class AuthErrorReported extends AuthBlocEvent {
+  const AuthErrorReported(this.error);
+
+  final AuthException error;
+}
+
 class AuthRegisterRequested extends AuthBlocEvent {
   const AuthRegisterRequested({required this.wallet, required this.password});
 
@@ -38,11 +44,37 @@ class AuthRestoreRequested extends AuthBlocEvent {
     required this.wallet,
     required this.password,
     required this.seed,
+    this.legacyNativeSecrets,
   });
 
   final Wallet wallet;
   final String password;
   final String seed;
+  final LegacyWalletSecrets? legacyNativeSecrets;
+}
+
+class AuthLegacyMigrationRequested extends AuthBlocEvent {
+  const AuthLegacyMigrationRequested({
+    required this.sourceWallet,
+    required this.legacyPassword,
+    required this.kdfPassword,
+    required this.targetWalletName,
+    required this.seedPhrase,
+    this.requestedZhtlcCoinIds = const <String>[],
+    this.zhtlcSyncPolicy,
+    this.legacyWalletExtras = const <String, dynamic>{},
+    this.legacyNativeSecrets,
+  });
+
+  final Wallet sourceWallet;
+  final String legacyPassword;
+  final String kdfPassword;
+  final String targetWalletName;
+  final String seedPhrase;
+  final List<String> requestedZhtlcCoinIds;
+  final ZhtlcRecurringSyncPolicy? zhtlcSyncPolicy;
+  final Map<String, dynamic> legacyWalletExtras;
+  final LegacyWalletSecrets? legacyNativeSecrets;
 }
 
 class AuthSeedBackupConfirmed extends AuthBlocEvent {

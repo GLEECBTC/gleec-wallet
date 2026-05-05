@@ -12,8 +12,9 @@ final class AppBootstrapper {
   Future<void> ensureInitialized(
     KomodoDefiSdk kdfSdk,
     Mm2Api mm2Api,
-    SparklineRepository sparklineRepository,
-  ) async {
+    SparklineRepository sparklineRepository, {
+    KomodoLegacyWalletMigration? legacyNativeWalletMigration,
+  }) async {
     if (_isInitialized) return;
 
     // Register core services with GetIt
@@ -26,7 +27,10 @@ final class AppBootstrapper {
     log('AppBootstrapper: Log initialized in ${timer.elapsedMilliseconds}ms');
     timer.reset();
 
-    await _warmUpInitializers(sparklineRepository).awaitAll();
+    await _warmUpInitializers(
+      sparklineRepository,
+      legacyNativeWalletMigration: legacyNativeWalletMigration,
+    ).awaitAll();
     log(
       'AppBootstrapper: Warm-up initializers completed in ${timer.elapsedMilliseconds}ms',
     );
@@ -50,15 +54,18 @@ final class AppBootstrapper {
   /// A list of futures that should be completed before the app starts
   /// ([runApp]) which do not depend on each other.
   List<Future<void>> _warmUpInitializers(
-    SparklineRepository sparklineRepository,
-  ) {
+    SparklineRepository sparklineRepository, {
+    KomodoLegacyWalletMigration? legacyNativeWalletMigration,
+  }) {
     return [
       app_bloc_root.loadLibrary(),
       packageInformation.init(),
       EasyLocalization.ensureInitialized(),
       CexMarketData.ensureInitialized(),
       PlatformTuner.setWindowTitleAndSize(),
-      _initializeSettings(),
+      _initializeSettings(
+        legacyNativeWalletMigration: legacyNativeWalletMigration,
+      ),
       _initHive(
         isWeb: kIsWeb || kIsWasm,
         appFolder: appFolder,
@@ -67,7 +74,15 @@ final class AppBootstrapper {
   }
 
   /// Initialize settings and register analytics
-  Future<void> _initializeSettings() async {
+  Future<void> _initializeSettings({
+    KomodoLegacyWalletMigration? legacyNativeWalletMigration,
+  }) async {
+    final storage = getStorage();
+    await LegacyAppSettingsMigrationService(
+      storage: storage,
+      legacyNativeWalletMigration: legacyNativeWalletMigration,
+    ).migrateIfNeeded();
+
     var stored = await SettingsRepository.loadStoredSettings();
     final mmSettings = stored.marketMakerBotSettings;
     final shouldClearStoredMakerOrders =
