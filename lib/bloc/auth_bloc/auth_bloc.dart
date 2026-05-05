@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
@@ -34,6 +35,20 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       'This wallet appears to have already been migrated. '
       'Use the migrated wallet entry and its current password.';
   static const Duration _postLoginStepTimeout = Duration(seconds: 5);
+  static const DeepCollectionEquality _metadataEquality =
+      DeepCollectionEquality();
+  static const Set<String> _optimisticAuthMetadataKeys = <String>{
+    'type',
+    'wallet_provenance',
+    'wallet_created_at',
+    'has_backup',
+    'activated_coins',
+    legacySourceKindMetadataKey,
+    legacySourceWalletIdMetadataKey,
+    legacySourceWalletNameMetadataKey,
+    legacyCleanupStatusMetadataKey,
+    legacyWalletExtrasMetadataKey,
+  };
 
   /// Handles [AuthBlocEvent]s and emits [AuthBlocState]s.
   /// [_kdfSdk] is an instance of [KomodoDefiSdk] used for authentication.
@@ -222,10 +237,9 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     }
 
     if (event.currentUser != null) {
-      // After optimistic login, the SDK watcher fires with the bare user
-      // before the background finalizer persists metadata. Suppress only if
-      // the incoming metadata carries no new or changed values; allow updates
-      // from finalizers (e.g. cleanup status, activated coins) through.
+      // After optimistic login, the SDK watcher can fire with a less-initialized
+      // user before the background finalizer persists metadata. Suppress those
+      // stale snapshots while still allowing complete finalizer updates through.
       if (state.status == AuthenticationStatus.completed &&
           state.currentUser?.walletId == event.currentUser!.walletId &&
           !_hasNewerMetadata(
@@ -517,8 +531,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           allowWeakPassword: weakPasswordsAllowed,
         ),
       );
-      final LegacyWalletSource? linkageSource =
-          event.sourceWallet.legacySource;
+      final LegacyWalletSource? linkageSource = event.sourceWallet.legacySource;
       if (linkageSource != null) {
         await _kdfSdk.setMigratedLegacySource(
           source: linkageSource,
@@ -987,20 +1000,69 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     }
   }
 
-  /// Returns `true` if [incoming] contains at least one key whose value
-  /// differs from [current], or a key that [current] does not have at all.
-  /// Used to distinguish bare-user watcher re-emissions (no new data) from
-  /// post-login finalizer updates that carry meaningful metadata changes.
+  /// Returns `true` when [incoming] carries metadata that should replace
+  /// [current] for same-wallet watcher updates.
   bool _hasNewerMetadata(
     Map<String, dynamic> incoming,
     Map<String, dynamic> current,
   ) {
+    if (_dropsOptimisticMetadata(incoming, current)) {
+      return false;
+    }
+    if (_regressesLegacyCleanupStatus(incoming, current)) {
+      return false;
+    }
+
     for (final entry in incoming.entries) {
-      if (!current.containsKey(entry.key) || current[entry.key] != entry.value) {
+      if (!current.containsKey(entry.key) ||
+          !_metadataEquality.equals(current[entry.key], entry.value)) {
         return true;
       }
     }
     return false;
+  }
+
+  bool _dropsOptimisticMetadata(
+    Map<String, dynamic> incoming,
+    Map<String, dynamic> current,
+  ) {
+    for (final key in _optimisticAuthMetadataKeys) {
+      if (_hasOptimisticMetadataValue(current, key) &&
+          !_preservesOptimisticMetadataValue(incoming, key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _hasOptimisticMetadataValue(Map<String, dynamic> metadata, String key) {
+    if (!_preservesOptimisticMetadataValue(metadata, key)) return false;
+
+    final value = metadata[key];
+    if (value is Iterable || value is Map) {
+      return value.isNotEmpty;
+    }
+    return true;
+  }
+
+  bool _preservesOptimisticMetadataValue(
+    Map<String, dynamic> metadata,
+    String key,
+  ) {
+    if (!metadata.containsKey(key)) return false;
+
+    final value = metadata[key];
+    return !_isMissingMetadataStringValue(value);
+  }
+
+  bool _regressesLegacyCleanupStatus(
+    Map<String, dynamic> incoming,
+    Map<String, dynamic> current,
+  ) {
+    final currentStatus = current[legacyCleanupStatusMetadataKey];
+    final incomingStatus = incoming[legacyCleanupStatusMetadataKey];
+    return currentStatus == LegacyMigrationCleanupStatus.complete.name &&
+        incomingStatus == LegacyMigrationCleanupStatus.incomplete.name;
   }
 
   bool _isMissingMetadataStringValue(dynamic value) {
