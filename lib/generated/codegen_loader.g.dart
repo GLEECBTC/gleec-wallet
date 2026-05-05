@@ -918,6 +918,19 @@ abstract class LocaleKeys {
   static const zhtlcAdvancedConfigurationHint =
       'zhtlcAdvancedConfigurationHint';
   static const zhtlcConfigButton = 'zhtlcConfigButton';
+  static const zhtlcRecentTransactionsOption = 'zhtlcRecentTransactionsOption';
+  static const legacyMigrationCleanupTitle = 'legacyMigrationCleanupTitle';
+  static const legacyMigrationCleanupDescription =
+      'legacyMigrationCleanupDescription';
+  static const legacyMigrationTitle = 'legacyMigrationTitle';
+  static const legacyMigrationDescriptionNameAndPassword =
+      'legacyMigrationDescriptionNameAndPassword';
+  static const legacyMigrationDescriptionNameOnly =
+      'legacyMigrationDescriptionNameOnly';
+  static const legacyMigrationDescriptionPasswordOnly =
+      'legacyMigrationDescriptionPasswordOnly';
+  static const legacyMigrationAlreadyMigrated =
+      'legacyMigrationAlreadyMigrated';
   static const kdfErrorGeneric = 'kdfErrorGeneric';
   static const kdfErrorNotSufficientBalance = 'kdfErrorNotSufficientBalance';
   static const kdfErrorNotSufficientPlatformBalanceForFee =

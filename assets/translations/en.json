@@ -875,6 +875,15 @@
   "zhtlcAdvancedConfiguration": "Advanced configuration",
   "zhtlcAdvancedConfigurationHint": "Faster intervals (lower milliseconds) and higher blocks per iteration result in higher memory and CPU usage.",
   "zhtlcConfigButton": "Config",
+  "zhtlcRecentTransactionsOption": "Recent transactions (last 2 days)",
+
+  "legacyMigrationCleanupTitle": "Legacy migration cleanup",
+  "legacyMigrationCleanupDescription": "This wallet was migrated successfully, but some legacy native app data could not be deleted automatically. The migrated KDF wallet is already the canonical wallet.",
+  "legacyMigrationTitle": "Legacy wallet migration",
+  "legacyMigrationDescriptionNameAndPassword": "This legacy wallet needs a KDF-compatible name and a new KDF password before it can be migrated.",
+  "legacyMigrationDescriptionNameOnly": "Confirm the KDF wallet name that will be used for this migrated wallet.",
+  "legacyMigrationDescriptionPasswordOnly": "Your legacy password can unlock the source wallet, but it cannot be used as the new KDF wallet password.",
+  "legacyMigrationAlreadyMigrated": "This wallet has already been migrated. Use the migrated wallet entry and its current password.",
 
   "kdfErrorGeneric": "An unexpected error occurred. Please try again.",
   "kdfErrorNotSufficientBalance": "Insufficient balance for this transaction.",

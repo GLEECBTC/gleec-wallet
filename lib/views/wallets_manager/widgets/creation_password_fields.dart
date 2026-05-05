@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
@@ -11,15 +10,19 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class CreationPasswordFields extends StatefulWidget {
   const CreationPasswordFields({
-    Key? key,
+    super.key,
     required this.passwordController,
     this.onValidityChanged,
     this.onFieldSubmitted,
-  }) : super(key: key);
+    this.enforceStrongPassword = false,
+  });
 
   final TextEditingController passwordController;
   final void Function(bool isValid)? onValidityChanged;
   final void Function(String)? onFieldSubmitted;
+
+  /// When true, weak passwords are never allowed regardless of settings.
+  final bool enforceStrongPassword;
 
   @override
   State<CreationPasswordFields> createState() => _CreationPasswordFieldsState();
@@ -104,7 +107,8 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
 
   String? _validatePasswordField(String? passwordFieldInput) {
     final settingsBlocState = context.read<SettingsBloc>().state;
-    final allowWeakPassword = settingsBlocState.weakPasswordsAllowed;
+    final allowWeakPassword =
+        !widget.enforceStrongPassword && settingsBlocState.weakPasswordsAllowed;
     final password = passwordFieldInput ?? '';
 
     if (allowWeakPassword) {
@@ -127,7 +131,8 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
     if (widget.onValidityChanged == null) return;
 
     final settingsBlocState = context.read<SettingsBloc>().state;
-    final allowWeakPassword = settingsBlocState.weakPasswordsAllowed;
+    final allowWeakPassword =
+        !widget.enforceStrongPassword && settingsBlocState.weakPasswordsAllowed;
 
     final password = widget.passwordController.text;
     final confirm = _confirmPasswordController.text;

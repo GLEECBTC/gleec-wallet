@@ -1,12 +1,21 @@
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:logging/logging.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_dex/app_config/app_config.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
+
+final Logger _walletModelLog = Logger('WalletModel');
 
 class Wallet {
-  Wallet({required this.id, required this.name, required this.config});
+  Wallet({
+    required this.id,
+    required this.name,
+    required this.config,
+    this.legacySource,
+    this.migratedLegacySource,
+    this.legacyWalletExtras,
+  });
 
   factory Wallet.fromJson(Map<String, dynamic> json) => Wallet(
     id: json['id'] as String? ?? '',
@@ -53,12 +62,20 @@ class Wallet {
   String id;
   String name;
   WalletConfig config;
+  LegacyWalletSource? legacySource;
+  MigratedLegacyWalletSource? migratedLegacySource;
+  Map<String, dynamic>? legacyWalletExtras;
 
   bool get isHW =>
       config.type != WalletType.iguana && config.type != WalletType.hdwallet;
   bool get isLegacyWallet => config.isLegacyWallet;
-  Future<String> getLegacySeed(String password) async =>
-      await EncryptionTool().decryptData(password, config.seedPhrase) ?? '';
+  bool get isNativeLegacyWallet =>
+      legacySource?.kind == LegacyWalletSourceKind.nativeApp;
+  bool get isSharedPrefsLegacyWallet => isLegacyWallet && !isNativeLegacyWallet;
+  bool get hasIncompleteNativeLegacyCleanup =>
+      migratedLegacySource?.kind == LegacyWalletSourceKind.nativeApp &&
+      migratedLegacySource?.cleanupStatus ==
+          LegacyMigrationCleanupStatus.incomplete;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'id': id,
@@ -67,16 +84,82 @@ class Wallet {
   };
 
   Wallet copy() {
-    return Wallet(id: id, name: name, config: config.copy());
+    return Wallet(
+      id: id,
+      name: name,
+      config: config.copy(),
+      legacySource: legacySource,
+      migratedLegacySource: migratedLegacySource,
+      legacyWalletExtras: legacyWalletExtras == null
+          ? null
+          : Map<String, dynamic>.from(legacyWalletExtras!),
+    );
   }
 
-  Wallet copyWith({String? id, String? name, WalletConfig? config}) {
+  Wallet copyWith({
+    String? id,
+    String? name,
+    WalletConfig? config,
+    LegacyWalletSource? legacySource,
+    MigratedLegacyWalletSource? migratedLegacySource,
+    Map<String, dynamic>? legacyWalletExtras,
+  }) {
     return Wallet(
       id: id ?? this.id,
       name: name ?? this.name,
       config: config ?? this.config.copy(),
+      legacySource: legacySource ?? this.legacySource,
+      migratedLegacySource: migratedLegacySource ?? this.migratedLegacySource,
+      legacyWalletExtras: legacyWalletExtras ?? this.legacyWalletExtras,
     );
   }
+}
+
+class LegacyWalletSource {
+  const LegacyWalletSource({
+    required this.kind,
+    required this.originalWalletName,
+    required this.originalWalletId,
+  });
+
+  final LegacyWalletSourceKind kind;
+  final String originalWalletName;
+  final String originalWalletId;
+
+  String get identityKey => '${kind.name}:$originalWalletId';
+}
+
+enum LegacyWalletSourceKind { sharedPrefs, nativeApp }
+
+enum LegacyMigrationCleanupStatus {
+  complete,
+  incomplete;
+
+  factory LegacyMigrationCleanupStatus.fromJson(String? value) {
+    switch (value) {
+      case 'incomplete':
+        return LegacyMigrationCleanupStatus.incomplete;
+      case 'complete':
+      default:
+        return LegacyMigrationCleanupStatus.complete;
+    }
+  }
+}
+
+class MigratedLegacyWalletSource {
+  const MigratedLegacyWalletSource({
+    required this.kind,
+    required this.originalWalletName,
+    required this.originalWalletId,
+    required this.cleanupStatus,
+  });
+
+  final LegacyWalletSourceKind kind;
+  final String originalWalletName;
+  final String originalWalletId;
+  final LegacyMigrationCleanupStatus cleanupStatus;
+
+  String get identityKey => '${kind.name}:$originalWalletId';
 }
 
 class WalletConfig {
@@ -230,6 +313,7 @@ extension KdfUserWalletExtension on KdfUser {
     final walletType = _walletTypeFromMetadataOrAuth(this);
     final provenance = _walletProvenanceFromMetadata(this);
     final createdAt = _walletCreatedAtFromMetadata(this);
+    final migratedLegacySource = _migratedLegacySourceFromMetadata(this);
     return Wallet(
       id: walletId.name,
       name: walletId.name,
@@ -243,6 +327,8 @@ extension KdfUserWalletExtension on KdfUser {
         provenance: provenance,
         createdAt: createdAt,
       ),
+      migratedLegacySource: migratedLegacySource,
+      legacyWalletExtras: _legacyWalletExtrasFromMetadata(this),
     );
   }
 }
@@ -285,6 +371,69 @@ DateTime? _walletCreatedAtFromMetadata(KdfUser user) {
     if (createdAtMs != null) {
       return DateTime.fromMillisecondsSinceEpoch(createdAtMs);
     }
+  }
+  return null;
+}
+
+const String legacySourceKindMetadataKey = 'legacy_source_kind';
+const String legacySourceWalletIdMetadataKey = 'legacy_source_wallet_id';
+const String legacySourceWalletNameMetadataKey = 'legacy_source_wallet_name';
+const String legacyCleanupStatusMetadataKey = 'legacy_cleanup_status';
+const String legacyWalletExtrasMetadataKey = 'legacy_wallet_extras_v1';
+
+MigratedLegacyWalletSource? _migratedLegacySourceFromMetadata(KdfUser user) {
+  final metadataKind = user.metadata[legacySourceKindMetadataKey];
+  final metadataWalletId = user.metadata[legacySourceWalletIdMetadataKey];
+  final metadataWalletName = user.metadata[legacySourceWalletNameMetadataKey];
+
+  final bool hasKind = metadataKind is String && metadataKind.isNotEmpty;
+  final bool hasId = metadataWalletId is String && metadataWalletId.isNotEmpty;
+  final bool hasName =
+      metadataWalletName is String && metadataWalletName.isNotEmpty;
+
+  if (!hasKind || !hasId || !hasName) {
+    final int presentCount = [hasKind, hasId, hasName].where((v) => v).length;
+    if (presentCount > 0) {
+      _walletModelLog.warning(
+        'Partial migration linkage metadata for wallet '
+        '"${user.walletId.name}": '
+        'kind=${hasKind ? metadataKind : "MISSING"}, '
+        'walletId=${hasId ? metadataWalletId : "MISSING"}, '
+        'walletName=${hasName ? metadataWalletName : "MISSING"}. '
+        'Legacy wallet may still appear as unmigrated.',
+      );
+    }
+    return null;
+  }
+
+  final kind = switch (metadataKind) {
+    'sharedPrefs' => LegacyWalletSourceKind.sharedPrefs,
+    'nativeApp' => LegacyWalletSourceKind.nativeApp,
+    _ => null,
+  };
+  if (kind == null) {
+    return null;
+  }
+
+  return MigratedLegacyWalletSource(
+    kind: kind,
+    originalWalletName: metadataWalletName,
+    originalWalletId: metadataWalletId,
+    cleanupStatus: LegacyMigrationCleanupStatus.fromJson(
+      user.metadata[legacyCleanupStatusMetadataKey] as String?,
+    ),
+  );
+}
+
+Map<String, dynamic>? _legacyWalletExtrasFromMetadata(KdfUser user) {
+  final rawExtras = user.metadata[legacyWalletExtrasMetadataKey];
+  if (rawExtras is Map<String, dynamic> && rawExtras.isNotEmpty) {
+    return Map<String, dynamic>.from(rawExtras);
+  }
+  if (rawExtras is Map && rawExtras.isNotEmpty) {
+    return rawExtras.map<String, dynamic>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
   }
   return null;
 }
