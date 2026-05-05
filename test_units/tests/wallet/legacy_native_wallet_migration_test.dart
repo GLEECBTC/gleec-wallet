@@ -602,6 +602,158 @@ void main() {
 
   group('AuthBloc legacy migration', () {
     test(
+      'auth watcher ignores less-initialized metadata for the active wallet',
+      () async {
+        final auth = _FakeAuth(users: const <KdfUser>[]);
+        final bloc = AuthBloc(
+          _FakeSdk(auth: auth),
+          WalletsRepository(
+            _FakeSdk(auth: auth),
+            _FakeMm2Api(),
+            _FakeStorage(),
+          ),
+          SettingsRepository(storage: _FakeStorage()),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+
+        final optimisticUser = _buildUser(
+          walletName: 'Migrated_Wallet',
+          derivationMethod: DerivationMethod.iguana,
+          metadata: <String, dynamic>{
+            'type': WalletType.iguana.name,
+            'wallet_provenance': WalletProvenance.imported.name,
+            'wallet_created_at': 1,
+            'has_backup': true,
+            'activated_coins': <String>['BTC'],
+            legacySourceKindMetadataKey: LegacyWalletSourceKind.nativeApp.name,
+            legacySourceWalletIdMetadataKey: 'native-1',
+            legacySourceWalletNameMetadataKey: 'Legacy Wallet!',
+            legacyCleanupStatusMetadataKey:
+                LegacyMigrationCleanupStatus.incomplete.name,
+          },
+        );
+        final staleUser = _buildUser(
+          walletName: 'Migrated_Wallet',
+          derivationMethod: DerivationMethod.iguana,
+          metadata: const <String, dynamic>{'activated_coins': <String>[]},
+        );
+
+        final optimisticStateFuture = bloc.stream.firstWhere(
+          (state) => state.currentUser?.metadata['wallet_created_at'] == 1,
+        );
+        bloc.add(
+          AuthModeChanged(
+            mode: AuthorizeMode.logIn,
+            currentUser: optimisticUser,
+          ),
+        );
+        await optimisticStateFuture;
+
+        bloc.add(
+          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: staleUser),
+        );
+        await pumpEventQueue(times: 10);
+
+        expect(bloc.state.currentUser?.metadata['activated_coins'], <String>[
+          'BTC',
+        ]);
+        expect(
+          bloc.state.currentUser?.metadata['type'],
+          WalletType.iguana.name,
+        );
+      },
+    );
+
+    test(
+      'auth watcher accepts complete finalizer metadata for the active wallet',
+      () async {
+        final auth = _FakeAuth(users: const <KdfUser>[]);
+        final bloc = AuthBloc(
+          _FakeSdk(auth: auth),
+          WalletsRepository(
+            _FakeSdk(auth: auth),
+            _FakeMm2Api(),
+            _FakeStorage(),
+          ),
+          SettingsRepository(storage: _FakeStorage()),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+
+        final optimisticUser = _buildUser(
+          walletName: 'Migrated_Wallet',
+          derivationMethod: DerivationMethod.iguana,
+          metadata: <String, dynamic>{
+            'type': WalletType.iguana.name,
+            'wallet_provenance': WalletProvenance.imported.name,
+            'wallet_created_at': 1,
+            'has_backup': true,
+            'activated_coins': <String>['BTC'],
+            legacySourceKindMetadataKey: LegacyWalletSourceKind.nativeApp.name,
+            legacySourceWalletIdMetadataKey: 'native-1',
+            legacySourceWalletNameMetadataKey: 'Legacy Wallet!',
+            legacyCleanupStatusMetadataKey:
+                LegacyMigrationCleanupStatus.incomplete.name,
+          },
+        );
+        final finalizedUser = _buildUser(
+          walletName: 'Migrated_Wallet',
+          derivationMethod: DerivationMethod.iguana,
+          metadata: <String, dynamic>{
+            'type': WalletType.iguana.name,
+            'wallet_provenance': WalletProvenance.imported.name,
+            'wallet_created_at': 1,
+            'has_backup': true,
+            'activated_coins': <String>['BTC', 'KMD'],
+            legacySourceKindMetadataKey: LegacyWalletSourceKind.nativeApp.name,
+            legacySourceWalletIdMetadataKey: 'native-1',
+            legacySourceWalletNameMetadataKey: 'Legacy Wallet!',
+            legacyCleanupStatusMetadataKey:
+                LegacyMigrationCleanupStatus.complete.name,
+          },
+        );
+
+        final optimisticStateFuture = bloc.stream.firstWhere(
+          (state) => state.currentUser?.metadata['wallet_created_at'] == 1,
+        );
+        bloc.add(
+          AuthModeChanged(
+            mode: AuthorizeMode.logIn,
+            currentUser: optimisticUser,
+          ),
+        );
+        await optimisticStateFuture;
+
+        final finalizedStateFuture = bloc.stream.firstWhere(
+          (state) =>
+              state.currentUser?.metadata[legacyCleanupStatusMetadataKey] ==
+              LegacyMigrationCleanupStatus.complete.name,
+        );
+        bloc.add(
+          AuthModeChanged(
+            mode: AuthorizeMode.logIn,
+            currentUser: finalizedUser,
+          ),
+        );
+        final finalizedState = await finalizedStateFuture;
+
+        expect(
+          finalizedState.currentUser?.metadata['activated_coins'],
+          <String>['BTC', 'KMD'],
+        );
+        expect(
+          finalizedState
+              .currentUser
+              ?.wallet
+              .migratedLegacySource
+              ?.cleanupStatus,
+          LegacyMigrationCleanupStatus.complete,
+        );
+      },
+    );
+
+    test(
       'legacy migration registers with the KDF password and stores migrated metadata',
       () async {
         final auth = _FakeAuth(users: const <KdfUser>[]);
