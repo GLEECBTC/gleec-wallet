@@ -686,10 +686,10 @@ packages:
     dependency: transitive
     description:
       name: js
-      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
+      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.7"
+    version: "0.7.2"
   json_annotation:
     dependency: transitive
     description:
@@ -704,77 +704,70 @@ packages:
       path: "sdk/packages/komodo_cex_market_data"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.0+1"
   komodo_coin_updates:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_coin_updates"
       relative: true
     source: path
-    version: "2.0.0"
+    version: "2.0.1"
   komodo_coins:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_coins"
       relative: true
     source: path
-    version: "0.3.2"
+    version: "0.3.2+1"
   komodo_defi_framework:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_defi_framework"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.4.1"
   komodo_defi_local_auth:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_defi_local_auth"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.4.1"
   komodo_defi_rpc_methods:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_defi_rpc_methods"
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.5.0"
   komodo_defi_sdk:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_defi_sdk"
       relative: true
     source: path
-    version: "0.5.0"
+    version: "0.6.0"
   komodo_defi_types:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_defi_types"
       relative: true
     source: path
-    version: "0.4.0"
-  komodo_legacy_wallet_migration:
-    dependency: "direct main"
-    description:
-      path: "sdk/packages/komodo_legacy_wallet_migration"
-      relative: true
-    source: path
-    version: "0.1.0"
+    version: "0.4.1"
   komodo_ui:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_ui"
       relative: true
     source: path
-    version: "0.3.1"
+    version: "0.3.2"
   komodo_wallet_build_transformer:
     dependency: "direct overridden"
     description:
       path: "sdk/packages/komodo_wallet_build_transformer"
       relative: true
     source: path
-    version: "0.4.1"
+    version: "0.4.2"
   leak_tracker:
     dependency: transitive
     description:
@@ -1284,46 +1277,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.0"
-  sqflite:
-    dependency: transitive
-    description:
-      name: sqflite
-      sha256: e2297b1da52f127bc7a3da11439985d9b536f75070f3325e62ada69a5c585d03
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.2"
-  sqflite_android:
-    dependency: transitive
-    description:
-      name: sqflite_android
-      sha256: "881e28efdcc9950fd8e9bb42713dcf1103e62a2e7168f23c9338d82db13dec40"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.2+3"
-  sqflite_common:
-    dependency: transitive
-    description:
-      name: sqflite_common
-      sha256: "6ef422a4525ecc601db6c0a2233ff448c731307906e92cabc9ba292afaae16a6"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.5.6"
-  sqflite_darwin:
-    dependency: transitive
-    description:
-      name: sqflite_darwin
-      sha256: "279832e5cde3fe99e8571879498c9211f3ca6391b0d818df4e17d9fff5c6ccb3"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.2"
-  sqflite_platform_interface:
-    dependency: transitive
-    description:
-      name: sqflite_platform_interface
-      sha256: "8dd4515c7bdcae0a785b0062859336de775e8c65db81ae33dd5445f35be61920"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.0"
   stack_trace:
     dependency: transitive
     description:
@@ -1364,14 +1317,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.1"
-  synchronized:
-    dependency: transitive
-    description:
-      name: synchronized
-      sha256: c254ade258ec8282947a0acbbc90b9575b4f19673533ee46f2f6e9b3aeefd7c0
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.4.0"
   term_glyph:
     dependency: transitive
     description:
