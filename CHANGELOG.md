@@ -1,22 +1,48 @@
 # Gleec Wallet v0.9.5 Release Notes
 
-This release prepares the updated `0.9.4` release line for mobile publishing as `0.9.5`, keeping the web release history intact while integrating the final mobile-readiness SDK roll. Highlights include `komodo-defi-sdk v0.6.0`, legacy wallet migration support, hardened TRON/TRC20 and SIA handling, refreshed Gleec Dex branding, and release metadata/lockfile updates for reproducible native builds.
+This release prepares the `0.9.4` release line for mobile publishing as `0.9.5`, keeping the app version at `0.9.5+0` while incorporating the final mobile-readiness work from `dev`. It covers the published SDK `0.6.0` roll, the in-app legacy wallet migration flow, the iOS publishing identity update, Gleec Dex branding, web publishing alignment, and refreshed dependency metadata.
 
 ## 🚀 New Features
 
-- **SDK 0.6.0 Integration** ([@CharlVS]) - Roll the SDK submodule to the published `komodo-defi-sdk v0.6.0` release, bringing the finalized mobile-readiness package set into the app.
-- **Legacy Wallet Migration Support** ([@CharlVS]) - Include the SDK-side migration package and auth/framework hooks for discovering, verifying, importing, and cleaning up legacy wallet data.
-- **TRON/TRC20 and SIA Readiness** ([@CharlVS]) - Pull in hardened TRON activation, transaction-history, explorer, and market-data handling alongside the finalized SIA activation and withdrawal strategy.
+- **Legacy Wallet Migration Flow** ([@CharlVS], #3475) - Add the app-side migration flow for discovering legacy native wallets, checking compatibility, preparing imports, integrating migrated wallets with auth/session state, and cleaning up migrated legacy data from settings.
+- **SDK 0.6.0 Integration** ([@CharlVS]) - Roll the SDK submodule to the published `komodo-defi-sdk v0.6.0` release commit and keep the root lockfile aligned with the SDK package versions used by the app.
+
+### SDK Updates (komodo-defi-sdk-flutter)
+
+This release integrates [komodo-defi-sdk v0.6.0](https://github.com/GLEECBTC/komodo-defi-sdk-flutter) with the mobile publishing package set bringing:
+
+- **Legacy Wallet Migration Support** - Add the `komodo_legacy_wallet_migration` package and supporting auth/framework hooks for discovering, verifying, importing, and cleaning up legacy wallet data.
+- **TRON/TRC20 Readiness** - Harden TRON activation, TRC20 handling, transaction history through Tronscan, explorer URL support, and TRX market-data coordination.
+- **SIA Readiness** - Finalize SIA activation and withdrawal handling for the mobile release line.
+- **Balance, Fee, and Market Data Hardening** - Add balance recovery mode, richer fee information, cached spot-price continuity, CoinGecko failure cooldowns, icon-precache hardening, and numeric JSON compatibility.
 
 ## 🐛 Bug Fixes
 
-- **Balance, Fee, and Market Data Hardening** ([@CharlVS]) - Integrate SDK fixes for activation recovery, richer fee information, cached spot-price continuity, CoinGecko failure cooldowns, and numeric JSON compatibility.
-- **Gleec Dex Branding Refresh** ([@CharlVS], #3479) - Preserve the updated Gleec Dex title, app metadata, icons, social preview assets, and Ramp logo cache-busting changes already prepared on `dev`.
+- **Migration Startup and Compatibility Guardrails** ([@CharlVS], #3475) - Add startup/settings migration services, compatibility dialog states, password-field handling, wallet metadata preparation, and migration cleanup coverage for legacy wallet users.
+- **Fiat Preference and Wallet Visibility Hardening** ([@CharlVS], #3475) - Stabilize fiat onramp defaults and wallet-gated UI behavior as part of the migration-ready app flow.
+
+## 🎨 UI/UX Improvements
+
+- **Gleec Dex Branding Refresh** ([@CharlVS], #3479) - Keep the updated Gleec Dex title, app metadata, icons, social preview assets, and Ramp logo cache-busting changes already prepared on `dev`.
+
+## 💻 Platform-Specific Changes
+
+### iOS
+
+- **Bundle Identifier and Signing Team Update** ([@DeckerSU], #3482) - Switch the iOS bundle identifier to `com.GleecDEX.wallet` and the signing team to `B52ZCS7TMQ` for mobile publishing.
+
+### Android
+
+- **Package Path Alignment** ([@CharlVS], #3475) - Move `MainActivity` into the Gleec package path used by the native release configuration.
+
+### Web
+
 - **Web Publishing Adjustment** ([@DeckerSU], #3476) - Keep the non-WASM web build path adjustment from `dev` so web publishing remains aligned with the current deployment target.
 
 ## 🔧 Technical Improvements
 
-- **Release Metadata Refresh** ([@CharlVS]) - Move the app release name to `0.9.5+0` and refresh dependency resolution against the SDK `0.6.0` submodule.
+- **Legacy Migration Test Coverage** ([@CharlVS], #3475) - Add unit/widget coverage for legacy app settings migration, legacy wallet migration, migration compatibility UI, cleanup UI, and fiat preference defaults.
+- **Release Metadata Refresh** ([@CharlVS]) - Keep the app release name at `0.9.5+0`, align the SDK submodule with the SDK `0.6.0` release commit, and refresh dependency resolution for reproducible native builds.
 
 **Full Changelog**: [0.9.4...0.9.5](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.4...0.9.5)
 
