@@ -151,6 +151,8 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
     bool hideBalances,
   ) {
     final statsTap = widget.onStatisticsTap;
+    final balance = widget.coin.balance(context.sdk) ?? 0;
+    final isZeroBalance = balance == 0;
     return Container(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -159,6 +161,7 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
           // Use CoinItem with large size for mobile, matching GroupedAssetTickerItem
           AssetIcon(widget.coin.id, size: CoinItemSize.large.coinLogo),
           const SizedBox(width: 8),
+          // Left side: ticker with market price and 24h change below it
           Expanded(
             flex: 8,
             child: Column(
@@ -169,70 +172,49 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
                   text: widget.coin.displayName,
                   style: theme.textTheme.headlineMedium,
                 ),
-                // Crypto balance - using bodySmall for 12px secondary text
-                AutoScrollText(
-                  text: hideBalances
-                      ? '$maskedBalanceText ${widget.coin.abbr}'
-                      : '${doubleToString(widget.coin.balance(context.sdk) ?? 0)} ${widget.coin.abbr}',
-                  style: theme.textTheme.bodySmall,
+                const SizedBox(height: 2),
+                // Market price + 24h change (price is always shown, even when
+                // balances are hidden, since it is public market data).
+                InkWell(
+                  onTap: statsTap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: _PriceWithChange(
+                    coin: widget.coin,
+                    textStyle: theme.textTheme.bodySmall,
+                    iconSize: 12,
+                    spacing: 2,
+                  ),
                 ),
               ],
             ),
           ),
           const Spacer(),
-          // Right side: Price and trend info
+          // Right side: holdings (coin amount on top, USD value below)
           Expanded(
             flex: 7,
-            child: InkWell(
-              onTap: statsTap,
-              borderRadius: BorderRadius.circular(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Current balance in USD - using headlineMedium for bold 16px text
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Coin amount + ticker. When the balance is zero we show only
+                // the ticker (no amount).
+                AutoScrollText(
+                  text: hideBalances
+                      ? '$maskedBalanceText ${widget.coin.abbr}'
+                      : isZeroBalance
+                      ? widget.coin.abbr
+                      : '${doubleToString(balance)} ${widget.coin.abbr}',
+                  style: theme.textTheme.headlineMedium,
+                  textAlign: TextAlign.right,
+                ),
+                // USD value of holdings - hidden entirely for zero balances.
+                if (!isZeroBalance) ...[
+                  const SizedBox(height: 2),
                   _UsdBalanceText(
                     coin: widget.coin,
-                    textStyle: theme.textTheme.headlineMedium,
+                    textStyle: theme.textTheme.bodySmall,
                   ),
-                  const SizedBox(height: 2),
-                  // Trend percentage
-                  if (!hideBalances)
-                    BlocBuilder<CoinsBloc, CoinsState>(
-                      builder: (context, state) {
-                        final usdBalance = widget.coin.lastKnownUsdBalance(
-                          context.sdk,
-                        );
-                        if (usdBalance == null) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final change24hPercent = usdBalance == 0.0
-                            ? 0.0
-                            : state.get24hChangeForAsset(widget.coin.id);
-                        // Calculate the 24h USD change value
-                        final change24hValue =
-                            change24hPercent != null && usdBalance > 0
-                            ? (change24hPercent * usdBalance / 100)
-                            : 0.0;
-                        final themeCustom =
-                            Theme.of(context).brightness == Brightness.dark
-                            ? Theme.of(context).extension<ThemeCustomDark>()!
-                            : Theme.of(context).extension<ThemeCustomLight>()!;
-                        return TrendPercentageText(
-                          percentage: change24hPercent,
-                          value: change24hValue,
-                          upColor: themeCustom.increaseColor,
-                          downColor: themeCustom.decreaseColor,
-                          valueFormatter: (value) =>
-                              NumberFormat.currency(symbol: '\$').format(value),
-                          iconSize: 12,
-                          spacing: 2,
-                          textStyle: theme.textTheme.bodySmall,
-                        );
-                      },
-                    ),
                 ],
-              ),
+              ],
             ),
           ),
         ],
@@ -246,6 +228,8 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
     bool hideBalances,
   ) {
     final statsTap = widget.onStatisticsTap;
+    final balance = widget.coin.balance(context.sdk) ?? 0;
+    final isZeroBalance = balance == 0;
     return Container(
       alignment: Alignment.centerLeft,
       child: Row(
@@ -257,50 +241,101 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
             child: CoinItem(coin: widget.coin, size: CoinItemSize.large),
           ),
           const Spacer(),
-          InkWell(
-            onTap: statsTap,
-            borderRadius: BorderRadius.circular(8),
-            child: CoinBalance(coin: widget.coin),
-          ),
-          if (!hideBalances)
-            BlocBuilder<CoinsBloc, CoinsState>(
-              builder: (context, state) {
-                final usdBalance = widget.coin.lastKnownUsdBalance(context.sdk);
-                if (usdBalance == null) {
-                  return const SizedBox.shrink();
-                }
-
-                final change24hPercent = usdBalance == 0.0
-                    ? 0.0
-                    : state.get24hChangeForAsset(widget.coin.id);
-
-                // Calculate the 24h USD change value
-                final change24hValue =
-                    change24hPercent != null && usdBalance > 0
-                    ? (change24hPercent * usdBalance / 100)
-                    : 0.0;
-
-                final themeCustom =
-                    Theme.of(context).brightness == Brightness.dark
-                    ? Theme.of(context).extension<ThemeCustomDark>()!
-                    : Theme.of(context).extension<ThemeCustomLight>()!;
-                return InkWell(
+          // Right side: holdings on top with the market price + 24h change
+          // below it. Mirrors the mobile layout's "price under balance" idea.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Holdings. When the balance is zero we show only the ticker
+              // (no amount and no USD value), mirroring the mobile behaviour.
+              if (isZeroBalance)
+                Text(
+                  hideBalances
+                      ? '$maskedBalanceText ${widget.coin.abbr}'
+                      : Coin.normalizeAbbr(widget.coin.abbr),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.right,
+                )
+              else
+                InkWell(
                   onTap: statsTap,
                   borderRadius: BorderRadius.circular(8),
-                  child: TrendPercentageText(
-                    percentage: change24hPercent,
-                    value: change24hValue,
-                    upColor: themeCustom.increaseColor,
-                    downColor: themeCustom.decreaseColor,
-                    valueFormatter: (value) =>
-                        NumberFormat.currency(symbol: '\$').format(value),
-                  ),
-                );
-              },
-            ),
-          // const Spacer(),
+                  child: CoinBalance(coin: widget.coin),
+                ),
+              const SizedBox(height: 2),
+              // Market price + 24h change (always shown, even when balances are
+              // hidden, since it is public market data).
+              InkWell(
+                onTap: statsTap,
+                borderRadius: BorderRadius.circular(8),
+                child: _PriceWithChange(
+                  coin: widget.coin,
+                  textStyle: theme.textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// Displays the asset's current market price in USD together with its 24h
+/// price change percentage (e.g. `$1.23 ↑2.45%`).
+///
+/// This is public market data, so it is shown regardless of the
+/// "hide balances" setting. Falls back to `--` when no price is available.
+class _PriceWithChange extends StatelessWidget {
+  const _PriceWithChange({
+    required this.coin,
+    this.textStyle,
+    this.iconSize = 18,
+    this.spacing = 2,
+  });
+
+  final Coin coin;
+  final TextStyle? textStyle;
+  final double iconSize;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    final themeCustom = Theme.of(context).brightness == Brightness.dark
+        ? Theme.of(context).extension<ThemeCustomDark>()!
+        : Theme.of(context).extension<ThemeCustomLight>()!;
+
+    return BlocBuilder<CoinsBloc, CoinsState>(
+      builder: (context, state) {
+        final price = state.getPriceForAsset(coin.id)?.price?.toDouble();
+        // Only show the percentage when we actually have a price to anchor it.
+        final change24hPercent = price == null
+            ? null
+            : state.get24hChangeForAsset(coin.id);
+
+        return TrendPercentageText(
+          value: price,
+          percentage: change24hPercent,
+          noValueText: '--',
+          upColor: themeCustom.increaseColor,
+          downColor: themeCustom.decreaseColor,
+          valueFormatter: (value) {
+            // Sub-dollar prices need more precision to be meaningful, so show
+            // 4 decimals below $1 and the usual 2 decimals otherwise.
+            final decimalDigits = value.abs() < 1 ? 4 : 2;
+            return NumberFormat.currency(
+              symbol: '\$',
+              decimalDigits: decimalDigits,
+            ).format(value);
+          },
+          iconSize: iconSize,
+          spacing: spacing,
+          textStyle: textStyle,
+        );
+      },
     );
   }
 }
