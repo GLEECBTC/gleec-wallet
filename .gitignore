@@ -94,3 +94,8 @@ web/kdf/kdf/bin/
 /.nano-banana-config.json
 /generated_imgs
 /.1code
+
+# Android release signing secrets — never commit.
+**/*.jks
+**/*.p12
+android/key.properties
