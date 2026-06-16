@@ -12,8 +12,8 @@ class SettingsState extends Equatable {
     required this.hideZeroBalanceAssets,
     required this.diagnosticLoggingEnabled,
     required this.hideBalances,
-    this.customKdfCoinsLabel,
-    this.customCoinsConfigLabel,
+    this.customKdfCoinsFileName,
+    this.customCoinsConfigFileName,
   });
 
   factory SettingsState.fromStored(StoredSettings stored) {
@@ -25,8 +25,8 @@ class SettingsState extends Equatable {
       hideZeroBalanceAssets: stored.hideZeroBalanceAssets,
       diagnosticLoggingEnabled: stored.diagnosticLoggingEnabled,
       hideBalances: stored.hideBalances,
-      customKdfCoinsLabel: stored.customKdfCoinsLabel,
-      customCoinsConfigLabel: stored.customCoinsConfigLabel,
+      customKdfCoinsFileName: stored.customKdfCoinsFileName,
+      customCoinsConfigFileName: stored.customCoinsConfigFileName,
     );
   }
 
@@ -37,8 +37,8 @@ class SettingsState extends Equatable {
   final bool hideZeroBalanceAssets;
   final bool diagnosticLoggingEnabled;
   final bool hideBalances;
-  final String? customKdfCoinsLabel;
-  final String? customCoinsConfigLabel;
+  final String? customKdfCoinsFileName;
+  final String? customCoinsConfigFileName;
 
   @override
   List<Object?> get props => [
@@ -49,8 +49,8 @@ class SettingsState extends Equatable {
     hideZeroBalanceAssets,
     diagnosticLoggingEnabled,
     hideBalances,
-    customKdfCoinsLabel,
-    customCoinsConfigLabel,
+    customKdfCoinsFileName,
+    customCoinsConfigFileName,
   ];
 
   SettingsState copyWith({
@@ -61,9 +61,9 @@ class SettingsState extends Equatable {
     bool? hideZeroBalanceAssets,
     bool? diagnosticLoggingEnabled,
     bool? hideBalances,
-    String? customKdfCoinsLabel,
-    String? customCoinsConfigLabel,
-    bool clearCustomCoinsLabels = false,
+    String? customKdfCoinsFileName,
+    String? customCoinsConfigFileName,
+    bool clearCustomCoinsFileNames = false,
   }) {
     return SettingsState(
       themeMode: mode ?? themeMode,
@@ -75,12 +75,12 @@ class SettingsState extends Equatable {
       diagnosticLoggingEnabled:
           diagnosticLoggingEnabled ?? this.diagnosticLoggingEnabled,
       hideBalances: hideBalances ?? this.hideBalances,
-      customKdfCoinsLabel: clearCustomCoinsLabels
+      customKdfCoinsFileName: clearCustomCoinsFileNames
           ? null
-          : (customKdfCoinsLabel ?? this.customKdfCoinsLabel),
-      customCoinsConfigLabel: clearCustomCoinsLabels
+          : (customKdfCoinsFileName ?? this.customKdfCoinsFileName),
+      customCoinsConfigFileName: clearCustomCoinsFileNames
           ? null
-          : (customCoinsConfigLabel ?? this.customCoinsConfigLabel),
+          : (customCoinsConfigFileName ?? this.customCoinsConfigFileName),
     );
   }
 }

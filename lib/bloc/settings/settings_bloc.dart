@@ -28,8 +28,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<HideZeroBalanceAssetsChanged>(_onHideZeroBalanceAssetsChanged);
     on<DiagnosticLoggingChanged>(_onDiagnosticLoggingChanged);
     on<HideBalancesChanged>(_onHideBalancesChanged);
-    on<CustomCoinsPathChanged>(_onCustomCoinsPathChanged);
-    on<CustomCoinsPathReset>(_onCustomCoinsPathReset);
+    on<CustomCoinsChanged>(_onCustomCoinsChanged);
+    on<CustomCoinsReset>(_onCustomCoinsReset);
   }
 
   late StoredSettings _storedSettings;
@@ -123,29 +123,29 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     emitter(state.copyWith(hideBalances: event.hideBalances));
   }
 
-  Future<void> _onCustomCoinsPathChanged(
-    CustomCoinsPathChanged event,
+  Future<void> _onCustomCoinsChanged(
+    CustomCoinsChanged event,
     Emitter<SettingsState> emitter,
   ) async {
     _storedSettings = _storedSettings.copyWith(
-      customKdfCoinsLabel: event.kdfCoinsLabel,
-      customCoinsConfigLabel: event.coinsConfigLabel,
+      customKdfCoinsFileName: event.kdfCoinsFileName,
+      customCoinsConfigFileName: event.coinsConfigFileName,
     );
     await _settingsRepo.updateSettings(_storedSettings);
     emitter(
       state.copyWith(
-        customKdfCoinsLabel: event.kdfCoinsLabel,
-        customCoinsConfigLabel: event.coinsConfigLabel,
+        customKdfCoinsFileName: event.kdfCoinsFileName,
+        customCoinsConfigFileName: event.coinsConfigFileName,
       ),
     );
   }
 
-  Future<void> _onCustomCoinsPathReset(
-    CustomCoinsPathReset event,
+  Future<void> _onCustomCoinsReset(
+    CustomCoinsReset event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(clearCustomCoinsLabels: true);
+    _storedSettings = _storedSettings.copyWith(clearCustomCoinsFileNames: true);
     await _settingsRepo.updateSettings(_storedSettings);
-    emitter(state.copyWith(clearCustomCoinsLabels: true));
+    emitter(state.copyWith(clearCustomCoinsFileNames: true));
   }
 }
