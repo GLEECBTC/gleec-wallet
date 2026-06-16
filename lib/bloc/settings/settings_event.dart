@@ -56,3 +56,21 @@ class HideBalancesChanged extends SettingsEvent {
   @override
   List<Object> get props => [hideBalances];
 }
+
+/// Persists the display labels for the custom coins / coins-config file
+/// override after the SDK has been updated. Only non-null labels are changed.
+class CustomCoinsPathChanged extends SettingsEvent {
+  const CustomCoinsPathChanged({this.kdfCoinsLabel, this.coinsConfigLabel});
+
+  final String? kdfCoinsLabel;
+  final String? coinsConfigLabel;
+
+  @override
+  List<Object> get props => [kdfCoinsLabel ?? '', coinsConfigLabel ?? ''];
+}
+
+/// Clears the custom coins / coins-config override labels (the SDK override is
+/// reset separately via [KomodoDefiSdk.resetCustomCoinsPath]).
+class CustomCoinsPathReset extends SettingsEvent {
+  const CustomCoinsPathReset();
+}

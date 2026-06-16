@@ -13,6 +13,8 @@ class StoredSettings {
     required this.hideZeroBalanceAssets,
     required this.diagnosticLoggingEnabled,
     required this.hideBalances,
+    this.customKdfCoinsLabel,
+    this.customCoinsConfigLabel,
   });
 
   final ThemeMode mode;
@@ -23,6 +25,16 @@ class StoredSettings {
   final bool hideZeroBalanceAssets;
   final bool diagnosticLoggingEnabled;
   final bool hideBalances;
+
+  /// Display label (file path on native, file name on web) for the custom KDF
+  /// coins file override, or `null` when the bundled config is used. The
+  /// authoritative override is persisted by the SDK; this is for UI display and
+  /// to pre-populate the file picker's starting directory.
+  final String? customKdfCoinsLabel;
+
+  /// Display label for the custom coins-config file override, or `null` when
+  /// the bundled config is used. See [customKdfCoinsLabel].
+  final String? customCoinsConfigLabel;
 
   static StoredSettings initial() {
     return StoredSettings(
@@ -51,6 +63,8 @@ class StoredSettings {
       hideZeroBalanceAssets: json['hideZeroBalanceAssets'] ?? false,
       diagnosticLoggingEnabled: json['diagnosticLoggingEnabled'] ?? false,
       hideBalances: json['hideBalances'] ?? false,
+      customKdfCoinsLabel: json['customKdfCoinsLabel'] as String?,
+      customCoinsConfigLabel: json['customCoinsConfigLabel'] as String?,
     );
   }
 
@@ -64,6 +78,10 @@ class StoredSettings {
       'hideZeroBalanceAssets': hideZeroBalanceAssets,
       'diagnosticLoggingEnabled': diagnosticLoggingEnabled,
       'hideBalances': hideBalances,
+      if (customKdfCoinsLabel != null)
+        'customKdfCoinsLabel': customKdfCoinsLabel,
+      if (customCoinsConfigLabel != null)
+        'customCoinsConfigLabel': customCoinsConfigLabel,
     };
   }
 
@@ -90,6 +108,9 @@ class StoredSettings {
     bool? hideZeroBalanceAssets,
     bool? diagnosticLoggingEnabled,
     bool? hideBalances,
+    String? customKdfCoinsLabel,
+    String? customCoinsConfigLabel,
+    bool clearCustomCoinsLabels = false,
   }) {
     return StoredSettings(
       mode: mode ?? this.mode,
@@ -103,6 +124,12 @@ class StoredSettings {
       diagnosticLoggingEnabled:
           diagnosticLoggingEnabled ?? this.diagnosticLoggingEnabled,
       hideBalances: hideBalances ?? this.hideBalances,
+      customKdfCoinsLabel: clearCustomCoinsLabels
+          ? null
+          : (customKdfCoinsLabel ?? this.customKdfCoinsLabel),
+      customCoinsConfigLabel: clearCustomCoinsLabels
+          ? null
+          : (customCoinsConfigLabel ?? this.customCoinsConfigLabel),
     );
   }
 }
