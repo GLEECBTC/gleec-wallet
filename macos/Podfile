@@ -54,7 +54,7 @@ post_install do |installer|
     end
   end
 
-  team_id = '8HPBYKKKQP'
+  team_id = 'B52ZCS7TMQ'
   installer.pods_project.targets.each do |t|
     t.build_configurations.each do |cfg|
       next unless cfg.name == 'Release-production'
