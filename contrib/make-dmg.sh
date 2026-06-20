@@ -51,9 +51,32 @@ APP_BASENAME="$(basename "${APP}")"
 OUT_DIR="$(dirname "${OUT}")"
 mkdir -p "${OUT_DIR}"
 
-# Work in local tmp inside project — fewer TCC issues
+# Work in a local tmp dir — fewer TCC issues. By default it lives inside the
+# project, but hdiutil cannot attach to a -mountpoint on a volume mounted with
+# "noowners" (most external drives) — attach fails with "Permission denied".
+# So if the chosen TMPROOT is on such a volume, fall back to the system temp,
+# which is always on an owners-enabled volume.
+_path_on_noowners() {
+  local p="$1" rp mp best="" best_line="" line
+  rp="$(cd "$p" 2>/dev/null && pwd -P || printf '%s' "$p")"
+  while IFS= read -r line; do
+    mp="${line#* on }"; mp="${mp% (*}"
+    case "$rp/" in
+      "$mp"/*) [ "${#mp}" -gt "${#best}" ] && { best="$mp"; best_line="$line"; } ;;
+    esac
+  done < <(mount)
+  [[ "$best_line" == *noowners* ]]
+}
+
 TMPROOT="${TMPROOT:-$PWD/.dmg_tmp}"
 mkdir -p "$TMPROOT"
+if _path_on_noowners "$TMPROOT"; then
+  _sys_tmp="${TMPDIR:-/tmp}"
+  echo "==> ${TMPROOT} is on a 'noowners' volume; hdiutil cannot mount there." >&2
+  echo "    Using system temp instead: ${_sys_tmp%/}/dmg_tmp" >&2
+  TMPROOT="${_sys_tmp%/}/dmg_tmp"
+  mkdir -p "$TMPROOT"
+fi
 TMPDIR="$(mktemp -d "$TMPROOT/tmp.XXXXXXXX")"
 STAGING="${TMPDIR}/staging"
 mkdir -p "${STAGING}"
