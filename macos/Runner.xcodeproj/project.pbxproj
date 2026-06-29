@@ -499,7 +499,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 8HPBYKKKQP;
+				DEVELOPMENT_TEAM = B52ZCS7TMQ;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -515,7 +515,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -639,7 +639,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 8HPBYKKKQP;
+				DEVELOPMENT_TEAM = B52ZCS7TMQ;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -655,7 +655,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -674,7 +674,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 8HPBYKKKQP;
+				DEVELOPMENT_TEAM = B52ZCS7TMQ;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -690,7 +690,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
@@ -776,7 +776,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 8HPBYKKKQP;
+				DEVELOPMENT_TEAM = B52ZCS7TMQ;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -792,7 +792,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -866,8 +866,8 @@
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 8HPBYKKKQP;
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 8HPBYKKKQP;
+				DEVELOPMENT_TEAM = B52ZCS7TMQ;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = B52ZCS7TMQ;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -884,9 +884,9 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
 				"OTHER_CODE_SIGN_FLAGS[sdk=*]" = "--options=runtime --timestamp";
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "[decker] Komodo(8HPBYKKKQP.com.komodo.wallet)";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "GleecDEX-B52ZCS7TMQ-Provisioning-Profile";
 				SWIFT_VERSION = 5.0;
 			};
 			name = "Release-production";
@@ -956,7 +956,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = 8HPBYKKKQP;
+				DEVELOPMENT_TEAM = B52ZCS7TMQ;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -972,7 +972,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.komodo.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
