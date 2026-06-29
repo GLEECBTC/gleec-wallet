@@ -55,9 +55,8 @@ jobs:
       - name: Deploy Gleec Wallet Web dev preview (`dev` branch)
         id: deploy_dev
         if: github.ref == 'refs/heads/dev'
-        uses: FirebaseExtended/action-hosting-deploy@v0.7.1
+        uses: ./.github/actions/firebase-hosting-deploy
         with:
-          repoToken: "${{ secrets.GITHUB_TOKEN }}"
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: live
           target: walletrc
@@ -66,9 +65,8 @@ jobs:
       - name: Deploy Gleec Wallet Web RC (`main` branch)
         id: deploy_rc
         if: github.ref == 'refs/heads/main'
-        uses: FirebaseExtended/action-hosting-deploy@v0.7.1
+        uses: ./.github/actions/firebase-hosting-deploy
         with:
-          repoToken: "${{ secrets.GITHUB_TOKEN }}"
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: live
           target: prodrc
