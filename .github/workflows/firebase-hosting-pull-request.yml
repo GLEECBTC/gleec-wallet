@@ -10,6 +10,11 @@ on:
       - release/*
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch' }}
@@ -71,6 +76,50 @@ jobs:
           target: walletrc
           expires: 7d
           projectId: komodo-wallet-official
+
+      - name: Comment Firebase preview URL
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_URL: ${{ steps.deploy_preview.outputs.details_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHANNEL_ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "Firebase deploy did not return a preview URL."
+            exit 1
+          fi
+
+          marker="<!-- firebase-hosting-preview-url -->"
+          body="$(cat <<EOF
+          $marker
+          ### Firebase Hosting Preview
+
+          Preview URL: $PREVIEW_URL
+
+          Channel: \`$CHANNEL_ID\`
+          Expires: 7d
+          Run: $RUN_URL
+          EOF
+          )"
+
+          comment_id="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- firebase-hosting-preview-url -->"))) | .id' \
+              | tail -n 1
+          )"
+
+          if [ -n "$comment_id" ]; then
+            jq -n --arg body "$body" '{body: $body}' \
+              | gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" --input -
+          else
+            jq -n --arg body "$body" '{body: $body}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --input -
+          fi
 
       - name: Deploy Gleec Wallet Web dev preview (`dev` branch)
         id: deploy_dev
