@@ -23,7 +23,14 @@ jobs:
             artifact_path: build/macos/Build/Products/Release/*.app
             artifact_name: komodo-wallet-macos
           - platform: windows
-            runner: windows-latest
+            # Pinned to windows-2022 (VS 2022 / CMake 3.x / MSVC 14.4x). The
+            # windows-latest image moved to VS 2026 (CMake 4.x, MSVC 14.51),
+            # which breaks the build: the bundled Firebase C++ SDK requires
+            # cmake_minimum_required < 3.5, and <experimental/coroutine> became
+            # a hard error. Revert to windows-latest once the firebase_* and
+            # local_auth_windows / flutter_inappwebview_windows plugins are
+            # upgraded to versions compatible with the VS 2026 toolchain.
+            runner: windows-2022
             build_command: flutter build windows --no-pub --release
             artifact_path: build/windows/x64/runner/Release/*
             artifact_name: komodo-wallet-windows
