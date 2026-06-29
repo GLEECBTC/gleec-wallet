@@ -12,6 +12,8 @@ class SettingsState extends Equatable {
     required this.hideZeroBalanceAssets,
     required this.diagnosticLoggingEnabled,
     required this.hideBalances,
+    this.customKdfCoinsFileName,
+    this.customCoinsConfigFileName,
   });
 
   factory SettingsState.fromStored(StoredSettings stored) {
@@ -23,6 +25,8 @@ class SettingsState extends Equatable {
       hideZeroBalanceAssets: stored.hideZeroBalanceAssets,
       diagnosticLoggingEnabled: stored.diagnosticLoggingEnabled,
       hideBalances: stored.hideBalances,
+      customKdfCoinsFileName: stored.customKdfCoinsFileName,
+      customCoinsConfigFileName: stored.customCoinsConfigFileName,
     );
   }
 
@@ -33,6 +37,8 @@ class SettingsState extends Equatable {
   final bool hideZeroBalanceAssets;
   final bool diagnosticLoggingEnabled;
   final bool hideBalances;
+  final String? customKdfCoinsFileName;
+  final String? customCoinsConfigFileName;
 
   @override
   List<Object?> get props => [
@@ -43,6 +49,8 @@ class SettingsState extends Equatable {
     hideZeroBalanceAssets,
     diagnosticLoggingEnabled,
     hideBalances,
+    customKdfCoinsFileName,
+    customCoinsConfigFileName,
   ];
 
   SettingsState copyWith({
@@ -53,6 +61,9 @@ class SettingsState extends Equatable {
     bool? hideZeroBalanceAssets,
     bool? diagnosticLoggingEnabled,
     bool? hideBalances,
+    String? customKdfCoinsFileName,
+    String? customCoinsConfigFileName,
+    bool clearCustomCoinsFileNames = false,
   }) {
     return SettingsState(
       themeMode: mode ?? themeMode,
@@ -64,6 +75,12 @@ class SettingsState extends Equatable {
       diagnosticLoggingEnabled:
           diagnosticLoggingEnabled ?? this.diagnosticLoggingEnabled,
       hideBalances: hideBalances ?? this.hideBalances,
+      customKdfCoinsFileName: clearCustomCoinsFileNames
+          ? null
+          : (customKdfCoinsFileName ?? this.customKdfCoinsFileName),
+      customCoinsConfigFileName: clearCustomCoinsFileNames
+          ? null
+          : (customCoinsConfigFileName ?? this.customCoinsConfigFileName),
     );
   }
 }

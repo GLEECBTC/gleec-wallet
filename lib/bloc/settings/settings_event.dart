@@ -56,3 +56,22 @@ class HideBalancesChanged extends SettingsEvent {
   @override
   List<Object> get props => [hideBalances];
 }
+
+/// Persists the displayed file names for the custom coins / coins-config
+/// override after the SDK snapshot has been updated. Only non-null names are
+/// changed.
+class CustomCoinsChanged extends SettingsEvent {
+  const CustomCoinsChanged({this.kdfCoinsFileName, this.coinsConfigFileName});
+
+  final String? kdfCoinsFileName;
+  final String? coinsConfigFileName;
+
+  @override
+  List<Object> get props => [kdfCoinsFileName ?? '', coinsConfigFileName ?? ''];
+}
+
+/// Clears the displayed custom coins / coins-config file names (the SDK
+/// override is reset separately via [KomodoDefiSdk.resetCustomCoins]).
+class CustomCoinsReset extends SettingsEvent {
+  const CustomCoinsReset();
+}

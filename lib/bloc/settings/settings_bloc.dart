@@ -28,6 +28,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<HideZeroBalanceAssetsChanged>(_onHideZeroBalanceAssetsChanged);
     on<DiagnosticLoggingChanged>(_onDiagnosticLoggingChanged);
     on<HideBalancesChanged>(_onHideBalancesChanged);
+    on<CustomCoinsChanged>(_onCustomCoinsChanged);
+    on<CustomCoinsReset>(_onCustomCoinsReset);
   }
 
   late StoredSettings _storedSettings;
@@ -119,5 +121,31 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     );
     await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(hideBalances: event.hideBalances));
+  }
+
+  Future<void> _onCustomCoinsChanged(
+    CustomCoinsChanged event,
+    Emitter<SettingsState> emitter,
+  ) async {
+    _storedSettings = _storedSettings.copyWith(
+      customKdfCoinsFileName: event.kdfCoinsFileName,
+      customCoinsConfigFileName: event.coinsConfigFileName,
+    );
+    await _settingsRepo.updateSettings(_storedSettings);
+    emitter(
+      state.copyWith(
+        customKdfCoinsFileName: event.kdfCoinsFileName,
+        customCoinsConfigFileName: event.coinsConfigFileName,
+      ),
+    );
+  }
+
+  Future<void> _onCustomCoinsReset(
+    CustomCoinsReset event,
+    Emitter<SettingsState> emitter,
+  ) async {
+    _storedSettings = _storedSettings.copyWith(clearCustomCoinsFileNames: true);
+    await _settingsRepo.updateSettings(_storedSettings);
+    emitter(state.copyWith(clearCustomCoinsFileNames: true));
   }
 }
