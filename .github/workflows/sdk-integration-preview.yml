@@ -157,15 +157,13 @@ jobs:
 
       - name: Deploy SDK Integration Preview (Expires in 7 days)
         id: firebase_deploy
-        uses: FirebaseExtended/action-hosting-deploy@v0.7.1
+        uses: ./.github/actions/firebase-hosting-deploy
         with:
-          repoToken: "${{ secrets.GITHUB_TOKEN }}"
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: "${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
           target: walletrc
           expires: 7d
           projectId: komodo-wallet-official
-          firebaseToolsVersion: 15.22.1
 
       - name: Display deployment information
         id: display_info

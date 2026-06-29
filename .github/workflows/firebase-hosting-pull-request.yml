@@ -64,24 +64,20 @@ jobs:
 
       - name: Deploy Gleec Wallet web feature preview (Expires in 7 days)
         id: deploy_preview
-        uses: FirebaseExtended/action-hosting-deploy@v0.7.1
+        uses: ./.github/actions/firebase-hosting-deploy
         with:
-          repoToken: "${{ secrets.GITHUB_TOKEN }}"
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: "${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
           target: walletrc
           expires: 7d
           projectId: komodo-wallet-official
-          firebaseToolsVersion: 15.22.1
 
       - name: Deploy Gleec Wallet Web dev preview (`dev` branch)
         id: deploy_dev
         if: github.ref == 'refs/heads/dev' && github.event_name != 'workflow_dispatch'
-        uses: FirebaseExtended/action-hosting-deploy@v0.7.1
+        uses: ./.github/actions/firebase-hosting-deploy
         with:
-          repoToken: "${{ secrets.GITHUB_TOKEN }}"
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: dev-preview
           target: walletrc
           projectId: komodo-wallet-official
-          firebaseToolsVersion: 15.22.1
