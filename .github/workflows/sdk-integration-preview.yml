@@ -165,6 +165,7 @@ jobs:
           target: walletrc
           expires: 7d
           projectId: komodo-wallet-official
+          firebaseToolsVersion: 15.22.1
 
       - name: Display deployment information
         id: display_info

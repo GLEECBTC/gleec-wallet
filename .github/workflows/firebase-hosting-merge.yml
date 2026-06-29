@@ -62,6 +62,7 @@ jobs:
           channelId: live
           target: walletrc
           projectId: komodo-wallet-official
+          firebaseToolsVersion: 15.22.1
 
       - name: Deploy Gleec Wallet Web RC (`main` branch)
         id: deploy_rc
@@ -73,3 +74,4 @@ jobs:
           channelId: live
           target: prodrc
           projectId: komodo-wallet-official
+          firebaseToolsVersion: 15.22.1

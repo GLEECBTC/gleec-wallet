@@ -72,6 +72,7 @@ jobs:
           target: walletrc
           expires: 7d
           projectId: komodo-wallet-official
+          firebaseToolsVersion: 15.22.1
 
       - name: Deploy Gleec Wallet Web dev preview (`dev` branch)
         id: deploy_dev
@@ -83,3 +84,4 @@ jobs:
           channelId: dev-preview
           target: walletrc
           projectId: komodo-wallet-official
+          firebaseToolsVersion: 15.22.1
