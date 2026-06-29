@@ -1,3 +1,33 @@
+# Gleec Wallet v0.9.6 Release Notes
+
+This release completes Google Play readiness for the mobile release line and reworks the wallet coin list so live market data sits alongside holdings. It rolls the SDK submodule forward to the `0.6.0` release line plus the Android 16 KB page-size compatibility fix required for the newest Android devices, and switches macOS signing to Gleec-BTC's own Apple identity.
+
+## 🎨 UI/UX Improvements
+
+- **Coin List Value Layout Rework** ([@CharlVS], #3490) - Show each asset's live market price and 24h price change beside the coin name, with holdings (coin amount and fiat value) right-aligned, consistently across mobile and desktop. Market prices stay visible when balances are hidden, and sub-$1 assets display greater price precision.
+
+## 💻 Platform-Specific Changes
+
+### Android
+
+- **Google Play Release Preparation** ([@DeckerSU], #3488) - Declare the `AD_ID` permission required for analytics on Android 13+, pin Gradle compatibility flags for the current Flutter toolchain, and keep the Play upload keystore out of version control.
+
+### macOS
+
+- **macOS Signing & Packaging** ([@DeckerSU], #3493) - Switch the macOS Development Team to Gleec-BTC OU (`B52ZCS7TMQ`) and the bundle identifier to `com.GleecDEX.wallet`, aligning macOS signing with iOS, and point the Release build at the Gleec Developer ID provisioning profile. Also make the DMG packaging fall back to the system temp directory on `noowners` volumes so release DMGs build on external drives.
+
+### SDK Updates (komodo-defi-sdk-flutter)
+
+- **Android 16 KB Page-Size Compatibility** ([@DeckerSU], SDK#355) - Align the native trading engine's LOAD segments to 16 KB memory pages so the app runs on Android 15+ devices, as required by Google Play. This rolls the SDK submodule to the `0.6.0` release commit plus this fix.
+
+## 🔧 Technical Improvements
+
+- **KDF Config & Deploy Hardening** ([@CharlVS], #3494) - Update the KDF hash configuration submodule pointer and harden the Firebase Hosting deploy workflow for reproducible release-candidate web deployments.
+
+**Full Changelog**: [0.9.5...0.9.6](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.5...0.9.6)
+
+---
+
 # Gleec Wallet v0.9.5 Release Notes
 
 This release prepares the `0.9.4` release line for mobile publishing as `0.9.5`, keeping the app version at `0.9.5+0` while incorporating the final mobile-readiness work from `dev`. It covers the published SDK `0.6.0` roll, the in-app legacy wallet migration flow, the iOS publishing identity update, Gleec Dex branding, web publishing alignment, and refreshed dependency metadata.
