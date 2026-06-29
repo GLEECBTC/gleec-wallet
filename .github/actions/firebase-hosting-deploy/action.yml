@@ -106,12 +106,15 @@ runs:
             break
           fi
 
-          # The finalized preview version already being the current active
-          # version is not an error -- the content is already live.
-          if [ "$is_preview" = "true" ] \
-            && grep -q "supplied version" "$deploy_log" \
+          # The deployed version already being the current active version is
+          # not an error -- the served content is already up to date, so
+          # Firebase refuses to re-release the identical version with
+          # FAILED_PRECONDITION. This applies to live deploys (unchanged web
+          # build pushed to `dev`/`main`) as well as preview channels, so it is
+          # intentionally NOT gated on is_preview.
+          if grep -q "supplied version" "$deploy_log" \
             && grep -q "current active version" "$deploy_log"; then
-            echo "Firebase CLI reported the finalized preview version is already active; treating deploy as successful."
+            echo "Firebase CLI reported the deployed version is already the current active version; treating deploy as successful."
             deploy_status=0
             break
           fi
