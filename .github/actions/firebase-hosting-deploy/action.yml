@@ -87,20 +87,46 @@ runs:
 
         deploy_args+=(--project "$PROJECT_ID" --debug)
 
-        set +e
-        npx "firebase-tools@$FIREBASE_TOOLS_VERSION" "${deploy_args[@]}" 2>&1 | tee "$deploy_log"
-        deploy_status=${PIPESTATUS[0]}
-        set -e
+        # Firebase Hosting's REST API intermittently drops the connection
+        # ("premature close error") *after* the server has already actioned a
+        # request. firebase-tools then retries the call; for the non-idempotent
+        # channel create this comes back 409 ALREADY_EXISTS and fails the deploy
+        # even though the channel was created. Re-running hosting:channel:deploy
+        # is safe -- the existing channel is reused and the version is uploaded
+        # normally -- so retry these transient failures before giving up.
+        max_attempts=3
+        attempt=1
+        while :; do
+          set +e
+          npx "firebase-tools@$FIREBASE_TOOLS_VERSION" "${deploy_args[@]}" 2>&1 | tee "$deploy_log"
+          deploy_status=${PIPESTATUS[0]}
+          set -e
 
-        if [ "$deploy_status" -ne 0 ]; then
+          if [ "$deploy_status" -eq 0 ]; then
+            break
+          fi
+
+          # The finalized preview version already being the current active
+          # version is not an error -- the content is already live.
           if [ "$is_preview" = "true" ] \
             && grep -q "supplied version" "$deploy_log" \
             && grep -q "current active version" "$deploy_log"; then
             echo "Firebase CLI reported the finalized preview version is already active; treating deploy as successful."
-          else
-            exit "$deploy_status"
+            deploy_status=0
+            break
           fi
-        fi
+
+          # Retry the transient channel/connection failures described above.
+          if [ "$attempt" -lt "$max_attempts" ] \
+            && grep -qiE "already exists|premature close|ECONNRESET|socket hang up|EAI_AGAIN" "$deploy_log"; then
+            echo "Transient Firebase Hosting error on attempt ${attempt}/${max_attempts}; retrying in $((attempt * 10))s..."
+            sleep "$((attempt * 10))"
+            attempt=$((attempt + 1))
+            continue
+          fi
+
+          exit "$deploy_status"
+        done
 
         if [ "$is_preview" = "true" ]; then
           set +e
