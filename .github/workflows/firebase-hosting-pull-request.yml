@@ -15,6 +15,12 @@ permissions:
   issues: write
   pull-requests: write
 
+# Cancel an in-flight preview build when a new commit is pushed to the same PR,
+# so two runs never race to create/update the same Firebase preview channel.
+concurrency:
+  group: firebase-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch' }}
