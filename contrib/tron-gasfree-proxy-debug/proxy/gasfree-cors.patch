@@ -1,0 +1,29 @@
+diff --git a/src/proxy/http/gasfree.rs b/src/proxy/http/gasfree.rs
+index 2e15fdd..1c707ad 100644
+--- a/src/proxy/http/gasfree.rs
++++ b/src/proxy/http/gasfree.rs
+@@ -74 +74,3 @@ pub(crate) async fn proxy(
+-    remove_hop_by_hop_headers(&mut req, &[])?;
++    // Strip browser-set headers before forwarding: the GasFree upstream sits behind
++    // Cloudflare, which 403s requests that carry an `Origin` (its response varies on it).
++    remove_hop_by_hop_headers(&mut req, &[header::ORIGIN, header::REFERER])?;
+@@ -87 +89 @@ pub(crate) async fn proxy(
+-    let res = match client.request(req).await {
++    let mut res = match client.request(req).await {
+@@ -101,0 +104,16 @@ pub(crate) async fn proxy(
++    // The GasFree upstream does not return CORS headers, so a browser/WASM caller could
++    // not read the response. Add permissive CORS, mirroring the proxy's own responses
++    // (see `response_by_status` / `handle_preflight` in `proxy/mod.rs`).
++    let headers = res.headers_mut();
++    headers.insert(
++        HeaderName::from_static("access-control-allow-origin"),
++        HeaderValue::from_static("*"),
++    );
++    headers.insert(
++        HeaderName::from_static("access-control-allow-headers"),
++        HeaderValue::from_static("*"),
++    );
++    headers.insert(
++        HeaderName::from_static("access-control-allow-methods"),
++        HeaderValue::from_static("POST, GET, OPTIONS"),
++    );

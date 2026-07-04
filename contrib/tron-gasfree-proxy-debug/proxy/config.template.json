@@ -1,0 +1,32 @@
+{
+  "port": ${PROXY_PORT},
+  "redis_connection_string": "${REDIS_CONNECTION_STRING}",
+  "kdf_rpc_client": "${KDF_RPC_URL}",
+  "kdf_rpc_password": "${KDF_RPC_PASSWORD}",
+  "pubkey_path": "/assets/.pubkey_test",
+  "privkey_path": "/assets/.privkey_test",
+  "token_expiration_time": 300,
+  "proxy_routes": [
+    {
+      "inbound_route": "/gasfree",
+      "outbound_route": "${GASFREE_OUTBOUND_URL}",
+      "proxy_type": {
+        "gas_free": {
+          "api_key": "${GASFREE_API_KEY}",
+          "api_secret": "${GASFREE_API_SECRET}"
+        }
+      },
+      "authorized": false,
+      "allowed_rpc_methods": [],
+      "rate_limiter": null
+    }
+  ],
+  "rate_limiter": {
+    "rp_1_min": 555,
+    "rp_5_min": 555,
+    "rp_15_min": 555,
+    "rp_30_min": 555,
+    "rp_60_min": 555
+  },
+  "peer_healthcheck_caching_secs": 10
+}
