@@ -65,7 +65,17 @@ class TransactionHistoryBloc
       final pubkeys =
           _sdk.pubkeys.lastKnown(asset.id) ??
           await _sdk.pubkeys.getPubkeys(asset);
-      final myAddresses = pubkeys.keys.map((p) => p.address).toSet();
+      // Include GasFree custody addresses so sanitize sorts them first in
+      // `to` (custody deposits and consolidations display the wallet's own
+      // address, not the counterparty).
+      final myAddresses = pubkeys.keys
+          .expand(
+            (p) => [
+              p.address,
+              if ((p.gasfreeAddress ?? '').isNotEmpty) p.gasfreeAddress!,
+            ],
+          )
+          .toSet();
 
       Transaction sanitize(Transaction transaction) {
         return transaction.sanitize(myAddresses);
