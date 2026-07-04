@@ -19,6 +19,7 @@ class AssetAmountWithFiat extends StatelessWidget {
     this.isSelectable = true,
     this.isAutoScrollEnabled = true,
     this.showCoinSymbol = true,
+    this.symbol,
   });
 
   /// The asset ID to fetch pricing for
@@ -26,6 +27,11 @@ class AssetAmountWithFiat extends StatelessWidget {
 
   /// The crypto amount to display
   final Decimal amount;
+
+  /// Ticker appended to the amount. Defaults to the raw [AssetId.id] (e.g.
+  /// `USDT-TRC20`); pass a clean symbol such as `configSymbol` where the
+  /// protocol suffix would read as noise (headline amounts, receipts).
+  final String? symbol;
 
   /// Text style for the main amount
   final TextStyle? style;
@@ -46,7 +52,7 @@ class AssetAmountWithFiat extends StatelessWidget {
 
     String displayText = amount.toString();
     if (showCoinSymbol) {
-      displayText = '$displayText ${assetId.id}';
+      displayText = '$displayText ${symbol ?? assetId.id}';
     }
 
     // If no price available, just show the amount

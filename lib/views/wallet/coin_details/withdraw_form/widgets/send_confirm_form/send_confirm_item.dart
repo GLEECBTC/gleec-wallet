@@ -29,8 +29,9 @@ class SendConfirmItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          centerAlign ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment: centerAlign
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         SizedBox(
           width: double.infinity,
@@ -38,13 +39,12 @@ class SendConfirmItem extends StatelessWidget {
             title,
             textAlign: centerAlign ? TextAlign.center : TextAlign.start,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.color
-                    ?.withValues(alpha: .6)),
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Theme.of(
+                context,
+              ).textTheme.titleLarge?.color?.withValues(alpha: .6),
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -60,21 +60,23 @@ class SendConfirmItem extends StatelessWidget {
                 : CrossAxisAlignment.start,
             children: [
               Flexible(
-                  child: _ValueText(
-                value: value,
-                url: url,
-                isCopied: isCopied,
-                isCopiedValueTruncated: isCopiedValueTruncated,
-                centerAlign: centerAlign,
-                isWarningShown: isWarningShown,
-              )),
+                child: _ValueText(
+                  value: value,
+                  url: url,
+                  isCopied: isCopied,
+                  isCopiedValueTruncated: isCopiedValueTruncated,
+                  centerAlign: centerAlign,
+                  isWarningShown: isWarningShown,
+                ),
+              ),
               if (usdPrice != null) ...[
                 const SizedBox(height: 10),
                 Flexible(
-                    child: _USDPrice(
-                  usdPrice: usdPrice,
-                  isWarningShown: isWarningShown,
-                )),
+                  child: _USDPrice(
+                    usdPrice: usdPrice,
+                    isWarningShown: isWarningShown,
+                  ),
+                ),
               ],
             ],
           ),
@@ -122,10 +124,11 @@ class _ValueText extends StatelessWidget {
       value,
       textAlign: centerAlign ? TextAlign.center : TextAlign.start,
       style: TextStyle(
-          color: isWarningShown ? Colors.orange[300] : null,
-          fontSize: 14,
-          fontFamily: 'Manrope',
-          fontWeight: FontWeight.w500),
+        color: isWarningShown ? Colors.orange[300] : null,
+        fontSize: 14,
+        fontFamily: 'Manrope',
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 

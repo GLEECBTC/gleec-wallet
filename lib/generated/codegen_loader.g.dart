@@ -92,6 +92,28 @@ abstract class LocaleKeys {
   static const transactions = 'transactions';
   static const send = 'send';
   static const receive = 'receive';
+  static const txInternalTransfer = 'txInternalTransfer';
+  static const receiveGasfreeAddressStatus = 'receiveGasfreeAddressStatus';
+  static const bitrefillGasfreeRefundStatus = 'bitrefillGasfreeRefundStatus';
+  static const receiveGaslessBadgeTitle = 'receiveGaslessBadgeTitle';
+  static const receiveGaslessBadgeSubtitle = 'receiveGaslessBadgeSubtitle';
+  static const receiveStandardAddressToggle = 'receiveStandardAddressToggle';
+  static const receiveStandardAddressCaveat = 'receiveStandardAddressCaveat';
+  static const receiveStandardAddressLabel = 'receiveStandardAddressLabel';
+  static const receiveStandardBalanceNotice = 'receiveStandardBalanceNotice';
+  static const gaslessStandardBalanceTitle = 'gaslessStandardBalanceTitle';
+  static const gaslessStandardBalanceBody = 'gaslessStandardBalanceBody';
+  static const gaslessStandardBalanceAction = 'gaslessStandardBalanceAction';
+  static const gaslessStandardBalanceNoTrxWarning =
+      'gaslessStandardBalanceNoTrxWarning';
+  static const gaslessInfoTitle = 'gaslessInfoTitle';
+  static const gaslessInfoBodyHow = 'gaslessInfoBodyHow';
+  static const gaslessInfoProviderDependence = 'gaslessInfoProviderDependence';
+  static const gaslessSingleAddressTooltip = 'gaslessSingleAddressTooltip';
+  static const addressRowGasfreeTag = 'addressRowGasfreeTag';
+  static const addressRowStandardTag = 'addressRowStandardTag';
+  static const receiveStandardVariantCaveat = 'receiveStandardVariantCaveat';
+  static const addressBalanceAvailable = 'addressBalanceAvailable';
   static const faucet = 'faucet';
   static const reward = 'reward';
   static const loadingSwap = 'loadingSwap';
@@ -510,17 +532,18 @@ abstract class LocaleKeys {
   static const lowTradeVolumeError = 'lowTradeVolumeError';
   static const bridgeSelectReceiveCoinError = 'bridgeSelectReceiveCoinError';
   static const withdrawNoParentCoinError = 'withdrawNoParentCoinError';
-  static const withdrawTopUpBalanceError = 'withdrawTopUpBalanceError';
   static const withdrawNotEnoughBalanceForGasError =
       'withdrawNotEnoughBalanceForGasError';
   static const withdrawNotSufficientBalanceError =
       'withdrawNotSufficientBalanceError';
   static const withdrawZeroBalanceError = 'withdrawZeroBalanceError';
   static const withdrawAmountTooLowError = 'withdrawAmountTooLowError';
+  static const withdrawInvalidAmountError = 'withdrawInvalidAmountError';
   static const withdrawNoSuchCoinError = 'withdrawNoSuchCoinError';
   static const withdrawPreview = 'withdrawPreview';
   static const withdrawPreviewZhtlcNote = 'withdrawPreviewZhtlcNote';
   static const withdrawPreviewError = 'withdrawPreviewError';
+  static const withdrawNoResultError = 'withdrawNoResultError';
   static const withdrawDestination = 'withdrawDestination';
   static const withdrawNetworkDetails = 'withdrawNetworkDetails';
   static const withdrawHighFee = 'withdrawHighFee';
@@ -546,6 +569,69 @@ abstract class LocaleKeys {
       'withdrawTronPreviewRefreshFailed';
   static const withdrawTronPreviewRegenerate = 'withdrawTronPreviewRegenerate';
   static const withdrawAwaitingConfirmations = 'withdrawAwaitingConfirmations';
+  static const withdrawGaslessBadge = 'withdrawGaslessBadge';
+  static const withdrawGaslessNetworkDetails = 'withdrawGaslessNetworkDetails';
+  static const withdrawGaslessProvider = 'withdrawGaslessProvider';
+  static const withdrawGaslessTransferFee = 'withdrawGaslessTransferFee';
+  static const withdrawGaslessTotalFee = 'withdrawGaslessTotalFee';
+  static const withdrawGaslessMaxFee = 'withdrawGaslessMaxFee';
+  static const withdrawGaslessFeeSummary = 'withdrawGaslessFeeSummary';
+  static const withdrawGaslessFallbackNotice = 'withdrawGaslessFallbackNotice';
+  static const withdrawGaslessUnavailableBlocked =
+      'withdrawGaslessUnavailableBlocked';
+  static const withdrawGaslessSourceAddress = 'withdrawGaslessSourceAddress';
+  static const withdrawSendFrom = 'withdrawSendFrom';
+  static const withdrawSourceGasfreeEntry = 'withdrawSourceGasfreeEntry';
+  static const withdrawSourceStandardEntry = 'withdrawSourceStandardEntry';
+  static const withdrawGaslessInsufficientBalance =
+      'withdrawGaslessInsufficientBalance';
+  static const withdrawGaslessInsufficientBalanceGeneric =
+      'withdrawGaslessInsufficientBalanceGeneric';
+  static const withdrawGaslessInsufficientGasFreeBalance =
+      'withdrawGaslessInsufficientGasFreeBalance';
+  static const withdrawGaslessInsufficientGasFreeBalanceForActivation =
+      'withdrawGaslessInsufficientGasFreeBalanceForActivation';
+  static const withdrawGaslessNoSourceAddress =
+      'withdrawGaslessNoSourceAddress';
+  static const withdrawGaslessRailChip = 'withdrawGaslessRailChip';
+  static const withdrawGaslessRailChipWithFee =
+      'withdrawGaslessRailChipWithFee';
+  static const withdrawAdvancedSection = 'withdrawAdvancedSection';
+  static const withdrawNativeSendToggle = 'withdrawNativeSendToggle';
+  static const withdrawNativeSendToggleSubtitle =
+      'withdrawNativeSendToggleSubtitle';
+  static const withdrawNativeSendActive = 'withdrawNativeSendActive';
+  static const withdrawGaslessTrezorNotice = 'withdrawGaslessTrezorNotice';
+  static const withdrawGaslessActivationBanner =
+      'withdrawGaslessActivationBanner';
+  static const withdrawGaslessActivationBannerGeneric =
+      'withdrawGaslessActivationBannerGeneric';
+  static const withdrawGaslessAmountExceedsMax =
+      'withdrawGaslessAmountExceedsMax';
+  static const withdrawGaslessProviderUnavailable =
+      'withdrawGaslessProviderUnavailable';
+  static const withdrawNoFundedAddresses = 'withdrawNoFundedAddresses';
+  static const withdrawTronNativeNeedsTrx = 'withdrawTronNativeNeedsTrx';
+  static const withdrawGaslessPendingTransfer =
+      'withdrawGaslessPendingTransfer';
+  static const withdrawRecipientGets = 'withdrawRecipientGets';
+  static const withdrawGaslessStatusSubmitting =
+      'withdrawGaslessStatusSubmitting';
+  static const withdrawGaslessStatusAwaitingRelay =
+      'withdrawGaslessStatusAwaitingRelay';
+  static const withdrawGaslessStatusSubmitted =
+      'withdrawGaslessStatusSubmitted';
+  static const withdrawGaslessStatusConfirmingOnChain =
+      'withdrawGaslessStatusConfirmingOnChain';
+  static const withdrawGaslessRelayHint = 'withdrawGaslessRelayHint';
+  static const withdrawGaslessCheckingAvailability =
+      'withdrawGaslessCheckingAvailability';
+  static const withdrawFullAmountFeeNotice = 'withdrawFullAmountFeeNotice';
+  static const withdrawAmountMaximum = 'withdrawAmountMaximum';
+  static const withdrawAvailableLabel = 'withdrawAvailableLabel';
+  static const withdrawTotalDeducted = 'withdrawTotalDeducted';
+  static const withdrawGaslessConfirmedOnChain =
+      'withdrawGaslessConfirmedOnChain';
   static const txHistoryFetchError = 'txHistoryFetchError';
   static const txHistoryNoTransactions = 'txHistoryNoTransactions';
   static const maxGapLimitReached = 'maxGapLimitReached';

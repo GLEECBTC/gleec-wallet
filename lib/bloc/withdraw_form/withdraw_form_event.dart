@@ -1,3 +1,4 @@
+import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
 sealed class WithdrawFormEvent {
@@ -32,6 +33,25 @@ class WithdrawFormCustomFeeEnabled extends WithdrawFormEvent {
 class WithdrawFormCustomFeeChanged extends WithdrawFormEvent {
   final FeeInfo fee;
   const WithdrawFormCustomFeeChanged(this.fee);
+}
+
+/// Toggles the gas-free (gasless) rail for a TRC20 withdrawal.
+class WithdrawFormGaslessToggled extends WithdrawFormEvent {
+  final bool isEnabled;
+  const WithdrawFormGaslessToggled(this.isEnabled);
+}
+
+/// Sets an optional max-fee cap (in token units) for a gasless withdrawal.
+class WithdrawFormGaslessMaxFeeChanged extends WithdrawFormEvent {
+  final Decimal? maxFee;
+  const WithdrawFormGaslessMaxFeeChanged(this.maxFee);
+}
+
+/// Requests a (cached) `gasless::account_status` snapshot for the asset.
+/// [force] bypasses the TTL cache, e.g. for a user-initiated retry.
+class WithdrawFormGaslessStatusRequested extends WithdrawFormEvent {
+  final bool force;
+  const WithdrawFormGaslessStatusRequested({this.force = false});
 }
 
 class WithdrawFormFeePriorityChanged extends WithdrawFormEvent {

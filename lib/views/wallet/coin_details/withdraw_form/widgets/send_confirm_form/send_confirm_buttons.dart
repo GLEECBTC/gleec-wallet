@@ -19,10 +19,7 @@ class SendConfirmButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isMobile) {
-      return _MobileButtons(
-        hasError: hasSendError,
-        onBackTap: onBackTap,
-      );
+      return _MobileButtons(hasError: hasSendError, onBackTap: onBackTap);
     }
     return _DesktopButtons(hasError: hasSendError, onBackTap: onBackTap);
   }
@@ -54,9 +51,9 @@ class _MobileButtons extends StatelessWidget {
               child: UiPrimaryButton(
                 key: const Key('confirm-agree-button'),
                 height: height,
-                onPressed: () => context
-                    .read<WithdrawFormBloc>()
-                    .add(const WithdrawFormSubmitted()),
+                onPressed: () => context.read<WithdrawFormBloc>().add(
+                  const WithdrawFormSubmitted(),
+                ),
                 text: LocaleKeys.confirm.tr(),
               ),
             ),
@@ -95,9 +92,9 @@ class _DesktopButtons extends StatelessWidget {
               key: const Key('confirm-agree-button'),
               width: width,
               height: height,
-              onPressed: () => context
-                  .read<WithdrawFormBloc>()
-                  .add(const WithdrawFormSubmitted()),
+              onPressed: () => context.read<WithdrawFormBloc>().add(
+                const WithdrawFormSubmitted(),
+              ),
               text: LocaleKeys.confirm.tr(),
             ),
           ),

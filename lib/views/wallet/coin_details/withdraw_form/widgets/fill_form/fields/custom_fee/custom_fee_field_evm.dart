@@ -64,8 +64,11 @@ class _CustomFeeFieldEVMState extends State<CustomFeeFieldEVM> {
         //
       },
       builder: (context, error) {
-        return BlocSelector<WithdrawFormBloc, WithdrawFormState,
-            FeeInfoEthGas?>(
+        return BlocSelector<
+          WithdrawFormBloc,
+          WithdrawFormState,
+          FeeInfoEthGas?
+        >(
           selector: (state) {
             if (state.customFee is! FeeInfoEthGas) return null;
             return (state.customFee as FeeInfoEthGas);
@@ -102,23 +105,16 @@ class _CustomFeeFieldEVMState extends State<CustomFeeFieldEVM> {
     final asset = context.read<WithdrawFormBloc>().state.asset;
 
     context.read<WithdrawFormBloc>().add(
-          WithdrawFormCustomFeeChanged(
-            FeeInfo.ethGas(
-              coin: asset.id.id,
-              gas: double.tryParse(_gasLimitController.text)?.toInt() ?? 0,
-              gasPrice:
-                  Decimal.tryParse(_gasPriceController.text) ?? Decimal.zero,
-            ),
-          ),
-        );
+      WithdrawFormCustomFeeChanged(
+        FeeInfo.ethGas(
+          coin: asset.id.id,
+          gas: double.tryParse(_gasLimitController.text)?.toInt() ?? 0,
+          gasPrice: Decimal.tryParse(_gasPriceController.text) ?? Decimal.zero,
+        ),
+      ),
+    );
   }
 }
 
-const _style = TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w400,
-);
-const _hintTextStyle = TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w500,
-);
+const _style = TextStyle(fontSize: 12, fontWeight: FontWeight.w400);
+const _hintTextStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w500);

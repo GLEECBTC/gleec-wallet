@@ -14,11 +14,12 @@ class WithdrawNotSufficientBalanceError implements BaseError {
     required String coin,
     required String availableAmount,
     required String requiredAmount,
-  })  : _coin = coin,
-        _availableAmount = availableAmount,
-        _requiredAmount = requiredAmount;
+  }) : _coin = coin,
+       _availableAmount = availableAmount,
+       _requiredAmount = requiredAmount;
   factory WithdrawNotSufficientBalanceError.fromJson(
-      Map<String, dynamic> json) {
+    Map<String, dynamic> json,
+  ) {
     return WithdrawNotSufficientBalanceError(
       coin: json['error_data']['coin'],
       availableAmount: json['error_data']['available'],
@@ -34,8 +35,9 @@ class WithdrawNotSufficientBalanceError implements BaseError {
 
   @override
   String get message {
-    return LocaleKeys.withdrawNotSufficientBalanceError
-        .tr(args: [_coin, _availableAmount, _requiredAmount]);
+    return LocaleKeys.withdrawNotSufficientBalanceError.tr(
+      args: [_coin, _availableAmount, _requiredAmount],
+    );
   }
 }
 
@@ -43,8 +45,8 @@ class WithdrawZeroBalanceToWithdrawMaxError
     implements BaseError, ErrorNeedsSetCoinAbbr {
   WithdrawZeroBalanceToWithdrawMaxError();
   factory WithdrawZeroBalanceToWithdrawMaxError.fromJson(
-          Map<String, dynamic> json) =>
-      WithdrawZeroBalanceToWithdrawMaxError();
+    Map<String, dynamic> json,
+  ) => WithdrawZeroBalanceToWithdrawMaxError();
 
   late String _coin;
 
@@ -62,11 +64,9 @@ class WithdrawZeroBalanceToWithdrawMaxError
 }
 
 class WithdrawAmountTooLowError implements BaseError, ErrorNeedsSetCoinAbbr {
-  WithdrawAmountTooLowError({
-    required String amount,
-    required String threshold,
-  })  : _amount = amount,
-        _threshold = threshold;
+  WithdrawAmountTooLowError({required String amount, required String threshold})
+    : _amount = amount,
+      _threshold = threshold;
 
   factory WithdrawAmountTooLowError.fromJson(Map<String, dynamic> json) =>
       WithdrawAmountTooLowError(
@@ -81,8 +81,9 @@ class WithdrawAmountTooLowError implements BaseError, ErrorNeedsSetCoinAbbr {
 
   @override
   String get message {
-    return LocaleKeys.withdrawAmountTooLowError
-        .tr(args: [_amount, _coin, _threshold, _coin]);
+    return LocaleKeys.withdrawAmountTooLowError.tr(
+      args: [_amount, _coin, _threshold, _coin],
+    );
   }
 
   @override
@@ -92,14 +93,10 @@ class WithdrawAmountTooLowError implements BaseError, ErrorNeedsSetCoinAbbr {
 }
 
 class WithdrawInvalidAddressError implements BaseError {
-  WithdrawInvalidAddressError({
-    required String error,
-  }) : _error = error;
+  WithdrawInvalidAddressError({required String error}) : _error = error;
 
   factory WithdrawInvalidAddressError.fromJson(Map<String, dynamic> json) =>
-      WithdrawInvalidAddressError(
-        error: json['error'],
-      );
+      WithdrawInvalidAddressError(error: json['error']);
 
   static const String type = 'InvalidAddress';
   String _error;
@@ -111,13 +108,9 @@ class WithdrawInvalidAddressError implements BaseError {
 }
 
 class WithdrawInvalidFeePolicyError implements BaseError {
-  WithdrawInvalidFeePolicyError({
-    required String error,
-  }) : _error = error;
+  WithdrawInvalidFeePolicyError({required String error}) : _error = error;
   factory WithdrawInvalidFeePolicyError.fromJson(Map<String, dynamic> json) =>
-      WithdrawInvalidFeePolicyError(
-        error: json['error'],
-      );
+      WithdrawInvalidFeePolicyError(error: json['error']);
 
   String _error;
   static const String type = 'InvalidFeePolicy';
@@ -132,9 +125,7 @@ class WithdrawNoSuchCoinError implements BaseError {
   WithdrawNoSuchCoinError({required String coin}) : _coin = coin;
 
   factory WithdrawNoSuchCoinError.fromJson(Map<String, dynamic> json) =>
-      WithdrawNoSuchCoinError(
-        coin: json['error_data']['coin'],
-      );
+      WithdrawNoSuchCoinError(coin: json['error_data']['coin']);
 
   String _coin;
 
@@ -149,16 +140,12 @@ class WithdrawNoSuchCoinError implements BaseError {
 class WithdrawTransportError
     with ErrorWithDetails
     implements BaseError, ErrorNeedsSetCoinAbbr {
-  WithdrawTransportError({
-    required String error,
-    String? feeCoin,
-  })  : _error = error,
-        _feeCoin = feeCoin;
+  WithdrawTransportError({required String error, String? feeCoin})
+    : _error = error,
+      _feeCoin = feeCoin;
 
   factory WithdrawTransportError.fromJson(Map<String, dynamic> json) {
-    return WithdrawTransportError(
-      error: json['error'] ?? '',
-    );
+    return WithdrawTransportError(error: json['error'] ?? '');
   }
 
   final String _error;
@@ -171,16 +158,15 @@ class WithdrawTransportError
     final hasFeeCoin = _feeCoin != null && _feeCoin!.isNotEmpty;
 
     if (isGasPaymentError && hasFeeCoin) {
-      return '${LocaleKeys.withdrawNotEnoughBalanceForGasError.tr(args: [
-            _feeCoin!
-          ])}.';
+      return '${LocaleKeys.withdrawNotEnoughBalanceForGasError.tr(args: [_feeCoin!])}.';
     }
 
     if (_error.isNotEmpty &&
         _error.contains('insufficient funds for transfer') &&
         hasFeeCoin) {
-      return LocaleKeys.withdrawNotEnoughBalanceForGasError
-          .tr(args: [_feeCoin!]);
+      return LocaleKeys.withdrawNotEnoughBalanceForGasError.tr(
+        args: [_feeCoin!],
+      );
     }
 
     return LocaleKeys.somethingWrong.tr();
@@ -202,8 +188,7 @@ class WithdrawTransportError
 
   @override
   void setCoinAbbr(String coinAbbr) {
-    final maybeCoin = GetIt.I<KomodoDefiSdk>()
-        .assets
+    final maybeCoin = GetIt.I<KomodoDefiSdk>().assets
         .findAssetsByConfigId(coinAbbr)
         .singleOrNull;
 
@@ -217,14 +202,10 @@ class WithdrawTransportError
 }
 
 class WithdrawInternalError with ErrorWithDetails implements BaseError {
-  WithdrawInternalError({
-    required String error,
-  }) : _error = error;
+  WithdrawInternalError({required String error}) : _error = error;
 
   factory WithdrawInternalError.fromJson(Map<String, dynamic> json) =>
-      WithdrawInternalError(
-        error: json['error'],
-      );
+      WithdrawInternalError(error: json['error']);
 
   String _error;
 
@@ -238,6 +219,66 @@ class WithdrawInternalError with ErrorWithDetails implements BaseError {
   @override
   String get details {
     return _error;
+  }
+}
+
+/// Legacy-path compatibility for KDF's structured GasFree custody shortfall
+/// errors (`WithdrawError::Gasless(InsufficientGasFreeBalance[ForActivation])`,
+/// adjacently tagged on both levels). The active SDK path parses these through
+/// `KdfErrorRegistry`; this exists only for any remaining legacy withdraw
+/// consumers. The activation fee is already included in `required`, so both
+/// variants share the token-denominated shortfall message.
+class WithdrawGaslessInsufficientGasFreeBalanceError implements BaseError {
+  WithdrawGaslessInsufficientGasFreeBalanceError({
+    required String coin,
+    required String availableAmount,
+    required String requiredAmount,
+  }) : _coin = coin,
+       _availableAmount = availableAmount,
+       _requiredAmount = requiredAmount;
+
+  factory WithdrawGaslessInsufficientGasFreeBalanceError.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final Map<String, dynamic> data =
+        (json['error_data'] as Map<String, dynamic>?) ?? const {};
+    return WithdrawGaslessInsufficientGasFreeBalanceError(
+      coin: '${data['coin'] ?? ''}',
+      availableAmount: '${data['available'] ?? ''}',
+      requiredAmount: '${data['required'] ?? ''}',
+    );
+  }
+
+  final String _coin;
+  final String _availableAmount;
+  final String _requiredAmount;
+
+  static const String type = 'Gasless';
+  static const Set<String> _shortfallInnerTypes = {
+    'InsufficientGasFreeBalance',
+    'InsufficientGasFreeBalanceForActivation',
+  };
+
+  /// Whether the nested gasless error is one of the custody shortfall
+  /// variants this class can render.
+  static bool matchesInner(Map<String, dynamic> json) {
+    final dynamic inner = json['error_data'];
+    return inner is Map<String, dynamic> &&
+        _shortfallInnerTypes.contains(inner['error_type']);
+  }
+
+  /// Unwraps the nested gasless payload (`error_data.error_data`).
+  static Map<String, dynamic> innerJson(Map<String, dynamic> json) {
+    final dynamic inner = json['error_data'];
+    if (inner is Map<String, dynamic>) return inner;
+    return const {};
+  }
+
+  @override
+  String get message {
+    return LocaleKeys.withdrawGaslessInsufficientBalance.tr(
+      args: [_availableAmount, _coin, _requiredAmount, _coin, _coin],
+    );
   }
 }
 
@@ -269,6 +310,12 @@ class WithdrawErrorFactory implements ErrorFactory<String> {
         return WithdrawTransportError.fromJson(json);
       case WithdrawInternalError.type:
         return WithdrawInternalError.fromJson(json);
+      case WithdrawGaslessInsufficientGasFreeBalanceError.type:
+        if (WithdrawGaslessInsufficientGasFreeBalanceError.matchesInner(json)) {
+          return WithdrawGaslessInsufficientGasFreeBalanceError.fromJson(
+            WithdrawGaslessInsufficientGasFreeBalanceError.innerJson(json),
+          );
+        }
     }
     return TextError(error: LocaleKeys.somethingWrong.tr());
   }

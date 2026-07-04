@@ -28,6 +28,8 @@ import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/asset_amount_with_fiat.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart'
     show CopiedText, CopiedTextV2;
+import 'package:web_dex/shared/widgets/gasless_info_dialog.dart';
+import 'package:web_dex/shared/widgets/notice_banner.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fields.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fill_form_memo.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/trezor_withdraw_progress_dialog.dart';
@@ -46,15 +48,43 @@ AssetId _resolveFeeAssetId(BuildContext context, Asset asset, FeeInfo fee) {
   return context.sdk.getSdkAsset(fee.coin).id;
 }
 
+/// The address a withdrawal is presented as sending FROM.
+///
+/// For a gas-free send this is the GasFree custody address — the address the
+/// tokens actually settle from and the one a block explorer shows — matching
+/// the source selector, where the custody address is the selected entry. KDF
+/// itself reports `from` as the signing (standard) address, but showing that
+/// here read as a mismatch against the on-chain transfer. Native sends keep
+/// the signing address.
+String? _effectiveWithdrawSourceAddress(WithdrawFormState state) {
+  if (state.useGasless) {
+    final custody =
+        state.gaslessAccountStatus?.gasfreeAddress ??
+        state.selectedSourceAddress?.gasfreeAddress;
+    if (custody != null && custody.isNotEmpty) return custody;
+  }
+  return state.selectedSourceAddress?.address;
+}
+
 class WithdrawForm extends StatefulWidget {
   final Asset asset;
   final VoidCallback onSuccess;
   final VoidCallback? onBackButtonPressed;
 
+  /// Optional prefill for flows that open the form with a known recipient —
+  /// e.g. the stranded-funds consolidation (recipient = the user's own GasFree
+  /// custody address, native rail, max amount).
+  final String? initialRecipient;
+  final bool initialGaslessEnabled;
+  final bool initialIsMax;
+
   const WithdrawForm({
     required this.asset,
     required this.onSuccess,
     this.onBackButtonPressed,
+    this.initialRecipient,
+    this.initialGaslessEnabled = true,
+    this.initialIsMax = false,
     super.key,
   });
 
@@ -79,6 +109,9 @@ class _WithdrawFormState extends State<WithdrawForm> {
       sdk: _sdk,
       mm2Api: _mm2Api,
       walletType: walletType,
+      initialRecipient: widget.initialRecipient,
+      initialGaslessEnabled: widget.initialGaslessEnabled,
+      initialIsMax: widget.initialIsMax,
     );
   }
 
@@ -104,6 +137,11 @@ class _WithdrawFormState extends State<WithdrawForm> {
               // spendable balance (but didn't select Max), offer to deduct the fee
               // by switching to max withdrawal.
               if (state.isMaxAmount) return;
+
+              // Gas-free sends add the fee on top (custody cap governs max)
+              // and the EOA spendable compared below is the wrong balance
+              // for them — this offer only makes sense on the native rail.
+              if (state.useGasless) return;
 
               final spendable = state.selectedSourceAddress?.balance.spendable;
               Decimal? entered;
@@ -134,9 +172,7 @@ class _WithdrawFormState extends State<WithdrawForm> {
                   context: context,
                   builder: (context) => AlertDialog(
                     title: Text(LocaleKeys.userActionRequired.tr()),
-                    content: const Text(
-                      'Since you\'re sending your full amount, the network fee will be deducted from the amount. Do you agree?',
-                    ),
+                    content: Text(LocaleKeys.withdrawFullAmountFeeNotice.tr()),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(false),
@@ -449,7 +485,22 @@ class WithdrawPreviewDetails extends StatelessWidget {
                 useWideLayout: useWideLayout,
               ),
             ),
-            if (preview.fee is FeeInfoTron) ...[
+            if (preview.fee is FeeInfoTronGasless) ...[
+              const SizedBox(height: 16),
+              _WithdrawGaslessDetailsCard(
+                fee: preview.fee as FeeInfoTronGasless,
+              ),
+            ] else if (preview.fee is FeeInfoTron) ...[
+              if (state.useGasless) ...[
+                const SizedBox(height: 16),
+                // Gas-free was requested but KDF returned a native preview: the
+                // rail is unavailable. Surface a blocking notice; the Send
+                // button is disabled (see isSubmitDisabled) so a native transfer
+                // is never sent under a ticked gas-free checkbox.
+                _GaslessUnavailableNotice(
+                  gasCoin: (preview.fee as FeeInfoTron).coin,
+                ),
+              ],
               const SizedBox(height: 16),
               _WithdrawTronDetailsCard(fee: preview.fee as FeeInfoTron),
             ],
@@ -471,24 +522,33 @@ class _WithdrawPreviewSummary extends StatelessWidget {
   final WithdrawalPreview preview;
   final bool useWideLayout;
 
-  Color _warningBackground(BuildContext context) {
-    final theme = Theme.of(context);
-    return Colors.amber.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.22 : 0.16,
-    );
-  }
+  Color _warningBackground(BuildContext context) =>
+      NoticeBanner.styleOf(context, NoticeBannerVariant.warning).background;
 
-  Color _warningForeground(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.brightness == Brightness.dark
-        ? Colors.amber.shade200
-        : Colors.amber.shade900;
-  }
+  Color _warningForeground(BuildContext context) =>
+      NoticeBanner.styleOf(context, NoticeBannerVariant.warning).foreground;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final feeAssetId = _resolveFeeAssetId(context, state.asset, preview.fee);
+    final fee = preview.fee;
+    final feeAssetId = _resolveFeeAssetId(context, state.asset, fee);
+    final symbol = state.asset.id.symbol.configSymbol;
+    final recipientAmount = _recipientAmount(preview.balanceChanges, fee);
+    // Gas-free fees are paid in the sent token, so amount + fee reconcile
+    // into a single meaningful total; on other rails the fee is a different
+    // asset and a token-sum would be nonsense.
+    final gaslessFee = fee is FeeInfoTronGasless ? fee : null;
+    final totalDeducted = gaslessFee == null
+        ? null
+        : recipientAmount + gaslessFee.totalTokenFee;
+    // The GasFree tariff is flat, so small sends can be fee-dominated; the
+    // SDK's isHighFee never fires for the gasless variant, so warn here when
+    // the fee is >= 20% of what the recipient gets.
+    final isFeeDominant =
+        gaslessFee != null &&
+        recipientAmount > Decimal.zero &&
+        gaslessFee.totalTokenFee * Decimal.fromInt(5) >= recipientAmount;
     final labelStyle = theme.textTheme.labelLarge?.copyWith(
       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.72),
       fontWeight: FontWeight.w600,
@@ -514,7 +574,12 @@ class _WithdrawPreviewSummary extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(LocaleKeys.youSend.tr(), style: labelStyle),
+                  Text(
+                    gaslessFee != null
+                        ? LocaleKeys.withdrawRecipientGets.tr()
+                        : LocaleKeys.youSend.tr(),
+                    style: labelStyle,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     state.asset.id.name,
@@ -530,10 +595,21 @@ class _WithdrawPreviewSummary extends StatelessWidget {
         const SizedBox(height: 20),
         AssetAmountWithFiat(
           assetId: state.asset.id,
-          amount: preview.balanceChanges.netChange.abs(),
+          amount: recipientAmount,
+          symbol: symbol,
           style: amountStyle,
           isAutoScrollEnabled: false,
         ),
+        if (totalDeducted != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            key: const Key('withdraw-gasless-total-deducted'),
+            LocaleKeys.withdrawTotalDeducted.tr(
+              args: [_formatTrimmedDecimal(totalDeducted), symbol],
+            ),
+            style: labelStyle,
+          ),
+        ],
       ],
     );
 
@@ -550,7 +626,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
           Row(
             children: [
               Expanded(child: Text(LocaleKeys.fee.tr(), style: labelStyle)),
-              if (state.isFeePriceExpensive)
+              if (state.isFeePriceExpensive || isFeeDominant)
                 Chip(
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -569,7 +645,8 @@ class _WithdrawPreviewSummary extends StatelessWidget {
           const SizedBox(height: 12),
           AssetAmountWithFiat(
             assetId: feeAssetId,
-            amount: preview.fee.totalFee,
+            amount: fee.totalFee,
+            symbol: feeAssetId.symbol.configSymbol,
             style: feeStyle,
             isAutoScrollEnabled: false,
           ),
@@ -648,7 +725,7 @@ class _WithdrawPreviewDestination extends StatelessWidget {
   }
 
   Widget _buildSourceAddress(BuildContext context) {
-    final sourceAddress = state.selectedSourceAddress?.address;
+    final sourceAddress = _effectiveWithdrawSourceAddress(state);
     final theme = Theme.of(context);
 
     if (sourceAddress == null || sourceAddress.isEmpty) {
@@ -780,10 +857,6 @@ class _WithdrawTronDetailsCard extends StatelessWidget {
 
   final FeeInfoTron fee;
 
-  String _formatDecimal(Decimal value, {int precision = 8}) {
-    return value.toStringAsFixed(precision).replaceAll(RegExp(r'\.?0+$'), '');
-  }
-
   Widget _buildDetailRow(
     BuildContext context, {
     required String label,
@@ -835,7 +908,7 @@ class _WithdrawTronDetailsCard extends StatelessWidget {
         : LocaleKeys.withdrawTronEnergyCovered.tr();
     final chargeSummary = totalFee > Decimal.zero
         ? LocaleKeys.withdrawTronFeeSummaryCharged.tr(
-            args: [_formatDecimal(totalFee), fee.coin],
+            args: [_formatTrimmedDecimal(totalFee), fee.coin],
           )
         : LocaleKeys.withdrawTronFeeSummaryCovered.tr(args: [fee.coin]);
 
@@ -865,7 +938,7 @@ class _WithdrawTronDetailsCard extends StatelessWidget {
             _buildDetailRow(
               context,
               label: LocaleKeys.withdrawTronBandwidthFee.tr(),
-              value: '${_formatDecimal(fee.bandwidthFee)} ${fee.coin}',
+              value: '${_formatTrimmedDecimal(fee.bandwidthFee)} ${fee.coin}',
             ),
             _buildDetailRow(
               context,
@@ -881,13 +954,14 @@ class _WithdrawTronDetailsCard extends StatelessWidget {
             _buildDetailRow(
               context,
               label: LocaleKeys.withdrawTronEnergyFee.tr(),
-              value: '${_formatDecimal(fee.energyFee)} ${fee.coin}',
+              value: '${_formatTrimmedDecimal(fee.energyFee)} ${fee.coin}',
             ),
             if (fee.accountCreationFee != null)
               _buildDetailRow(
                 context,
                 label: LocaleKeys.withdrawTronAccountActivationFee.tr(),
-                value: '${_formatDecimal(fee.accountCreationFee!)} ${fee.coin}',
+                value:
+                    '${_formatTrimmedDecimal(fee.accountCreationFee!)} ${fee.coin}',
               ),
             _buildDetailRow(
               context,
@@ -908,6 +982,224 @@ class _WithdrawTronDetailsCard extends StatelessWidget {
   }
 }
 
+class _WithdrawGaslessDetailsCard extends StatelessWidget {
+  const _WithdrawGaslessDetailsCard({required this.fee});
+
+  final FeeInfoTronGasless fee;
+
+  /// Maps the backend's raw provider token (e.g. "gasfree", or an empty
+  /// string) to a human-readable name so the Provider row never surfaces an
+  /// internal code.
+  String _humanizeProvider(String raw) {
+    final name = raw.trim();
+    if (name.isEmpty || name.toLowerCase() == 'gasfree') return 'GasFree';
+    return name;
+  }
+
+  Widget _buildDetailRow(
+    BuildContext context, {
+    required String label,
+    required String value,
+    TextStyle? valueStyle,
+  }) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 4,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: valueStyle ?? theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final summary = LocaleKeys.withdrawGaslessFeeSummary.tr(
+      args: [_formatTrimmedDecimal(fee.totalTokenFee), fee.coin],
+    );
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  LocaleKeys.withdrawGaslessNetworkDetails.tr(),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Chip(
+                label: Text(LocaleKeys.withdrawGaslessBadge.tr()),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                backgroundColor: NoticeBanner.styleOf(
+                  context,
+                  NoticeBannerVariant.success,
+                ).background,
+                labelStyle: theme.textTheme.labelSmall?.copyWith(
+                  color: NoticeBanner.styleOf(
+                    context,
+                    NoticeBannerVariant.success,
+                  ).foreground,
+                  fontWeight: FontWeight.w700,
+                ),
+                side: BorderSide.none,
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(summary, style: theme.textTheme.bodySmall),
+          ),
+          children: [
+            // The GasFree custody address the tokens actually settle from —
+            // distinct from the withdrawal's `from` (the user's own address).
+            _buildDetailRow(
+              context,
+              label: LocaleKeys.withdrawGaslessSourceAddress.tr(),
+              value: formatCompactAddress(fee.gasfreeAddress),
+            ),
+            _buildDetailRow(
+              context,
+              label: LocaleKeys.withdrawGaslessProvider.tr(),
+              value: _humanizeProvider(fee.providerName),
+            ),
+            _buildDetailRow(
+              context,
+              label: LocaleKeys.withdrawGaslessTransferFee.tr(),
+              value: '${_formatTrimmedDecimal(fee.transferFee)} ${fee.coin}',
+            ),
+            if (fee.activationFee != null)
+              _buildDetailRow(
+                context,
+                label: LocaleKeys.withdrawTronAccountActivationFee.tr(),
+                value:
+                    '${_formatTrimmedDecimal(fee.activationFee!)} ${fee.coin}',
+              ),
+            _buildDetailRow(
+              context,
+              label: LocaleKeys.withdrawGaslessTotalFee.tr(),
+              value: '${_formatTrimmedDecimal(fee.totalTokenFee)} ${fee.coin}',
+            ),
+            if (fee.signedMaxFee != null)
+              _buildDetailRow(
+                context,
+                label: LocaleKeys.withdrawGaslessMaxFee.tr(),
+                value:
+                    '${_formatTrimmedDecimal(fee.signedMaxFee!)} ${fee.coin}',
+                valueStyle: theme.textTheme.bodySmall,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Amber notice shown when a gas-free withdrawal silently fell back to the
+/// native rail (relay unavailable), so the user learns the network fee is
+/// actually paid in [gasCoin] (TRX) rather than in the token they expected.
+/// Amber receipt banner shown when a gas-free request fell back to a native
+/// (TRX-funded) transfer.
+///
+/// Intentionally unreachable under the current design (gas-free downgrades are
+/// blocked before submit and `fallbackToNative` is false) — kept as a
+/// defense-in-depth backstop should native fallback ever be re-enabled.
+class _GaslessFallbackNotice extends StatelessWidget {
+  const _GaslessFallbackNotice({required this.gasCoin});
+
+  final String gasCoin;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.warning);
+
+    return NoticeBanner(
+      icon: Icons.info_outline_rounded,
+      child: Text(
+        LocaleKeys.withdrawGaslessFallbackNotice.tr(args: [gasCoin]),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: style.foreground,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// Blocking notice shown on the confirm step when gas-free was requested but
+/// the generated preview came back as a native (TRX-funded) transfer — the
+/// gas-free rail could not be built (e.g. the GasFree custody address is
+/// unfunded, or the token is not enrolled with the provider). The Send button
+/// is disabled for this state, so the user must untick gas-free to send a
+/// standard transfer paid in [gasCoin] (TRX).
+class _GaslessUnavailableNotice extends StatelessWidget {
+  const _GaslessUnavailableNotice({required this.gasCoin});
+
+  final String gasCoin;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final background = theme.colorScheme.errorContainer;
+    final foreground = theme.colorScheme.onErrorContainer;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.block_rounded, size: 20, color: foreground),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              LocaleKeys.withdrawGaslessUnavailableBlocked.tr(args: [gasCoin]),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WithdrawSectionCard extends StatelessWidget {
   const _WithdrawSectionCard({required this.child});
 
@@ -922,6 +1214,382 @@ class _WithdrawSectionCard extends StatelessWidget {
   }
 }
 
+/// Source selector for gas-free-capable sends.
+///
+/// The user's single TRON key funds two spendable pots: the derived GasFree
+/// custody address (token balance, fees paid in the token) and the standard
+/// address (fees paid in TRX). The stock selector could only show the
+/// standard address — locked — while a gas-free send actually settles from
+/// the custody address, which read as "sending from an address I never
+/// chose". Here both pots are selectable entries and the choice drives the
+/// fee rail; the Advanced native toggle dispatches the same event, so the
+/// two controls stay in sync by construction.
+class _GaslessRailSourceSelector extends StatelessWidget {
+  const _GaslessRailSourceSelector({required this.state});
+
+  final WithdrawFormState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final source = state.selectedSourceAddress!;
+    final custodyAddress = source.gasfreeAddress!;
+    final symbol = state.asset.id.symbol.configSymbol;
+    final custodyBalance =
+        state.gaslessAccountStatus?.custodyBalance ??
+        context.sdk.balances.lastKnown(state.asset.id) ??
+        BalanceInfo(
+          total: Decimal.zero,
+          spendable: Decimal.zero,
+          unspendable: Decimal.zero,
+        );
+
+    // View-model entry only: selection dispatches the rail toggle, never a
+    // source change, so this synthetic pubkey can never leak into the bloc.
+    final custodyEntry = PubkeyInfo(
+      address: custodyAddress,
+      derivationPath: source.derivationPath,
+      chain: source.chain,
+      balance: custodyBalance,
+      coinTicker: state.asset.id.id,
+      gasfreeAddress: custodyAddress,
+    );
+    final selected = state.isGaslessEnabled ? custodyEntry : source;
+
+    String entryLabel(PubkeyInfo entry) => entry.address == custodyAddress
+        ? LocaleKeys.withdrawSourceGasfreeEntry.tr(
+            args: [_formatTrimmedDecimal(entry.balance.spendable), symbol],
+          )
+        : LocaleKeys.withdrawSourceStandardEntry.tr(
+            args: [_formatTrimmedDecimal(entry.balance.spendable), symbol],
+          );
+
+    return Column(
+      key: const Key('withdraw-gasless-source-selector'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          LocaleKeys.withdrawSendFrom.tr(),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        AddressSelectInput(
+          addresses: [custodyEntry, source],
+          selectedAddress: selected,
+          assetName: symbol,
+          balanceLabel: entryLabel,
+          verified: (entry) => entry.address == custodyAddress,
+          onAddressSelected: (picked) {
+            if (picked == null) return;
+            final wantGasless = picked.address == custodyAddress;
+            if (wantGasless != state.isGaslessEnabled) {
+              context.read<WithdrawFormBloc>().add(
+                WithdrawFormGaslessToggled(wantGasless),
+              );
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+String _formatTrimmedDecimal(Decimal value, {int precision = 8}) {
+  return value.toStringAsFixed(precision).replaceAll(RegExp(r'\.?0+$'), '');
+}
+
+/// The amount the recipient actually receives.
+///
+/// For gas-free transfers KDF reports `spent_by_me = amount + token fee`
+/// (fee is paid in the same token), so the raw
+/// `balanceChanges.netChange.abs()` overstates the send by the fee — and
+/// collapses to the bare fee on a self-send, where `received_by_me` offsets
+/// it. Deriving from `spentByMe - totalTokenFee` is stable for both.
+///
+/// For every other rail the net change IS the sent amount; the `spentByMe`
+/// fallback covers wallet-internal moves (e.g. standard->gas-free
+/// consolidation) whose net change is zero.
+Decimal _recipientAmount(BalanceChanges balanceChanges, FeeInfo fee) {
+  if (fee is FeeInfoTronGasless) {
+    final derived = balanceChanges.spentByMe - fee.totalTokenFee;
+    if (derived > Decimal.zero) return derived;
+    return balanceChanges.netChange.abs();
+  }
+  final net = balanceChanges.netChange.abs();
+  return net > Decimal.zero ? net : balanceChanges.spentByMe;
+}
+
+/// Fixed status chip communicating that the gas-free rail is active: the fee
+/// is paid in the token and the user never needs TRX. Replaces the old opt-in
+/// checkbox — gasless is the default, not an option to discover. The trailing
+/// info affordance opens [GaslessInfoDialog].
+class _GaslessRailStatusChip extends StatelessWidget {
+  const _GaslessRailStatusChip({required this.state});
+
+  final WithdrawFormState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.success);
+    final foreground = style.foreground;
+    final symbol = state.asset.id.symbol.configSymbol;
+    final transferFee = state.gaslessTransferFee;
+    // While the first status fetch is in flight the fee and availability are
+    // unknown: say so instead of optimistically promising the rail (the
+    // Preview button is held under the same condition).
+    final isCheckingAvailability = state.isGaslessAvailabilityUnknown;
+    final label = isCheckingAvailability
+        ? LocaleKeys.withdrawGaslessCheckingAvailability.tr()
+        : transferFee != null
+        ? LocaleKeys.withdrawGaslessRailChipWithFee.tr(
+            args: [_formatTrimmedDecimal(transferFee), symbol],
+          )
+        : LocaleKeys.withdrawGaslessRailChip.tr(args: [symbol]);
+
+    return Container(
+      key: const Key('withdraw-gasless-chip'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: style.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (isCheckingAvailability)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: foreground,
+              ),
+            )
+          else
+            Icon(Icons.bolt_rounded, size: 20, color: foreground),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(
+            key: const Key('withdraw-gasless-info-button'),
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.info_outline_rounded, size: 18, color: foreground),
+            tooltip: LocaleKeys.gaslessInfoTitle.tr(),
+            onPressed: () => GaslessInfoDialog.show(
+              context,
+              assetName: state.asset.id.symbol.configSymbol,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pre-warning shown on the fill step when the custody account has not been
+/// activated yet: the first gasless send carries a one-time activation fee on
+/// top of the transfer fee, both paid in the token. The confirm step shows the
+/// exact signed fees.
+class _GaslessActivationBanner extends StatelessWidget {
+  const _GaslessActivationBanner({required this.state});
+
+  final WithdrawFormState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final symbol = state.asset.id.symbol.configSymbol;
+    final activationFee = state.gaslessActivationFee;
+    final transferFee = state.gaslessTransferFee;
+    final message = activationFee != null && transferFee != null
+        ? LocaleKeys.withdrawGaslessActivationBanner.tr(
+            args: [
+              _formatTrimmedDecimal(activationFee),
+              symbol,
+              _formatTrimmedDecimal(transferFee),
+              symbol,
+            ],
+          )
+        : LocaleKeys.withdrawGaslessActivationBannerGeneric.tr(args: [symbol]);
+
+    return Container(
+      key: const Key('withdraw-gasless-activation-banner'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 20,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Honest degradation notice when the GasFree provider reports itself
+/// unavailable: funds are safe on-chain but a gasless send cannot be built
+/// right now. Never suggests TRX or the native rail. Offers a retry that
+/// force-refreshes the account status.
+class _GaslessProviderUnavailableNotice extends StatelessWidget {
+  const _GaslessProviderUnavailableNotice({required this.assetName});
+
+  final String assetName;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.warning);
+
+    return NoticeBanner(
+      key: const Key('gasless-provider-unavailable-notice'),
+      icon: Icons.cloud_off_rounded,
+      footer: Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          key: const Key('gasless-provider-unavailable-retry'),
+          onPressed: () => context.read<WithdrawFormBloc>().add(
+            const WithdrawFormGaslessStatusRequested(force: true),
+          ),
+          child: Text(
+            LocaleKeys.retryButtonText.tr(),
+            style: TextStyle(color: style.foreground),
+          ),
+        ),
+      ),
+      child: Text(
+        LocaleKeys.withdrawGaslessProviderUnavailable.tr(args: [assetName]),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: style.foreground,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// Collapsed "Advanced" section housing the native (TRX-paid) interop rail.
+/// Kept out of the way: gasless is the default, and a standard transfer is
+/// only for interoperability (or moving legacy standard-address funds).
+class _AdvancedNativeSendSection extends StatelessWidget {
+  const _AdvancedNativeSendSection({required this.state});
+
+  final WithdrawFormState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isNativeSelected = !state.isGaslessEnabled;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          key: const Key('withdraw-advanced-section'),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          initiallyExpanded: isNativeSelected,
+          title: Text(
+            LocaleKeys.withdrawAdvancedSection.tr(),
+            style: theme.textTheme.titleSmall,
+          ),
+          children: [
+            SwitchListTile(
+              key: const Key('withdraw-native-send-switch'),
+              value: isNativeSelected,
+              contentPadding: EdgeInsets.zero,
+              onChanged: (nativeOn) => context.read<WithdrawFormBloc>().add(
+                WithdrawFormGaslessToggled(!nativeOn),
+              ),
+              title: Text(LocaleKeys.withdrawNativeSendToggle.tr()),
+              subtitle: Text(
+                LocaleKeys.withdrawNativeSendToggleSubtitle.tr(
+                  args: [state.asset.id.symbol.configSymbol],
+                ),
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            if (isNativeSelected)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: NoticeBanner(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Text(
+                    LocaleKeys.withdrawNativeSendActive.tr(),
+                    key: const Key('withdraw-native-send-active-note'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: NoticeBanner.styleOf(
+                        context,
+                        NoticeBannerVariant.warning,
+                      ).foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Honest notice for hardware wallets, where the gasless rail is unavailable
+/// (the Trezor activation path does not thread the GasFree provider): sends
+/// use a standard TRON transfer and need a small TRX balance.
+class _GaslessTrezorNotice extends StatelessWidget {
+  const _GaslessTrezorNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.warning);
+
+    return NoticeBanner(
+      key: const Key('withdraw-gasless-trezor-notice'),
+      icon: Icons.usb_rounded,
+      child: Text(
+        LocaleKeys.withdrawGaslessTrezorNotice.tr(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: style.foreground,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class WithdrawFormFillSection extends StatelessWidget {
   final bool suppressPreviewError;
 
@@ -929,6 +1597,17 @@ class WithdrawFormFillSection extends StatelessWidget {
     required this.suppressPreviewError,
     super.key,
   });
+
+  /// The "Available:" figure above the amount input. Gas-free sends show the
+  /// sendable cap from `gasless::account_status` (null until known); native
+  /// sends show the selected source address's spendable balance.
+  static String? _fillAvailableBalance(WithdrawFormState state) {
+    final value = state.useGasless
+        ? state.gaslessMaxWithdrawable
+        : state.selectedSourceAddress?.balance.spendable;
+    if (value == null) return null;
+    return _formatTrimmedDecimal(value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -951,19 +1630,33 @@ class WithdrawFormFillSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SourceAddressField(
-                    asset: state.asset,
-                    pubkeys: state.pubkeys,
-                    selectedAddress: state.selectedSourceAddress,
-                    isLoading: state.pubkeys?.isEmpty ?? true,
-                    onChanged: isSourceInputEnabled
-                        ? (address) => address == null
-                              ? null
-                              : context.read<WithdrawFormBloc>().add(
-                                  WithdrawFormSourceChanged(address),
-                                )
-                        : null,
-                  ),
+                  // A gas-free-capable TRON key funds TWO spendable pots:
+                  // the GasFree custody address (token balance, fee in the
+                  // token) and the standard address (fee in TRX). Present
+                  // both as selectable source entries — the choice drives the
+                  // fee rail. Other assets keep the stock selector.
+                  if (state.isGaslessSupported &&
+                      (state
+                              .selectedSourceAddress
+                              ?.gasfreeAddress
+                              ?.isNotEmpty ??
+                          false))
+                    _GaslessRailSourceSelector(state: state)
+                  else
+                    SourceAddressField(
+                      asset: state.asset,
+                      pubkeys: state.pubkeys,
+                      selectedAddress: state.selectedSourceAddress,
+                      isLoading: state.pubkeys?.isEmpty ?? true,
+                      showBalanceIndicator: !state.useGasless,
+                      onChanged: isSourceInputEnabled
+                          ? (address) => address == null
+                                ? null
+                                : context.read<WithdrawFormBloc>().add(
+                                    WithdrawFormSourceChanged(address),
+                                  )
+                          : null,
+                    ),
                   const SizedBox(height: 16),
                   RecipientAddressWithNotification(
                     address: state.recipientAddress,
@@ -998,6 +1691,14 @@ class WithdrawFormFillSection extends StatelessWidget {
                         .read<WithdrawFormBloc>()
                         .add(WithdrawFormMaxAmountEnabled(value)),
                     amountError: state.amountError?.message,
+                    // On the gas-free rail the sendable cap (fees already
+                    // netted out by KDF) is the honest "available" figure;
+                    // the per-address EOA balance would be misleading there.
+                    availableBalance: _fillAvailableBalance(state),
+                    symbol: state.asset.id.symbol.configSymbol,
+                    maxAmountLabel: LocaleKeys.withdrawAmountMaximum.tr(),
+                    availableBalanceLabel: LocaleKeys.withdrawAvailableLabel
+                        .tr(),
                   ),
                   if (state.isPriorityFeeSupported) ...[
                     const SizedBox(height: 16),
@@ -1056,6 +1757,31 @@ class WithdrawFormFillSection extends StatelessWidget {
                         ),
                       ),
                   ],
+                  if (state.isGaslessSupported) ...[
+                    const SizedBox(height: 16),
+                    // Gasless is the default rail, not an option to discover:
+                    // a fixed status chip replaces the old checkbox, and the
+                    // native (TRX-paid) rail lives in a collapsed Advanced
+                    // section for interop only.
+                    if (state.useGasless) ...[
+                      _GaslessRailStatusChip(state: state),
+                      if (state.needsGaslessActivation) ...[
+                        const SizedBox(height: 8),
+                        _GaslessActivationBanner(state: state),
+                      ],
+                      if (state.isGaslessProviderUnavailable) ...[
+                        const SizedBox(height: 8),
+                        _GaslessProviderUnavailableNotice(
+                          assetName: state.asset.id.symbol.configSymbol,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                    ],
+                    _AdvancedNativeSendSection(state: state),
+                  ] else if (state.isGaslessTrezorBlocked) ...[
+                    const SizedBox(height: 16),
+                    const _GaslessTrezorNotice(),
+                  ],
                   const SizedBox(height: 16),
                   if (_isMemoSupportedProtocol(state.asset)) ...[
                     WithdrawMemoField(
@@ -1078,7 +1804,11 @@ class WithdrawFormFillSection extends StatelessWidget {
               ),
             const SizedBox(height: 16),
             PreviewWithdrawButton(
-              onPressed: state.isSending || state.hasValidationErrors
+              onPressed:
+                  state.isSending ||
+                      state.hasValidationErrors ||
+                      state.isGaslessProviderUnavailable ||
+                      state.isGaslessAvailabilityUnknown
                   ? null
                   : () {
                       final authBloc = context.read<AuthBloc>();
@@ -1114,19 +1844,11 @@ class WithdrawFormFillSection extends StatelessWidget {
 class WithdrawFormConfirmSection extends StatelessWidget {
   const WithdrawFormConfirmSection({super.key});
 
-  Color _warningBackground(BuildContext context) {
-    final theme = Theme.of(context);
-    return Colors.amber.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.22 : 0.16,
-    );
-  }
+  Color _warningBackground(BuildContext context) =>
+      NoticeBanner.styleOf(context, NoticeBannerVariant.warning).background;
 
-  Color _warningForeground(BuildContext context) {
-    final theme = Theme.of(context);
-    return theme.brightness == Brightness.dark
-        ? Colors.amber.shade200
-        : Colors.amber.shade900;
-  }
+  Color _warningForeground(BuildContext context) =>
+      NoticeBanner.styleOf(context, NoticeBannerVariant.warning).foreground;
 
   Widget? _buildStatusBanner(BuildContext context, WithdrawFormState state) {
     if (!state.isTronAsset &&
@@ -1140,9 +1862,17 @@ class WithdrawFormConfirmSection extends StatelessWidget {
     late final Color foregroundColor;
     late final IconData icon;
     late final String message;
-    final showSpinner = state.isPreviewRefreshing;
+    // While a gas-free transfer is being relayed/confirmed, show its live state.
+    final isGaslessSending =
+        state.isSending && state.gaslessStatusMessage != null;
+    final showSpinner = state.isPreviewRefreshing || isGaslessSending;
 
-    if (state.isPreviewRefreshing) {
+    if (isGaslessSending) {
+      backgroundColor = theme.colorScheme.secondaryContainer;
+      foregroundColor = theme.colorScheme.onSecondaryContainer;
+      icon = Icons.bolt_rounded;
+      message = _gaslessRelayStatusText(state);
+    } else if (state.isPreviewRefreshing) {
       backgroundColor = theme.colorScheme.secondaryContainer;
       foregroundColor = theme.colorScheme.onSecondaryContainer;
       icon = Icons.refresh_rounded;
@@ -1192,17 +1922,55 @@ class WithdrawFormConfirmSection extends StatelessWidget {
             Icon(icon, color: foregroundColor),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: foregroundColor,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Announce relay-state changes to screen readers; the
+                // liveRegion is scoped to the gas-free branch so the
+                // per-second preview countdown never spams announcements.
+                Semantics(
+                  liveRegion: isGaslessSending,
+                  child: Text(
+                    message,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: foregroundColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (isGaslessSending) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    LocaleKeys.withdrawGaslessRelayHint.tr(),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: foregroundColor.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Localized live status for the gas-free relay, keyed off the typed
+  /// [WithdrawFormState.gaslessTraceState]; the raw SDK message is only a
+  /// fallback for states this build does not know.
+  String _gaslessRelayStatusText(WithdrawFormState state) {
+    return switch (state.gaslessTraceState) {
+      GaslessTraceState.pending =>
+        LocaleKeys.withdrawGaslessStatusAwaitingRelay.tr(),
+      GaslessTraceState.submitted =>
+        LocaleKeys.withdrawGaslessStatusSubmitted.tr(),
+      GaslessTraceState.onChain || GaslessTraceState.confirmed =>
+        LocaleKeys.withdrawGaslessStatusConfirmingOnChain.tr(),
+      GaslessTraceState.failed => state.gaslessStatusMessage ?? '',
+      // The pre-relay yield ("Submitting gas-free transfer...") carries no
+      // trace state yet.
+      null => LocaleKeys.withdrawGaslessStatusSubmitting.tr(),
+    };
   }
 
   Widget _buildActions(
@@ -1277,6 +2045,11 @@ class WithdrawFormConfirmSection extends StatelessWidget {
         final isSubmitDisabled =
             state.isSending ||
             state.isPreviewRefreshing ||
+            // Gas-free requested but the preview came back native: block the
+            // send so a native (TRX-funded) transfer is never broadcast under a
+            // ticked gas-free checkbox. The user must untick gas-free to send a
+            // standard transfer.
+            state.didGaslessDowngrade ||
             (state.isTronAsset &&
                 (state.previewSecondsRemaining == null ||
                     state.previewSecondsRemaining == 0));
@@ -1314,12 +2087,26 @@ class WithdrawFormSuccessSection extends StatelessWidget {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
         final result = state.result!;
+        // Gas-free was requested but the executed fee is native TRX -> the
+        // relay was unavailable and the transfer fell back to the native rail.
+        //
+        // Defense-in-depth: this is currently UNREACHABLE. With
+        // `fallbackToNative: false`, a gas-free request never produces a native
+        // result, and a native downgrade is blocked before submit
+        // (`didGaslessDowngrade` -> `isSubmitDisabled`). A successful gas-free
+        // result therefore always carries a `FeeInfoTronGasless` fee, so this
+        // stays false. It is retained intentionally so the user is still warned
+        // if native fallback is ever re-enabled; do not remove without also
+        // revisiting that block.
+        final didGaslessFallBack =
+            state.useGasless && result.fee is FeeInfoTron;
 
         return WithdrawSuccessReceipt(
           asset: state.asset,
           result: result,
-          sourceAddress: state.selectedSourceAddress?.address,
+          sourceAddress: _effectiveWithdrawSourceAddress(state),
           memo: state.memo,
+          didGaslessFallBack: didGaslessFallBack,
           onClose: onDone,
         );
       },
@@ -1334,6 +2121,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     required this.onClose,
     this.sourceAddress,
     this.memo,
+    this.didGaslessFallBack = false,
     super.key,
   });
 
@@ -1341,6 +2129,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
   final WithdrawalResult result;
   final String? sourceAddress;
   final String? memo;
+  final bool didGaslessFallBack;
   final VoidCallback onClose;
 
   Widget _buildActions(BuildContext context, Uri? explorerUrl) {
@@ -1405,6 +2194,14 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     final theme = Theme.of(context);
     final explorerUrl = asset.protocol.explorerTxUrl(result.txHash);
     final feeAssetId = _resolveFeeAssetId(context, asset, result.fee);
+    final symbol = asset.id.symbol.configSymbol;
+    final recipientAmount = _recipientAmount(result.balanceChanges, result.fee);
+    final gaslessFee = result.fee is FeeInfoTronGasless
+        ? result.fee as FeeInfoTronGasless
+        : null;
+    final totalDeducted = gaslessFee == null
+        ? null
+        : recipientAmount + gaslessFee.totalTokenFee;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1432,7 +2229,8 @@ class WithdrawSuccessReceipt extends StatelessWidget {
               Center(
                 child: AssetAmountWithFiat(
                   assetId: asset.id,
-                  amount: result.amount,
+                  amount: recipientAmount,
+                  symbol: symbol,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     height: 1.1,
@@ -1447,6 +2245,21 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              if (totalDeducted != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  key: const Key('withdraw-receipt-total-deducted'),
+                  LocaleKeys.withdrawTotalDeducted.tr(
+                    args: [_formatTrimmedDecimal(totalDeducted), symbol],
+                  ),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.textTheme.bodySmall?.color?.withValues(
+                      alpha: 0.72,
+                    ),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               Align(
                 alignment: Alignment.centerLeft,
@@ -1476,29 +2289,41 @@ class WithdrawSuccessReceipt extends StatelessWidget {
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Chip(
-                  padding: EdgeInsets.zero,
-                  avatar: Icon(
-                    Icons.schedule_rounded,
-                    size: 18,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                  label: Text(
-                    LocaleKeys.withdrawAwaitingConfirmations.tr(),
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  side: BorderSide.none,
-                ),
+                // A gas-free success only fires after the relay reports the
+                // transfer confirmed on-chain, so "awaiting confirmations"
+                // would understate finality on exactly the rail where the
+                // user already sat through the wait.
+                child: gaslessFee != null
+                    ? _ConfirmedOnChainChip(theme: theme)
+                    : Chip(
+                        padding: EdgeInsets.zero,
+                        avatar: Icon(
+                          Icons.schedule_rounded,
+                          size: 18,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                        label: Text(
+                          LocaleKeys.withdrawAwaitingConfirmations.tr(),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        side: BorderSide.none,
+                      ),
               ),
               const SizedBox(height: 24),
               _buildActions(context, explorerUrl),
             ],
           ),
         ),
+        // Retained defense-in-depth: `didGaslessFallBack` is unreachable under
+        // the current strict-block design (see WithdrawFormSuccessSection).
+        if (didGaslessFallBack && result.fee is FeeInfoTron) ...[
+          const SizedBox(height: 16),
+          _GaslessFallbackNotice(gasCoin: (result.fee as FeeInfoTron).coin),
+        ],
         const SizedBox(height: 16),
         Card(
           margin: EdgeInsets.zero,
@@ -1558,6 +2383,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                   child: AssetAmountWithFiat(
                     assetId: feeAssetId,
                     amount: result.fee.totalFee,
+                    symbol: feeAssetId.symbol.configSymbol,
                     isAutoScrollEnabled: false,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.w600,
@@ -1594,6 +2420,38 @@ class WithdrawSuccessReceipt extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Finality chip for gas-free receipts: the relay flow completes only after
+/// on-chain confirmation, so the receipt states it plainly. Uses the brand OK
+/// green family (icon) with onSurface text for contrast in both themes.
+class _ConfirmedOnChainChip extends StatelessWidget {
+  const _ConfirmedOnChainChip({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.success);
+    final background = style.background;
+    final iconColor = style.accent;
+    final textColor = style.foreground;
+
+    return Chip(
+      key: const Key('withdraw-gasless-confirmed-chip'),
+      padding: EdgeInsets.zero,
+      avatar: Icon(Icons.check_circle_rounded, size: 18, color: iconColor),
+      label: Text(
+        LocaleKeys.withdrawGaslessConfirmedOnChain.tr(),
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: textColor,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      backgroundColor: background,
+      side: BorderSide.none,
     );
   }
 }

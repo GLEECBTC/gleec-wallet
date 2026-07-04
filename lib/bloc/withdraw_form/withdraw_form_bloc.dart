@@ -13,6 +13,7 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/kdf_error_display.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
@@ -31,6 +32,14 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
   final KomodoDefiSdk _sdk;
   final WalletType? _walletType;
+
+  /// Prefill applied at construction AND on [WithdrawFormReset], so a "try
+  /// again" after a failed prefilled flow (e.g. the stranded-funds
+  /// consolidation) restores the same rail/recipient/max instead of a default
+  /// gasless form.
+  final String? _initialRecipient;
+  final bool _initialGaslessEnabled;
+  final bool _initialIsMax;
   Timer? _tronPreviewTimer;
 
   WithdrawFormBloc({
@@ -38,14 +47,22 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     required KomodoDefiSdk sdk,
     required Mm2Api mm2Api,
     WalletType? walletType,
+    String? initialRecipient,
+    bool initialGaslessEnabled = true,
+    bool initialIsMax = false,
   }) : _sdk = sdk,
        _walletType = walletType,
+       _initialRecipient = initialRecipient,
+       _initialGaslessEnabled = initialGaslessEnabled,
+       _initialIsMax = initialIsMax,
        super(
          WithdrawFormState(
            asset: asset,
            step: WithdrawFormStep.fill,
            recipientAddress: '',
            amount: '0',
+           walletType: walletType,
+           isGaslessEnabled: initialGaslessEnabled,
          ),
        ) {
     on<WithdrawFormRecipientChanged>(
@@ -57,6 +74,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormMaxAmountEnabled>(_onMaxAmountEnabled);
     on<WithdrawFormCustomFeeEnabled>(_onCustomFeeEnabled);
     on<WithdrawFormCustomFeeChanged>(_onFeeChanged);
+    on<WithdrawFormGaslessToggled>(_onGaslessToggled);
+    on<WithdrawFormGaslessMaxFeeChanged>(_onGaslessMaxFeeChanged);
+    on<WithdrawFormGaslessStatusRequested>(
+      _onGaslessStatusRequested,
+      transformer: restartable(),
+    );
     on<WithdrawFormFeePriorityChanged>(_onFeePriorityChanged);
     on<WithdrawFormMemoChanged>(_onMemoChanged);
     on<WithdrawFormIbcTransferEnabled>(_onIbcTransferEnabled);
@@ -80,6 +103,15 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
     add(const WithdrawFormSourcesLoadRequested());
     add(const WithdrawFormFeeOptionsRequested());
+    if (state.isGaslessSupported) {
+      add(const WithdrawFormGaslessStatusRequested());
+    }
+    if (initialRecipient != null && initialRecipient.isNotEmpty) {
+      add(WithdrawFormRecipientChanged(initialRecipient));
+    }
+    if (initialIsMax) {
+      add(const WithdrawFormMaxAmountEnabled(true));
+    }
   }
 
   bool _isTronAsset(Asset asset) =>
@@ -140,6 +172,18 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
     if (_isSelfTransfer) {
       return TextError(error: LocaleKeys.cannotSendToSelf.tr());
+    }
+
+    // The GasFree provider reported itself unreachable: custody funds are
+    // safe on-chain but a gasless send cannot be built right now. Block with
+    // an honest message — never suggest TRX or switching to the native rail
+    // (custody funds are not natively spendable).
+    if (state.isGaslessProviderUnavailable) {
+      return TextError(
+        error: LocaleKeys.withdrawGaslessProviderUnavailable.tr(
+          args: [state.asset.id.id],
+        ),
+      );
     }
 
     return null;
@@ -235,8 +279,60 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   String _formatErrorMessage(Object error) {
+    final structured = _formatStructuredGaslessShortfall(error);
+    if (structured != null) return structured;
     final resolved = formatKdfUserFacingError(error);
     return _normalizeCommonErrors(resolved);
+  }
+
+  /// KDF's structured GasFree shortfall errors (`InsufficientGasFreeBalance`
+  /// [ForActivation]) carry exact token amounts; render them directly — with
+  /// the custody address the wallet already knows — instead of letting the
+  /// string normalizers collapse them back into the generic gasless text.
+  ///
+  /// The SDK's arg orders are a stable contract (see sdk_error_mapper.dart):
+  /// base `[gasfreeAddress, available, coin, required, coin, coin]`,
+  /// activation `[gasfreeAddress, available, coin, required, coin,
+  /// activationFee, coin, coin]`. KDF does not send the custody address in
+  /// the payload, so arg 0 is usually empty and substituted here.
+  String? _formatStructuredGaslessShortfall(Object error) {
+    if (error is! SdkError) return null;
+    final isActivation =
+        error.messageKey ==
+        LocaleKeys.withdrawGaslessInsufficientGasFreeBalanceForActivation;
+    final isBase =
+        error.messageKey ==
+        LocaleKeys.withdrawGaslessInsufficientGasFreeBalance;
+    if (!isBase && !isActivation) return null;
+
+    final args = List<String>.of(error.messageArgs);
+    if (args.length != (isActivation ? 8 : 6)) return null;
+
+    // KDF reports the raw config id (e.g. USDT-TRC20) as the coin; show the
+    // clean ticker. Value-matched (not positional) so amounts are untouched.
+    for (var i = 1; i < args.length; i++) {
+      if (args[i] == state.asset.id.id) {
+        args[i] = state.asset.id.symbol.configSymbol;
+      }
+    }
+
+    if (args.first.isEmpty) {
+      args[0] =
+          state.gaslessAccountStatus?.gasfreeAddress ??
+          state.selectedSourceAddress?.gasfreeAddress ??
+          '';
+    }
+    if (args.first.isEmpty) {
+      // Custody address unknown (status fetch failed and no source selected):
+      // fall back to the address-less shortfall copy rather than rendering
+      // "Your gasless address  holds …". `required` already includes any
+      // activation fee, so the shared message stays accurate.
+      return LocaleKeys.withdrawGaslessInsufficientBalance.tr(
+        args: [args[1], args[2], args[3], args[4], args[4]],
+      );
+    }
+    args[0] = truncateMiddleSymbols(args[0]);
+    return error.messageKey.tr(args: args);
   }
 
   TextError _buildTextError(Object error) {
@@ -247,6 +343,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   String _normalizeCommonErrors(String message) {
+    final gaslessMessage = _normalizeGaslessError(message);
+    if (gaslessMessage != null) {
+      return gaslessMessage;
+    }
+
     final normalized = message.toLowerCase();
 
     if (normalized.contains('cannot transfer') &&
@@ -254,21 +355,25 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return LocaleKeys.cannotSendToSelf.tr();
     }
 
-    if (normalized.contains('insufficient') &&
+    // "Not enough balance to pay gas" is a native-rail concept; a gas-free
+    // send must never surface it (fees are paid in the token). Gasless
+    // fee-shaped shortfalls are handled by [_normalizeGaslessError] above.
+    if (!state.useGasless &&
+        normalized.contains('insufficient') &&
         (normalized.contains('gas') || normalized.contains('fee'))) {
       return LocaleKeys.notEnoughBalanceForGasError.tr();
     }
 
     if (normalized.contains('insufficient funds') ||
         normalized.contains('not sufficient balance')) {
-      return 'kdfErrorNotSufficientBalance'.tr();
+      return LocaleKeys.kdfErrorNotSufficientBalance.tr();
     }
 
     if (normalized.contains('failed to fetch') ||
         normalized.contains('network error') ||
         normalized.contains('timed out') ||
         normalized.contains('timeout')) {
-      return 'kdfErrorTransport'.tr();
+      return LocaleKeys.kdfErrorTransport.tr();
     }
 
     if (message.trim().isEmpty) {
@@ -278,6 +383,84 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     return message;
   }
 
+  /// For a gas-free withdrawal that is short on custody balance, produce a
+  /// custody-aware message denominated in the token (never "insufficient TRX").
+  /// Handles both the active-account shortfall (`available X, required at least
+  /// Y`) and the inactive-account variant (`… activation fee Z`). GasFree
+  /// provider/transport failures (401, rate limit, timeout, …) are mapped to
+  /// the honest "service unavailable" message instead — never to a
+  /// balance-shortfall diagnosis that would tell the user to deposit more.
+  String? _normalizeGaslessError(String message) {
+    if (!state.useGasless) return null;
+    final normalized = message.toLowerCase();
+
+    // The provider allows one in-flight transfer at a time
+    // (maxPendingTransfer: 1) — KDF surfaces this as "already pending".
+    if (normalized.contains('already pending')) {
+      return LocaleKeys.withdrawGaslessPendingTransfer.tr();
+    }
+
+    final mentionsGasfreeRail =
+        normalized.contains('gasfree') || normalized.contains('gas-free');
+    final looksLikeProviderOutage =
+        mentionsGasfreeRail &&
+        (normalized.contains('unauthorized') ||
+            normalized.contains('authentication') ||
+            normalized.contains('forbidden') ||
+            normalized.contains('rate limit') ||
+            normalized.contains('upstream') ||
+            normalized.contains('unavailable') ||
+            normalized.contains('timed out') ||
+            normalized.contains('timeout') ||
+            normalized.contains('transport') ||
+            normalized.contains('network'));
+    if (looksLikeProviderOutage) {
+      return LocaleKeys.withdrawGaslessProviderUnavailable.tr(
+        args: [state.asset.id.symbol.configSymbol],
+      );
+    }
+
+    // Only genuine shortfall wording qualifies — a bare mention of the
+    // gas-free rail (e.g. "GasFree authentication failed") must not be
+    // rewritten into an "add more USDT" message.
+    final looksLikeBalanceShortfall =
+        normalized.contains('required at least') ||
+        ((normalized.contains('not enough') ||
+                normalized.contains('insufficient') ||
+                normalized.contains('not sufficient')) &&
+            (normalized.contains('balance') ||
+                normalized.contains('fee') ||
+                normalized.contains('gas')));
+
+    if (!looksLikeBalanceShortfall) {
+      return null;
+    }
+
+    // Older KDF phrases the shortfall as "required at least {r}"; the
+    // structured GasFree errors phrase it as "required {r}" (and are normally
+    // caught upstream by [_formatStructuredGaslessShortfall] — this regex is
+    // the string-level fallback).
+    // `\d+(?:\.\d+)?` (not `[\d.]+`) so a sentence-ending period after the
+    // amount ("required 8. Deposit …") isn't captured into the number.
+    final details = RegExp(
+      r'available\s+(\d+(?:\.\d+)?)\s*,\s*'
+      r'required(?:\s+at\s+least)?\s+(\d+(?:\.\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(message);
+    final assetName = state.asset.id.symbol.configSymbol;
+    if (details == null) {
+      return LocaleKeys.withdrawGaslessInsufficientBalanceGeneric.tr(
+        args: [assetName, assetName],
+      );
+    }
+
+    final available = details.group(1)?.trim() ?? '0';
+    final required = details.group(2)?.trim() ?? '';
+    return LocaleKeys.withdrawGaslessInsufficientBalance.tr(
+      args: [available, assetName, required, assetName, assetName],
+    );
+  }
+
   Future<void> _onSourcesLoadRequested(
     WithdrawFormSourcesLoadRequested event,
     Emitter<WithdrawFormState> emit,
@@ -285,9 +468,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     try {
       final cached = _sdk.pubkeys.lastKnown(state.asset.id);
       final pubkeys = cached ?? await state.asset.getPubkeys(_sdk);
-      final fundedKeys = pubkeys.keys
-          .where((key) => key.balance.spendable > Decimal.zero)
-          .toList();
+      final fundedKeys = pubkeys.keys.where(_canUseSourceAddress).toList();
 
       if (fundedKeys.isNotEmpty) {
         final filteredPubkeys = AssetPubkeys(
@@ -311,11 +492,30 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
             selectedSourceAddress: () => newSelection,
           ),
         );
+        // A max amount chosen before sources finished loading (e.g. the
+        // consolidation prefill) was computed against a null balance —
+        // recompute it now that the source address is known.
+        if (state.isMaxAmount) {
+          add(const WithdrawFormMaxAmountEnabled(true));
+        }
       } else {
         emit(
           state.copyWith(
+            pubkeys: () => AssetPubkeys(
+              assetId: pubkeys.assetId,
+              keys: const [],
+              availableAddressesCount: pubkeys.availableAddressesCount,
+              syncStatus: pubkeys.syncStatus,
+            ),
+            selectedSourceAddress: () => null,
             networkError: () => TextError(
-              error: 'No funded addresses found for ${state.asset.id.name}',
+              error: state.useGasless
+                  ? LocaleKeys.withdrawGaslessNoSourceAddress.tr(
+                      args: [state.asset.id.id],
+                    )
+                  : LocaleKeys.withdrawNoFundedAddresses.tr(
+                      args: [state.asset.id.name],
+                    ),
             ),
           ),
         );
@@ -330,6 +530,18 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ),
       );
     }
+  }
+
+  bool _canUseSourceAddress(PubkeyInfo key) {
+    if (state.useGasless) {
+      return key.gasfreeAddress?.isNotEmpty ?? false;
+    }
+
+    if (key.balance.spendable > Decimal.zero) {
+      return true;
+    }
+
+    return false;
   }
 
   FeeInfo? _getDefaultFee() {
@@ -488,13 +700,54 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       // Use the selected address balance if available
       final balance = state.selectedSourceAddress?.balance.spendable;
 
-      if (balance != null && amount > balance) {
+      if (!state.useGasless && balance != null && amount > balance) {
         emit(
           state.copyWith(
             amount: event.amount,
-            amountError: () => TextError(error: 'Insufficient funds'),
+            amountError: () => TextError(
+              error: LocaleKeys.withdrawNotSufficientBalanceError.tr(
+                args: [
+                  state.asset.id.id,
+                  balance.toString(),
+                  amount.toString(),
+                ],
+              ),
+            ),
           ),
         );
+        return;
+      }
+
+      // Advisory custody-cap pre-validation for the gas-free rail. Only when
+      // a status snapshot is cached — otherwise behavior is unchanged and the
+      // KDF preview (via _normalizeGaslessError) remains the backstop.
+      final gaslessCap = state.gaslessMaxWithdrawable;
+      if (gaslessCap != null && amount > gaslessCap) {
+        emit(
+          state.copyWith(
+            amount: event.amount,
+            amountError: () => TextError(
+              error: gaslessCap > Decimal.zero
+                  ? LocaleKeys.withdrawGaslessAmountExceedsMax.tr(
+                      args: [
+                        gaslessCap.toString(),
+                        state.asset.id.id,
+                        state.asset.id.id,
+                      ],
+                    )
+                  // "You can send up to 0" reads absurd — an empty custody
+                  // account gets the plain add-funds message instead.
+                  : LocaleKeys.withdrawGaslessInsufficientBalanceGeneric.tr(
+                      args: [state.asset.id.id, state.asset.id.id],
+                    ),
+            ),
+          ),
+        );
+        // The snapshot may be stale (e.g. the user deposited to custody after
+        // it was cached). A TTL-gated refresh re-validates and clears the
+        // error once fresh numbers land; when the cap is genuinely exceeded
+        // the follow-up request is a no-op (fresh snapshot → early return).
+        add(const WithdrawFormGaslessStatusRequested());
         return;
       }
 
@@ -502,8 +755,16 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         emit(
           state.copyWith(
             amount: event.amount,
-            amountError: () =>
-                TextError(error: 'Amount must be greater than 0'),
+            amountError: () => TextError(
+              error: LocaleKeys.withdrawAmountTooLowError.tr(
+                args: [
+                  amount.toString(),
+                  state.asset.id.id,
+                  '0',
+                  state.asset.id.id,
+                ],
+              ),
+            ),
           ),
         );
         return;
@@ -520,7 +781,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       emit(
         state.copyWith(
           amount: event.amount,
-          amountError: () => TextError(error: 'Invalid amount'),
+          amountError: () =>
+              TextError(error: LocaleKeys.withdrawInvalidAmountError.tr()),
         ),
       );
     }
@@ -532,7 +794,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   ) {
     if (state.isSending || state.step != WithdrawFormStep.fill) return;
     final balance = event.address.balance;
-    final updatedAmount = state.isMaxAmount
+    final updatedAmount = state.isMaxAmount && !state.useGasless
         ? balance.spendable.toString()
         : state.amount;
 
@@ -557,7 +819,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.isSending || state.step != WithdrawFormStep.fill) return;
-    if (event.isEnabled && state.asset.id.parentId != null) {
+    // Gas-free transfers pay the network fee in the token itself, so the
+    // source address legitimately holds zero TRX. Only enforce the parent
+    // (TRX) gas balance guard on the native rail.
+    if (event.isEnabled &&
+        !state.useGasless &&
+        state.asset.id.parentId != null) {
       final parentId = state.asset.id.parentId!;
       final parentBalance =
           _sdk.balances.lastKnown(parentId) ??
@@ -567,8 +834,14 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         emit(
           state.copyWith(
             isMaxAmount: false,
-            amountError: () =>
-                TextError(error: LocaleKeys.notEnoughBalanceForGasError.tr()),
+            // TRON gets a specific message naming TRX and the standard
+            // address — this native-rail guard is the one flow (interop /
+            // stranded-funds consolidation) honestly allowed to require TRX.
+            amountError: () => TextError(
+              error: state.isTronAsset
+                  ? LocaleKeys.withdrawTronNativeNeedsTrx.tr()
+                  : LocaleKeys.notEnoughBalanceForGasError.tr(),
+            ),
           ),
         );
         return;
@@ -577,9 +850,18 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
     final balance =
         state.selectedSourceAddress?.balance ?? state.pubkeys?.balance;
-    final maxAmount = event.isEnabled
-        ? (balance?.spendable.toString() ?? '0')
-        : '0';
+    final String maxAmount;
+    if (!event.isEnabled) {
+      maxAmount = '0';
+    } else if (state.useGasless) {
+      // Custody-aware max: `gasless::account_status.max_withdrawable` already
+      // nets out the transfer (and, if inactive, activation) fee. Display
+      // only — the withdraw request still sends `isMax: true` with no amount,
+      // so KDF remains the authority on the signed amount.
+      maxAmount = state.gaslessMaxWithdrawable?.toString() ?? '0';
+    } else {
+      maxAmount = balance?.spendable.toString() ?? '0';
+    }
 
     emit(
       state.copyWith(
@@ -589,6 +871,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         previewError: () => null, // Clear preview error when toggling max
       ),
     );
+
+    // A missing/stale custody snapshot renders as the "Maximum" placeholder;
+    // fetching (TTL-cached) fills in the concrete number when it lands.
+    if (event.isEnabled && state.useGasless) {
+      add(const WithdrawFormGaslessStatusRequested());
+    }
   }
 
   void _onCustomFeeEnabled(
@@ -608,6 +896,124 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         selectedFeePriority: () => event.isEnabled ? null : defaultPriority,
       ),
     );
+  }
+
+  void _onGaslessToggled(
+    WithdrawFormGaslessToggled event,
+    Emitter<WithdrawFormState> emit,
+  ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
+    if (!state.isGaslessSupported) return;
+    emit(
+      state.copyWith(
+        isGaslessEnabled: event.isEnabled,
+        // Clear any stale max-fee cap when turning gasless off.
+        gaslessMaxFee: event.isEnabled ? null : () => null,
+        // The rail changed, so every error produced on the previous rail is
+        // stale — including the gasless "no source address" network error and
+        // any left-over transaction/confirm errors.
+        amountError: () => null,
+        previewError: () => null,
+        networkError: () => null,
+        transactionError: () => null,
+        confirmStepError: () => null,
+        gaslessStatusMessage: () => null,
+        gaslessTraceState: () => null,
+      ),
+    );
+    add(const WithdrawFormSourcesLoadRequested());
+    if (event.isEnabled) {
+      add(const WithdrawFormGaslessStatusRequested());
+    }
+    if (state.isMaxAmount) {
+      // Recompute the max on the rail just switched to (custody cap vs EOA).
+      add(const WithdrawFormMaxAmountEnabled(true));
+    } else {
+      // Re-validate on the new rail — but leave a pristine amount ('0')
+      // alone, or an untouched field would flag "must be greater than 0".
+      final currentAmount = Decimal.tryParse(
+        normalizeDecimalString(state.amount),
+      );
+      if (currentAmount != null && currentAmount > Decimal.zero) {
+        add(WithdrawFormAmountChanged(state.amount));
+      }
+    }
+  }
+
+  void _onGaslessMaxFeeChanged(
+    WithdrawFormGaslessMaxFeeChanged event,
+    Emitter<WithdrawFormState> emit,
+  ) {
+    if (state.isSending || state.step != WithdrawFormStep.fill) return;
+    emit(state.copyWith(gaslessMaxFee: () => event.maxFee));
+  }
+
+  /// How long a fetched `gasless::account_status` snapshot stays fresh before
+  /// a non-forced [WithdrawFormGaslessStatusRequested] re-fetches it.
+  static const Duration _gaslessStatusTtl = Duration(seconds: 30);
+
+  Future<void> _onGaslessStatusRequested(
+    WithdrawFormGaslessStatusRequested event,
+    Emitter<WithdrawFormState> emit,
+  ) async {
+    if (!state.isGaslessSupported) return;
+
+    final fetchedAt = state.gaslessStatusFetchedAt;
+    final isFresh =
+        fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _gaslessStatusTtl;
+    // `restartable()` cancels any in-flight fetch when this event arrives, so
+    // when one WAS in flight (isGaslessStatusLoading) this handler must run
+    // the fetch itself — early-returning would strand the cancelled request
+    // (e.g. a forced retry superseded by a non-forced one within the TTL).
+    if (!event.force &&
+        isFresh &&
+        state.gaslessAccountStatus != null &&
+        !state.isGaslessStatusLoading) {
+      return;
+    }
+
+    emit(state.copyWith(isGaslessStatusLoading: true));
+    try {
+      final status = await _sdk.withdrawals.gaslessAccountStatus(
+        state.asset.id,
+      );
+      emit(
+        state.copyWith(
+          gaslessAccountStatus: () => status,
+          gaslessStatusFetchedAt: () => DateTime.now(),
+          isGaslessStatusLoading: false,
+        ),
+      );
+      // Re-validate against the fresh custody numbers so a max amount or an
+      // over-cap error entered before the fetch landed doesn't go stale. A
+      // pristine form (amount still '0') is left alone — re-validating it
+      // would surface a spurious "amount must be greater than 0" error.
+      if (state.useGasless && state.step == WithdrawFormStep.fill) {
+        if (state.isMaxAmount) {
+          add(const WithdrawFormMaxAmountEnabled(true));
+        } else {
+          final currentAmount = Decimal.tryParse(
+            normalizeDecimalString(state.amount),
+          );
+          if (currentAmount != null && currentAmount > Decimal.zero) {
+            add(WithdrawFormAmountChanged(state.amount));
+          }
+        }
+      }
+    } catch (e) {
+      // Keep any previous (stale) snapshot: the KDF preview remains the
+      // authority, so a failed refresh must never block or error the form.
+      // Stamping the fetch time applies the TTL to failures too, so retries
+      // are throttled to once per TTL window (force still bypasses).
+      _logger.fine('gasless::account_status fetch failed', e);
+      emit(
+        state.copyWith(
+          gaslessStatusFetchedAt: () => DateTime.now(),
+          isGaslessStatusLoading: false,
+        ),
+      );
+    }
   }
 
   void _onFeeChanged(
@@ -723,6 +1129,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       tron: (_) {
         throw Exception('Custom TRON fees are not supported');
       },
+      tronGasless: (_) {
+        throw Exception('Custom gas-free TRON fees are not supported');
+      },
       sia: (sia) {
         if (sia.amount <= Decimal.zero) {
           throw Exception('Fee amount must be greater than 0');
@@ -792,6 +1201,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isAwaitingTrezorConfirmation: false,
         ),
       );
+      // Self-heal: when the block was the provider gate, re-check
+      // availability so a recovered provider unblocks the form.
+      if (requestState.isGaslessProviderUnavailable) {
+        add(const WithdrawFormGaslessStatusRequested(force: true));
+      }
       return;
     }
 
@@ -840,6 +1254,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         return;
       }
 
+      // A gas-free withdrawal that is short on custody balance surfaces a plain,
+      // USDT-denominated error telling the user to add USDT to their gasless
+      // address (see `_normalizeGaslessError`). There is no TRX-paid top-up: the
+      // custody address is the account, funded by receiving USDT into it.
       emit(
         state.copyWith(
           previewError: () => _buildTextError(e),
@@ -992,6 +1410,28 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return;
     }
 
+    // Backstop: never broadcast a native (TRX-funded) transfer when the user
+    // asked for gas-free. KDF fell back to native (e.g. the GasFree custody
+    // address is unfunded); block the send and direct the user to send a
+    // standard transfer explicitly by unticking gas-free. The confirm UI also
+    // disables the Send button for this case, so this guard rarely fires.
+    if (state.didGaslessDowngrade) {
+      emit(
+        state.copyWith(
+          confirmStepError: () => TextError(
+            // The standard (native) TRC20 transfer fee is paid in the platform
+            // coin (TRX), not the token being sent — use the native fee coin so
+            // this matches the confirm-step `_GaslessUnavailableNotice`.
+            error: LocaleKeys.withdrawGaslessUnavailableBlocked.tr(
+              args: [(state.preview!.fee as FeeInfoTron).coin],
+            ),
+          ),
+          isSending: false,
+        ),
+      );
+      return;
+    }
+
     try {
       _cancelTronPreviewTimer();
 
@@ -1026,6 +1466,16 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           }
           throw Exception(progress.errorMessage ?? 'Broadcast failed');
         }
+        // Surface live gas-free relay status while the transfer is relayed and
+        // confirmed (pending -> submitted -> on-chain).
+        if (state.useGasless) {
+          emit(
+            state.copyWith(
+              gaslessStatusMessage: () => progress.message,
+              gaslessTraceState: () => progress.gaslessState,
+            ),
+          );
+        }
         // Continue for in-progress states
       }
 
@@ -1033,9 +1483,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         emit(
           state.copyWith(
             isSending: false,
-            transactionError: () => TextError(
-              error: 'Withdrawal did not complete: no result received.',
-            ),
+            transactionError: () =>
+                TextError(error: LocaleKeys.withdrawNoResultError.tr()),
             isAwaitingTrezorConfirmation: false,
           ),
         );
@@ -1054,6 +1503,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isPreviewExpired: false,
           isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
+          gaslessStatusMessage: () => null,
+          gaslessTraceState: () => null,
         ),
       );
       return;
@@ -1080,6 +1531,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isSending: false,
           isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
+          gaslessStatusMessage: () => null,
+          gaslessTraceState: () => null,
         ),
       );
     }
@@ -1089,10 +1542,13 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       _walletType == WalletType.trezor && state.asset.protocol is SiaProtocol;
 
   bool get _isSelfTransfer {
-    final source = state.selectedSourceAddress?.address;
+    if (kAllowSameAddressWithdrawals) return false;
+
+    final source = state.selectedSourceAddress;
     final recipient = state.recipientAddress.trim();
     if (source == null || recipient.isEmpty) return false;
-    return source == recipient;
+    return source.address == recipient ||
+        (state.useGasless && source.gasfreeAddress == recipient);
   }
 
   void _onCancelled(
@@ -1112,10 +1568,25 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         step: WithdrawFormStep.fill,
         recipientAddress: '',
         amount: '0',
+        walletType: state.walletType,
         pubkeys: state.pubkeys,
-        selectedSourceAddress: state.pubkeys?.keys.first,
+        selectedSourceAddress: state.pubkeys?.keys.firstOrNull,
+        isGaslessEnabled: _initialGaslessEnabled,
       ),
     );
+    // The fresh state dropped the cached custody snapshot; re-request it.
+    if (state.isGaslessSupported) {
+      add(const WithdrawFormGaslessStatusRequested());
+    }
+    // Restore the construction-time prefill so a retry after a failed
+    // prefilled flow (consolidation) does not degrade to an empty form.
+    final initialRecipient = _initialRecipient;
+    if (initialRecipient != null && initialRecipient.isNotEmpty) {
+      add(WithdrawFormRecipientChanged(initialRecipient));
+    }
+    if (_initialIsMax) {
+      add(const WithdrawFormMaxAmountEnabled(true));
+    }
   }
 
   void _onStepReverted(
