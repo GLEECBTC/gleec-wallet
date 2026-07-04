@@ -514,31 +514,8 @@ class CoinsRepo {
             'SubClass: ${asset.id.subClass}',
           );
         }
-        if (notifyListeners) {
-          _broadcastAsset(coin.copyWith(state: CoinState.active));
-          if (coin.id.parentId != null) {
-            final parentCoin = _assetToCoinWithoutAddress(
-              _kdfSdk.assets.available[coin.id.parentId]!,
-            );
-            _broadcastAsset(parentCoin.copyWith(state: CoinState.active));
-          }
-        }
-        _subscribeToBalanceUpdates(asset);
-        if (kDebugElectrumLogs) {
-          _log.info(
-            '[ACTIVATION] Subscribed to balance updates for ${asset.id.id}',
-          );
-        }
-        if (coin.id.parentId != null) {
-          final parentAsset = _kdfSdk.assets.available[coin.id.parentId];
-          if (parentAsset == null) {
-            _log.warning('Parent asset not found: ${coin.id.parentId}');
-          } else {
-            _subscribeToBalanceUpdates(parentAsset);
-          }
-        }
+        _markActiveAndSubscribe(asset, coin, notifyListeners: notifyListeners);
       } catch (e, s) {
-        lastActivationException = e is Exception ? e : Exception(e.toString());
         _log.shout(
           'Error activating asset after retries: ${asset.id.id}',
           e,
@@ -558,8 +535,45 @@ class CoinsRepo {
           }
         }
 
-        if (notifyListeners) {
-          _broadcastAsset(asset.toCoin().copyWith(state: CoinState.suspended));
+        // A platform coin (e.g. TRX) can be activated as a side-effect of a
+        // child token activation racing this standalone attempt. A late/transient
+        // failure here must not evict a coin that KDF actually has active, so
+        // verify against KDF before suspending. Otherwise a suspended broadcast
+        // lands after the child's "active" broadcast and removes the platform
+        // from the wallet, leaving it without balance streaming.
+        var isActuallyActive = false;
+        try {
+          isActuallyActive = await isAssetActivated(
+            asset.id,
+            forceRefresh: true,
+          );
+        } catch (recheckError, recheckStack) {
+          _log.warning(
+            'Failed to re-check activation for ${asset.id.id} after error',
+            recheckError,
+            recheckStack,
+          );
+        }
+
+        if (isActuallyActive) {
+          _log.info(
+            '${asset.id.id} is active in KDF despite an activation error; '
+            'marking active instead of suspended.',
+          );
+          _markActiveAndSubscribe(
+            asset,
+            coin,
+            notifyListeners: notifyListeners,
+          );
+        } else {
+          lastActivationException = e is Exception
+              ? e
+              : Exception(e.toString());
+          if (notifyListeners) {
+            _broadcastAsset(
+              asset.toCoin().copyWith(state: CoinState.suspended),
+            );
+          }
         }
       } finally {
         // Register outside of the try-catch to ensure icon is available even
@@ -579,6 +593,49 @@ class CoinsRepo {
     // Rethrow the last activation exception if there was one
     if (lastActivationException != null) {
       throw lastActivationException;
+    }
+  }
+
+  /// Broadcasts [coin] (and its parent platform coin, if any) as active and
+  /// subscribes both to balance updates.
+  ///
+  /// Used both on the activation success path and on the failure path when the
+  /// coin is found to be active in KDF anyway (e.g. a platform coin enabled as a
+  /// side-effect of a child token activation racing a standalone attempt).
+  void _markActiveAndSubscribe(
+    Asset asset,
+    Coin coin, {
+    required bool notifyListeners,
+  }) {
+    final parentId = coin.id.parentId;
+    final parentAsset = parentId != null
+        ? _kdfSdk.assets.available[parentId]
+        : null;
+
+    if (notifyListeners) {
+      _broadcastAsset(coin.copyWith(state: CoinState.active));
+      if (parentAsset != null) {
+        _broadcastAsset(
+          _assetToCoinWithoutAddress(
+            parentAsset,
+          ).copyWith(state: CoinState.active),
+        );
+      }
+    }
+
+    _subscribeToBalanceUpdates(asset);
+    if (kDebugElectrumLogs) {
+      _log.info(
+        '[ACTIVATION] Subscribed to balance updates for ${asset.id.id}',
+      );
+    }
+
+    if (parentId != null) {
+      if (parentAsset == null) {
+        _log.warning('Parent asset not found: $parentId');
+      } else {
+        _subscribeToBalanceUpdates(parentAsset);
+      }
     }
   }
 

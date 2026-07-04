@@ -200,6 +200,14 @@ List<String> get enabledByDefaultCoins => [
   'GLEEC', // GLEEC ecosystem coin
   'KMD', // Komodo ecosystem coin
   'BTC-segwit', // Default Fiat Ramps coin
+  'TRX', // TRON parent chain (also the parent of USDT-TRC20)
+  // Primary gas-free (gasless) withdrawal token. Its TRX parent is activated
+  // atomically by the SDK; the SDK ActivationManager also tolerates TRX being
+  // activated concurrently (the join branch re-verifies and activates any
+  // missing children, and always emits a terminal completion), so listing TRX
+  // separately is safe and keeps TRX seeded even when USDT-TRC20 is removed by
+  // the regional trading blacklist.
+  'USDT-TRC20',
 ];
 
 const String logsDbName = 'logs';

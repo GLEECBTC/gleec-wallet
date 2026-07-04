@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 RegExp numberRegExp = RegExp('^\$|^(0|([1-9][0-9]{0,12}))([.,]{1}[0-9]{0,8})?');
 RegExp emailRegex = RegExp(
   r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$',
@@ -54,6 +56,9 @@ const bool isTestMode = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Permits withdraw-form self-transfers (recipient matches source) in debug builds.
+const bool kAllowSameAddressWithdrawals = kDebugMode;
+
 // Analytics & CI environment configuration
 // These values are provided via --dart-define at build/run time in CI and app builds
 const bool isCiEnvironment = bool.fromEnvironment('CI', defaultValue: false);
@@ -80,6 +85,59 @@ const int? matomoPlatformDimensionId =
     : int.fromEnvironment('MATOMO_PLATFORM_DIMENSION_ID');
 const String moralisProxyUrl = 'https://moralis.gleec.com';
 const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
+
+/// Tron gas-free (GasFree) relay configuration for gas-free TRC20 withdrawals.
+///
+/// [tronGaslessBaseUrl] is passed verbatim to KDF as the
+/// `tron_gasless_provider.base_url` activation param (via [MM2] / the SDK's
+/// `TronGaslessProviderConfig`). In `komodo_proxy` mode KDF preserves this URL
+/// as-is and only appends `api/v1/...`, so it must be the FULL GasFree base
+/// path — including the per-network segment.
+///
+/// The Gleec komodo_proxy (`komodo-defi-proxy` `gas_free` route) strips its
+/// `/gasfree` inbound prefix and forwards the remaining path verbatim to
+/// `https://open.gasfree.io`, attaching the GasFree HMAC credentials
+/// server-side. It does NOT inject the network segment, and KDF doesn't either
+/// in proxy mode — so the client supplies it. The GasFree API lives under
+/// `/tron` (mainnet) or `/nile` (testnet):
+///
+///   proxy root:  https://quicknode.gleec.com/              (TRON RPC nodes)
+///   this value:  https://quicknode.gleec.com/gasfree/tron  (mainnet GasFree)
+///
+/// Resulting request flow (account-info call shown):
+///   KDF      -> https://quicknode.gleec.com/gasfree/tron/api/v1/address/{addr}
+///   proxy    -> strips `/gasfree`, HMAC-signs, forwards
+///   upstream -> https://open.gasfree.io/tron/api/v1/address/{addr}
+///
+/// Dropping `/tron` (or the `/gasfree` mount) routes to the wrong upstream path,
+/// and because the proxy signs the GasFree HMAC over that path, the request is
+/// also rejected — gasless then fails / falls back with no client-side signal.
+///
+/// Override at build time via `--dart-define=TRON_GASLESS_BASE_URL=...`.
+const String tronGaslessBaseUrl = String.fromEnvironment(
+  'TRON_GASLESS_BASE_URL',
+  defaultValue: 'https://quicknode.gleec.com/gasfree/tron',
+);
+
+bool get isTronGaslessConfigured => tronGaslessBaseUrl.trim().isNotEmpty;
+
+/// GasFree service-provider TRON address, bound into the signed TIP-712
+/// `PermitTransferMessage` and forwarded to the GasFree backend on submit.
+///
+/// This MUST be the provider registered for the GasFree account that the proxy
+/// holds credentials for — the permit names this address and the provider
+/// rejects a permit naming a different one. This default is the provider
+/// returned by the Gleec proxy's account at
+/// `<base_url>/api/v1/config/provider/all` (verified 2026-06-24). If the proxy's
+/// GasFree account changes, re-check that endpoint and update this value.
+///
+/// TODO: KDF intends to auto-fetch this at activation (see gasfree/config.rs in
+/// komodo-defi-framework); drop this constant once that lands.
+/// Override at build time via `--dart-define=TRON_GASLESS_SERVICE_PROVIDER=...`.
+const String tronGaslessServiceProvider = String.fromEnvironment(
+  'TRON_GASLESS_SERVICE_PROVIDER',
+  defaultValue: 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+);
 
 const String geoBlockerApiUrl = 'https://gleec-wallet-bouncer.gleec.com/v1';
 const String tradingBlacklistUrl =
