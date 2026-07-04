@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
@@ -105,6 +106,26 @@ class _CoinDetailsState extends State<CoinDetails> {
           onBackButtonPressed: _openInfo,
         );
 
+      case CoinPageType.sendConsolidate:
+        final sdk = context.read<KomodoDefiSdk>();
+        final asset = widget.coin.toSdkAsset(sdk);
+        // The user's own GasFree custody address — the consolidation target.
+        final gasfreeAddress = sdk.pubkeys
+            .lastKnown(asset.id)
+            ?.keys
+            .firstWhereOrNull((key) => key.gasfreeAddress?.isNotEmpty ?? false)
+            ?.gasfreeAddress;
+        return WithdrawForm(
+          asset: asset,
+          // A one-time native transfer moving standard-address funds into the
+          // custody address; without a known custody address this degrades to
+          // the plain send form.
+          initialRecipient: gasfreeAddress,
+          initialGaslessEnabled: gasfreeAddress == null,
+          initialIsMax: gasfreeAddress != null,
+          onSuccess: _openInfo,
+          onBackButtonPressed: _openInfo,
+        );
       case CoinPageType.claim:
         return KmdRewardsInfo(
           coin: widget.coin,

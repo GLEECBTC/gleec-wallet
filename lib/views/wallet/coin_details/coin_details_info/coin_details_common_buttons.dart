@@ -19,11 +19,38 @@ import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
+import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/bitrefill/bitrefill_button.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/contract_address_button.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_dialog.dart';
+
+bool _usesGasfreeReceiveAddress(Coin coin, PubkeyInfo address) =>
+    coin.id.subClass == CoinSubClass.trc20 &&
+    (address.gasfreeAddress?.isNotEmpty ?? false);
+
+String _receiveAddressFor(Coin coin, PubkeyInfo address) {
+  final gasfreeAddress = address.gasfreeAddress;
+  if (_usesGasfreeReceiveAddress(coin, address)) {
+    return gasfreeAddress!;
+  }
+
+  return address.address;
+}
+
+String _receiveAddressStatus(Coin coin, PubkeyInfo address) {
+  final args = [
+    formatDexAmt(address.balance.spendable),
+    abbr2Ticker(coin.abbr),
+  ];
+  if (_usesGasfreeReceiveAddress(coin, address)) {
+    return LocaleKeys.receiveGasfreeAddressStatus.tr(args: args);
+  }
+
+  return LocaleKeys.addressBalanceAvailable.tr(args: args);
+}
 
 class CoinDetailsCommonButtons extends StatelessWidget {
   const CoinDetailsCommonButtons({
@@ -253,6 +280,10 @@ class CoinDetailsReceiveButton extends StatelessWidget {
       context,
       addresses: addresses,
       assetNameLabel: coin.abbr,
+      verified: (address) => _usesGasfreeReceiveAddress(coin, address),
+      displayAddress: (address) => _receiveAddressFor(coin, address),
+      copyAddress: (address) => _receiveAddressFor(coin, address),
+      balanceLabel: (address) => _receiveAddressStatus(coin, address),
     );
 
     if (selectedAddress != null && context.mounted) {
@@ -305,28 +336,51 @@ class CoinDetailsSendButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    final lastKnownBalance =
-        sdk.balances.lastKnown(coin.id)?.total ?? Decimal.zero;
-
     final ThemeData themeData = Theme.of(context);
-    return UiPrimaryButton(
-      key: const Key('coin-details-send-button'),
-      height: isMobile ? 52 : 40,
-      prefix: Container(
-        padding: const EdgeInsets.only(right: 14),
-        child: SvgPicture.asset('$assetsPath/others/send.svg'),
-      ),
-      textStyle: themeData.textTheme.labelLarge?.copyWith(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-      ),
-      backgroundColor: themeData.colorScheme.tertiary,
-      onPressed: !coin.isActive || lastKnownBalance == Decimal.zero
-          ? null
-          : () {
-              selectWidget(CoinPageType.send);
-            },
-      text: LocaleKeys.send.tr(),
+    final hasGasfreeAddress =
+        coin.id.subClass == CoinSubClass.trc20 &&
+        context.watch<CoinAddressesBloc>().state.addresses.any(
+          (address) => address.gasfreeAddress?.isNotEmpty ?? false,
+        );
+
+    // Gate Send on *confirmed* activation. The coin must be fully active in
+    // KDF before a withdraw can be previewed: enabling Send while the coin is
+    // only `activating` (relying on a cached balance / gas-free address) lets
+    // the user fire `init_withdraw` against a coin KDF has not registered yet,
+    // which fails with `NoSuchCoin`. A funded balance is shown for context, but
+    // it does not by itself imply the coin is active in the current session.
+    return StreamBuilder<BalanceInfo>(
+      initialData: sdk.balances.lastKnown(coin.id),
+      stream: sdk.balances.watchBalance(coin.id),
+      builder: (context, snapshot) {
+        // Fall back to the last known balance on a transient stream error
+        // (e.g. wallet change) so a funded button does not flicker to disabled.
+        final balance = snapshot.hasError
+            ? sdk.balances.lastKnown(coin.id)?.total ?? Decimal.zero
+            : snapshot.data?.total ?? Decimal.zero;
+        final canSend =
+            coin.isActive && (balance > Decimal.zero || hasGasfreeAddress);
+
+        return UiPrimaryButton(
+          key: const Key('coin-details-send-button'),
+          height: isMobile ? 52 : 40,
+          prefix: Container(
+            padding: const EdgeInsets.only(right: 14),
+            child: SvgPicture.asset('$assetsPath/others/send.svg'),
+          ),
+          textStyle: themeData.textTheme.labelLarge?.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+          backgroundColor: themeData.colorScheme.tertiary,
+          onPressed: canSend
+              ? () {
+                  selectWidget(CoinPageType.send);
+                }
+              : null,
+          text: LocaleKeys.send.tr(),
+        );
+      },
     );
   }
 }

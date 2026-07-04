@@ -175,6 +175,14 @@ class AppBlocRoot extends StatelessWidget {
         RepositoryProvider(
           create: (_) => KmdRewardsBloc(coinsRepository, mm2Api),
         ),
+        // Expose the portfolio chart repositories so that scoped views (e.g.
+        // the single-coin details page) can spin up their own
+        // PortfolioGrowthBloc/ProfitLossBloc instances that reuse the same
+        // cache, instead of sharing the app-wide whole-portfolio blocs below.
+        RepositoryProvider<ProfitLossRepository>.value(value: profitLossRepo),
+        RepositoryProvider<PortfolioGrowthRepository>.value(
+          value: portfolioGrowthRepo,
+        ),
       ],
       child: MultiBlocProvider(
         providers: [
