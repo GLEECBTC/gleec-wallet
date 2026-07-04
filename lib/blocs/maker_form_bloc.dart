@@ -100,6 +100,9 @@ class MakerFormBloc implements BlocBase {
   Stream<Coin?> get outSellCoin => _sellCoinCtrl.stream;
   Coin? get sellCoin => _sellCoin;
   set sellCoin(Coin? coin) {
+    // Wallet-only assets (e.g. TRX/TRC-20) are excluded from the DEX pickers;
+    // ignore programmatic/deep-link selections too.
+    if (coin != null && coin.walletOnly) return;
     if (coin?.abbr != sellCoin?.abbr) {
       setSellAmount(null);
       setBuyAmount(null);
@@ -248,8 +251,9 @@ class MakerFormBloc implements BlocBase {
     maxSellAmount = null;
     // Only show loading spinner when signed in
     final bool isSignedIn = await kdfSdk.auth.isSignedIn();
-    availableBalanceState =
-        isSignedIn ? AvailableBalanceState.loading : AvailableBalanceState.unavailable;
+    availableBalanceState = isSignedIn
+        ? AvailableBalanceState.loading
+        : AvailableBalanceState.unavailable;
     isMaxActive = false;
 
     await _updateMaxSellAmount();

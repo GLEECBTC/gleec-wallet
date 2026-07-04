@@ -319,6 +319,17 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
   ) async {
     if (event.setOnlyIfNotSet && state.sellCoin != null) return;
 
+    // Wallet-only assets (e.g. TRX/TRC-20, whose gasless balance lives at the
+    // GasFree custody address) are filtered out of every DEX picker; ignore
+    // programmatic/deep-link selections too so trading validation can never
+    // demand gas for them.
+    if (event.coin?.walletOnly ?? false) {
+      _log.warning(
+        'Ignoring wallet-only sell coin selection: ${event.coin?.abbr}',
+      );
+      return;
+    }
+
     emit(
       state.copyWith(
         sellCoin: () => event.coin,
