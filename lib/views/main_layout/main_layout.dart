@@ -9,8 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-// TODO(migration): Re-enable once update checker endpoint is migrated
-// import 'package:web_dex/blocs/update_bloc.dart';
+import 'package:web_dex/blocs/update_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 
 import 'package:web_dex/model/authorize_mode.dart';
@@ -43,8 +42,7 @@ class _MainLayoutState extends State<MainLayout> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await AlphaVersionWarningService().run();
-      // TODO(migration): Re-enable once update checker endpoint is migrated
-      // await updateBloc.init();
+      await updateBloc.init();
 
       if (mounted) {
         try {

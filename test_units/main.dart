@@ -18,6 +18,7 @@ import 'tests/helpers/max_min_rational_tests.dart';
 import 'tests/helpers/total_24_change_tests.dart';
 import 'tests/helpers/total_fee_test.dart';
 import 'tests/helpers/update_sell_amount_tests.dart';
+import 'tests/helpers/update_version_compare_tests.dart';
 import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
@@ -35,8 +36,10 @@ import 'tests/wallet/coin_details/kmd_rewards_logic_test.dart';
 import 'tests/wallet/coin_details/receive_address_faucet_widget_test.dart';
 import 'tests/wallet/coin_details/rewards_widget_test.dart';
 import 'tests/wallet/coin_details/transaction_details_logic_test.dart';
+import 'tests/wallet/coin_details/transaction_sanitize_custody_test.dart';
 import 'tests/wallet/coin_details/transaction_views_widget_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_bloc_test.dart';
+import 'tests/wallet/coin_details/withdraw_form_confirm_receipt_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_fill_section_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
 import 'tests/utils/convert_fract_rat_tests.dart';
@@ -97,6 +100,7 @@ void main() {
     testGetTotalFee();
     testGetSellAmount();
     testUpdateSellAmount();
+    testUpdateVersionCompare();
   });
 
   group('Crypto:', () {
@@ -120,7 +124,9 @@ void main() {
     testCoinDetailsBalanceConfirmationController();
     testCoinDetailsBalanceContent();
     testWithdrawFormFillSection();
+    testWithdrawFormConfirmReceipt();
     testTransactionDetailsLogic();
+    testTransactionSanitizeCustody();
     testKmdRewardsLogic();
     testRewardsWidgets();
     testTransactionViewsWidgets();

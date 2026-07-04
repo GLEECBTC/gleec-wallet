@@ -4,6 +4,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/blocs/update_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class UpdatePopUp extends StatelessWidget {
@@ -71,8 +72,9 @@ class UpdatePopUp extends StatelessWidget {
                             p: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.color,
                             ),
                           ),
                           data: versionInfo.changelog,
@@ -109,13 +111,23 @@ class UpdatePopUp extends StatelessWidget {
                   backgroundColor: Theme.of(context).colorScheme.secondary,
                   onPressed: () async {
                     onAccept();
-                    await updateBloc.update();
+                    Navigator.of(context).pop();
+                    try {
+                      await updateBloc.update(versionInfo);
+                    } catch (e, s) {
+                      log(
+                        'Failed to start app update: $e',
+                        path: 'update_popup => updateNow',
+                        trace: s,
+                        isError: true,
+                      );
+                    }
                   },
                 ),
               ),
             ],
           ),
-        )
+        ),
       ],
     );
   }
