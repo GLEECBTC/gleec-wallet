@@ -52,6 +52,15 @@ inputs:
     required: false
     default: ""
 
+  TRON_GASLESS_BASE_URL:
+    description: "TRON GasFree provider base URL embedded in the Flutter web build"
+    required: false
+    default: "https://quicknode.gleec.com/gasfree/tron"
+  TRON_GASLESS_SERVICE_PROVIDER:
+    description: "TRON GasFree service provider address embedded in the Flutter web build"
+    required: false
+    default: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+
 runs:
   using: "composite"
   steps:
@@ -88,6 +97,8 @@ runs:
         MATOMO_URL: ${{ inputs.MATOMO_URL }}
         MATOMO_SITE_ID: ${{ inputs.MATOMO_SITE_ID }}
         ANALYTICS_DISABLED: ${{ inputs.ANALYTICS_DISABLED }}
+        TRON_GASLESS_BASE_URL: ${{ inputs.TRON_GASLESS_BASE_URL }}
+        TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
       run: |
         echo "Running \`flutter build\` to generate assets for the deployment build"
 
@@ -106,6 +117,19 @@ runs:
         # Add commit hash and build date to build command
         BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"
         BUILD_CMD="$BUILD_CMD --dart-define=BUILD_DATE=$BUILD_DATE"
+
+        if [ -n "$TRON_GASLESS_BASE_URL" ]; then
+          echo "Adding TRON GasFree proxy configuration: $TRON_GASLESS_BASE_URL"
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_BASE_URL=$TRON_GASLESS_BASE_URL"
+        else
+          echo "Warning: TRON_GASLESS_BASE_URL is empty; gas-free TRON will be disabled for this build."
+        fi
+
+        if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_SERVICE_PROVIDER=$TRON_GASLESS_SERVICE_PROVIDER"
+        else
+          echo "Warning: TRON_GASLESS_SERVICE_PROVIDER is empty; KDF will rely on provider auto-discovery where supported."
+        fi
 
         # Check and add the shared Trello board and list IDs if they are available
         HAVE_TRELLO_IDS=false
