@@ -84,7 +84,7 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
       args:
-        # Pin the GLEEC fork + the gas-free commit so the build is reproducible.
+        # Pin the GLEEC proxy repo + the gas-free commit so the build is reproducible.
         PROXY_REPO: ${PROXY_REPO:-https://github.com/GLEECBTC/komodo-defi-proxy.git}
         PROXY_COMMIT: ${PROXY_COMMIT:-4526f9d6322c90bb944ca5a0f24e9b547d967696}
     restart: unless-stopped
