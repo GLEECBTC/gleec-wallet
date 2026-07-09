@@ -2,6 +2,11 @@
     "name": "flutter_docker",
     "context": "..",
     "dockerFile": "../.docker/komodo-wallet-android.dockerfile",
+    "features": {
+        "ghcr.io/devcontainers/features/sshd:1": {
+            "version": "latest"
+        }
+    },
     "remoteUser": "komodo",
     "workspaceFolder": "/workspaces/komodo-wallet",
     "initializeCommand": "docker build -t komodo/android-sdk:35 -f ${localWorkspaceFolder}/.docker/android-sdk.dockerfile ${localWorkspaceFolder}",
