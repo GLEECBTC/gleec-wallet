@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactoring Guru Patterns"
+  short_description: "Choose patterns without unnecessary ceremony."
+  default_prompt: "Use -guru-patterns to select the smallest suitable design pattern for this change."

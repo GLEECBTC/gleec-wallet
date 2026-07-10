@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flutter BLoC Development"
+  short_description: "Build wallet features with injected repositories and BLoCs."
+  default_prompt: "Use -bloc-development to implement this Flutter feature with the repository and BLoC conventions."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gleec UI Implementation"
+  short_description: "Implement polished responsive Gleec interfaces."
+  default_prompt: "Use -ui-design-implementation to build this approved Gleec UI responsively."
