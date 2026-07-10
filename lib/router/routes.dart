@@ -10,6 +10,13 @@ abstract class AppRoutePath {
   final String location = '';
 }
 
+class CardRoutePath implements AppRoutePath {
+  CardRoutePath.card() : location = '/${firstUriSegment.card}';
+
+  @override
+  final String location;
+}
+
 class WalletRoutePath implements AppRoutePath {
   WalletRoutePath.wallet() : location = '/${firstUriSegment.wallet}';
 

@@ -4,6 +4,7 @@ class FirstUriSegment {
   final String wallet = 'wallet';
   final String fiat = 'fiat';
   final String dex = 'dex';
+  final String card = 'card';
   final String bridge = 'bridge';
   final String nfts = 'nfts';
   final String walletManager = 'wallet-manager';

@@ -54,6 +54,8 @@ import 'package:web_dex/blocs/maker_form_bloc.dart';
 import 'package:web_dex/blocs/orderbook_bloc.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
+import 'package:web_dex/features/gnosis_card/application/gnosis_card_bloc.dart';
+import 'package:web_dex/features/gnosis_card/infrastructure/gnosis_card_dependencies.dart';
 import 'package:web_dex/main.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/model/main_menu_value.dart';
@@ -116,6 +118,9 @@ class AppBlocRoot extends StatelessWidget {
       myOrdersService,
     );
     final dexRepository = DexRepository(mm2Api);
+    final gnosisCardDependencies = GnosisCardDependencies.fromEnvironment(
+      komodoDefiSdk,
+    );
 
     final transactionsRepo = performanceMode != null
         ? MockTransactionHistoryRepo(
@@ -172,6 +177,7 @@ class AppBlocRoot extends StatelessWidget {
         ),
         RepositoryProvider(create: (_) => OrderbookBloc(sdk: komodoDefiSdk)),
         RepositoryProvider(create: (_) => myOrdersService),
+        RepositoryProvider.value(value: gnosisCardDependencies),
         RepositoryProvider(
           create: (_) => KmdRewardsBloc(coinsRepository, mm2Api),
         ),
@@ -294,6 +300,11 @@ class AppBlocRoot extends StatelessWidget {
             lazy: false,
             create: (context) =>
                 PlatformBloc()..add(const PlatformInitRequested()),
+          ),
+          BlocProvider<GnosisCardBloc>(
+            create: (_) =>
+                gnosisCardDependencies.createBloc()
+                  ..add(const GnosisCardStarted()),
           ),
         ],
         child: _MyAppView(),

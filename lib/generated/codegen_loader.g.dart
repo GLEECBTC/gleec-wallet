@@ -7,6 +7,8 @@ abstract class LocaleKeys {
   static const rewardClaiming = 'rewardClaiming';
   static const noKmdAddress = 'noKmdAddress';
   static const dex = 'dex';
+  static const card = 'card';
+  static const more = 'more';
   static const asset = 'asset';
   static const assets = 'assets';
   static const price = 'price';

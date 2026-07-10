@@ -77,6 +77,18 @@ class NavIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (item == MainMenuValue.card || item == MainMenuValue.more) {
+      final color = isActive
+          ? theme.custom.mainMenuSelectedItemColor
+          : theme.custom.mainMenuItemColor;
+      return Icon(
+        item == MainMenuValue.card
+            ? Icons.credit_card_rounded
+            : Icons.more_horiz_rounded,
+        color: color,
+        size: isTablet ? 30 : 20,
+      );
+    }
     final String iconPath = '/${item.name.split('.').last}';
     final String screenPath = isMobile ? '/mobile' : '/desktop';
     final String themePath = isMobile

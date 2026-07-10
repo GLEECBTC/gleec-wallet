@@ -6,6 +6,7 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
+import 'package:web_dex/common/app_assets.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
@@ -81,6 +82,16 @@ class MainMenuBarMobile extends StatelessWidget {
                     child: Tooltip(
                       message: walletOnlyTooltipMessage(),
                       child: MainMenuBarMobileItem(
+                        value: MainMenuValue.card,
+                        enabled: currentWallet?.isHW != true,
+                        isActive: selected == MainMenuValue.card,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Tooltip(
+                      message: walletOnlyTooltipMessage(),
+                      child: MainMenuBarMobileItem(
                         value: MainMenuValue.fiat,
                         enabled: currentWallet?.isHW != true,
                         isActive: selected == MainMenuValue.fiat,
@@ -88,40 +99,16 @@ class MainMenuBarMobile extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: Tooltip(
-                      message: tradingTooltipMessage(),
-                      child: MainMenuBarMobileItem(
-                        value: MainMenuValue.bridge,
-                        enabled: currentWallet?.isHW != true,
-                        isActive: selected == MainMenuValue.bridge,
-                      ),
-                    ),
-                  ),
-                  if (isMMBotEnabled)
-                    Expanded(
-                      child: Tooltip(
-                        message: tradingTooltipMessage(),
-                        child: MainMenuBarMobileItem(
-                          enabled: currentWallet?.isHW != true,
-                          value: MainMenuValue.marketMakerBot,
-                          isActive: selected == MainMenuValue.marketMakerBot,
-                        ),
-                      ),
-                    ),
-                  Expanded(
-                    child: Tooltip(
-                      message: LocaleKeys.nftDisabledTooltip.tr(),
-                      child: MainMenuBarMobileItem(
-                        value: MainMenuValue.nft,
-                        enabled: false,
-                        isActive: selected == MainMenuValue.nft,
-                      ),
-                    ),
-                  ),
-                  Expanded(
                     child: MainMenuBarMobileItem(
-                      value: MainMenuValue.settings,
-                      isActive: selected == MainMenuValue.settings,
+                      value: MainMenuValue.more,
+                      isActive: _moreDestinations(
+                        isMMBotEnabled,
+                      ).contains(selected),
+                      onTap: () => _showMore(
+                        context,
+                        isMMBotEnabled: isMMBotEnabled,
+                        hardwareWallet: isHardwareWallet,
+                      ),
                     ),
                   ),
                 ],
@@ -131,5 +118,47 @@ class MainMenuBarMobile extends StatelessWidget {
         );
       },
     );
+  }
+
+  List<MainMenuValue> _moreDestinations(bool isMMBotEnabled) => [
+    MainMenuValue.bridge,
+    if (isMMBotEnabled) MainMenuValue.marketMakerBot,
+    MainMenuValue.nft,
+    MainMenuValue.settings,
+    MainMenuValue.support,
+  ];
+
+  Future<void> _showMore(
+    BuildContext context, {
+    required bool isMMBotEnabled,
+    required bool hardwareWallet,
+  }) async {
+    final selected = await showModalBottomSheet<MainMenuValue>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 16),
+          children: [
+            for (final destination in _moreDestinations(isMMBotEnabled))
+              ListTile(
+                leading: NavIcon(
+                  item: destination,
+                  isActive: routingState.selectedMenu == destination,
+                ),
+                title: Text(destination.title),
+                enabled:
+                    destination != MainMenuValue.nft &&
+                    (!hardwareWallet ||
+                        destination == MainMenuValue.settings ||
+                        destination == MainMenuValue.support),
+                onTap: () => Navigator.pop(context, destination),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) routingState.selectedMenu = selected;
   }
 }

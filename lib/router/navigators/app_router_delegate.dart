@@ -82,6 +82,8 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       _setNewDexRoutePath(configurationToSet);
     } else if (configurationToSet is BridgeRoutePath) {
       _setNewBridgeRoutePath(configurationToSet);
+    } else if (configurationToSet is CardRoutePath) {
+      routingState.selectedMenu = MainMenuValue.card;
     } else if (configurationToSet is NftRoutePath) {
       _setNewNftsRoutePath(configurationToSet);
     } else if (configurationToSet is SettingsRoutePath) {
@@ -150,10 +152,12 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       MainMenuValue.fiat: _currentFiatConfiguration,
       MainMenuValue.dex: _currentDexConfiguration,
       MainMenuValue.bridge: _currentBridgeConfiguration,
+      MainMenuValue.card: CardRoutePath.card(),
       MainMenuValue.marketMakerBot: _currentMarketMakerBotConfiguration,
       MainMenuValue.nft: _currentNftConfiguration,
       MainMenuValue.settings: _currentSettingsConfiguration,
       MainMenuValue.support: _currentSettingsConfiguration,
+      MainMenuValue.more: _currentSettingsConfiguration,
     };
   }
 

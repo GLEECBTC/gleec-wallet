@@ -110,6 +110,18 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                             Tooltip(
                               message: walletOnlyTooltipMessage(),
                               child: DesktopMenuDesktopItem(
+                                key: const Key('main-menu-card'),
+                                enabled: currentWallet?.isHW != true,
+                                menu: MainMenuValue.card,
+                                onTap: onTapItem,
+                                isSelected: _checkSelectedItem(
+                                  MainMenuValue.card,
+                                ),
+                              ),
+                            ),
+                            Tooltip(
+                              message: walletOnlyTooltipMessage(),
+                              child: DesktopMenuDesktopItem(
                                 key: const Key('main-menu-fiat'),
                                 enabled: currentWallet?.isHW != true,
                                 menu: MainMenuValue.fiat,
@@ -166,6 +178,14 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                   currentWallet?.config.hasBackup == false,
                               isSelected: _checkSelectedItem(
                                 MainMenuValue.settings,
+                              ),
+                            ),
+                            DesktopMenuDesktopItem(
+                              key: const Key('main-menu-support'),
+                              menu: MainMenuValue.support,
+                              onTap: onTapItem,
+                              isSelected: _checkSelectedItem(
+                                MainMenuValue.support,
                               ),
                             ),
                           ],
