@@ -267,7 +267,7 @@ GaslessAccountStatusResponse _gaslessStatus({
 }
 
 PendingGaslessTransfer _pendingGaslessTransfer({
-  String traceId = 'trace-pending',
+  String? traceId = 'trace-pending',
   GaslessTransferState state = GaslessTransferState.submittedUnknown,
 }) {
   final now = DateTime.utc(2026, 7, 10, 12);
@@ -317,6 +317,8 @@ WithdrawFormBloc _buildTrc20Bloc({
   bool initialGaslessEnabled = true,
   bool initialIsMax = false,
   String pubkeyBalance = '5',
+  WithdrawalAuthorizationGuard? authorizationGuard,
+  String? authorizationFailureMessage,
 }) {
   final parentId = asset.id.parentId;
   final parentAsset = parentId == null
@@ -373,6 +375,8 @@ WithdrawFormBloc _buildTrc20Bloc({
     initialGaslessEnabled: initialGaslessEnabled,
     initialIsMax: initialIsMax,
     gaslessFeatureConfigured: true,
+    authorizationGuard: authorizationGuard,
+    authorizationFailureMessage: authorizationFailureMessage,
   );
 }
 
@@ -1485,6 +1489,70 @@ void testWithdrawFormBloc() {
         );
         expect(success.result?.txHash, 'on-chain-hash');
         expect(success.gaslessTransferState, GaslessTransferState.confirmed);
+      },
+    );
+
+    test(
+      'restart reconciles request-only identity without promoting it to trace',
+      () async {
+        final asset = _trc20Asset();
+        final pending = _pendingGaslessTransfer(traceId: null);
+        final reconciliation = StreamController<WithdrawalProgress>();
+        addTearDown(reconciliation.close);
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => _tronGaslessPreview(
+            txHash: 'unused-preview',
+            toAddress: pending.destinationAddress,
+            timestamp:
+                DateTime.now().millisecondsSinceEpoch ~/
+                Duration.millisecondsPerSecond,
+          ),
+          listPendingGaslessTransfersHandler: () async => [pending],
+          resumePendingGaslessTransferHandler: (identity) {
+            expect(identity, pending.requestId);
+            return reconciliation.stream;
+          },
+        );
+        final bloc = WithdrawFormBloc(
+          asset: asset,
+          sdk: _FakeSdk(
+            addresses: _FakeAddressOperations(),
+            withdrawals: withdrawals,
+            pubkeys: _FakePubkeyManager({
+              asset.id: _assetPubkeys(asset, balance: '5'),
+            }),
+            balances: _FakeBalanceManager({asset.id: _balance('5')}),
+          ),
+          mm2Api: _FakeMm2Api(),
+          gaslessFeatureConfigured: false,
+        );
+        addTearDown(bloc.close);
+
+        final checking = await bloc.stream.firstWhere(
+          (state) =>
+              state.step == WithdrawFormStep.pending &&
+              state.gaslessRequestId == pending.requestId &&
+              state.isSending,
+        );
+        expect(checking.gaslessTraceId, isNull);
+        expect(withdrawals.pendingResumeCallCount, 1);
+
+        reconciliation.add(
+          WithdrawalProgress(
+            status: WithdrawalStatus.inProgress,
+            message: 'Still reconciling request',
+            submission: WithdrawalSubmission.gaslessUnknown(
+              requestId: pending.requestId,
+            ),
+            gaslessTransferState: GaslessTransferState.submittedUnknown,
+          ),
+        );
+        final unresolved = await bloc.stream.firstWhere(
+          (state) => state.gaslessStatusMessage == 'Still reconciling request',
+        );
+        expect(unresolved.gaslessRequestId, pending.requestId);
+        expect(unresolved.gaslessTraceId, isNull);
+        expect(unresolved.canRetryGaslessTransfer, isFalse);
       },
     );
 
@@ -2803,6 +2871,92 @@ void testWithdrawFormBloc() {
     });
 
     group('consolidation prefill', () {
+      test('authorization loss blocks the source preview', () async {
+        final asset = _trc20Asset();
+        final parentId = asset.id.parentId!;
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => _tronPreview(
+            txHash: 'must-not-preview',
+            toAddress: 'gasfree-source-address',
+            timestamp: 1,
+          ),
+        );
+        final bloc = _buildTrc20Bloc(
+          asset: asset,
+          withdrawals: withdrawals,
+          pubkeyBalance: '5',
+          balances: {asset.id: _balance('5'), parentId: _balance('10')},
+          initialRecipient: 'gasfree-source-address',
+          initialGaslessEnabled: false,
+          initialIsMax: true,
+          authorizationGuard: () async => false,
+          authorizationFailureMessage: 'GasFree consolidation paused',
+        );
+        addTearDown(bloc.close);
+
+        await bloc.stream.firstWhere(
+          (state) =>
+              state.recipientAddress == 'gasfree-source-address' &&
+              state.amount == '5',
+        );
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        final blocked = await bloc.stream.firstWhere(
+          (state) =>
+              state.previewError?.message == 'GasFree consolidation paused',
+        );
+
+        expect(blocked.step, WithdrawFormStep.fill);
+        expect(blocked.preview, isNull);
+        expect(withdrawals.previewCallCount, 0);
+      });
+
+      test('authorization loss blocks execution after preview', () async {
+        var authorized = true;
+        final asset = _trc20Asset();
+        final parentId = asset.id.parentId!;
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => _tronPreview(
+            txHash: 'preview-consolidate',
+            toAddress: 'gasfree-source-address',
+            timestamp: 1,
+          ),
+        );
+        final bloc = _buildTrc20Bloc(
+          asset: asset,
+          withdrawals: withdrawals,
+          pubkeyBalance: '5',
+          balances: {asset.id: _balance('5'), parentId: _balance('10')},
+          initialRecipient: 'gasfree-source-address',
+          initialGaslessEnabled: false,
+          initialIsMax: true,
+          authorizationGuard: () => authorized,
+          authorizationFailureMessage: 'GasFree consolidation paused',
+        );
+        addTearDown(bloc.close);
+
+        await bloc.stream.firstWhere(
+          (state) =>
+              state.recipientAddress == 'gasfree-source-address' &&
+              state.amount == '5',
+        );
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await bloc.stream.firstWhere(
+          (state) => state.step == WithdrawFormStep.confirm,
+        );
+
+        authorized = false;
+        bloc.add(const WithdrawFormSubmitted());
+        final blocked = await bloc.stream.firstWhere(
+          (state) =>
+              state.step == WithdrawFormStep.fill &&
+              state.previewError?.message == 'GasFree consolidation paused',
+        );
+
+        expect(blocked.preview, isNull);
+        expect(withdrawals.previewCallCount, 1);
+        expect(withdrawals.executeCallCount, 0);
+      });
+
       test('prefills custody recipient, native rail, and max', () async {
         final asset = _trc20Asset();
         final parentId = asset.id.parentId!;

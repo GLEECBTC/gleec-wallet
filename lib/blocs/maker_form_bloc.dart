@@ -127,6 +127,9 @@ class MakerFormBloc implements BlocBase {
   Stream<Coin?> get outBuyCoin => _buyCoinCtrl.stream;
   Coin? get buyCoin => _buyCoin;
   set buyCoin(Coin? coin) {
+    // Match the sell-side guard: wallet-only/custody assets must not be
+    // introduced through deep links or programmatic quote selection.
+    if (coin != null && coin.walletOnly) return;
     if (coin?.abbr != buyCoin?.abbr) {
       setBuyAmount(null);
       setPriceValue(null);
@@ -530,6 +533,10 @@ class MakerFormBloc implements BlocBase {
   }
 
   Future<TextError?> makeOrder() async {
+    if ((sellCoin?.walletOnly ?? true) || (buyCoin?.walletOnly ?? true)) {
+      return TextError(error: LocaleKeys.dexUnableToStartSwap.tr());
+    }
+
     final Map<String, dynamic>? response = await api.setprice(
       SetPriceRequest(
         base: sellCoin!.abbr,

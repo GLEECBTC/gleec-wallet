@@ -17,6 +17,7 @@ class GaslessPendingTransferPanel extends StatelessWidget {
     required this.onViewActivity,
     required this.onSupport,
     this.traceId,
+    this.requestId,
     super.key,
   });
 
@@ -27,6 +28,7 @@ class GaslessPendingTransferPanel extends StatelessWidget {
   final String supportLabel;
   final String traceLabel;
   final String? traceId;
+  final String? requestId;
   final bool isChecking;
   final VoidCallback? onContinueChecking;
   final VoidCallback? onViewActivity;
@@ -36,6 +38,8 @@ class GaslessPendingTransferPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasTrace = traceId?.trim().isNotEmpty == true;
+    final hasRecoveryIdentity =
+        hasTrace || requestId?.trim().isNotEmpty == true;
     return Semantics(
       container: true,
       liveRegion: true,
@@ -86,11 +90,10 @@ class GaslessPendingTransferPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 28),
-          // A request-only journal record has not received a relay trace yet.
-          // It must remain a non-retryable "still processing" state: there is
-          // no authoritative trace to poll, so omit the polling affordance and
-          // leave Activity/Support as the safe recovery paths.
-          if (hasTrace) ...[
+          // The SDK can safely resume by either persisted identity. A request
+          // ID remains distinct from a trace ID and is never rendered or
+          // promoted as one while reconciliation is still ambiguous.
+          if (hasRecoveryIdentity) ...[
             FilledButton.icon(
               onPressed: isChecking ? null : onContinueChecking,
               icon: isChecking

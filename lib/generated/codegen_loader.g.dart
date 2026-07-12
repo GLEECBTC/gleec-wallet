@@ -97,6 +97,8 @@ abstract class LocaleKeys {
   static const bitrefillGasfreeRefundStatus = 'bitrefillGasfreeRefundStatus';
   static const bitrefillGasfreeRefundBalanceUnavailable =
       'bitrefillGasfreeRefundBalanceUnavailable';
+  static const bitrefillGasfreeRefundUnavailable =
+      'bitrefillGasfreeRefundUnavailable';
   static const receiveGaslessBadgeTitle = 'receiveGaslessBadgeTitle';
   static const receiveGaslessBadgeSubtitle = 'receiveGaslessBadgeSubtitle';
   static const receiveGaslessOnlySendToAddress =

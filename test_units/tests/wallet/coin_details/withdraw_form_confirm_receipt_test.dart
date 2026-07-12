@@ -9,6 +9,7 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_pending_transfer_panel.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_complete_form/send_complete_form_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_confirm_form/send_confirm_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_confirm_form/send_confirm_item.dart';
 
@@ -142,6 +143,14 @@ class _FakeSdk implements KomodoDefiSdk {
 
   @override
   final MarketDataManager marketData = _FakeMarketData();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
+    implements WithdrawFormBloc {
+  _FakeWithdrawFormBloc(super.initialState);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -460,7 +469,7 @@ void testWithdrawFormConfirmReceipt() {
       },
     );
 
-    testWidgets('request-only pending state cannot start a trace poll', (
+    testWidgets('request-only pending state can continue safe reconciliation', (
       tester,
     ) async {
       var continueChecks = 0;
@@ -475,6 +484,7 @@ void testWithdrawFormConfirmReceipt() {
           activityLabel: 'View activity',
           supportLabel: 'Contact support',
           traceLabel: 'Trace ID',
+          requestId: 'request-only-id',
           isChecking: false,
           onContinueChecking: () => continueChecks++,
           onViewActivity: () => activityViews++,
@@ -482,7 +492,7 @@ void testWithdrawFormConfirmReceipt() {
         ),
       );
 
-      expect(find.text('Continue checking'), findsNothing);
+      expect(find.text('Continue checking'), findsOneWidget);
       expect(find.text('View activity'), findsOneWidget);
       expect(find.text('Contact support'), findsOneWidget);
       final activityAction = find.text('View activity');
@@ -490,7 +500,9 @@ void testWithdrawFormConfirmReceipt() {
       await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(activityAction);
       expect(activityViews, 1);
-      expect(continueChecks, 0);
+      await tester.ensureVisible(find.text('Continue checking'));
+      await tester.tap(find.text('Continue checking'));
+      expect(continueChecks, 1);
       expect(tester.takeException(), isNull);
     });
 
@@ -534,6 +546,71 @@ void testWithdrawFormConfirmReceipt() {
         greaterThanOrEqualTo(48),
       );
     });
+
+    testWidgets(
+      'desktop confirmation and completion targets are at least 48dp',
+      (tester) async {
+        final asset = _utxoAsset();
+        final bloc = _FakeWithdrawFormBloc(
+          WithdrawFormState(
+            asset: asset,
+            step: WithdrawFormStep.success,
+            recipientAddress: 'recipient',
+            amount: '1',
+            isGaslessFeatureConfigured: false,
+            result: WithdrawalResult.fromWithdrawResult(
+              _result(
+                balanceChanges: _balanceChanges(spent: '1'),
+                fee: FeeInfo.utxoFixed(
+                  coin: asset.id.id,
+                  amount: Decimal.parse('0.0001'),
+                ),
+                coin: asset.id.id,
+              ),
+            ),
+          ),
+        );
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(size: Size(1280, 900)),
+              child: Builder(
+                builder: (context) {
+                  updateScreenType(context);
+                  return BlocProvider<WithdrawFormBloc>.value(
+                    value: bloc,
+                    child: const Scaffold(
+                      body: Column(
+                        children: [
+                          SendConfirmButtons(
+                            hasSendError: false,
+                            onBackTap: _noop,
+                          ),
+                          SendCompleteFormButtons(),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+
+        for (final key in [
+          const Key('confirm-back-button'),
+          const Key('confirm-agree-button'),
+          const Key('send-complete-done'),
+        ]) {
+          expect(
+            tester.getRect(find.byKey(key)).height,
+            greaterThanOrEqualTo(48),
+          );
+        }
+      },
+    );
   });
 }
 

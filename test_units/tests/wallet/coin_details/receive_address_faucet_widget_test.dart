@@ -33,6 +33,8 @@ class _FakeCoinAddressesBloc extends Cubit<CoinAddressesState>
     implements CoinAddressesBloc {
   _FakeCoinAddressesBloc(super.initialState);
 
+  void update(CoinAddressesState state) => emit(state);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -81,14 +83,22 @@ class _FakeMarketDataManager implements MarketDataManager {
 }
 
 class _FakeSdk implements KomodoDefiSdk {
-  _FakeSdk({required this.balances, MarketDataManager? marketData})
-    : marketData = marketData ?? _FakeMarketDataManager();
+  _FakeSdk({
+    required this.balances,
+    MarketDataManager? marketData,
+    this.boundGaslessReceive = false,
+  }) : marketData = marketData ?? _FakeMarketDataManager();
 
   @override
   final BalanceManager balances;
 
   @override
   final MarketDataManager marketData;
+
+  final bool boundGaslessReceive;
+
+  @override
+  bool canReceiveGasless(Asset asset) => boundGaslessReceive;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -233,6 +243,53 @@ GaslessBalanceSnapshot _gaslessSnapshot({
   isFresh: true,
 );
 
+Widget _liveGaslessReceiveDialog({
+  required Asset asset,
+  required PubkeyInfo address,
+  CoinAddressesBloc? addressesBloc,
+  AddressDisplayVariant? variant,
+  TextScaler textScaler = const TextScaler.linear(1),
+}) {
+  final bloc =
+      addressesBloc ??
+      _FakeCoinAddressesBloc(
+        CoinAddressesState(
+          addresses: [address],
+          gaslessReceiveStatus: GaslessReceiveStatus.ready,
+          gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+            const Duration(hours: 1),
+          ),
+          verifiedGasfreeAddress: address.gasfreeAddress,
+        ),
+      );
+  if (addressesBloc == null) addTearDown(bloc.close);
+  final sdk = _FakeSdk(
+    balances: _FakeBalanceManager(const {}),
+    boundGaslessReceive: true,
+  );
+
+  return MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: child!,
+    ),
+    home: RepositoryProvider<KomodoDefiSdk>.value(
+      value: sdk,
+      child: BlocProvider<CoinAddressesBloc>.value(
+        value: bloc,
+        child: Scaffold(
+          body: PubkeyReceiveDialog(
+            coin: asset.toCoin(),
+            address: address,
+            variant: variant,
+            gaslessReceiveEnabled: true,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 void testReceiveAddressFaucetWidgets() {
   group('Receive/address/faucet widgets', () {
     testWidgets('faucet button dispatches request for selected address', (
@@ -347,15 +404,7 @@ void testReceiveAddressFaucetWidgets() {
         );
 
         await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: PubkeyReceiveDialog(
-                coin: asset.toCoin(),
-                address: address,
-                gaslessReceiveEnabled: true,
-              ),
-            ),
-          ),
+          _liveGaslessReceiveDialog(asset: asset, address: address),
         );
 
         // Custody is the headline address; the EOA is hidden by default.
@@ -386,6 +435,71 @@ void testReceiveAddressFaucetWidgets() {
           find.byKey(const Key('receive-standard-balance-notice')),
           findsOneWidget,
         );
+      },
+    );
+
+    testWidgets(
+      'open GasFree dialog revokes QR and copy when readiness changes',
+      (tester) async {
+        final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+        final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+        final address = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+        final addressesBloc = _FakeCoinAddressesBloc(
+          CoinAddressesState(
+            addresses: [address],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+              const Duration(hours: 1),
+            ),
+            verifiedGasfreeAddress: address.gasfreeAddress,
+          ),
+        );
+        addTearDown(addressesBloc.close);
+
+        await tester.pumpWidget(
+          _liveGaslessReceiveDialog(
+            asset: asset,
+            address: address,
+            addressesBloc: addressesBloc,
+          ),
+        );
+        expect(find.byType(QrCode), findsOneWidget);
+        expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
+
+        addressesBloc.update(
+          CoinAddressesState(
+            addresses: [address],
+            gaslessReceiveStatus: GaslessReceiveStatus.disabled,
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const Key('gasless-receive-paused-dialog')),
+          findsOneWidget,
+        );
+        expect(find.byType(QrCode), findsNothing);
+        expect(find.byIcon(Icons.copy_rounded), findsNothing);
+        expect(
+          find.byKey(const Key('gasless-official-recovery-action')),
+          findsOneWidget,
+        );
+
+        addressesBloc.update(
+          CoinAddressesState(
+            addresses: [address],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+              const Duration(hours: 1),
+            ),
+            verifiedGasfreeAddress: 'TDifferentCustodyAddress',
+          ),
+        );
+        await tester.pump();
+        expect(find.byType(QrCode), findsNothing);
       },
     );
 
@@ -963,6 +1077,11 @@ void testReceiveAddressFaucetWidgets() {
           expect(find.textContaining('120.5'), findsOneWidget);
           expect(find.byType(AddressCopyButton), findsNothing);
           expect(find.byType(QrButton), findsNothing);
+          expect(find.text('gaslessRecoveryBody'), findsOneWidget);
+          expect(
+            find.byKey(const Key('gasless-custody-recovery-action')),
+            findsOneWidget,
+          );
         },
       );
 
@@ -1066,20 +1185,10 @@ void testReceiveAddressFaucetWidgets() {
           );
 
           await tester.pumpWidget(
-            MaterialApp(
-              builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: const TextScaler.linear(2)),
-                child: child!,
-              ),
-              home: Scaffold(
-                body: PubkeyReceiveDialog(
-                  coin: usdt.toCoin(),
-                  address: pubkey,
-                  gaslessReceiveEnabled: true,
-                ),
-              ),
+            _liveGaslessReceiveDialog(
+              asset: usdt,
+              address: pubkey,
+              textScaler: const TextScaler.linear(2),
             ),
           );
           await tester.pumpAndSettle();

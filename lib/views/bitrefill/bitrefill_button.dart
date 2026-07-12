@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:komodo_ui/komodo_ui.dart' show showAddressSearch;
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/bitrefill/bloc/bitrefill_bloc.dart';
 import 'package:web_dex/bloc/bitrefill/models/bitrefill_event.dart';
 import 'package:web_dex/bloc/bitrefill/models/bitrefill_event_factory.dart';
@@ -14,9 +16,24 @@ import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/bitrefill/bitrefill_inappwebview_button.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:get_it/get_it.dart';
+
+final class _RefundAddressOption {
+  const _RefundAddressOption({
+    required this.address,
+    required this.isGasfree,
+    required this.spendableBalance,
+  });
+
+  final String address;
+  final bool isGasfree;
+  final Decimal? spendableBalance;
+}
 
 /// A button that opens the Bitrefill widget in a new window or tab.
 /// The Bitrefill widget is a web page that allows the user to purchase gift
@@ -55,6 +72,17 @@ class _BitrefillButtonState extends State<BitrefillButton> {
   @override
   void initState() {
     super.initState();
+    _selectedRefundAddress = null;
+    context.read<BitrefillBloc>().add(
+      BitrefillLoadRequested(coin: widget.coin, refundAddress: null),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant BitrefillButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coin.id == widget.coin.id) return;
+
     _selectedRefundAddress = _defaultRefundAddress(context);
     context.read<BitrefillBloc>().add(
       BitrefillLoadRequested(
@@ -68,14 +96,39 @@ class _BitrefillButtonState extends State<BitrefillButton> {
   Widget build(BuildContext context) {
     void handleMessage(String event) => _handleMessage(event, context);
     final KomodoDefiSdk sdk = GetIt.I<KomodoDefiSdk>();
+    final addressesState = context.watch<CoinAddressesBloc>().state;
+    final gaslessSnapshot = sdk.balances.lastKnownGaslessBalanceSnapshot(
+      widget.coin.id,
+    );
+    final gaslessReceiveEnabled = _gaslessReceiveEnabled(
+      context,
+      sdk,
+      addressesState: addressesState,
+    );
+    final isHdWallet = _isHdWallet(context);
 
     return BlocListener<CoinAddressesBloc, CoinAddressesState>(
       listenWhen: (previous, current) =>
+          gaslessReceiveEnabled &&
           _selectedRefundAddress == null &&
-          _firstGasfreeRefundAddress(previous.addresses) == null &&
-          _firstGasfreeRefundAddress(current.addresses) != null,
+          _firstGasfreeRefundAddress(
+                previous.addresses,
+                gaslessReceiveEnabled: true,
+                isHdWallet: isHdWallet,
+              ) ==
+              null &&
+          _firstGasfreeRefundAddress(
+                current.addresses,
+                gaslessReceiveEnabled: true,
+                isHdWallet: isHdWallet,
+              ) !=
+              null,
       listener: (context, state) {
-        final refundAddress = _firstGasfreeRefundAddress(state.addresses);
+        final refundAddress = _firstGasfreeRefundAddress(
+          state.addresses,
+          gaslessReceiveEnabled: gaslessReceiveEnabled,
+          isHdWallet: isHdWallet,
+        );
         if (refundAddress != null) {
           _setRefundAddress(context, refundAddress);
         }
@@ -93,10 +146,12 @@ class _BitrefillButtonState extends State<BitrefillButton> {
             isCoinSupported = state.supportedCoins.contains(widget.coin.abbr);
           }
 
-          final double coinBalance =
-              sdk.balances.lastKnown(widget.coin.id)?.spendable.toDouble() ??
-              0.0;
-          final bool hasNonZeroBalance = coinBalance > 0;
+          final walletSpendable =
+              sdk.balances.lastKnown(widget.coin.id)?.spendable ?? Decimal.zero;
+          final custodySpendable =
+              gaslessSnapshot?.custodySpendable ?? Decimal.zero;
+          final bool hasNonZeroBalance =
+              walletSpendable > Decimal.zero || custodySpendable > Decimal.zero;
 
           final isShown =
               bitrefillLoadSuccess &&
@@ -123,8 +178,14 @@ class _BitrefillButtonState extends State<BitrefillButton> {
                   isCoinSupported,
                 ),
                 onMessage: handleMessage,
-                onPressed: () async =>
-                    _handleButtonPress(context, hasNonZeroBalance),
+                onBeforeOpen: () => _prepareLaunchUrl(
+                  context,
+                  hasNonZeroBalance: hasNonZeroBalance,
+                  currentUrl: url,
+                  gaslessReceiveEnabled: gaslessReceiveEnabled,
+                  isHdWallet: isHdWallet,
+                  gaslessSnapshot: gaslessSnapshot,
+                ),
               ),
             ],
           );
@@ -161,54 +222,102 @@ class _BitrefillButtonState extends State<BitrefillButton> {
     return null;
   }
 
-  bool _usesGasfreeAddress(PubkeyInfo address) =>
+  bool _gaslessReceiveEnabled(
+    BuildContext context,
+    KomodoDefiSdk sdk, {
+    CoinAddressesState? addressesState,
+  }) {
+    final walletType = context
+        .read<AuthBloc>()
+        .state
+        .currentUser
+        ?.wallet
+        .config
+        .type;
+    if (walletType != WalletType.iguana && walletType != WalletType.hdwallet) {
+      return false;
+    }
+    final state = addressesState ?? context.read<CoinAddressesBloc>().state;
+    try {
+      final asset = widget.coin.toSdkAsset(sdk);
+      return widget.coin.isGaslessReceiveAsset(sdk) &&
+          state.addresses.any(
+            (address) =>
+                isCanonicalTronGaslessPubkey(
+                  address,
+                  isHdWallet: walletType == WalletType.hdwallet,
+                ) &&
+                isVerifiedBoundTronGaslessReceive(
+                  sdk,
+                  asset,
+                  capabilityReady:
+                      state.gaslessReceiveStatus == GaslessReceiveStatus.ready,
+                  verifiedAddress: state.verifiedGasfreeAddress,
+                  custodyAddress: address.gasfreeAddress,
+                  expiresAt: state.gaslessReceiveConfigExpiresAt,
+                ),
+          );
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _gasfreeSelectionIsCurrent(
+    BuildContext context,
+    KomodoDefiSdk sdk,
+    CoinAddressesBloc addressesBloc,
+    _RefundAddressOption selected,
+  ) {
+    if (!selected.isGasfree) return true;
+    final state = addressesBloc.state;
+    return selected.address == state.verifiedGasfreeAddress &&
+        _gaslessReceiveEnabled(context, sdk, addressesState: state) &&
+        state.addresses.any(
+          (address) =>
+              address.gasfreeAddress == selected.address &&
+              isCanonicalTronGaslessPubkey(
+                address,
+                isHdWallet: _isHdWallet(context),
+              ),
+        );
+  }
+
+  bool _usesGasfreeAddress(
+    PubkeyInfo address, {
+    required bool gaslessReceiveEnabled,
+    required bool isHdWallet,
+  }) =>
+      gaslessReceiveEnabled &&
       widget.coin.id.subClass == CoinSubClass.trc20 &&
+      isCanonicalTronGaslessPubkey(address, isHdWallet: isHdWallet) &&
       (address.gasfreeAddress?.isNotEmpty ?? false);
 
-  // Refunds (failed orders / overpayments, rare) default to the GasFree
-  // custody address so refunded funds land gaslessly spendable. TRON permits
-  // TRC20 transfers to contract accounts and Bitrefill documents no contract-
-  // address restriction, so custody is the better target than the standard
-  // address (where a refund would land stranded, needing TRX to move). The
-  // user can still pick the standard address in the selector below.
-  String _refundAddressFor(PubkeyInfo address) {
-    final gasfreeAddress = address.gasfreeAddress;
-    if (_usesGasfreeAddress(address)) {
-      return gasfreeAddress!;
-    }
-
-    return address.address;
-  }
-
-  String _refundAddressStatus(PubkeyInfo address) {
-    if (_usesGasfreeAddress(address)) {
-      return LocaleKeys.bitrefillGasfreeRefundStatus.tr(
-        args: [address.balance.spendable.toString(), widget.coin.abbr],
-      );
-    }
-
-    return LocaleKeys.addressBalanceAvailable.tr(
-      args: [address.balance.spendable.toString(), widget.coin.abbr],
-    );
-  }
+  bool _isHdWallet(BuildContext context) =>
+      context.read<AuthBloc>().state.currentUser?.wallet.config.type ==
+      WalletType.hdwallet;
 
   String? _defaultRefundAddress(BuildContext context) {
-    if (widget.coin.id.subClass != CoinSubClass.trc20) {
-      return null;
-    }
-
     return _firstGasfreeRefundAddress(
       context.read<CoinAddressesBloc>().state.addresses,
+      gaslessReceiveEnabled: _gaslessReceiveEnabled(
+        context,
+        GetIt.I<KomodoDefiSdk>(),
+      ),
+      isHdWallet: _isHdWallet(context),
     );
   }
 
-  String? _firstGasfreeRefundAddress(List<PubkeyInfo> addresses) {
-    if (widget.coin.id.subClass != CoinSubClass.trc20) {
-      return null;
-    }
-
+  String? _firstGasfreeRefundAddress(
+    List<PubkeyInfo> addresses, {
+    required bool gaslessReceiveEnabled,
+    required bool isHdWallet,
+  }) {
     for (final address in addresses) {
-      if (_usesGasfreeAddress(address)) {
+      if (_usesGasfreeAddress(
+        address,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+        isHdWallet: isHdWallet,
+      )) {
         return address.gasfreeAddress;
       }
     }
@@ -217,6 +326,10 @@ class _BitrefillButtonState extends State<BitrefillButton> {
   }
 
   void _setRefundAddress(BuildContext context, String refundAddress) {
+    _applyRefundAddress(context.read<BitrefillBloc>(), refundAddress);
+  }
+
+  void _applyRefundAddress(BitrefillBloc bloc, String refundAddress) {
     if (_selectedRefundAddress == refundAddress) {
       return;
     }
@@ -225,7 +338,7 @@ class _BitrefillButtonState extends State<BitrefillButton> {
       _selectedRefundAddress = refundAddress;
     });
 
-    context.read<BitrefillBloc>().add(
+    bloc.add(
       BitrefillLoadRequested(
         coin: widget.coin,
         refundAddress: _selectedRefundAddress,
@@ -233,37 +346,200 @@ class _BitrefillButtonState extends State<BitrefillButton> {
     );
   }
 
-  /// Handles button press with address selection if needed
-  Future<void> _handleButtonPress(
-    BuildContext context,
-    bool hasNonZeroBalance,
-  ) async {
-    if (!hasNonZeroBalance) {
-      return; // Button should be disabled anyway
-    }
-
-    // Check if we need to show address selector
-    final addressesBloc = context.read<CoinAddressesBloc>();
-    final addresses = addressesBloc.state.addresses;
-
-    if (addresses.length > 1) {
-      // Show address selector if multiple addresses are available
-      final selectedAddress = await showAddressSearch(
-        context,
-        addresses: addresses,
-        assetNameLabel: widget.coin.abbr,
-        verified: _usesGasfreeAddress,
-        displayAddress: _refundAddressFor,
-        copyAddress: _refundAddressFor,
-        balanceLabel: _refundAddressStatus,
-      );
-
-      if (selectedAddress != null && context.mounted) {
-        _setRefundAddress(context, _refundAddressFor(selectedAddress));
-      }
-    }
-    // If single address or no address selection needed, the button will work with existing URL
+  List<_RefundAddressOption> _refundOptions(
+    List<PubkeyInfo> addresses, {
+    required bool gaslessReceiveEnabled,
+    required bool isHdWallet,
+    required GaslessBalanceSnapshot? gaslessSnapshot,
+  }) {
+    return [
+      for (final address in addresses) ...[
+        if (_usesGasfreeAddress(
+          address,
+          gaslessReceiveEnabled: gaslessReceiveEnabled,
+          isHdWallet: isHdWallet,
+        ))
+          _RefundAddressOption(
+            address: address.gasfreeAddress!,
+            isGasfree: true,
+            spendableBalance:
+                gaslessSnapshot?.custodyAddress == address.gasfreeAddress
+                ? gaslessSnapshot?.custodySpendable
+                : null,
+          ),
+        _RefundAddressOption(
+          address: address.address,
+          isGasfree: false,
+          spendableBalance: address.balance.spendable,
+        ),
+      ],
+    ];
   }
+
+  Future<_RefundAddressOption?> _selectRefundAddress(
+    BuildContext context,
+    List<_RefundAddressOption> options,
+  ) async {
+    if (options.isEmpty) return null;
+    if (options.length == 1) return options.single;
+
+    return showDialog<_RefundAddressOption>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(LocaleKeys.addresses.tr()),
+        children: [
+          for (final option in options)
+            SimpleDialogOption(
+              key: ValueKey('bitrefill-refund-${option.address}'),
+              onPressed: () => Navigator.of(dialogContext).pop(option),
+              child: Row(
+                children: [
+                  Icon(
+                    option.isGasfree
+                        ? Icons.bolt_rounded
+                        : Icons.account_balance_wallet_outlined,
+                    semanticLabel: option.isGasfree
+                        ? LocaleKeys.addressRowGasfreeTag.tr()
+                        : LocaleKeys.addressRowStandardTag.tr(),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          option.isGasfree
+                              ? LocaleKeys.addressRowGasfreeTag.tr()
+                              : LocaleKeys.addressRowStandardTag.tr(),
+                          style: Theme.of(dialogContext).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          option.address,
+                          softWrap: true,
+                          style: Theme.of(dialogContext).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          option.spendableBalance == null
+                              ? LocaleKeys
+                                    .bitrefillGasfreeRefundBalanceUnavailable
+                                    .tr()
+                              : option.isGasfree
+                              ? LocaleKeys.bitrefillGasfreeRefundStatus.tr(
+                                  args: [
+                                    option.spendableBalance.toString(),
+                                    widget.coin.abbr,
+                                  ],
+                                )
+                              : LocaleKeys.addressBalanceAvailable.tr(
+                                  args: [
+                                    option.spendableBalance.toString(),
+                                    widget.coin.abbr,
+                                  ],
+                                ),
+                          style: Theme.of(dialogContext).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_selectedRefundAddress == option.address)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: Icon(Icons.check_circle_outline),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _prepareLaunchUrl(
+    BuildContext context, {
+    required bool hasNonZeroBalance,
+    required String currentUrl,
+    required bool gaslessReceiveEnabled,
+    required bool isHdWallet,
+    required GaslessBalanceSnapshot? gaslessSnapshot,
+  }) async {
+    if (!hasNonZeroBalance) return null;
+    final authBloc = context.read<AuthBloc>();
+    final addressesBloc = context.read<CoinAddressesBloc>();
+    final bitrefillBloc = context.read<BitrefillBloc>();
+    final sdk = GetIt.I<KomodoDefiSdk>();
+    final initialWalletId = authBloc.state.currentUser?.walletId;
+    final initialCoinId = widget.coin.id;
+
+    bool selectionContextIsCurrent([_RefundAddressOption? selected]) =>
+        mounted &&
+        authBloc.state.currentUser?.walletId == initialWalletId &&
+        widget.coin.id == initialCoinId &&
+        (selected == null ||
+            _gasfreeSelectionIsCurrent(context, sdk, addressesBloc, selected));
+
+    void showGasfreeSelectionUnavailable(_RefundAddressOption selected) {
+      if (!selected.isGasfree || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(LocaleKeys.bitrefillGasfreeRefundUnavailable.tr()),
+        ),
+      );
+    }
+
+    final options = _refundOptions(
+      addressesBloc.state.addresses,
+      gaslessReceiveEnabled: gaslessReceiveEnabled,
+      isHdWallet: isHdWallet,
+      gaslessSnapshot: gaslessSnapshot,
+    );
+    final selected = await _selectRefundAddress(context, options);
+    if (selected == null) return null;
+    if (!selectionContextIsCurrent(selected)) {
+      showGasfreeSelectionUnavailable(selected);
+      return null;
+    }
+
+    if (_urlUsesRefundAddress(currentUrl, selected.address)) {
+      if (!selectionContextIsCurrent(selected)) {
+        showGasfreeSelectionUnavailable(selected);
+        return null;
+      }
+      _selectedRefundAddress = selected.address;
+      return selectionContextIsCurrent(selected) ? currentUrl : null;
+    }
+
+    final matchingState = bitrefillBloc.stream.firstWhere(
+      (state) =>
+          state is BitrefillLoadSuccess &&
+          _urlUsesRefundAddress(state.url, selected.address),
+    );
+    if (!selectionContextIsCurrent(selected)) {
+      showGasfreeSelectionUnavailable(selected);
+      return null;
+    }
+    _applyRefundAddress(bitrefillBloc, selected.address);
+
+    try {
+      final state = await matchingState.timeout(const Duration(seconds: 5));
+      if (!selectionContextIsCurrent(selected)) {
+        showGasfreeSelectionUnavailable(selected);
+        return null;
+      }
+      return (state as BitrefillLoadSuccess).url;
+    } on TimeoutException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(LocaleKeys.somethingWrong.tr())));
+      }
+      return null;
+    }
+  }
+
+  bool _urlUsesRefundAddress(String url, String refundAddress) =>
+      Uri.tryParse(url)?.queryParameters['refund_address'] == refundAddress;
 
   /// Handles messages from the Bitrefill widget.
   /// The message is a JSON string that contains the event name and event data.

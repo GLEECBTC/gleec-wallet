@@ -137,6 +137,8 @@ class WithdrawForm extends StatefulWidget {
   final bool initialGaslessEnabled;
   final bool initialIsMax;
   final bool lockSourceSelection;
+  final WithdrawalAuthorizationGuard? authorizationGuard;
+  final String? authorizationFailureMessage;
 
   const WithdrawForm({
     required this.asset,
@@ -147,6 +149,8 @@ class WithdrawForm extends StatefulWidget {
     this.initialGaslessEnabled = true,
     this.initialIsMax = false,
     this.lockSourceSelection = false,
+    this.authorizationGuard,
+    this.authorizationFailureMessage,
     super.key,
   });
 
@@ -176,6 +180,8 @@ class _WithdrawFormState extends State<WithdrawForm> {
       initialGaslessEnabled: widget.initialGaslessEnabled,
       initialIsMax: widget.initialIsMax,
       lockSourceSelection: widget.lockSourceSelection,
+      authorizationGuard: widget.authorizationGuard,
+      authorizationFailureMessage: widget.authorizationFailureMessage,
     );
   }
 
@@ -2828,6 +2834,7 @@ class WithdrawFormPendingSection extends StatelessWidget {
           supportLabel: LocaleKeys.support.tr(),
           traceLabel: LocaleKeys.withdrawGaslessTraceId.tr(),
           traceId: state.gaslessTraceId,
+          requestId: state.gaslessRequestId,
           isChecking: state.isSending,
           onContinueChecking: () => context.read<WithdrawFormBloc>().add(
             const WithdrawFormGaslessTraceCheckRequested(),

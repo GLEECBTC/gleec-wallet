@@ -1,9 +1,9 @@
 enum CoinPageType {
   send,
 
-  /// One-time native transfer moving stranded standard-address (EOA) funds of
-  /// a gasless asset into the user's own GasFree custody address. Opens the
-  /// send form prefilled: recipient = custody address, native rail, max.
+  /// Per-source native transfer wizard moving funded Standard EOAs into the
+  /// user's canonical GasFree custody address. Every source is previewed and
+  /// confirmed independently because its TRX balance pays its own network fee.
   sendConsolidate,
   claim,
   info,

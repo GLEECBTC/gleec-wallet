@@ -80,7 +80,7 @@ class _DesktopButtons extends StatelessWidget {
   final VoidCallback onBackTap;
   @override
   Widget build(BuildContext context) {
-    const double height = 40.0;
+    const double height = 48.0;
     const double space = 16.0;
 
     final width = hasError ? withdrawWidth : (withdrawWidth - space) / 2;

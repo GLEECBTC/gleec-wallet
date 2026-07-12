@@ -28,6 +28,8 @@ export 'package:web_dex/bloc/withdraw_form/withdraw_form_step.dart';
 
 import 'package:decimal/decimal.dart';
 
+typedef WithdrawalAuthorizationGuard = FutureOr<bool> Function();
+
 class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   static final Logger _logger = Logger('WithdrawFormBloc');
   static const _unsupportedSiaHardwareWalletMessage =
@@ -45,6 +47,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   final bool _initialGaslessEnabled;
   final bool _initialIsMax;
   final bool _lockSourceSelection;
+  final WithdrawalAuthorizationGuard? _authorizationGuard;
+  final String? _authorizationFailureMessage;
   Timer? _tronPreviewTimer;
 
   WithdrawFormBloc({
@@ -58,6 +62,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     bool initialIsMax = false,
     bool lockSourceSelection = false,
     bool? gaslessFeatureConfigured,
+    WithdrawalAuthorizationGuard? authorizationGuard,
+    String? authorizationFailureMessage,
   }) : _sdk = sdk,
        _walletType = walletType,
        _initialRecipient = initialRecipient,
@@ -65,6 +71,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
        _initialGaslessEnabled = initialGaslessEnabled,
        _initialIsMax = initialIsMax,
        _lockSourceSelection = lockSourceSelection,
+       _authorizationGuard = authorizationGuard,
+       _authorizationFailureMessage = authorizationFailureMessage,
        super(
          WithdrawFormState(
            asset: asset,
@@ -137,6 +145,43 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     if (initialIsMax) {
       add(const WithdrawFormMaxAmountEnabled(true));
     }
+  }
+
+  Future<bool> _authorizeWithdrawal(Emitter<WithdrawFormState> emit) async {
+    final guard = _authorizationGuard;
+    if (guard == null) return true;
+
+    var authorized = false;
+    try {
+      authorized = await guard();
+    } catch (_) {
+      authorized = false;
+    }
+    if (emit.isDone) return false;
+    if (authorized) return true;
+
+    _cancelTronPreviewTimer();
+    emit(
+      state.copyWith(
+        step: WithdrawFormStep.fill,
+        preview: () => null,
+        authorizedRecipientAmount: () => null,
+        isSending: false,
+        isAwaitingTrezorConfirmation: false,
+        previewError: () => TextError(
+          error:
+              _authorizationFailureMessage ??
+              LocaleKeys.receiveGaslessPausedNotice.tr(),
+        ),
+        transactionError: () => null,
+        confirmStepError: () => null,
+        previewExpiresAt: () => null,
+        previewSecondsRemaining: () => null,
+        isPreviewExpired: false,
+        isPreviewRefreshing: false,
+      ),
+    );
+    return false;
   }
 
   bool _isTronAsset(Asset asset) =>
@@ -1430,6 +1475,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormPreviewSubmitted event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (!await _authorizeWithdrawal(emit)) return;
     final requestState = state;
     if (requestState.hasValidationErrors) return;
     final guardError = _previewGuardError();
@@ -1554,6 +1600,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormTronPreviewRefreshRequested event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (!await _authorizeWithdrawal(emit)) return;
     final requestState = state;
     if (!_isTronAsset(requestState.asset) ||
         requestState.step != WithdrawFormStep.confirm ||
@@ -1702,7 +1749,13 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     final traceId = state.gaslessTraceId;
-    if (traceId == null || traceId.isEmpty || state.isSending) return;
+    final requestId = state.gaslessRequestId;
+    final reconciliationId = traceId?.isNotEmpty == true
+        ? traceId
+        : requestId?.isNotEmpty == true
+        ? requestId
+        : null;
+    if (reconciliationId == null || state.isSending) return;
 
     emit(
       state.copyWith(
@@ -1716,16 +1769,22 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
     try {
       await for (final progress
-          in _sdk.withdrawals.resumePendingGaslessTransfer(traceId)) {
+          in _sdk.withdrawals.resumePendingGaslessTransfer(reconciliationId)) {
         // Only the typed relay submission may supply a provider trace. The
         // generic task ID is also used for request-only records and therefore
         // must never be promoted into a pollable trace identity.
-        final progressTraceId = progress.submission?.traceId ?? traceId;
+        final progressTraceId =
+            progress.submission?.traceId ?? state.gaslessTraceId;
         final progressRequestId =
             progress.submission?.requestId ?? state.gaslessRequestId;
         final transferState =
             progress.gaslessTransferState ??
-            _gaslessTransferStateForProgress(progress, hasAcceptedTrace: true);
+            _gaslessTransferStateForProgress(
+              progress,
+              hasAcceptedTrace:
+                  progressTraceId?.isNotEmpty == true ||
+                  state.gaslessTransferState?.hasRelayAccepted == true,
+            );
 
         if (progress.status == WithdrawalStatus.complete &&
             progress.withdrawalResult != null) {
@@ -1799,6 +1858,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormSubmitted event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (!await _authorizeWithdrawal(emit)) return;
     if (state.hasValidationErrors) return;
     if (_isUnsupportedSiaHardwareWalletFlow) {
       emit(

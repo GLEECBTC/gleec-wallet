@@ -1,8 +1,9 @@
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
+import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
+import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_bloc.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_event.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -10,11 +11,13 @@ import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/analytics/events/portfolio_events.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_info.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/coin_details/rewards/kmd_reward_claim_success.dart';
 import 'package:web_dex/views/wallet/coin_details/rewards/kmd_rewards_info.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/gasless_consolidation_wizard.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
 
 class CoinDetails extends StatefulWidget {
@@ -109,22 +112,31 @@ class _CoinDetailsState extends State<CoinDetails> {
       case CoinPageType.sendConsolidate:
         final sdk = context.read<KomodoDefiSdk>();
         final asset = widget.coin.toSdkAsset(sdk);
-        // The user's own GasFree custody address — the consolidation target.
-        final gasfreeAddress = sdk.pubkeys
-            .lastKnown(asset.id)
-            ?.keys
-            .firstWhereOrNull((key) => key.gasfreeAddress?.isNotEmpty ?? false)
-            ?.gasfreeAddress;
-        return WithdrawForm(
-          asset: asset,
-          // A one-time native transfer moving standard-address funds into the
-          // custody address; without a known custody address this degrades to
-          // the plain send form.
-          initialRecipient: gasfreeAddress,
-          initialGaslessEnabled: gasfreeAddress == null,
-          initialIsMax: gasfreeAddress != null,
-          onSuccess: _openInfo,
-          onBackButtonPressed: _openInfo,
+        final walletType = context
+            .read<AuthBloc>()
+            .state
+            .currentUser
+            ?.wallet
+            .config
+            .type;
+        final gasfreeAddress = cachedCanonicalTronGaslessCustodyAddress(
+          sdk,
+          asset,
+          walletType: walletType,
+        );
+
+        // The info-page receive BLoC is intentionally page-scoped. Start a
+        // fresh gate evaluation for the wizard so remote expiry, SDK binding,
+        // and the canonical cache are revalidated after navigation as well.
+        return BlocProvider<CoinAddressesBloc>(
+          create: (context) =>
+              CoinAddressesBloc(sdk, asset.id.id, context.read<AnalyticsBloc>())
+                ..add(const CoinAddressesStarted()),
+          child: GaslessConsolidationWizard(
+            asset: asset,
+            custodyAddress: gasfreeAddress ?? '',
+            onDone: _openInfo,
+          ),
         );
       case CoinPageType.claim:
         return KmdRewardsInfo(

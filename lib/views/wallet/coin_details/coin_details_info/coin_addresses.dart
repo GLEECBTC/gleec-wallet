@@ -18,6 +18,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -70,6 +71,26 @@ bool _isGaslessCustodyAddress(
     coin.id.subClass == CoinSubClass.trc20 &&
     isCanonicalTronGaslessPubkey(address, isHdWallet: isHdWallet) &&
     (address.gasfreeAddress?.isNotEmpty ?? false);
+
+bool _isVerifiedGaslessReceiveForAddress(
+  BuildContext context,
+  Coin coin,
+  CoinAddressesState state,
+  PubkeyInfo address,
+) {
+  try {
+    return isVerifiedBoundTronGaslessReceive(
+      context.sdk,
+      coin.toSdkAsset(context.sdk),
+      capabilityReady: state.gaslessReceiveStatus == GaslessReceiveStatus.ready,
+      verifiedAddress: state.verifiedGasfreeAddress,
+      custodyAddress: address.gasfreeAddress,
+      expiresAt: state.gaslessReceiveConfigExpiresAt,
+    );
+  } catch (_) {
+    return false;
+  }
+}
 
 /// Whether the faucet button may be shown on a row displaying [variant]. The
 /// faucet drips to the standard (EOA) address, so it belongs on the standard
@@ -237,11 +258,9 @@ class _AddressVariantTag extends StatelessWidget {
 }
 
 class _GaslessRecoveryBanner extends StatelessWidget {
-  const _GaslessRecoveryBanner();
+  const _GaslessRecoveryBanner({required this.isTestnet});
 
-  static const _recoveryGuide =
-      'https://support.tronlink.org/hc/en-us/articles/'
-      '38903684778393-GasFree-User-Guide';
+  final bool isTestnet;
 
   @override
   Widget build(BuildContext context) {
@@ -270,12 +289,49 @@ class _GaslessRecoveryBanner extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             TextButton.icon(
-              onPressed: () => launchURLString(_recoveryGuide),
+              key: const Key('gasless-official-recovery-action'),
+              onPressed: () =>
+                  launchURLString(tronGaslessRecoveryUrl(isTestnet: isTestnet)),
               icon: const Icon(Icons.open_in_new_rounded, size: 18),
               label: Text(LocaleKeys.gaslessRecoveryAction.tr()),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _GaslessRecoveryInline extends StatelessWidget {
+  const _GaslessRecoveryInline({required this.isTestnet});
+
+  final bool isTestnet;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            LocaleKeys.receiveGaslessPausedNotice.tr(),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            LocaleKeys.gaslessRecoveryBody.tr(),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
+          TextButton.icon(
+            key: const Key('gasless-custody-recovery-action'),
+            onPressed: () =>
+                launchURLString(tronGaslessRecoveryUrl(isTestnet: isTestnet)),
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: Text(LocaleKeys.gaslessRecoveryAction.tr()),
+          ),
+        ],
       ),
     );
   }
@@ -335,24 +391,45 @@ class _CoinAddressesState extends State<CoinAddresses> {
             }
           },
           builder: (context, state) {
+            final isHdWallet = walletType == WalletType.hdwallet;
+            final hasVerifiedGaslessAddress = state.addresses.any(
+              (address) =>
+                  isCanonicalTronGaslessPubkey(
+                    address,
+                    isHdWallet: isHdWallet,
+                  ) &&
+                  _isVerifiedGaslessReceiveForAddress(
+                    context,
+                    widget.coin,
+                    state,
+                    address,
+                  ),
+            );
             final gaslessReceiveEnabled =
-                gaslessReceiveConfigured &&
-                state.gaslessReceiveStatus == GaslessReceiveStatus.ready &&
-                state.verifiedGasfreeAddress?.isNotEmpty == true;
+                gaslessReceiveConfigured && hasVerifiedGaslessAddress;
             final gaslessCustodyVisible =
                 isSoftwareWallet && widget.coin.isGaslessRecoveryAsset;
             final errorMessage = state.errorMessage?.trim();
+            final hasRetainedCustodyAddress = state.addresses.any(
+              (address) =>
+                  address.gasfreeAddress?.isNotEmpty == true &&
+                  (!widget.coin.isGaslessRecoveryAsset ||
+                      !isSoftwareWallet ||
+                      isCanonicalTronGaslessPubkey(
+                        address,
+                        isHdWallet: isHdWallet,
+                      )),
+            );
             final showRecoveryBanner =
-                !widget.coin.isGaslessRecoveryAsset &&
-                state.addresses.any(
-                  (address) => address.gasfreeAddress?.isNotEmpty == true,
-                );
+                !gaslessReceiveEnabled &&
+                hasRetainedCustodyAddress &&
+                (!widget.coin.isGaslessRecoveryAsset || !gaslessCustodyVisible);
             final rows = visibleAddressRows(
               widget.coin,
               state.addresses,
               hideZeroBalance: state.hideZeroBalance,
               gaslessReceiveEnabled: gaslessReceiveEnabled,
-              isHdWallet: walletType == WalletType.hdwallet,
+              isHdWallet: isHdWallet,
               gaslessCustodyVisible: gaslessCustodyVisible,
             );
             // Gasless assets are single-address by design: the custody model
@@ -376,7 +453,7 @@ class _CoinAddressesState extends State<CoinAddresses> {
                     widget.coin,
                     address,
                     gaslessCustodyVisible: gaslessCustodyVisible,
-                    isHdWallet: walletType == WalletType.hdwallet,
+                    isHdWallet: isHdWallet,
                   ),
                 )
                 .length;
@@ -401,7 +478,9 @@ class _CoinAddressesState extends State<CoinAddresses> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (showRecoveryBanner)
-                            const _GaslessRecoveryBanner(),
+                            _GaslessRecoveryBanner(
+                              isTestnet: widget.coin.isTestCoin,
+                            ),
                           _Header(
                             status: state.status,
                             createAddressStatus: state.createAddressStatus,
@@ -603,24 +682,32 @@ class AddressCard extends StatelessWidget {
                   )
                 : null;
 
-            if (useCompactLayout) {
-              return _MobileAddressContent(
-                address: address,
-                coin: coin,
-                variant: variant,
-                isSoleGaslessRow: isSoleGaslessRow,
-                gaslessReceiveEnabled: gaslessReceiveEnabled,
-                onTapAddress: onTapAddress,
-              );
-            }
+            final content = useCompactLayout
+                ? _MobileAddressContent(
+                    address: address,
+                    coin: coin,
+                    variant: variant,
+                    isSoleGaslessRow: isSoleGaslessRow,
+                    gaslessReceiveEnabled: gaslessReceiveEnabled,
+                    onTapAddress: onTapAddress,
+                  )
+                : _DesktopAddressContent(
+                    address: address,
+                    coin: coin,
+                    variant: variant,
+                    isSoleGaslessRow: isSoleGaslessRow,
+                    gaslessReceiveEnabled: gaslessReceiveEnabled,
+                    onTapAddress: onTapAddress,
+                  );
 
-            return _DesktopAddressContent(
-              address: address,
-              coin: coin,
-              variant: variant,
-              isSoleGaslessRow: isSoleGaslessRow,
-              gaslessReceiveEnabled: gaslessReceiveEnabled,
-              onTapAddress: onTapAddress,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                content,
+                if (variant == AddressDisplayVariant.gasfree &&
+                    !gaslessReceiveEnabled)
+                  _GaslessRecoveryInline(isTestnet: coin.isTestCoin),
+              ],
             );
           },
         ),
@@ -639,14 +726,37 @@ void showPubkeyReceiveDialog(
   AddressDisplayVariant? variant,
   bool gaslessReceiveEnabled = false,
 }) {
+  final wantsGaslessReceive =
+      gaslessReceiveEnabled && variant != AddressDisplayVariant.standard;
+  CoinAddressesBloc? addressesBloc;
+  if (wantsGaslessReceive) {
+    addressesBloc = context.read<CoinAddressesBloc>();
+    if (!_isVerifiedGaslessReceiveForAddress(
+      context,
+      coin,
+      addressesBloc.state,
+      address,
+    )) {
+      return;
+    }
+  }
+
   showDialog<void>(
     context: context,
-    builder: (context) => PubkeyReceiveDialog(
-      coin: coin,
-      address: address,
-      variant: variant,
-      gaslessReceiveEnabled: gaslessReceiveEnabled,
-    ),
+    builder: (context) {
+      final dialog = PubkeyReceiveDialog(
+        coin: coin,
+        address: address,
+        variant: variant,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+      );
+      return addressesBloc == null
+          ? dialog
+          : BlocProvider<CoinAddressesBloc>.value(
+              value: addressesBloc,
+              child: dialog,
+            );
+    },
   );
 }
 
@@ -800,13 +910,6 @@ class _MobileAddressContent extends StatelessWidget {
               SwapAddressTag(address: address),
           ],
         ),
-        if (isGaslessCustody && !gaslessReceiveEnabled) ...[
-          const SizedBox(height: 8),
-          Text(
-            LocaleKeys.receiveGaslessPausedNotice.tr(),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
         const SizedBox(height: 8),
         _Balance(
           address: address,
@@ -982,6 +1085,34 @@ class PubkeyReceiveDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final wantsGasfreeSurface =
+        gaslessReceiveEnabled &&
+        variant != AddressDisplayVariant.standard &&
+        address.gasfreeAddress?.isNotEmpty == true;
+    if (wantsGasfreeSurface) {
+      final addressesState = context.watch<CoinAddressesBloc>().state;
+      if (!_isVerifiedGaslessReceiveForAddress(
+        context,
+        coin,
+        addressesState,
+        address,
+      )) {
+        return AlertDialog(
+          key: const Key('gasless-receive-paused-dialog'),
+          title: Semantics(header: true, child: Text(LocaleKeys.receive.tr())),
+          content: SingleChildScrollView(
+            child: _GaslessRecoveryBanner(isTestnet: coin.isTestCoin),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(MaterialLocalizations.of(context).closeButtonLabel),
+            ),
+          ],
+        );
+      }
+    }
+
     final isGaslessPubkey = _isGaslessReceiveAddress(
       coin,
       address,

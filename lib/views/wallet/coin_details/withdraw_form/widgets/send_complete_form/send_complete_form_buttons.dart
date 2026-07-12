@@ -86,7 +86,7 @@ class _DesktopButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const height = 40.0;
+    const height = 48.0;
     const space = 16.0;
     final WithdrawFormBloc withdrawFormBloc = context.read<WithdrawFormBloc>();
     final WithdrawFormState state = withdrawFormBloc.state;

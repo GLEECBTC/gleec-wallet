@@ -2,10 +2,14 @@ import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
@@ -52,12 +56,28 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final sdk = context.read<KomodoDefiSdk>();
+    final walletType = context.select<AuthBloc, WalletType?>(
+      (bloc) => bloc.state.currentUser?.wallet.config.type,
+    );
+
     return BlocBuilder<CoinAddressesBloc, CoinAddressesState>(
       builder: (context, state) {
         final stranded = strandedStandardBalance(state);
         if (stranded <= Decimal.zero) {
           return const SizedBox.shrink();
         }
+
+        final asset = sdk.assets.fromId(coin.id);
+        final consolidationAddress = asset == null
+            ? null
+            : verifiedTronGaslessConsolidationAddress(
+                sdk,
+                asset,
+                state,
+                walletType: walletType,
+              );
+        final canMoveToGasfree = consolidationAddress != null;
 
         final theme = Theme.of(context);
         final foreground = NoticeBanner.styleOf(
@@ -70,20 +90,43 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
           child: NoticeBanner(
             key: const Key('gasless-standard-balance-notice'),
             icon: Icons.account_balance_wallet_outlined,
-            footer: Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                key: const Key('gasless-consolidate-button'),
-                onPressed: () => setPageType(CoinPageType.sendConsolidate),
-                child: Text(
-                  LocaleKeys.gaslessStandardBalanceAction.tr(),
-                  style: TextStyle(
-                    color: foreground,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
+            footer: canMoveToGasfree
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      key: const Key('gasless-consolidate-button'),
+                      onPressed: () {
+                        if (asset == null) return;
+                        final currentState = context
+                            .read<CoinAddressesBloc>()
+                            .state;
+                        if (verifiedTronGaslessConsolidationAddress(
+                              sdk,
+                              asset,
+                              currentState,
+                              walletType: context
+                                  .read<AuthBloc>()
+                                  .state
+                                  .currentUser
+                                  ?.wallet
+                                  .config
+                                  .type,
+                            ) ==
+                            null) {
+                          return;
+                        }
+                        setPageType(CoinPageType.sendConsolidate);
+                      },
+                      child: Text(
+                        LocaleKeys.gaslessStandardBalanceAction.tr(),
+                        style: TextStyle(
+                          color: foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -98,7 +141,10 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  LocaleKeys.gaslessStandardBalanceBody.tr(),
+                  (canMoveToGasfree
+                          ? LocaleKeys.gaslessStandardBalanceBody
+                          : LocaleKeys.receiveGaslessPausedNotice)
+                      .tr(),
                   style: theme.textTheme.bodySmall?.copyWith(color: foreground),
                 ),
               ],

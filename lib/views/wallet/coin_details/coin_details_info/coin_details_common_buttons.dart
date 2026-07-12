@@ -11,6 +11,7 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
+import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -19,6 +20,7 @@ import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/bitrefill/bitrefill_button.dart';
@@ -27,29 +29,76 @@ import 'package:web_dex/views/wallet/coin_details/coin_details_info/contract_add
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_dialog.dart';
 
-bool _usesGasfreeReceiveAddress(Coin coin, PubkeyInfo address) =>
+bool _usesGasfreeReceiveAddress(
+  Coin coin,
+  PubkeyInfo address, {
+  required bool gaslessReceiveEnabled,
+  required bool isHdWallet,
+}) =>
+    gaslessReceiveEnabled &&
     coin.id.subClass == CoinSubClass.trc20 &&
+    isCanonicalTronGaslessPubkey(address, isHdWallet: isHdWallet) &&
     (address.gasfreeAddress?.isNotEmpty ?? false);
 
-String _receiveAddressFor(Coin coin, PubkeyInfo address) {
+String _receiveAddressFor(
+  Coin coin,
+  PubkeyInfo address, {
+  required bool gaslessReceiveEnabled,
+  required bool isHdWallet,
+}) {
   final gasfreeAddress = address.gasfreeAddress;
-  if (_usesGasfreeReceiveAddress(coin, address)) {
+  if (_usesGasfreeReceiveAddress(
+    coin,
+    address,
+    gaslessReceiveEnabled: gaslessReceiveEnabled,
+    isHdWallet: isHdWallet,
+  )) {
     return gasfreeAddress!;
   }
 
   return address.address;
 }
 
-String _receiveAddressStatus(Coin coin, PubkeyInfo address) {
+String _receiveAddressStatus(
+  Coin coin,
+  PubkeyInfo address, {
+  required bool gaslessReceiveEnabled,
+  required bool isHdWallet,
+}) {
   final args = [
     formatDexAmt(address.balance.spendable),
     abbr2Ticker(coin.abbr),
   ];
-  if (_usesGasfreeReceiveAddress(coin, address)) {
+  if (_usesGasfreeReceiveAddress(
+    coin,
+    address,
+    gaslessReceiveEnabled: gaslessReceiveEnabled,
+    isHdWallet: isHdWallet,
+  )) {
     return LocaleKeys.receiveGasfreeAddressStatus.tr(args: args);
   }
 
   return LocaleKeys.addressBalanceAvailable.tr(args: args);
+}
+
+bool _isVerifiedGaslessReceiveSelection(
+  KomodoDefiSdk sdk,
+  Coin coin,
+  CoinAddressesState state,
+  PubkeyInfo address,
+) {
+  try {
+    return isVerifiedBoundTronGaslessReceive(
+      sdk,
+      coin.toSdkAsset(sdk),
+      capabilityReady: state.gaslessReceiveStatus == GaslessReceiveStatus.ready,
+      verifiedAddress: state.verifiedGasfreeAddress,
+      custodyAddress: address.gasfreeAddress,
+      expiresAt: state.gaslessReceiveConfigExpiresAt,
+    );
+  } catch (_) {
+    return false;
+  }
 }
 
 class CoinDetailsCommonButtons extends StatelessWidget {
@@ -104,68 +153,93 @@ class CoinDetailsCommonButtonsMobileLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Visibility(
-          visible: coin.protocolData?.contractAddress.isNotEmpty ?? false,
-          child: ContractAddressButton(coin),
+    final sendButton = CoinDetailsSendButton(
+      isMobile: isMobile,
+      coin: coin,
+      selectWidget: selectWidget,
+      context: context,
+    );
+    final receiveButton = CoinDetailsReceiveButton(
+      isMobile: isMobile,
+      coin: coin,
+      selectWidget: selectWidget,
+      context: context,
+    );
+    final secondaryActions = <Widget>[
+      if (isBitrefillIntegrationEnabled)
+        BitrefillButton(
+          key: Key('coin-details-bitrefill-button-${coin.abbr.toLowerCase()}'),
+          coin: coin,
+          onPaymentRequested: (_) => selectWidget(CoinPageType.send),
+          tooltip: _getBitrefillTooltip(coin),
         ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: CoinDetailsSendButton(
-                isMobile: isMobile,
-                coin: coin,
-                selectWidget: selectWidget,
-                context: context,
-              ),
-            ),
-            const SizedBox(width: 15),
-            Flexible(
-              child: CoinDetailsReceiveButton(
-                isMobile: isMobile,
-                coin: coin,
-                selectWidget: selectWidget,
-                context: context,
-              ),
-            ),
-          ],
+      if (!coin.walletOnly)
+        CoinDetailsSwapButton(
+          isMobile: isMobile,
+          coin: coin,
+          onClickSwapButton: clickSwapButton,
+          context: context,
         ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stackActions =
+            constraints.maxWidth < 340 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.3;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (isBitrefillIntegrationEnabled) ...[
-              Flexible(
-                child: BitrefillButton(
-                  key: Key(
-                    'coin-details-bitrefill-button-${coin.abbr.toLowerCase()}',
-                  ),
-                  coin: coin,
-                  onPaymentRequested: (_) => selectWidget(CoinPageType.send),
-                  tooltip: _getBitrefillTooltip(coin),
+            Visibility(
+              visible: coin.protocolData?.contractAddress.isNotEmpty ?? false,
+              child: ContractAddressButton(coin),
+            ),
+            const SizedBox(height: 12),
+            if (stackActions) ...[
+              sendButton,
+              const SizedBox(height: 12),
+              receiveButton,
+            ] else
+              Row(
+                children: [
+                  Expanded(child: sendButton),
+                  const SizedBox(width: 15),
+                  Expanded(child: receiveButton),
+                ],
+              ),
+            if (secondaryActions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              if (stackActions)
+                for (var index = 0; index < secondaryActions.length; index++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == secondaryActions.length - 1 ? 0 : 12,
+                    ),
+                    child: secondaryActions[index],
+                  )
+              else
+                Row(
+                  children: [
+                    for (
+                      var index = 0;
+                      index < secondaryActions.length;
+                      index++
+                    ) ...[
+                      Expanded(child: secondaryActions[index]),
+                      if (index != secondaryActions.length - 1)
+                        const SizedBox(width: 12),
+                    ],
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
             ],
-            if (!coin.walletOnly)
-              Flexible(
-                child: CoinDetailsSwapButton(
-                  isMobile: isMobile,
-                  coin: coin,
-                  onClickSwapButton: clickSwapButton,
-                  context: context,
-                ),
-              ),
+            if (coin.id.subClass == CoinSubClass.zhtlc) ...[
+              const SizedBox(height: 12),
+              ZhtlcConfigButton(coin: coin, isMobile: isMobile),
+            ],
           ],
-        ),
-        if (coin.id.subClass == CoinSubClass.zhtlc) ...[
-          const SizedBox(height: 12),
-          ZhtlcConfigButton(coin: coin, isMobile: isMobile),
-        ],
-      ],
+        );
+      },
     );
   }
 }
@@ -274,20 +348,102 @@ class CoinDetailsReceiveButton extends StatelessWidget {
   Future<void> _handleReceive(BuildContext context) async {
     // Get coin addresses bloc from the parent widget
     final addressesBloc = context.read<CoinAddressesBloc>();
-    final addresses = addressesBloc.state.addresses;
+    final addressesState = addressesBloc.state;
+    final addresses = addressesState.addresses;
+    final walletType = context
+        .read<AuthBloc>()
+        .state
+        .currentUser
+        ?.wallet
+        .config
+        .type;
+    final sdk = context.sdk;
+    final gaslessReceiveEnabled =
+        (walletType == WalletType.iguana ||
+            walletType == WalletType.hdwallet) &&
+        coin.isGaslessReceiveAsset(sdk) &&
+        addresses.any(
+          (address) => _isVerifiedGaslessReceiveSelection(
+            sdk,
+            coin,
+            addressesState,
+            address,
+          ),
+        );
 
     final selectedAddress = await showAddressSearch(
       context,
       addresses: addresses,
       assetNameLabel: coin.abbr,
-      verified: (address) => _usesGasfreeReceiveAddress(coin, address),
-      displayAddress: (address) => _receiveAddressFor(coin, address),
-      copyAddress: (address) => _receiveAddressFor(coin, address),
-      balanceLabel: (address) => _receiveAddressStatus(coin, address),
+      verified: (address) => _usesGasfreeReceiveAddress(
+        coin,
+        address,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+        isHdWallet: walletType == WalletType.hdwallet,
+      ),
+      displayAddress: (address) => _receiveAddressFor(
+        coin,
+        address,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+        isHdWallet: walletType == WalletType.hdwallet,
+      ),
+      copyAddress: (address) => _receiveAddressFor(
+        coin,
+        address,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+        isHdWallet: walletType == WalletType.hdwallet,
+      ),
+      balanceLabel: (address) => _receiveAddressStatus(
+        coin,
+        address,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+        isHdWallet: walletType == WalletType.hdwallet,
+      ),
     );
 
     if (selectedAddress != null && context.mounted) {
-      showPubkeyReceiveDialog(context, coin, selectedAddress);
+      final selectedWasGasfree = _usesGasfreeReceiveAddress(
+        coin,
+        selectedAddress,
+        gaslessReceiveEnabled: gaslessReceiveEnabled,
+        isHdWallet: walletType == WalletType.hdwallet,
+      );
+      var currentGaslessReceiveEnabled = false;
+      if (selectedWasGasfree) {
+        final currentWalletType = context
+            .read<AuthBloc>()
+            .state
+            .currentUser
+            ?.wallet
+            .config
+            .type;
+        final currentState = addressesBloc.state;
+        currentGaslessReceiveEnabled =
+            (currentWalletType == WalletType.iguana ||
+                currentWalletType == WalletType.hdwallet) &&
+            _isVerifiedGaslessReceiveSelection(
+              sdk,
+              coin,
+              currentState,
+              selectedAddress,
+            );
+        if (!currentGaslessReceiveEnabled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(LocaleKeys.receiveGaslessPausedNotice.tr())),
+          );
+          return;
+        }
+      }
+
+      showPubkeyReceiveDialog(
+        context,
+        coin,
+        selectedAddress,
+        variant: selectedWasGasfree
+            ? AddressDisplayVariant.gasfree
+            : AddressDisplayVariant.standard,
+        gaslessReceiveEnabled: currentGaslessReceiveEnabled,
+      );
     }
   }
 
@@ -337,10 +493,26 @@ class CoinDetailsSendButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
     final ThemeData themeData = Theme.of(context);
+    final walletType = context
+        .watch<AuthBloc>()
+        .state
+        .currentUser
+        ?.wallet
+        .config
+        .type;
+    final gaslessEnabled =
+        (walletType == WalletType.iguana ||
+            walletType == WalletType.hdwallet) &&
+        coin.isGaslessAsset(sdk);
     final hasGasfreeAddress =
-        coin.id.subClass == CoinSubClass.trc20 &&
+        gaslessEnabled &&
         context.watch<CoinAddressesBloc>().state.addresses.any(
-          (address) => address.gasfreeAddress?.isNotEmpty ?? false,
+          (address) =>
+              isCanonicalTronGaslessPubkey(
+                address,
+                isHdWallet: walletType == WalletType.hdwallet,
+              ) &&
+              (address.gasfreeAddress?.isNotEmpty ?? false),
         );
 
     // Gate Send on *confirmed* activation. The coin must be fully active in

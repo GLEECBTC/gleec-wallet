@@ -19,6 +19,8 @@ import 'tests/helpers/total_24_change_tests.dart';
 import 'tests/helpers/total_fee_test.dart';
 import 'tests/helpers/update_sell_amount_tests.dart';
 import 'tests/helpers/update_version_compare_tests.dart';
+import 'tests/gasless/tron_gasless_policy_test.dart';
+import 'tests/gasless/tron_gasless_receive_gate_test.dart';
 import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
@@ -30,6 +32,8 @@ import 'tests/system_health/system_clock_repository_tests.dart';
 import 'tests/system_health/time_provider_registry_tests.dart';
 import 'tests/balance_utils/compute_wallet_total_usd_tests.dart';
 import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
+import 'tests/analytics/transaction_event_privacy_test.dart';
+import 'tests/bitrefill/bitrefill_refund_url_test.dart';
 import 'tests/wallet/coin_details/coin_details_balance_confirmation_controller_test.dart';
 import 'tests/wallet/coin_details/coin_details_balance_content_test.dart';
 import 'tests/wallet/coin_details/kmd_rewards_logic_test.dart';
@@ -103,6 +107,9 @@ void main() {
     testUpdateVersionCompare();
   });
 
+  testTronGaslessPolicy();
+  testTronGaslessReceiveGate();
+
   group('Crypto:', () {
     testEncryptDataTool();
   });
@@ -132,4 +139,7 @@ void main() {
     testTransactionViewsWidgets();
     testReceiveAddressFaucetWidgets();
   });
+
+  testTransactionEventPrivacy();
+  testBitrefillRefundUrl();
 }

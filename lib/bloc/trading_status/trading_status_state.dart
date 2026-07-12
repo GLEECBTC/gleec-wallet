@@ -50,8 +50,13 @@ extension TradingStatusStateX on TradingStatusState {
     // Filter out nulls - only check assets that are actually selected
     final nonNullAssets = assets.whereType<AssetId>();
     for (final asset in nonNullAssets) {
+      if (_isWalletOnlyAsset(asset)) return false;
       if (isAssetBlocked(asset)) return false;
     }
     return true;
+  }
+
+  bool _isWalletOnlyAsset(AssetId asset) {
+    return isWalletOnlyTradingAssetId(asset.id);
   }
 }

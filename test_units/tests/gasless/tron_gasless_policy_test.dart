@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
+import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
@@ -88,12 +91,79 @@ class _UnavailableReceiveCapabilitySdk implements KomodoDefiSdk {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _CachedPubkeyManager implements PubkeyManager {
+  const _CachedPubkeyManager(this.cached);
+
+  final AssetPubkeys? cached;
+
+  @override
+  AssetPubkeys? lastKnown(AssetId assetId) =>
+      cached?.assetId == assetId ? cached : null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CachedReceiveCapabilitySdk implements KomodoDefiSdk {
+  const _CachedReceiveCapabilitySdk({
+    required this.pubkeys,
+    required this.canReceive,
+  });
+
+  @override
+  final PubkeyManager pubkeys;
+
+  final bool canReceive;
+
+  @override
+  bool canReceiveGasless(Asset asset) => canReceive;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+PubkeyInfo _gaslessPubkey({
+  required String address,
+  required String gasfreeAddress,
+  required String? derivationPath,
+  String? chain = 'external',
+}) {
+  return PubkeyInfo(
+    address: address,
+    derivationPath: derivationPath,
+    chain: chain,
+    balance: BalanceInfo.zero(),
+    coinTicker: 'USDT-TRC20',
+    gasfreeAddress: gasfreeAddress,
+  );
+}
+
+AssetPubkeys _cachedPubkeys(Asset asset, List<PubkeyInfo> keys) {
+  return AssetPubkeys(
+    assetId: asset.id,
+    keys: keys,
+    availableAddressesCount: keys.length,
+    syncStatus: SyncStatusEnum.success,
+  );
+}
+
 void testTronGaslessPolicy() {
   group('TRON GasFree policy', () {
     test('build feature is fail-closed by default', () {
       expect(tronGaslessEnabled, isFalse);
       expect(tronGaslessReceiveEnabled, isFalse);
       expect(isTronGaslessConfigured, isFalse);
+    });
+
+    test('recovery route follows the custody network', () {
+      expect(
+        tronGaslessRecoveryUrl(isTestnet: false),
+        'https://gasfree.io/withdraw',
+      );
+      expect(
+        tronGaslessRecoveryUrl(isTestnet: true),
+        'https://test.gasfree.io/withdraw',
+      );
     });
 
     test('configuration rejects unsafe URLs and malformed provider pins', () {
@@ -235,6 +305,108 @@ void testTronGaslessPolicy() {
         hasBoundTronGaslessReceiveCapability(
           const _UnavailableReceiveCapabilitySdk(),
           asset,
+        ),
+        isFalse,
+      );
+    });
+
+    test('consolidation accepts only one cached canonical software key', () {
+      final asset = _asset();
+      const custody = 'TCanonicalGasFreeAddress00000000001';
+      final canonical = _gaslessPubkey(
+        address: 'TCanonicalStandardAddress0000000001',
+        gasfreeAddress: custody,
+        derivationPath: "m/44'/195'/0'/0/0",
+      );
+      final secondary = _gaslessPubkey(
+        address: 'TSecondaryStandardAddress0000000001',
+        gasfreeAddress: 'TSecondaryGasFreeAddress00000000001',
+        derivationPath: "m/44'/195'/0'/0/1",
+      );
+
+      KomodoDefiSdk sdkFor(List<PubkeyInfo> keys) =>
+          _CachedReceiveCapabilitySdk(
+            pubkeys: _CachedPubkeyManager(_cachedPubkeys(asset, keys)),
+            canReceive: true,
+          );
+
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical, secondary]),
+          asset,
+          walletType: WalletType.hdwallet,
+        ),
+        custody,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([secondary]),
+          asset,
+          walletType: WalletType.hdwallet,
+        ),
+        isNull,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical]),
+          asset,
+          walletType: WalletType.trezor,
+        ),
+        isNull,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical, canonical]),
+          asset,
+          walletType: WalletType.hdwallet,
+        ),
+        isNull,
+      );
+    });
+
+    test('receive verifier requires bound, exact, and fresh context', () {
+      final asset = _asset();
+      const custody = 'TCanonicalGasFreeAddress00000000001';
+      final now = DateTime.utc(2026, 7, 12, 12);
+      final boundSdk = _CachedReceiveCapabilitySdk(
+        pubkeys: const _CachedPubkeyManager(null),
+        canReceive: true,
+      );
+      final unboundSdk = _CachedReceiveCapabilitySdk(
+        pubkeys: const _CachedPubkeyManager(null),
+        canReceive: false,
+      );
+
+      bool verify({
+        KomodoDefiSdk? sdk,
+        bool ready = true,
+        String? verified = custody,
+        String? candidate = custody,
+        DateTime? expiresAt,
+      }) => isVerifiedBoundTronGaslessReceive(
+        sdk ?? boundSdk,
+        asset,
+        capabilityReady: ready,
+        verifiedAddress: verified,
+        custodyAddress: candidate,
+        expiresAt: expiresAt ?? now.add(const Duration(minutes: 1)),
+        now: now,
+      );
+
+      expect(verify(), isTrue);
+      expect(verify(sdk: unboundSdk), isFalse);
+      expect(verify(ready: false), isFalse);
+      expect(verify(candidate: 'TDifferentCustodyAddress'), isFalse);
+      expect(verify(expiresAt: now), isFalse);
+      expect(
+        isVerifiedBoundTronGaslessReceive(
+          boundSdk,
+          asset,
+          capabilityReady: true,
+          verifiedAddress: custody,
+          custodyAddress: custody,
+          expiresAt: null,
+          now: now,
         ),
         isFalse,
       );

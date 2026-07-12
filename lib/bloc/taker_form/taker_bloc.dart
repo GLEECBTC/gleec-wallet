@@ -128,6 +128,18 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
       return;
     }
 
+    final buyCoin = _coinsRepo.getCoin(selectedOrder.coin);
+    if (sellCoin.walletOnly || buyCoin == null || buyCoin.walletOnly) {
+      _log.warning('Blocked wallet-only asset at swap submission');
+      emit(state.copyWith(inProgress: () => false));
+      add(
+        TakerAddError(
+          DexFormError(error: LocaleKeys.dexUnableToStartSwap.tr()),
+        ),
+      );
+      return;
+    }
+
     emit(state.copyWith(inProgress: () => true));
 
     final int callStart = DateTime.now().millisecondsSinceEpoch;
@@ -266,6 +278,16 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
     TakerSelectOrder event,
     Emitter<TakerState> emit,
   ) async {
+    final orderCoin = event.order == null
+        ? null
+        : _coinsRepo.getCoin(event.order!.coin);
+    if (orderCoin?.walletOnly ?? false) {
+      _log.warning(
+        'Ignoring wallet-only buy coin selection: ${orderCoin?.abbr}',
+      );
+      return;
+    }
+
     final bool switchingCoin =
         state.selectedOrder != null &&
         event.order != null &&

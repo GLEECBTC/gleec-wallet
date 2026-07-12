@@ -3,6 +3,14 @@ import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/constants.dart';
 
+/// Official recovery page for the selected TRON network.
+///
+/// Testnet custody must never be handed to the mainnet withdrawal flow (or the
+/// reverse), even when ordinary GasFree receive entry points are disabled.
+String tronGaslessRecoveryUrl({required bool isTestnet}) => isTestnet
+    ? 'https://test.gasfree.io/withdraw'
+    : 'https://gasfree.io/withdraw';
+
 /// Whether KDF proved the bound-relay contract required for exposing a new
 /// GasFree custody receive address.
 ///
@@ -15,6 +23,38 @@ bool hasBoundTronGaslessReceiveCapability(KomodoDefiSdk sdk, Asset asset) {
   } catch (_) {
     return false;
   }
+}
+
+/// Final UI boundary for exposing or using a GasFree receive address.
+///
+/// A previous `ready` result is insufficient once its remote-control document
+/// has expired or the canonical custody address has changed. Every receive
+/// surface calls this immediately before revealing, copying, or passing the
+/// address to an integration.
+bool isVerifiedBoundTronGaslessReceive(
+  KomodoDefiSdk sdk,
+  Asset asset, {
+  required bool capabilityReady,
+  required String? verifiedAddress,
+  required String? custodyAddress,
+  required DateTime? expiresAt,
+  DateTime? now,
+}) {
+  final verified = verifiedAddress?.trim();
+  final custody = custodyAddress?.trim();
+  final currentTime = (now ?? DateTime.now()).toUtc();
+  if (!capabilityReady ||
+      verified == null ||
+      verified.isEmpty ||
+      custody == null ||
+      custody.isEmpty ||
+      verified != custody ||
+      expiresAt == null ||
+      !expiresAt.toUtc().isAfter(currentTime)) {
+    return false;
+  }
+
+  return hasBoundTronGaslessReceiveCapability(sdk, asset);
 }
 
 /// Validates a TRC-20 identity against the provider network selected by the
