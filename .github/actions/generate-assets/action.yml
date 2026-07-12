@@ -52,14 +52,26 @@ inputs:
     required: false
     default: ""
 
+  TRON_GASLESS_ENABLED:
+    description: "Explicitly enable the TRON GasFree send rail (true/false)"
+    required: false
+    default: "false"
+  TRON_GASLESS_RECEIVE_ENABLED:
+    description: "Expose GasFree custody addresses for new deposits (true/false)"
+    required: false
+    default: "false"
   TRON_GASLESS_BASE_URL:
     description: "TRON GasFree provider base URL embedded in the Flutter web build"
     required: false
-    default: "https://quicknode.gleec.com/gasfree/tron"
+    default: ""
   TRON_GASLESS_SERVICE_PROVIDER:
     description: "TRON GasFree service provider address embedded in the Flutter web build"
     required: false
-    default: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+    default: ""
+  TRON_GASLESS_CONTROL_URL:
+    description: "HTTPS endpoint for the short-lived GasFree receive control document"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -97,8 +109,11 @@ runs:
         MATOMO_URL: ${{ inputs.MATOMO_URL }}
         MATOMO_SITE_ID: ${{ inputs.MATOMO_SITE_ID }}
         ANALYTICS_DISABLED: ${{ inputs.ANALYTICS_DISABLED }}
+        TRON_GASLESS_ENABLED: ${{ inputs.TRON_GASLESS_ENABLED }}
+        TRON_GASLESS_RECEIVE_ENABLED: ${{ inputs.TRON_GASLESS_RECEIVE_ENABLED }}
         TRON_GASLESS_BASE_URL: ${{ inputs.TRON_GASLESS_BASE_URL }}
         TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
+        TRON_GASLESS_CONTROL_URL: ${{ inputs.TRON_GASLESS_CONTROL_URL }}
       run: |
         echo "Running \`flutter build\` to generate assets for the deployment build"
 
@@ -118,6 +133,50 @@ runs:
         BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"
         BUILD_CMD="$BUILD_CMD --dart-define=BUILD_DATE=$BUILD_DATE"
 
+        if [ "$TRON_GASLESS_RECEIVE_ENABLED" = "true" ] && [ "$TRON_GASLESS_ENABLED" != "true" ]; then
+          echo "Error: TRON_GASLESS_RECEIVE_ENABLED requires TRON_GASLESS_ENABLED=true."
+          exit 1
+        fi
+
+        if [ "$TRON_GASLESS_ENABLED" = "true" ]; then
+          if [ -z "$TRON_GASLESS_BASE_URL" ] || [ -z "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
+            echo "Error: enabled TRON GasFree builds require a base URL and pinned service provider."
+            exit 1
+          fi
+          if [[ ! "$TRON_GASLESS_BASE_URL" =~ ^https://[^/?#]+(/[^?#]*)?/(tron|nile)/?$ ]]; then
+            echo "Error: TRON_GASLESS_BASE_URL must be an HTTPS tron/nile endpoint without credentials, query, or fragment."
+            exit 1
+          fi
+          if [[ ! "$TRON_GASLESS_SERVICE_PROVIDER" =~ ^T[1-9A-HJ-NP-Za-km-z]{33}$ ]]; then
+            echo "Error: TRON_GASLESS_SERVICE_PROVIDER is not a valid pinned TRON address."
+            exit 1
+          fi
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=true"
+        else
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=false"
+        fi
+
+        if [ "$TRON_GASLESS_RECEIVE_ENABLED" = "true" ]; then
+          if [ -z "$TRON_GASLESS_CONTROL_URL" ]; then
+            echo "Error: TRON_GASLESS_RECEIVE_ENABLED requires TRON_GASLESS_CONTROL_URL."
+            exit 1
+          fi
+          if [[ ! "$TRON_GASLESS_CONTROL_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$ ]] ||
+             [[ "$TRON_GASLESS_CONTROL_URL" == *"%"* ]] ||
+             [[ "$TRON_GASLESS_CONTROL_URL" == *"/../"* ]] ||
+             [[ "$TRON_GASLESS_CONTROL_URL" == *"/./"* ]]; then
+            echo "Error: TRON_GASLESS_CONTROL_URL must be a strict HTTPS path without credentials, query, fragment, encoding, or dot segments."
+            exit 1
+          fi
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true"
+        else
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=false"
+        fi
+
+        if [ -n "$TRON_GASLESS_CONTROL_URL" ]; then
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_CONTROL_URL=$TRON_GASLESS_CONTROL_URL"
+        fi
+
         if [ -n "$TRON_GASLESS_BASE_URL" ]; then
           echo "Adding TRON GasFree proxy configuration: $TRON_GASLESS_BASE_URL"
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_BASE_URL=$TRON_GASLESS_BASE_URL"
@@ -128,7 +187,7 @@ runs:
         if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_SERVICE_PROVIDER=$TRON_GASLESS_SERVICE_PROVIDER"
         else
-          echo "Warning: TRON_GASLESS_SERVICE_PROVIDER is empty; KDF will rely on provider auto-discovery where supported."
+          echo "TRON_GASLESS_SERVICE_PROVIDER is empty; GasFree remains disabled."
         fi
 
         # Check and add the shared Trello board and list IDs if they are available

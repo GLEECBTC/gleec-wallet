@@ -4,11 +4,15 @@ inputs:
   EXPECTED_TRON_GASLESS_BASE_URL:
     description: "TRON GasFree provider base URL expected in the compiled Flutter web build"
     required: false
-    default: "https://quicknode.gleec.com/gasfree/tron"
+    default: ""
   EXPECTED_TRON_GASLESS_SERVICE_PROVIDER:
     description: "TRON GasFree service provider address expected in the compiled Flutter web build"
     required: false
-    default: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+    default: ""
+  EXPECTED_TRON_GASLESS_CONTROL_URL:
+    description: "GasFree receive control endpoint expected in the compiled Flutter web build"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -49,6 +53,7 @@ runs:
 
         EXPECTED_TRON_GASLESS_BASE_URL="${{ inputs.EXPECTED_TRON_GASLESS_BASE_URL }}"
         EXPECTED_TRON_GASLESS_SERVICE_PROVIDER="${{ inputs.EXPECTED_TRON_GASLESS_SERVICE_PROVIDER }}"
+        EXPECTED_TRON_GASLESS_CONTROL_URL="${{ inputs.EXPECTED_TRON_GASLESS_CONTROL_URL }}"
 
         if [ -n "$EXPECTED_TRON_GASLESS_BASE_URL" ] && ! grep -Fq "$EXPECTED_TRON_GASLESS_BASE_URL" "$APP_JS"; then
           echo "Error: Web build is not configured with the expected TRON GasFree proxy."
@@ -59,6 +64,12 @@ runs:
         if [ -n "$EXPECTED_TRON_GASLESS_SERVICE_PROVIDER" ] && ! grep -Fq "$EXPECTED_TRON_GASLESS_SERVICE_PROVIDER" "$APP_JS"; then
           echo "Error: Web build is not configured with the expected TRON GasFree service provider."
           echo "Expected TRON_GASLESS_SERVICE_PROVIDER=$EXPECTED_TRON_GASLESS_SERVICE_PROVIDER"
+          exit 1
+        fi
+
+        if [ -n "$EXPECTED_TRON_GASLESS_CONTROL_URL" ] && ! grep -Fq "$EXPECTED_TRON_GASLESS_CONTROL_URL" "$APP_JS"; then
+          echo "Error: Web build is missing the expected TRON GasFree receive control endpoint."
+          echo "Expected TRON_GASLESS_CONTROL_URL=$EXPECTED_TRON_GASLESS_CONTROL_URL"
           exit 1
         fi
 
@@ -74,7 +85,11 @@ runs:
           fi
         done
 
-        echo "TRON GasFree build configuration verified: $EXPECTED_TRON_GASLESS_BASE_URL"
+        if [ -n "$EXPECTED_TRON_GASLESS_BASE_URL" ]; then
+          echo "TRON GasFree build configuration verified: $EXPECTED_TRON_GASLESS_BASE_URL"
+        else
+          echo "TRON GasFree endpoint is not embedded in this disabled-by-default build."
+        fi
 
         # Decode the AssetManifest.bin and check for the coin icon presence
         if [ ! -f build/web/assets/AssetManifest.bin ]; then
