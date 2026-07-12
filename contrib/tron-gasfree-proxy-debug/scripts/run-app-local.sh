@@ -19,7 +19,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"      # contrib/tron-gasfree-proxy-debug
 REPO="$(cd "$HERE/../.." && pwd)"             # repo root
 DEVICE="${1:-macos}"
 # Default to the NGINX edge (6160), which handles browser CORS + (locally) bypasses the
-# proxy gate. Use http://localhost:6150/gasfree/tron to hit the stock proxy directly.
+# proxy gate. Use http://localhost:6150/gasfree/tron to hit the proxy directly.
 PROXY_BASE="${TRON_GASLESS_BASE_URL:-http://localhost:6160/gasfree/tron}"
 SERVICE_PROVIDER="${TRON_GASLESS_SERVICE_PROVIDER:-TLyqzVGLV1srkB7dToTAEqgDSfPtXRJZYH}"
 

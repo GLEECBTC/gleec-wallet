@@ -8,8 +8,8 @@
 #   kdf-client  - a wallet-like KDF node. When its seednodes include kdf-probe it is
 #                 directly meshed with the probe (healthcheck => true). Point it
 #                 elsewhere to reproduce the production "not connected => 401".
-#   proxy       - GLEECBTC/komodo-defi-proxy built at the gas-free commit, with a
-#                 /gasfree route -> open.gasfree.io (HMAC creds are placeholders).
+#   proxy       - GLEECBTC/komodo-defi-proxy built from fix/healthcheck-serialization,
+#                 with /gasfree -> open.gasfree.io (HMAC creds from .env).
 #
 # See README.md for the full run + debug procedure. Secrets come from .env
 # (copy .env.example -> .env). Nothing here prints secret values.
@@ -84,9 +84,9 @@ services:
       context: ./proxy
       dockerfile: Dockerfile
       args:
-        # Pin the GLEEC proxy repo + the gas-free commit so the build is reproducible.
+        # Pin the GLEEC proxy repo + fixed proxy commit so the build is reproducible.
         PROXY_REPO: ${PROXY_REPO:-https://github.com/GLEECBTC/komodo-defi-proxy.git}
-        PROXY_COMMIT: ${PROXY_COMMIT:-4526f9d6322c90bb944ca5a0f24e9b547d967696}
+        PROXY_COMMIT: ${PROXY_COMMIT:-45c9a06e6a98c611520317933414113480530b60}
     restart: unless-stopped
     depends_on:
       - redis

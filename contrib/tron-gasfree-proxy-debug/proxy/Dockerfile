@@ -1,14 +1,14 @@
-# Build the GLEEC komodo-defi-proxy at the gas-free commit and run it with a
-# config rendered from environment variables at container start.
+# Build the GLEEC komodo-defi-proxy fixed branch and run it with a config
+# rendered from environment variables at container start.
 #
 # Mirrors the upstream Containerfile build, but clones a pinned commit so the
-# image matches what is (meant to be) deployed at quicknode.gleec.com/gasfree.
+# image matches the intended quicknode.gleec.com/gasfree deployment baseline.
 
 # ---------- build stage ----------
 FROM docker.io/library/debian:bookworm-slim AS build
 
 ARG PROXY_REPO=https://github.com/GLEECBTC/komodo-defi-proxy.git
-ARG PROXY_COMMIT=4526f9d6322c90bb944ca5a0f24e9b547d967696
+ARG PROXY_COMMIT=45c9a06e6a98c611520317933414113480530b60
 
 RUN apt-get update \
     && apt-get install -y build-essential curl pkg-config libssl-dev git ca-certificates \
@@ -22,9 +22,9 @@ RUN git clone "$PROXY_REPO" komodo-defi-proxy \
     && git checkout "$PROXY_COMMIT"
 
 WORKDIR /usr/src/komodo-defi-proxy
-# Stock proxy — no source patches. The browser CORS handling lives in the NGINX edge
-# config (../nginx/nginx.conf), not in the proxy. (gasfree-cors.patch is kept as a
-# reference-only alternative; it is intentionally NOT applied.)
+# Fixed proxy branch — no local source patches. Browser response CORS still lives in
+# the NGINX edge config (../nginx/nginx.conf). gasfree-cors.patch is kept only as
+# a reference alternative for deployments without edge CORS.
 RUN cargo build --release
 
 # ---------- runtime stage ----------

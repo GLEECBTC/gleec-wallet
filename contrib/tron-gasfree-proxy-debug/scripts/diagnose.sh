@@ -4,8 +4,9 @@
 #   1. read each KDF node's libp2p PeerId
 #   2. ask the PROBE whether the CLIENT peer is connected (peer_connection_healthcheck)
 #      -> this is the exact check the proxy runs; `true` => no 401, `false` => 401
-#   3. hit the proxy /gasfree route with X-Forwarded-For (a public IP) to force the
-#      validation path (private/loopback source IPs bypass validation in the proxy)
+#   3. hit the proxy /gasfree route with X-Forwarded-For (a public IP) to confirm
+#      the route is gated. On the fixed branch this unsigned request stops at
+#      signature validation before the healthcheck.
 #
 # Does not print the rpc_password or any GasFree secret.
 set -euo pipefail
@@ -24,17 +25,15 @@ have_jq() { command -v jq >/dev/null 2>&1; }
 
 peer_id() { # $1 = rpc url
   # get_my_peer_id is a legacy (non-mmrpc) method.
-  local body resp
-  body="$(printf '{"userpass":"%s","method":"get_my_peer_id"}' "$KDF_RPC_PASSWORD")"
-  resp="$(curl -s -m 10 "$1" --data "$body" || true)"
+  local resp
+  resp="$(printf '{"userpass":"%s","method":"get_my_peer_id"}' \
+    "$KDF_RPC_PASSWORD" | curl -s -m 10 "$1" --data-binary @- || true)"
   if have_jq; then echo "$resp" | jq -r '.result // .peer_id // empty'; else echo "$resp"; fi
 }
 
 healthcheck() { # $1 = prober rpc url, $2 = target peer id
-  local body
-  body="$(printf '{"userpass":"%s","mmrpc":"2.0","method":"peer_connection_healthcheck","params":{"peer_address":"%s"},"id":0}' \
-    "$KDF_RPC_PASSWORD" "$2")"
-  curl -s -m 20 "$1" --data "$body"
+  printf '{"userpass":"%s","mmrpc":"2.0","method":"peer_connection_healthcheck","params":{"peer_address":"%s"},"id":0}' \
+    "$KDF_RPC_PASSWORD" "$2" | curl -s -m 20 "$1" --data-binary @-
 }
 
 echo "== 1. PeerIds =="
@@ -62,7 +61,8 @@ for path in \
   echo "   [$code] ${path}"
 done
 echo
-echo "   Note: this curl sends NO X-Auth-Payload, so a 401 here just confirms the"
-echo "   route is gated. The meaningful signal is in the proxy logs:"
-echo "     docker compose logs -f proxy | grep -E 'returning 401|not connected'"
-echo "   'Peer isn'\\''t connected to KDF network, returning 401' == the diagnosed cause."
+echo "   Note: this curl sends NO X-Auth-Payload, so a 401 here only confirms the"
+echo "   route is gated. The topology signal is the direct healthcheck above."
+echo "   For real signed wallet requests, classify proxy logs as:"
+echo "     invalid signed message                     -> signature/expiry"
+echo "     Peer isn't connected to KDF network         -> KDF mesh/topology"

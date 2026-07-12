@@ -1,0 +1,20 @@
+{
+  "gui": "gleec-gasfree-proxy-kdf",
+  "mm2": 1,
+  "netid": 6133,
+  "rpc_password": "__REPLACE_WITH_STRONG_RPC_PASSWORD__",
+  "rpcip": "127.0.0.1",
+  "rpcport": 7783,
+  "rpc_local_only": true,
+  "i_am_seed": false,
+  "disable_p2p": false,
+  "seednodes": [
+    "seed03.kmdefi.net",
+    "kdfseed1.decker.im",
+    "staking1.gleec.com",
+    "staking2.gleec.com"
+  ],
+  "passphrase": "__REPLACE_WITH_STABLE_NODE_PASSPHRASE__",
+  "coins": [],
+  "allow_weak_password": false
+}

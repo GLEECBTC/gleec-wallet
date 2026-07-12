@@ -25,7 +25,7 @@ and watch `peer_connection_healthcheck` (and the proxy's 401) follow.
 | `redis` | rate-limiter / address-status store the proxy needs |
 | `kdf-probe` | the KDF node the **proxy** queries (`kdf_rpc_client`). netid-6133 seed. Analogue of the node behind quicknode.gleec.com |
 | `kdf-client` | a wallet-like KDF node. Meshes with `kdf-probe` when its seednodes include it |
-| `proxy` | `GLEECBTC/komodo-defi-proxy` built at the gas-free commit, `/gasfree` → `open.gasfree.io` |
+| `proxy` | `GLEECBTC/komodo-defi-proxy` built at fixed commit `45c9a06` from `fix/healthcheck-serialization`, `/gasfree` -> `open.gasfree.io` |
 
 The KDF binary is the exact Linux build the wallet ships
 (`sdk/packages/komodo_defi_framework/linux/bin/kdf`), mounted read-only. It is
@@ -63,8 +63,9 @@ the probe:
 Expected:
 - both PeerIds print,
 - **`peer_connection_healthcheck` → `{"result":true}`** (probe sees the client),
-- the proxy logs show the request passing the gate (then a GasFree/upstream result —
-  with placeholder HMAC creds that will be a GasFree-side error, *not* a proxy 401).
+- unsigned proxy curls still return `401`, because the fixed branch validates the
+  `X-Auth-Payload` signature before running the healthcheck. Use the direct
+  healthcheck result as the topology signal.
 
 ### Step 2 — reproduce the production 401 (client not meshed)
 
@@ -81,33 +82,35 @@ KDF_CLIENT_SEEDNODES=172.28.0.99 docker compose up -d --force-recreate --no-deps
 > seednodes refuses to start (KDF requires ≥1 seednode unless `disable_p2p=true`), so it
 > would crash-loop instead of reproducing the 401.
 
-Expected: **`peer_connection_healthcheck` → `{"result":false}`**, and the proxy returns
-`401` via the healthcheck branch (see Step 3 / `prove.sh` for the exact log line).
+Expected: **`peer_connection_healthcheck` → `{"result":false}`**. With a real signed
+wallet request, the proxy returns `401` via the healthcheck branch and logs
+`Peer isn't connected to KDF network, returning 401`.
 
-### Step 3 — see the exact proxy 401 branch (one command)
+### Step 3 — classify fixed-branch 401s
 
 `scripts/prove.sh` runs the full A/B automatically: it recreates the client **connected**
-then **disconnected**, and for each case sends a request through the proxy carrying a
-well-formed `x-auth-payload` for the client's real PeerId. (The proxy checks
-`peer_connection_healthcheck` *before* signature validity, so a dummy signature is enough
-to reach — and reveal — the healthcheck branch.)
+then **disconnected**, waits for the probe's direct `peer_connection_healthcheck` result,
+and then sends an intentionally invalid signed proxy request to demonstrate the fixed
+branch's signature-first behavior.
 
 ```sh
 ./scripts/prove.sh          # takes a few minutes (mesh formation under amd64 emulation)
 ```
 
-Expected output — the two distinct proxy log lines that prove the gate:
+Expected output:
 
 ```
-CONNECTED    -> healthcheck {"result":true}   -> proxy: "Request has invalid signed message, returning 401"
-DISCONNECTED -> healthcheck {"result":false}  -> proxy: "Peer isn't connected to KDF network, returning 401"
+CONNECTED    -> healthcheck {"result":true}
+DISCONNECTED -> healthcheck {"result":false}
+proxy log    -> "Request has invalid signed message (...), returning 401" for the dummy request
 ```
 
-The **DISCONNECTED** line is the production failure, reproduced locally — the same line to
-grep for in the production proxy logs:
+On the fixed branch, a dummy signature never reaches the healthcheck branch. In production,
+classify real wallet failures by the proxy log line:
 
 ```
-docker compose logs proxy | grep -E "returning 401|not connected"
+"Request has invalid signed message (...), returning 401" -> signature/expiry
+"Peer isn't connected to KDF network, returning 401"      -> KDF mesh/topology
 ```
 
 ### Step 4 — end-to-end with a real signed request (optional)
@@ -138,8 +141,10 @@ light nodes that share only a common seed still complete `peer_connection_health
 The usual trap is **netid**: `seed_nodes.json` mixes 6133 and 8762 entries, so the proxy
 node must use the 6133 ones and run on netid 6133.
 
-Separately worth doing: widen the proxy's `MAX_SIGNATURE_EXP_SECS` (currently 15, equal
-to the signer's 15s window → zero tolerance for browser clock drift).
+Deployment-ready templates for the production KDF node and NGINX edge live in
+[`production/`](production/). Separately worth doing: widen the proxy's
+`MAX_SIGNATURE_EXP_SECS` (currently 15, equal to the signer's 15s window -> zero
+tolerance for browser clock drift).
 
 ## Testing with a local build of the app
 
@@ -184,27 +189,29 @@ In-app: activate **TRX** + **USDT-TRC20**, fund the GasFree custody address, the
 with the **gas-free** toggle on. Watch `docker compose logs -f proxy` for the forwarded
 `/gasfree/...` calls.
 
-### Web build (`chrome`) and the CORS fix — handled in NGINX (no proxy code change)
+### Web build (`chrome`) and the CORS fix — handled in NGINX
 `open.gasfree.io` sits behind Cloudflare, which **403s browser-`Origin` requests and
-returns no `Access-Control-Allow-Origin`**. The stock `gas_free` handler forwards the
-upstream response **raw**, so a stock proxy is CORS-blocked for WASM/browser callers.
+returns no `Access-Control-Allow-Origin`**. The fixed proxy branch strips browser
+request headers before forwarding upstream, but still returns successful GasFree
+responses raw. The edge must add browser-readable `Access-Control-Allow-*` response
+headers.
 
-This stack solves that **entirely in the NGINX edge** (`nginx/nginx.conf`) in front of the
-**stock** proxy — no Rust fork. NGINX:
-- strips `Origin`/`Referer` before the proxy forwards upstream (so Cloudflare stops 403-ing),
+This stack solves that in the NGINX edge (`nginx/nginx.conf`) in front of the proxy.
+NGINX:
+- strips `Origin`/`Referer` before forwarding as defense in depth,
 - adds `Access-Control-Allow-*` on responses (hiding the proxy's own to avoid duplicates),
 - (local-debug) clears `X-Forwarded-For` so the proxy sees internal traffic and bypasses
   its libp2p gate — so the web app needs no per-peer trusting.
 
-Topology: app → **NGINX `:6160`** → stock proxy `:6150` → open.gasfree.io. The diagnostics
+Topology: app → **NGINX `:6160`** → fixed proxy `:6150` → open.gasfree.io. The diagnostics
 (`prove.sh`, `diagnose.sh`, `check-creds.sh`) still hit the proxy directly on `:6150`.
 Verified: a browser-`Origin` GET via `:6160` returns `200` + data + `access-control-allow-origin: *`,
 and OPTIONS preflight returns `204` + CORS.
 
-**For production**: add the same `Origin`/`Referer` strip + `Access-Control-Allow-*` to the
-NGINX (or equivalent edge) already fronting `quicknode.gleec.com` — **no komodo-defi-proxy
-fork required**. Keep real `X-Forwarded-For` in production (don't clear it) and fix the
-healthcheck `401` by meshing the proxy's KDF node onto netid 6133.
+**For production**: use [`production/nginx-gasfree-location.conf`](production/nginx-gasfree-location.conf)
+as the edge shape. Keep real, single-valued `X-Forwarded-For` in production (do not clear
+it and do not pass through client-supplied XFF) and fix the healthcheck `401` by meshing
+the proxy's KDF node onto netid 6133.
 
 > `proxy/gasfree-cors.patch` (the in-proxy Rust alternative) is kept for reference only and
 > is **not** applied by the Dockerfile.

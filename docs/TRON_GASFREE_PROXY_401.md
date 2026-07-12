@@ -2,17 +2,18 @@
 
 > Status: **root cause identified and reproduced** (code audited across wallet, SDK,
 > KDF, and the GLEEC `komodo-defi-proxy`; cross-checked against the KDF API docs; and
-> reproduced locally against the real proxy built from the gas-free commit). The
-> remaining work is **operational** (proxy-side p2p topology), not a wallet code change.
+> reproduced locally against the real proxy. The local stack now builds
+> `fix/healthcheck-serialization` commit `45c9a06`; the remaining work is
+> **operational** (proxy-side p2p topology), not a wallet code change.
 > A local reproduction stack lives in
 > [`contrib/tron-gasfree-proxy-debug/`](../contrib/tron-gasfree-proxy-debug/).
 >
-> **Reproduced locally** (proxy built from commit `4526f9d`), driving requests through the
-> proxy with an `x-auth-payload` carrying a client KDF node's real PeerId:
+> **Reproduced locally** by toggling the client KDF seed topology and calling the same
+> `peer_connection_healthcheck` RPC the proxy uses:
 > | client p2p state | `peer_connection_healthcheck` | proxy result |
 > |---|---|---|
-> | connected to the proxy's KDF node | `true` | passes the gate (then 401 only on a bad signature) |
-> | **not** connected | `false` | **`401` — `"Peer isn't connected to KDF network"`** |
+> | connected to the proxy's KDF node | `true` | real signed requests pass the peer gate |
+> | **not** connected | `false` | real signed requests hit **`401` — `"Peer isn't connected to KDF network"`** |
 
 ## Symptom
 
@@ -81,12 +82,12 @@ GLEEC `komodo-defi-proxy`, `src/proxy/http/mod.rs` → `validation_middleware`:
    - `Trusted` → allow (bypasses the healthcheck);
    - `Blocked` → **`403`** (note: *not* 401);
    - `None` (the default for any peer) → continue.
-3. **`peer_connection_healthcheck`** — call **the proxy's own KDF node's** RPC
+3. Verify the Ed25519 `X-Auth-Payload` signature and that the signature is within the
+   **15-second** `MAX_SIGNATURE_EXP_SECS` window → else **`401`**
+   (`"Request has invalid signed message (...), returning 401"`).
+4. **`peer_connection_healthcheck`** — call **the proxy's own KDF node's** RPC
    `peer_connection_healthcheck { peer_address }`. If the result is not `true` (or the
    PeerId is malformed) → **`401`** (`"Peer isn't connected to KDF network, returning 401"`).
-4. `is_valid_message(MAX_SIGNATURE_EXP_SECS = 15)` — verify the Ed25519 signature and
-   that the signature is within its **15-second** window → else **`401`**
-   (`"invalid signed message, returning 401"`).
 5. Rate-limit → `406` if exceeded.
 
 The newly added gas-free handler (`src/proxy/http/gasfree.rs`) runs **after** this gate
@@ -94,7 +95,7 @@ and never returns `401` itself — only `500`/`503`, or it forwards `open.gasfre
 own response. So a `401` is always the middleware in steps 3–4, and never the GasFree
 upstream.
 
-### Why step 3 fails for the wallet
+### Why step 4 fails for the wallet
 
 `peer_connection_healthcheck` (KDF `mm2src/mm2_main/src/lp_healthcheck.rs`) is **not** a
 direct ping. It is a **gossipsub broadcast-and-await-reply**: the proxy's KDF node
@@ -166,8 +167,8 @@ quicknode.gleec.com host) must:
 curl -s http://127.0.0.1:7783 -d '{"userpass":"<rpc_password>","mmrpc":"2.0",
   "method":"peer_connection_healthcheck","params":{"peer_address":"<wallet PeerId 12D3KooW…>"}}'
 # Confirm that node's netid == 6133, and grep the proxy log:
-#   "Peer isn't connected to KDF network, returning 401"  -> this diagnosis
-#   "invalid signed message, returning 401"               -> signature/expiry instead
+#   "Peer isn't connected to KDF network, returning 401"       -> this diagnosis
+#   "Request has invalid signed message (...), returning 401"  -> signature/expiry instead
 ```
 
 Reproduce both outcomes locally first with the stack in
@@ -198,13 +199,10 @@ CORS-blocked when reading forwarded gas-free responses, even once the 401 is res
 - **Native builds are unaffected** (KDF's Rust HTTP client sends no `Origin`) — which is
   why the local test in [`contrib/tron-gasfree-proxy-debug/`](../contrib/tron-gasfree-proxy-debug/)
   uses the macOS build.
-- **Web fix** — implemented as
-  [`contrib/tron-gasfree-proxy-debug/proxy/gasfree-cors.patch`](../contrib/tron-gasfree-proxy-debug/proxy/gasfree-cors.patch):
-  the `gas_free` route strips inbound `Origin`/`Referer` before forwarding upstream and
-  adds `Access-Control-Allow-*` on the forwarded response. The local debug stack builds
-  with it applied (verified: browser-`Origin` request → `200` + data + ACAO). **Apply this
-  patch to the GLEEC `komodo-defi-proxy` repo (clean on `4526f9d`) and redeploy** for the
-  production web app.
+- **Web fix** — the fixed proxy branch strips browser request headers before forwarding
+  upstream. Production still needs the NGINX/equivalent edge to add
+  `Access-Control-Allow-*` headers to successful forwarded `/gasfree/*` responses.
+  See [`contrib/tron-gasfree-proxy-debug/production/nginx-gasfree-location.conf`](../contrib/tron-gasfree-proxy-debug/production/nginx-gasfree-location.conf).
 
 ## Unrelated note (not the 401)
 

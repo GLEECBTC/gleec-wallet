@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# Conclusive A/B proof that the gas-free 401 is gated by `peer_connection_healthcheck`.
+# A/B proof for the proxy KDF mesh prerequisite on the fixed proxy branch.
 #
-# For each case it recreates kdf-client (connected vs not), then sends a request through
-# the proxy carrying a well-formed (but cryptographically bogus) x-auth-payload for the
-# client's real PeerId. The proxy checks the healthcheck BEFORE signature validity, so:
-#   connected    -> passes the healthcheck, then 401 "invalid signed message"  (dummy sig)
-#   disconnected -> 401 "Peer isn't connected to KDF network"                  (the prod bug)
+# For each case it recreates kdf-client (connected vs not), then asks the probe exactly
+# what the proxy asks its kdf_rpc_client:
+#
+#   peer_connection_healthcheck(peer_address = client PeerId)
+#
+# On the fixed proxy branch, signature validation runs before peer healthcheck.
+# Therefore a dummy X-Auth-Payload is useful only to prove signature-first log
+# classification; it must not be used as evidence that the peer gate passed/failed.
 #
 # Takes a few minutes: gossipsub mesh formation under amd64 emulation is slow.
 # Does not print the rpc_password or any GasFree secret.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+set -a
 # shellcheck disable=SC1091
-set -a; . ./.env; set +a
+. ./.env
+set +a
 : "${KDF_RPC_PASSWORD:?set KDF_RPC_PASSWORD in .env}"
 
 PROBE_RPC="http://localhost:7790"
@@ -25,12 +30,14 @@ ENDPOINT="/gasfree/tron/api/v1/address/TDpG5sdBXmpCGfJJSr5RGnyHxmcJSYmrg7"
 
 # 25s timeout: a healthcheck for a NOT-connected peer blocks ~10s server-side
 # (gossipsub broadcast wait) before returning {"result":false}.
-rpc()  { curl -s -m 25 "$1" --data "$2"; }
-ready(){ rpc "$1" "{\"userpass\":\"$KDF_RPC_PASSWORD\",\"method\":\"version\"}" | grep -q '"result"'; }
-peer() { rpc "$CLIENT_RPC" "{\"userpass\":\"$KDF_RPC_PASSWORD\",\"method\":\"get_my_peer_id\"}" \
-           | python3 -c 'import sys,json;print(json.load(sys.stdin).get("result",""))'; }
-healthcheck(){ rpc "$PROBE_RPC" \
-  "{\"userpass\":\"$KDF_RPC_PASSWORD\",\"mmrpc\":\"2.0\",\"method\":\"peer_connection_healthcheck\",\"params\":{\"peer_address\":\"$1\"},\"id\":0}"; }
+rpc()  { curl -s -m 25 "$1" --data-binary @-; }
+ready(){ printf '{"userpass":"%s","method":"version"}' \
+  "$KDF_RPC_PASSWORD" | rpc "$1" | grep -q '"result"'; }
+peer() { printf '{"userpass":"%s","method":"get_my_peer_id"}' \
+  "$KDF_RPC_PASSWORD" | rpc "$CLIENT_RPC" \
+    | python3 -c 'import sys,json;print(json.load(sys.stdin).get("result",""))'; }
+healthcheck(){ printf '{"userpass":"%s","mmrpc":"2.0","method":"peer_connection_healthcheck","params":{"peer_address":"%s"},"id":0}' \
+  "$KDF_RPC_PASSWORD" "$1" | rpc "$PROBE_RPC"; }
 craft(){ python3 -c "import json,sys;print(json.dumps({'signature_bytes':[0]*64,'address':sys.argv[1],'raw_message':{'uri':'https://quicknode.gleec.com$ENDPOINT','body_size':0,'public_key_encoded':[0]*38,'expires_at':9999999999}}))" "$1"; }
 
 proxy_branch(){ # $1 = x-auth-payload
@@ -61,8 +68,13 @@ run_case(){ # $1 label  $2 seednode  $3 expect(true|false)
   echo
 }
 
-echo "Proving the proxy 401 is gated by peer_connection_healthcheck ..."
+echo "Proving the proxy KDF mesh prerequisite with peer_connection_healthcheck ..."
 echo
 run_case "CONNECTED (meshes with probe)"        "$PROBE_IP" "true"
 run_case "DISCONNECTED (cannot reach probe)"    "$DEAD_IP"  "false"
-echo "Done. The DISCONNECTED 'Peer isn't connected to KDF network' line is the production cause."
+echo "Done."
+echo
+echo "Interpretation on the fixed branch:"
+echo "  healthcheck false -> real signed wallet requests will log:"
+echo "    Peer isn't connected to KDF network, returning 401"
+echo "  dummy request 401 -> should log invalid signed message first; that is expected."
