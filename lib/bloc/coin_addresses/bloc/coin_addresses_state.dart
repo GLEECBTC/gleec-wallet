@@ -1,7 +1,19 @@
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
 
 enum FormStatus { initial, submitting, success, failure }
+
+enum GaslessReceiveStatus {
+  initial,
+  checking,
+  ready,
+  stale,
+  temporarilyUnavailable,
+  disabled,
+  unsupported,
+  securityMismatch,
+}
 
 class CoinAddressesState extends Equatable {
   final FormStatus status;
@@ -11,6 +23,10 @@ class CoinAddressesState extends Equatable {
   final bool hideZeroBalance;
   final Set<CantCreateNewAddressReason>? cantCreateNewAddressReasons;
   final NewAddressState? newAddressState;
+  final GaslessReceiveStatus gaslessReceiveStatus;
+  final GaslessReceiveReasonCode? gaslessReceiveReason;
+  final DateTime? gaslessReceiveConfigExpiresAt;
+  final String? verifiedGasfreeAddress;
 
   const CoinAddressesState({
     this.status = FormStatus.initial,
@@ -20,6 +36,10 @@ class CoinAddressesState extends Equatable {
     this.hideZeroBalance = false,
     this.cantCreateNewAddressReasons,
     this.newAddressState,
+    this.gaslessReceiveStatus = GaslessReceiveStatus.initial,
+    this.gaslessReceiveReason,
+    this.gaslessReceiveConfigExpiresAt,
+    this.verifiedGasfreeAddress,
   });
 
   CoinAddressesState copyWith({
@@ -30,6 +50,10 @@ class CoinAddressesState extends Equatable {
     bool Function()? hideZeroBalance,
     Set<CantCreateNewAddressReason>? Function()? cantCreateNewAddressReasons,
     NewAddressState? Function()? newAddressState,
+    GaslessReceiveStatus Function()? gaslessReceiveStatus,
+    GaslessReceiveReasonCode? Function()? gaslessReceiveReason,
+    DateTime? Function()? gaslessReceiveConfigExpiresAt,
+    String? Function()? verifiedGasfreeAddress,
   }) {
     return CoinAddressesState(
       status: status == null ? this.status : status(),
@@ -38,13 +62,27 @@ class CoinAddressesState extends Equatable {
           : createAddressStatus(),
       errorMessage: errorMessage == null ? this.errorMessage : errorMessage(),
       addresses: addresses == null ? this.addresses : addresses(),
-      hideZeroBalance:
-          hideZeroBalance == null ? this.hideZeroBalance : hideZeroBalance(),
+      hideZeroBalance: hideZeroBalance == null
+          ? this.hideZeroBalance
+          : hideZeroBalance(),
       cantCreateNewAddressReasons: cantCreateNewAddressReasons == null
           ? this.cantCreateNewAddressReasons
           : cantCreateNewAddressReasons(),
-      newAddressState:
-          newAddressState == null ? this.newAddressState : newAddressState(),
+      newAddressState: newAddressState == null
+          ? this.newAddressState
+          : newAddressState(),
+      gaslessReceiveStatus: gaslessReceiveStatus == null
+          ? this.gaslessReceiveStatus
+          : gaslessReceiveStatus(),
+      gaslessReceiveReason: gaslessReceiveReason == null
+          ? this.gaslessReceiveReason
+          : gaslessReceiveReason(),
+      gaslessReceiveConfigExpiresAt: gaslessReceiveConfigExpiresAt == null
+          ? this.gaslessReceiveConfigExpiresAt
+          : gaslessReceiveConfigExpiresAt(),
+      verifiedGasfreeAddress: verifiedGasfreeAddress == null
+          ? this.verifiedGasfreeAddress
+          : verifiedGasfreeAddress(),
     );
   }
 
@@ -56,6 +94,10 @@ class CoinAddressesState extends Equatable {
     bool Function()? hideZeroBalance,
     Set<CantCreateNewAddressReason>? Function()? cantCreateNewAddressReasons,
     NewAddressState? Function()? newAddressState,
+    GaslessReceiveStatus Function()? gaslessReceiveStatus,
+    GaslessReceiveReasonCode? Function()? gaslessReceiveReason,
+    DateTime? Function()? gaslessReceiveConfigExpiresAt,
+    String? Function()? verifiedGasfreeAddress,
   }) {
     return CoinAddressesState(
       status: status == null ? FormStatus.initial : status(),
@@ -69,17 +111,33 @@ class CoinAddressesState extends Equatable {
           ? null
           : cantCreateNewAddressReasons(),
       newAddressState: newAddressState == null ? null : newAddressState(),
+      gaslessReceiveStatus: gaslessReceiveStatus == null
+          ? GaslessReceiveStatus.initial
+          : gaslessReceiveStatus(),
+      gaslessReceiveReason: gaslessReceiveReason == null
+          ? null
+          : gaslessReceiveReason(),
+      gaslessReceiveConfigExpiresAt: gaslessReceiveConfigExpiresAt == null
+          ? null
+          : gaslessReceiveConfigExpiresAt(),
+      verifiedGasfreeAddress: verifiedGasfreeAddress == null
+          ? null
+          : verifiedGasfreeAddress(),
     );
   }
 
   @override
   List<Object?> get props => [
-        status,
-        createAddressStatus,
-        errorMessage,
-        addresses,
-        hideZeroBalance,
-        cantCreateNewAddressReasons,
-        newAddressState,
-      ];
+    status,
+    createAddressStatus,
+    errorMessage,
+    addresses,
+    hideZeroBalance,
+    cantCreateNewAddressReasons,
+    newAddressState,
+    gaslessReceiveStatus,
+    gaslessReceiveReason,
+    gaslessReceiveConfigExpiresAt,
+    verifiedGasfreeAddress,
+  ];
 }

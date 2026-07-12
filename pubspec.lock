@@ -739,21 +739,21 @@ packages:
       path: "sdk/packages/komodo_defi_rpc_methods"
       relative: true
     source: path
-    version: "0.5.0"
+    version: "1.0.0"
   komodo_defi_sdk:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_defi_sdk"
       relative: true
     source: path
-    version: "0.6.0"
+    version: "1.0.0"
   komodo_defi_types:
     dependency: "direct main"
     description:
       path: "sdk/packages/komodo_defi_types"
       relative: true
     source: path
-    version: "0.4.1"
+    version: "1.0.0"
   komodo_legacy_wallet_migration:
     dependency: "direct main"
     description:

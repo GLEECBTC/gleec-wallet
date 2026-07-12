@@ -72,6 +72,20 @@ class WithdrawFormSubmitted extends WithdrawFormEvent {
   const WithdrawFormSubmitted();
 }
 
+/// Resumes status reconciliation for an already-accepted GasFree relay.
+class WithdrawFormGaslessTraceCheckRequested extends WithdrawFormEvent {
+  const WithdrawFormGaslessTraceCheckRequested();
+}
+
+/// Restores any unresolved wallet-scoped GasFree relay for this asset.
+///
+/// This is deliberately independent of the new-transfer feature switch: a
+/// kill switch may stop new custody activity, but it must never hide or forget
+/// a transfer that the relay has already accepted.
+class WithdrawFormPendingGaslessLoadRequested extends WithdrawFormEvent {
+  const WithdrawFormPendingGaslessLoadRequested();
+}
+
 class WithdrawFormTronPreviewTicked extends WithdrawFormEvent {
   const WithdrawFormTronPreviewTicked();
 }

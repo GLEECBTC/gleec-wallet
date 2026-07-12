@@ -20,6 +20,12 @@ class CoinAddressesSubscriptionRequested extends CoinAddressesEvent {
   const CoinAddressesSubscriptionRequested();
 }
 
+/// Revalidates the short-lived remote receive permission and authoritative
+/// GasFree account status without rebuilding or hiding retained address rows.
+class CoinAddressesGaslessReceiveRefreshRequested extends CoinAddressesEvent {
+  const CoinAddressesGaslessReceiveRefreshRequested();
+}
+
 class CoinAddressesZeroBalanceVisibilityChanged extends CoinAddressesEvent {
   final bool hideZeroBalance;
 

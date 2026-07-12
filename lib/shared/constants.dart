@@ -86,6 +86,89 @@ const int? matomoPlatformDimensionId =
 const String moralisProxyUrl = 'https://moralis.gleec.com';
 const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
 
+/// Explicit build-time kill switch for TRON GasFree.
+///
+/// This is deliberately disabled unless the release pipeline opts in. A valid
+/// relay URL alone must never activate a custody receive/send rail.
+const bool tronGaslessEnabled = bool.fromEnvironment(
+  'TRON_GASLESS_ENABLED',
+  defaultValue: false,
+);
+
+/// Separate kill switch for exposing GasFree custody addresses to depositors.
+///
+/// Receive is more difficult to roll back than send because users may keep
+/// depositing after the provider is disabled. Release automation should only
+/// enable this after the send rail and recovery path have passed production
+/// checks.
+const bool tronGaslessReceiveEnabled = bool.fromEnvironment(
+  'TRON_GASLESS_RECEIVE_ENABLED',
+  defaultValue: false,
+);
+
+/// Runtime control endpoint for exposing new GasFree custody receive
+/// addresses.
+///
+/// The build-time switches above are necessary but not sufficient: production
+/// must also serve a fresh, fail-closed JSON document from this HTTPS URL. The
+/// expected schema is intentionally small and strict so an unrelated endpoint,
+/// stale cache, or partially deployed response cannot accidentally enable new
+/// deposits:
+///
+/// ```json
+/// {
+///   "schemaVersion": 1,
+///   "receiveEnabled": true,
+///   "expiresAt": "2026-07-10T12:00:00Z",
+///   "network": "tron",
+///   "serviceProvider": "T..."
+/// }
+/// ```
+///
+/// Empty is the production-safe default. Query parameters, fragments, embedded
+/// credentials, root-only URLs, and non-HTTPS endpoints are rejected.
+const String tronGaslessControlUrl = String.fromEnvironment(
+  'TRON_GASLESS_CONTROL_URL',
+  defaultValue: '',
+);
+
+/// Parses a structurally safe GasFree runtime-control endpoint.
+Uri? parseTronGaslessControlEndpoint(String rawUrl) {
+  final trimmed = rawUrl.trim();
+  final uri = Uri.tryParse(trimmed);
+  final hasSafeSurface = RegExp(
+    r'^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$',
+  ).hasMatch(trimmed);
+  if (!hasSafeSurface ||
+      trimmed.isEmpty ||
+      uri == null ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment ||
+      uri.path.isEmpty ||
+      uri.path == '/' ||
+      uri.path.endsWith('/') ||
+      uri.path.contains('//') ||
+      trimmed.contains('%') ||
+      trimmed.contains('/../') ||
+      trimmed.contains('/./') ||
+      trimmed.endsWith('/..') ||
+      trimmed.endsWith('/.')) {
+    return null;
+  }
+
+  final pathSegments = uri.pathSegments;
+  if (pathSegments.any(
+    (segment) => segment.isEmpty || segment == '.' || segment == '..',
+  )) {
+    return null;
+  }
+
+  return uri;
+}
+
 /// Tron gas-free (GasFree) relay configuration for gas-free TRC20 withdrawals.
 ///
 /// [tronGaslessBaseUrl] is passed verbatim to KDF as the
@@ -116,28 +199,102 @@ const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
 /// Override at build time via `--dart-define=TRON_GASLESS_BASE_URL=...`.
 const String tronGaslessBaseUrl = String.fromEnvironment(
   'TRON_GASLESS_BASE_URL',
-  defaultValue: 'https://quicknode.gleec.com/gasfree/tron',
+  defaultValue: '',
 );
 
-bool get isTronGaslessConfigured => tronGaslessBaseUrl.trim().isNotEmpty;
+/// Returns the configured GasFree network path (`tron` or `nile`) when the
+/// endpoint is safe to use. Production endpoints must be HTTPS and may not
+/// carry client credentials, query parameters, or fragments.
+String? tronGaslessNetworkPath(String rawBaseUrl) {
+  final uri = Uri.tryParse(rawBaseUrl.trim());
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    return null;
+  }
+
+  final segments = uri.pathSegments.where((segment) => segment.isNotEmpty);
+  if (segments.isEmpty) return null;
+  return switch (segments.last.toLowerCase()) {
+    'tron' => 'tron',
+    'nile' => 'nile',
+    _ => null,
+  };
+}
 
 /// GasFree service-provider TRON address, bound into the signed TIP-712
 /// `PermitTransferMessage` and forwarded to the GasFree backend on submit.
 ///
 /// This MUST be the provider registered for the GasFree account that the proxy
 /// holds credentials for — the permit names this address and the provider
-/// rejects a permit naming a different one. This default is the provider
-/// returned by the Gleec proxy's account at
-/// `<base_url>/api/v1/config/provider/all` (verified 2026-06-24). If the proxy's
-/// GasFree account changes, re-check that endpoint and update this value.
-///
-/// TODO: KDF intends to auto-fetch this at activation (see gasfree/config.rs in
-/// komodo-defi-framework); drop this constant once that lands.
+/// rejects a permit naming a different one. Production builds must supply the
+/// address explicitly; client-side provider auto-discovery is not accepted as
+/// a signing authority.
 /// Override at build time via `--dart-define=TRON_GASLESS_SERVICE_PROVIDER=...`.
 const String tronGaslessServiceProvider = String.fromEnvironment(
   'TRON_GASLESS_SERVICE_PROVIDER',
-  defaultValue: 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+  defaultValue: '',
 );
+
+/// Conservative validation for the pinned TRON service-provider address.
+///
+/// This intentionally checks the Base58Check surface shape only; KDF/provider
+/// response binding remains authoritative for the actual account.
+bool isValidTronServiceProvider(String value) =>
+    RegExp(r'^T[1-9A-HJ-NP-Za-km-z]{33}$').hasMatch(value.trim());
+
+Set<String> tronGaslessAssetIdsFor({
+  required bool enabled,
+  required String baseUrl,
+  required String serviceProvider,
+}) {
+  if (!enabled) return const <String>{};
+  return tronGaslessRecoveryAssetIdsFor(
+    baseUrl: baseUrl,
+    serviceProvider: serviceProvider,
+  );
+}
+
+Set<String> tronGaslessRecoveryAssetIdsFor({
+  required String baseUrl,
+  required String serviceProvider,
+}) {
+  if (!isValidTronServiceProvider(serviceProvider)) {
+    return const <String>{};
+  }
+  return switch (tronGaslessNetworkPath(baseUrl)) {
+    'tron' => const {'USDT-TRC20'},
+    'nile' => const {'TESTUSDT-TRC20'},
+    _ => const <String>{},
+  };
+}
+
+bool get hasValidTronGaslessProviderConfig => tronGaslessRecoveryAssetIdsFor(
+  baseUrl: tronGaslessBaseUrl,
+  serviceProvider: tronGaslessServiceProvider,
+).isNotEmpty;
+
+Set<String> get tronGaslessRecoveryAssetIds => tronGaslessRecoveryAssetIdsFor(
+  baseUrl: tronGaslessBaseUrl,
+  serviceProvider: tronGaslessServiceProvider,
+);
+
+Set<String> get tronGaslessConfiguredAssetIds => tronGaslessAssetIdsFor(
+  enabled: tronGaslessEnabled,
+  baseUrl: tronGaslessBaseUrl,
+  serviceProvider: tronGaslessServiceProvider,
+);
+
+/// True only when the feature was explicitly enabled and every mandatory
+/// production configuration value is present and structurally safe.
+bool get isTronGaslessConfigured => tronGaslessConfiguredAssetIds.isNotEmpty;
+
+/// Whether the app may present a GasFree custody address for new deposits.
+bool get isTronGaslessReceiveConfigured =>
+    isTronGaslessConfigured && tronGaslessReceiveEnabled;
 
 const String geoBlockerApiUrl = 'https://gleec-wallet-bouncer.gleec.com/v1';
 const String tradingBlacklistUrl =

@@ -147,6 +147,34 @@ class AnalyticsSendFailedEvent extends AnalyticsSendDataEvent {
        );
 }
 
+/// Privacy-minimized lifecycle telemetry for the GasFree rail.
+///
+/// GasFree authorization and relay data is financially sensitive. This event
+/// deliberately excludes asset identifiers, wallet type, addresses, amounts,
+/// fees, provider messages, trace IDs, and signed payloads.
+class GaslessTransferAnalyticsEventData extends AnalyticsEventData {
+  const GaslessTransferAnalyticsEventData({
+    required this.stage,
+    required this.code,
+    required this.retryable,
+  });
+
+  final String stage;
+  final String code;
+  final bool retryable;
+
+  @override
+  String get name => 'gasless_transfer_transition';
+
+  @override
+  JsonMap get parameters => {
+    'stage': _stableAnalyticsToken(stage),
+    'code': _stableFailureToken(code) ?? 'unknown',
+    'rail': 'tron_gasfree',
+    'retryable': retryable,
+  };
+}
+
 // E17: Swap order submitted
 // ------------------------------------------
 
@@ -341,15 +369,19 @@ class AnalyticsSwapFailedEvent extends AnalyticsSendDataEvent {
 String _formatFailureReason({String? stage, String? reason, String? code}) {
   final parts = <String>[];
 
-  String? sanitize(String? value) {
+  String? sanitizeStage(String? value) {
     if (value == null) return null;
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
+    final normalized = value.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9_.-]+'),
+      '_',
+    );
+    if (normalized.isEmpty) return null;
+    return normalized.length > 48 ? normalized.substring(0, 48) : normalized;
   }
 
-  final sanitizedStage = sanitize(stage);
-  final sanitizedReason = sanitize(reason);
-  final sanitizedCode = sanitize(code);
+  final sanitizedStage = sanitizeStage(stage);
+  final sanitizedReason = _stableFailureToken(reason);
+  final sanitizedCode = _stableFailureToken(code);
 
   if (sanitizedStage != null) {
     parts.add('stage:$sanitizedStage');
@@ -365,4 +397,70 @@ String _formatFailureReason({String? stage, String? reason, String? code}) {
     return 'reason:unknown';
   }
   return parts.join('|');
+}
+
+/// Converts potentially sensitive transport/provider messages into a bounded
+/// analytics category. Raw GasFree errors can contain addresses, signed
+/// payload fields, upstream URLs, or correlation data and must never leave the
+/// device as analytics dimensions.
+String? _stableFailureToken(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return null;
+  final value = raw.toLowerCase();
+
+  const stableCodes = {
+    'started',
+    'confirmed',
+    'rejected_before_relay',
+    'failed_final',
+  };
+  if (stableCodes.contains(value.trim())) return value.trim();
+
+  if (value.contains('cancel')) return 'cancelled';
+  if (value.contains('timeout') || value.contains('timed out')) {
+    return 'timeout';
+  }
+  if (value.contains('insufficient') ||
+      value.contains('not enough') ||
+      value.contains('below fee')) {
+    return 'insufficient_funds';
+  }
+  if (value.contains('expired') || value.contains('deadline')) {
+    return 'authorization_expired';
+  }
+  if (value.contains('pending') || value.contains('in progress')) {
+    return 'transfer_pending';
+  }
+  if (value.contains('mismatch') ||
+      value.contains('tamper') ||
+      value.contains('invalid signature')) {
+    return 'security_mismatch';
+  }
+  if (value.contains('unauthor') ||
+      value.contains('forbidden') ||
+      value.contains('authentication') ||
+      RegExp(r'(^|\D)(401|403)(\D|$)').hasMatch(value)) {
+    return 'authentication_failed';
+  }
+  if (value.contains('unsupported') || value.contains('no such coin')) {
+    return 'unsupported';
+  }
+  if (value.contains('invalid address')) return 'invalid_address';
+  if (value.contains('unavailable') ||
+      value.contains('provider') ||
+      value.contains('relay') ||
+      value.contains('connection') ||
+      value.contains('network')) {
+    return 'service_unavailable';
+  }
+
+  return 'unknown';
+}
+
+String _stableAnalyticsToken(String raw) {
+  final token = raw.trim().toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9_.-]+'),
+    '_',
+  );
+  if (token.isEmpty) return 'unknown';
+  return token.length <= 48 ? token : token.substring(0, 48);
 }

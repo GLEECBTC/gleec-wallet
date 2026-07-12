@@ -21,14 +21,18 @@ final class MM2 {
         preActivateHistoricalAssets: false,
         preActivateDefaultAssets: false,
         tronGaslessProvider: _tronGaslessProviderConfig(),
+        // Keep recovery/status capability after a user-facing send/receive
+        // kill switch. UI send eligibility remains separately gated.
+        tronGaslessAssetIds: tronGaslessRecoveryAssetIds,
       ),
       onLog: _handleSdkLog,
     );
   }
 
   TronGaslessProviderConfig? _tronGaslessProviderConfig() {
+    if (!hasValidTronGaslessProviderConfig) return null;
+
     final baseUrl = tronGaslessBaseUrl.trim();
-    if (baseUrl.isEmpty) return null;
 
     // GasFree requires server-side credentials, so route through KDF's
     // komodo_proxy rail (libp2p-key auth, no secrets on the client). The base
@@ -37,7 +41,7 @@ final class MM2 {
     return TronGaslessProviderConfig(
       baseUrl: baseUrl,
       service: const GaslessServiceKomodoProxy(),
-      serviceProvider: tronGaslessServiceProvider,
+      serviceProvider: tronGaslessServiceProvider.trim(),
     );
   }
 

@@ -6,6 +6,32 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
+
+/// True only for the software-wallet key GasFree v1 binds to.
+///
+/// Non-HD wallets expose no derivation path. HD wallets must use the external
+/// account-zero/address-zero key. Secondary and change keys remain standard
+/// TRON addresses even if stale cached metadata carries a GasFree address.
+bool isCanonicalTronGaslessPubkey(
+  PubkeyInfo pubkey, {
+  required bool isHdWallet,
+}) {
+  final derivationPath = pubkey.derivationPath?.trim();
+  final chain = pubkey.chain?.trim().toLowerCase();
+
+  if (!isHdWallet) {
+    // Iguana wallets have one software key and no HD metadata. Reject stale
+    // derivation metadata rather than treating it as another custody account.
+    return (derivationPath == null || derivationPath.isEmpty) &&
+        (chain == null || chain.isEmpty || chain == 'external');
+  }
+
+  // GasFree v1 is bound to TRON BIP44 account 0, external chain, address 0.
+  // A suffix check is not sufficient: account 1 and other coin types can end
+  // in `/0/0` as well. Missing metadata fails closed for HD wallets.
+  return chain == 'external' && derivationPath == "m/44'/195'/0'/0/0";
+}
 
 extension LegacyCoinMigrationExtensions on Coin {
   /// Gets the current USD price of this coin
@@ -78,7 +104,25 @@ extension LegacyCoinMigrationExtensions on Coin {
   /// The coin's `my_balance` still reports the EOA balance, so custody-aware
   /// surfaces must use [gasfreeCustodyBalance] instead.
   bool isGaslessAsset(KomodoDefiSdk sdk) =>
-      id.subClass == CoinSubClass.trc20 && isTronGaslessConfigured;
+      isTronGaslessConfigured && _matchesGaslessAssetPolicy;
+
+  /// Whether the custody receive address may be exposed for this asset.
+  /// Sending and recovery can remain available while new GasFree deposits are
+  /// disabled independently.
+  bool isGaslessReceiveAsset(KomodoDefiSdk sdk) =>
+      isTronGaslessReceiveConfigured && _matchesGaslessAssetPolicy;
+
+  /// Existing custody/pending/recovery visibility must survive send and
+  /// receive kill switches. This derives network identity from the coin
+  /// itself while retaining the exact token policy.
+  bool get isGaslessRecoveryAsset => isTronGaslessAssetIdEligible(
+    id,
+    isCustomToken: isCustomCoin,
+    isTestnet: isTestCoin,
+    platform: protocolData?.platform,
+    contractAddress: protocolData?.contractAddress,
+    providerNetworkPath: isTestCoin ? 'nile' : 'tron',
+  );
 
   /// Whether this coin falls under the TRON gasless single-address model.
   ///
@@ -89,7 +133,29 @@ extension LegacyCoinMigrationExtensions on Coin {
   /// TRON addresses).
   bool isGaslessSingleAddressScope(KomodoDefiSdk sdk) =>
       isTronGaslessConfigured &&
-      (id.subClass == CoinSubClass.trc20 || id.subClass == CoinSubClass.trx);
+      (_matchesGaslessAssetPolicy || _matchesGaslessParentPolicy);
+
+  /// GasFree v1 supports only the pinned Tether contracts on their matching
+  /// provider network. Custom tokens and network/contract lookalikes fail
+  /// closed even when KDF happens to return a `gasfreeAddress` field.
+  bool get _matchesGaslessAssetPolicy {
+    return isTronGaslessAssetIdEligible(
+      id,
+      isCustomToken: isCustomCoin,
+      isTestnet: isTestCoin,
+      platform: protocolData?.platform,
+      contractAddress: protocolData?.contractAddress,
+    );
+  }
+
+  bool get _matchesGaslessParentPolicy {
+    if (id.subClass != CoinSubClass.trx) return false;
+    return switch (tronGaslessNetworkPath(tronGaslessBaseUrl)) {
+      'tron' => !isTestCoin && id.id == 'TRX',
+      'nile' => isTestCoin && id.id == 'TRXT',
+      _ => false,
+    };
+  }
 
   /// The GasFree custody balance for a gas-free TRC-20 asset — the balance a
   /// gasless withdrawal actually settles from. Returns `null` for non-gasless
@@ -98,7 +164,7 @@ extension LegacyCoinMigrationExtensions on Coin {
   /// This is an on-demand fetch (`gasless::account_status`); callers that need a
   /// synchronous value should cache the result.
   Future<BalanceInfo?> gasfreeCustodyBalance(KomodoDefiSdk sdk) async {
-    if (!isGaslessAsset(sdk)) return null;
+    if (!isGaslessRecoveryAsset) return null;
     try {
       final status = await sdk.withdrawals.gaslessAccountStatus(id);
       return status.custodyBalance;
