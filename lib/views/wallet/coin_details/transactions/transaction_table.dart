@@ -6,6 +6,7 @@ import 'package:komodo_ui/komodo_ui.dart' show showAddressSearch;
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_bloc.dart';
+import 'package:web_dex/bloc/transaction_history/transaction_history_event.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -16,11 +17,11 @@ import 'package:web_dex/views/wallet/coin_details/transactions/transaction_list.
 
 class TransactionTable extends StatelessWidget {
   const TransactionTable({
-    Key? key,
+    super.key,
     required this.coin,
     required this.setTransaction,
     this.selectedTransaction,
-  }) : super(key: key);
+  });
 
   final Coin coin;
   final Transaction? selectedTransaction;
@@ -87,6 +88,9 @@ class TransactionTable extends StatelessWidget {
             child: _ErrorMessage(
               text: errorText,
               textColor: theme.currentGlobal.colorScheme.error,
+              onRetry: () => context.read<TransactionHistoryBloc>().add(
+                TransactionHistorySubscribe(coin: coin),
+              ),
             ),
           );
         }
@@ -127,10 +131,10 @@ class _TransactionsListWrapper extends StatelessWidget {
 }
 
 class _ErrorMessage extends StatelessWidget {
-  const _ErrorMessage({Key? key, required this.text, this.textColor})
-    : super(key: key);
+  const _ErrorMessage({required this.text, this.textColor, this.onRetry});
   final String text;
   final Color? textColor;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -149,9 +153,28 @@ class _ErrorMessage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 20),
             margin: const EdgeInsets.fromLTRB(0, 30, 0, 20),
             child: Center(
-              child: SelectableText(
-                text,
-                style: TextStyle(color: textColor, fontSize: 13),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SelectableText(
+                      text,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: textColor, fontSize: 13),
+                    ),
+                    if (onRetry != null) ...[
+                      const SizedBox(height: 16),
+                      UiPrimaryButton(
+                        key: const Key('transaction-history-retry'),
+                        width: 160,
+                        height: 44,
+                        onPressed: onRetry,
+                        text: LocaleKeys.retryButtonText.tr(),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -162,8 +185,7 @@ class _ErrorMessage extends StatelessWidget {
 }
 
 class _IguanaCoinWithoutTxHistorySupport extends StatelessWidget {
-  const _IguanaCoinWithoutTxHistorySupport({Key? key, required this.coin})
-    : super(key: key);
+  const _IguanaCoinWithoutTxHistorySupport({required this.coin});
   final Coin coin;
 
   Future<void> _openExplorer(BuildContext context) async {

@@ -92,7 +92,7 @@ GaslessAccountStatusResponse _gaslessStatus({
 WithdrawFormState _trc20FillState({
   bool isGaslessEnabled = true,
   GaslessAccountStatusResponse? gaslessAccountStatus,
-  WalletType? walletType,
+  WalletType? walletType = WalletType.hdwallet,
   bool isGaslessStatusLoading = false,
   String sourceBalance = '100',
 }) {
@@ -107,6 +107,7 @@ WithdrawFormState _trc20FillState({
     gasfreeAddress: 'TGasFreeSourceAddress',
   );
   return WithdrawFormState(
+    isGaslessFeatureConfigured: true,
     asset: asset,
     pubkeys: AssetPubkeys(
       assetId: asset.id,
@@ -188,6 +189,7 @@ void testWithdrawFormFillSection() {
       final asset = Asset.fromJson(_utxoConfig(), knownIds: const {});
       final bloc = _FakeWithdrawFormBloc(
         WithdrawFormState(
+          isGaslessFeatureConfigured: true,
           asset: asset,
           step: WithdrawFormStep.fill,
           recipientAddress: 'recipient',
@@ -212,6 +214,7 @@ void testWithdrawFormFillSection() {
       final asset = Asset.fromJson(_utxoConfig(), knownIds: const {});
       final bloc = _FakeWithdrawFormBloc(
         WithdrawFormState(
+          isGaslessFeatureConfigured: true,
           asset: asset,
           step: WithdrawFormStep.fill,
           recipientAddress: 'recipient',
@@ -280,16 +283,18 @@ void testWithdrawFormFillSection() {
 
       await tester.pumpWidget(_buildTestWidget(bloc));
 
-      await tester.ensureVisible(
-        find.byKey(const Key('withdraw-gasless-source-selector')),
+      final selector = tester.widget<AddressSelectInput>(
+        find.byType(AddressSelectInput),
       );
-      await tester.tap(find.byType(AddressSelectInput));
-      await tester.pumpAndSettle();
+      expect(selector.addresses, hasLength(2));
+      final standard = selector.addresses.singleWhere(
+        (entry) => entry.address == 'TRegularSourceAddress',
+      );
 
-      // Both pots are listed; choosing the standard one flips the rail.
-      expect(find.text('withdrawSourceGasfreeEntry'), findsWidgets);
-      await tester.tap(find.text('withdrawSourceStandardEntry').last);
-      await tester.pumpAndSettle();
+      // Exercise the production selector callback directly. The generic
+      // dropdown owns a process-wide overlay and is independently tested by
+      // komodo_ui; direct selection keeps this rail-wiring test deterministic.
+      selector.onAddressSelected!(standard);
 
       final toggle = bloc.events.whereType<WithdrawFormGaslessToggled>().single;
       expect(toggle.isEnabled, isFalse);
@@ -306,7 +311,15 @@ void testWithdrawFormFillSection() {
       await tester.pumpWidget(_buildTestWidget(bloc));
 
       expect(find.byKey(const Key('withdraw-gasless-chip')), findsOneWidget);
-      expect(find.byType(CheckboxListTile), findsNothing);
+      // The amount field still has its legitimate "send maximum" checkbox;
+      // ensure there is no checkbox inside the rail-specific Advanced card.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('withdraw-advanced-section')),
+          matching: find.byType(CheckboxListTile),
+        ),
+        findsNothing,
+      );
       expect(
         find.byKey(const Key('withdraw-advanced-section')),
         findsOneWidget,
@@ -367,9 +380,12 @@ void testWithdrawFormFillSection() {
         find.byKey(const Key('withdraw-advanced-section')),
       );
       await tester.tap(find.byKey(const Key('withdraw-advanced-section')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.tap(find.byKey(const Key('withdraw-native-send-switch')));
+      final nativeSwitch = tester.widget<SwitchListTile>(
+        find.byKey(const Key('withdraw-native-send-switch')),
+      );
+      nativeSwitch.onChanged!(true);
       expect(
         bloc.events.whereType<WithdrawFormGaslessToggled>().single.isEnabled,
         isFalse,

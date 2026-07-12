@@ -84,7 +84,9 @@ class NoticeBanner extends StatelessWidget {
           foreground: orange != null
               ? _legibleShade(orange, isDark: isDark)
               : (isDark ? Colors.amber.shade200 : Colors.amber.shade900),
-          accent: orange ?? (isDark ? Colors.amber.shade200 : Colors.amber),
+          accent: orange != null
+              ? _legibleShade(orange, isDark: isDark)
+              : (isDark ? Colors.amber.shade200 : Colors.amber.shade900),
         );
       case NoticeBannerVariant.success:
         final green = scheme?.green;
@@ -97,7 +99,9 @@ class NoticeBanner extends StatelessWidget {
           foreground: green != null
               ? _legibleShade(green, isDark: isDark)
               : (isDark ? Colors.green.shade200 : Colors.green.shade900),
-          accent: green ?? theme.colorScheme.primary,
+          accent: green != null
+              ? _legibleShade(green, isDark: isDark)
+              : (isDark ? Colors.green.shade200 : Colors.green.shade900),
         );
     }
   }
@@ -107,7 +111,7 @@ class NoticeBanner extends StatelessWidget {
   /// ones. Keeps the token as the single source of hue.
   static Color _legibleShade(Color color, {required bool isDark}) {
     final hsl = HSLColor.fromColor(color);
-    return hsl.withLightness(isDark ? 0.75 : 0.28).toColor();
+    return hsl.withLightness(isDark ? 0.75 : 0.20).toColor();
   }
 
   @override

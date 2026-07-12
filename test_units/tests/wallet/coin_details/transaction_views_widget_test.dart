@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_bloc.dart';
+import 'package:web_dex/bloc/transaction_history/transaction_history_event.dart';
 import 'package:web_dex/bloc/transaction_history/transaction_history_state.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -19,6 +20,11 @@ import 'coin_details_test_harness.dart';
 class _FakeTransactionHistoryBloc extends Cubit<TransactionHistoryState>
     implements TransactionHistoryBloc {
   _FakeTransactionHistoryBloc(super.initialState);
+
+  final events = <TransactionHistoryEvent>[];
+
+  @override
+  void add(TransactionHistoryEvent event) => events.add(event);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -134,6 +140,14 @@ void testTransactionViewsWidgets() {
         find.textContaining(LocaleKeys.connectionToServersFailing),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('transaction-history-retry')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('transaction-history-retry')));
+      expect(bloc.events, hasLength(1));
+      expect(bloc.events.single, isA<TransactionHistorySubscribe>());
     });
 
     testWidgets('transaction row labels net-zero transfer as internal move', (

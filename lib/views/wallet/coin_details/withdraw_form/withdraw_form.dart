@@ -1,4 +1,5 @@
 import 'dart:async' show Timer;
+import 'dart:convert' show jsonEncode;
 
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -11,7 +12,6 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/analytics/events/transaction_events.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
@@ -32,12 +32,18 @@ import 'package:web_dex/shared/widgets/gasless_info_dialog.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fields.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fill_form_memo.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_pending_transfer_panel.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/trezor_withdraw_progress_dialog.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/withdraw_form_header.dart';
 
 bool _isMemoSupportedProtocol(Asset asset) {
   final protocol = asset.protocol;
   return protocol is TendermintProtocol || protocol is ZhtlcProtocol;
+}
+
+bool _shouldStackWithdrawActions(BuildContext context, double maxWidth) {
+  return maxWidth < 480 || MediaQuery.textScalerOf(context).scale(1) > 1.3;
 }
 
 AssetId _resolveFeeAssetId(BuildContext context, Asset asset, FeeInfo fee) {
@@ -66,6 +72,58 @@ String? _effectiveWithdrawSourceAddress(WithdrawFormState state) {
   return state.selectedSourceAddress?.address;
 }
 
+Future<void> _openGaslessSupportContact(
+  BuildContext context,
+  WithdrawFormState state,
+) async {
+  final hasGaslessContext =
+      state.gaslessTransferState != null || state.gaslessTraceId != null;
+  if (!hasGaslessContext) {
+    try {
+      await openUrl(discordInviteUrl);
+    } catch (_) {
+      // A support-launch failure must not replace the transfer result.
+    }
+    return;
+  }
+
+  final approved = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(LocaleKeys.withdrawGaslessSupportDiagnosticsTitle.tr()),
+      content: Text(LocaleKeys.withdrawGaslessSupportDiagnosticsBody.tr()),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(LocaleKeys.cancel.tr()),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(LocaleKeys.withdrawGaslessSupportDiagnosticsAction.tr()),
+        ),
+      ],
+    ),
+  );
+  if (approved != true || !context.mounted) return;
+
+  final diagnostics = jsonEncode({
+    'feature': 'tron_gasfree',
+    'stage': state.gaslessTraceId == null ? 'pre_relay' : 'trace_status',
+    'rail': 'gasfree',
+    'state': state.gaslessTransferState?.name ?? 'unknown',
+    'availability': state.gaslessAvailability.name,
+    'retryable': state.canRetryGaslessTransfer,
+    if (state.gaslessTraceId != null) 'trace_id': state.gaslessTraceId,
+  });
+  copyToClipBoard(context, diagnostics);
+
+  try {
+    await openUrl(discordInviteUrl);
+  } catch (_) {
+    // The approved bundle remains on the clipboard if support cannot open.
+  }
+}
+
 class WithdrawForm extends StatefulWidget {
   final Asset asset;
   final VoidCallback onSuccess;
@@ -75,16 +133,20 @@ class WithdrawForm extends StatefulWidget {
   /// e.g. the stranded-funds consolidation (recipient = the user's own GasFree
   /// custody address, native rail, max amount).
   final String? initialRecipient;
+  final PubkeyInfo? initialSourceAddress;
   final bool initialGaslessEnabled;
   final bool initialIsMax;
+  final bool lockSourceSelection;
 
   const WithdrawForm({
     required this.asset,
     required this.onSuccess,
     this.onBackButtonPressed,
     this.initialRecipient,
+    this.initialSourceAddress,
     this.initialGaslessEnabled = true,
     this.initialIsMax = false,
+    this.lockSourceSelection = false,
     super.key,
   });
 
@@ -110,8 +172,10 @@ class _WithdrawFormState extends State<WithdrawForm> {
       mm2Api: _mm2Api,
       walletType: walletType,
       initialRecipient: widget.initialRecipient,
+      initialSourceAddress: widget.initialSourceAddress,
       initialGaslessEnabled: widget.initialGaslessEnabled,
       initialIsMax: widget.initialIsMax,
+      lockSourceSelection: widget.lockSourceSelection,
     );
   }
 
@@ -203,16 +267,27 @@ class _WithdrawFormState extends State<WithdrawForm> {
             listenWhen: (prev, curr) =>
                 prev.step != curr.step && curr.step == WithdrawFormStep.success,
             listener: (context, state) async {
-              final authBloc = context.read<AuthBloc>();
-              final walletType = authBloc.state.currentUser?.type ?? '';
-              context.read<AnalyticsBloc>().logEvent(
-                SendSucceededEventData(
-                  asset: state.asset.id.id,
-                  network: state.asset.id.subClass.name,
-                  amount: double.tryParse(state.amount) ?? 0.0,
-                  hdType: walletType,
-                ),
-              );
+              if (state.gaslessTransferState ==
+                  GaslessTransferState.confirmed) {
+                context.read<AnalyticsBloc>().logEvent(
+                  const GaslessTransferAnalyticsEventData(
+                    stage: 'finality',
+                    code: 'confirmed',
+                    retryable: false,
+                  ),
+                );
+              } else {
+                final authBloc = context.read<AuthBloc>();
+                final walletType = authBloc.state.currentUser?.type ?? '';
+                context.read<AnalyticsBloc>().logEvent(
+                  SendSucceededEventData(
+                    asset: state.asset.id.id,
+                    network: state.asset.id.subClass.name,
+                    amount: double.tryParse(state.amount) ?? 0.0,
+                    hdType: walletType,
+                  ),
+                );
+              }
 
               final coin = context
                   .read<CoinsBloc>()
@@ -236,17 +311,27 @@ class _WithdrawFormState extends State<WithdrawForm> {
             listenWhen: (prev, curr) =>
                 prev.step != curr.step && curr.step == WithdrawFormStep.failed,
             listener: (context, state) {
-              final authBloc = context.read<AuthBloc>();
-              final walletType = authBloc.state.currentUser?.type ?? '';
               final reason = state.transactionError?.message ?? 'unknown';
-              context.read<AnalyticsBloc>().logEvent(
-                SendFailedEventData(
-                  asset: state.asset.id.id,
-                  network: state.asset.protocol.subClass.name,
-                  failureReason: reason,
-                  hdType: walletType,
-                ),
-              );
+              if (state.gaslessTransferState != null || state.useGasless) {
+                context.read<AnalyticsBloc>().logEvent(
+                  GaslessTransferAnalyticsEventData(
+                    stage: state.gaslessTransferState?.name ?? 'submission',
+                    code: reason,
+                    retryable: state.canRetryGaslessTransfer,
+                  ),
+                );
+              } else {
+                final authBloc = context.read<AuthBloc>();
+                final walletType = authBloc.state.currentUser?.type ?? '';
+                context.read<AnalyticsBloc>().logEvent(
+                  SendFailedEventData(
+                    asset: state.asset.id.id,
+                    network: state.asset.protocol.subClass.name,
+                    failureReason: reason,
+                    hdType: walletType,
+                  ),
+                );
+              }
             },
           ),
           BlocListener<WithdrawFormBloc, WithdrawFormState>(
@@ -302,28 +387,38 @@ class WithdrawFormContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
-      buildWhen: (prev, curr) => prev.step != curr.step,
+      buildWhen: (prev, curr) =>
+          prev.step != curr.step ||
+          prev.isSending != curr.isSending ||
+          prev.gaslessTraceId != curr.gaslessTraceId,
       builder: (context, state) {
-        return Column(
-          children: [
-            WithdrawFormHeader(
-              asset: state.asset,
-              onBackButtonPressed: onBackButtonPressed,
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(18),
+        final canLeave =
+            !state.isSending ||
+            !state.useGasless ||
+            state.gaslessTraceId != null;
+        return PopScope(
+          canPop: canLeave,
+          child: Column(
+            children: [
+              WithdrawFormHeader(
+                asset: state.asset,
+                onBackButtonPressed: canLeave ? onBackButtonPressed : null,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: _buildStep(state.step),
                   ),
-                  child: _buildStep(state.step),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -337,6 +432,8 @@ class WithdrawFormContent extends StatelessWidget {
         );
       case WithdrawFormStep.confirm:
         return const WithdrawFormConfirmSection();
+      case WithdrawFormStep.pending:
+        return WithdrawFormPendingSection(onViewActivity: onSuccess);
       case WithdrawFormStep.success:
         return WithdrawFormSuccessSection(onDone: onSuccess);
       case WithdrawFormStep.failed:
@@ -534,7 +631,9 @@ class _WithdrawPreviewSummary extends StatelessWidget {
     final fee = preview.fee;
     final feeAssetId = _resolveFeeAssetId(context, state.asset, fee);
     final symbol = state.asset.id.symbol.configSymbol;
-    final recipientAmount = _recipientAmount(preview.balanceChanges, fee);
+    final recipientAmount = fee is FeeInfoTronGasless
+        ? state.authorizedRecipientAmount ?? preview.balanceChanges.totalAmount
+        : _recipientAmount(preview.balanceChanges);
     // Gas-free fees are paid in the sent token, so amount + fee reconcile
     // into a single meaningful total; on other rails the fee is a different
     // asset and a token-sum would be nonsense.
@@ -1041,46 +1140,43 @@ class _WithdrawGaslessDetailsCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      child: Theme(
-        data: theme.copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          title: Row(
-            children: [
-              Flexible(
-                child: Text(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
                   LocaleKeys.withdrawGaslessNetworkDetails.tr(),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Chip(
-                label: Text(LocaleKeys.withdrawGaslessBadge.tr()),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                backgroundColor: NoticeBanner.styleOf(
-                  context,
-                  NoticeBannerVariant.success,
-                ).background,
-                labelStyle: theme.textTheme.labelSmall?.copyWith(
-                  color: NoticeBanner.styleOf(
+                Chip(
+                  label: Text(LocaleKeys.withdrawGaslessBadge.tr()),
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: NoticeBanner.styleOf(
                     context,
                     NoticeBannerVariant.success,
-                  ).foreground,
-                  fontWeight: FontWeight.w700,
+                  ).background,
+                  labelStyle: theme.textTheme.labelSmall?.copyWith(
+                    color: NoticeBanner.styleOf(
+                      context,
+                      NoticeBannerVariant.success,
+                    ).foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  side: BorderSide.none,
                 ),
-                side: BorderSide.none,
-              ),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(summary, style: theme.textTheme.bodySmall),
-          ),
-          children: [
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(summary, style: theme.textTheme.bodySmall),
+            const SizedBox(height: 16),
             // The GasFree custody address the tokens actually settle from —
             // distinct from the withdrawal's `from` (the user's own address).
             _buildDetailRow(
@@ -1118,6 +1214,34 @@ class _WithdrawGaslessDetailsCard extends StatelessWidget {
                     '${_formatTrimmedDecimal(fee.signedMaxFee!)} ${fee.coin}',
                 valueStyle: theme.textTheme.bodySmall,
               ),
+            const SizedBox(height: 4),
+            NoticeBanner(
+              variant: NoticeBannerVariant.info,
+              icon: Icons.schedule_outlined,
+              child: Text(
+                LocaleKeys.withdrawGaslessRelayHint.tr(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NoticeBanner.styleOf(
+                    context,
+                    NoticeBannerVariant.info,
+                  ).foreground,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            NoticeBanner(
+              variant: NoticeBannerVariant.warning,
+              icon: Icons.warning_amber_rounded,
+              child: Text(
+                LocaleKeys.withdrawGaslessIrreversibleWarning.tr(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: NoticeBanner.styleOf(
+                    context,
+                    NoticeBannerVariant.warning,
+                  ).foreground,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1232,12 +1356,25 @@ class _GaslessRailSourceSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final source = state.selectedSourceAddress!;
-    final custodyAddress = source.gasfreeAddress!;
+    final sources = state.pubkeys?.keys ?? const <PubkeyInfo>[];
+    final canonicalSource = sources.firstWhereOrNull(
+      (key) =>
+          isCanonicalTronGaslessPubkey(
+            key,
+            isHdWallet: state.walletType == WalletType.hdwallet,
+          ) &&
+          (key.gasfreeAddress?.isNotEmpty ?? false),
+    );
+    if (canonicalSource == null) return const SizedBox.shrink();
+    final custodyAddress =
+        state.gaslessAccountStatus?.gasfreeAddress ??
+        canonicalSource.gasfreeAddress!;
     final symbol = state.asset.id.symbol.configSymbol;
+    // Never substitute the aggregate/EOA cache into custody. Unknown custody
+    // balance remains explicitly zero until account_status supplies its
+    // provenance-aware snapshot.
     final custodyBalance =
         state.gaslessAccountStatus?.custodyBalance ??
-        context.sdk.balances.lastKnown(state.asset.id) ??
         BalanceInfo(
           total: Decimal.zero,
           spendable: Decimal.zero,
@@ -1248,13 +1385,25 @@ class _GaslessRailSourceSelector extends StatelessWidget {
     // source change, so this synthetic pubkey can never leak into the bloc.
     final custodyEntry = PubkeyInfo(
       address: custodyAddress,
-      derivationPath: source.derivationPath,
-      chain: source.chain,
+      derivationPath: canonicalSource.derivationPath,
+      chain: canonicalSource.chain,
       balance: custodyBalance,
       coinTicker: state.asset.id.id,
       gasfreeAddress: custodyAddress,
     );
-    final selected = state.isGaslessEnabled ? custodyEntry : source;
+    final standardSources = sources
+        .where(
+          (key) =>
+              key.balance.total > Decimal.zero ||
+              key.address == canonicalSource.address,
+        )
+        .toList();
+    final selectedStandard = standardSources.firstWhereOrNull(
+      (entry) => entry.address == state.selectedSourceAddress?.address,
+    );
+    final selected = state.isGaslessEnabled
+        ? custodyEntry
+        : selectedStandard ?? canonicalSource;
 
     String entryLabel(PubkeyInfo entry) => entry.address == custodyAddress
         ? LocaleKeys.withdrawSourceGasfreeEntry.tr(
@@ -1276,20 +1425,33 @@ class _GaslessRailSourceSelector extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         AddressSelectInput(
-          addresses: [custodyEntry, source],
+          addresses: [custodyEntry, ...standardSources],
           selectedAddress: selected,
           assetName: symbol,
           balanceLabel: entryLabel,
           verified: (entry) => entry.address == custodyAddress,
-          onAddressSelected: (picked) {
-            if (picked == null) return;
-            final wantGasless = picked.address == custodyAddress;
-            if (wantGasless != state.isGaslessEnabled) {
-              context.read<WithdrawFormBloc>().add(
-                WithdrawFormGaslessToggled(wantGasless),
-              );
-            }
-          },
+          onAddressSelected: state.isSourceSelectionLocked
+              ? null
+              : (picked) {
+                  if (picked == null) return;
+                  final wantGasless = picked.address == custodyAddress;
+                  if (wantGasless) {
+                    if (!state.isGaslessEnabled) {
+                      context.read<WithdrawFormBloc>().add(
+                        const WithdrawFormGaslessToggled(true),
+                      );
+                    }
+                    return;
+                  }
+                  if (state.isGaslessEnabled) {
+                    context.read<WithdrawFormBloc>().add(
+                      const WithdrawFormGaslessToggled(false),
+                    );
+                  }
+                  context.read<WithdrawFormBloc>().add(
+                    WithdrawFormSourceChanged(picked),
+                  );
+                },
         ),
       ],
     );
@@ -1300,23 +1462,12 @@ String _formatTrimmedDecimal(Decimal value, {int precision = 8}) {
   return value.toStringAsFixed(precision).replaceAll(RegExp(r'\.?0+$'), '');
 }
 
-/// The amount the recipient actually receives.
+/// The amount sent on a standard rail.
 ///
-/// For gas-free transfers KDF reports `spent_by_me = amount + token fee`
-/// (fee is paid in the same token), so the raw
-/// `balanceChanges.netChange.abs()` overstates the send by the fee — and
-/// collapses to the bare fee on a self-send, where `received_by_me` offsets
-/// it. Deriving from `spentByMe - totalTokenFee` is stable for both.
-///
-/// For every other rail the net change IS the sent amount; the `spentByMe`
-/// fallback covers wallet-internal moves (e.g. standard->gas-free
-/// consolidation) whose net change is zero.
-Decimal _recipientAmount(BalanceChanges balanceChanges, FeeInfo fee) {
-  if (fee is FeeInfoTronGasless) {
-    final derived = balanceChanges.spentByMe - fee.totalTokenFee;
-    if (derived > Decimal.zero) return derived;
-    return balanceChanges.netChange.abs();
-  }
+/// GasFree call sites use the persisted authorization amount or KDF's
+/// `totalAmount` directly. They must never reverse-calculate the recipient
+/// amount from a fee that can settle below the signed maximum.
+Decimal _recipientAmount(BalanceChanges balanceChanges) {
   final net = balanceChanges.netChange.abs();
   return net > Decimal.zero ? net : balanceChanges.spentByMe;
 }
@@ -1333,16 +1484,35 @@ class _GaslessRailStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.success);
+    final isReady = state.gaslessAvailability.isVerifiedReady;
+    final isCheckingAvailability = state.isGaslessAvailabilityUnknown;
+    final isNeutralAvailability = state.isGaslessAvailabilityNeutral;
+    final isUnsupported =
+        state.gaslessAvailability == GaslessAvailability.unsupported;
+    final isSecurityMismatch =
+        state.gaslessAvailability == GaslessAvailability.securityMismatch;
+    final variant = isReady
+        ? NoticeBannerVariant.success
+        : isSecurityMismatch
+        ? NoticeBannerVariant.warning
+        : NoticeBannerVariant.info;
+    final style = NoticeBanner.styleOf(context, variant);
     final foreground = style.foreground;
     final symbol = state.asset.id.symbol.configSymbol;
     final transferFee = state.gaslessTransferFee;
     // While the first status fetch is in flight the fee and availability are
     // unknown: say so instead of optimistically promising the rail (the
     // Preview button is held under the same condition).
-    final isCheckingAvailability = state.isGaslessAvailabilityUnknown;
     final label = isCheckingAvailability
         ? LocaleKeys.withdrawGaslessCheckingAvailability.tr()
+        : state.isGaslessProviderUnavailable
+        ? LocaleKeys.withdrawGaslessProviderUnavailable.tr(args: [symbol])
+        : isUnsupported
+        ? LocaleKeys.withdrawGaslessUnsupported.tr()
+        : isSecurityMismatch
+        ? LocaleKeys.withdrawGaslessSecurityMismatch.tr()
+        : isNeutralAvailability
+        ? LocaleKeys.withdrawGaslessAvailabilityUnknown.tr()
         : transferFee != null
         ? LocaleKeys.withdrawGaslessRailChipWithFee.tr(
             args: [_formatTrimmedDecimal(transferFee), symbol],
@@ -1369,7 +1539,17 @@ class _GaslessRailStatusChip extends StatelessWidget {
               ),
             )
           else
-            Icon(Icons.bolt_rounded, size: 20, color: foreground),
+            Icon(
+              isReady
+                  ? Icons.bolt_rounded
+                  : isSecurityMismatch
+                  ? Icons.gpp_bad_outlined
+                  : isUnsupported
+                  ? Icons.block_rounded
+                  : Icons.info_outline_rounded,
+              size: 20,
+              color: foreground,
+            ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -1390,6 +1570,15 @@ class _GaslessRailStatusChip extends StatelessWidget {
               assetName: state.asset.id.symbol.configSymbol,
             ),
           ),
+          if (isNeutralAvailability || state.isGaslessProviderUnavailable)
+            IconButton(
+              tooltip: LocaleKeys.retryButtonText.tr(),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              onPressed: () => context.read<WithdrawFormBloc>().add(
+                const WithdrawFormGaslessStatusRequested(force: true),
+              ),
+              icon: Icon(Icons.refresh_rounded, color: foreground),
+            ),
         ],
       ),
     );
@@ -1615,9 +1804,10 @@ class WithdrawFormFillSection extends StatelessWidget {
       builder: (context, state) {
         final isEditingLocked = state.isSending;
         final isSourceInputEnabled =
-            // Enabled if the asset has multiple source addresses or if there is
-            // no selected address and pubkeys are available.
-            (state.pubkeys?.keys.length ?? 0) > 1 ||
+            !state.isSourceSelectionLocked &&
+                // Enabled if the asset has multiple source addresses or if there is
+                // no selected address and pubkeys are available.
+                (state.pubkeys?.keys.length ?? 0) > 1 ||
             (state.selectedSourceAddress == null &&
                 (state.pubkeys?.isNotEmpty ?? false));
 
@@ -1697,9 +1887,38 @@ class WithdrawFormFillSection extends StatelessWidget {
                     availableBalance: _fillAvailableBalance(state),
                     symbol: state.asset.id.symbol.configSymbol,
                     maxAmountLabel: LocaleKeys.withdrawAmountMaximum.tr(),
-                    availableBalanceLabel: LocaleKeys.withdrawAvailableLabel
-                        .tr(),
+                    // Gas-free nets fees out of the "available" figure, so the
+                    // custody balance (e.g. 3 USDT chip) and the sendable amount
+                    // (0 after fees) legitimately differ — label it honestly so
+                    // the two numbers don't read as a contradiction.
+                    availableBalanceLabel: state.useGasless
+                        ? LocaleKeys.withdrawGaslessSendableLabel.tr()
+                        : LocaleKeys.withdrawAvailableLabel.tr(),
                   ),
+                  if (state.useGasless &&
+                      state.gaslessAccountStatus != null) ...[
+                    const SizedBox(height: 12),
+                    GaslessBalanceBreakdown(
+                      total: _formatTrimmedDecimal(
+                        state.gaslessAccountStatus!.onChainBalance,
+                      ),
+                      spendable: _formatTrimmedDecimal(
+                        state.gaslessAccountStatus!.spendableBalance ??
+                            Decimal.zero,
+                      ),
+                      pending: _formatTrimmedDecimal(
+                        state.gaslessAccountStatus!.frozenBalance ??
+                            Decimal.zero,
+                      ),
+                      symbol: state.asset.id.symbol.configSymbol,
+                      totalLabel: LocaleKeys.withdrawGaslessTotalBalance.tr(),
+                      spendableLabel: LocaleKeys.withdrawGaslessSpendableBalance
+                          .tr(),
+                      pendingLabel: LocaleKeys
+                          .withdrawGaslessPendingLockedBalance
+                          .tr(),
+                    ),
+                  ],
                   if (state.isPriorityFeeSupported) ...[
                     const SizedBox(height: 16),
                     WithdrawalPrioritySelector(
@@ -1807,22 +2026,38 @@ class WithdrawFormFillSection extends StatelessWidget {
               onPressed:
                   state.isSending ||
                       state.hasValidationErrors ||
-                      state.isGaslessProviderUnavailable ||
+                      state.isGaslessSendBlocked ||
                       state.isGaslessAvailabilityUnknown
                   ? null
                   : () {
-                      final authBloc = context.read<AuthBloc>();
-                      final walletType =
-                          authBloc.state.currentUser?.wallet.config.type.name ??
-                          '';
-                      context.read<AnalyticsBloc>().logEvent(
-                        SendInitiatedEventData(
-                          asset: state.asset.id.id,
-                          network: state.asset.protocol.subClass.name,
-                          amount: double.tryParse(state.amount) ?? 0.0,
-                          hdType: walletType,
-                        ),
-                      );
+                      if (state.useGasless) {
+                        context.read<AnalyticsBloc>().logEvent(
+                          const GaslessTransferAnalyticsEventData(
+                            stage: 'preview',
+                            code: 'started',
+                            retryable: false,
+                          ),
+                        );
+                      } else {
+                        final authBloc = context.read<AuthBloc>();
+                        final walletType =
+                            authBloc
+                                .state
+                                .currentUser
+                                ?.wallet
+                                .config
+                                .type
+                                .name ??
+                            '';
+                        context.read<AnalyticsBloc>().logEvent(
+                          SendInitiatedEventData(
+                            asset: state.asset.id.id,
+                            network: state.asset.protocol.subClass.name,
+                            amount: double.tryParse(state.amount) ?? 0.0,
+                            hdType: walletType,
+                          ),
+                        );
+                      }
                       context.read<WithdrawFormBloc>().add(
                         const WithdrawFormPreviewSubmitted(),
                       );
@@ -2014,19 +2249,23 @@ class WithdrawFormConfirmSection extends StatelessWidget {
             ),
     );
 
-    if (isMobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [primaryButton, const SizedBox(height: 12), backButton],
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (_shouldStackWithdrawActions(context, constraints.maxWidth)) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [primaryButton, const SizedBox(height: 12), backButton],
+          );
+        }
 
-    return Row(
-      children: [
-        Expanded(child: backButton),
-        const SizedBox(width: 16),
-        Expanded(child: primaryButton),
-      ],
+        return Row(
+          children: [
+            Expanded(child: backButton),
+            const SizedBox(width: 16),
+            Expanded(child: primaryButton),
+          ],
+        );
+      },
     );
   }
 
@@ -2050,6 +2289,7 @@ class WithdrawFormConfirmSection extends StatelessWidget {
             // ticked gas-free checkbox. The user must untick gas-free to send a
             // standard transfer.
             state.didGaslessDowngrade ||
+            state.isGaslessSendBlocked ||
             (state.isTronAsset &&
                 (state.previewSecondsRemaining == null ||
                     state.previewSecondsRemaining == 0));
@@ -2104,6 +2344,7 @@ class WithdrawFormSuccessSection extends StatelessWidget {
         return WithdrawSuccessReceipt(
           asset: state.asset,
           result: result,
+          recipientAmount: state.authorizedRecipientAmount,
           sourceAddress: _effectiveWithdrawSourceAddress(state),
           memo: state.memo,
           didGaslessFallBack: didGaslessFallBack,
@@ -2121,6 +2362,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     required this.onClose,
     this.sourceAddress,
     this.memo,
+    this.recipientAmount,
     this.didGaslessFallBack = false,
     super.key,
   });
@@ -2129,6 +2371,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
   final WithdrawalResult result;
   final String? sourceAddress;
   final String? memo;
+  final Decimal? recipientAmount;
   final bool didGaslessFallBack;
   final VoidCallback onClose;
 
@@ -2147,19 +2390,23 @@ class WithdrawSuccessReceipt extends StatelessWidget {
       label: Text(LocaleKeys.viewOnExplorer.tr()),
     );
 
-    if (isMobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [explorerButton, const SizedBox(height: 12), doneButton],
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (_shouldStackWithdrawActions(context, constraints.maxWidth)) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [explorerButton, const SizedBox(height: 12), doneButton],
+          );
+        }
 
-    return Row(
-      children: [
-        Expanded(child: explorerButton),
-        const SizedBox(width: 16),
-        Expanded(child: doneButton),
-      ],
+        return Row(
+          children: [
+            Expanded(child: explorerButton),
+            const SizedBox(width: 16),
+            Expanded(child: doneButton),
+          ],
+        );
+      },
     );
   }
 
@@ -2192,16 +2439,24 @@ class WithdrawSuccessReceipt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final explorerUrl = asset.protocol.explorerTxUrl(result.txHash);
+    final txHash = result.txHash;
+    final explorerUrl = txHash == null || txHash.isEmpty
+        ? null
+        : asset.protocol.explorerTxUrl(txHash);
     final feeAssetId = _resolveFeeAssetId(context, asset, result.fee);
     final symbol = asset.id.symbol.configSymbol;
-    final recipientAmount = _recipientAmount(result.balanceChanges, result.fee);
     final gaslessFee = result.fee is FeeInfoTronGasless
         ? result.fee as FeeInfoTronGasless
         : null;
+    final displayedRecipientAmount =
+        recipientAmount ??
+        (gaslessFee == null
+            ? _recipientAmount(result.balanceChanges)
+            : result.balanceChanges.totalAmount);
     final totalDeducted = gaslessFee == null
         ? null
-        : recipientAmount + gaslessFee.totalTokenFee;
+        : displayedRecipientAmount +
+              (gaslessFee.finalFee ?? gaslessFee.totalTokenFee);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2216,12 +2471,16 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(height: 16),
-              Text(
-                LocaleKeys.successPageHeadline.tr(),
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+              Semantics(
+                header: true,
+                liveRegion: true,
+                child: Text(
+                  LocaleKeys.successPageHeadline.tr(),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               AssetLogo.ofId(asset.id, size: 52),
@@ -2229,7 +2488,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
               Center(
                 child: AssetAmountWithFiat(
                   assetId: asset.id,
-                  amount: recipientAmount,
+                  amount: displayedRecipientAmount,
                   symbol: symbol,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
@@ -2342,18 +2601,43 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                 ),
               ),
               children: [
-                _buildDetailItem(
-                  context,
-                  label: LocaleKeys.transactionHash.tr(),
-                  child: CopiedText(
-                    copiedValue: result.txHash,
-                    isTruncated: true,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
+                if (txHash != null && txHash.isNotEmpty)
+                  _buildDetailItem(
+                    context,
+                    label: LocaleKeys.transactionHash.tr(),
+                    child: CopiedText(
+                      copiedValue: txHash,
+                      isTruncated: true,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                     ),
                   ),
-                ),
+                if (gaslessFee?.traceId?.isNotEmpty ?? false)
+                  _buildDetailItem(
+                    context,
+                    label: LocaleKeys.withdrawGaslessTraceId.tr(),
+                    child: CopiedText(
+                      copiedValue: gaslessFee!.traceId!,
+                      isTruncated: true,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                if (gaslessFee != null)
+                  _buildDetailItem(
+                    context,
+                    label: LocaleKeys.withdrawGaslessProvider.tr(),
+                    child: SelectableText(
+                      gaslessFee.providerName,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 if (sourceAddress?.isNotEmpty ?? false)
                   _buildDetailItem(
                     context,
@@ -2379,10 +2663,12 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                 ),
                 _buildDetailItem(
                   context,
-                  label: LocaleKeys.fee.tr(),
+                  label: gaslessFee == null
+                      ? LocaleKeys.fee.tr()
+                      : LocaleKeys.withdrawGaslessFinalFee.tr(),
                   child: AssetAmountWithFiat(
                     assetId: feeAssetId,
-                    amount: result.fee.totalFee,
+                    amount: gaslessFee?.finalFee ?? result.fee.totalFee,
                     symbol: feeAssetId.symbol.configSymbol,
                     isAutoScrollEnabled: false,
                     style: theme.textTheme.bodyLarge?.copyWith(
@@ -2390,6 +2676,65 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (gaslessFee != null) ...[
+                  _buildDetailItem(
+                    context,
+                    label: LocaleKeys.withdrawGaslessTransferFee.tr(),
+                    child: AssetAmountWithFiat(
+                      assetId: asset.id,
+                      amount: gaslessFee.transferFee,
+                      symbol: symbol,
+                      isAutoScrollEnabled: false,
+                    ),
+                  ),
+                  if (gaslessFee.activationFee != null)
+                    _buildDetailItem(
+                      context,
+                      label: LocaleKeys.withdrawGaslessActivationFee.tr(),
+                      child: AssetAmountWithFiat(
+                        assetId: asset.id,
+                        amount: gaslessFee.activationFee!,
+                        symbol: symbol,
+                        isAutoScrollEnabled: false,
+                      ),
+                    ),
+                  if (gaslessFee.signedMaxFee != null)
+                    _buildDetailItem(
+                      context,
+                      label: LocaleKeys.withdrawGaslessMaxFee.tr(),
+                      child: AssetAmountWithFiat(
+                        assetId: asset.id,
+                        amount: gaslessFee.signedMaxFee!,
+                        symbol: symbol,
+                        isAutoScrollEnabled: false,
+                      ),
+                    ),
+                  if (result.confirmedAt != null)
+                    _buildDetailItem(
+                      context,
+                      label: LocaleKeys.withdrawGaslessConfirmationTime.tr(),
+                      child: SelectableText(
+                        _formatConfirmationDateTime(
+                          context,
+                          result.confirmedAt!,
+                        ),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  if (result.confirmationBlockHeight != null)
+                    _buildDetailItem(
+                      context,
+                      label: LocaleKeys.withdrawGaslessConfirmationBlock.tr(),
+                      child: SelectableText(
+                        result.confirmationBlockHeight.toString(),
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
                 if (memo?.isNotEmpty ?? false)
                   _buildDetailItem(
                     context,
@@ -2406,10 +2751,13 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                     children: [
                       AssetLogo.ofId(asset.id, size: 28),
                       const SizedBox(width: 10),
-                      Text(
-                        asset.id.name,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Text(
+                          asset.id.name,
+                          overflow: TextOverflow.visible,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -2422,6 +2770,13 @@ class WithdrawSuccessReceipt extends StatelessWidget {
       ],
     );
   }
+}
+
+String _formatConfirmationDateTime(BuildContext context, DateTime value) {
+  final local = value.toLocal();
+  final localizations = MaterialLocalizations.of(context);
+  return '${localizations.formatFullDate(local)}, '
+      '${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
 }
 
 /// Finality chip for gas-free receipts: the relay flow completes only after
@@ -2456,16 +2811,37 @@ class _ConfirmedOnChainChip extends StatelessWidget {
   }
 }
 
+class WithdrawFormPendingSection extends StatelessWidget {
+  const WithdrawFormPendingSection({required this.onViewActivity, super.key});
+
+  final VoidCallback onViewActivity;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
+      builder: (context, state) {
+        return GaslessPendingTransferPanel(
+          title: LocaleKeys.withdrawGaslessPendingTitle.tr(),
+          description: LocaleKeys.withdrawGaslessPendingDescription.tr(),
+          continueLabel: LocaleKeys.withdrawGaslessContinueChecking.tr(),
+          activityLabel: LocaleKeys.withdrawGaslessViewActivity.tr(),
+          supportLabel: LocaleKeys.support.tr(),
+          traceLabel: LocaleKeys.withdrawGaslessTraceId.tr(),
+          traceId: state.gaslessTraceId,
+          isChecking: state.isSending,
+          onContinueChecking: () => context.read<WithdrawFormBloc>().add(
+            const WithdrawFormGaslessTraceCheckRequested(),
+          ),
+          onViewActivity: onViewActivity,
+          onSupport: () => _openGaslessSupportContact(context, state),
+        );
+      },
+    );
+  }
+}
+
 class WithdrawFormFailedSection extends StatelessWidget {
   const WithdrawFormFailedSection({super.key});
-
-  static Future<void> _openSupportContact() async {
-    try {
-      await openUrl(discordInviteUrl);
-    } catch (_) {
-      // Avoid surfacing launch failures as another error state.
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -2474,7 +2850,7 @@ class WithdrawFormFailedSection extends StatelessWidget {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
         final supportLink = TextButton(
-          onPressed: _openSupportContact,
+          onPressed: () => _openGaslessSupportContact(context, state),
           child: Text(LocaleKeys.support.tr()),
         );
 
@@ -2486,8 +2862,11 @@ class WithdrawFormFailedSection extends StatelessWidget {
         );
 
         final tryAgainButton = FilledButton(
-          onPressed: () =>
-              context.read<WithdrawFormBloc>().add(const WithdrawFormReset()),
+          onPressed: state.canRetryGaslessTransfer
+              ? () => context.read<WithdrawFormBloc>().add(
+                  const WithdrawFormReset(),
+                )
+              : null,
           child: Text(LocaleKeys.tryAgainButton.tr()),
         );
 
@@ -2524,24 +2903,34 @@ class WithdrawFormFailedSection extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            if (isMobile) ...[
-              backButton,
-              const SizedBox(height: 12),
-              tryAgainButton,
-              const SizedBox(height: 8),
-              Center(child: supportLink),
-            ] else ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: backButton),
-                  const SizedBox(width: 16),
-                  Expanded(child: tryAgainButton),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Center(child: supportLink),
-            ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stack = _shouldStackWithdrawActions(
+                  context,
+                  constraints.maxWidth,
+                );
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (stack) ...[
+                      backButton,
+                      const SizedBox(height: 12),
+                      tryAgainButton,
+                    ] else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: backButton),
+                          const SizedBox(width: 16),
+                          Expanded(child: tryAgainButton),
+                        ],
+                      ),
+                    const SizedBox(height: 8),
+                    Center(child: supportLink),
+                  ],
+                );
+              },
+            ),
           ],
         );
       },

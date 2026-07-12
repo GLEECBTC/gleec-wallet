@@ -159,6 +159,47 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return null;
     }
 
+    final isGaslessPreview =
+        preview.fee is FeeInfoTronGasless ||
+        preview.txJson?['relay_type'] == 'tron_gasfree';
+    if (isGaslessPreview) {
+      final authorization = preview.txJson?['signed_authorization'];
+      final rawDeadline = authorization is Map
+          ? authorization['deadline']
+          : null;
+      final deadline = switch (rawDeadline) {
+        final int value when value >= 0 => value,
+        final String value when RegExp(r'^\d+$').hasMatch(value) =>
+          int.tryParse(value),
+        _ => null,
+      };
+      final feeDeadline = switch (preview.fee) {
+        FeeInfoTronGasless(:final authorizationDeadline) =>
+          authorizationDeadline,
+        _ => null,
+      };
+
+      // The relay signature, not the preview creation time, defines how long
+      // the authorization may be submitted. Legacy KDF responses can omit the
+      // duplicated fee field, so read the signed payload and only use the fee
+      // value as a consistency check when it is present.
+      if (deadline == null ||
+          (feeDeadline != null && feeDeadline != deadline)) {
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+
+      try {
+        return DateTime.fromMillisecondsSinceEpoch(
+          deadline * Duration.millisecondsPerSecond,
+          isUtc: true,
+        );
+      } on ArgumentError {
+        // A malformed/out-of-range signed deadline must never leave the send
+        // button enabled indefinitely.
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+    }
+
     return DateTime.fromMillisecondsSinceEpoch(
       preview.timestamp * 1000,
       isUtc: true,
@@ -1839,6 +1880,31 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         preview,
         state.asset.id.id,
       )) {
+        // Preserve the SDK's typed relay lifecycle before handling a generic
+        // error status. In particular, a response can be financially ambiguous
+        // with only a wallet request ID and no provider trace; the catch path
+        // must still see that post-submission state and block resubmission.
+        if (state.useGasless && progress.status != WithdrawalStatus.complete) {
+          final submission = progress.submission;
+          final traceId = submission?.traceId ?? state.gaslessTraceId;
+          final requestId = submission?.requestId ?? state.gaslessRequestId;
+          emit(
+            state.copyWith(
+              gaslessStatusMessage: () => progress.message,
+              gaslessTraceState: () => progress.gaslessState,
+              gaslessTransferState: () => _gaslessTransferStateForProgress(
+                progress,
+                hasAcceptedTrace: traceId != null,
+              ),
+              gaslessTraceId: () => traceId,
+              gaslessRequestId: () => requestId,
+              gaslessSubmittedAt: () => traceId == null && requestId == null
+                  ? state.gaslessSubmittedAt
+                  : state.gaslessSubmittedAt ?? DateTime.now().toUtc(),
+            ),
+          );
+        }
+
         if (progress.status == WithdrawalStatus.complete) {
           result = progress.withdrawalResult;
           if (state.useGasless) {
@@ -1862,33 +1928,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           }
           throw Exception(progress.errorMessage ?? 'Broadcast failed');
         }
-        // Surface live gas-free relay status while the transfer is relayed and
-        // confirmed (pending -> submitted -> on-chain).
-        if (state.useGasless) {
-          final submission = progress.submission;
-          final traceId = submission?.traceId ?? state.gaslessTraceId;
-          final requestId = submission?.requestId ?? state.gaslessRequestId;
-          emit(
-            state.copyWith(
-              gaslessStatusMessage: () => progress.message,
-              gaslessTraceState: () => progress.gaslessState,
-              gaslessTransferState: () => _gaslessTransferStateForProgress(
-                progress,
-                hasAcceptedTrace: traceId != null,
-              ),
-              gaslessTraceId: () => traceId,
-              gaslessRequestId: () => requestId,
-              gaslessSubmittedAt: () => traceId == null
-                  ? state.gaslessSubmittedAt
-                  : state.gaslessSubmittedAt ?? DateTime.now().toUtc(),
-            ),
-          );
-        }
         // Continue for in-progress states
       }
 
       if (result == null) {
-        if (state.useGasless && state.gaslessTraceId != null) {
+        if (state.useGasless && _hasPossiblySubmittedGaslessTransfer) {
           _emitGaslessSubmittedUnknown(
             emit,
             LocaleKeys.withdrawGaslessStatusUnknown.tr(),
@@ -1944,7 +1988,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         }
       }
 
-      if (state.useGasless && state.gaslessTraceId != null) {
+      if (state.useGasless && _hasPossiblySubmittedGaslessTransfer) {
         if (_isAuthoritativeGaslessFinalFailure(e)) {
           _emitGaslessFinalFailure(emit, _buildTextError(e));
         } else {
@@ -1996,6 +2040,15 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     final source = error is SdkError ? error.source : error;
     return source is GaslessTransferException && source.terminal;
   }
+
+  /// A relay request can be financially accepted even when its response never
+  /// returns a trace. The SDK persists that ambiguity with a request ID and a
+  /// typed post-submission state. Neither case may be downgraded to a safe
+  /// pre-relay rejection, because doing so would enable a duplicate send.
+  bool get _hasPossiblySubmittedGaslessTransfer =>
+      state.gaslessTraceId?.isNotEmpty == true ||
+      state.gaslessRequestId?.isNotEmpty == true ||
+      state.gaslessTransferState?.hasRelayAccepted == true;
 
   void _emitGaslessFinalFailure(
     Emitter<WithdrawFormState> emit,

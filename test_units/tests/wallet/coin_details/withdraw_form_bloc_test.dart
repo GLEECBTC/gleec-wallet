@@ -183,14 +183,28 @@ WithdrawalPreview _tronGaslessPreview({
   required String txHash,
   required String toAddress,
   required int timestamp,
+  int? authorizationDeadline,
+  Object? signedAuthorizationDeadline,
+  bool includeAuthorizationDeadline = true,
 }) {
+  final resolvedDeadline =
+      authorizationDeadline ??
+      DateTime.now()
+              .toUtc()
+              .add(const Duration(minutes: 5))
+              .millisecondsSinceEpoch ~/
+          Duration.millisecondsPerSecond;
   return WithdrawResult(
-    txJson: const {
+    txJson: {
       'relay_type': 'tron_gasfree',
       'chain_id': '728126428',
       'coin': 'USDT-TRC20',
       'from_address': 'source-address',
       'gasfree_address': 'gasfree-source-address',
+      if (includeAuthorizationDeadline)
+        'signed_authorization': {
+          'deadline': signedAuthorizationDeadline ?? '$resolvedDeadline',
+        },
     },
     txHash: txHash,
     from: const ['source-address'],
@@ -210,6 +224,9 @@ WithdrawalPreview _tronGaslessPreview({
       gasfreeAddress: 'gasfree-source-address',
       transferFee: Decimal.parse('1'),
       totalTokenFee: Decimal.parse('1'),
+      authorizationDeadline: includeAuthorizationDeadline
+          ? resolvedDeadline
+          : null,
     ),
     coin: 'USDT-TRC20',
   );
@@ -1282,6 +1299,116 @@ void testWithdrawFormBloc() {
     );
 
     test(
+      'request-only relay ambiguity remains non-retryable when stream closes',
+      () async {
+        final asset = _trc20Asset();
+        final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        final preview = _tronGaslessPreview(
+          txHash: 'gasless-preview',
+          toAddress: 'tron-recipient',
+          timestamp: now,
+        );
+        final progressController = StreamController<WithdrawalProgress>();
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => preview,
+          executeWithdrawalHandler: (_, __) => progressController.stream,
+        );
+        final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await bloc.stream.firstWhere(
+          (state) => state.step == WithdrawFormStep.confirm,
+        );
+        bloc.add(const WithdrawFormSubmitted());
+        await bloc.stream.firstWhere((state) => state.isSending);
+
+        progressController.add(
+          const WithdrawalProgress(
+            status: WithdrawalStatus.inProgress,
+            message: 'Gas-free submission outcome is unknown',
+            gaslessTransferState: GaslessTransferState.submittedUnknown,
+            submission: WithdrawalSubmission.gaslessUnknown(
+              requestId: 'request-only-ambiguity',
+            ),
+          ),
+        );
+        await progressController.close();
+
+        final pending = await bloc.stream.firstWhere(
+          (state) => state.step == WithdrawFormStep.pending,
+        );
+        expect(pending.gaslessRequestId, 'request-only-ambiguity');
+        expect(pending.gaslessTraceId, isNull);
+        expect(pending.gaslessSubmittedAt, isNotNull);
+        expect(
+          pending.gaslessTransferState,
+          GaslessTransferState.submittedUnknown,
+        );
+        expect(pending.canRetryGaslessTransfer, isFalse);
+        expect(pending.transactionError, isNull);
+      },
+    );
+
+    test(
+      'request-only relay ambiguity remains non-retryable on stream error',
+      () async {
+        final asset = _trc20Asset();
+        final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        final preview = _tronGaslessPreview(
+          txHash: 'gasless-preview',
+          toAddress: 'tron-recipient',
+          timestamp: now,
+        );
+        final progressController = StreamController<WithdrawalProgress>();
+        addTearDown(progressController.close);
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => preview,
+          executeWithdrawalHandler: (_, __) => progressController.stream,
+        );
+        final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await bloc.stream.firstWhere(
+          (state) => state.step == WithdrawFormStep.confirm,
+        );
+        bloc.add(const WithdrawFormSubmitted());
+        await bloc.stream.firstWhere((state) => state.isSending);
+
+        progressController.add(
+          const WithdrawalProgress(
+            status: WithdrawalStatus.inProgress,
+            message: 'Gas-free submission outcome is unknown',
+            gaslessTransferState: GaslessTransferState.submittedUnknown,
+            submission: WithdrawalSubmission.gaslessUnknown(
+              requestId: 'request-only-error',
+            ),
+          ),
+        );
+        await bloc.stream.firstWhere(
+          (state) => state.gaslessRequestId == 'request-only-error',
+        );
+        progressController.addError(StateError('relay response lost'));
+
+        final pending = await bloc.stream.firstWhere(
+          (state) => state.step == WithdrawFormStep.pending,
+        );
+        expect(pending.gaslessRequestId, 'request-only-error');
+        expect(pending.gaslessTraceId, isNull);
+        expect(pending.gaslessSubmittedAt, isNotNull);
+        expect(
+          pending.gaslessTransferState,
+          GaslessTransferState.submittedUnknown,
+        );
+        expect(pending.canRetryGaslessTransfer, isFalse);
+        expect(pending.transactionError, isNull);
+      },
+    );
+
+    test(
       'restart restores and reconciles an accepted trace while new sends are disabled',
       () async {
         final asset = _trc20Asset();
@@ -1671,6 +1798,120 @@ void testWithdrawFormBloc() {
       expect(bloc.state.step, WithdrawFormStep.confirm);
       expect(bloc.state.confirmStepError, isNotNull);
     });
+
+    test(
+      'gasless preview expires at the signed authorization deadline',
+      () async {
+        final asset = _trc20Asset();
+        final now =
+            DateTime.now().toUtc().millisecondsSinceEpoch ~/
+            Duration.millisecondsPerSecond;
+        final authorizationDeadline = now - 1;
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => _tronGaslessPreview(
+            txHash: 'expired-gasless-preview',
+            toAddress: 'tron-recipient',
+            // A future result timestamp proves it cannot extend the signed
+            // relay authorization.
+            timestamp: now + 3600,
+            authorizationDeadline: authorizationDeadline,
+          ),
+          executeWithdrawalHandler: (_, __) async* {},
+        );
+        final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+        addTearDown(bloc.close);
+
+        await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        final expired = await bloc.stream.firstWhere(
+          (state) =>
+              state.step == WithdrawFormStep.confirm && state.isPreviewExpired,
+        );
+
+        expect(
+          expired.previewExpiresAt,
+          DateTime.fromMillisecondsSinceEpoch(
+            authorizationDeadline * Duration.millisecondsPerSecond,
+            isUtc: true,
+          ),
+        );
+        bloc.add(const WithdrawFormSubmitted());
+        await _flush();
+        expect(withdrawals.executeCallCount, 0);
+      },
+    );
+
+    test('gasless preview accepts a fresh legacy signed deadline', () async {
+      final asset = _trc20Asset();
+      final now =
+          DateTime.now().toUtc().millisecondsSinceEpoch ~/
+          Duration.millisecondsPerSecond;
+      final authorizationDeadline = now + 120;
+      final withdrawals = _FakeWithdrawalManager(
+        previewWithdrawalHandler: (_) async => _tronGaslessPreview(
+          txHash: 'fresh-gasless-preview',
+          toAddress: 'tron-recipient',
+          // Legacy GasFree relay results can have an absent/old result
+          // timestamp; freshness comes from signed_authorization.deadline.
+          timestamp: now - 3600,
+          authorizationDeadline: authorizationDeadline,
+        ),
+      );
+      final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+      addTearDown(bloc.close);
+
+      await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+      bloc.add(const WithdrawFormPreviewSubmitted());
+      final ready = await bloc.stream.firstWhere(
+        (state) =>
+            state.step == WithdrawFormStep.confirm &&
+            state.preview?.txHash == 'fresh-gasless-preview',
+      );
+
+      expect(ready.isPreviewExpired, isFalse);
+      expect(
+        ready.previewExpiresAt,
+        DateTime.fromMillisecondsSinceEpoch(
+          authorizationDeadline * Duration.millisecondsPerSecond,
+          isUtc: true,
+        ),
+      );
+    });
+
+    for (final malformedDeadline in <Object?>[null, 'not-an-epoch']) {
+      test(
+        'gasless preview fails closed for '
+        '${malformedDeadline == null ? 'missing' : 'malformed'} deadline',
+        () async {
+          final asset = _trc20Asset();
+          final now =
+              DateTime.now().toUtc().millisecondsSinceEpoch ~/
+              Duration.millisecondsPerSecond;
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => _tronGaslessPreview(
+              txHash: 'invalid-deadline-preview',
+              toAddress: 'tron-recipient',
+              timestamp: now,
+              includeAuthorizationDeadline: malformedDeadline != null,
+              signedAuthorizationDeadline: malformedDeadline,
+            ),
+          );
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          addTearDown(bloc.close);
+
+          await _primeFillState(bloc, recipient: 'tron-recipient', amount: '1');
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          final expired = await bloc.stream.firstWhere(
+            (state) =>
+                state.step == WithdrawFormStep.confirm &&
+                state.isPreviewExpired,
+          );
+
+          expect(expired.previewSecondsRemaining, 0);
+          expect(expired.confirmStepError, isNotNull);
+        },
+      );
+    }
 
     test('send max recomputes amount when source address changes', () async {
       final asset = _assetFromConfig(_utxoConfig());

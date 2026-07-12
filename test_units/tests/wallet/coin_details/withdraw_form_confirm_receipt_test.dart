@@ -7,6 +7,10 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_pending_transfer_panel.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_confirm_form/send_confirm_buttons.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_confirm_form/send_confirm_item.dart';
 
 Map<String, dynamic> _utxoConfig() => {
   'coin': 'KMD',
@@ -79,7 +83,13 @@ BalanceChanges _balanceChanges({required String spent, String received = '0'}) {
   );
 }
 
-FeeInfoTronGasless _gaslessFee({String totalTokenFee = '1.5'}) {
+FeeInfoTronGasless _gaslessFee({
+  String totalTokenFee = '1.5',
+  String? finalFee,
+  String? signedMaxFee,
+  String? activationFee,
+  String? traceId,
+}) {
   final fee = Decimal.parse(totalTokenFee);
   return FeeInfoTronGasless(
     coin: 'USDT-TRC20',
@@ -88,6 +98,10 @@ FeeInfoTronGasless _gaslessFee({String totalTokenFee = '1.5'}) {
     gasfreeAddress: 'TGasFreeSourceAddress',
     transferFee: fee,
     totalTokenFee: fee,
+    finalFee: finalFee == null ? null : Decimal.parse(finalFee),
+    signedMaxFee: signedMaxFee == null ? null : Decimal.parse(signedMaxFee),
+    activationFee: activationFee == null ? null : Decimal.parse(activationFee),
+    traceId: traceId,
   );
 }
 
@@ -95,6 +109,8 @@ WithdrawResult _result({
   required BalanceChanges balanceChanges,
   required FeeInfo fee,
   String coin = 'USDT-TRC20',
+  int blockHeight = 0,
+  int timestamp = 0,
 }) {
   return WithdrawResult(
     txHex: 'deadbeef',
@@ -102,8 +118,8 @@ WithdrawResult _result({
     from: const ['TRegularSourceAddress'],
     to: const ['TRecipientAddress'],
     balanceChanges: balanceChanges,
-    blockHeight: 0,
-    timestamp: 0,
+    blockHeight: blockHeight,
+    timestamp: timestamp,
     fee: fee,
     coin: coin,
   );
@@ -148,6 +164,30 @@ Widget _wrap(Widget child) {
   );
 }
 
+Future<void> _pumpNarrowLargeText(WidgetTester tester, Widget child) async {
+  tester.view.physicalSize = const Size(320, 568);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: const TextScaler.linear(2)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: child,
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
 void testWithdrawFormConfirmReceipt() {
   group('WithdrawPreviewDetails (confirm summary)', () {
     testWidgets(
@@ -160,6 +200,8 @@ void testWithdrawFormConfirmReceipt() {
           recipientAddress: 'TRecipientAddress',
           amount: '10',
           isGaslessEnabled: true,
+          isGaslessFeatureConfigured: true,
+          authorizedRecipientAmount: Decimal.parse('10'),
           preview: _result(
             balanceChanges: _balanceChanges(spent: '11.5'),
             fee: _gaslessFee(),
@@ -196,6 +238,8 @@ void testWithdrawFormConfirmReceipt() {
         recipientAddress: 'TRecipientAddress',
         amount: '2',
         isGaslessEnabled: true,
+        isGaslessFeatureConfigured: true,
+        authorizedRecipientAmount: Decimal.parse('2'),
         preview: _result(
           balanceChanges: _balanceChanges(spent: '3.5'),
           fee: _gaslessFee(),
@@ -218,6 +262,7 @@ void testWithdrawFormConfirmReceipt() {
         step: WithdrawFormStep.confirm,
         recipientAddress: 'recipient',
         amount: '1',
+        isGaslessFeatureConfigured: false,
         preview: _result(
           balanceChanges: _balanceChanges(spent: '1'),
           fee: FeeInfoUtxoFixed(coin: 'KMD', amount: Decimal.parse('0.0001')),
@@ -252,9 +297,17 @@ void testWithdrawFormConfirmReceipt() {
               result: WithdrawalResult.fromWithdrawResult(
                 _result(
                   balanceChanges: _balanceChanges(spent: '11.5'),
-                  fee: _gaslessFee(),
+                  fee: _gaslessFee(
+                    finalFee: '1.25',
+                    signedMaxFee: '2',
+                    activationFee: '0.5',
+                    traceId: 'trace-receipt-1',
+                  ),
+                  blockHeight: 76543210,
+                  timestamp: 1720000000,
                 ),
               ),
+              recipientAmount: Decimal.parse('10'),
               onClose: () {},
             ),
           ),
@@ -273,6 +326,16 @@ void testWithdrawFormConfirmReceipt() {
         );
         expect(find.text('withdrawGaslessConfirmedOnChain'), findsOneWidget);
         expect(find.text('withdrawAwaitingConfirmations'), findsNothing);
+
+        await tester.tap(find.text('technicalDetails'));
+        await tester.pumpAndSettle();
+        expect(find.text('withdrawGaslessFinalFee'), findsOneWidget);
+        expect(find.text('withdrawGaslessMaxFee'), findsOneWidget);
+        expect(find.text('withdrawGaslessActivationFee'), findsOneWidget);
+        expect(find.text('withdrawGaslessConfirmationTime'), findsOneWidget);
+        expect(find.text('withdrawGaslessConfirmationBlock'), findsOneWidget);
+        expect(find.text('76543210'), findsOneWidget);
+        expect(find.text('withdrawGaslessTraceId'), findsOneWidget);
 
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump(const Duration(seconds: 3));
@@ -344,7 +407,137 @@ void testWithdrawFormConfirmReceipt() {
       await tester.pump(const Duration(seconds: 3));
     });
   });
+
+  group('GasFree accessibility and narrow layout', () {
+    testWidgets(
+      'pending trace remains scroll-safe with 320px width and 200% text',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+
+        await _pumpNarrowLargeText(
+          tester,
+          GaslessPendingTransferPanel(
+            title: 'Transfer still processing',
+            description:
+                'The relay accepted this transfer and it may still confirm.',
+            continueLabel: 'Continue checking transfer status',
+            activityLabel: 'View pending transfer activity',
+            supportLabel: 'Contact support',
+            traceLabel: 'Trace ID',
+            traceId: '4f8f4bea-f0d6-49ad-a02f-e871408b6b22',
+            isChecking: false,
+            onContinueChecking: () {},
+            onViewActivity: () {},
+            onSupport: () {},
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(
+          find.bySemanticsLabel(
+            'Transfer still processing. '
+            'The relay accepted this transfer and it may still confirm.',
+          ),
+          findsOneWidget,
+        );
+        for (final button in [
+          find.ancestor(
+            of: find.text('Continue checking transfer status'),
+            matching: find.byType(FilledButton),
+          ),
+          find.ancestor(
+            of: find.text('View pending transfer activity'),
+            matching: find.byType(OutlinedButton),
+          ),
+          find.ancestor(
+            of: find.text('Contact support'),
+            matching: find.byType(TextButton),
+          ),
+        ]) {
+          expect(tester.getRect(button).height, greaterThanOrEqualTo(48));
+        }
+        semantics.dispose();
+      },
+    );
+
+    testWidgets('request-only pending state cannot start a trace poll', (
+      tester,
+    ) async {
+      var continueChecks = 0;
+      var activityViews = 0;
+
+      await _pumpNarrowLargeText(
+        tester,
+        GaslessPendingTransferPanel(
+          title: 'Transfer still processing',
+          description: 'Relay acceptance is being reconciled.',
+          continueLabel: 'Continue checking',
+          activityLabel: 'View activity',
+          supportLabel: 'Contact support',
+          traceLabel: 'Trace ID',
+          isChecking: false,
+          onContinueChecking: () => continueChecks++,
+          onViewActivity: () => activityViews++,
+          onSupport: () {},
+        ),
+      );
+
+      expect(find.text('Continue checking'), findsNothing);
+      expect(find.text('View activity'), findsOneWidget);
+      expect(find.text('Contact support'), findsOneWidget);
+      final activityAction = find.text('View activity');
+      await tester.ensureVisible(activityAction);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(activityAction);
+      expect(activityViews, 1);
+      expect(continueChecks, 0);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('balance values and confirmation items wrap at 200% text', (
+      tester,
+    ) async {
+      const longAmount = '12345678901234567890.123456789';
+      await _pumpNarrowLargeText(
+        tester,
+        const Column(
+          children: [
+            GaslessBalanceBreakdown(
+              total: longAmount,
+              spendable: '12345678901234567889.123456789',
+              pending: '1.000000000',
+              symbol: 'USDT-TRC20',
+              totalLabel: 'Gas-free custody total',
+              spendableLabel: 'Sendable after provider fees',
+              pendingLabel: 'Pending and locked funds',
+            ),
+            SizedBox(height: 16),
+            SendConfirmItem(
+              title: 'Recipient amount authorized',
+              value: '$longAmount USDT-TRC20',
+              usdPrice: 1234567890.12,
+            ),
+            SizedBox(height: 16),
+            SendConfirmButtons(hasSendError: false, onBackTap: _noop),
+          ],
+        ),
+      );
+
+      expect(find.text('$longAmount USDT-TRC20'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getRect(find.byKey(const Key('confirm-back-button'))).height,
+        greaterThanOrEqualTo(48),
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('confirm-agree-button'))).height,
+        greaterThanOrEqualTo(48),
+      );
+    });
+  });
 }
+
+void _noop() {}
 
 void main() {
   testWithdrawFormConfirmReceipt();

@@ -13,11 +13,13 @@ import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/wallet/coin_details/constants.dart';
 
 class SendCompleteFormButtons extends StatelessWidget {
-  const SendCompleteFormButtons({Key? key}) : super(key: key);
+  const SendCompleteFormButtons({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (isMobile) return const _MobileButtons();
+    if (isMobile || MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+      return const _MobileButtons();
+    }
     return const _DesktopButtons();
   }
 }
@@ -27,40 +29,54 @@ class _MobileButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const height = 52.0;
+    final useLargeTextLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    final height = useLargeTextLayout ? 72.0 : 52.0;
     final WithdrawFormBloc withdrawFormBloc = context.read<WithdrawFormBloc>();
     final WithdrawFormState state = withdrawFormBloc.state;
 
     final txHash = state.result?.txHash;
 
-    final explorerUrl = txHash == null
+    final explorerUrl = txHash == null || txHash.isEmpty
         ? null
         : state.asset.protocol.explorerTxUrl(txHash);
 
-    return Row(
-      children: [
-        if (explorerUrl != null)
-          Expanded(
-            child: AppDefaultButton(
-              key: const Key('send-complete-view-on-explorer'),
-              height: height + 6,
-              padding: const EdgeInsets.symmetric(vertical: 0),
-              onPressed: () => launchUrl(explorerUrl),
-              text: LocaleKeys.viewOnExplorer.tr(),
-            ),
-          ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 16.0),
-            child: UiPrimaryButton(
-              key: const Key('send-complete-done'),
-              height: height,
-              onPressed: () => withdrawFormBloc.add(const WithdrawFormReset()),
-              text: LocaleKeys.done.tr(),
-            ),
-          ),
-        ),
-      ],
+    final explorerButton = explorerUrl == null
+        ? null
+        : AppDefaultButton(
+            key: const Key('send-complete-view-on-explorer'),
+            height: height + 6,
+            padding: const EdgeInsets.symmetric(vertical: 0),
+            onPressed: () => launchUrl(explorerUrl),
+            text: LocaleKeys.viewOnExplorer.tr(),
+          );
+    final doneButton = UiPrimaryButton(
+      key: const Key('send-complete-done'),
+      height: height,
+      onPressed: () => withdrawFormBloc.add(const WithdrawFormReset()),
+      text: LocaleKeys.done.tr(),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (explorerButton == null) {
+          return SizedBox(width: double.infinity, child: doneButton);
+        }
+
+        if (useLargeTextLayout || constraints.maxWidth < 360) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [explorerButton, const SizedBox(height: 12), doneButton],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: explorerButton),
+            const SizedBox(width: 16),
+            Expanded(child: doneButton),
+          ],
+        );
+      },
     );
   }
 }
@@ -75,18 +91,21 @@ class _DesktopButtons extends StatelessWidget {
     final WithdrawFormBloc withdrawFormBloc = context.read<WithdrawFormBloc>();
     final WithdrawFormState state = withdrawFormBloc.state;
     const width = (withdrawWidth - space) / 2;
+    final txHash = state.result?.txHash;
+    final explorerUrl = txHash == null || txHash.isEmpty
+        ? null
+        : state.asset.txExplorerUrl(txHash);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        if (state.result?.txHash != null)
+        if (explorerUrl != null)
           AppDefaultButton(
             key: const Key('send-complete-view-on-explorer'),
             width: width,
             height: height + 6,
             padding: const EdgeInsets.symmetric(vertical: 0),
-            onPressed: () =>
-                openUrl(state.asset.txExplorerUrl(state.result?.txHash)!),
+            onPressed: () => openUrl(explorerUrl),
             text: LocaleKeys.viewOnExplorer.tr(),
           ),
         Padding(

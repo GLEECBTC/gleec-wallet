@@ -28,23 +28,30 @@ class GaslessInfoDialog extends StatelessWidget {
     return AlertDialog(
       title: Text(LocaleKeys.gaslessInfoTitle.tr()),
       content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              LocaleKeys.gaslessInfoBodyHow.tr(args: [assetName, assetName]),
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              LocaleKeys.gaslessInfoProviderDependence.tr(),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.8),
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.65,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                LocaleKeys.gaslessInfoBodyHow.tr(args: [assetName, assetName]),
+                style: theme.textTheme.bodyMedium,
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                LocaleKeys.gaslessInfoProviderDependence.tr(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color?.withValues(
+                    alpha: 0.8,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
