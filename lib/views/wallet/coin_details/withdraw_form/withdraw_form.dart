@@ -1800,9 +1800,9 @@ class WithdrawFormFillSection extends StatelessWidget {
     super.key,
   });
 
-  /// The "Available:" figure above the amount input. Gas-free sends show the
-  /// sendable cap from `gasless::account_status` (null until known); native
-  /// sends show the selected source address's spendable balance.
+  /// The "Available:" figure above the amount input. Gas-free sends show KDF's
+  /// advisory status estimate when supplied; the fresh `max: true` preview
+  /// remains authoritative. Native sends show the selected source balance.
   static String? _fillAvailableBalance(WithdrawFormState state) {
     final value = state.useGasless
         ? state.gaslessMaxWithdrawable

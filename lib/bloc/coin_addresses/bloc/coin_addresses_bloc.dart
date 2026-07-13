@@ -598,8 +598,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       if (status.active == null ||
           status.frozenBalance == null ||
           status.spendableBalance == null ||
-          status.transferFee == null ||
-          status.maxWithdrawable == null) {
+          status.transferFee == null) {
         return _ResolvedGaslessReceive(
           status: GaslessReceiveStatus.securityMismatch,
           reason: GaslessReceiveReasonCode.statusAttestationMissing,

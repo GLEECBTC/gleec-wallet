@@ -1063,10 +1063,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     if (!event.isEnabled) {
       maxAmount = '0';
     } else if (state.useGasless) {
-      // Custody-aware max: `gasless::account_status.max_withdrawable` already
-      // nets out the transfer (and, if inactive, activation) fee. Display
-      // only — the withdraw request still sends `isMax: true` with no amount,
-      // so KDF remains the authority on the signed amount.
+      // When supplied, `gasless::account_status.max_withdrawable` is an
+      // advisory display value with transfer/activation fees already netted.
+      // The request still sends `isMax: true` with no amount, so a fresh KDF
+      // preview remains authoritative for the amount that is signed.
       maxAmount = state.gaslessMaxWithdrawable?.toString() ?? '0';
     } else {
       maxAmount = balance?.spendable.toString() ?? '0';
@@ -1345,8 +1345,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return status.active == null ||
           status.frozenBalance == null ||
           status.spendableBalance == null ||
-          status.transferFee == null ||
-          status.maxWithdrawable == null;
+          status.transferFee == null;
     }
 
     // KDF's availability contract only exposes provider fee and maximum

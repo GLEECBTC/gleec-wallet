@@ -2705,6 +2705,47 @@ void testWithdrawFormBloc() {
         },
       );
 
+      test(
+        'gasless max delegates to KDF when status omits advisory maximum',
+        () async {
+          final asset = _trc20Asset();
+          final withdrawals =
+              _FakeWithdrawalManager(
+                  previewWithdrawalHandler: (_) async => _tronGaslessPreview(
+                    txHash: 'unused',
+                    toAddress: 'recipient-1',
+                    timestamp: 1,
+                  ),
+                )
+                ..gaslessAccountStatusHandler = (_) async => _gaslessStatus(
+                  availability: GaslessAccountAvailability.available,
+                  maxWithdrawable: null,
+                );
+          final bloc = _buildTrc20Bloc(
+            asset: asset,
+            withdrawals: withdrawals,
+            pubkeyBalance: '5',
+          );
+          addTearDown(bloc.close);
+
+          await bloc.stream.firstWhere(
+            (state) => state.gaslessAvailability == GaslessAvailability.ready,
+          );
+          await _awaitSourceSelection(bloc);
+
+          bloc.add(const WithdrawFormMaxAmountEnabled(true));
+          final maxState = await bloc.stream.firstWhere(
+            (state) => state.isMaxAmount && state.amount == '0',
+          );
+
+          expect(maxState.gaslessMaxWithdrawable, isNull);
+          final params = maxState.toWithdrawParameters();
+          expect(params.isMax, isTrue);
+          expect(params.amount, isNull);
+          expect(params.feeMethod, WithdrawalFeeMethod.gasless);
+        },
+      );
+
       test('max with custody funds below the fee floor blocks with an honest '
           'message, not a doomed preview', () async {
         final asset = _trc20Asset();
@@ -2719,7 +2760,7 @@ void testWithdrawFormBloc() {
               ..gaslessAccountStatusHandler = (_) async => _gaslessStatus(
                 active: false,
                 onChain: '3',
-                maxWithdrawable: '0',
+                maxWithdrawable: null,
                 transferFee: '1.5',
                 activationFee: '1.5',
               );

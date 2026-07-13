@@ -198,8 +198,12 @@ class WithdrawFormState extends Equatable {
               gaslessAccountStatus!.availability !=
                   GaslessAccountAvailability.available));
 
-  /// Largest amount that can be sent gaslessly right now (fees already netted
-  /// out by KDF), or null when unknown or on the native rail.
+  /// Advisory largest amount reported by account status, or null when KDF
+  /// omitted the estimate or the native rail is selected.
+  ///
+  /// This value is presentation-only. A maximum send is submitted with
+  /// `isMax: true` and no amount; its fresh KDF preview resolves and signs the
+  /// authoritative recipient amount.
   Decimal? get gaslessMaxWithdrawable =>
       useGasless && gaslessAvailability.isVerifiedReady
       ? gaslessAccountStatus?.maxWithdrawable
@@ -247,8 +251,7 @@ class WithdrawFormState extends Equatable {
     final feeFloor =
         (status.transferFee ?? Decimal.zero) +
         (status.activationFee ?? Decimal.zero);
-    return status.maxWithdrawable == Decimal.zero &&
-        spendable != null &&
+    return spendable != null &&
         spendable > Decimal.zero &&
         feeFloor >= spendable;
   }
