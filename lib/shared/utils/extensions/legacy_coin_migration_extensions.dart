@@ -100,7 +100,8 @@ extension LegacyCoinMigrationExtensions on Coin {
   ///
   /// For these assets the spendable balance lives at the deterministic CREATE2
   /// **GasFree custody address**, not the EOA — a gasless withdrawal settles
-  /// from custody and pays its fee in the token, so the user never needs TRX.
+  /// from custody and ordinarily pays its fee in the token. Exceptional
+  /// recovery may still require TRX in the Standard wallet.
   /// The coin's `my_balance` still reports the EOA balance, so custody-aware
   /// surfaces must use [gasfreeCustodyBalance] instead.
   bool isGaslessAsset(KomodoDefiSdk sdk) =>

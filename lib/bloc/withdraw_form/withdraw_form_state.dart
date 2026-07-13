@@ -2,7 +2,10 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
-    show GaslessAccountStatusResponse, GaslessTraceState;
+    show
+        GaslessAccountAvailability,
+        GaslessAccountStatusResponse,
+        GaslessTraceState;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/utils.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_step.dart';
@@ -168,19 +171,21 @@ class WithdrawFormState extends Equatable {
   /// activation fee (custody account not yet activated on-chain).
   bool get needsGaslessActivation =>
       useGasless &&
-      gaslessAccountStatus?.providerAvailable == true &&
+      gaslessAccountStatus?.availability ==
+          GaslessAccountAvailability.available &&
       gaslessAccountStatus?.active == false;
 
   /// True when the GasFree provider reported itself unreachable: the custody
   /// balance is still known (on-chain fallback) but a gasless send cannot be
-  /// built right now. Only a *successful* status fetch that says
-  /// `provider_available:false` blocks — a failed fetch leaves the KDF preview
-  /// as the authority.
+  /// built right now. Only a *successful* status fetch with an explicit
+  /// non-available result blocks — a failed fetch leaves the KDF preview as
+  /// the authority.
   bool get isGaslessProviderUnavailable =>
       useGasless &&
       (gaslessAvailability == GaslessAvailability.providerUnavailable ||
           (gaslessAvailability == GaslessAvailability.temporarilyUnavailable &&
-              gaslessAccountStatus?.providerAvailable == false));
+              gaslessAccountStatus?.availability ==
+                  GaslessAccountAvailability.providerUnreachable));
 
   /// Whether an authoritative capability/status result blocks a new GasFree
   /// submission. A transient fetch failure without a status snapshot remains
@@ -189,12 +194,16 @@ class WithdrawFormState extends Equatable {
   bool get isGaslessSendBlocked =>
       useGasless &&
       (gaslessAvailability.isBlocked ||
-          gaslessAccountStatus?.providerAvailable == false);
+          (gaslessAccountStatus != null &&
+              gaslessAccountStatus!.availability !=
+                  GaslessAccountAvailability.available));
 
   /// Largest amount that can be sent gaslessly right now (fees already netted
   /// out by KDF), or null when unknown or on the native rail.
   Decimal? get gaslessMaxWithdrawable =>
-      useGasless ? gaslessAccountStatus?.maxWithdrawable : null;
+      useGasless && gaslessAvailability.isVerifiedReady
+      ? gaslessAccountStatus?.maxWithdrawable
+      : null;
 
   /// True while the very first gas-free account-status fetch is still in
   /// flight: availability (and fees) are unknown, so the UI should show a
@@ -212,10 +221,14 @@ class WithdrawFormState extends Equatable {
       gaslessTransferState == null || gaslessTransferState!.canRetrySafely;
 
   /// One-time activation fee (token units), when known.
-  Decimal? get gaslessActivationFee => gaslessAccountStatus?.activationFee;
+  Decimal? get gaslessActivationFee => gaslessAvailability.isVerifiedReady
+      ? gaslessAccountStatus?.activationFee
+      : null;
 
   /// Per-transfer gasless fee (token units), when known.
-  Decimal? get gaslessTransferFee => gaslessAccountStatus?.transferFee;
+  Decimal? get gaslessTransferFee => gaslessAvailability.isVerifiedReady
+      ? gaslessAccountStatus?.transferFee
+      : null;
 
   /// True when the gas-free rail is usable (provider available, status known)
   /// but the custody balance is entirely consumed by the transfer (and, on a
@@ -225,7 +238,9 @@ class WithdrawFormState extends Equatable {
   /// reports well.
   bool get isGaslessBalanceBelowFees {
     final status = gaslessAccountStatus;
-    if (!useGasless || status == null || !status.providerAvailable) {
+    if (!useGasless ||
+        status == null ||
+        status.availability != GaslessAccountAvailability.available) {
       return false;
     }
     final spendable = status.spendableBalance;

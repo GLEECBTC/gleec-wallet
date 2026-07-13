@@ -27,6 +27,7 @@ class CoinAddressesState extends Equatable {
   final GaslessReceiveReasonCode? gaslessReceiveReason;
   final DateTime? gaslessReceiveConfigExpiresAt;
   final String? verifiedGasfreeAddress;
+  final String? gaslessReceiveWalletPubkeyHash;
 
   const CoinAddressesState({
     this.status = FormStatus.initial,
@@ -40,6 +41,7 @@ class CoinAddressesState extends Equatable {
     this.gaslessReceiveReason,
     this.gaslessReceiveConfigExpiresAt,
     this.verifiedGasfreeAddress,
+    this.gaslessReceiveWalletPubkeyHash,
   });
 
   CoinAddressesState copyWith({
@@ -54,6 +56,7 @@ class CoinAddressesState extends Equatable {
     GaslessReceiveReasonCode? Function()? gaslessReceiveReason,
     DateTime? Function()? gaslessReceiveConfigExpiresAt,
     String? Function()? verifiedGasfreeAddress,
+    String? Function()? gaslessReceiveWalletPubkeyHash,
   }) {
     return CoinAddressesState(
       status: status == null ? this.status : status(),
@@ -83,6 +86,9 @@ class CoinAddressesState extends Equatable {
       verifiedGasfreeAddress: verifiedGasfreeAddress == null
           ? this.verifiedGasfreeAddress
           : verifiedGasfreeAddress(),
+      gaslessReceiveWalletPubkeyHash: gaslessReceiveWalletPubkeyHash == null
+          ? this.gaslessReceiveWalletPubkeyHash
+          : gaslessReceiveWalletPubkeyHash(),
     );
   }
 
@@ -98,6 +104,7 @@ class CoinAddressesState extends Equatable {
     GaslessReceiveReasonCode? Function()? gaslessReceiveReason,
     DateTime? Function()? gaslessReceiveConfigExpiresAt,
     String? Function()? verifiedGasfreeAddress,
+    String? Function()? gaslessReceiveWalletPubkeyHash,
   }) {
     return CoinAddressesState(
       status: status == null ? FormStatus.initial : status(),
@@ -123,6 +130,9 @@ class CoinAddressesState extends Equatable {
       verifiedGasfreeAddress: verifiedGasfreeAddress == null
           ? null
           : verifiedGasfreeAddress(),
+      gaslessReceiveWalletPubkeyHash: gaslessReceiveWalletPubkeyHash == null
+          ? null
+          : gaslessReceiveWalletPubkeyHash(),
     );
   }
 
@@ -139,5 +149,6 @@ class CoinAddressesState extends Equatable {
     gaslessReceiveReason,
     gaslessReceiveConfigExpiresAt,
     verifiedGasfreeAddress,
+    gaslessReceiveWalletPubkeyHash,
   ];
 }

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
+    show GeneralErrorResponse;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
@@ -311,7 +313,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return TextError(error: LocaleKeys.withdrawGaslessSecurityMismatch.tr());
     }
 
-    if (state.useGasless && state.gaslessAvailability.isBlocked) {
+    if (state.useGasless &&
+        state.gaslessAvailability == GaslessAvailability.pendingTransfer) {
+      return TextError(error: LocaleKeys.withdrawGaslessPendingTransfer.tr());
+    }
+
+    if (state.useGasless && state.isGaslessSendBlocked) {
       return TextError(
         error: LocaleKeys.withdrawGaslessUnavailableBlocked.tr(),
       );
@@ -1265,19 +1272,33 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           }
         }
       }
-    } catch (e) {
-      // Keep any previous snapshot but label it stale. With no snapshot, use
-      // an explicit neutral/unavailable state rather than rendering the green
-      // ready chip. Do not timestamp failures as fresh: the user must be able
-      // to retry immediately, while preview can remain the authoritative
-      // operation for an already-funded custody account.
-      _logger.fine('gasless::account_status fetch failed', e);
+    } catch (error) {
+      // Deterministic KDF/SDK failures revoke the previous snapshot; unknown
+      // transport failures retain it as stale recovery context. Do not mark a
+      // failed lookup fresh or expose the raw exception through logs.
+      final authoritativeFailure = _availabilityForGaslessStatusError(error);
+      _logger.fine(
+        'gasless::account_status fetch failed '
+        '(${authoritativeFailure?.name ?? 'transport_or_unknown'})',
+      );
       emit(
         state.copyWith(
+          // Deterministic KDF/SDK rejections invalidate the older snapshot:
+          // its fee and maximum fields must never remain usable after a hard
+          // status failure. Transient transport failures retain custody data
+          // as stale recovery context.
+          gaslessAccountStatus: authoritativeFailure == null
+              ? null
+              : () => null,
+          gaslessStatusFetchedAt: authoritativeFailure == null
+              ? null
+              : () => null,
           isGaslessStatusLoading: false,
-          gaslessAvailability: state.gaslessAccountStatus == null
-              ? GaslessAvailability.temporarilyUnavailable
-              : GaslessAvailability.stale,
+          gaslessAvailability:
+              authoritativeFailure ??
+              (state.gaslessAccountStatus == null
+                  ? GaslessAvailability.temporarilyUnavailable
+                  : GaslessAvailability.stale),
         ),
       );
     }
@@ -1286,19 +1307,106 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   GaslessAvailability _availabilityForGaslessStatus(
     GaslessAccountStatusResponse status,
   ) {
-    if (status.providerAvailable) return GaslessAvailability.ready;
+    if (status.hasExplicitAvailability) {
+      if (status.reasonCode != null || _hasUnsafeGaslessStatusShape(status)) {
+        return GaslessAvailability.securityMismatch;
+      }
+      return switch (status.availability) {
+        GaslessAccountAvailability.available => GaslessAvailability.ready,
+        GaslessAccountAvailability.pendingTransfer =>
+          GaslessAvailability.pendingTransfer,
+        GaslessAccountAvailability.tokenUnsupported =>
+          GaslessAvailability.unsupported,
+        GaslessAccountAvailability.providerUnreachable =>
+          GaslessAvailability.providerUnavailable,
+      };
+    }
+    if (status.availability == GaslessAccountAvailability.available) {
+      return GaslessAvailability.ready;
+    }
 
     return switch (status.reasonCode) {
       'provider_temporarily_unavailable' =>
         GaslessAvailability.temporarilyUnavailable,
-      'token_unsupported' ||
-      'token_decimals_mismatch' => GaslessAvailability.unsupported,
+      'pending_transfer' => GaslessAvailability.pendingTransfer,
+      'token_unsupported' => GaslessAvailability.unsupported,
+      'token_decimals_mismatch' ||
       'custody_address_mismatch' ||
       'provider_identity_mismatch' ||
       'provider_invalid_response' => GaslessAvailability.securityMismatch,
       'provider_authentication_failed' => GaslessAvailability.disabled,
-      _ => GaslessAvailability.providerUnavailable,
+      null => GaslessAvailability.providerUnavailable,
+      _ => GaslessAvailability.securityMismatch,
     };
+  }
+
+  bool _hasUnsafeGaslessStatusShape(GaslessAccountStatusResponse status) {
+    if (status.availability == GaslessAccountAvailability.available) {
+      return status.active == null ||
+          status.frozenBalance == null ||
+          status.spendableBalance == null ||
+          status.transferFee == null ||
+          status.maxWithdrawable == null;
+    }
+
+    // KDF's availability contract only exposes provider fee and maximum
+    // fields for a usable account. Their presence in a degraded response is a
+    // malformed/security status, not a reason to retain old sendability.
+    return status.transferFee != null ||
+        status.activationFee != null ||
+        status.maxWithdrawable != null;
+  }
+
+  GaslessAvailability? _availabilityForGaslessStatusError(Object error) {
+    if (error is FormatException || error is ArgumentError) {
+      return GaslessAvailability.securityMismatch;
+    }
+
+    if (error is GeneralErrorResponse) {
+      return switch (error.errorType) {
+        'TokenDecimalsMismatch' ||
+        'CustodyAddressMismatch' ||
+        'ProviderIdentityMismatch' ||
+        'InvalidResponse' => GaslessAvailability.securityMismatch,
+        'CoinNotSupported' ||
+        'TokenUnsupported' ||
+        'UnsupportedToken' => GaslessAvailability.unsupported,
+        'PendingTransfer' => GaslessAvailability.pendingTransfer,
+        'GaslessNotConfigured' => GaslessAvailability.disabled,
+        _ => null,
+      };
+    }
+
+    if (error is GaslessTransferException) {
+      return switch (error.code) {
+        GaslessTransferErrorCode.unsupportedToken =>
+          GaslessAvailability.unsupported,
+        GaslessTransferErrorCode.pendingTransfer =>
+          GaslessAvailability.pendingTransfer,
+        GaslessTransferErrorCode.invalidPayload ||
+        GaslessTransferErrorCode.chainIdMismatch ||
+        GaslessTransferErrorCode.verifyingContractMismatch ||
+        GaslessTransferErrorCode.serviceProviderMismatch ||
+        GaslessTransferErrorCode.tokenMismatch ||
+        GaslessTransferErrorCode.custodyAddressMismatch ||
+        GaslessTransferErrorCode.signatureMismatch ||
+        GaslessTransferErrorCode.walletOwnershipMismatch ||
+        GaslessTransferErrorCode.responseMismatch ||
+        GaslessTransferErrorCode.finalFeeExceeded =>
+          GaslessAvailability.securityMismatch,
+        GaslessTransferErrorCode.configurationInvalid =>
+          GaslessAvailability.disabled,
+        GaslessTransferErrorCode.providerUnavailable ||
+        GaslessTransferErrorCode.providerTimeout ||
+        GaslessTransferErrorCode.rateLimited =>
+          GaslessAvailability.providerUnavailable,
+        _ when error.kind == GaslessTransferErrorKind.providerResponse =>
+          GaslessAvailability.securityMismatch,
+        _ => null,
+      };
+    }
+
+    return null;
   }
 
   void _onFeeChanged(

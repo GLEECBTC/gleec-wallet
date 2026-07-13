@@ -106,6 +106,18 @@ const bool tronGaslessReceiveEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Temporary V1 opt-in for exposing a custody address attested by
+/// `gasless::account_status` when bound-relay metadata is unavailable.
+///
+/// This only affects the wallet's core QR/copy receive surface. Integrations
+/// such as Bitrefill and Standard -> GasFree consolidation continue to require
+/// the bound-relay contract. Remove this flag after the V2 KDF contract is the
+/// minimum supported runtime.
+const bool tronGaslessStatusAttestedReceiveEnabled = bool.fromEnvironment(
+  'TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED',
+  defaultValue: false,
+);
+
 /// Runtime control endpoint for exposing new GasFree custody receive
 /// addresses.
 ///

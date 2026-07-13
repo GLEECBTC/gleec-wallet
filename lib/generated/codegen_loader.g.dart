@@ -122,6 +122,22 @@ abstract class LocaleKeys {
   static const addressRowGasfreeTag = 'addressRowGasfreeTag';
   static const addressRowGasfreePausedTag = 'addressRowGasfreePausedTag';
   static const receiveGaslessPausedNotice = 'receiveGaslessPausedNotice';
+  static const receiveGaslessProviderUnavailableNotice =
+      'receiveGaslessProviderUnavailableNotice';
+  static const receiveGaslessPendingTransferNotice =
+      'receiveGaslessPendingTransferNotice';
+  static const receiveGaslessTokenUnsupportedNotice =
+      'receiveGaslessTokenUnsupportedNotice';
+  static const receiveGaslessDecimalsMismatchNotice =
+      'receiveGaslessDecimalsMismatchNotice';
+  static const receiveGaslessCustodyMismatchNotice =
+      'receiveGaslessCustodyMismatchNotice';
+  static const receiveGaslessProviderMismatchNotice =
+      'receiveGaslessProviderMismatchNotice';
+  static const receiveGaslessRestartRequiredNotice =
+      'receiveGaslessRestartRequiredNotice';
+  static const receiveGaslessAttestationMissingNotice =
+      'receiveGaslessAttestationMissingNotice';
   static const addressRowStandardTag = 'addressRowStandardTag';
   static const receiveStandardVariantCaveat = 'receiveStandardVariantCaveat';
   static const addressBalanceAvailable = 'addressBalanceAvailable';

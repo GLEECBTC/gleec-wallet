@@ -1478,10 +1478,9 @@ Decimal _recipientAmount(BalanceChanges balanceChanges) {
   return net > Decimal.zero ? net : balanceChanges.spentByMe;
 }
 
-/// Fixed status chip communicating that the gas-free rail is active: the fee
-/// is paid in the token and the user never needs TRX. Replaces the old opt-in
-/// checkbox — gasless is the default, not an option to discover. The trailing
-/// info affordance opens [GaslessInfoDialog].
+/// Status chip for the default GasFree rail. Ordinary sends pay fees in the
+/// token and normally need no TRX; the trailing info affordance discloses
+/// provider dependence and exceptional recovery requirements.
 class _GaslessRailStatusChip extends StatelessWidget {
   const _GaslessRailStatusChip({required this.state});
 
@@ -1495,6 +1494,8 @@ class _GaslessRailStatusChip extends StatelessWidget {
     final isNeutralAvailability = state.isGaslessAvailabilityNeutral;
     final isUnsupported =
         state.gaslessAvailability == GaslessAvailability.unsupported;
+    final isPendingTransfer =
+        state.gaslessAvailability == GaslessAvailability.pendingTransfer;
     final isSecurityMismatch =
         state.gaslessAvailability == GaslessAvailability.securityMismatch;
     final variant = isReady
@@ -1513,6 +1514,8 @@ class _GaslessRailStatusChip extends StatelessWidget {
         ? LocaleKeys.withdrawGaslessCheckingAvailability.tr()
         : state.isGaslessProviderUnavailable
         ? LocaleKeys.withdrawGaslessProviderUnavailable.tr(args: [symbol])
+        : isPendingTransfer
+        ? LocaleKeys.withdrawGaslessPendingTransfer.tr()
         : isUnsupported
         ? LocaleKeys.withdrawGaslessUnsupported.tr()
         : isSecurityMismatch
@@ -1548,6 +1551,8 @@ class _GaslessRailStatusChip extends StatelessWidget {
             Icon(
               isReady
                   ? Icons.bolt_rounded
+                  : isPendingTransfer
+                  ? Icons.hourglass_top_rounded
                   : isSecurityMismatch
                   ? Icons.gpp_bad_outlined
                   : isUnsupported
@@ -1576,7 +1581,9 @@ class _GaslessRailStatusChip extends StatelessWidget {
               assetName: state.asset.id.symbol.configSymbol,
             ),
           ),
-          if (isNeutralAvailability || state.isGaslessProviderUnavailable)
+          if (isNeutralAvailability ||
+              isPendingTransfer ||
+              state.isGaslessProviderUnavailable)
             IconButton(
               tooltip: LocaleKeys.retryButtonText.tr(),
               constraints: const BoxConstraints(minWidth: 48, minHeight: 48),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
+    show GaslessReceiveEvidence, KomodoDefiSdk;
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
@@ -70,12 +71,24 @@ Asset _asset({bool testnet = false, bool custom = false, String? contract}) {
 }
 
 class _ReceiveCapabilitySdk implements KomodoDefiSdk {
-  const _ReceiveCapabilitySdk(this.canReceive);
+  const _ReceiveCapabilitySdk(
+    this.canReceive, {
+    this.statusAttested = false,
+    this.evidence = GaslessReceiveEvidence.none,
+  });
 
   final bool canReceive;
+  final bool statusAttested;
+  final GaslessReceiveEvidence evidence;
 
   @override
   bool canReceiveGasless(Asset asset) => canReceive;
+
+  @override
+  bool canReceiveGaslessFromStatus(Asset asset) => statusAttested;
+
+  @override
+  GaslessReceiveEvidence gaslessReceiveEvidence(Asset asset) => evidence;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -152,6 +165,7 @@ void testTronGaslessPolicy() {
     test('build feature is fail-closed by default', () {
       expect(tronGaslessEnabled, isFalse);
       expect(tronGaslessReceiveEnabled, isFalse);
+      expect(tronGaslessStatusAttestedReceiveEnabled, isFalse);
       expect(isTronGaslessConfigured, isFalse);
     });
 
@@ -307,6 +321,47 @@ void testTronGaslessPolicy() {
           asset,
         ),
         isFalse,
+      );
+    });
+
+    test('wallet-only V1 evidence never satisfies the bound receive gate', () {
+      final asset = _asset();
+      const sdk = _ReceiveCapabilitySdk(
+        false,
+        statusAttested: true,
+        evidence: GaslessReceiveEvidence.statusAttestedV1,
+      );
+      final now = DateTime.utc(2026, 7, 12, 12);
+
+      expect(hasBoundTronGaslessReceiveCapability(sdk, asset), isFalse);
+      expect(
+        hasWalletTronGaslessReceiveCapability(
+          sdk,
+          asset,
+          allowStatusAttestedV1: false,
+        ),
+        isFalse,
+      );
+      expect(
+        hasWalletTronGaslessReceiveCapability(
+          sdk,
+          asset,
+          allowStatusAttestedV1: true,
+        ),
+        isTrue,
+      );
+      expect(
+        isVerifiedWalletTronGaslessReceive(
+          sdk,
+          asset,
+          capabilityReady: true,
+          verifiedAddress: 'TCanonicalGasFreeAddress00000000001',
+          custodyAddress: 'TCanonicalGasFreeAddress00000000001',
+          expiresAt: now.add(const Duration(minutes: 1)),
+          now: now,
+          allowStatusAttestedV1: true,
+        ),
+        isTrue,
       );
     });
 

@@ -4,8 +4,8 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 
 /// On-demand explainer for the gasless (GasFree) custody address: how fees are
 /// paid in the token, and the honest disclosure that sending depends on the
-/// GasFree service being available (funds stay safe on-chain; the recovery
-/// phrase also works in other GasFree-compatible wallets).
+/// GasFree provider being available. Funds stay safe on-chain, while the
+/// exceptional recovery flow may require Standard-wallet TRX.
 class GaslessInfoDialog extends StatelessWidget {
   const GaslessInfoDialog({required this.assetName, super.key});
 

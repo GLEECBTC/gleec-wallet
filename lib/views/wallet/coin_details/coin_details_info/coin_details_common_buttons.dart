@@ -85,10 +85,31 @@ bool _isVerifiedGaslessReceiveSelection(
   KomodoDefiSdk sdk,
   Coin coin,
   CoinAddressesState state,
-  PubkeyInfo address,
-) {
+  PubkeyInfo address, {
+  required bool isHdWallet,
+  required String? currentWalletPubkeyHash,
+}) {
   try {
-    return isVerifiedBoundTronGaslessReceive(
+    final normalizedCurrentWallet = currentWalletPubkeyHash?.trim();
+    final attestedWallet = state.gaslessReceiveWalletPubkeyHash?.trim();
+    if (normalizedCurrentWallet == null ||
+        normalizedCurrentWallet.isEmpty ||
+        attestedWallet == null ||
+        attestedWallet.isEmpty ||
+        normalizedCurrentWallet != attestedWallet) {
+      return false;
+    }
+    final canonical = state.addresses
+        .where(
+          (candidate) =>
+              isCanonicalTronGaslessPubkey(candidate, isHdWallet: isHdWallet),
+        )
+        .toList(growable: false);
+    if (canonical.length != 1 || canonical.single.address != address.address) {
+      return false;
+    }
+
+    return isVerifiedWalletTronGaslessReceive(
       sdk,
       coin.toSdkAsset(sdk),
       capabilityReady: state.gaslessReceiveStatus == GaslessReceiveStatus.ready,
@@ -350,13 +371,9 @@ class CoinDetailsReceiveButton extends StatelessWidget {
     final addressesBloc = context.read<CoinAddressesBloc>();
     final addressesState = addressesBloc.state;
     final addresses = addressesState.addresses;
-    final walletType = context
-        .read<AuthBloc>()
-        .state
-        .currentUser
-        ?.wallet
-        .config
-        .type;
+    final currentUser = context.read<AuthBloc>().state.currentUser;
+    final walletType = currentUser?.wallet.config.type;
+    final walletPubkeyHash = currentUser?.walletId.pubkeyHash;
     final sdk = context.sdk;
     final gaslessReceiveEnabled =
         (walletType == WalletType.iguana ||
@@ -368,6 +385,8 @@ class CoinDetailsReceiveButton extends StatelessWidget {
             coin,
             addressesState,
             address,
+            isHdWallet: walletType == WalletType.hdwallet,
+            currentWalletPubkeyHash: walletPubkeyHash,
           ),
         );
 
@@ -418,6 +437,12 @@ class CoinDetailsReceiveButton extends StatelessWidget {
             .config
             .type;
         final currentState = addressesBloc.state;
+        final currentWalletPubkeyHash = context
+            .read<AuthBloc>()
+            .state
+            .currentUser
+            ?.walletId
+            .pubkeyHash;
         currentGaslessReceiveEnabled =
             (currentWalletType == WalletType.iguana ||
                 currentWalletType == WalletType.hdwallet) &&
@@ -426,6 +451,8 @@ class CoinDetailsReceiveButton extends StatelessWidget {
               coin,
               currentState,
               selectedAddress,
+              isHdWallet: currentWalletType == WalletType.hdwallet,
+              currentWalletPubkeyHash: currentWalletPubkeyHash,
             );
         if (!currentGaslessReceiveEnabled) {
           ScaffoldMessenger.of(context).showSnackBar(

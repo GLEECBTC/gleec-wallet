@@ -18,6 +18,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
@@ -49,7 +50,7 @@ String _addressForVariant(PubkeyInfo address, AddressDisplayVariant variant) =>
 
 /// Whether [address] carries a GasFree (CREATE2) custody address for [coin].
 /// Depositing to it lands funds ready to send gaslessly — the network fee is
-/// paid in the token, so the user never needs TRX.
+/// normally paid in the token; exceptional recovery may still require TRX.
 bool _isGaslessReceiveAddress(
   Coin coin,
   PubkeyInfo address, {
@@ -76,10 +77,35 @@ bool _isVerifiedGaslessReceiveForAddress(
   BuildContext context,
   Coin coin,
   CoinAddressesState state,
-  PubkeyInfo address,
-) {
+  PubkeyInfo address, {
+  AuthBlocState? authState,
+}) {
   try {
-    return isVerifiedBoundTronGaslessReceive(
+    final currentUser =
+        (authState ?? context.read<AuthBloc>().state).currentUser;
+    final walletType = currentUser?.wallet.config.type;
+    final currentWalletHash = currentUser?.walletId.pubkeyHash?.trim();
+    final attestedWalletHash = state.gaslessReceiveWalletPubkeyHash?.trim();
+    if (currentWalletHash == null ||
+        currentWalletHash.isEmpty ||
+        attestedWalletHash == null ||
+        attestedWalletHash.isEmpty ||
+        currentWalletHash != attestedWalletHash) {
+      return false;
+    }
+    final isHdWallet = walletType == WalletType.hdwallet;
+    if (walletType != WalletType.iguana && !isHdWallet) return false;
+    final canonical = state.addresses
+        .where(
+          (candidate) =>
+              isCanonicalTronGaslessPubkey(candidate, isHdWallet: isHdWallet),
+        )
+        .toList(growable: false);
+    if (canonical.length != 1 || canonical.single.address != address.address) {
+      return false;
+    }
+
+    return isVerifiedWalletTronGaslessReceive(
       context.sdk,
       coin.toSdkAsset(context.sdk),
       capabilityReady: state.gaslessReceiveStatus == GaslessReceiveStatus.ready,
@@ -98,6 +124,41 @@ bool _isVerifiedGaslessReceiveForAddress(
 /// stranded outside the shown account.
 bool showFaucetForAddress(Coin coin, AddressDisplayVariant variant) =>
     coin.id.hasFaucet && variant == AddressDisplayVariant.standard;
+
+void _showGaslessReceivePaused(BuildContext context) {
+  context.read<CoinAddressesBloc>().add(
+    const CoinAddressesGaslessReceiveRefreshRequested(),
+  );
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(LocaleKeys.receiveGaslessPausedNotice.tr())),
+  );
+}
+
+String _gaslessReceiveUnavailableMessage(GaslessReceiveReasonCode? reason) {
+  return switch (reason) {
+    GaslessReceiveReasonCode.providerUnavailable ||
+    GaslessReceiveReasonCode.providerTemporarilyUnavailable ||
+    GaslessReceiveReasonCode.accountStatusUnavailable =>
+      LocaleKeys.receiveGaslessProviderUnavailableNotice.tr(),
+    GaslessReceiveReasonCode.pendingTransfer =>
+      LocaleKeys.receiveGaslessPendingTransferNotice.tr(),
+    GaslessReceiveReasonCode.tokenUnsupported =>
+      LocaleKeys.receiveGaslessTokenUnsupportedNotice.tr(),
+    GaslessReceiveReasonCode.tokenDecimalsMismatch =>
+      LocaleKeys.receiveGaslessDecimalsMismatchNotice.tr(),
+    GaslessReceiveReasonCode.custodyAddressMismatch =>
+      LocaleKeys.receiveGaslessCustodyMismatchNotice.tr(),
+    GaslessReceiveReasonCode.providerIdentityMismatch =>
+      LocaleKeys.receiveGaslessProviderMismatchNotice.tr(),
+    GaslessReceiveReasonCode.runtimeRestartRequired =>
+      LocaleKeys.receiveGaslessRestartRequiredNotice.tr(),
+    GaslessReceiveReasonCode.canonicalAddressAmbiguous ||
+    GaslessReceiveReasonCode.custodyAddressMissing ||
+    GaslessReceiveReasonCode.statusAttestationMissing =>
+      LocaleKeys.receiveGaslessAttestationMissingNotice.tr(),
+    _ => LocaleKeys.receiveGaslessPausedNotice.tr(),
+  };
+}
 
 /// Expands pubkeys into display rows: a gasless pubkey becomes a gas-free
 /// (custody) row followed by a standard (EOA) row; others stay one row. The
@@ -135,11 +196,9 @@ List<AddressRowEntry> visibleAddressRows(
       .toList();
 }
 
-/// A green "gasless" pill shown on the receive surface for a TRC-20 GasFree
-/// custody address, reassuring the user that funds received here can be sent
-/// gaslessly with no TRX required. When [assetName] is provided, a trailing
-/// info affordance opens [GaslessInfoDialog] (fees + provider-dependence
-/// disclosure).
+/// A green "gasless" pill shown only after the TRC-20 custody address has been
+/// freshly verified. When [assetName] is provided, a trailing info affordance
+/// opens [GaslessInfoDialog] (fees, recovery, and provider dependence).
 class _GaslessReceiveBadge extends StatelessWidget {
   const _GaslessReceiveBadge({this.assetName});
 
@@ -258,9 +317,10 @@ class _AddressVariantTag extends StatelessWidget {
 }
 
 class _GaslessRecoveryBanner extends StatelessWidget {
-  const _GaslessRecoveryBanner({required this.isTestnet});
+  const _GaslessRecoveryBanner({required this.isTestnet, this.reason});
 
   final bool isTestnet;
+  final GaslessReceiveReasonCode? reason;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +339,13 @@ class _GaslessRecoveryBanner extends StatelessWidget {
                 color: style.foreground,
                 fontWeight: FontWeight.w700,
               ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _gaslessReceiveUnavailableMessage(reason),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: style.foreground),
             ),
             const SizedBox(height: 4),
             Text(
@@ -303,9 +370,10 @@ class _GaslessRecoveryBanner extends StatelessWidget {
 }
 
 class _GaslessRecoveryInline extends StatelessWidget {
-  const _GaslessRecoveryInline({required this.isTestnet});
+  const _GaslessRecoveryInline({required this.isTestnet, this.reason});
 
   final bool isTestnet;
+  final GaslessReceiveReasonCode? reason;
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +383,7 @@ class _GaslessRecoveryInline extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            LocaleKeys.receiveGaslessPausedNotice.tr(),
+            _gaslessReceiveUnavailableMessage(reason),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 4),
@@ -480,6 +548,7 @@ class _CoinAddressesState extends State<CoinAddresses> {
                           if (showRecoveryBanner)
                             _GaslessRecoveryBanner(
                               isTestnet: widget.coin.isTestCoin,
+                              reason: state.gaslessReceiveReason,
                             ),
                           _Header(
                             status: state.status,
@@ -504,6 +573,7 @@ class _CoinAddressesState extends State<CoinAddresses> {
                               setPageType: widget.setPageType,
                               isSoleGaslessRow: gaslessAddressCount == 1,
                               gaslessReceiveEnabled: gaslessReceiveEnabled,
+                              gaslessReceiveReason: state.gaslessReceiveReason,
                             ),
                           ),
                           if (hasMore)
@@ -638,6 +708,7 @@ class AddressCard extends StatelessWidget {
     this.variant = AddressDisplayVariant.standard,
     this.isSoleGaslessRow = false,
     this.gaslessReceiveEnabled = false,
+    this.gaslessReceiveReason,
   });
 
   final PubkeyInfo address;
@@ -652,6 +723,7 @@ class AddressCard extends StatelessWidget {
   /// single row. See [_Balance].
   final bool isSoleGaslessRow;
   final bool gaslessReceiveEnabled;
+  final GaslessReceiveReasonCode? gaslessReceiveReason;
 
   @override
   Widget build(BuildContext context) {
@@ -706,7 +778,10 @@ class AddressCard extends StatelessWidget {
                 content,
                 if (variant == AddressDisplayVariant.gasfree &&
                     !gaslessReceiveEnabled)
-                  _GaslessRecoveryInline(isTestnet: coin.isTestCoin),
+                  _GaslessRecoveryInline(
+                    isTestnet: coin.isTestCoin,
+                    reason: gaslessReceiveReason,
+                  ),
               ],
             );
           },
@@ -737,6 +812,7 @@ void showPubkeyReceiveDialog(
       addressesBloc.state,
       address,
     )) {
+      _showGaslessReceivePaused(context);
       return;
     }
   }
@@ -893,7 +969,10 @@ class _MobileAddressContent extends StatelessWidget {
                 receiveEnabled: gaslessReceiveEnabled,
               ),
             if (!isGaslessCustody || gaslessReceiveEnabled) ...[
-              AddressCopyButton(address: rowAddress, coinAbbr: coin.abbr),
+              if (isGaslessCustody)
+                _GaslessAddressCopyButton(coin: coin, address: address)
+              else
+                AddressCopyButton(address: rowAddress, coinAbbr: coin.abbr),
               QrButton(
                 coin: coin,
                 address: address,
@@ -986,7 +1065,10 @@ class _DesktopAddressContent extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 if (!isGaslessCustody || gaslessReceiveEnabled) ...[
-                  AddressCopyButton(address: rowAddress, coinAbbr: coin.abbr),
+                  if (isGaslessCustody)
+                    _GaslessAddressCopyButton(coin: coin, address: address)
+                  else
+                    AddressCopyButton(address: rowAddress, coinAbbr: coin.abbr),
                   QrButton(
                     coin: coin,
                     address: address,
@@ -1022,6 +1104,41 @@ class _DesktopAddressContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _GaslessAddressCopyButton extends StatelessWidget {
+  const _GaslessAddressCopyButton({required this.coin, required this.address});
+
+  final Coin coin;
+  final PubkeyInfo address;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      splashRadius: 18,
+      icon: const Icon(Icons.copy, size: 16),
+      color: Theme.of(context).textTheme.bodyMedium?.color,
+      tooltip: LocaleKeys.copyAddressToClipboard.tr(args: [coin.abbr]),
+      onPressed: () {
+        final state = context.read<CoinAddressesBloc>().state;
+        if (!_isVerifiedGaslessReceiveForAddress(
+          context,
+          coin,
+          state,
+          address,
+        )) {
+          _showGaslessReceivePaused(context);
+          return;
+        }
+
+        copyToClipBoard(
+          context,
+          address.gasfreeAddress!,
+          LocaleKeys.copiedAddressToClipboard.tr(args: [coin.abbr]),
+        );
+      },
     );
   }
 }
@@ -1091,17 +1208,22 @@ class PubkeyReceiveDialog extends StatelessWidget {
         address.gasfreeAddress?.isNotEmpty == true;
     if (wantsGasfreeSurface) {
       final addressesState = context.watch<CoinAddressesBloc>().state;
+      final authState = context.watch<AuthBloc>().state;
       if (!_isVerifiedGaslessReceiveForAddress(
         context,
         coin,
         addressesState,
         address,
+        authState: authState,
       )) {
         return AlertDialog(
           key: const Key('gasless-receive-paused-dialog'),
           title: Semantics(header: true, child: Text(LocaleKeys.receive.tr())),
           content: SingleChildScrollView(
-            child: _GaslessRecoveryBanner(isTestnet: coin.isTestCoin),
+            child: _GaslessRecoveryBanner(
+              isTestnet: coin.isTestCoin,
+              reason: addressesState.gaslessReceiveReason,
+            ),
           ),
           actions: [
             TextButton(
@@ -1211,7 +1333,18 @@ class PubkeyReceiveDialog extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              _AddressCopyRow(coin: coin, address: receiveAddress),
+              _AddressCopyRow(
+                coin: coin,
+                address: receiveAddress,
+                canUseAddress: showGasfreeSurface
+                    ? () => _isVerifiedGaslessReceiveForAddress(
+                        context,
+                        coin,
+                        context.read<CoinAddressesBloc>().state,
+                        address,
+                      )
+                    : null,
+              ),
               if (showGasfreeSurface) ...[
                 const SizedBox(height: 12),
                 _GaslessReceiveBadge(assetName: abbr2Ticker(coin.abbr)),
@@ -1233,10 +1366,15 @@ class PubkeyReceiveDialog extends StatelessWidget {
 
 /// Compact address row with copy and explorer-link actions.
 class _AddressCopyRow extends StatelessWidget {
-  const _AddressCopyRow({required this.coin, required this.address});
+  const _AddressCopyRow({
+    required this.coin,
+    required this.address,
+    this.canUseAddress,
+  });
 
   final Coin coin;
   final String address;
+  final bool Function()? canUseAddress;
 
   @override
   Widget build(BuildContext context) {
@@ -1254,11 +1392,17 @@ class _AddressCopyRow extends StatelessWidget {
       child: IconButton(
         tooltip: LocaleKeys.copyAddressToClipboard.tr(args: [coin.abbr]),
         icon: const Icon(Icons.copy_rounded, size: 20),
-        onPressed: () => copyToClipBoard(
-          context,
-          address,
-          LocaleKeys.copiedAddressToClipboard.tr(args: [coin.abbr]),
-        ),
+        onPressed: () {
+          if (canUseAddress?.call() == false) {
+            _showGaslessReceivePaused(context);
+            return;
+          }
+          copyToClipBoard(
+            context,
+            address,
+            LocaleKeys.copiedAddressToClipboard.tr(args: [coin.abbr]),
+          );
+        },
       ),
     );
     final explorerButton = Material(

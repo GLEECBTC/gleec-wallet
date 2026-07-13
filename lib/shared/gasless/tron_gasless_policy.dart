@@ -1,4 +1,5 @@
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
+    show GaslessReceiveEvidence, KomodoDefiSdk;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/constants.dart';
@@ -20,6 +21,29 @@ String tronGaslessRecoveryUrl({required bool isTestnet}) => isTestnet
 bool hasBoundTronGaslessReceiveCapability(KomodoDefiSdk sdk, Asset asset) {
   try {
     return sdk.canReceiveGasless(asset);
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Whether the wallet's core receive surface has sufficient V1 or V2 proof.
+///
+/// The status-attested V1 path is guarded by a dedicated, false-by-default
+/// build flag. This helper must not be used by external integrations or
+/// consolidation; those deliberately continue to call
+/// [hasBoundTronGaslessReceiveCapability].
+bool hasWalletTronGaslessReceiveCapability(
+  KomodoDefiSdk sdk,
+  Asset asset, {
+  bool allowStatusAttestedV1 = tronGaslessStatusAttestedReceiveEnabled,
+}) {
+  if (hasBoundTronGaslessReceiveCapability(sdk, asset)) return true;
+  if (!allowStatusAttestedV1) return false;
+
+  try {
+    return sdk.canReceiveGaslessFromStatus(asset) &&
+        sdk.gaslessReceiveEvidence(asset) ==
+            GaslessReceiveEvidence.statusAttestedV1;
   } catch (_) {
     return false;
   }
@@ -55,6 +79,41 @@ bool isVerifiedBoundTronGaslessReceive(
   }
 
   return hasBoundTronGaslessReceiveCapability(sdk, asset);
+}
+
+/// Final wallet-only boundary for showing, copying, or rendering a GasFree QR.
+///
+/// Address equality and remote expiry are rechecked at the user action, not
+/// only when the BLoC first evaluated availability.
+bool isVerifiedWalletTronGaslessReceive(
+  KomodoDefiSdk sdk,
+  Asset asset, {
+  required bool capabilityReady,
+  required String? verifiedAddress,
+  required String? custodyAddress,
+  required DateTime? expiresAt,
+  DateTime? now,
+  bool allowStatusAttestedV1 = tronGaslessStatusAttestedReceiveEnabled,
+}) {
+  final verified = verifiedAddress?.trim();
+  final custody = custodyAddress?.trim();
+  final currentTime = (now ?? DateTime.now()).toUtc();
+  if (!capabilityReady ||
+      verified == null ||
+      verified.isEmpty ||
+      custody == null ||
+      custody.isEmpty ||
+      verified != custody ||
+      expiresAt == null ||
+      !expiresAt.toUtc().isAfter(currentTime)) {
+    return false;
+  }
+
+  return hasWalletTronGaslessReceiveCapability(
+    sdk,
+    asset,
+    allowStatusAttestedV1: allowStatusAttestedV1,
+  );
 }
 
 /// Validates a TRC-20 identity against the provider network selected by the

@@ -12,6 +12,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
         MarketDataManager;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/faucet_button/faucet_button_bloc.dart';
@@ -29,11 +30,22 @@ import 'package:web_dex/views/wallet/coin_details/coin_details_info/gasless_stan
 import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 
+import 'coin_addresses_bloc_gasless_revalidation_test.dart';
+
 class _FakeCoinAddressesBloc extends Cubit<CoinAddressesState>
     implements CoinAddressesBloc {
   _FakeCoinAddressesBloc(super.initialState);
 
   void update(CoinAddressesState state) => emit(state);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
+  _FakeAuthBloc(super.initialState);
+
+  void update(AuthBlocState state) => emit(state);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -227,6 +239,18 @@ BalanceInfo _balanceOf(String amount) => BalanceInfo(
   unspendable: Decimal.zero,
 );
 
+const _walletAHash = 'wallet-a-pubkey-hash';
+const _walletBHash = 'wallet-b-pubkey-hash';
+
+KdfUser _softwareUser(String walletName, String pubkeyHash) => KdfUser(
+  walletId: WalletId.withPubkeyHash(
+    walletName,
+    const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+    pubkeyHash,
+  ),
+  isBip39Seed: true,
+);
+
 GaslessBalanceSnapshot _gaslessSnapshot({
   required String custodyAddress,
   required String custodyTotal,
@@ -247,9 +271,16 @@ Widget _liveGaslessReceiveDialog({
   required Asset asset,
   required PubkeyInfo address,
   CoinAddressesBloc? addressesBloc,
+  _FakeAuthBloc? authBloc,
   AddressDisplayVariant? variant,
   TextScaler textScaler = const TextScaler.linear(1),
 }) {
+  final activeAuthBloc =
+      authBloc ??
+      _FakeAuthBloc(
+        AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+      );
+  if (authBloc == null) addTearDown(activeAuthBloc.close);
   final bloc =
       addressesBloc ??
       _FakeCoinAddressesBloc(
@@ -260,6 +291,7 @@ Widget _liveGaslessReceiveDialog({
             const Duration(hours: 1),
           ),
           verifiedGasfreeAddress: address.gasfreeAddress,
+          gaslessReceiveWalletPubkeyHash: _walletAHash,
         ),
       );
   if (addressesBloc == null) addTearDown(bloc.close);
@@ -275,8 +307,11 @@ Widget _liveGaslessReceiveDialog({
     ),
     home: RepositoryProvider<KomodoDefiSdk>.value(
       value: sdk,
-      child: BlocProvider<CoinAddressesBloc>.value(
-        value: bloc,
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthBloc>.value(value: activeAuthBloc),
+          BlocProvider<CoinAddressesBloc>.value(value: bloc),
+        ],
         child: Scaffold(
           body: PubkeyReceiveDialog(
             coin: asset.toCoin(),
@@ -291,6 +326,8 @@ Widget _liveGaslessReceiveDialog({
 }
 
 void testReceiveAddressFaucetWidgets() {
+  testCoinAddressesBlocGaslessRevalidation();
+
   group('Receive/address/faucet widgets', () {
     testWidgets('faucet button dispatches request for selected address', (
       tester,
@@ -439,7 +476,7 @@ void testReceiveAddressFaucetWidgets() {
     );
 
     testWidgets(
-      'open GasFree dialog revokes QR and copy when readiness changes',
+      'in-flight candidate replacement or duplication revokes QR and copy',
       (tester) async {
         final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
         final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
@@ -455,6 +492,7 @@ void testReceiveAddressFaucetWidgets() {
               const Duration(hours: 1),
             ),
             verifiedGasfreeAddress: address.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletAHash,
           ),
         );
         addTearDown(addressesBloc.close);
@@ -469,10 +507,14 @@ void testReceiveAddressFaucetWidgets() {
         expect(find.byType(QrCode), findsOneWidget);
         expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
 
+        final replacement = _trc20Address(
+          address: 'TRegularReceiveAddress000000000002',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000002',
+        );
         addressesBloc.update(
           CoinAddressesState(
-            addresses: [address],
-            gaslessReceiveStatus: GaslessReceiveStatus.disabled,
+            addresses: [replacement],
+            gaslessReceiveStatus: GaslessReceiveStatus.checking,
           ),
         );
         await tester.pump();
@@ -483,6 +525,28 @@ void testReceiveAddressFaucetWidgets() {
         );
         expect(find.byType(QrCode), findsNothing);
         expect(find.byIcon(Icons.copy_rounded), findsNothing);
+
+        final duplicateCandidate = _trc20Address(
+          address: 'TRegularReceiveAddress000000000003',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000003',
+        );
+        addressesBloc.update(
+          CoinAddressesState(
+            addresses: [replacement, duplicateCandidate],
+            gaslessReceiveStatus: GaslessReceiveStatus.checking,
+          ),
+        );
+        await tester.pump();
+        expect(find.byType(QrCode), findsNothing);
+        expect(find.byIcon(Icons.copy_rounded), findsNothing);
+
+        addressesBloc.update(
+          CoinAddressesState(
+            addresses: [replacement, duplicateCandidate],
+            gaslessReceiveStatus: GaslessReceiveStatus.disabled,
+          ),
+        );
+        await tester.pump();
         expect(
           find.byKey(const Key('gasless-official-recovery-action')),
           findsOneWidget,
@@ -496,10 +560,61 @@ void testReceiveAddressFaucetWidgets() {
               const Duration(hours: 1),
             ),
             verifiedGasfreeAddress: 'TDifferentCustodyAddress',
+            gaslessReceiveWalletPubkeyHash: _walletAHash,
           ),
         );
         await tester.pump();
         expect(find.byType(QrCode), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'open GasFree dialog immediately pauses on a same-type wallet switch',
+      (tester) async {
+        final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+        final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+        final address = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+        );
+        final addressesBloc = _FakeCoinAddressesBloc(
+          CoinAddressesState(
+            addresses: [address],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+              const Duration(hours: 1),
+            ),
+            verifiedGasfreeAddress: address.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletAHash,
+          ),
+        );
+        addTearDown(authBloc.close);
+        addTearDown(addressesBloc.close);
+
+        await tester.pumpWidget(
+          _liveGaslessReceiveDialog(
+            asset: asset,
+            address: address,
+            addressesBloc: addressesBloc,
+            authBloc: authBloc,
+          ),
+        );
+        expect(find.byType(QrCode), findsOneWidget);
+
+        authBloc.update(
+          AuthBlocState.loggedIn(_softwareUser('wallet-b', _walletBHash)),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const Key('gasless-receive-paused-dialog')),
+          findsOneWidget,
+        );
+        expect(find.byType(QrCode), findsNothing);
+        expect(find.byIcon(Icons.copy_rounded), findsNothing);
       },
     );
 

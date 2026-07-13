@@ -11,6 +11,7 @@ enum GaslessAvailability {
   ready,
   stale,
   temporarilyUnavailable,
+  pendingTransfer,
   providerUnavailable,
   disabled,
   unsupported,
@@ -27,6 +28,7 @@ enum GaslessAvailability {
       this == GaslessAvailability.temporarilyUnavailable;
 
   bool get isBlocked =>
+      this == GaslessAvailability.pendingTransfer ||
       this == GaslessAvailability.providerUnavailable ||
       this == GaslessAvailability.disabled ||
       this == GaslessAvailability.unsupported ||
