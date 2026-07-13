@@ -88,8 +88,9 @@ The resulting reviewed tip becomes the V1 release candidate. All artifacts
 MUST be built from and report that final full SHA.
 
 The KDF team has reported an in-progress account-status correction that adds
-the explicit availability states below, suppresses fee/maximum fields whenever
-GasFree is unusable, and promotes decimal and custody mismatches to hard errors.
+the explicit availability states below, suppresses usable spendability and fee
+fields whenever GasFree is unusable, and promotes decimal and custody
+mismatches to hard errors.
 That work is the correct V1 foundation and supersedes the earlier proposed
 `provider_available`/`reason_code` compatibility shape. It is not, by itself,
 sufficient to open receive: the final V1 candidate must also implement exact
@@ -104,16 +105,17 @@ that contract and the superseded `provider_available`/`reason_code` shape.
    these V1 values: `available`, `pending_transfer`, `token_unsupported`, and
    `provider_unreachable`.
 2. Only `availability: available` means GasFree is usable. It MUST populate
-   `active`, `frozen_balance`, `spendable_balance`, `transfer_fee`, and
-   `max_withdrawable`; `activation_fee` MAY be `null` for an already-active
-   account. A pending transfer MUST never report a positive
-   `max_withdrawable` or otherwise look healthy.
+   `active`, `frozen_balance`, `spendable_balance`, and `transfer_fee`;
+   `activation_fee` MAY be `null` for an already-active account.
 3. `pending_transfer`, `token_unsupported`, and `provider_unreachable` MUST
    preserve the locally read custody address and total. A pending response MAY
    retain trusted `active` and `frozen_balance`, but `spendable_balance`, fee
-   fields, and `max_withdrawable` MUST be `null`. Unsupported and unreachable
-   responses MUST additionally set `active` and `frozen_balance` to `null`.
-   These are balance/recovery states, not receive or send readiness.
+   fields, and any optional `max_withdrawable` MUST be `null` or omitted.
+   Unsupported and unreachable responses MUST additionally set `active` and
+   `frozen_balance` to `null`. These are balance/recovery states, not receive or
+   send readiness. `max_withdrawable` is advisory compatibility data, never
+   receive evidence, a send-readiness prerequisite, or an input to a Max
+   withdrawal.
 4. Token-decimal and custody-address mismatches MUST be hard typed errors,
    matching the withdraw path's safety policy. The RPC MUST expose stable
    `TokenDecimalsMismatch` and `CustodyAddressMismatch` error types without raw
@@ -143,13 +145,20 @@ that contract and the superseded `provider_available`/`reason_code` shape.
    request-envelope fields to the signed relay payload.
 9. Standard TRX and Standard TRC-20 behavior remains unchanged and available
    whenever GasFree is unavailable.
-10. Focused tests cover exact provider matching, substitution rejection,
-   explicit availability, pending-transfer max suppression, hard mismatch
-   errors, every balance-only response, timestamp formats, normalization, and
-   strict legacy payload compatibility. Shared pure
+10. The existing GasFree Max path MUST accept `max: true` with no `amount`. The
+   base currently derives the Max value before validating availability, which
+   can mask a more specific failure. V1 MUST reverse that order: pending,
+   unsupported-token, decimal-mismatch, and custody-mismatch conditions retain
+   their typed errors; `ZeroBalanceToWithdrawMax` is reserved for an otherwise
+   available account with no positive amount after fees.
+11. Focused tests cover exact provider matching, substitution rejection,
+   explicit availability, optional `max_withdrawable` omission, hard mismatch
+   errors, a GasFree `max: true` request with no `amount`, Max error ordering,
+   every balance-only response, timestamp formats, normalization, and strict
+   legacy payload compatibility. Shared pure
    parsing logic SHOULD use `cross_test!` unless a target-specific reason is
    recorded.
-11. Immutable artifacts and independent SHA-256 checksums are published for
+12. Immutable artifacts and independent SHA-256 checksums are published for
    every declared platform, including Android armv7 and Android arm64.
 
 The following are explicitly **not required for the V1 KDF release** and
@@ -259,8 +268,8 @@ determine whether the GUI can be accurate and financially safe.
 - **Safer sending:** the V1 SDK treats every ambiguous relay outcome as
   processing and suppresses duplicate sends; V2 KDF adds authoritative
   rejected-versus-accepted classification.
-- **Clear money presentation:** custody total, spendable amount, fee maximum,
-  recipient amount, and final fee remain distinct.
+- **Clear money presentation:** custody total, spendable amount, signed fee cap,
+  resolved recipient amount, and final fee remain distinct.
 - **Predictable recovery:** Standard TRON remains usable and unsupported custody
   deposits retain an official recovery path.
 - **Safe V1 onboarding:** exact provider/address attestation lets the wallet
@@ -277,7 +286,7 @@ determine whether the GUI can be accurate and financially safe.
 | Temporary provider unavailability | Custody balance and recovery remain visible with neutral messaging; receive and stale spend limits stay hidden while recheck or fresh preview remains available | Provider-bound status distinguishes a safe retry from a security mismatch |
 | RFC3339/seconds/milliseconds compatibility | Normalized `confirmed_at` renders consistently; created, updated, and expiry values are accepted without assuming they were normalized | Bound trace finality adds trustworthy block and confirmation metadata |
 | Strict Standard/GasFree rail separation | Unsupported users remain on familiar Standard TRON instead of silently entering custody | KDF attests the exact rail and runtime configuration before signing |
-| Legacy signed preview exposes the service provider; SDK verifies the configured pin | Existing custody sends show provider, fee maximum, and expiry before approval | KDF verifies the provider pin before status, preview, submit, and every trace response |
+| Legacy signed preview exposes the service provider; SDK verifies the configured pin | Existing custody sends show provider, signed fee cap, and expiry before approval | KDF verifies the provider pin before status, preview, submit, and every trace response |
 | Legacy relay result plus SDK recovery policy | GUI shows “Still processing,” keeps durable activity, and hides “Try again” | Bound request/trace data allows stronger reconciliation and terminal-state classification |
 | Runtime reconfiguration | Fresh activation/restart is required before V1 receive can become ready | Already-active TRON assets can become authoritatively GasFree-ready without restart |
 | Production error sanitation | Release enablement requires operational proof that the Gleec proxy emits only stable codes/correlation IDs and withholds raw provider content from GUI and support bundles | KDF additionally enforces recursive redaction and raw-body suppression at the protocol boundary |
@@ -288,9 +297,9 @@ The V1 availability/error values map to the following safe GUI contract:
 | KDF outcome | V1 KDF response | Required GUI interpretation |
 | --- | --- | --- |
 | `availability: available` | Exact `service_provider` and complete usable fields | Core-wallet QR/copy may open only after SDK/app identity, freshness, and remote-control gates also pass |
-| `availability: pending_transfer` | Custody total retained; trusted active/frozen data may remain; spendable, fee fields, and maximum `null` | “Transfer in progress”; retain balance/activity/recovery, with no receive or new send |
-| `availability: token_unsupported` | Custody total retained; every provider-derived status, spendable, fee, and maximum field `null` | Use Standard TRON for normal actions and offer official custody recovery; no GasFree send/receive |
-| `availability: provider_unreachable` | Custody total retained; `service_provider` and every provider-derived status, spendable, fee, and maximum field `null` | Neutral temporary-unavailability state; retain balance/recovery, hide receive and spend limits, allow recheck |
+| `availability: pending_transfer` | Custody total retained; trusted active/frozen data may remain; spendable and fee fields `null`; optional `max_withdrawable` absent/null | “Transfer in progress”; retain balance/activity/recovery, with no receive or new send |
+| `availability: token_unsupported` | Custody total retained; every provider-derived status, spendable, and fee field `null`; optional `max_withdrawable` absent/null | Use Standard TRON for normal actions and offer official custody recovery; no GasFree send/receive |
+| `availability: provider_unreachable` | Custody total retained; `service_provider` and every provider-derived status, spendable, and fee field `null`; optional `max_withdrawable` absent/null | Neutral temporary-unavailability state; retain balance/recovery, hide receive and spend limits, allow recheck |
 | `TokenDecimalsMismatch` | Typed hard error; no usable status | Security/recovery state; retain any earlier custody snapshot, never substitute EOA balance, and disable GasFree send/receive |
 | `CustodyAddressMismatch` | Typed hard error; no usable status | Security/recovery state with official recovery/support guidance; disable GasFree send/receive |
 | `ProviderIdentityMismatch` | Typed hard error; no usable status | Security state; disable GasFree send/receive while retaining Standard and existing recovery access |
@@ -752,7 +761,6 @@ Response:
         "spendable_balance": "100",
         "transfer_fee": "1",
         "activation_fee": null,
-        "max_withdrawable": "99",
         "availability": "available",
         "service_provider": "T..."
       }
@@ -810,7 +818,7 @@ Request:
 }
 ```
 
-The response MUST contain:
+The response field contract is:
 
 | Field | Meaning |
 | --- | --- |
@@ -821,7 +829,7 @@ The response MUST contain:
 | `spendable_balance` | Custody total minus frozen, or `null` |
 | `transfer_fee` | Token-denominated provider transfer fee, or `null` |
 | `activation_fee` | One-time token fee when applicable, otherwise `null` |
-| `max_withdrawable` | Spendable minus fees, clamped to zero, or `null` |
+| `max_withdrawable` | Optional advisory snapshot of spendable minus fees; never readiness evidence or an input to Max |
 | `availability` | Required V1 usability state |
 | `service_provider` | Exact resolved provider address when ready, otherwise `null` |
 
@@ -856,19 +864,22 @@ Requirements:
   `availability: provider_unreachable`. Neither path may use a fallback.
 - A V1 ready response MUST contain the exact `service_provider`, omit
   legacy `provider_available`/`reason_code`, set `availability: available`, and
-  populate `active`, `frozen_balance`, `spendable_balance`, `transfer_fee`, and
-  `max_withdrawable`.
+  populate `active`, `frozen_balance`, `spendable_balance`, and `transfer_fee`.
 - KDF MUST combine the on-chain balance with provider `frozen` state before
   calculating spendability.
 - `pending_transfer` MUST set `transfer_fee`, `activation_fee`,
-  `spendable_balance`, and `max_withdrawable` to `null`. It MAY retain trusted
-  `active` and `frozen_balance` for presentation, but it is not receive/send
-  readiness.
+  and `spendable_balance` to `null`. It MAY retain trusted `active` and
+  `frozen_balance` for presentation, but it is not receive/send readiness.
 - `token_unsupported` and `provider_unreachable` MUST retain the local custody
   total and set `service_provider`, `active`, `frozen_balance`, fee fields,
-  spendable balance, and maximum to `null`.
+  and spendable balance to `null`.
+- `max_withdrawable` is optional compatibility data. If returned, it MUST be
+  derived from the same status snapshot and is permitted only for `available`;
+  every other availability MUST omit it or return `null`. Consumers MUST NOT
+  use it as receive evidence, a send-readiness prerequisite, or the amount for
+  a Max send.
 - Provider identity, token, decimal, custody, or pending mismatch MUST never
-  return a positive maximum or usable spendability.
+  return usable spendability or receive evidence.
 - Authentication failure may degrade for read-only balance visibility, but
   preview/submission MUST still fail.
 - Unknown provider states or malformed amounts MUST not be accepted.
@@ -884,7 +895,6 @@ Canonical V1 ready result shape:
   "spendable_balance": "25.000000",
   "transfer_fee": "1.000000",
   "activation_fee": null,
-  "max_withdrawable": "24.000000",
   "availability": "available",
   "service_provider": "T..."
 }
@@ -901,7 +911,6 @@ Canonical V1 degraded result shape:
   "spendable_balance": null,
   "transfer_fee": null,
   "activation_fee": null,
-  "max_withdrawable": null,
   "availability": "provider_unreachable",
   "service_provider": null
 }
@@ -929,6 +938,28 @@ A GasFree preview request MUST use an explicit rail:
 }
 ```
 
+The canonical Max request omits `amount`:
+
+```json
+{
+  "coin": "USDT-TRC20",
+  "from": { "derivation_path": "m/44'/195'/0'/0/0" },
+  "to": "T...",
+  "max": true,
+  "fee_method": "gasless",
+  "gasless": {
+    "max_fee": "2",
+    "deadline_seconds": 300,
+    "fallback_to_native": false
+  }
+}
+```
+
+The terms are distinct: `max: true` selects the request mode; the resolved
+recipient amount is the exact value KDF derives and signs after preflight; and
+`gasless.max_fee` is the separate signed fee-authorization cap. An optional
+account-status `max_withdrawable` is only an advisory snapshot.
+
 Requirements:
 
 - `fallback_to_native` MUST default to `false`.
@@ -939,8 +970,18 @@ Requirements:
 - Preview MUST re-fetch account info, recommended nonce, frozen funds, token
   enrollment, fees, `allowSubmit`, and provider limits.
 - The selected source MUST be the canonical EOA from KDF-GF-001.
-- `max=true` MUST calculate the maximum from authoritative custody spendable
-  funds after frozen value, transfer fee, and activation fee.
+- `max: false` MUST require a positive `amount`. For `max: true`, callers omit
+  `amount` and KDF MUST NOT require it.
+- KDF MUST validate preflight availability before deriving or zero-checking a
+  Max amount. Pending, unsupported-token, decimal-mismatch, and
+  custody-mismatch conditions MUST preserve their typed errors; none may be
+  replaced by `ZeroBalanceToWithdrawMax`.
+- After availability is confirmed, `max: true` MUST calculate the recipient
+  amount from authoritative custody total minus frozen value, transfer fee, and
+  activation fee. KDF MUST sign that exact value and return it as the preview's
+  transaction `total_amount`.
+- `ZeroBalanceToWithdrawMax` is valid only when an otherwise available account
+  has no positive recipient amount after frozen funds and applicable fees.
 - Zero, below-fee, fully frozen, partially frozen, and exact-fee boundaries
   MUST be distinguished.
 - Fee cap is the smaller of the request cap and runtime token cap. The quoted
@@ -1324,12 +1365,13 @@ The V1 KDF candidate MUST cover:
 - ready status with explicit `availability: available` and no legacy
   `provider_available` or `reason_code` fields;
 - every explicit availability value;
-- pending transfer never reporting fees, spendable balance, or a positive
-  maximum;
+- pending transfer never reporting fees or spendable balance, with optional
+  `max_withdrawable` omitted/null;
 - locally read custody total retained for token-unsupported and
   provider-unreachable responses;
 - token-unsupported and provider-unreachable responses clearing every
-  provider-derived status, frozen, spendable, fee, maximum, and provider field;
+  provider-derived status, frozen, spendable, fee, and provider field, with
+  optional `max_withdrawable` omitted/null;
 - non-available responses with even an empty `service_provider` field rejected
   as an invalid wire shape rather than treated as routine degradation;
 - exact typed `TokenDecimalsMismatch`, `CustodyAddressMismatch`, and
@@ -1346,6 +1388,10 @@ The V1 KDF candidate MUST cover:
 - malformed and out-of-range timestamp rejection;
 - no new request, fingerprint, or envelope fields in the strict legacy
   `tx_json` fixture;
+- GasFree `max: true` deserializing and completing with no `amount`, with the
+  fresh computed value bound in the signed permit and returned `total_amount`;
+- Max preflight preserving typed pending, unsupported-token, decimal-mismatch,
+  and custody-mismatch errors before `ZeroBalanceToWithdrawMax` handling;
 - Standard TRX/TRC-20 withdrawal and non-GasFree JSON broadcaster regressions;
 - native and WASM compilation of the changed parser/status path; and
 - immutable artifact version/checksum verification for every declared target,
@@ -1379,7 +1425,9 @@ required field and degraded null/omission semantic.
 - active versus first-transfer activation fee;
 - provider deadline minimum/default/maximum, expiry, and overflow;
 - request cap versus runtime cap;
-- `max=true` authoritative calculation;
+- `max: true` with no `amount`, authoritative calculation, signed recipient
+  value, and returned transaction `total_amount`;
+- Max availability/error ordering before zero-balance derivation;
 - `fallback_to_native=false` never returns a native fee/result;
 - all GasFree withdraw error variants serialize deterministically.
 
@@ -1490,7 +1538,10 @@ custody state, validate:
   switch, and the remote kill switch closing QR/copy immediately while leaving
   balance and recovery visible;
 - runtime-not-configured restart guidance without synthetic readiness;
-- explicit-amount and maximum legacy preview;
+- explicit-amount preview and a maximum legacy preview using `max: true` with no
+  `amount`;
+- Max preflight error ordering for pending, unsupported, decimal mismatch, and
+  custody mismatch;
 - exact signed-preview provider equality before submission;
 - first-transfer activation fee when applicable;
 - legacy relay acceptance and immediate trace persistence;
@@ -1500,7 +1551,7 @@ custody state, validate:
 - an ambiguous submit outcome induced through controlled transport fault
   injection and remaining non-retryable;
 - exact raw on-chain reconciliation of token, custody source, recipient,
-  authorized amount, final fee maximum, and transaction hash;
+  authorized recipient amount, signed maximum fee, and transaction hash;
 - unsupported token, wrong network, secondary derivation, and provider outage
   falling back safely to Standard TRON or recovery; and
 - Bitrefill refund selection and consolidation remaining bound-relay-only.
@@ -1511,7 +1562,7 @@ Validate:
 
 - first activation and already-active runtime configuration;
 - authoritative account status;
-- explicit amount and maximum withdrawal;
+- explicit-amount withdrawal and `max: true` withdrawal with no `amount`;
 - first-transfer activation fee;
 - relay submit and immediate trace persistence data;
 - on-chain and solidified confirmation;
@@ -1605,7 +1656,11 @@ The V1 KDF implementation is accepted when all of the following are true:
 - Available status echoes the exact provider and every non-available status
   clears it.
 - Pending transfer, unsupported token, and provider-unreachable status never
-  expose fees, spendable balance, or a maximum as usable.
+  expose fees or spendable balance as usable; optional `max_withdrawable` is
+  omitted/null.
+- GasFree `max: true` works with no `amount`, returns the freshly resolved signed
+  recipient amount, and preserves typed availability/mismatch errors before
+  zero-balance handling.
 - Decimal, custody, and provider identity mismatches are stable typed hard
   errors and never produce receive/spend readiness.
 - RFC3339, epoch-second, and epoch-millisecond inputs are accepted and

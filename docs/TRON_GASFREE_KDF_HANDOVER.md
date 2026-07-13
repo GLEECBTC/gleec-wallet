@@ -38,10 +38,10 @@ future bound-relay capability.
 ## Current KDF WIP
 
 The reported KDF WIP is the correct V1 foundation: it introduces the four
-`availability` states, removes spendability/fees/maximum from unusable states,
-prevents pending transfers from looking healthy, and makes decimal and custody
-mismatches hard errors. V1 receive must remain closed until that work also has
-the exact provider selection/`service_provider` attestation, timestamp
+`availability` states, removes usable spendability and fees from unusable
+states, prevents pending transfers from looking healthy, and makes decimal and
+custody mismatches hard errors. V1 receive must remain closed until that work
+also has the exact provider selection/`service_provider` attestation, timestamp
 compatibility, tests, and immutable artifacts required below.
 
 ## V1 required KDF changes
@@ -75,7 +75,6 @@ It must include:
 - `frozen_balance`;
 - `spendable_balance`;
 - `transfer_fee`;
-- `max_withdrawable`; and
 - `service_provider`, exactly equal to the configured provider pin.
 
 `activation_fee` may be absent/null only when `active` is `true`. If `active`
@@ -92,7 +91,6 @@ Example:
   "spendable_balance": "25.000000",
   "transfer_fee": "1.000000",
   "activation_fee": null,
-  "max_withdrawable": "24.000000",
   "availability": "available",
   "service_provider": "T..."
 }
@@ -104,19 +102,21 @@ For every non-available result:
 
 - derive and return the local custody address;
 - read and return its TRC-20 `on_chain_balance`;
-- expose no spendable balance, fees, maximum, or provider identity; and
+- expose no spendable balance, fees, or provider identity; and
 - never substitute the Standard EOA balance.
 
 Required field matrix:
 
-| Availability | `active` / `frozen_balance` | Spendable, fees, maximum | `service_provider` |
+| Availability | `active` / `frozen_balance` | Spendable and fees | `service_provider` |
 | --- | --- | --- | --- |
 | `pending_transfer` | May retain trusted provider values | Null | Null |
 | `token_unsupported` | Null | Null | Null |
 | `provider_unreachable` | Null | Null | Null |
 
-A pending transfer must never look healthy or expose a positive
-`max_withdrawable`.
+`max_withdrawable` is an optional, advisory compatibility field. If KDF emits
+it, it is permitted only for `available`; every non-available response must
+omit it or return `null`. It is never receive evidence, never a send-readiness
+prerequisite, and never an input to a Max withdrawal.
 
 ### 4. Treat identity mismatches as hard errors
 
@@ -161,7 +161,36 @@ Provider `createdAt`, `updatedAt`, `expiredAt`, and `txnBlockTimestamp` may be
 non-negative integers, decimal-integer strings, or RFC3339. Preserve numeric
 units where the existing relay contract requires them.
 
-### 7. Preserve V1 compatibility boundaries
+### 7. Preserve authoritative Max semantics
+
+The canonical GasFree Max request sets `max: true` and omits `amount`; KDF must
+not require it:
+
+```json
+{
+  "coin": "USDT-TRC20",
+  "to": "T...",
+  "max": true,
+  "fee_method": "gasless",
+  "gasless": { "fallback_to_native": false }
+}
+```
+
+`max: true` is the request mode. KDF must perform a fresh preflight, then derive
+and sign the recipient amount from custody total minus frozen funds, transfer
+fee, and any activation fee. That resolved recipient amount remains bound in
+the signed permit and relay lifecycle. `gasless.max_fee` is a separate signed
+fee cap. `max_withdrawable`, when returned by account status, is only an
+advisory snapshot; the fresh withdrawal preview is authoritative.
+
+The base currently derives the Max value before validating availability, which
+can mask a more specific failure. V1 must reverse that order: pending,
+unsupported-token, decimal-mismatch, and custody-mismatch conditions must retain
+their typed errors and must not collapse into `ZeroBalanceToWithdrawMax`. That
+zero-balance error is valid only after an otherwise available account yields no
+positive amount after fees.
+
+### 8. Preserve V1 compatibility boundaries
 
 V1 must not:
 
@@ -182,7 +211,7 @@ can open.
 | `pending_transfer` | Show “transfer in progress”; retain balance/activity/recovery and block another GasFree action |
 | `token_unsupported` | Keep custody recovery visible and use Standard TRON for normal actions |
 | `provider_unreachable` | Show neutral temporary unavailability; retain custody balance/recovery and allow recheck |
-| Any typed identity mismatch | Show a security state; hide QR/copy, fees, maximum, and retry paths that could create an unsafe deposit |
+| Any typed identity mismatch | Show a security state; hide QR/copy, actionable spend estimates, and retry paths that could create an unsafe deposit |
 
 The app can disable new receives remotely without hiding existing custody
 balances, pending transfers, Standard TRON, or recovery.
@@ -195,7 +224,12 @@ KDF must provide focused automated coverage for:
 - rejection of mixed new and legacy status fields;
 - ready status with complete fields and exact `service_provider`;
 - inactive ready status with and without `activation_fee`;
-- pending transfer with no spendability, fees, or maximum;
+- optional `max_withdrawable` accepted only as advisory data for `available`
+  and omitted/null for every non-available result;
+- a GasFree `max: true` request with no `amount`, including exact signed and
+  returned recipient amount after frozen funds and all applicable fees;
+- Max error ordering that preserves typed pending, unsupported-token,
+  decimal-mismatch, and custody-mismatch errors before zero-balance handling;
 - unsupported/unreachable status retaining only local custody identity/total;
 - exact provider match, substitution rejection, empty discovery, and outage;
 - typed decimal, custody, and provider mismatch errors, including serialized
@@ -251,7 +285,8 @@ V2 moves the remaining assurance into KDF:
 - provider pinning across status, signing, submission, and trace polling;
 - KDF-issued request IDs and signed-payload fingerprints;
 - submit/trace binding to provider, account, custody address, recipient, token,
-  amount, nonce, version, deadline, signature context, and maximum fee;
+  resolved recipient amount, nonce, version, deadline, signature context, and
+  signed maximum fee;
 - typed lifecycle, retryability, terminality, security, and configuration
   errors with redacted diagnostics;
 - authorization-expiry handling and `final_fee <= signed_max_fee`;
