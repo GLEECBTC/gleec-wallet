@@ -13,7 +13,7 @@ Last updated: 2026-07-13
 This is the complete, self-contained KDF team hand-over for both staged Gleec
 Wallet TRON GasFree releases:
 
-1. the **initial limited release**, which is the immediate delivery target; and
+1. the **V1 status-attested opening**, which is the immediate delivery target; and
 2. the later **V2 provider-bound release**, which completes the production
    assurance model.
 
@@ -25,10 +25,11 @@ usual RFC-style meanings.
 The following invariants apply to both release profiles:
 
 - Gleec production configuration MUST pin the service-provider address. In the
-  initial profile, the SDK verifies that pin against the signed preview before
-  an existing-custody send. V2 additionally enforces it inside KDF before
-  status, signing, submission, and trace handling. Automatic discovery is not
-  an acceptable production default.
+  V1 profile, KDF attests the resolved provider through
+  `gasless::account_status`, and the SDK requires exact equality with the pin
+  before exposing receive QR/copy. V2 extends that enforcement through runtime
+  configuration, signing, submission, and trace handling. Automatic discovery
+  is not an acceptable production default.
 - A GasFree request MUST NOT silently downgrade to a native TRON transfer.
 - A missing transaction hash after relay acceptance is a pending relay
   submission, not a failed transaction.
@@ -47,9 +48,9 @@ extends them.
 ### 2.1 Decision and terminology
 
 The project has deliberately pivoted to a staged rollout. The KDF team's
-immediate task is the **initial limited release**, not the full V2 contract.
-That release may proceed after the reduced compatibility patch, required tests,
-and immutable platform artifacts pass the initial acceptance gate in section
+immediate task is the **V1 status-attested opening**, not the full V2 contract.
+That release may proceed after the complete V1 delta from `bfd7f7ee…`, required
+tests, and immutable platform artifacts pass the acceptance gate in section
 20.1.
 
 The full provider-bound assurance profile remains a separate **V2** delivery
@@ -62,95 +63,121 @@ unrelated to KDF's atomic-swap V2 protocol.
 
 | Release profile | KDF delivery | User-facing scope | Status |
 | --- | --- | --- | --- |
-| Initial limited release | Existing PR #9 behavior plus the four reason codes, balance-preserving mismatch behavior, timestamp compatibility, tests, and immutable artifacts | Existing GasFree custody visibility, recovery, and guarded sends; Standard TRON remains available; no new GasFree receive address | Immediate implementation and artifact target |
-| V2 provider-bound release | Runtime configuration, production provider pinning, signed-request/trace binding, typed lifecycle errors, finality verification, and full native/WASM parity | New GasFree receive onboarding, authoritative readiness, stronger pending/finality UX, and a fully bound send lifecycle | Deferred until every V2 requirement passes |
+| V1 status-attested opening | Exact provider attestation, explicit availability, hard identity mismatches, balance-preserving non-usable states, timestamp compatibility, focused tests, and immutable artifacts | Core-wallet GasFree QR/copy for one canonical address; truthful pending/paused/recovery states; Standard TRON remains available | Immediate implementation and artifact target |
+| V2 provider-bound release | Runtime configuration, provider enforcement across the lifecycle, signed-request/trace binding, typed errors, finality verification, and full native/WASM parity | Removes V1 restart/status workarounds, enables broader integrations, and provides a fully bound send lifecycle | Deferred until every V2 requirement passes |
 
-Shipping the initial profile is an explicit constrained-risk decision. It does
-not assert that the legacy provider API is idempotent or that PR #9 binds every
-relay response to its signed request. The app and SDK compensate by narrowing
-eligibility, disabling new GasFree receives, preserving unresolved submissions,
-and refusing retry after any possibly accepted relay request.
+Shipping V1 is an explicit constrained-risk decision. It attests the custody
+address and provider strongly enough to open the core receive surface, but it
+does not assert that the legacy provider API is idempotent or that PR #9 binds
+every relay response to its signed request. The app and SDK compensate by
+narrowing eligibility and integration scope, preserving unresolved
+submissions, and refusing retry after any possibly accepted relay request.
 
-### 2.2 Immediate KDF scope: initial limited release
+### 2.2 Immediate KDF scope: V1 status-attested opening
 
-The audited behavior baseline for
+The required V1 implementation MUST be developed and reviewed as a delta from
 [GLEECBTC/kdf-internal PR #9](https://github.com/GLEECBTC/kdf-internal/pull/9)
-is `997332e5d6b0c5ca471aa7dc9727a7be96938ae2`. As of 2026-07-13, the PR's
-observed remote tip is `bfd7f7ee30deed4e02b87347e19426b52017d580`, which adds
-dev-workflow Android Cargo serialization, longer Android job timeouts, and
-target-scoped dev-workflow concurrency. Its two new CI commits MUST be rewritten
-to satisfy the release commit-history policy before promotion, while preserving
-their Conventional Commit subjects and code changes; the rewritten tip will
-therefore have a new SHA. The reduced patch
-`a341a3e714bb2719ddb55c527bf37741c83de99e` was authored from the audited
-behavior baseline and MUST be replayed onto that rewritten CI tip.
+tip
+`bfd7f7ee30deed4e02b87347e19426b52017d580`. That tip already contains the
+Android Cargo serialization and target-scoped workflow changes. There is no
+separate local compatibility commit to preserve, replay, or cherry-pick, and
+there is no special line-count allowance or limit for V1. The KDF team should
+implement the complete behavior below in reviewable Conventional Commits.
 
-The resulting combined commit, plus any required test-only or build-only
-correction, becomes the initial release candidate. All artifacts MUST be built
-from and report that final full SHA.
+The resulting reviewed tip becomes the V1 release candidate. All artifacts
+MUST be built from and report that final full SHA.
 
-The KDF team MUST deliver the following initial behavior:
+The KDF team has reported an in-progress account-status correction that adds
+the explicit availability states below, suppresses fee/maximum fields whenever
+GasFree is unusable, and promotes decimal and custody mismatches to hard errors.
+That work is the correct V1 foundation and supersedes the earlier proposed
+`provider_available`/`reason_code` compatibility shape. It is not, by itself,
+sufficient to open receive: the final V1 candidate must also implement exact
+provider selection and the attested `service_provider`, timestamp
+compatibility, regression coverage, and artifact requirements specified here.
 
-1. `reason_code` is an optional `gasless::account_status` response field: it is
-   omitted when the account is ready and MUST contain the matching value when
-   one of these four degraded conditions occurs:
-   `provider_temporarily_unavailable`, `token_unsupported`,
-   `token_decimals_mismatch`, or `custody_address_mismatch`.
-2. Provider-unavailable, unsupported-token, and decimal-mismatch paths return
-   the locally read GasFree custody total with `provider_available: false`;
-   spendable, maximum-withdrawable, activation, frozen, active, and fee fields
-   serialize as `null`.
-3. A custody-address mismatch preserves the locally derived custody balance for
-   recovery with `provider_available: false`; every provider-derived optional
-   field serializes as `null`, and KDF exposes no spendability or receive
-   readiness.
-4. Provider timestamps accept RFC3339, epoch seconds, or epoch milliseconds.
+The KDF team MUST deliver the following V1 behavior. This contract incorporates
+the account-availability safety correction; implementations MUST NOT expose both
+that contract and the superseded `provider_available`/`reason_code` shape.
+
+1. `gasless::account_status` MUST return required `availability` with exactly
+   these V1 values: `available`, `pending_transfer`, `token_unsupported`, and
+   `provider_unreachable`.
+2. Only `availability: available` means GasFree is usable. It MUST populate
+   `active`, `frozen_balance`, `spendable_balance`, `transfer_fee`, and
+   `max_withdrawable`; `activation_fee` MAY be `null` for an already-active
+   account. A pending transfer MUST never report a positive
+   `max_withdrawable` or otherwise look healthy.
+3. `pending_transfer`, `token_unsupported`, and `provider_unreachable` MUST
+   preserve the locally read custody address and total. A pending response MAY
+   retain trusted `active` and `frozen_balance`, but `spendable_balance`, fee
+   fields, and `max_withdrawable` MUST be `null`. Unsupported and unreachable
+   responses MUST additionally set `active` and `frozen_balance` to `null`.
+   These are balance/recovery states, not receive or send readiness.
+4. Token-decimal and custody-address mismatches MUST be hard typed errors,
+   matching the withdraw path's safety policy. The RPC MUST expose stable
+   `TokenDecimalsMismatch` and `CustodyAddressMismatch` error types without raw
+   provider content. Consumers retain an earlier custody snapshot for recovery;
+   they MUST NOT substitute the EOA balance.
+5. When `service_provider` is configured, provider enrollment discovery MUST
+   offer that exact TRON address. KDF MUST NOT silently substitute the first
+   discovered provider or fall back to the configured provider when discovery
+   fails or returns an empty list.
+6. An available response MUST echo the exact resolved provider in optional
+   `service_provider`. A non-empty provider list that omits the configured pin
+   MUST return a stable `ProviderIdentityMismatch` hard error. Provider-list
+   outage or an empty list MUST return `availability: provider_unreachable`,
+   `service_provider: null`, and the local custody total.
+7. Provider timestamps accept RFC3339, epoch seconds, or epoch milliseconds.
    Projected `confirmed_at` is normalized to epoch seconds on the KDF wire
    response. Submit/trace created, updated, and expiry integers retain their
    supplied units; consumers MUST detect and normalize those units explicitly.
-5. Existing strict PR #9 `tx_json` remains wire-compatible. The reduced patch
-   MUST NOT add request-envelope fields to the signed relay payload.
-6. Standard TRX and Standard TRC-20 behavior remains unchanged and available
+   Specifically, `expiredAt`, `createdAt`, `updatedAt`, and
+   `txnBlockTimestamp` accept a non-negative JSON integer, a decimal-integer
+   string, or RFC3339. Numeric input retains its units; RFC3339 converts to epoch
+   seconds. For public `confirmed_at`, numeric values greater than or equal to
+   `100000000000` are epoch milliseconds and MUST be integer-divided by `1000`;
+   smaller values are epoch seconds. Negative, malformed, fractional, and `u64`
+   overflow values MUST fail.
+8. Existing strict PR #9 `tx_json` remains wire-compatible. V1 MUST NOT add
+   request-envelope fields to the signed relay payload.
+9. Standard TRX and Standard TRC-20 behavior remains unchanged and available
    whenever GasFree is unavailable.
-7. Focused native tests cover every reason, balance-only response, timestamp
-   shape, and regression boundary. Shared pure parsing logic SHOULD use
-   `cross_test!` unless a target-specific reason is recorded.
-8. Immutable artifacts and independent SHA-256 checksums are published for
+10. Focused tests cover exact provider matching, substitution rejection,
+   explicit availability, pending-transfer max suppression, hard mismatch
+   errors, every balance-only response, timestamp formats, normalization, and
+   strict legacy payload compatibility. Shared pure
+   parsing logic SHOULD use `cross_test!` unless a target-specific reason is
+   recorded.
+11. Immutable artifacts and independent SHA-256 checksums are published for
    every declared platform, including Android armv7 and Android arm64.
 
-For this staged plan, the 200-touched-line constraint applies to the reduced
-Rust behavior patch: `a341a3e…` is exactly 170 additions plus 30 deletions
-against `997332e5…`. Existing CI-only changes and mandatory test-only corrections
-are separately reviewed exceptions to that runtime-patch budget. They MUST NOT
-broaden initial runtime behavior. Consequently, the final release-candidate
-diff and SHA will be larger and different. If repository governance instead
-applies 200 lines to the entire PR, the patch MUST first be reduced because that
-interpretation is incompatible with the required CI and regression evidence.
-
-The following are explicitly **not required for the initial KDF release** and
+The following are explicitly **not required for the V1 KDF release** and
 remain V2 work:
 
 - `gasless::configure` and authoritative reconfiguration of an already-active
   TRON runtime;
-- provider-pin enforcement inside account status;
 - KDF-issued request envelopes, idempotency keys, or signed-payload
   fingerprints;
 - field-by-field submit-response and trace-response binding;
 - the V2 typed relay lifecycle error family;
-- new-receive capability attestation; and
+- KDF-side wallet-type and primary-derivation enforcement;
+- provider `accountAddress` validation beyond the locally checked custody
+  address; and
 - any change to PR #9's strict signed `tx_json` shape.
 
-Against the initial KDF contract, a missing `gasless::configure` method is the
+Against the V1 KDF contract, a missing `gasless::configure` method is the
 expected compatibility signal. Any other configuration error remains fail-
 closed in the SDK.
 
-### 2.3 Initial-release assurance envelope
+### 2.3 V1 assurance envelope
 
-The initial app and SDK profile is intentionally narrow:
+The V1 app and SDK profile is intentionally narrow:
 
 - GasFree defaults to disabled; production must explicitly enable the limited
-  profile after release-owner risk acceptance, and no remote receive control
-  may override the legacy contract's new-receive prohibition;
+  profile and its separate status-attested receive flag after release-owner
+  risk acceptance; a fresh network/provider-bound remote control document is
+  also required and may disable new receives at any time;
 - only the exact mainnet `USDT-TRC20` or Nile `TESTUSDT-TRC20` identity,
   canonical contract, matching network, configured provider, primary software-
   wallet derivation, and canonical custody address is eligible;
@@ -160,16 +187,34 @@ The initial app and SDK profile is intentionally narrow:
   primary path `m/44'/195'/0'/0/0`;
 - Trezor, custom tokens, secondary derivations, wrong-network assets, and
   provider-rejected tokens always use Standard TRON;
-- PR #9 account status is provisional because it does not echo the selected
-  provider. It may preserve custody access but cannot authorize a new receive
-  surface;
+- receive becomes eligible only after a fresh V1 account status echoes the
+  exact configured provider, returns the exact locally expected custody
+  address, reports explicit `availability: available`, and includes every
+  required usable-status field;
+- the account-status custody address is authoritative. Cached activation or
+  pubkey metadata is used only as an exact cross-check and can never authorize
+  receive independently;
+- exactly one canonical primary custody candidate must exist. Duplicate,
+  secondary, previously cached, hardware-wallet, or ambiguous candidates fail
+  closed;
+- V1 receive evidence is distinct from legacy transfer verification. A signed
+  preview can enable a guarded legacy send but can never enable receive;
+- every account-status probe is bound to the stable wallet session and a
+  per-asset request epoch. A wallet switch, reset, or newer probe invalidates
+  older success and error completions before they can mutate capability,
+  balances, or receive evidence;
+- V1 opens QR/copy only in the core wallet Receive surface. Bitrefill refund
+  selection, consolidation, and other integrations remain bound-relay-only;
+- because V1 has no `gasless::configure`, a TRON runtime activated without the
+  provider must be restarted or freshly activated. The app must explain this
+  limitation and must not synthesize readiness;
 - a signed preview must contain the configured provider before an existing
   custody balance can be submitted;
 - the SDK-generated request ID and fingerprint are wallet-local recovery data
   and are never injected into the legacy signed relay payload;
 - a transport-ambiguous submit, malformed response, trace mismatch, or legacy
   terminal failure remains non-retryable `submittedUnknown`;
-- the initial KDF profile does not provide V2 recursive redaction or complete
+- the V1 KDF profile does not provide V2 recursive redaction or complete
   raw-body suppression. Production MUST use the Gleec proxy's stable sanitized
   error contract, direct provider/HMAC mode remains development-only, raw relay
   diagnostics remain off, and support bundles MUST exclude raw KDF/provider
@@ -180,63 +225,103 @@ The initial app and SDK profile is intentionally narrow:
 - existing custody balances, pending activity, Standard addresses, and recovery
   remain visible when availability becomes stale, disabled, or unsupported.
 
-The initial profile therefore supports recovery and guarded sending of funds
-already held in GasFree custody. It MUST NOT expose, copy, or encode a new
-GasFree receive address. New GasFree receive onboarding is a V2 capability.
+The V1 profile therefore supports recovery, guarded sending of existing funds,
+and core-wallet QR/copy onboarding for one status-attested canonical GasFree
+address. Broader receive integrations and authoritative in-place runtime
+upgrade remain V2 capabilities.
+
+Downstream compatibility is intentionally explicit:
+
+- the SDK parses legacy `provider_available` for balance/recovery compatibility
+  only; legacy responses set no V1 receive evidence;
+- `GaslessReceiveEvidence.statusAttestedV1` is independent of legacy transfer
+  verification and is granted only by explicit `availability: available`, exact
+  `service_provider`, exact custody address, and complete usable fields;
+- `GaslessReceiveEvidence.boundRelayV2` remains the only receive permission for
+  Bitrefill, consolidation, and other integrations;
+- production core receive requires `TRON_GASLESS_ENABLED=true`,
+  `TRON_GASLESS_RECEIVE_ENABLED=true`, and
+  `TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED=true`, plus valid pinned
+  provider/base/control URLs and a fresh matching remote-control document; and
+- all three switches default to `false`. Disabling them hides new receive
+  actions but never hides custody balances, pending activity, or recovery.
 
 ### 2.4 GUI value enabled by the staged system contract
 
 KDF does not own Flutter layout or copy. Its structured responses, together
-with the initial SDK/app/proxy mitigations and later V2 KDF guarantees,
+with the V1 SDK/app/proxy mitigations and later V2 KDF guarantees,
 determine whether the GUI can be accurate and financially safe.
 
 - **Truthful availability:** users see neutral, unsupported, recovery, or
   security states instead of a false green GasFree promise.
 - **Preserved access:** provider or token problems do not make an existing
   custody balance disappear.
-- **Safer sending:** the initial SDK treats every ambiguous relay outcome as
+- **Safer sending:** the V1 SDK treats every ambiguous relay outcome as
   processing and suppresses duplicate sends; V2 KDF adds authoritative
   rejected-versus-accepted classification.
 - **Clear money presentation:** custody total, spendable amount, fee maximum,
   recipient amount, and final fee remain distinct.
 - **Predictable recovery:** Standard TRON remains usable and unsupported custody
   deposits retain an official recovery path.
-- **V2 onboarding:** once KDF provides provider-bound readiness, the GUI can
-  safely reveal GasFree receive QR/copy actions and upgrade already-active
-  runtimes without restart.
+- **Safe V1 onboarding:** exact provider/address attestation lets the wallet
+  reveal one canonical GasFree QR/copy action without weakening other
+  integrations.
+- **V2 simplification:** authoritative configuration and bound relay responses
+  remove restart messaging, legacy inference, and duplicate verification seams.
 
-| Interface or system behavior | Initial-release GUI value | Additional V2 GUI value |
+| Interface or system behavior | V1 GUI value | Additional V2 GUI value |
 | --- | --- | --- |
-| Four stable account-status reasons | Distinct temporary, unsupported, decimal-mismatch, and security messaging | Reasons become part of an authoritative provider-bound capability state |
+| Explicit availability plus typed mismatches | Distinct ready, pending, unsupported, unreachable, and security messaging without inferring usability from a balance | V2 adds lifecycle-wide typed state and terminality |
+| Exact `service_provider` in ready status | Core receive opens only for the configured provider; missing/old KDF responses remain fail-closed | The same pin is enforced through configure, sign, submit, and trace |
 | Deterministic token, decimal, or custody mismatch | Custody funds stay visible with recovery actions, while in-app GasFree send/receive controls remain disabled | Provenance is combined with authoritative spendable and frozen amounts |
 | Temporary provider unavailability | Custody balance and recovery remain visible with neutral messaging; receive and stale spend limits stay hidden while recheck or fresh preview remains available | Provider-bound status distinguishes a safe retry from a security mismatch |
 | RFC3339/seconds/milliseconds compatibility | Normalized `confirmed_at` renders consistently; created, updated, and expiry values are accepted without assuming they were normalized | Bound trace finality adds trustworthy block and confirmation metadata |
 | Strict Standard/GasFree rail separation | Unsupported users remain on familiar Standard TRON instead of silently entering custody | KDF attests the exact rail and runtime configuration before signing |
 | Legacy signed preview exposes the service provider; SDK verifies the configured pin | Existing custody sends show provider, fee maximum, and expiry before approval | KDF verifies the provider pin before status, preview, submit, and every trace response |
 | Legacy relay result plus SDK recovery policy | GUI shows “Still processing,” keeps durable activity, and hides “Try again” | Bound request/trace data allows stronger reconciliation and terminal-state classification |
-| Runtime reconfiguration | Not available; new receives stay hidden | Already-active TRON assets can become authoritatively GasFree-ready without restart |
+| Runtime reconfiguration | Fresh activation/restart is required before V1 receive can become ready | Already-active TRON assets can become authoritatively GasFree-ready without restart |
 | Production error sanitation | Release enablement requires operational proof that the Gleec proxy emits only stable codes/correlation IDs and withholds raw provider content from GUI and support bundles | KDF additionally enforces recursive redaction and raw-body suppression at the protocol boundary |
 | Immutable native/WASM artifacts | The same limited behavior reaches supported devices, including Android | Every platform exposes the complete provider-bound V2 contract with parity evidence |
 
-The initial `reason_code` values map to the following safe GUI contract:
+The V1 availability/error values map to the following safe GUI contract:
 
-| `reason_code` | Initial KDF response | Required GUI interpretation |
+| KDF outcome | V1 KDF response | Required GUI interpretation |
 | --- | --- | --- |
-| Omitted | `provider_available: true` with provider-derived fields | Existing-custody send may proceed only after signed-preview provider verification; GasFree receive remains hidden |
-| `provider_temporarily_unavailable` | Custody total retained; provider-derived fields `null` | Neutral temporary-unavailability state, retained balance/recovery, no receive, and no displayed spend limit; allow recheck or a fresh authoritative preview attempt |
-| `token_unsupported` | Custody total retained; no spendability | Use Standard TRON for normal wallet actions and offer official custody recovery; no GasFree send or receive |
-| `token_decimals_mismatch` | Custody total retained; no spendability | Security/recovery state with support guidance; no GasFree send or receive |
-| `custody_address_mismatch` | Locally derived custody balance retained; no spendability | Security/recovery state that disables in-app GasFree send/receive and exposes the official recovery route |
+| `availability: available` | Exact `service_provider` and complete usable fields | Core-wallet QR/copy may open only after SDK/app identity, freshness, and remote-control gates also pass |
+| `availability: pending_transfer` | Custody total retained; trusted active/frozen data may remain; spendable, fee fields, and maximum `null` | “Transfer in progress”; retain balance/activity/recovery, with no receive or new send |
+| `availability: token_unsupported` | Custody total retained; every provider-derived status, spendable, fee, and maximum field `null` | Use Standard TRON for normal actions and offer official custody recovery; no GasFree send/receive |
+| `availability: provider_unreachable` | Custody total retained; `service_provider` and every provider-derived status, spendable, fee, and maximum field `null` | Neutral temporary-unavailability state; retain balance/recovery, hide receive and spend limits, allow recheck |
+| `TokenDecimalsMismatch` | Typed hard error; no usable status | Security/recovery state; retain any earlier custody snapshot, never substitute EOA balance, and disable GasFree send/receive |
+| `CustodyAddressMismatch` | Typed hard error; no usable status | Security/recovery state with official recovery/support guidance; disable GasFree send/receive |
+| `ProviderIdentityMismatch` | Typed hard error; no usable status | Security state; disable GasFree send/receive while retaining Standard and existing recovery access |
 
 ### 2.5 V2 provider-bound delivery
 
 The V2-scoped requirements in sections 3–19 specify the deferred KDF
-implementation; requirements marked **Initial release** or **Both profiles**
-apply as stated. V2 is required before the app may enable new GasFree receives
+implementation; requirements marked **V1** or **Both profiles**
+apply as stated. V2 is required before the app may enable GasFree receive in
+Bitrefill, consolidation, or other integrations, remove V1 compatibility seams,
 or claim a fully provider-bound relay lifecycle. Android build fixes alone do
 not satisfy V2 because signing and relay submission occur inside KDF; runtime
 safety, response binding, typed errors, and finality verification must also be
 implemented.
+
+V2 must remove or narrow the following downstream compatibility seams only
+after the corresponding KDF capability and immutable artifacts are promoted:
+
+| V1 compatibility seam | V2 KDF replacement | SDK/GUI change after promotion |
+| --- | --- | --- |
+| Fresh activation/restart requirement | Authoritative `gasless::configure` | Remove restart guidance and missing-configure compatibility path |
+| `statusAttestedV1` wallet-only receive evidence and build flag | `boundRelayV2` capability | Retire the V1 receive flag/path for new sessions |
+| SDK/app canonical-wallet and derivation inference | KDF wallet-type and primary-path enforcement | Remove local eligibility inference as an authority; retain display checks defensively |
+| Account-status provider echo plus preview-time provider comparison | Provider pin enforced across configure, status, signing, submit, and trace | Collapse duplicated provider inference into typed KDF capability/errors |
+| SDK-local request UUID/fingerprint and mandatory independent finality matching | KDF-issued request/fingerprint context and bound relay responses | Stop creating the local workaround for new V2 sends; retain it for migrated legacy pending records |
+| Core-wallet QR/copy only | Fully bound receive/send capability | Permit Bitrefill, consolidation, and other reviewed integrations to use the shared bound gate |
+
+The remote receive kill switch, custody/recovery visibility, durable
+pending/unknown activity, no-retry rule after possible acceptance,
+duplicate-send reservation, and copy/QR sensitive-action revalidation remain
+permanent safeguards; V2 does not remove them.
 
 ### 2.6 Local delivery references
 
@@ -245,11 +330,10 @@ reviewable while the complete V2 target remains available to the KDF team:
 
 | Component | Local branch | Commit | Purpose |
 | --- | --- | --- | --- |
-| KDF PR #9 observed CI tip | `feat/tron-gasfree-gui-tweaks` remote PR tip | `bfd7f7ee30deed4e02b87347e19426b52017d580` | Audited behavior plus dev-workflow Android serialization, longer Android timeouts, and target-scoped dev concurrency; rewrite to satisfy release commit-history policy before promotion |
-| KDF compatibility patch | `feat/tron-gasfree-gui-tweaks` | `a341a3e714bb2719ddb55c527bf37741c83de99e` | Additive account-status reasons and provider timestamp compatibility only |
+| KDF V1 implementation base | `feat/tron-gasfree-gui-tweaks` remote PR tip | `bfd7f7ee30deed4e02b87347e19426b52017d580` | Exact base for the KDF team to implement the complete V1 contract in this document; no local follow-up commit exists |
 | Complete KDF contract | `add/gas-free-tron-hardening` | `049012bc3540f3307e67c1afe537c8208f6498b5` | Full provider pinning, runtime configuration, relay binding, typed errors, and validation |
-| Flutter SDK | `add/tron-gas-free` and `add/gas-free-tron-hardening` | `fa56cf611cc7f1b3556bece704e4ba316735b2d0` | Hardened SDK with bound-relay and conservative initial-profile modes |
-| Gleec Wallet implementation | `add/gas-free-tron` | `03ab61c9f748fb73f49dae72f76d46855c8f3553` | Last non-document snapshot: capability gates, custody UX, recovery, integrations, and rollout controls |
+| Flutter SDK | `add/tron-gas-free` and `add/gas-free-tron-hardening` | `179daea217d8a0e130d680f6915efba159bea7af` | Hardened SDK with bound-relay mode, wallet-only V1 receive attestation, and session-safe status/recovery handling |
+| Gleec Wallet implementation | `add/gas-free-tron` | `24b5527e3dc7c620d60ea3dabc5186e5b5519425` | Last non-document snapshot: status-attested core receive, fail-closed custody UX, recovery, integration isolation, and rollout controls |
 
 The complete KDF tip consists of these reviewable commits, oldest first:
 
@@ -259,10 +343,11 @@ The complete KDF tip consists of these reviewable commits, oldest first:
 4. `049012bc3540f3307e67c1afe537c8208f6498b5` — integration coverage.
 
 That V2 tip is a reference snapshot based on `997332e5…`, not a directly
-promotable descendant of the final initial release. Before V2 promotion, its
-commits MUST be rebased or cherry-picked and reconciled onto the final initial-
-release SHA, retaining the four reason codes, timestamp compatibility, approved
-Android CI fixes, and all initial regression coverage.
+promotable descendant of the final V1 release. Before V2 promotion, its
+commits MUST be rebased or cherry-picked and reconciled onto the final V1 SHA,
+retaining explicit availability, hard mismatch errors, exact status provider
+attestation, timestamp compatibility, Android CI fixes, and all V1 regression
+coverage.
 
 The SDK hardening tip consists of these reviewable commits, oldest first:
 
@@ -271,7 +356,12 @@ The SDK hardening tip consists of these reviewable commits, oldest first:
 3. `68bc1a09c9aa38eb650fb889f9da3404660f5a6c` — durable unresolved-relay recovery;
 4. `80ebc370093e85d539e928a6b5f3614327213d4d` — custody balance and history reconciliation;
 5. `0bfb44f49feb99d5eaf78609a879870dff8dd41c` — spend-limit UI clarity;
-6. `fa56cf611cc7f1b3556bece704e4ba316735b2d0` — SDK 1.0 migration metadata.
+6. `fa56cf611cc7f1b3556bece704e4ba316735b2d0` — SDK 1.0 migration metadata;
+7. `a177ab2c5449d17251d2919074ac1e754e9636b7` — wallet-only receive-evidence contract;
+8. `e141d13e5e9bad82ec5f1470fcf133ca0f45eada` — legacy account-status receive attestation;
+9. `7f2dba7de8da9f8b33f80342656110ab0e3102a3` — session-scoped attestation readiness;
+10. `f3d1c6f331a38d92e076b095d4c67f0c0a0f3fd7` — receive-attestation lint cleanup; and
+11. `179daea217d8a0e130d680f6915efba159bea7af` — explicit-availability validation, wallet/session binding, request ordering, and recovery-race coverage.
 
 The Gleec Wallet implementation snapshot consists of these reviewable commits,
 oldest first:
@@ -280,17 +370,14 @@ oldest first:
 2. `9b2e5c7ddf1f55dbd3e03d23abb9aa35f4a2bd3a` — custody and relay-state UX;
 3. `64fd06de95a2dc23e6b19e85a6e2e3b8c28b8b0c` — wallet integrations and sensitive-action revalidation;
 4. `176c6d643e076a211834b1bf38a02cd521c3f6f7` — production proxy controls;
-5. `03ab61c9f748fb73f49dae72f76d46855c8f3553` — release configuration gates.
+5. `03ab61c9f748fb73f49dae72f76d46855c8f3553` — release configuration gates;
+6. `3a1ca2db1b0dbfa96ecf9c6b13fee4e273fa5675` — status-attested core receive, explicit availability UX, and sensitive-action revalidation; and
+7. `24b5527e3dc7c620d60ea3dabc5186e5b5519425` — false-default status-attested receive build gate.
 
 The documentation commit containing this specification is the local main-app
 branch tip. It cannot embed its own commit identifier without changing that
-identifier; the five immutable implementation commits above are the handoff
+identifier; the seven immutable implementation commits above are the handoff
 reference for code and configuration review.
-
-The compatibility branch adds only
-`a341a3e714bb2719ddb55c527bf37741c83de99e`. Its measured delta from PR #9
-audited behavior baseline `997332e5d6b0c5ca471aa7dc9727a7be96938ae2`
-is exactly 170 additions and 30 deletions (200 touched lines).
 
 These branches and commits are provenance and implementation-acceleration aids;
 the normative requirements in this document do not depend on access to them.
@@ -317,11 +404,11 @@ responsibility ends at stable, typed, semantically correct response data.
 
 ## 3. Scope
 
-Unless a requirement is explicitly labeled **Initial release** or **Both
+Unless a requirement is explicitly labeled **V1** or **Both
 profiles**, sections 3–19 define the V2 provider-bound profile. Sections 5 and
 15 explicitly preserve shared protocol and compatibility invariants. In
 sections 3–19, **Release blocker** means a blocker for V2 enablement unless the
-heading says **Initial release blocker**.
+heading says **V1 release blocker**.
 
 ### 3.1 In scope
 
@@ -351,9 +438,9 @@ security of every value the SDK persists.
 
 ## 4. Protocol and trust model
 
-### 4.1 Initial limited flow
+### 4.1 V1 status-attested flow
 
-The initial release uses the legacy PR #9 contract. It does not call
+V1 uses the legacy PR #9 relay contract. It does not call
 `gasless::configure`, and it does not add local SDK recovery fields to KDF's
 strict signed `tx_json`.
 
@@ -365,13 +452,16 @@ sequenceDiagram
     participant Provider as GasFree provider
     participant Tron as TRON network
 
-    App->>SDK: inspect existing custody state
+    App->>SDK: request canonical GasFree receive readiness
     SDK->>KDF: gasless::account_status
+    KDF->>Provider: discover enrollment and require configured provider
     KDF->>Provider: read account/provider status
     KDF->>Tron: read canonical custody token balance
-    KDF-->>SDK: full or balance-only provisional status
-    Note over App,SDK: New GasFree receive remains hidden
-    App->>SDK: send existing custody funds
+    KDF-->>SDK: exact provider/address availability or typed mismatch error
+    SDK->>SDK: verify provider, custody, asset, wallet, path, complete fields
+    SDK-->>App: status-attested V1 receive evidence
+    App->>App: require fresh remote control; expose core QR/copy only
+    App->>SDK: send custody funds
     SDK->>KDF: legacy gasless withdraw preview
     KDF-->>SDK: strict signed tx_json + fee authorization
     SDK->>SDK: verify provider pin; persist local request ID/fingerprint
@@ -387,10 +477,11 @@ sequenceDiagram
     SDK-->>App: processing, confirmed, or non-retryable unknown
 ```
 
-The local request ID and fingerprint improve wallet-scoped recovery but are not
-provider idempotency keys. KDF does not provide field-bound relay assurance in
-this profile. That residual risk is why ambiguous outcomes remain locked and
-why confirmation requires exact on-chain reconciliation.
+The status response attests the provider and custody address for receiving; it
+does not bind a later relay response to its signed request. The local request ID
+and fingerprint improve wallet-scoped recovery but are not provider idempotency
+keys. That residual risk is why ambiguous outcomes remain locked and why
+confirmation requires exact on-chain reconciliation.
 
 ### 4.2 V2 provider-bound flow
 
@@ -428,8 +519,9 @@ sequenceDiagram
 
 Trust assumptions:
 
-- In the initial profile, the SDK and app MUST treat unbound provider data as
-  provisional and apply the assurance envelope in section 2.3.
+- In V1, the SDK and app MAY trust the exact ready account status only for the
+  narrow receive decision described in section 2.3. Relay responses remain
+  provisional and require the legacy recovery/finality policy.
 - In V2, the SDK and app MUST NOT trust provider data that KDF has not
   validated and bound to the signed request.
 - The provider may be unavailable, stale, compromised, or return a response for
@@ -500,7 +592,7 @@ canonical primary software-wallet address:
 KDF MUST derive the GasFree custody address locally from the canonical EOA and
 network. A provider-reported custody address MUST match this local derivation.
 
-For the initial profile, the SDK and app MUST restrict GasFree custody to that
+For V1, the SDK and app MUST restrict GasFree custody to that
 single canonical address and treat secondary derivations as Standard TRON. V2
 KDF MUST enforce the same restriction authoritatively and MUST NOT expose
 additional GasFree custody accounts for secondary derivations.
@@ -661,7 +753,8 @@ Response:
         "transfer_fee": "1",
         "activation_fee": null,
         "max_withdrawable": "99",
-        "provider_available": true
+        "availability": "available",
+        "service_provider": "T..."
       }
     }
   ]
@@ -705,7 +798,7 @@ appropriate 4xx, 502/503, and 500 mappings.
 
 ## 9. Custody account status RPC
 
-### KDF-GF-006 — `gasless::account_status` — Release blocker
+### KDF-GF-006 — `gasless::account_status` — V1 release blocker
 
 Request:
 
@@ -729,34 +822,90 @@ The response MUST contain:
 | `transfer_fee` | Token-denominated provider transfer fee, or `null` |
 | `activation_fee` | One-time token fee when applicable, otherwise `null` |
 | `max_withdrawable` | Spendable minus fees, clamped to zero, or `null` |
-| `provider_available` | Whether provider-derived fields are authoritative |
-| `reason_code` | Stable degraded/security reason, omitted when ready |
+| `availability` | Required V1 usability state |
+| `service_provider` | Exact resolved provider address when ready, otherwise `null` |
 
-Allowed `reason_code` values:
+V1 `availability` values:
 
 ```text
-provider_temporarily_unavailable
-provider_identity_mismatch
-provider_authentication_failed
-provider_invalid_response
+available
+pending_transfer
 token_unsupported
-token_decimals_mismatch
-custody_address_mismatch
+provider_unreachable
 ```
+
+V1 hard-error `error_type` values added to `GaslessAccountStatusError`:
+
+```text
+TokenDecimalsMismatch
+CustodyAddressMismatch
+ProviderIdentityMismatch
+```
+
+These errors MUST implement `SerializeErrorType` and `HttpStatusCode`, contain
+only stable non-secret fields, and never require consumers to parse display
+messages. V2 may add finer authentication and invalid-response categories.
 
 Requirements:
 
 - `on_chain_balance` MUST be read from the custody address, never substituted
   from the EOA.
+- Before returning ready, KDF MUST resolve provider enrollment and require the
+  configured provider exactly. A non-empty provider list that omits the pin is
+  `ProviderIdentityMismatch`; directory outage or an empty response produces
+  `availability: provider_unreachable`. Neither path may use a fallback.
+- A V1 ready response MUST contain the exact `service_provider`, omit
+  legacy `provider_available`/`reason_code`, set `availability: available`, and
+  populate `active`, `frozen_balance`, `spendable_balance`, `transfer_fee`, and
+  `max_withdrawable`.
 - KDF MUST combine the on-chain balance with provider `frozen` state before
   calculating spendability.
-- When provider status cannot be trusted, KDF SHOULD return an on-chain-only
-  degraded snapshot: provider-derived fields are `null`,
-  `provider_available=false`, and a stable reason is present.
-- Identity, token, decimal, or custody mismatch MUST never return spendability.
+- `pending_transfer` MUST set `transfer_fee`, `activation_fee`,
+  `spendable_balance`, and `max_withdrawable` to `null`. It MAY retain trusted
+  `active` and `frozen_balance` for presentation, but it is not receive/send
+  readiness.
+- `token_unsupported` and `provider_unreachable` MUST retain the local custody
+  total and set `service_provider`, `active`, `frozen_balance`, fee fields,
+  spendable balance, and maximum to `null`.
+- Provider identity, token, decimal, custody, or pending mismatch MUST never
+  return a positive maximum or usable spendability.
 - Authentication failure may degrade for read-only balance visibility, but
   preview/submission MUST still fail.
 - Unknown provider states or malformed amounts MUST not be accepted.
+
+Canonical V1 ready result shape:
+
+```json
+{
+  "gasfree_address": "T...",
+  "active": true,
+  "on_chain_balance": "25.000000",
+  "frozen_balance": "0.000000",
+  "spendable_balance": "25.000000",
+  "transfer_fee": "1.000000",
+  "activation_fee": null,
+  "max_withdrawable": "24.000000",
+  "availability": "available",
+  "service_provider": "T..."
+}
+```
+
+Canonical V1 degraded result shape:
+
+```json
+{
+  "gasfree_address": "T...",
+  "active": null,
+  "on_chain_balance": "25.000000",
+  "frozen_balance": null,
+  "spendable_balance": null,
+  "transfer_fee": null,
+  "activation_fee": null,
+  "max_withdrawable": null,
+  "availability": "provider_unreachable",
+  "service_provider": null
+}
+```
 
 ## 10. Withdraw preview and signed relay payload
 
@@ -1168,16 +1317,28 @@ Requirements:
 Every defect boundary MUST have a regression test. Shared pure logic SHOULD use
 `cross_test!` unless target-specific behavior is documented.
 
-### 16.1 Initial limited-release tests
+### 16.1 V1 status-attested opening tests
 
-The initial KDF candidate MUST cover:
+The V1 KDF candidate MUST cover:
 
-- ready status with `reason_code` omitted;
-- each of the four degraded reason codes;
-- locally read custody total retained for unsupported-token, decimal-mismatch,
-  provider-unavailable, and custody-mismatch paths;
-- `provider_available: false` and every provider-derived optional field
-  serialized as `null` on balance-only responses;
+- ready status with explicit `availability: available` and no legacy
+  `provider_available` or `reason_code` fields;
+- every explicit availability value;
+- pending transfer never reporting fees, spendable balance, or a positive
+  maximum;
+- locally read custody total retained for token-unsupported and
+  provider-unreachable responses;
+- token-unsupported and provider-unreachable responses clearing every
+  provider-derived status, frozen, spendable, fee, maximum, and provider field;
+- non-available responses with even an empty `service_provider` field rejected
+  as an invalid wire shape rather than treated as routine degradation;
+- exact typed `TokenDecimalsMismatch`, `CustodyAddressMismatch`, and
+  `ProviderIdentityMismatch` errors with safe HTTP mappings;
+- exact configured provider offered and echoed as `service_provider` in a ready
+  response;
+- configured provider absent from a non-empty list, empty provider list, and
+  provider-list outage never substituting or falling back to another provider;
+- `service_provider: null` on every non-available response;
 - RFC3339, epoch-second, and epoch-millisecond provider timestamps;
 - `confirmed_at` normalized to epoch seconds;
 - submit/trace created, updated, and expiry integer units preserved for
@@ -1189,12 +1350,6 @@ The initial KDF candidate MUST cover:
 - native and WASM compilation of the changed parser/status path; and
 - immutable artifact version/checksum verification for every declared target,
   including Android armv7 and Android arm64.
-
-At `a341a3e…`, serialized provider-temporary status, ready-state omission,
-end-to-end balance retention for every degraded path, and malformed/out-of-
-range timestamp coverage are not yet complete. They are mandatory test-only
-corrections for the final initial-release SHA and MUST NOT change production
-wire behavior.
 
 The strict signed legacy `tx_json` request fixture MUST deny unknown fields.
 Provider response fixtures MAY tolerate additive metadata but MUST assert every
@@ -1268,9 +1423,10 @@ required field and degraded null/omission semantic.
 
 ## 17. Required validation commands
 
-### 17.1 Initial limited-release gate
+### 17.1 V1 status-attested release gate
 
-Run the current stable toolchain against the reduced patch and its RPC path:
+Run the current stable toolchain against the complete V1 delta from
+`bfd7f7ee…` and its RPC path:
 
 ```bash
 cargo fmt --all -- --check
@@ -1320,11 +1476,20 @@ All live validation MUST use environment-provided credentials and funded Nile
 wallets. Tests sharing an account MUST be serialized because the official
 provider currently permits one pending authorization per account.
 
-### 18.1 Initial limited release
+### 18.1 V1 status-attested opening
 
-Using a wallet that already has canonical Nile GasFree custody state, validate:
+Using both an empty canonical Nile wallet and a wallet with existing GasFree
+custody state, validate:
 
 - full and balance-only account-status presentation;
+- exact pinned provider echo, provider-list mismatch, provider outage, and no
+  silent provider substitution;
+- core-wallet QR/copy opening only for a fresh, complete, status-attested
+  canonical address;
+- duplicate candidates, secondary derivations, stale remote control, wallet
+  switch, and the remote kill switch closing QR/copy immediately while leaving
+  balance and recovery visible;
+- runtime-not-configured restart guidance without synthetic readiness;
 - explicit-amount and maximum legacy preview;
 - exact signed-preview provider equality before submission;
 - first-transfer activation fee when applicable;
@@ -1338,7 +1503,7 @@ Using a wallet that already has canonical Nile GasFree custody state, validate:
   authorized amount, final fee maximum, and transaction hash;
 - unsupported token, wrong network, secondary derivation, and provider outage
   falling back safely to Standard TRON or recovery; and
-- new GasFree receive QR/copy remaining unavailable throughout the profile.
+- Bitrefill refund selection and consolidation remaining bound-relay-only.
 
 ### 18.2 V2 provider-bound release
 
@@ -1365,12 +1530,10 @@ Real-value mainnet transfers require separate written approval.
 
 ## 19. Artifact and delivery requirements
 
-### 19.1 Initial immutable artifacts — Initial release blocker
+### 19.1 V1 immutable artifacts — V1 release blocker
 
-The initial artifact candidate is the metadata-clean equivalent of the observed
-PR tip `bfd7f7ee30deed4e02b87347e19426b52017d580`, with the reduced
-compatibility patch replayed on top, plus only approved test-only or build-only
-corrections. The KDF team MUST:
+The V1 artifact candidate is the reviewed implementation of this document on
+top of `bfd7f7ee30deed4e02b87347e19426b52017d580`. The KDF team MUST:
 
 1. identify the final full release SHA;
 2. build Web/WASM, iOS arm64, macOS universal, Android armv7, Android arm64,
@@ -1378,19 +1541,18 @@ corrections. The KDF team MUST:
 3. publish every archive through a location available to clean CI and developer
    environments;
 4. calculate and publish an independent SHA-256 for each archive;
-5. prove each runtime reports the final full SHA and exposes the same initial
-   account-status/timestamp contract; and
+5. prove each runtime reports the final full SHA and exposes the same V1
+   provider-attested account-status and timestamp contract; and
 6. provide the complete manifest before the SDK artifact pin is changed.
 
-The reduced patch `a341a3e714bb2719ddb55c527bf37741c83de99e` is currently
-**pending replay and artifact promotion** onto the PR tip above. The final
-combined SHA, not either input SHA, becomes the artifact identity. The
+No prebuilt local V1 follow-up commit or artifact exists. The final reviewed
+descendant of `bfd7f7ee…` becomes the sole V1 artifact identity. The
 compatibility SDK remains pinned to the last fetchable artifact commit,
-`997332e5d6b0c5ca471aa7dc9727a7be96938ae2`, until all initial release archives
-and checksums are published. Artifacts from `997332e5…` MUST NOT be relabeled as
-artifacts for `a341a3e…` or a later build-fix SHA.
+`997332e5d6b0c5ca471aa7dc9727a7be96938ae2`, until all V1 release archives
+and checksums are published. Existing artifacts MUST NOT be relabeled as
+artifacts for the future V1 implementation SHA.
 
-Android armv7 and Android arm64 are immediate initial-release blockers. A local
+Android armv7 and Android arm64 are immediate V1 release blockers. A local
 binary override is never a release input. All-zero or placeholder checksums are
 invalid.
 
@@ -1431,38 +1593,49 @@ permitted.
 
 ## 20. Acceptance criteria
 
-### 20.1 Initial limited-release acceptance
+### 20.1 V1 status-attested opening acceptance
 
-The initial KDF implementation is accepted when all of the following are true:
+The V1 KDF implementation is accepted when all of the following are true:
 
-- PR #9's audited behavior baseline, the metadata-clean equivalent of the
-  observed Android CI fixes, and the reduced compatibility behavior in section
-  2.2 are present in the final combined release candidate.
-- All four reason paths preserve the correct locally read custody balance and
-  expose no spendability when provider authority is absent or mismatched.
+- The candidate is a descendant of
+  `bfd7f7ee30deed4e02b87347e19426b52017d580` and implements the complete V1
+  behavior in section 2.2.
+- Exact configured provider selection is proven; mismatch, empty discovery,
+  and outage never substitute or fall back to another provider.
+- Available status echoes the exact provider and every non-available status
+  clears it.
+- Pending transfer, unsupported token, and provider-unreachable status never
+  expose fees, spendable balance, or a maximum as usable.
+- Decimal, custody, and provider identity mismatches are stable typed hard
+  errors and never produce receive/spend readiness.
 - RFC3339, epoch-second, and epoch-millisecond inputs are accepted and
   `confirmed_at` is normalized to epoch seconds.
 - The strict legacy `tx_json` and Standard TRON rails have no breaking change.
 - The focused initial tests, formatting, clippy, native checks, and WASM checks
   are green.
-- Funded Nile validation for the constrained existing-custody flow passes.
+- Funded and empty-wallet Nile validation for status-attested core receive and
+  the constrained legacy send flow passes.
 - Every declared platform artifact exists, reports one immutable full SHA, and
   matches a non-placeholder checksum; Android armv7 and arm64 are included.
 
-Production enablement of the initial profile additionally requires the
+Production enablement of the V1 profile additionally requires the
 downstream SDK, app, proxy, and release-owner teams to confirm:
 
-- The SDK team validates ready and four degraded RPC fixtures before updating
-  the KDF artifact pin.
-- The app keeps new GasFree receive/QR/copy disabled and retains Standard TRON,
-  custody visibility, unresolved activity, and recovery.
+- The SDK team validates available, all three non-available, and all three hard
+  mismatch RPC fixtures, mixed old/new wire rejection, out-of-order probe
+  completion, and wallet-switch error completion before updating the KDF
+  artifact pin.
+- The app opens core-wallet GasFree QR/copy only with status-attested V1 or
+  bound-relay V2 evidence plus fresh remote authorization. Bitrefill and
+  consolidation remain bound-only. Standard TRON, custody visibility,
+  unresolved activity, and recovery remain available in every state.
 - Operational evidence proves the production Gleec proxy returns only stable
   sanitized errors and correlation IDs; direct provider/HMAC mode and raw relay
   diagnostics remain disabled.
 - Release owner explicitly accepts the residual legacy relay ambiguity
   and KDF redaction limitation described in section 2.3.
 
-The initial release does **not** require the V2 items in section 20.2.
+V1 does **not** require the V2 items in section 20.2.
 
 ### 20.2 V2 provider-bound acceptance
 
@@ -1491,22 +1664,28 @@ The V2 KDF delivery is accepted only when all of the following are true:
 
 ## 21. Deliverables expected from the KDF team
 
-### 21.1 Initial limited release
+### 21.1 V1 status-attested opening
 
-- Reviewable Conventional Commit changesets containing the reduced patch
-  replayed onto the metadata-clean rewritten CI tip and any approved test-only
-  or Android/build-only correction.
-- Ready and degraded `gasless::account_status` request/response fixtures,
-  including the four exact reason codes and `null` provider-derived fields.
+- Reviewable Conventional Commit changesets directly descended from
+  `bfd7f7ee30deed4e02b87347e19426b52017d580`.
+- `gasless::account_status` fixtures for `available`, `pending_transfer`,
+  `token_unsupported`, and `provider_unreachable`, including exact
+  `service_provider` and nullability semantics.
+- Typed error fixtures for `TokenDecimalsMismatch`,
+  `CustodyAddressMismatch`, and `ProviderIdentityMismatch`.
+- Provider evidence for exact match, missing configured pin, empty list,
+  provider outage, and no silent substitution/fallback.
 - RFC3339, epoch-second, and epoch-millisecond submit and trace fixtures with
   normalized `confirmed_at` output.
 - Focused unit/RPC, native, WASM, clippy, and Standard-rail regression evidence.
-- A funded Nile report for the guarded existing-custody flow.
+- Empty-wallet and funded Nile evidence for status-attested core receive plus
+  the guarded legacy send flow.
 - Published archives and an independent SHA-256 manifest for every supported
   platform, including Android armv7 and Android arm64.
 - The final full immutable KDF SHA that the SDK may pin.
-- A short release note stating that no V2 request envelope, configure RPC,
-  provider-bound status, relay binding, or new-receive attestation is included.
+- A short release note stating that V1 includes core-wallet receive attestation
+  but excludes `gasless::configure`, bound request envelopes, submit/trace
+  lifecycle binding, and KDF-side canonical-wallet enforcement.
 
 ### 21.2 V2 provider-bound release
 
