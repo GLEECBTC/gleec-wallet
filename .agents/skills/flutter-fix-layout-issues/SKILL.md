@@ -14,7 +14,7 @@ metadata:
 
 ## Constraint Violation Diagnostics
 
-Flutter layout operates on a strict rule: **Constraints go down. Sizes go up. Parent sets position.** Layout errors occur when this negotiation fails, typically due to unbounded constraints or unconstrained children. 
+Flutter layout operates on a strict rule: **Constraints go down. Sizes go up. Parent sets position.** Layout errors occur when this negotiation fails, typically due to unbounded constraints or unconstrained children.
 
 Diagnose layout failures using the following error signatures:
 
@@ -85,7 +85,7 @@ Column(
 Row(
   children: [
     const Icon(Icons.search),
-    TextField(), 
+    TextField(),
   ],
 )
 ```

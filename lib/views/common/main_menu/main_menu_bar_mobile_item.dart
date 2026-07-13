@@ -42,18 +42,26 @@ class MainMenuBarMobileItem extends StatelessWidget {
                 AutoScrollText(
                   text: value.title,
                   style: isActive
-                      ? theme.currentGlobal.bottomNavigationBarTheme
-                          .selectedLabelStyle
-                          ?.copyWith(
-                          color: theme.currentGlobal.bottomNavigationBarTheme
-                              .selectedItemColor,
-                        )
-                      : theme.currentGlobal.bottomNavigationBarTheme
-                          .unselectedLabelStyle
-                          ?.copyWith(
-                          color: theme.currentGlobal.bottomNavigationBarTheme
-                              .unselectedItemColor,
-                        ),
+                      ? theme
+                            .currentGlobal
+                            .bottomNavigationBarTheme
+                            .selectedLabelStyle
+                            ?.copyWith(
+                              color: theme
+                                  .currentGlobal
+                                  .bottomNavigationBarTheme
+                                  .selectedItemColor,
+                            )
+                      : theme
+                            .currentGlobal
+                            .bottomNavigationBarTheme
+                            .unselectedLabelStyle
+                            ?.copyWith(
+                              color: theme
+                                  .currentGlobal
+                                  .bottomNavigationBarTheme
+                                  .unselectedItemColor,
+                            ),
                 ),
               ],
             ),

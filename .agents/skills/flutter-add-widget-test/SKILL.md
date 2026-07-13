@@ -50,10 +50,10 @@ Copy the following checklist to track progress when implementing a new widget te
 Apply the following conditional logic based on the type of interaction or state change being tested:
 
 *   **If testing static rendering:** Call `await tester.pumpWidget()` once, then immediately run `expect()` assertions.
-*   **If testing standard state changes (e.g., button taps):** 
+*   **If testing standard state changes (e.g., button taps):**
     1. Call `await tester.tap(finder)`.
     2. Call `await tester.pump()` to trigger a single frame rebuild.
-*   **If testing animations, transitions, or asynchronous UI updates:** 
+*   **If testing animations, transitions, or asynchronous UI updates:**
     1. Trigger the action (e.g., `await tester.drag(finder, Offset(500, 0))`).
     2. Call `await tester.pumpAndSettle()` to repeatedly pump frames until no more frames are scheduled (animation completes).
 *   **If testing text input:** Call `await tester.enterText(textFieldFinder, 'Input string')`.

@@ -15,7 +15,7 @@ metadata:
 
 ## Preview Guidelines
 
-Use the Flutter Widget Previewer to render widgets in real-time, isolated from the full application context. 
+Use the Flutter Widget Previewer to render widgets in real-time, isolated from the full application context.
 
 - **Target Elements:** Apply the `@Preview` annotation to top-level functions, static methods within a class, or public widget constructors/factories that have no required arguments and return a `Widget` or `WidgetBuilder`.
 - **Imports:** Always import `package:flutter/widget_previews.dart` to access the preview annotations.
@@ -98,7 +98,7 @@ final class TransformativePreview extends Preview {
   Preview transform() {
     final originalPreview = super.transform();
     final builder = originalPreview.toBuilder();
-    
+
     builder
       ..name = 'Transformed - ${originalPreview.name}'
       ..theme = _themeBuilder;
