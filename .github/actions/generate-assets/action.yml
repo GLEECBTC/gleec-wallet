@@ -60,6 +60,10 @@ inputs:
     description: "Expose GasFree custody addresses for new deposits (true/false)"
     required: false
     default: "false"
+  TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED:
+    description: "Allow the wallet-only V1 account-status receive contract (true/false)"
+    required: false
+    default: "false"
   TRON_GASLESS_BASE_URL:
     description: "TRON GasFree provider base URL embedded in the Flutter web build"
     required: false
@@ -111,6 +115,7 @@ runs:
         ANALYTICS_DISABLED: ${{ inputs.ANALYTICS_DISABLED }}
         TRON_GASLESS_ENABLED: ${{ inputs.TRON_GASLESS_ENABLED }}
         TRON_GASLESS_RECEIVE_ENABLED: ${{ inputs.TRON_GASLESS_RECEIVE_ENABLED }}
+        TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED: ${{ inputs.TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED }}
         TRON_GASLESS_BASE_URL: ${{ inputs.TRON_GASLESS_BASE_URL }}
         TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
         TRON_GASLESS_CONTROL_URL: ${{ inputs.TRON_GASLESS_CONTROL_URL }}
@@ -135,6 +140,11 @@ runs:
 
         if [ "$TRON_GASLESS_RECEIVE_ENABLED" = "true" ] && [ "$TRON_GASLESS_ENABLED" != "true" ]; then
           echo "Error: TRON_GASLESS_RECEIVE_ENABLED requires TRON_GASLESS_ENABLED=true."
+          exit 1
+        fi
+
+        if [ "$TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED" = "true" ] && [ "$TRON_GASLESS_RECEIVE_ENABLED" != "true" ]; then
+          echo "Error: TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED requires TRON_GASLESS_RECEIVE_ENABLED=true."
           exit 1
         fi
 
@@ -171,6 +181,12 @@ runs:
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true"
         else
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=false"
+        fi
+
+        if [ "$TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED" = "true" ]; then
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED=true"
+        else
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_STATUS_ATTESTED_RECEIVE_ENABLED=false"
         fi
 
         if [ -n "$TRON_GASLESS_CONTROL_URL" ]; then
