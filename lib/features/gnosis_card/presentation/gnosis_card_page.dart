@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
@@ -5,119 +6,106 @@ import 'package:web_dex/features/gnosis_card/application/gnosis_card_bloc.dart';
 import 'package:web_dex/features/gnosis_card/application/gnosis_card_coordinator.dart';
 import 'package:web_dex/features/gnosis_card/domain/gnosis_card_models.dart';
 import 'package:web_dex/features/gnosis_card/infrastructure/gnosis_card_dependencies.dart';
+import 'package:web_dex/features/gnosis_card/presentation/gnosis_onboarding_view.dart';
+import 'package:web_dex/features/gnosis_card/presentation/gnosis_onboarding_widgets.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 
-class GnosisCardPage extends StatelessWidget {
+class GnosisCardPage extends StatefulWidget {
   const GnosisCardPage({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      BlocBuilder<GnosisCardBloc, GnosisCardState>(
-        builder: (context, state) {
-          if (state.status == GnosisCardLoadStatus.disabled) {
-            return _RecoveryState(
-              icon: Icons.credit_card_off_outlined,
-              title: 'Cards are unavailable',
-              message: state.message ?? 'This feature is disabled.',
-            );
-          }
-          if (state.status == GnosisCardLoadStatus.failure) {
-            return _RecoveryState(
-              icon: Icons.cloud_off_outlined,
-              title: 'We could not continue',
-              message: state.message ?? 'Try again.',
-              actionLabel: 'Retry safely',
-              onAction: () =>
-                  context.read<GnosisCardBloc>().add(const GnosisCardStarted()),
-            );
-          }
-          final snapshot = state.snapshot;
-          return Stack(
-            children: [
-              if (snapshot == null)
-                const Center(child: CircularProgressIndicator())
-              else if (snapshot.stage != GnosisOnboardingStage.ready)
-                _Onboarding(snapshot: snapshot)
-              else
-                _Dashboard(snapshot: snapshot),
-              if (state.status == GnosisCardLoadStatus.loading)
-                const Positioned.fill(child: _LoadingScrim()),
-            ],
-          );
-        },
-      );
+  State<GnosisCardPage> createState() => _GnosisCardPageState();
 }
 
-class _Onboarding extends StatelessWidget {
-  const _Onboarding({required this.snapshot});
-  final GnosisCardSnapshot snapshot;
+class _GnosisCardPageState extends State<GnosisCardPage>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final content = _stageContent(snapshot.stage);
-    final colorScheme = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Card', style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                'A secure card account connected to your wallet.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 32),
-              Card(
-                elevation: 0,
-                color: colorScheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _Progress(stage: snapshot.stage),
-                      const SizedBox(height: 32),
-                      Icon(content.icon, size: 40, color: colorScheme.primary),
-                      const SizedBox(height: 20),
-                      Text(
-                        content.title,
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(content.description),
-                      if (snapshot.deployment != null) ...[
-                        const SizedBox(height: 20),
-                        _InfoRow(
-                          label: 'Deployment',
-                          value: snapshot.deployment!.status.name,
-                        ),
-                      ],
-                      const SizedBox(height: 28),
-                      FilledButton.icon(
-                        onPressed: () => context.read<GnosisCardBloc>().add(
-                          const GnosisCardAdvanceRequested(),
-                        ),
-                        icon: Icon(content.icon),
-                        label: Text(content.action),
-                      ),
-                    ],
-                  ),
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    final bloc = context.read<GnosisCardBloc>();
+    if (bloc.state.snapshot?.progress.nextStage == GnosisOnboardingStage.kyc) {
+      bloc.add(const GnosisKycRefreshRequested());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      BlocListener<GnosisCardBloc, GnosisCardState>(
+        listenWhen: (previous, current) =>
+            previous.externalFlow?.id != current.externalFlow?.id &&
+            current.externalFlow != null,
+        listener: _launchExternalFlow,
+        child: BlocBuilder<GnosisCardBloc, GnosisCardState>(
+          builder: (context, state) {
+            if (state.status == GnosisCardLoadStatus.disabled) {
+              return _RecoveryState(
+                icon: Icons.credit_card_off_outlined,
+                title: LocaleKeys.gnosisCard_disabledTitle.tr(),
+                message: LocaleKeys.gnosisCard_disabledBody.tr(),
+              );
+            }
+            if (state.status == GnosisCardLoadStatus.failure &&
+                state.snapshot == null) {
+              return _RecoveryState(
+                icon: Icons.cloud_off_outlined,
+                title: LocaleKeys.gnosisCard_failureTitle.tr(),
+                message: state.failure == null
+                    ? LocaleKeys.gnosisCard_recovery_unknown.tr()
+                    : gnosisLocalizedFailureMessage(state.failure!),
+                actionLabel: LocaleKeys.gnosisCard_retrySafely.tr(),
+                onAction: () => context.read<GnosisCardBloc>().add(
+                  const GnosisCardStarted(),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Safe deployment and setup are performed by the Gnosis Pay API. '
-                'The wallet registers the returned Safe with KDF only after deployment succeeds.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+              );
+            }
+            final snapshot = state.snapshot;
+            if (snapshot == null) {
+              return Semantics(
+                label: LocaleKeys.gnosisCard_loading.tr(),
+                child: const Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.progress.nextStage != GnosisOnboardingStage.ready ||
+                snapshot.dashboard == null) {
+              return GnosisOnboardingView(state: state, snapshot: snapshot);
+            }
+            return _Dashboard(snapshot: snapshot);
+          },
         ),
-      ),
-    );
+      );
+
+  Future<void> _launchExternalFlow(
+    BuildContext context,
+    GnosisCardState state,
+  ) async {
+    final flow = state.externalFlow;
+    if (flow == null) return;
+    try {
+      await context.read<GnosisCardDependencies>().externalFlowLauncher.launch(
+        flow,
+      );
+      if (context.mounted) {
+        context.read<GnosisCardBloc>().add(GnosisExternalFlowHandled(flow.id));
+      }
+    } catch (_) {
+      if (context.mounted) {
+        context.read<GnosisCardBloc>().add(
+          GnosisExternalFlowLaunchFailed(flow.id),
+        );
+      }
+    }
   }
 }
 
@@ -136,13 +124,30 @@ class _Dashboard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _DashboardHeader(dashboard: dashboard),
+              if (snapshot.progress.isPinProvisioned) ...[
+                GnosisStatusBanner(
+                  title: LocaleKeys.gnosisCard_order_completeTitle.tr(),
+                  message: LocaleKeys.gnosisCard_order_completeBody.tr(),
+                  icon: Icons.local_shipping_outlined,
+                ),
+                const SizedBox(height: 20),
+              ] else if (snapshot.progress.cards.any(
+                (card) => card.kind == GnosisCardKind.virtual,
+              )) ...[
+                GnosisStatusBanner(
+                  title: LocaleKeys.gnosisCard_virtual_completeTitle.tr(),
+                  message: LocaleKeys.gnosisCard_virtual_completeBody.tr(),
+                  icon: Icons.check_circle_outline,
+                ),
+                const SizedBox(height: 20),
+              ],
+              _DashboardHeader(snapshot: snapshot),
               const SizedBox(height: 24),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final overview = _CardOverview(
                     dashboard: dashboard,
-                    deployment: snapshot.deployment,
+                    configuration: snapshot.safeConfiguration,
                   );
                   final activity = _CardActivity(dashboard: dashboard);
                   if (constraints.maxWidth >= 900) {
@@ -173,9 +178,9 @@ class _Dashboard extends StatelessWidget {
 }
 
 class _CardOverview extends StatelessWidget {
-  const _CardOverview({required this.dashboard, required this.deployment});
+  const _CardOverview({required this.dashboard, required this.configuration});
   final GnosisCardDashboard dashboard;
-  final SafeDeployment? deployment;
+  final SafeConfiguration? configuration;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -203,12 +208,18 @@ class _CardOverview extends StatelessWidget {
               const SizedBox(height: 12),
               _InfoRow(
                 label: 'Safe',
-                value: _short(deployment?.safeAddress ?? 'Not registered'),
+                value: _short(
+                  configuration?.safeAddress ??
+                      LocaleKeys.gnosisCard_safe_notRegistered.tr(),
+                ),
               ),
               const _InfoRow(label: 'Network', value: 'Gnosis Chain · 100'),
               _InfoRow(
                 label: 'Delay',
-                value: _short(deployment?.delayModule ?? 'Not registered'),
+                value: _short(
+                  configuration?.delayModule ??
+                      LocaleKeys.gnosisCard_safe_notRegistered.tr(),
+                ),
               ),
             ],
           ),
@@ -219,11 +230,20 @@ class _CardOverview extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.dashboard});
-  final GnosisCardDashboard dashboard;
+  const _DashboardHeader({required this.snapshot});
+  final GnosisCardSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
+    final dashboard = snapshot.dashboard!;
+    GnosisCardProduct? physicalProduct;
+    for (final product in snapshot.cardProducts) {
+      if (product.kind == GnosisCardKind.physical) {
+        physicalProduct = product;
+        break;
+      }
+    }
+    final physicalProductId = physicalProduct?.id;
     final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -235,14 +255,10 @@ class _DashboardHeader extends StatelessWidget {
       ],
     );
     final order = OutlinedButton.icon(
-      onPressed: dashboard.physicalOrder == null
-          ? () async {
-              if (await _confirmPhysicalOrder(context) && context.mounted) {
-                context.read<GnosisCardBloc>().add(
-                  const GnosisPhysicalCardRequested(),
-                );
-              }
-            }
+      onPressed: dashboard.physicalOrder == null && physicalProductId != null
+          ? () => context.read<GnosisCardBloc>().add(
+              GnosisCardProductSelected(physicalProductId),
+            )
           : null,
       icon: const Icon(Icons.local_shipping_outlined),
       label: Text(
@@ -734,24 +750,6 @@ class _ReviewValue extends StatelessWidget {
   );
 }
 
-class _Progress extends StatelessWidget {
-  const _Progress({required this.stage});
-  final GnosisOnboardingStage stage;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = (stage.index + 1) / GnosisOnboardingStage.values.length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Setup ${stage.index + 1} of 7'),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(value: progress.clamp(0, 1).toDouble()),
-      ],
-    );
-  }
-}
-
 class _InfoRow extends StatelessWidget {
   const _InfoRow({required this.label, required this.value});
   final String label;
@@ -799,16 +797,6 @@ class _StatusPill extends StatelessWidget {
   );
 }
 
-class _LoadingScrim extends StatelessWidget {
-  const _LoadingScrim();
-
-  @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
-    child: const Center(child: CircularProgressIndicator()),
-  );
-}
-
 class _RecoveryState extends StatelessWidget {
   const _RecoveryState({
     required this.icon,
@@ -846,65 +834,6 @@ class _RecoveryState extends StatelessWidget {
     ),
   );
 }
-
-class _StageContent {
-  const _StageContent(this.title, this.description, this.action, this.icon);
-  final String title;
-  final String description;
-  final String action;
-  final IconData icon;
-}
-
-_StageContent _stageContent(GnosisOnboardingStage stage) => switch (stage) {
-  GnosisOnboardingStage.signedOut => const _StageContent(
-    'Connect your wallet',
-    'KDF signs a SIWE message using EIP-191. This proves address ownership without sending a transaction.',
-    'Sign in securely',
-    Icons.key_outlined,
-  ),
-  GnosisOnboardingStage.terms => const _StageContent(
-    'Review the terms',
-    'Read and accept the card programme terms before registration.',
-    'Accept and continue',
-    Icons.description_outlined,
-  ),
-  GnosisOnboardingStage.registration => const _StageContent(
-    'Create your card profile',
-    'Confirm the identity details used for card eligibility.',
-    'Create profile',
-    Icons.person_outline,
-  ),
-  GnosisOnboardingStage.phoneAndSourceOfFunds => const _StageContent(
-    'Contact and funding details',
-    'Verify a phone number and describe the source of funds for compliance.',
-    'Submit details',
-    Icons.fact_check_outlined,
-  ),
-  GnosisOnboardingStage.kycPending => const _StageContent(
-    'Identity verification',
-    'The deterministic adapter is waiting for the mocked KYC decision.',
-    'Check status',
-    Icons.badge_outlined,
-  ),
-  GnosisOnboardingStage.safeDeployment => const _StageContent(
-    'Deploy the card Safe',
-    'The mock Gnosis API models accepted, processing, and final deployment states. The wallet does not deploy the Safe.',
-    'Deploy via API',
-    Icons.account_balance_wallet_outlined,
-  ),
-  GnosisOnboardingStage.cardIssuance => const _StageContent(
-    'Create a virtual card',
-    'Issue the first card after the API-owned Safe passes integrity checks and KDF registration.',
-    'Create virtual card',
-    Icons.credit_card,
-  ),
-  GnosisOnboardingStage.ready => const _StageContent(
-    'Ready',
-    'Your card is ready.',
-    'Open card',
-    Icons.check_circle_outline,
-  ),
-};
 
 Future<void> _showWithdrawalDialog(BuildContext context) async {
   final recipient = TextEditingController(
@@ -1049,35 +978,6 @@ Future<bool> _confirmCardStatus(
             child: Text(
               status == GnosisCardStatus.voided ? 'Void card' : 'Confirm',
             ),
-          ),
-        ],
-      ),
-    ) ??
-    false;
-
-Future<bool> _confirmPhysicalOrder(BuildContext context) async =>
-    await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Order a physical card'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Mock delivery address\n12 Example Street\nCape Town'),
-            SizedBox(height: 16),
-            _InfoRow(label: 'Card and delivery', value: 'EUR 9.99'),
-            _InfoRow(label: 'Estimated arrival', value: '3–5 days'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Pay and order'),
           ),
         ],
       ),

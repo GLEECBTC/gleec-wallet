@@ -3,10 +3,21 @@ import 'package:web_dex/features/gnosis_card/domain/gnosis_card_models.dart';
 
 enum GnosisCardScenario {
   happyPath,
-  deploymentFailure,
-  kycExpired,
   offline,
   expiredSession,
+  invalidOtp,
+  kycResubmission,
+  kycRejected,
+  kycRequiresAction,
+  deploymentFailure,
+  safeIntegrityFailure,
+  paymentFailure,
+  issuanceFailure,
+
+  /// Source compatibility for direct test construction. Environment parsing
+  /// canonicalizes the former name to [kycResubmission].
+  @Deprecated('Use kycResubmission')
+  kycExpired,
 }
 
 class GnosisCardConfig {
@@ -29,10 +40,7 @@ class GnosisCardConfig {
       (mode) => mode.name == modeValue,
       orElse: () => GnosisCardMode.disabled,
     );
-    final scenario = GnosisCardScenario.values.firstWhere(
-      (value) => value.name == scenarioValue,
-      orElse: () => GnosisCardScenario.happyPath,
-    );
+    final scenario = _parseScenario(scenarioValue);
 
     if (kReleaseMode && requestedMode == GnosisCardMode.mock) {
       return const GnosisCardConfig(
@@ -61,4 +69,12 @@ class GnosisCardConfig {
   final GnosisCardMode mode;
   final GnosisCardScenario scenario;
   final String? failureReason;
+}
+
+GnosisCardScenario _parseScenario(String value) {
+  if (value == 'kycExpired') return GnosisCardScenario.kycResubmission;
+  return GnosisCardScenario.values.firstWhere(
+    (scenario) => scenario.name == value,
+    orElse: () => GnosisCardScenario.happyPath,
+  );
 }

@@ -70,7 +70,7 @@ import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
-class AppBlocRoot extends StatelessWidget {
+class AppBlocRoot extends StatefulWidget {
   const AppBlocRoot({
     required this.storedPrefs,
     required this.komodoDefiSdk,
@@ -79,6 +79,24 @@ class AppBlocRoot extends StatelessWidget {
 
   final StoredSettings storedPrefs;
   final KomodoDefiSdk komodoDefiSdk;
+
+  @override
+  State<AppBlocRoot> createState() => _AppBlocRootState();
+}
+
+class _AppBlocRootState extends State<AppBlocRoot> {
+  StoredSettings get storedPrefs => widget.storedPrefs;
+  KomodoDefiSdk get komodoDefiSdk => widget.komodoDefiSdk;
+
+  late final GnosisCardDependencies _gnosisCardDependencies;
+
+  @override
+  void initState() {
+    super.initState();
+    _gnosisCardDependencies = GnosisCardDependencies.fromEnvironment(
+      komodoDefiSdk,
+    );
+  }
 
   // TODO: Refactor to clean up the bloat in this main file
   Future<void> _clearCachesIfPerformanceModeChanged(
@@ -118,9 +136,7 @@ class AppBlocRoot extends StatelessWidget {
       myOrdersService,
     );
     final dexRepository = DexRepository(mm2Api);
-    final gnosisCardDependencies = GnosisCardDependencies.fromEnvironment(
-      komodoDefiSdk,
-    );
+    final gnosisCardDependencies = _gnosisCardDependencies;
 
     final transactionsRepo = performanceMode != null
         ? MockTransactionHistoryRepo(
@@ -386,6 +402,7 @@ class _MyAppViewState extends State<_MyAppView> {
 
       // Await 200ms so the user can see the animation.
       await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
 
       // Remove the loading indicator.
       _platformWebApi.removeElement('loading');

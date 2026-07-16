@@ -1031,6 +1031,227 @@ abstract class LocaleKeys {
   static const kdfErrorGetNftInfoError = 'kdfErrorGetNftInfoError';
   static const kdfErrorMetamaskError = 'kdfErrorMetamaskError';
   static const kdfErrorWalletConnectError = 'kdfErrorWalletConnectError';
+  static const gnosisCard_title = 'gnosisCard.title';
+  static const gnosisCard_subtitle = 'gnosisCard.subtitle';
+  static const gnosisCard_disabledTitle = 'gnosisCard.disabledTitle';
+  static const gnosisCard_disabledBody = 'gnosisCard.disabledBody';
+  static const gnosisCard_failureTitle = 'gnosisCard.failureTitle';
+  static const gnosisCard_retry = 'gnosisCard.retry';
+  static const gnosisCard_retrySafely = 'gnosisCard.retrySafely';
+  static const gnosisCard_loading = 'gnosisCard.loading';
+  static const gnosisCard_continue = 'gnosisCard.continue';
+  static const gnosisCard_back = 'gnosisCard.back';
+  static const gnosisCard_cancel = 'gnosisCard.cancel';
+  static const gnosisCard_edit = 'gnosisCard.edit';
+  static const gnosisCard_confirm = 'gnosisCard.confirm';
+  static const gnosisCard_checkStatus = 'gnosisCard.checkStatus';
+  static const gnosisCard_openSupport = 'gnosisCard.openSupport';
+  static const gnosisCard_externalNotice = 'gnosisCard.externalNotice';
+  static const gnosisCard_milestones_label = 'gnosisCard.milestones.label';
+  static const gnosisCard_milestones_account = 'gnosisCard.milestones.account';
+  static const gnosisCard_milestones_identity =
+      'gnosisCard.milestones.identity';
+  static const gnosisCard_milestones_cardAccount =
+      'gnosisCard.milestones.cardAccount';
+  static const gnosisCard_milestones_card = 'gnosisCard.milestones.card';
+  static const gnosisCard_milestones_complete =
+      'gnosisCard.milestones.complete';
+  static const gnosisCard_milestones_current = 'gnosisCard.milestones.current';
+  static const gnosisCard_milestones_upcoming =
+      'gnosisCard.milestones.upcoming';
+  static const gnosisCard_milestones = 'gnosisCard.milestones';
+  static const gnosisCard_discovery_title = 'gnosisCard.discovery.title';
+  static const gnosisCard_discovery_body = 'gnosisCard.discovery.body';
+  static const gnosisCard_discovery_signIn = 'gnosisCard.discovery.signIn';
+  static const gnosisCard_discovery_kdfTitle = 'gnosisCard.discovery.kdfTitle';
+  static const gnosisCard_discovery_kdfBody = 'gnosisCard.discovery.kdfBody';
+  static const gnosisCard_discovery_reauthenticate =
+      'gnosisCard.discovery.reauthenticate';
+  static const gnosisCard_discovery = 'gnosisCard.discovery';
+  static const gnosisCard_account_title = 'gnosisCard.account.title';
+  static const gnosisCard_account_body = 'gnosisCard.account.body';
+  static const gnosisCard_account_emailLabel = 'gnosisCard.account.emailLabel';
+  static const gnosisCard_account_emailHint = 'gnosisCard.account.emailHint';
+  static const gnosisCard_account_emailRequired =
+      'gnosisCard.account.emailRequired';
+  static const gnosisCard_account_emailInvalid =
+      'gnosisCard.account.emailInvalid';
+  static const gnosisCard_account_termsTitle = 'gnosisCard.account.termsTitle';
+  static const gnosisCard_account_termsBody = 'gnosisCard.account.termsBody';
+  static const gnosisCard_account_viewDocument =
+      'gnosisCard.account.viewDocument';
+  static const gnosisCard_account_required = 'gnosisCard.account.required';
+  static const gnosisCard_account_acceptanceRequired =
+      'gnosisCard.account.acceptanceRequired';
+  static const gnosisCard_account_submit = 'gnosisCard.account.submit';
+  static const gnosisCard_account = 'gnosisCard.account';
+  static const gnosisCard_kyc_title = 'gnosisCard.kyc.title';
+  static const gnosisCard_kyc_body = 'gnosisCard.kyc.body';
+  static const gnosisCard_kyc_launch = 'gnosisCard.kyc.launch';
+  static const gnosisCard_kyc_relaunch = 'gnosisCard.kyc.relaunch';
+  static const gnosisCard_kyc_returned = 'gnosisCard.kyc.returned';
+  static const gnosisCard_kyc_statusLabel = 'gnosisCard.kyc.statusLabel';
+  static const gnosisCard_kyc_notStarted = 'gnosisCard.kyc.notStarted';
+  static const gnosisCard_kyc_documentsRequested =
+      'gnosisCard.kyc.documentsRequested';
+  static const gnosisCard_kyc_pending = 'gnosisCard.kyc.pending';
+  static const gnosisCard_kyc_processing = 'gnosisCard.kyc.processing';
+  static const gnosisCard_kyc_approved = 'gnosisCard.kyc.approved';
+  static const gnosisCard_kyc_resubmissionRequested =
+      'gnosisCard.kyc.resubmissionRequested';
+  static const gnosisCard_kyc_rejected = 'gnosisCard.kyc.rejected';
+  static const gnosisCard_kyc_requiresAction = 'gnosisCard.kyc.requiresAction';
+  static const gnosisCard_kyc_notStartedBody = 'gnosisCard.kyc.notStartedBody';
+  static const gnosisCard_kyc_documentsRequestedBody =
+      'gnosisCard.kyc.documentsRequestedBody';
+  static const gnosisCard_kyc_pendingBody = 'gnosisCard.kyc.pendingBody';
+  static const gnosisCard_kyc_processingBody = 'gnosisCard.kyc.processingBody';
+  static const gnosisCard_kyc_approvedBody = 'gnosisCard.kyc.approvedBody';
+  static const gnosisCard_kyc_resubmissionRequestedBody =
+      'gnosisCard.kyc.resubmissionRequestedBody';
+  static const gnosisCard_kyc_rejectedBody = 'gnosisCard.kyc.rejectedBody';
+  static const gnosisCard_kyc_requiresActionBody =
+      'gnosisCard.kyc.requiresActionBody';
+  static const gnosisCard_kyc = 'gnosisCard.kyc';
+  static const gnosisCard_source_title = 'gnosisCard.source.title';
+  static const gnosisCard_source_body = 'gnosisCard.source.body';
+  static const gnosisCard_source_required = 'gnosisCard.source.required';
+  static const gnosisCard_source_submit = 'gnosisCard.source.submit';
+  static const gnosisCard_source = 'gnosisCard.source';
+  static const gnosisCard_phone_title = 'gnosisCard.phone.title';
+  static const gnosisCard_phone_body = 'gnosisCard.phone.body';
+  static const gnosisCard_phone_numberLabel = 'gnosisCard.phone.numberLabel';
+  static const gnosisCard_phone_numberHint = 'gnosisCard.phone.numberHint';
+  static const gnosisCard_phone_numberRequired =
+      'gnosisCard.phone.numberRequired';
+  static const gnosisCard_phone_numberInvalid =
+      'gnosisCard.phone.numberInvalid';
+  static const gnosisCard_phone_confirmTitle = 'gnosisCard.phone.confirmTitle';
+  static const gnosisCard_phone_confirmBody = 'gnosisCard.phone.confirmBody';
+  static const gnosisCard_phone_sendCode = 'gnosisCard.phone.sendCode';
+  static const gnosisCard_phone_codeTitle = 'gnosisCard.phone.codeTitle';
+  static const gnosisCard_phone_codeLabel = 'gnosisCard.phone.codeLabel';
+  static const gnosisCard_phone_codeRequired = 'gnosisCard.phone.codeRequired';
+  static const gnosisCard_phone_codeInvalid = 'gnosisCard.phone.codeInvalid';
+  static const gnosisCard_phone_verify = 'gnosisCard.phone.verify';
+  static const gnosisCard_phone_demoCode = 'gnosisCard.phone.demoCode';
+  static const gnosisCard_phone_demoCodeHint = 'gnosisCard.phone.demoCodeHint';
+  static const gnosisCard_phone_resend = 'gnosisCard.phone.resend';
+  static const gnosisCard_phone_resendIn = 'gnosisCard.phone.resendIn';
+  static const gnosisCard_phone_editNumber = 'gnosisCard.phone.editNumber';
+  static const gnosisCard_phone = 'gnosisCard.phone';
+  static const gnosisCard_safe_title = 'gnosisCard.safe.title';
+  static const gnosisCard_safe_body = 'gnosisCard.safe.body';
+  static const gnosisCard_safe_start = 'gnosisCard.safe.start';
+  static const gnosisCard_safe_accepted = 'gnosisCard.safe.accepted';
+  static const gnosisCard_safe_processing = 'gnosisCard.safe.processing';
+  static const gnosisCard_safe_failed = 'gnosisCard.safe.failed';
+  static const gnosisCard_safe_timeout = 'gnosisCard.safe.timeout';
+  static const gnosisCard_safe_configuration = 'gnosisCard.safe.configuration';
+  static const gnosisCard_safe_integrity = 'gnosisCard.safe.integrity';
+  static const gnosisCard_safe_registering = 'gnosisCard.safe.registering';
+  static const gnosisCard_safe_ready = 'gnosisCard.safe.ready';
+  static const gnosisCard_safe_poll = 'gnosisCard.safe.poll';
+  static const gnosisCard_safe_reset = 'gnosisCard.safe.reset';
+  static const gnosisCard_safe_retryIntegrity =
+      'gnosisCard.safe.retryIntegrity';
+  static const gnosisCard_safe_safeAddress = 'gnosisCard.safe.safeAddress';
+  static const gnosisCard_safe_delayModule = 'gnosisCard.safe.delayModule';
+  static const gnosisCard_safe_notRegistered = 'gnosisCard.safe.notRegistered';
+  static const gnosisCard_safe_validIntegrity =
+      'gnosisCard.safe.validIntegrity';
+  static const gnosisCard_safe_invalidIntegrity =
+      'gnosisCard.safe.invalidIntegrity';
+  static const gnosisCard_safe_validStatuses = 'gnosisCard.safe.validStatuses';
+  static const gnosisCard_safe = 'gnosisCard.safe';
+  static const gnosisCard_product_title = 'gnosisCard.product.title';
+  static const gnosisCard_product_body = 'gnosisCard.product.body';
+  static const gnosisCard_product_virtualTitle =
+      'gnosisCard.product.virtualTitle';
+  static const gnosisCard_product_virtualBody =
+      'gnosisCard.product.virtualBody';
+  static const gnosisCard_product_physicalTitle =
+      'gnosisCard.product.physicalTitle';
+  static const gnosisCard_product_physicalBody =
+      'gnosisCard.product.physicalBody';
+  static const gnosisCard_product_included = 'gnosisCard.product.included';
+  static const gnosisCard_product_select = 'gnosisCard.product.select';
+  static const gnosisCard_product = 'gnosisCard.product';
+  static const gnosisCard_virtual_title = 'gnosisCard.virtual.title';
+  static const gnosisCard_virtual_body = 'gnosisCard.virtual.body';
+  static const gnosisCard_virtual_issue = 'gnosisCard.virtual.issue';
+  static const gnosisCard_virtual_completeTitle =
+      'gnosisCard.virtual.completeTitle';
+  static const gnosisCard_virtual_completeBody =
+      'gnosisCard.virtual.completeBody';
+  static const gnosisCard_virtual = 'gnosisCard.virtual';
+  static const gnosisCard_shipping_title = 'gnosisCard.shipping.title';
+  static const gnosisCard_shipping_body = 'gnosisCard.shipping.body';
+  static const gnosisCard_shipping_name = 'gnosisCard.shipping.name';
+  static const gnosisCard_shipping_line1 = 'gnosisCard.shipping.line1';
+  static const gnosisCard_shipping_line2 = 'gnosisCard.shipping.line2';
+  static const gnosisCard_shipping_city = 'gnosisCard.shipping.city';
+  static const gnosisCard_shipping_state = 'gnosisCard.shipping.state';
+  static const gnosisCard_shipping_postalCode =
+      'gnosisCard.shipping.postalCode';
+  static const gnosisCard_shipping_country = 'gnosisCard.shipping.country';
+  static const gnosisCard_shipping_required = 'gnosisCard.shipping.required';
+  static const gnosisCard_shipping_countryMismatch =
+      'gnosisCard.shipping.countryMismatch';
+  static const gnosisCard_shipping_review = 'gnosisCard.shipping.review';
+  static const gnosisCard_shipping = 'gnosisCard.shipping';
+  static const gnosisCard_order_reviewTitle = 'gnosisCard.order.reviewTitle';
+  static const gnosisCard_order_reviewBody = 'gnosisCard.order.reviewBody';
+  static const gnosisCard_order_shippingTo = 'gnosisCard.order.shippingTo';
+  static const gnosisCard_order_cardFee = 'gnosisCard.order.cardFee';
+  static const gnosisCard_order_placeOrder = 'gnosisCard.order.placeOrder';
+  static const gnosisCard_order_status = 'gnosisCard.order.status';
+  static const gnosisCard_order_cancel = 'gnosisCard.order.cancel';
+  static const gnosisCard_order_cancelled = 'gnosisCard.order.cancelled';
+  static const gnosisCard_order_resumePin = 'gnosisCard.order.resumePin';
+  static const gnosisCard_order_completeTitle =
+      'gnosisCard.order.completeTitle';
+  static const gnosisCard_order_completeBody = 'gnosisCard.order.completeBody';
+  static const gnosisCard_order = 'gnosisCard.order';
+  static const gnosisCard_payment_title = 'gnosisCard.payment.title';
+  static const gnosisCard_payment_warningTitle =
+      'gnosisCard.payment.warningTitle';
+  static const gnosisCard_payment_warningBody =
+      'gnosisCard.payment.warningBody';
+  static const gnosisCard_payment_amount = 'gnosisCard.payment.amount';
+  static const gnosisCard_payment_pay = 'gnosisCard.payment.pay';
+  static const gnosisCard_payment_receipt = 'gnosisCard.payment.receipt';
+  static const gnosisCard_payment_attach = 'gnosisCard.payment.attach';
+  static const gnosisCard_payment_confirm = 'gnosisCard.payment.confirm';
+  static const gnosisCard_payment_retry = 'gnosisCard.payment.retry';
+  static const gnosisCard_payment = 'gnosisCard.payment';
+  static const gnosisCard_pin_title = 'gnosisCard.pin.title';
+  static const gnosisCard_pin_body = 'gnosisCard.pin.body';
+  static const gnosisCard_pin_open = 'gnosisCard.pin.open';
+  static const gnosisCard_pin_returned = 'gnosisCard.pin.returned';
+  static const gnosisCard_pin_cancelled = 'gnosisCard.pin.cancelled';
+  static const gnosisCard_pin = 'gnosisCard.pin';
+  static const gnosisCard_recovery_offline = 'gnosisCard.recovery.offline';
+  static const gnosisCard_recovery_expiredSession =
+      'gnosisCard.recovery.expiredSession';
+  static const gnosisCard_recovery_invalidInput =
+      'gnosisCard.recovery.invalidInput';
+  static const gnosisCard_recovery_resendCooldown =
+      'gnosisCard.recovery.resendCooldown';
+  static const gnosisCard_recovery_deploymentFailure =
+      'gnosisCard.recovery.deploymentFailure';
+  static const gnosisCard_recovery_paymentFailure =
+      'gnosisCard.recovery.paymentFailure';
+  static const gnosisCard_recovery_issuanceFailure =
+      'gnosisCard.recovery.issuanceFailure';
+  static const gnosisCard_recovery_stateChanged =
+      'gnosisCard.recovery.stateChanged';
+  static const gnosisCard_recovery_notFound = 'gnosisCard.recovery.notFound';
+  static const gnosisCard_recovery_unavailable =
+      'gnosisCard.recovery.unavailable';
+  static const gnosisCard_recovery_unknown = 'gnosisCard.recovery.unknown';
+  static const gnosisCard_recovery = 'gnosisCard.recovery';
+  static const gnosisCard = 'gnosisCard';
   static const sdk_errors_network_unavailable =
       'sdk_errors.network_unavailable';
   static const sdk_errors_timeout = 'sdk_errors.timeout';

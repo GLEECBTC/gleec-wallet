@@ -1,6 +1,7 @@
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/features/gnosis_card/domain/gnosis_card_models.dart';
 import 'package:web_dex/features/gnosis_card/domain/gnosis_card_ports.dart';
 
 /// Adapter around the existing KDF EIP-191 and smart-account RPCs.

@@ -36,23 +36,67 @@ abstract interface class SmartAccountSigner {
 }
 
 abstract interface class GnosisPayRepository {
+  Future<GnosisOnboardingProgress> onboardingProgress();
+
+  /// Compatibility view; implementations must derive this from progress.
   Future<GnosisOnboardingStage> onboardingStage();
+
   Future<String> createSiweMessage({required String ownerAddress});
   Future<GnosisCardSession> authenticate({
     required String ownerAddress,
     required String signature,
   });
-  Future<void> acceptTerms();
-  Future<void> registerApplicant();
-  Future<void> submitPhoneAndSourceOfFunds();
+
+  Future<List<GnosisTerm>> requiredTerms();
+  Future<void> signUp({required String email});
+  Future<void> acceptTerms(List<GnosisTermAcceptance> acceptances);
+
+  Future<GnosisExternalFlow> kycIntegration();
   Future<GnosisKycStatus> pollKyc();
-  Future<SafeDeployment?> safeDeployment();
-  Future<SafeDeployment> requestSafeDeployment();
-  Future<SafeDeployment> pollSafeDeployment(String requestId);
-  Future<void> validateSafeIntegrity(SafeDeployment deployment);
-  Future<GnosisPaymentCard> issueVirtualCard();
-  Future<PhysicalCardOrder> orderPhysicalCard();
-  Future<PhysicalCardOrder> payAndShipPhysicalCard(String orderId);
+  Future<GnosisExternalFlow> supportFlow();
+
+  Future<List<SourceOfFundsQuestion>> sourceOfFundsQuestions();
+  Future<void> submitSourceOfFunds(List<SourceOfFundsAnswer> answers);
+
+  Future<PhoneOtpChallenge> requestPhoneOtp({required String phoneNumber});
+  Future<PhoneOtpChallenge> resendPhoneOtp();
+  Future<void> verifyPhoneOtp({required String code});
+  Future<void> clearPhoneOtp();
+
+  Future<SafeDeployment?> safeDeployment({required String ownerAddress});
+  Future<SafeDeployment> requestSafeDeployment({required String ownerAddress});
+  Future<SafeDeployment> pollSafeDeployment({required String ownerAddress});
+  Future<SafeConfiguration> safeConfiguration({required String ownerAddress});
+  Future<void> validateSafeIntegrity(SafeConfiguration configuration);
+  Future<void> resetSafe({required String ownerAddress});
+
+  Future<List<GnosisCardProduct>> cardProducts();
+  Future<void> selectCardProduct({required String productId});
+  Future<void> clearCardProductSelection();
+  Future<GnosisPaymentCard> issueVirtualCard({required String productId});
+
+  Future<PhysicalCardOrder> createPhysicalCardOrder({
+    required String productId,
+    required ShippingAddress shippingAddress,
+  });
+  Future<void> markPhysicalCardOrderReviewed({required String orderId});
+  Future<CardOrderPaymentQuote> physicalCardPaymentQuote({
+    required String orderId,
+  });
+  Future<PhysicalCardOrder> attachPhysicalCardPayment({
+    required String orderId,
+    required CardOrderPaymentReceipt receipt,
+  });
+  Future<PhysicalCardOrder> confirmPhysicalCardPayment({
+    required String orderId,
+  });
+  Future<CardProvisioningHandle> createPhysicalCard({required String orderId});
+  Future<void> completePhysicalCardPin({
+    required String orderId,
+    required String cardId,
+  });
+  Future<PhysicalCardOrder> cancelPhysicalCardOrder({required String orderId});
+
   Future<GnosisCardDashboard> dashboard();
   Future<GnosisCardDashboard> pollDelayedOperations();
   Future<GnosisCardDashboard> setFrozen({
@@ -76,16 +120,20 @@ abstract interface class GnosisPayRepository {
   });
 }
 
-/// Owns the sensitive surface. Values never pass through dashboard models.
+abstract interface class ExternalFlowLauncher {
+  Future<void> launch(GnosisExternalFlow flow);
+}
+
+abstract interface class CardOrderPaymentGateway {
+  Future<CardOrderPaymentReceipt> pay(CardOrderPaymentQuote quote);
+}
+
+/// Owns the sensitive surface. Secret values never pass through domain state.
 abstract interface class CardSecureElementGateway {
   Future<void> showCardDetails(BuildContext context, {required String cardId});
   Future<void> showPin(BuildContext context, {required String cardId});
-}
-
-class GnosisCardUnavailable implements Exception {
-  const GnosisCardUnavailable(this.message);
-  final String message;
-
-  @override
-  String toString() => message;
+  Future<void> provisionInitialPin(
+    BuildContext context, {
+    required CardProvisioningHandle handle,
+  });
 }
