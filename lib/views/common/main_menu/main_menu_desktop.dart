@@ -13,6 +13,7 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/widgets/gleec_dex_logo.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_desktop_item.dart';
 
@@ -107,18 +108,19 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                 ),
                               ),
                             ),
-                            Tooltip(
-                              message: walletOnlyTooltipMessage(),
-                              child: DesktopMenuDesktopItem(
-                                key: const Key('main-menu-card'),
-                                enabled: currentWallet?.isHW != true,
-                                menu: MainMenuValue.card,
-                                onTap: onTapItem,
-                                isSelected: _checkSelectedItem(
-                                  MainMenuValue.card,
+                            if (isCardFeatureEnabled)
+                              Tooltip(
+                                message: walletOnlyTooltipMessage(),
+                                child: DesktopMenuDesktopItem(
+                                  key: const Key('main-menu-card'),
+                                  enabled: currentWallet?.isHW != true,
+                                  menu: MainMenuValue.card,
+                                  onTap: onTapItem,
+                                  isSelected: _checkSelectedItem(
+                                    MainMenuValue.card,
+                                  ),
                                 ),
                               ),
-                            ),
                             Tooltip(
                               message: walletOnlyTooltipMessage(),
                               child: DesktopMenuDesktopItem(
