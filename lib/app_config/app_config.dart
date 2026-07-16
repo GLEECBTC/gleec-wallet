@@ -200,6 +200,11 @@ List<String> get enabledByDefaultCoins => [
   'GLEEC', // GLEEC ecosystem coin
   'KMD', // Komodo ecosystem coin
   'BTC-segwit', // Default Fiat Ramps coin
+  'ETH',
+  'TRX',
+  'USDT-ERC20',
+  'USDT-TRC20',
+  'USDC-ERC20',
 ];
 
 const String logsDbName = 'logs';
