@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
 
@@ -44,10 +43,11 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   bool _hasFocus = false;
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
     return UIBaseButton(
       isEnabled: widget.onPressed != null,
       width: widget.width,
-      height: widget.height,
+      height: widget.height + ((textScale - 1).clamp(0.0, 1.0).toDouble() * 32),
       border: widget.border,
       child: ElevatedButton(
         focusNode: widget.focusNode,
@@ -56,7 +56,7 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
             _hasFocus = value;
           });
         },
-        onPressed: widget.onPressed ?? () {},
+        onPressed: widget.onPressed,
         key: widget.buttonKey,
         style: ElevatedButton.styleFrom(
           shape: _shape,
@@ -90,8 +90,8 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   Color get _foregroundColor {
     return ThemeData.estimateBrightnessForColor(_backgroundColor) ==
             Brightness.dark
-        ? theme.global.light.colorScheme.onSurface
-        : Theme.of(context).colorScheme.secondary;
+        ? Colors.white
+        : Colors.black;
   }
 
   /// Returns a text style with the appropriate foreground color based on the
@@ -134,7 +134,7 @@ class _ButtonContent extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (prefix != null) prefix!,
+        if (prefix != null) ...[prefix!, const SizedBox(width: 8)],
         Flexible(
           child: Text(
             text,
