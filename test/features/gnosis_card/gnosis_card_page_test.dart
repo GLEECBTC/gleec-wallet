@@ -20,6 +20,9 @@ import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 import 'gnosis_card_test_helpers.dart';
 
+part 'gnosis_card_page_privacy_test.dart';
+part 'gnosis_card_page_test_support.dart';
+
 const _mockConfig = GnosisCardConfig(
   mode: GnosisCardMode.mock,
   scenario: GnosisCardScenario.happyPath,
@@ -62,6 +65,53 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    'automatic entry requests one concise approval and respects Not now',
+    (tester) async {
+      _setViewSize(tester, const Size(390, 844));
+      final launcher = RecordingExternalFlowLauncher();
+      final payment = GnosisTestPaymentGateway();
+      final coordinator = _coordinator(
+        DeterministicGnosisPayRepository(
+          scenario: GnosisCardScenario.happyPath,
+        ),
+        GnosisTestSigner(),
+        launcher,
+        payment,
+      );
+      final dependencies = GnosisCardDependencies.forAdapters(
+        config: _mockConfig,
+        secureElement: GnosisTestSecureElementGateway(),
+        externalFlowLauncher: launcher,
+        paymentGateway: payment,
+        coordinator: coordinator,
+      );
+      final bloc = GnosisCardBloc(
+        config: _mockConfig,
+        coordinator: coordinator,
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_pageApp(bloc, dependencies));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Securely connect your wallet'), findsOneWidget);
+      expect(find.text('Activate GNO'), findsNothing);
+      expect(find.text('Sign in with wallet'), findsNothing);
+      expect(find.text('Initialize card account'), findsNothing);
+
+      await tester.tap(find.text('Not now'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Securely connect your wallet'), findsNothing);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Securely connect your wallet'), findsNothing);
+    },
+  );
 
   testWidgets('signup validates email, accepts terms, and launches documents', (
     tester,
@@ -175,11 +225,12 @@ void main() {
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
     expect(bloc.state.snapshot?.kycStatus, GnosisKycStatus.processing);
 
-    await tester.tap(find.byKey(const Key('gnosis-kyc-refresh')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 15));
+    await tester.pump(const Duration(milliseconds: 100));
     expect(bloc.state.snapshot?.stage, GnosisOnboardingStage.sourceOfFunds);
   });
 
@@ -225,11 +276,9 @@ void main() {
     expect(editCalls, 1);
   });
 
-  testWidgets('Safe state exposes polling, reset, and live status semantics', (
+  testWidgets('Safe state exposes automatic progress and live semantics', (
     tester,
   ) async {
-    var polls = 0;
-    var resets = 0;
     final progress = _safeProgress(
       deployment: SafeDeployment(
         requestId: 'deployment',
@@ -244,9 +293,8 @@ void main() {
         GnosisSafeSetupStep(
           progress: progress,
           busy: false,
-          onStart: () {},
-          onPoll: () => polls += 1,
-          onReset: () => resets += 1,
+          onRetry: () {},
+          onSupport: () {},
         ),
       ),
     );
@@ -259,13 +307,11 @@ void main() {
       ),
       findsWidgets,
     );
-    await tester.tap(find.byKey(const Key('gnosis-safe-primary')));
-    await tester.tap(find.byKey(const Key('gnosis-safe-reset')));
-    expect(polls, 1);
-    expect(resets, 1);
+    expect(find.byKey(const Key('gnosis-safe-primary')), findsNothing);
+    expect(find.byKey(const Key('gnosis-safe-reset')), findsNothing);
   });
 
-  testWidgets('card choices and simulated payment expose explicit actions', (
+  testWidgets('card choice and payment expose one explicit authorization', (
     tester,
   ) async {
     String? selectedProduct;
@@ -298,7 +344,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('Demo payment only'), findsOneWidget);
+    expect(find.text('Authorize payment'), findsOneWidget);
     await tester.tap(find.byKey(const Key('gnosis-payment-submit')));
     expect(paymentCalls, 1);
 
@@ -316,8 +362,9 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.byKey(const Key('gnosis-payment-submit')));
-    expect(confirmationCalls, 1);
+    expect(find.byKey(const Key('gnosis-payment-submit')), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(confirmationCalls, 0);
   });
 
   testWidgets('cancelled secure handoff preserves state and can be resumed', (
@@ -360,7 +407,9 @@ void main() {
       paymentGateway: GnosisTestPaymentGateway(),
     );
 
-    await tester.pumpWidget(_pageApp(bloc, dependencies));
+    await tester.pumpWidget(
+      _pageApp(bloc, dependencies, manageLifecycle: false),
+    );
     await tester.pump();
     await tester.tap(find.byKey(const Key('gnosis-pin-open')));
     await tester.pump();
@@ -380,289 +429,45 @@ void main() {
   testWidgets('onboarding adapts to width, large text, and keyboard focus', (
     tester,
   ) async {
-    for (final size in <Size>[const Size(390, 844), const Size(1280, 900)]) {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      await tester.pumpWidget(
-        _stepApp(
-          GnosisOnboardingFrame(
-            milestoneIndex: 1,
-            child: GnosisPhoneNumberStep(busy: false, onSubmit: (_) {}),
+    for (final size in <Size>[
+      const Size(375, 812),
+      const Size(768, 1024),
+      const Size(1024, 900),
+      const Size(1440, 900),
+    ]) {
+      for (final scale in <double>[1, 1.4, 2]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        await tester.pumpWidget(
+          _stepApp(
+            GnosisOnboardingFrame(
+              milestoneIndex: 1,
+              child: GnosisPhoneNumberStep(
+                busy: false,
+                verifiedCallingCode: '+49',
+                onSubmit: (_) {},
+              ),
+            ),
+            textScaler: TextScaler.linear(scale),
+            disableAnimations: true,
           ),
-          textScaler: const TextScaler.linear(2),
-          disableAnimations: true,
-        ),
-      );
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        );
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
 
-      expect(FocusManager.instance.primaryFocus, isNotNull);
-      expect(
-        find.byWidgetPredicate(
-          (widget) => widget is Semantics && widget.properties.header == true,
-        ),
-        findsWidgets,
-      );
-      expect(tester.takeException(), isNull);
+        expect(FocusManager.instance.primaryFocus, isNotNull);
+        expect(
+          find.byWidgetPredicate(
+            (widget) => widget is Semantics && widget.properties.header == true,
+          ),
+          findsWidgets,
+        );
+        expect(tester.takeException(), isNull);
+      }
     }
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
   });
 
-  testWidgets('secure detail placeholder remains screenshot-sensitive', (
-    tester,
-  ) async {
-    _setViewSize(tester, const Size(1280, 900));
-    final sensitivity = ScreenshotSensitivityController();
-    addTearDown(sensitivity.dispose);
-    final bloc = GnosisCardBloc(
-      config: _mockConfig,
-      coordinator: null,
-      initialState: GnosisCardState(
-        status: GnosisCardLoadStatus.ready,
-        snapshot: gnosisCardPreviewSnapshot(),
-      ),
-    );
-    addTearDown(bloc.close);
-    final dependencies = GnosisCardDependencies.forAdapters(
-      config: _mockConfig,
-      secureElement: const SyntheticSecureElementGateway(),
-    );
-
-    await tester.pumpWidget(
-      _pageApp(bloc, dependencies, sensitivity: sensitivity),
-    );
-    await tester.pump();
-    await tester.tap(find.text('Details'));
-    await tester.pump();
-
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(sensitivity.isSensitive, isTrue);
-    expect(
-      find.text(
-        'This opens securely outside Gleec Wallet. Return here when you are finished.',
-      ),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Close'));
-    await tester.pumpAndSettle();
-    expect(sensitivity.isSensitive, isFalse);
-  });
+  _registerGnosisCardPrivacyTest();
 }
-
-GnosisCardCoordinator _coordinator(
-  DeterministicGnosisPayRepository repository,
-  GnosisTestSigner signer,
-  RecordingExternalFlowLauncher launcher,
-  GnosisTestPaymentGateway payment,
-) => GnosisCardCoordinator(
-  repository: repository,
-  signer: signer,
-  externalFlowLauncher: launcher,
-  paymentGateway: payment,
-);
-
-Widget _pageApp(
-  GnosisCardBloc bloc,
-  GnosisCardDependencies dependencies, {
-  ScreenshotSensitivityController? sensitivity,
-}) {
-  Widget child = _localizedApp(
-    RepositoryProvider.value(
-      value: dependencies,
-      child: BlocProvider.value(
-        value: bloc,
-        child: const Scaffold(body: GnosisCardPage()),
-      ),
-    ),
-  );
-  if (sensitivity != null) {
-    child = ScreenshotSensitivity(controller: sensitivity, child: child);
-  }
-  return child;
-}
-
-Widget _stepApp(
-  Widget child, {
-  TextScaler textScaler = TextScaler.noScaling,
-  bool disableAnimations = false,
-}) => _localizedApp(
-  Scaffold(body: child),
-  textScaler: textScaler,
-  disableAnimations: disableAnimations,
-);
-
-Widget _localizedApp(
-  Widget home, {
-  TextScaler textScaler = TextScaler.noScaling,
-  bool disableAnimations = false,
-}) => EasyLocalization(
-  supportedLocales: const [Locale('en')],
-  fallbackLocale: const Locale('en'),
-  useOnlyLangCode: true,
-  path: '$assetsPath/translations',
-  child: Builder(
-    builder: (context) => MaterialApp(
-      locale: context.locale,
-      localizationsDelegates: context.localizationDelegates,
-      supportedLocales: context.supportedLocales,
-      theme: theme.global.light,
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler: textScaler,
-          disableAnimations: disableAnimations,
-        ),
-        child: child!,
-      ),
-      home: home,
-    ),
-  ),
-);
-
-void _setViewSize(WidgetTester tester, Size size) {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-}
-
-GnosisOnboardingProgress _safeProgress({SafeDeployment? deployment}) =>
-    GnosisOnboardingProgress(
-      isAuthenticated: true,
-      isRegistered: true,
-      email: 'cardholder@example.test',
-      countryCode: 'DE',
-      terms: _acceptedTerms,
-      kycStatus: GnosisKycStatus.approved,
-      isSourceOfFundsAnswered: true,
-      phoneNumber: '+4915123456789',
-      isPhoneValidated: true,
-      phoneChallenge: null,
-      safeDeployment: deployment,
-      safeConfiguration: null,
-      isSafeRegistered: false,
-      selectedProduct: null,
-      physicalOrder: null,
-      isPhysicalOrderReviewed: false,
-      paymentReceipt: null,
-      provisioningHandle: null,
-      isPinProvisioned: false,
-      cards: const [],
-    );
-
-GnosisOnboardingProgress _physicalProgress({
-  required PhysicalCardOrderStatus orderStatus,
-  CardOrderPaymentReceipt? receipt,
-  CardProvisioningHandle? provisioningHandle,
-  List<GnosisPaymentCard> cards = const [],
-}) => GnosisOnboardingProgress(
-  isAuthenticated: true,
-  isRegistered: true,
-  email: 'cardholder@example.test',
-  countryCode: 'DE',
-  terms: _acceptedTerms,
-  kycStatus: GnosisKycStatus.approved,
-  isSourceOfFundsAnswered: true,
-  phoneNumber: '+4915123456789',
-  isPhoneValidated: true,
-  phoneChallenge: null,
-  safeDeployment: _safeDeployment,
-  safeConfiguration: _safeConfiguration,
-  isSafeRegistered: true,
-  selectedProduct: _physicalProduct,
-  physicalOrder: _physicalOrder(orderStatus),
-  isPhysicalOrderReviewed: true,
-  paymentReceipt: receipt,
-  provisioningHandle: provisioningHandle,
-  isPinProvisioned: false,
-  cards: cards,
-);
-
-PhysicalCardOrder _physicalOrder(PhysicalCardOrderStatus status) =>
-    PhysicalCardOrder(
-      id: 'physical-order',
-      createdAt: DateTime.utc(2026, 7, 14, 12),
-      status: status,
-      totalAmountMinor: 999,
-      totalDiscountMinor: 0,
-      currency: 'EUR',
-      embossedName: 'Test Cardholder',
-      shippingAddress: const ShippingAddress(
-        recipientName: 'Test Cardholder',
-        address1: '12 Test Street',
-        city: 'Berlin',
-        postalCode: '10115',
-        country: 'DE',
-      ),
-      transactionHash: '0xtest-synthetic-receipt',
-    );
-
-const _owner = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-
-const _acceptedTerms = [
-  GnosisTerm(
-    id: 'terms',
-    title: 'Card agreement',
-    version: '2026-07',
-    documentUrl: 'https://example.test/card-agreement',
-    isAccepted: true,
-  ),
-];
-
-const _virtualProduct = GnosisCardProduct(
-  id: 'virtual',
-  kind: GnosisCardKind.virtual,
-  title: 'Virtual card',
-  description: 'Test virtual product',
-  feeMinor: 0,
-  currency: 'EUR',
-  requiresShipping: false,
-  requiresPin: false,
-);
-
-const _physicalProduct = GnosisCardProduct(
-  id: 'physical',
-  kind: GnosisCardKind.physical,
-  title: 'Physical card',
-  description: 'Test physical product',
-  feeMinor: 999,
-  currency: 'EUR',
-  requiresShipping: true,
-  requiresPin: true,
-);
-
-final _safeDeployment = SafeDeployment(
-  requestId: 'deployment',
-  ownerAddress: _owner,
-  status: SafeDeploymentStatus.ok,
-  updatedAt: DateTime.utc(2026, 7, 14, 12),
-);
-
-const _safeConfiguration = SafeConfiguration(
-  ownerAddress: _owner,
-  isDeployed: true,
-  integrity: SafeAccountIntegrity.ok,
-  safeAddress: '0x1111111111111111111111111111111111111111',
-  delayModule: '0x2222222222222222222222222222222222222222',
-  tokenSymbol: 'EURe',
-  fiatSymbol: 'EUR',
-);
-
-const _paymentQuote = CardOrderPaymentQuote(
-  orderId: 'physical-order',
-  amountMinor: 999,
-  currency: 'EUR',
-  assetSymbol: 'EURe',
-  assetContract: '0x3333333333333333333333333333333333333333',
-  recipient: '0x4444444444444444444444444444444444444444',
-  isSimulated: true,
-);
-
-final _paymentReceipt = CardOrderPaymentReceipt(
-  orderId: 'physical-order',
-  transactionHash: '0xtest-synthetic-receipt',
-  amountMinor: 999,
-  currency: 'EUR',
-  paidAt: DateTime.utc(2026, 7, 14, 12),
-  isSimulated: true,
-);

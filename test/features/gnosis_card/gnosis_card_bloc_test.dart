@@ -58,17 +58,24 @@ void main() {
       );
       addTearDown(bloc.close);
 
+      final approvalState = bloc.stream.firstWhere(
+        (state) => state.intervention == GnosisCardIntervention.walletApproval,
+      );
+      bloc.add(const GnosisSignInRequested());
+      final approval = await approvalState;
+      final approvalId = approval.snapshot!.siweChallenge!.approvalId;
+
       final busyState = bloc.stream.firstWhere(
         (state) => state.isBusy(GnosisCardAction.signIn),
       );
       bloc
-        ..add(const GnosisSignInRequested())
-        ..add(const GnosisSignInRequested());
+        ..add(GnosisSiweApprovalRequested(approvalId))
+        ..add(GnosisSiweApprovalRequested(approvalId));
 
       final busy = await busyState;
       await signer.personalSignatureStarted.future;
       expect(busy.status, GnosisCardLoadStatus.ready);
-      expect(busy.snapshot, same(initialSnapshot));
+      expect(busy.snapshot?.siweChallenge?.approvalId, approvalId);
       expect(signer.personalSignatureCalls, 1);
 
       final completed = bloc.stream.firstWhere(
@@ -100,10 +107,18 @@ void main() {
     );
     addTearDown(bloc.close);
 
+    final approvalState = bloc.stream.firstWhere(
+      (state) => state.intervention == GnosisCardIntervention.walletApproval,
+    );
+    bloc.add(const GnosisSignInRequested());
+    final approval = await approvalState;
+
     final failed = bloc.stream.firstWhere(
       (state) => state.failure?.code == GnosisCardFailureCode.sessionExpired,
     );
-    bloc.add(const GnosisSignInRequested());
+    bloc.add(
+      GnosisSiweApprovalRequested(approval.snapshot!.siweChallenge!.approvalId),
+    );
 
     final state = await failed;
     expect(state.status, GnosisCardLoadStatus.ready);
@@ -199,6 +214,68 @@ void main() {
     expect(state.failure, isNull);
     expect(repository.createPhysicalOrderCalls, 1);
     expect(state.snapshot?.progress.physicalOrder, isNotNull);
+  });
+
+  test('declined approval stays paused until an explicit resume', () async {
+    final coordinator = _coordinator(
+      DeterministicGnosisPayRepository(scenario: GnosisCardScenario.happyPath),
+      GnosisTestSigner(),
+    );
+    final bloc = GnosisCardBloc(config: _mockConfig, coordinator: coordinator);
+    addTearDown(bloc.close);
+
+    final approval = bloc.stream.firstWhere(
+      (state) => state.intervention == GnosisCardIntervention.walletApproval,
+    );
+    bloc.add(const GnosisCardEntered());
+    await approval;
+
+    final declined = bloc.stream.firstWhere(
+      (state) =>
+          state.automationPhase == GnosisCardAutomationPhase.paused &&
+          state.intervention == null,
+    );
+    final approvalId = bloc.state.snapshot!.siweChallenge!.approvalId;
+    bloc.add(GnosisSiweApprovalDeclined(approvalId));
+    expect((await declined).snapshot?.siweChallenge, isNull);
+
+    bloc.add(const GnosisCardResumed());
+    await Future<void>.delayed(Duration.zero);
+    expect(bloc.state.automationPhase, GnosisCardAutomationPhase.paused);
+    expect(bloc.state.intervention, isNull);
+
+    final explicitApproval = bloc.stream.firstWhere(
+      (state) => state.intervention == GnosisCardIntervention.walletApproval,
+    );
+    bloc.add(const GnosisSignInRequested());
+    expect((await explicitApproval).snapshot?.siweChallenge, isNotNull);
+  });
+
+  test('wallet identity change clears prior-wallet UI immediately', () async {
+    final coordinator = _coordinator(
+      DeterministicGnosisPayRepository(scenario: GnosisCardScenario.happyPath),
+      GnosisTestSigner(),
+    );
+    final signedIn = await coordinator.signIn();
+    final bloc = GnosisCardBloc(
+      config: _mockConfig,
+      coordinator: coordinator,
+      initialState: GnosisCardState(
+        status: GnosisCardLoadStatus.ready,
+        snapshot: signedIn,
+        isForeground: true,
+      ),
+    );
+    addTearDown(bloc.close);
+
+    final cleared = bloc.stream.firstWhere(
+      (state) => state.activeWalletGeneration == 1 && state.snapshot == null,
+    );
+    bloc.add(const GnosisWalletIdentityChanged('wallet-b'));
+
+    final state = await cleared;
+    expect(state.snapshot, isNull);
+    expect(coordinator.snapshot, const GnosisCardSnapshot.initial());
   });
 }
 
