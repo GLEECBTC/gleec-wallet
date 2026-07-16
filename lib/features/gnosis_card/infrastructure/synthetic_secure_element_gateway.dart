@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/features/gnosis_card/domain/gnosis_card_models.dart';
@@ -27,24 +29,26 @@ class SyntheticSecureElementGateway implements CardSecureElementGateway {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) => ScreenshotSensitive(
-        child: AlertDialog(
-          icon: const Icon(Icons.open_in_new),
-          title: Text(LocaleKeys.gnosisCard_pin_title.tr()),
-          content: Semantics(
-            container: true,
-            liveRegion: true,
-            child: Text(LocaleKeys.gnosisCard_pin_body.tr()),
+        child: _DismissOnBackground(
+          child: AlertDialog(
+            icon: const Icon(Icons.open_in_new),
+            title: Text(LocaleKeys.gnosisCard_pin_title.tr()),
+            content: Semantics(
+              container: true,
+              liveRegion: true,
+              child: Text(LocaleKeys.gnosisCard_pin_body.tr()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(LocaleKeys.gnosisCard_cancel.tr()),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(LocaleKeys.gnosisCard_pin_returned.tr()),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(LocaleKeys.gnosisCard_cancel.tr()),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(LocaleKeys.gnosisCard_pin_returned.tr()),
-            ),
-          ],
         ),
       ),
     );
@@ -84,21 +88,62 @@ class SyntheticSecureElementGateway implements CardSecureElementGateway {
     context: context,
     barrierDismissible: true,
     builder: (context) => ScreenshotSensitive(
-      child: AlertDialog(
-        icon: const Icon(Icons.open_in_new),
-        title: Text(title),
-        content: Semantics(
-          container: true,
-          liveRegion: true,
-          child: Text(body),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(LocaleKeys.close.tr()),
+      child: _DismissOnBackground(
+        child: AlertDialog(
+          icon: const Icon(Icons.open_in_new),
+          title: Text(title),
+          content: Semantics(
+            container: true,
+            liveRegion: true,
+            child: Text(body),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleKeys.close.tr()),
+            ),
+          ],
+        ),
       ),
     ),
   );
+}
+
+class _DismissOnBackground extends StatefulWidget {
+  const _DismissOnBackground({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DismissOnBackground> createState() => _DismissOnBackgroundState();
+}
+
+class _DismissOnBackgroundState extends State<_DismissOnBackground>
+    with WidgetsBindingObserver {
+  Timer? _expiryTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _expiryTimer = Timer(const Duration(minutes: 1), () {
+      if (mounted) Navigator.of(context).maybePop();
+    });
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed || !mounted) return;
+    Navigator.of(context).maybePop();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

@@ -3,41 +3,52 @@ import 'package:flutter/material.dart';
 import 'package:web_dex/features/gnosis_card/domain/gnosis_card_models.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 
-String gnosisLocalizedFailureMessage(GnosisCardFailure failure) =>
-    switch (failure.code) {
-      GnosisCardFailureCode.offline =>
-        LocaleKeys.gnosisCard_recovery_offline.tr(),
-      GnosisCardFailureCode.sessionExpired =>
-        LocaleKeys.gnosisCard_recovery_expiredSession.tr(),
-      GnosisCardFailureCode.invalidInput =>
-        LocaleKeys.gnosisCard_recovery_invalidInput.tr(),
-      GnosisCardFailureCode.invalidOtp =>
-        LocaleKeys.gnosisCard_phone_codeInvalid.tr(),
-      GnosisCardFailureCode.resendCooldown =>
-        LocaleKeys.gnosisCard_recovery_resendCooldown.tr(),
-      GnosisCardFailureCode.kycResubmissionRequired =>
-        LocaleKeys.gnosisCard_kyc_resubmissionRequestedBody.tr(),
-      GnosisCardFailureCode.kycRejected =>
-        LocaleKeys.gnosisCard_kyc_rejectedBody.tr(),
-      GnosisCardFailureCode.kycRequiresAction =>
-        LocaleKeys.gnosisCard_kyc_requiresActionBody.tr(),
-      GnosisCardFailureCode.deploymentFailed =>
-        LocaleKeys.gnosisCard_recovery_deploymentFailure.tr(),
-      GnosisCardFailureCode.deploymentTimedOut =>
-        LocaleKeys.gnosisCard_safe_timeout.tr(),
-      GnosisCardFailureCode.safeIntegrityFailed =>
-        LocaleKeys.gnosisCard_safe_invalidIntegrity.tr(),
-      GnosisCardFailureCode.paymentFailed =>
-        LocaleKeys.gnosisCard_recovery_paymentFailure.tr(),
-      GnosisCardFailureCode.issuanceFailed =>
-        LocaleKeys.gnosisCard_recovery_issuanceFailure.tr(),
-      GnosisCardFailureCode.invalidTransition =>
-        LocaleKeys.gnosisCard_recovery_stateChanged.tr(),
-      GnosisCardFailureCode.notFound =>
-        LocaleKeys.gnosisCard_recovery_notFound.tr(),
-      GnosisCardFailureCode.unavailable =>
-        LocaleKeys.gnosisCard_recovery_unavailable.tr(),
-    };
+part 'gnosis_onboarding_milestones.dart';
+
+String gnosisLocalizedFailureMessage(
+  GnosisCardFailure failure,
+) => switch (failure.code) {
+  GnosisCardFailureCode.offline => LocaleKeys.gnosisCard_recovery_offline.tr(),
+  GnosisCardFailureCode.rateLimited => 'gnosisCard.recovery.rateLimited'.tr(),
+  GnosisCardFailureCode.serviceUnavailable =>
+    'gnosisCard.recovery.serviceUnavailable'.tr(),
+  GnosisCardFailureCode.walletLocked => 'gnosisCard.recovery.walletLocked'.tr(),
+  GnosisCardFailureCode.wrongChain => 'gnosisCard.recovery.wrongChain'.tr(),
+  GnosisCardFailureCode.activationFailed =>
+    'gnosisCard.recovery.activationFailed'.tr(),
+  GnosisCardFailureCode.migrationFailed =>
+    'gnosisCard.recovery.migrationFailed'.tr(),
+  GnosisCardFailureCode.sessionExpired =>
+    LocaleKeys.gnosisCard_recovery_expiredSession.tr(),
+  GnosisCardFailureCode.invalidInput =>
+    LocaleKeys.gnosisCard_recovery_invalidInput.tr(),
+  GnosisCardFailureCode.invalidOtp =>
+    LocaleKeys.gnosisCard_phone_codeInvalid.tr(),
+  GnosisCardFailureCode.resendCooldown =>
+    LocaleKeys.gnosisCard_recovery_resendCooldown.tr(),
+  GnosisCardFailureCode.kycResubmissionRequired =>
+    LocaleKeys.gnosisCard_kyc_resubmissionRequestedBody.tr(),
+  GnosisCardFailureCode.kycRejected =>
+    LocaleKeys.gnosisCard_kyc_rejectedBody.tr(),
+  GnosisCardFailureCode.kycRequiresAction =>
+    LocaleKeys.gnosisCard_kyc_requiresActionBody.tr(),
+  GnosisCardFailureCode.deploymentFailed =>
+    LocaleKeys.gnosisCard_recovery_deploymentFailure.tr(),
+  GnosisCardFailureCode.deploymentTimedOut =>
+    LocaleKeys.gnosisCard_safe_timeout.tr(),
+  GnosisCardFailureCode.safeIntegrityFailed =>
+    LocaleKeys.gnosisCard_safe_invalidIntegrity.tr(),
+  GnosisCardFailureCode.paymentFailed =>
+    LocaleKeys.gnosisCard_recovery_paymentFailure.tr(),
+  GnosisCardFailureCode.issuanceFailed =>
+    LocaleKeys.gnosisCard_recovery_issuanceFailure.tr(),
+  GnosisCardFailureCode.invalidTransition =>
+    LocaleKeys.gnosisCard_recovery_stateChanged.tr(),
+  GnosisCardFailureCode.notFound =>
+    LocaleKeys.gnosisCard_recovery_notFound.tr(),
+  GnosisCardFailureCode.unavailable =>
+    LocaleKeys.gnosisCard_recovery_unavailable.tr(),
+};
 
 class GnosisOnboardingFrame extends StatelessWidget {
   const GnosisOnboardingFrame({
@@ -81,6 +92,14 @@ class GnosisOnboardingFrame extends StatelessWidget {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        LocaleKeys.gnosisCard_title.tr(),
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     _CompactMilestones(current: milestoneIndex),
                     const SizedBox(height: 20),
                     child,
@@ -142,7 +161,12 @@ class GnosisStepHeader extends StatelessWidget {
           child: Text(title, style: theme.textTheme.headlineSmall),
         ),
         const SizedBox(height: 12),
-        Text(body, style: theme.textTheme.bodyLarge),
+        Text(
+          body,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: _gnosisReadableText(context),
+          ),
+        ),
       ],
     );
   }
@@ -166,13 +190,21 @@ class GnosisStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final background = isError
-        ? scheme.errorContainer
-        : scheme.secondaryContainer;
+        ? dark
+              ? const Color(0xFF421525)
+              : const Color(0xFFFFE5EE)
+        : dark
+        ? const Color(0xFF302640)
+        : const Color(0xFFF1E9FF);
     final foreground = isError
-        ? scheme.onErrorContainer
-        : scheme.onSecondaryContainer;
+        ? dark
+              ? const Color(0xFFFFD9E4)
+              : const Color(0xFF7A1238)
+        : dark
+        ? const Color(0xFFF7F1FF)
+        : const Color(0xFF321A4D);
     return Semantics(
       liveRegion: isLiveRegion,
       container: true,
@@ -231,6 +263,28 @@ class GnosisServerErrorBanner extends StatelessWidget {
   );
 }
 
+class GnosisProgressIndicator extends StatelessWidget {
+  const GnosisProgressIndicator({this.label, super.key});
+
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    return Semantics(
+      label: label ?? LocaleKeys.gnosisCard_loading.tr(),
+      liveRegion: true,
+      child: Center(
+        child: ExcludeSemantics(
+          child: reducedMotion
+              ? const Icon(Icons.hourglass_top_outlined, size: 32)
+              : const CircularProgressIndicator(),
+        ),
+      ),
+    );
+  }
+}
+
 class GnosisExternalHandoffCard extends StatelessWidget {
   const GnosisExternalHandoffCard({
     required this.title,
@@ -251,7 +305,7 @@ class GnosisExternalHandoffCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      border: Border.all(color: _gnosisBorderColor(context)),
       borderRadius: BorderRadius.circular(16),
     ),
     child: Column(
@@ -332,140 +386,3 @@ const _milestoneKeys = [
   LocaleKeys.gnosisCard_milestones_cardAccount,
   LocaleKeys.gnosisCard_milestones_card,
 ];
-
-class _MilestoneRail extends StatelessWidget {
-  const _MilestoneRail({required this.current});
-
-  final int current;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: LocaleKeys.gnosisCard_milestones_label.tr(),
-    explicitChildNodes: true,
-    child: Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              LocaleKeys.gnosisCard_title.tr(),
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 24),
-            for (var index = 0; index < _milestoneKeys.length; index += 1)
-              _MilestoneTile(
-                label: _milestoneKeys[index].tr(),
-                index: index,
-                current: current,
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _CompactMilestones extends StatelessWidget {
-  const _CompactMilestones({required this.current});
-
-  final int current;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: LocaleKeys.gnosisCard_milestones_label.tr(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            for (var index = 0; index < _milestoneKeys.length; index += 1) ...[
-              Expanded(
-                child: Container(
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: index <= current
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              if (index < _milestoneKeys.length - 1) const SizedBox(width: 6),
-            ],
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _milestoneKeys[current.clamp(0, _milestoneKeys.length - 1)].tr(),
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
-      ],
-    ),
-  );
-}
-
-class _MilestoneTile extends StatelessWidget {
-  const _MilestoneTile({
-    required this.label,
-    required this.index,
-    required this.current,
-  });
-
-  final String label;
-  final int index;
-  final int current;
-
-  @override
-  Widget build(BuildContext context) {
-    final complete = index < current;
-    final active = index == current;
-    final status = complete
-        ? LocaleKeys.gnosisCard_milestones_complete.tr()
-        : active
-        ? LocaleKeys.gnosisCard_milestones_current.tr()
-        : LocaleKeys.gnosisCard_milestones_upcoming.tr();
-    final color = active || complete
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.outline;
-    return Semantics(
-      label: '$label, $status',
-      selected: active,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 15,
-              backgroundColor: active || complete
-                  ? color
-                  : Theme.of(context).colorScheme.surfaceContainerHighest,
-              foregroundColor: active || complete
-                  ? Theme.of(context).colorScheme.onPrimary
-                  : color,
-              child: complete
-                  ? const Icon(Icons.check, size: 18)
-                  : Icon(
-                      active
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked,
-                      size: 18,
-                    ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: color,
-                  fontWeight: active ? FontWeight.w700 : null,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

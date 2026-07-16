@@ -4,6 +4,7 @@ import 'package:web_dex/features/gnosis_card/domain/gnosis_card_models.dart';
 enum GnosisCardScenario {
   happyPath,
   offline,
+  offlineDashboard,
   expiredSession,
   invalidOtp,
   kycResubmission,
@@ -13,6 +14,25 @@ enum GnosisCardScenario {
   safeIntegrityFailure,
   paymentFailure,
   issuanceFailure,
+  lockedWallet,
+  wrongChain,
+  activationFailure,
+  nonceReplay,
+  walletSwitch,
+  rateLimited,
+  serviceFailure,
+  slowDeployment,
+  migrationPending,
+  migrationFailed,
+  emptyActivity,
+  cardOrdered,
+  cardShipped,
+  cardActivatable,
+  cardActive,
+  cardFrozen,
+  cardLost,
+  cardStolen,
+  cardVoided,
 
   /// Source compatibility for direct test construction. Environment parsing
   /// canonicalizes the former name to [kycResubmission].

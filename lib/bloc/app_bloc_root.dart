@@ -88,15 +88,7 @@ class _AppBlocRootState extends State<AppBlocRoot> {
   StoredSettings get storedPrefs => widget.storedPrefs;
   KomodoDefiSdk get komodoDefiSdk => widget.komodoDefiSdk;
 
-  late final GnosisCardDependencies _gnosisCardDependencies;
-
-  @override
-  void initState() {
-    super.initState();
-    _gnosisCardDependencies = GnosisCardDependencies.fromEnvironment(
-      komodoDefiSdk,
-    );
-  }
+  GnosisCardDependencies? _gnosisCardDependencies;
 
   // TODO: Refactor to clean up the bloat in this main file
   Future<void> _clearCachesIfPerformanceModeChanged(
@@ -136,7 +128,8 @@ class _AppBlocRootState extends State<AppBlocRoot> {
       myOrdersService,
     );
     final dexRepository = DexRepository(mm2Api);
-    final gnosisCardDependencies = _gnosisCardDependencies;
+    final gnosisCardDependencies = _gnosisCardDependencies ??=
+        GnosisCardDependencies.fromEnvironment(komodoDefiSdk, coinsRepository);
 
     final transactionsRepo = performanceMode != null
         ? MockTransactionHistoryRepo(
@@ -318,9 +311,7 @@ class _AppBlocRootState extends State<AppBlocRoot> {
                 PlatformBloc()..add(const PlatformInitRequested()),
           ),
           BlocProvider<GnosisCardBloc>(
-            create: (_) =>
-                gnosisCardDependencies.createBloc()
-                  ..add(const GnosisCardStarted()),
+            create: (_) => gnosisCardDependencies.createBloc(),
           ),
         ],
         child: _MyAppView(),

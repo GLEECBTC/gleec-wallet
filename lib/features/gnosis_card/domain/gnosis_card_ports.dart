@@ -26,13 +26,42 @@ class SmartAccountSignature {
   final String ownerAddress;
 }
 
+abstract interface class GnosisWalletReadiness {
+  Future<SmartAccountOwner> ensureReady();
+  void invalidate();
+}
+
+abstract interface class GnosisWalletIdentitySource {
+  Future<String?> currentWalletId();
+  Stream<String?> watchWalletId();
+}
+
+abstract interface class GnosisMigrationNoticeStore {
+  Future<bool> isDismissed({
+    required String walletIdentity,
+    required String migrationId,
+  });
+
+  Future<void> dismiss({
+    required String walletIdentity,
+    required String migrationId,
+  });
+}
+
 abstract interface class SmartAccountSigner {
   Future<SmartAccountOwner> owner();
-  Future<String> signPersonalMessage(String message);
-  Future<void> registerSafe(String safeAddress);
+  Future<String> signPersonalMessage(
+    String message, {
+    required SmartAccountOwner expectedOwner,
+  });
+  Future<void> registerSafe(
+    String safeAddress, {
+    required SmartAccountOwner expectedOwner,
+  });
   Future<SmartAccountSignature> signTypedData(
-    PreparedSmartAccountIntent intent,
-  );
+    PreparedSmartAccountIntent intent, {
+    required SmartAccountOwner expectedOwner,
+  });
 }
 
 abstract interface class GnosisPayRepository {
@@ -41,11 +70,26 @@ abstract interface class GnosisPayRepository {
   /// Compatibility view; implementations must derive this from progress.
   Future<GnosisOnboardingStage> onboardingStage();
 
+  Future<GnosisSiweChallenge> createSiweChallenge({
+    required String ownerAddress,
+  });
+
+  /// Temporary compatibility surface for older harness callers.
+  @Deprecated('Use createSiweChallenge')
   Future<String> createSiweMessage({required String ownerAddress});
+
   Future<GnosisCardSession> authenticate({
+    required GnosisSiweChallenge challenge,
     required String ownerAddress,
     required String signature,
   });
+
+  /// Restores an existing provider session only when it belongs to [ownerAddress].
+  Future<GnosisCardSession?> currentSession({required String ownerAddress});
+
+  /// Clears local credentials and outstanding approvals after the wallet
+  /// identity changes without discarding server-derived onboarding progress.
+  void invalidateSession();
 
   Future<List<GnosisTerm>> requiredTerms();
   Future<void> signUp({required String email});
@@ -68,7 +112,6 @@ abstract interface class GnosisPayRepository {
   Future<SafeDeployment> pollSafeDeployment({required String ownerAddress});
   Future<SafeConfiguration> safeConfiguration({required String ownerAddress});
   Future<void> validateSafeIntegrity(SafeConfiguration configuration);
-  Future<void> resetSafe({required String ownerAddress});
 
   Future<List<GnosisCardProduct>> cardProducts();
   Future<void> selectCardProduct({required String productId});
@@ -107,7 +150,10 @@ abstract interface class GnosisPayRepository {
     required String cardId,
     required GnosisCardStatus status,
   });
-  Future<GnosisCardDashboard> updateControls(GnosisCardControls controls);
+  Future<GnosisCardDashboard> updateControls({
+    required String cardId,
+    required GnosisCardControls controls,
+  });
   Future<PreparedSmartAccountIntent> prepareWithdrawal(
     WithdrawalRequest request,
   );
@@ -117,7 +163,12 @@ abstract interface class GnosisPayRepository {
   Future<DelayedOperation> submitSignedOperation({
     required PreparedSmartAccountIntent intent,
     required SmartAccountSignature signature,
+    required String idempotencyKey,
   });
+}
+
+abstract interface class GnosisSafeMigrationRepository {
+  Future<GnosisSafeMigration> safeMigration();
 }
 
 abstract interface class ExternalFlowLauncher {
@@ -125,7 +176,15 @@ abstract interface class ExternalFlowLauncher {
 }
 
 abstract interface class CardOrderPaymentGateway {
-  Future<CardOrderPaymentReceipt> pay(CardOrderPaymentQuote quote);
+  Future<CardOrderPaymentReceipt?> findPayment({
+    required CardOrderPaymentQuote quote,
+    required String idempotencyKey,
+  });
+
+  Future<CardOrderPaymentReceipt> pay(
+    CardOrderPaymentQuote quote, {
+    required String idempotencyKey,
+  });
 }
 
 /// Owns the sensitive surface. Secret values never pass through domain state.
