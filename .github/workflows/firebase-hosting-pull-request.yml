@@ -57,6 +57,11 @@ jobs:
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Profile mode keeps mock card data out of production release builds.
+          BUILD_COMMAND: >-
+            flutter build web --no-pub --profile
+            --dart-define=CARD_FEATURE_ENABLED=true
+            --dart-define=GNOSIS_CARD_MODE=mock
           # Optionally provide feedback service configuration if available
           FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
           FEEDBACK_PRODUCTION_URL: ${{ secrets.FEEDBACK_PRODUCTION_URL }}
