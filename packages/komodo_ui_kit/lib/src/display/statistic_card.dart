@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -38,30 +39,36 @@ class StatisticCard extends StatelessWidget {
 
   // TODO! Refactor to theme and/or re-usable widget
   static LinearGradient containerGradient(ThemeData theme) {
-    final cardColor = theme.cardColor;
+    final colors = theme.extension<GleecColorTokens>();
+    final cardColor = colors?.surfaceRaised ?? theme.cardColor;
 
     return LinearGradient(
       begin: Alignment.topRight,
       end: Alignment.bottomLeft,
-      colors: (theme.brightness == Brightness.light)
-          ? [cardColor, cardColor]
-          : [Color.fromRGBO(23, 24, 28, 1), theme.cardColor],
+      colors: [cardColor, cardColor],
       stops: const [0.0, 1.0],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.extension<GleecColorTokens>();
+    final geometry = theme.extension<GleecGeometry>() ?? GleecGeometry.standard;
+    final typography = theme.extension<GleecTypography>();
     return Container(
       decoration: BoxDecoration(
-        gradient: containerGradient(Theme.of(context)),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor, width: 1),
+        gradient: containerGradient(theme),
+        borderRadius: geometry.borderRadius16,
+        border: Border.all(
+          color: colors?.border ?? theme.dividerColor,
+          width: 1,
+        ),
       ),
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: geometry.borderRadius16,
         child: Container(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -77,14 +84,17 @@ class StatisticCard extends StatelessWidget {
                     value != null
                         ? AutoScrollText(
                             text: valueText ?? _valueFormatter.format(value!),
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style:
+                                typography?.tabularAmount ??
+                                theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                           )
                         : _ValuePlaceholder(),
                     const SizedBox(height: 4),
                     // Caption
                     DefaultTextStyle(
-                      style: Theme.of(context).textTheme.bodySmall!,
+                      style: theme.textTheme.bodySmall!,
                       child: caption,
                     ),
                     if (actionWidget != null) ...[

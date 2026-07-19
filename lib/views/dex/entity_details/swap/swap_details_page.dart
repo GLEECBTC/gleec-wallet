@@ -35,6 +35,7 @@ class _SwapDetailsPageState extends State<SwapDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -44,13 +45,14 @@ class _SwapDetailsPageState extends State<SwapDetailsPage> {
           swapStatus: widget.swapStatus,
           isFailed: _isFailed,
           belowUuid: UiBorderButton(
-            width: 160,
-            height: 32,
-            borderWidth: 0,
-            borderColor: theme.custom.subCardBackgroundColor,
-            backgroundColor: theme.custom.subCardBackgroundColor,
+            width: 200,
+            height: 48,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surfaceHigh,
             fontWeight: FontWeight.w500,
-            fontSize: 11,
+            fontSize: 12,
+            allowMultiline: true,
             text: LocaleKeys.exportSwapData.tr(),
             icon: _isExporting
                 ? const UiSpinner()

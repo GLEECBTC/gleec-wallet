@@ -31,7 +31,7 @@ class DexFiatAmount extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
-          color: theme.custom.fiatAmountColor,
+          color: Theme.of(context).calmCoreCompatibility.fiatAmountColor,
         ).merge(textStyle),
       ),
     );

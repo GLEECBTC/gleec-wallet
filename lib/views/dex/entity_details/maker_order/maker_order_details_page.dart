@@ -11,13 +11,13 @@ import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/ui/ui_light_button.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
-import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/dex/entity_details/trading_details_coin_pair.dart';
 import 'package:web_dex/views/dex/entity_details/trading_details_header.dart';
+import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 
 class MakerOrderDetailsPage extends StatefulWidget {
   const MakerOrderDetailsPage(this.makerOrderStatus, {Key? key})
-      : super(key: key);
+    : super(key: key);
 
   final MakerOrderStatus makerOrderStatus;
 
@@ -36,9 +36,7 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        TradingDetailsHeader(
-          title: LocaleKeys.makerOrderDetails.tr(),
-        ),
+        TradingDetailsHeader(title: LocaleKeys.makerOrderDetails.tr()),
         const SizedBox(height: 40),
         Flexible(
           child: ConstrainedBox(
@@ -71,11 +69,7 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Table(
         columnWidths: const {0: FlexColumnWidth(1.4), 1: FlexColumnWidth(4)},
-        children: [
-          _buildPrice(),
-          _buildCreatedAt(),
-          _buildStatus(),
-        ],
+        children: [_buildPrice(), _buildCreatedAt(), _buildStatus()],
       ),
     );
   }
@@ -92,10 +86,9 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
             child: Text(
               _cancelingError!,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
           ),
         IgnorePointer(
@@ -176,8 +169,9 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
 
   TableRow _buildPrice() {
     final MyOrder order = widget.makerOrderStatus.order;
-    final String price =
-        formatAmt((order.relAmount / order.baseAmount).toDouble());
+    final String price = formatAmt(
+      (order.relAmount / order.baseAmount).toDouble(),
+    );
 
     return TableRow(
       children: [
@@ -190,13 +184,8 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
         ),
         Row(
           children: [
-            Text(
-              price,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(
-              width: 5,
-            ),
+            Text(price, style: const TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(width: 5),
             Text(order.rel),
           ],
         ),
@@ -205,18 +194,27 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
   }
 
   Future<void> _cancelOrder() async {
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: LocaleKeys.cancelOrder.tr(),
+      confirmButtonKey: const Key('dex-details-cancel-order-confirm'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _cancelingError = null;
       _inProgress = true;
     });
 
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
-    final String? error = await tradingEntitiesBloc
-        .cancelOrder(widget.makerOrderStatus.order.uuid);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
+    final String? error = await tradingEntitiesBloc.cancelOrder(
+      widget.makerOrderStatus.order.uuid,
+    );
 
     await Future<dynamic>.delayed(const Duration(milliseconds: 1000));
 
+    if (!mounted) return;
     setState(() => _inProgress = false);
 
     if (error != null) {

@@ -50,7 +50,7 @@ class _CoinsTableState extends State<CoinsTable> {
               child: TableSearchField(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
-                height: 30,
+                height: 48,
                 onChanged: (_) => _searchDebouncer.run(_updateSearchTerm),
               ),
             ),

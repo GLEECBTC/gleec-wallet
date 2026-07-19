@@ -121,7 +121,6 @@ class MainMenuBarMobile extends StatelessWidget {
   }
 
   List<MainMenuValue> _moreDestinations(bool isMMBotEnabled) => [
-    MainMenuValue.bridge,
     if (isMMBotEnabled) MainMenuValue.marketMakerBot,
     MainMenuValue.nft,
     MainMenuValue.settings,

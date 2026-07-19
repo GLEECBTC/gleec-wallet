@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
 
@@ -40,11 +41,20 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
   @override
   Widget build(BuildContext context) {
     final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final colors = Theme.of(context).extension<GleecColorTokens>();
+    final geometry = Theme.of(context).extension<GleecGeometry>();
     return UIBaseButton(
       isEnabled: widget.onPressed != null,
       width: widget.width,
       height: widget.height + ((textScale - 1).clamp(0.0, 1.0).toDouble() * 32),
-      border: widget.border,
+      border:
+          widget.border ??
+          (_hasFocus
+              ? Border.all(
+                  color: colors?.brand ?? Theme.of(context).colorScheme.primary,
+                  width: geometry?.focusRingWidth ?? 3,
+                )
+              : null),
       child: ElevatedButton(
         focusNode: widget.focusNode,
         onFocusChange: (value) {
@@ -59,9 +69,11 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
           side: BorderSide(color: _borderColor, width: 1),
           shadowColor: _shadowColor,
           elevation: 1,
-          backgroundColor: Colors.transparent,
-          foregroundColor: _borderColor,
-          padding: EdgeInsets.zero,
+          backgroundColor:
+              colors?.surfaceHigh ?? Theme.of(context).colorScheme.surface,
+          foregroundColor:
+              colors?.textPrimary ?? Theme.of(context).colorScheme.onSurface,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
         child:
             widget.child ??
@@ -76,19 +88,20 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
 
   Color get _borderColor {
     return widget.borderColor ??
-        Theme.of(context).textTheme.labelLarge?.color ??
-        (Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFFF8F4FC)
-            : const Color(0xFF28183D));
+        Theme.of(context).extension<GleecColorTokens>()?.controlBorder ??
+        Theme.of(context).colorScheme.outline;
   }
 
   Color get _shadowColor {
     return _hasFocus ? widget.shadowColor ?? _borderColor : Colors.transparent;
   }
 
-  OutlinedBorder get _shape => const RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(18)),
-  );
+  OutlinedBorder get _shape {
+    final geometry = Theme.of(context).extension<GleecGeometry>();
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(geometry?.radius16 ?? 16)),
+    );
+  }
 }
 
 class _ButtonContent extends StatelessWidget {
@@ -111,8 +124,6 @@ class _ButtonContent extends StatelessWidget {
         Flexible(
           child: Text(
             text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: textStyle ?? _defaultTextStyle(context),
           ),

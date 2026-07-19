@@ -33,21 +33,22 @@ class TradingDetailsCoinPair extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
     final Coin? coinBase = coinsRepository.getCoin(baseCoin);
     final Coin? coinRel = coinsRepository.getCoin(relCoin);
     final String? swapId = this.swapId;
     final bool isOrder = this.isOrder;
 
-    
-
     if (coinBase == null || coinRel == null) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 20, 10, 10),
+      padding: EdgeInsets.all(geometry.space20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: theme.currentGlobal.colorScheme.surface,
+        borderRadius: geometry.borderRadius20,
+        color: colors.surfaceRaised,
+        border: Border.all(color: colors.border),
       ),
       child: Column(
         children: [
@@ -62,11 +63,7 @@ class TradingDetailsCoinPair extends StatelessWidget {
                 ),
               ),
               Column(
-                children: [
-                  SvgPicture.asset(
-                    '$assetsPath/ui_icons/arrows.svg',
-                  ),
-                ],
+                children: [SvgPicture.asset('$assetsPath/ui_icons/arrows.svg')],
               ),
               Flexible(
                 child: CoinItem(
@@ -82,29 +79,27 @@ class TradingDetailsCoinPair extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-              Flexible(
-                child: CopiedText(
-                  key: Key('uuid-${swapId}'),
-                  text: isOrder
-                      ? LocaleKeys.orderUuid.tr(args: [swapId])
-                      : LocaleKeys.swapUuid.tr(args: [swapId]),
-                  copiedValue: swapId,
-                  isCopiedValueShown: false,
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-                  fontSize: 11,
-                  iconSize: 14,
-                  backgroundColor: theme.custom.subCardBackgroundColor,
+                Flexible(
+                  child: CopiedText(
+                    key: Key('uuid-${swapId}'),
+                    text: isOrder
+                        ? LocaleKeys.orderUuid.tr(args: [swapId])
+                        : LocaleKeys.swapUuid.tr(args: [swapId]),
+                    copiedValue: swapId,
+                    isCopiedValueShown: false,
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                    fontSize: 11,
+                    iconSize: 14,
+                    backgroundColor: colors.surfaceHighest,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           if (swapId != null && belowUuid != null) ...[
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                belowUuid!,
-              ],
+              children: [belowUuid!],
             ),
           ],
         ],

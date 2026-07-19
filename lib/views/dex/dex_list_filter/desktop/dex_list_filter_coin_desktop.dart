@@ -30,8 +30,9 @@ class DexListFilterCoinDesktop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     switch (listType) {
       case DexListType.orders:
         return StreamBuilder<List<MyOrder>>(
@@ -47,11 +48,8 @@ class DexListFilterCoinDesktop extends StatelessWidget {
               onCoinSelect: onCoinSelect,
               value: coinAbbr,
               items: _getItems(context, coinAbbrMap),
-              selectedItemBuilder: (context) => _getItems(
-                context,
-                coinAbbrMap,
-                selected: true,
-              ),
+              selectedItemBuilder: (context) =>
+                  _getItems(context, coinAbbrMap, selected: true),
             );
           },
         );
@@ -73,11 +71,8 @@ class DexListFilterCoinDesktop extends StatelessWidget {
               onCoinSelect: onCoinSelect,
               value: coinAbbr,
               items: _getItems(context, coinAbbrMap),
-              selectedItemBuilder: (context) => _getItems(
-                context,
-                coinAbbrMap,
-                selected: true,
-              ),
+              selectedItemBuilder: (context) =>
+                  _getItems(context, coinAbbrMap, selected: true),
             );
           },
         );
@@ -91,8 +86,9 @@ class DexListFilterCoinDesktop extends StatelessWidget {
     Map<String, List<String>> coinAbbrMap, {
     bool selected = false,
   }) {
-    final Iterable<String> coinAbbrList =
-        coinAbbrMap.keys.where((abbr) => abbr != anotherCoinAbbr);
+    final Iterable<String> coinAbbrList = coinAbbrMap.keys.where(
+      (abbr) => abbr != anotherCoinAbbr,
+    );
 
     return selected
         ? coinAbbrList.map((abbr) {
@@ -123,12 +119,14 @@ class DexListFilterCoinDesktop extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         mainAxisSize: MainAxisSize.max,
         children: [
-          Flexible(child: CoinItem(coin: coin, size: CoinItemSize.small)),
+          Flexible(
+            child: CoinItem(coin: coin, size: CoinItemSize.small),
+          ),
           const SizedBox(width: 4),
           Text(
             '($pairsCount)',
             style: TextStyle(
-              color: theme.currentGlobal.textTheme.bodyMedium?.color,
+              color: Theme.of(context).textTheme.bodyMedium?.color,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -139,7 +137,9 @@ class DexListFilterCoinDesktop extends StatelessWidget {
   }
 
   DropdownMenuItem<String> _buildSelectedItem(
-      BuildContext context, String coinAbbr) {
+    BuildContext context,
+    String coinAbbr,
+  ) {
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
     final Coin? coin = coinsRepository.getCoin(coinAbbr);
     if (coin == null) return const DropdownMenuItem<String>(child: SizedBox());
@@ -176,9 +176,7 @@ class _DropDownButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: Theme.of(context).brightness == Brightness.light
-          ? newThemeLight
-          : newThemeDark,
+      data: Theme.of(context),
       child: Builder(
         builder: (context) {
           final ext = Theme.of(context).extension<ColorSchemeExtension>();
@@ -196,10 +194,11 @@ class _DropDownButton extends StatelessWidget {
             child: DropdownButton<String>(
               hint: Text(
                 label,
-                style: theme.currentGlobal.textTheme.bodySmall?.copyWith(
-                    color: value != null && value!.isNotEmpty
-                        ? ext?.surf
-                        : ext?.s70),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: value != null && value!.isNotEmpty
+                      ? ext?.surf
+                      : ext?.s70,
+                ),
               ),
               iconSize: 12,
               value: value,
@@ -208,8 +207,9 @@ class _DropDownButton extends StatelessWidget {
               focusColor: Colors.transparent,
               icon: Icon(
                 Icons.keyboard_arrow_down,
-                color:
-                    value != null && value!.isNotEmpty ? ext?.surf : ext?.s70,
+                color: value != null && value!.isNotEmpty
+                    ? ext?.surf
+                    : ext?.s70,
               ),
               underline: const SizedBox(),
               isExpanded: true,

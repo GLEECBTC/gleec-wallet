@@ -133,18 +133,6 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                 ),
                               ),
                             ),
-                            Tooltip(
-                              message: tradingTooltipMessage(),
-                              child: DesktopMenuDesktopItem(
-                                key: const Key('main-menu-bridge'),
-                                enabled: currentWallet?.isHW != true,
-                                menu: MainMenuValue.bridge,
-                                onTap: onTapItem,
-                                isSelected: _checkSelectedItem(
-                                  MainMenuValue.bridge,
-                                ),
-                              ),
-                            ),
                             if (isMMBotEnabled && isAuthenticated)
                               Tooltip(
                                 message: tradingTooltipMessage(),

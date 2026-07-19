@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
+import 'package:web_dex/features/unified_swap/infrastructure/unified_swap_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -10,13 +11,15 @@ final MM2 mm2 = MM2();
 
 final class MM2 {
   MM2() {
+    final unifiedSwap = UnifiedSwapConfig.fromEnvironment();
     _kdfSdk = KomodoDefiSdk(
-      config: const KomodoDefiSdkConfig(
+      config: KomodoDefiSdkConfig(
         // Syncing pre-activation coin states is not yet implemented,
         // so we disable it for now.
         // TODO: sync pre-activation of coins (show activating coins in list)
         preActivateHistoricalAssets: false,
         preActivateDefaultAssets: false,
+        externalExecution: _externalExecutionConfig(unifiedSwap),
       ),
       onLog: _handleSdkLog,
     );
@@ -114,6 +117,31 @@ final class MM2 {
   void _handleSdkLog(String message) {
     log(message, path: 'KomodoDefiSdk').ignore();
   }
+}
+
+ExternalExecutionStartupConfig _externalExecutionConfig(
+  UnifiedSwapConfig config,
+) {
+  if (!config.canStartKdfExternalExecution) {
+    return const ExternalExecutionStartupConfig();
+  }
+  final transport = switch (config.transport) {
+    UnifiedSwapLifiTransport.gleecProxy => LifiTransport.gleecProxy(
+      config.proxyUrl!,
+    ),
+    UnifiedSwapLifiTransport.direct => const LifiTransport.direct(),
+    UnifiedSwapLifiTransport.invalid => throw StateError(
+      'Invalid Li.Fi transport reached KDF startup',
+    ),
+  };
+  return ExternalExecutionStartupConfig(
+    lifi: LifiStartupConfig(
+      enabled: config.kdfLifiEnabled,
+      caseAEnabled: config.kdfLifiCaseAEnabled,
+      transport: transport,
+      allowDirectNonProduction: config.allowDirectLifiNonProduction,
+    ),
+  );
 }
 
 // 0 - MM2 is not running yet.

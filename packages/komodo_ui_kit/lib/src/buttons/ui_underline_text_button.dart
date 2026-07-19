@@ -28,8 +28,10 @@ class _UiUnderlineTextButtonState extends State<UiUnderlineTextButton> {
     final buttonTextStyle = Theme.of(context).textTheme.labelLarge;
 
     return Container(
-      constraints:
-          BoxConstraints.tightFor(width: widget.width, height: widget.height),
+      constraints: BoxConstraints.tightFor(
+        width: widget.width,
+        height: widget.height,
+      ),
       decoration: const BoxDecoration(
         borderRadius: BorderRadius.all(Radius.circular(18)),
       ),
@@ -47,7 +49,9 @@ class _UiUnderlineTextButtonState extends State<UiUnderlineTextButton> {
             border: Border(
               bottom: BorderSide(
                 width: 0.7,
-                color: buttonTextStyle?.color ?? theme.custom.noColor,
+                color:
+                    buttonTextStyle?.color ??
+                    Theme.of(context).calmCoreCompatibility.noColor,
               ),
             ),
           ),

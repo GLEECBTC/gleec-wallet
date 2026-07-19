@@ -13,40 +13,42 @@ class MakerFormSellCoinTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     return StreamBuilder<bool>(
-        initialData: makerFormBloc.showSellCoinSelect,
-        stream: makerFormBloc.outShowSellCoinSelect,
-        builder: (context, snapshot) {
-          if (snapshot.data != true) return const SizedBox.shrink();
+      initialData: makerFormBloc.showSellCoinSelect,
+      stream: makerFormBloc.outShowSellCoinSelect,
+      builder: (context, snapshot) {
+        if (snapshot.data != true) return const SizedBox.shrink();
 
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 52, 16, 10),
-            child: StreamBuilder<Coin?>(
-                initialData: makerFormBloc.sellCoin,
-                stream: makerFormBloc.outSellCoin,
-                builder: (context, coinSnapshot) {
-                  final Coin? coin = coinSnapshot.data;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: StreamBuilder<Coin?>(
+            initialData: makerFormBloc.sellCoin,
+            stream: makerFormBloc.outSellCoin,
+            builder: (context, coinSnapshot) {
+              final Coin? coin = coinSnapshot.data;
 
-                  return CoinsTable(
-                    key: const Key('maker-sell-coins-table'),
-                    head: Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
-                      child: MakerFormSellSwitcher(
-                        controller: TradeCoinController(
-                            coin: coin,
-                            onTap: () =>
-                                makerFormBloc.showSellCoinSelect = false,
-                            isOpened: true,
-                            isEnabled: coin != null),
-                      ),
+              return CoinsTable(
+                key: const Key('maker-sell-coins-table'),
+                head: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
+                  child: MakerFormSellSwitcher(
+                    controller: TradeCoinController(
+                      coin: coin,
+                      onTap: () => makerFormBloc.showSellCoinSelect = false,
+                      isOpened: true,
+                      isEnabled: coin != null,
                     ),
-                    maxHeight: 330,
-                    onSelect: (Coin coin) {
-                      makerFormBloc.sellCoin = coin;
-                      makerFormBloc.showSellCoinSelect = false;
-                    },
-                  );
-                }),
-          );
-        });
+                  ),
+                ),
+                maxHeight: 330,
+                onSelect: (Coin coin) {
+                  makerFormBloc.sellCoin = coin;
+                  makerFormBloc.showSellCoinSelect = false;
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 }

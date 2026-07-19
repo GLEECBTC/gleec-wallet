@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/model/trading_entities_filter.dart';
 import 'package:web_dex/views/dex/dex_helpers.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/entities_list/common/dex_empty_list.dart';
 import 'package:web_dex/views/dex/entities_list/common/dex_error_message.dart';
 import 'package:web_dex/views/dex/entities_list/history/history_item.dart';
@@ -70,36 +70,46 @@ class _HistoryListState extends State<HistoryList>
       return const DexEmptyList();
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (!isMobile)
-          HistoryListHeader(sortData: _sortData, onSortChange: _onSortChange),
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(top: isMobile ? 0 : 10.0),
-            child: DexScrollbar(
-              isMobile: isMobile,
-              scrollController: _mainScrollController,
-              child: ListView.builder(
-                key: const Key('swap-history-list-list-view'),
-                shrinkWrap: false,
-                controller: _mainScrollController,
-                itemBuilder: (BuildContext context, int index) {
-                  final Swap swap = _processedSwaps[index];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = DexResponsiveSpec.fromWidth(
+          constraints.maxWidth,
+        ).usesMobileLists;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isCompact)
+              HistoryListHeader(
+                sortData: _sortData,
+                onSortChange: _onSortChange,
+              ),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(top: isCompact ? 0 : 10.0),
+                child: DexScrollbar(
+                  isMobile: isCompact,
+                  scrollController: _mainScrollController,
+                  child: ListView.builder(
+                    key: const Key('swap-history-list-list-view'),
+                    shrinkWrap: false,
+                    controller: _mainScrollController,
+                    itemBuilder: (BuildContext context, int index) {
+                      final Swap swap = _processedSwaps[index];
 
-                  return HistoryItem(
-                    key: Key('swap-item-${swap.uuid}'),
-                    swap,
-                    onClick: () => widget.onItemClick(swap),
-                  );
-                },
-                itemCount: _processedSwaps.length,
+                      return HistoryItem(
+                        key: Key('swap-item-${swap.uuid}'),
+                        swap,
+                        onClick: () => widget.onItemClick(swap),
+                      );
+                    },
+                    itemCount: _processedSwaps.length,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 

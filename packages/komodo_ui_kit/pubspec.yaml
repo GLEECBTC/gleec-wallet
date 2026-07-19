@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   app_theme:
     path: ../../app_theme/
+  intl: 0.20.2
 
   komodo_defi_types:
     path: ../../sdk/packages/komodo_defi_types # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md

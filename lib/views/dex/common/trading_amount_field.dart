@@ -8,8 +8,9 @@ class TradingAmountField extends StatelessWidget {
     required this.controller,
     this.enabled = true,
     this.onChanged,
-    this.height = 20,
-    this.contentPadding = const EdgeInsets.all(0),
+    this.height = 52,
+    this.contentPadding = const EdgeInsets.symmetric(horizontal: 12),
+    this.inputKey = const Key('amount-input'),
   });
 
   final TextEditingController controller;
@@ -17,31 +18,32 @@ class TradingAmountField extends StatelessWidget {
   final Function(String)? onChanged;
   final double height;
   final EdgeInsetsGeometry contentPadding;
+  final Key inputKey;
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
     return SizedBox(
       height: height,
       child: TextFormField(
-        key: const Key('amount-input'),
+        key: inputKey,
         controller: controller,
         enabled: enabled,
         textInputAction: TextInputAction.done,
         textAlign: TextAlign.end,
         inputFormatters: currencyInputFormatters,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: dexPageColors.activeText,
-              decoration: TextDecoration.none,
-            ),
+        style: typography.tabularAmountCompact.copyWith(
+          fontSize: 16,
+          color: colors.textPrimary,
+          decoration: TextDecoration.none,
+        ),
         decoration: InputDecoration(
           hintText: '0.00',
           contentPadding: contentPadding,
-          fillColor: Colors.transparent,
-          focusColor: Colors.transparent,
-          hoverColor: Colors.transparent,
+          filled: true,
+          fillColor: colors.surfaceHighest,
         ),
         onChanged: onChanged,
       ),

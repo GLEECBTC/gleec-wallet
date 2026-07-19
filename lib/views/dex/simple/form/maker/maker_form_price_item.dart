@@ -46,10 +46,7 @@ class _MakerFormPriceItemState extends State<MakerFormPriceItem> {
       padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(
-            width: 1,
-            color: theme.currentGlobal.dividerColor,
-          ),
+          top: BorderSide(width: 1, color: Theme.of(context).dividerColor),
         ),
       ),
       child: Row(
@@ -57,9 +54,7 @@ class _MakerFormPriceItemState extends State<MakerFormPriceItem> {
         children: [
           _buildLabel(),
           const SizedBox(width: 24),
-          Expanded(
-            child: _buildPriceField(),
-          ),
+          Expanded(child: _buildPriceField()),
         ],
       ),
     );
@@ -70,10 +65,7 @@ class _MakerFormPriceItemState extends State<MakerFormPriceItem> {
       padding: const EdgeInsets.fromLTRB(6, 3, 6, 6),
       child: Text(
         '${LocaleKeys.price.tr()}:',
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
       ),
     );
   }
@@ -81,19 +73,20 @@ class _MakerFormPriceItemState extends State<MakerFormPriceItem> {
   Widget _buildPriceField() {
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     return AmountInputField(
-        hint: '',
-        stream: makerFormBloc.outPrice,
-        initialData: makerFormBloc.price,
-        isEnabled: _sellCoin != null && _buyCoin != null,
-        suffix: _buildSuffix(),
-        onChanged: (String value) {
-          makerFormBloc.setPriceValue(value);
-        },
-        height: 18,
-        background: theme.custom.noColor,
-        textAlign: TextAlign.right,
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-        contentPadding: const EdgeInsets.all(0));
+      hint: '',
+      stream: makerFormBloc.outPrice,
+      initialData: makerFormBloc.price,
+      isEnabled: _sellCoin != null && _buyCoin != null,
+      suffix: _buildSuffix(),
+      onChanged: (String value) {
+        makerFormBloc.setPriceValue(value);
+      },
+      height: 18,
+      background: Theme.of(context).calmCoreCompatibility.noColor,
+      textAlign: TextAlign.right,
+      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      contentPadding: const EdgeInsets.all(0),
+    );
   }
 
   Widget _buildSuffix() {

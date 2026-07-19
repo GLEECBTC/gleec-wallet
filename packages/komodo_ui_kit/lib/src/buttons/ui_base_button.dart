@@ -1,4 +1,5 @@
-import 'package:flutter/cupertino.dart';
+import 'package:app_theme/app_theme.dart';
+import 'package:flutter/material.dart';
 
 class UIBaseButton extends StatelessWidget {
   const UIBaseButton({
@@ -17,17 +18,37 @@ class UIBaseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      ignoring: !isEnabled,
-      child: Opacity(
-        opacity: isEnabled ? 1 : 0.4,
-        child: Container(
-          constraints: BoxConstraints.tightFor(width: width, height: height),
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.all(Radius.circular(18)),
-            border: border,
+    final geometry =
+        Theme.of(context).extension<GleecGeometry>() ?? GleecGeometry.standard;
+    final effectiveHeight = height < geometry.minimumTapTarget
+        ? geometry.minimumTapTarget
+        : height;
+    final effectiveWidth = width.isFinite && width < geometry.minimumTapTarget
+        ? geometry.minimumTapTarget
+        : width;
+
+    return Semantics(
+      button: true,
+      enabled: isEnabled,
+      child: IgnorePointer(
+        ignoring: !isEnabled,
+        child: Opacity(
+          opacity: isEnabled ? 1 : 0.5,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: effectiveWidth.isFinite ? effectiveWidth : 0,
+              maxWidth: effectiveWidth,
+              minHeight: effectiveHeight,
+            ),
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: geometry.borderRadius16,
+                border: border,
+              ),
+              child: child,
+            ),
           ),
-          child: child,
         ),
       ),
     );

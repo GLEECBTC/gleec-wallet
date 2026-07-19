@@ -17,15 +17,17 @@ class SwapProgressStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double circleSize = 220.0;
-    if (progress == 100) {
-      return const _CompletedSwapStatus(key: Key('swap-status-success'));
-    }
-    return isFailed
-        ? const _FailedSwapStatus(
-            circleSize: circleSize,
-          )
-        : _InProgressSwapStatus(progress: progress, circleSize: circleSize);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final circleSize = constraints.maxWidth.clamp(160.0, 220.0).toDouble();
+        if (progress == 100) {
+          return const _CompletedSwapStatus(key: Key('swap-status-success'));
+        }
+        return isFailed
+            ? _FailedSwapStatus(circleSize: circleSize)
+            : _InProgressSwapStatus(progress: progress, circleSize: circleSize);
+      },
+    );
   }
 }
 
@@ -53,11 +55,14 @@ class _CompletedSwapStatus extends StatelessWidget {
 
 class _FailedSwapStatus extends StatelessWidget {
   const _FailedSwapStatus({Key? key, required this.circleSize})
-      : super(key: key);
+    : super(key: key);
   final double circleSize;
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    final typography = GleecTypography.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 30, 10, 40),
@@ -66,32 +71,15 @@ class _FailedSwapStatus extends StatelessWidget {
           height: circleSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: LinearGradient(
-                colors:
-                    theme.custom.tradingDetailsTheme.swapFailedStatusColors),
+            color: colors.dangerContainer,
+            border: Border.all(color: colors.danger, width: 2),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(30),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Theme.of(context).colorScheme.surface,
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      LocaleKeys.swapProgressStatusFailed.tr(),
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          padding: EdgeInsets.all(geometry.space24),
+          child: Center(
+            child: Text(
+              LocaleKeys.swapProgressStatusFailed.tr(),
+              textAlign: TextAlign.center,
+              style: typography.sectionTitle.copyWith(color: colors.danger),
             ),
           ),
         ),
@@ -100,81 +88,48 @@ class _FailedSwapStatus extends StatelessWidget {
   }
 }
 
-class _InProgressSwapStatus extends StatefulWidget {
-  const _InProgressSwapStatus(
-      {Key? key, required this.progress, required this.circleSize})
-      : super(key: key);
+class _InProgressSwapStatus extends StatelessWidget {
+  const _InProgressSwapStatus({
+    required this.progress,
+    required this.circleSize,
+  });
+
   final int progress;
   final double circleSize;
 
   @override
-  State<_InProgressSwapStatus> createState() => _InProgressSwapStatusState();
-}
-
-class _InProgressSwapStatusState extends State<_InProgressSwapStatus>
-    with TickerProviderStateMixin {
-  late AnimationController _colorAnimationController;
-  late Animation _colorAnimation;
-
-  @override
-  void initState() {
-    _colorAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2500),
-    );
-    _colorAnimationController.repeat(reverse: true);
-    _colorAnimation = Tween(begin: 0.0, end: 1.0)
-        .chain(CurveTween(curve: Curves.easeIn))
-        .animate(_colorAnimationController)
-      ..addListener(() {
-        setState(() {});
-      });
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    _colorAnimationController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final motion = GleecMotion.of(context);
+    final typography = GleecTypography.of(context);
+    final normalizedProgress = (progress / 100).clamp(0.0, 1.0).toDouble();
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 30, 10, 40),
-        child: Container(
-          width: widget.circleSize,
-          height: widget.circleSize,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              stops: [
-                _colorAnimation.value - 0.7,
-                _colorAnimation.value,
-                _colorAnimation.value + 0.4,
-                _colorAnimation.value + 0.7,
-              ],
-              colors: theme.custom.tradingDetailsTheme.swapStatusColors,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(30),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Theme.of(context).colorScheme.surface,
-              ),
-              child: Center(
-                child: Text(
-                  '${widget.progress.toString()} %',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.secondary,
+        child: SizedBox.square(
+          dimension: circleSize,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: normalizedProgress),
+            duration: motion.resolve(context, motion.deliberate),
+            curve: motion.standardCurve,
+            builder: (context, value, child) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: value,
+                    strokeWidth: 12,
+                    color: colors.brand,
+                    backgroundColor: colors.surfaceHighest,
                   ),
-                ),
-              ),
+                  Center(child: child),
+                ],
+              );
+            },
+            child: Text(
+              '$progress %',
+              style: typography.tabularAmount.copyWith(color: colors.brand),
             ),
           ),
         ),

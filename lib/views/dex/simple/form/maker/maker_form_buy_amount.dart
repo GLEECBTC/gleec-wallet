@@ -1,10 +1,10 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/blocs/maker_form_bloc.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/views/dex/common/trading_amount_field.dart';
 import 'package:web_dex/views/dex/dex_helpers.dart';
 
 class MakerFormBuyAmount extends StatelessWidget {
@@ -62,10 +62,7 @@ class _BuyAmountFiat extends StatelessWidget {
 }
 
 class _BuyAmountInput extends StatelessWidget {
-  _BuyAmountInput({
-    Key? key,
-    required this.isEnabled,
-  }) : super(key: key);
+  _BuyAmountInput({Key? key, required this.isEnabled}) : super(key: key);
 
   final bool isEnabled;
 
@@ -80,33 +77,11 @@ class _BuyAmountInput extends StatelessWidget {
       builder: (context, snapshot) {
         formatAmountInput(_textController, makerFormBloc.buyAmount);
 
-        return SizedBox(
-          height: 20,
-          child: TextFormField(
-            key: const Key('maker-buy-amount-input'),
-            controller: _textController,
-            enabled: isEnabled,
-            textInputAction: TextInputAction.done,
-            textAlign: TextAlign.end,
-            inputFormatters: currencyInputFormatters,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: dexPageColors.activeText,
-                  decoration: TextDecoration.none,
-                ),
-            onChanged: (String value) {
-              makerFormBloc.setBuyAmount(value);
-            },
-            decoration: const InputDecoration(
-              hintText: '0.00',
-              contentPadding: EdgeInsets.all(0),
-              fillColor: Colors.transparent,
-              focusColor: Colors.transparent,
-              hoverColor: Colors.transparent,
-            ),
-          ),
+        return TradingAmountField(
+          inputKey: const Key('maker-buy-amount-input'),
+          controller: _textController,
+          enabled: isEnabled,
+          onChanged: makerFormBloc.setBuyAmount,
         );
       },
     );

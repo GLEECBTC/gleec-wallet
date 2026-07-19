@@ -1276,4 +1276,19 @@ abstract class LocaleKeys {
       'sdk_errors.auth_wallet_not_found';
   static const sdk_errors_general = 'sdk_errors.general';
   static const sdk_errors = 'sdk_errors';
+  static const unifiedSwap_navigationLabel = 'unifiedSwap.navigationLabel';
+  static const unifiedSwap_swap = 'unifiedSwap.swap';
+  static const unifiedSwap_activity = 'unifiedSwap.activity';
+  static const unifiedSwap_advanced = 'unifiedSwap.advanced';
+  static const unifiedSwap_unavailableTitle = 'unifiedSwap.unavailableTitle';
+  static const unifiedSwap_quoteDisabled = 'unifiedSwap.quoteDisabled';
+  static const unifiedSwap_executionDisabled = 'unifiedSwap.executionDisabled';
+  static const unifiedSwap_activityEmptyTitle =
+      'unifiedSwap.activityEmptyTitle';
+  static const unifiedSwap_activityEmptyBody = 'unifiedSwap.activityEmptyBody';
+  static const unifiedSwap_activityUnavailableTitle =
+      'unifiedSwap.activityUnavailableTitle';
+  static const unifiedSwap_activityUnavailableBody =
+      'unifiedSwap.activityUnavailableBody';
+  static const unifiedSwap = 'unifiedSwap';
 }

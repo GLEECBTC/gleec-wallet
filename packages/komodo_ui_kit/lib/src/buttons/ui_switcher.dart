@@ -30,15 +30,13 @@ class _UiSwitcherState extends State<UiSwitcher>
       value: widget.value ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 200),
     );
-    _toggleAnimation = AlignmentTween(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-    ).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.linear,
-      ),
-    );
+    _toggleAnimation =
+        AlignmentTween(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.linear),
+        );
     super.initState();
   }
 
@@ -70,7 +68,9 @@ class _UiSwitcherState extends State<UiSwitcher>
             height: widget.height,
             decoration: BoxDecoration(
               borderRadius: const BorderRadius.all(Radius.circular(18)),
-              gradient: theme.custom.defaultSwitchColor,
+              gradient: Theme.of(
+                context,
+              ).calmCoreCompatibility.defaultSwitchColor,
             ),
             child: Padding(
               padding: const EdgeInsets.all(2),
@@ -90,8 +90,11 @@ class _UiSwitcherState extends State<UiSwitcher>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: widget.value ? Colors.white : null,
-                      gradient:
-                          widget.value ? null : theme.custom.defaultSwitchColor,
+                      gradient: widget.value
+                          ? null
+                          : Theme.of(
+                              context,
+                            ).calmCoreCompatibility.defaultSwitchColor,
                     ),
                   ),
                 ),

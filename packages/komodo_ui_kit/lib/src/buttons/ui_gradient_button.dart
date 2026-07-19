@@ -24,7 +24,8 @@ class UiGradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveGradient = gradient ?? theme.custom.defaultSwitchColor;
+    final effectiveGradient =
+        gradient ?? Theme.of(context).calmCoreCompatibility.defaultSwitchColor;
 
     // Apply default white color to Icon widgets that don't have a color specified
     Widget effectiveChild = child;

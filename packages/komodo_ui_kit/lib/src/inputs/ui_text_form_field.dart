@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -209,54 +210,59 @@ class _UiTextFormFieldState extends State<UiTextFormField> {
         break;
     }
 
-    return TextFormField(
-      controller: _controller,
-      maxLength: widget.maxLength,
-      maxLengthEnforcement: widget.maxLengthEnforcement,
-      inputFormatters: widget.inputFormatters,
-      autofillHints: widget.autofillHints,
-      validator: (value) {
-        // Always return the validator result so FormState.validate() reflects correctness
-        final error = widget.validator?.call(value) ?? widget.errorText;
-        return error;
-      },
-      onChanged: (value) {
-        widget.onChanged?.call(value);
-      },
-      onFieldSubmitted: widget.onFieldSubmitted,
-      enableInteractiveSelection: widget.enableInteractiveSelection,
-      textInputAction: widget.textInputAction,
-      style: style,
-      autovalidateMode: autovalidateMode,
-      keyboardType: widget.keyboardType,
-      obscureText: widget.obscureText,
-      autocorrect: widget.autocorrect,
-      autofocus: widget.autofocus,
-      maxLines: widget.maxLines,
-      readOnly: widget.readOnly,
-      focusNode: _focusNode,
-      enabled: widget.enabled,
-      decoration: InputDecoration(
-        fillColor: fillColor,
-        filled: fillColor != null,
-        hintText: widget.hintText,
-        hintStyle: hintStyle,
-        contentPadding:
-            widget.inputContentPadding ??
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        counterText: widget.counterText,
-        labelText: widget.labelText ?? widget.hintText,
-        labelStyle: labelStyle,
-        helperText: widget.helperText,
-        // If an external errorText provided, show it; otherwise let Form/validator drive error display
-        errorText: widget.errorText,
-        errorStyle: errorStyle,
-        prefixIcon: widget.prefixIcon,
-        suffixIcon: widget.suffixIcon,
-        errorMaxLines: widget.errorMaxLines,
-        suffix: widget.suffix,
-        enabledBorder: widget.enabledBorder,
-        focusedBorder: widget.focusedBorder,
+    final geometry = theme.extension<GleecGeometry>() ?? GleecGeometry.standard;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: geometry.inputHeight),
+      child: TextFormField(
+        controller: _controller,
+        maxLength: widget.maxLength,
+        maxLengthEnforcement: widget.maxLengthEnforcement,
+        inputFormatters: widget.inputFormatters,
+        autofillHints: widget.autofillHints,
+        validator: (value) {
+          // Always return the validator result so FormState.validate() reflects correctness
+          final error = widget.validator?.call(value) ?? widget.errorText;
+          return error;
+        },
+        onChanged: (value) {
+          widget.onChanged?.call(value);
+        },
+        onFieldSubmitted: widget.onFieldSubmitted,
+        enableInteractiveSelection: widget.enableInteractiveSelection,
+        textInputAction: widget.textInputAction,
+        style: style,
+        autovalidateMode: autovalidateMode,
+        keyboardType: widget.keyboardType,
+        obscureText: widget.obscureText,
+        autocorrect: widget.autocorrect,
+        autofocus: widget.autofocus,
+        maxLines: widget.maxLines,
+        readOnly: widget.readOnly,
+        focusNode: _focusNode,
+        enabled: widget.enabled,
+        decoration: InputDecoration(
+          fillColor: fillColor,
+          filled: fillColor != null,
+          hintText: widget.hintText,
+          hintStyle: hintStyle,
+          contentPadding:
+              widget.inputContentPadding ??
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          counterText: widget.counterText,
+          labelText: widget.labelText ?? widget.hintText,
+          labelStyle: labelStyle,
+          helperText: widget.helperText,
+          // If an external errorText provided, show it; otherwise let Form/validator drive error display
+          errorText: widget.errorText,
+          errorStyle: errorStyle,
+          prefixIcon: widget.prefixIcon,
+          suffixIcon: widget.suffixIcon,
+          errorMaxLines: widget.errorMaxLines,
+          suffix: widget.suffix,
+          enabledBorder: widget.enabledBorder,
+          focusedBorder: widget.focusedBorder,
+        ),
       ),
     );
   }

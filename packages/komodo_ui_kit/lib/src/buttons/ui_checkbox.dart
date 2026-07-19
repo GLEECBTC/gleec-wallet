@@ -44,14 +44,21 @@ class UiCheckbox extends StatelessWidget {
                 constraints: BoxConstraints.tightFor(width: size, height: size),
                 decoration: BoxDecoration(
                   color: value
-                      ? theme.custom.defaultCheckboxColor
-                      : theme.custom.noColor,
+                      ? Theme.of(
+                          context,
+                        ).calmCoreCompatibility.defaultCheckboxColor
+                      : Theme.of(context).calmCoreCompatibility.noColor,
                   borderRadius: borderRadius,
                   border: Border.all(
-                    color: borderColor ??
+                    color:
+                        borderColor ??
                         (value
-                            ? theme.custom.defaultCheckboxColor
-                            : theme.custom.borderCheckboxColor),
+                            ? Theme.of(
+                                context,
+                              ).calmCoreCompatibility.defaultCheckboxColor
+                            : Theme.of(
+                                context,
+                              ).calmCoreCompatibility.borderCheckboxColor),
                   ),
                 ),
                 child: value
@@ -59,7 +66,9 @@ class UiCheckbox extends StatelessWidget {
                         child: Icon(
                           Icons.check,
                           size: size * 0.8,
-                          color: theme.custom.checkCheckboxColor,
+                          color: Theme.of(
+                            context,
+                          ).calmCoreCompatibility.checkCheckboxColor,
                         ),
                       )
                     : const SizedBox.shrink(),
@@ -68,12 +77,11 @@ class UiCheckbox extends StatelessWidget {
                 Flexible(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 8, right: 2),
-                    child: textWidget ??
+                    child:
+                        textWidget ??
                         Text(
                           text,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
+                          style: Theme.of(context).textTheme.labelLarge
                               ?.copyWith(fontSize: 14, color: textColor),
                         ),
                   ),

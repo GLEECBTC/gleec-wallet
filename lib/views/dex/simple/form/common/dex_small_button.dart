@@ -9,22 +9,26 @@ class DexSmallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap == null ? null : () => onTap!(context),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(7),
-          color: dexPageColors.smallButton,
-        ),
-        width: 46,
-        height: 16,
-        child: Center(
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: dexPageColors.smallButtonText,
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    final typography = GleecTypography.of(context);
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      child: SizedBox.square(
+        dimension: geometry.minimumTapTarget,
+        child: Material(
+          color: colors.selected,
+          borderRadius: geometry.borderRadius12,
+          child: InkWell(
+            onTap: onTap == null ? null : () => onTap!(context),
+            borderRadius: geometry.borderRadius12,
+            child: Center(
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: typography.labelMedium.copyWith(color: colors.brand),
+              ),
             ),
           ),
         ),

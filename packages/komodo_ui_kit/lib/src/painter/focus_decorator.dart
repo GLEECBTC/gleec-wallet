@@ -35,7 +35,10 @@ class _FocusDecoratorState extends State<FocusDecorator> {
         child: CustomPaint(
           painter: DashRectPainter(
             color: _hasFocus
-                ? theme.custom.buttonColorDefaultHover.withValues(alpha: .8)
+                ? Theme.of(context)
+                      .calmCoreCompatibility
+                      .buttonColorDefaultHover
+                      .withValues(alpha: .8)
                 : Colors.transparent,
             strokeWidth: 1,
             gap: 2,

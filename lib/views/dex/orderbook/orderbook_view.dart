@@ -9,7 +9,6 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/orderbook/order.dart';
 import 'package:web_dex/model/orderbook/orderbook.dart';
 import 'package:web_dex/model/orderbook_model.dart';
-import 'package:web_dex/shared/ui/gradient_border.dart';
 import 'package:web_dex/views/dex/orderbook/orderbook_error_message.dart';
 import 'package:web_dex/views/dex/orderbook/orderbook_table.dart';
 import 'package:web_dex/views/dex/orderbook/orderbook_table_title.dart';
@@ -94,39 +93,41 @@ class _OrderbookViewState extends State<OrderbookView> {
           return Center(child: Text(LocaleKeys.orderBookEmpty.tr()));
         }
 
-        return GradientBorder(
-          innerColor: dexPageColors.frontPlate,
-          gradient: dexPageColors.formPlateGradient,
-          child: Container(
-            constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16.0,
-              vertical: 16.0,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: OrderbookTableTitle(
-                    LocaleKeys.orderBook.tr(),
-                    titleTextSize: 14,
-                  ),
+        final colors = GleecColorTokens.of(context);
+        final geometry = GleecGeometry.of(context);
+        return Container(
+          constraints: BoxConstraints(
+            maxWidth: Theme.of(context).calmCoreCompatibility.dexFormWidth,
+          ),
+          padding: EdgeInsets.all(geometry.space16),
+          decoration: BoxDecoration(
+            color: colors.surfaceRaised,
+            border: Border.all(color: colors.border),
+            borderRadius: geometry.borderRadius20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(left: geometry.space8),
+                child: OrderbookTableTitle(
+                  LocaleKeys.orderBook.tr(),
+                  titleTextSize: 14,
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 7),
-                  child: OrderbookTable(
-                    orderbook,
-                    myOrder: widget.myOrder,
-                    selectedOrderUuid: widget.selectedOrderUuid,
-                    onAskClick: widget.onAskClick,
-                    onBidClick: widget.onBidClick,
-                  ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(top: geometry.space8),
+                child: OrderbookTable(
+                  orderbook,
+                  myOrder: widget.myOrder,
+                  selectedOrderUuid: widget.selectedOrderUuid,
+                  onAskClick: widget.onAskClick,
+                  onBidClick: widget.onBidClick,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

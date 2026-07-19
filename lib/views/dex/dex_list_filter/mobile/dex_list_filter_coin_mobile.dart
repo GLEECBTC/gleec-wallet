@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui/komodo_ui.dart';
@@ -18,6 +19,8 @@ class DexListFilterCoinMobile extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? abbr = coinAbbr;
     final ThemeData themeData = Theme.of(context);
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -36,11 +39,13 @@ class DexListFilterCoinMobile extends StatelessWidget {
           radius: 18,
           onTap: showCoinList,
           child: Container(
-            constraints: const BoxConstraints.tightFor(width: double.infinity),
+            width: double.infinity,
+            constraints: BoxConstraints(minHeight: geometry.inputHeight),
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: themeData.inputDecorationTheme.fillColor,
+              borderRadius: geometry.borderRadius16,
+              color: colors.surfaceHigh,
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               children: [
@@ -55,8 +60,10 @@ class DexListFilterCoinMobile extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Icon(Icons.expand_more,
-                    color: themeData.inputDecorationTheme.labelStyle?.color)
+                Icon(
+                  Icons.expand_more,
+                  color: themeData.inputDecorationTheme.labelStyle?.color,
+                ),
               ],
             ),
           ),

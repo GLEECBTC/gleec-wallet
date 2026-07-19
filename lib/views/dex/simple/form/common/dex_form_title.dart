@@ -8,13 +8,13 @@ class DexFormTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w500,
-      color: dexPageColors.activeText,
-      letterSpacing: 4,
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
+    final titleStyle = typography.labelMedium.copyWith(
+      color: colors.textSecondary,
+      letterSpacing: 0.4,
     );
 
-    return Text(title, style: titleStyle);
+    return Text(title, style: titleStyle, maxLines: 2);
   }
 }

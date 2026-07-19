@@ -1,19 +1,17 @@
 # Deploy a preview build with SDK integration for testing KDF API changes
 name: Deploy SDK Integration Preview
-run-name: ${{ github.actor }} is deploying SDK integration preview with API branch '${{ inputs.api_branch }}' 🚀
+run-name: ${{ github.actor }} is deploying SDK ${{ inputs.sdk_commit_sha }} with KDF ${{ inputs.kdf_commit_sha }} 🚀
 
 on:
   workflow_dispatch:
     inputs:
-      api_branch:
-        description: "API branch name to update KDF configuration"
+      sdk_commit_sha:
+        description: "Full 40-character SDK commit SHA"
         required: true
-        default: "dev"
         type: string
-      sdk_branch:
-        description: "SDK branch to clone (optional, defaults to dev)"
-        required: false
-        default: "dev"
+      kdf_commit_sha:
+        description: "Full 40-character KDF artifact commit SHA pinned by the SDK"
+        required: true
         type: string
 
 jobs:
@@ -24,112 +22,101 @@ jobs:
       channel_id: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}
 
     steps:
-      - name: Shortify commit sha
-        id: shortify_commit
-        shell: bash
-        run: echo "sha_short=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
-
-      - name: Get branch
-        id: get_branch
-        shell: bash
-        run: echo "ref_short=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
-
-      - name: Get Preview Channel ID
-        id: get_preview_channel_id
-        shell: bash
-        run: echo "preview_channel_id=sdk-integration-${{ inputs.api_branch }}-$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
-
       - name: Setup GH Actions
         id: checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Update SDK to specified branch
-        id: update_sdk_branch
+      - name: Checkout exact SDK commit
+        id: checkout_sdk_commit
         shell: bash
+        env:
+          SDK_COMMIT_SHA: ${{ inputs.sdk_commit_sha }}
         run: |
-          echo "Updating SDK submodule to branch ${{ inputs.sdk_branch }}..."
-          cd sdk
-          git fetch origin
-          git checkout ${{ inputs.sdk_branch }}
-          git pull origin ${{ inputs.sdk_branch }}
-          cd ..
-          echo "SDK updated to branch ${{ inputs.sdk_branch }}"
-          ls -la sdk/
-
-      - name: Update KDF API configuration
-        id: update_kdf_config
-        shell: bash
-        run: |
-          echo "Updating KDF API configuration for branch: ${{ inputs.api_branch }}"
-          cd sdk
-
-          # Check if the update script exists
-          if [ -f "packages/komodo_wallet_cli/bin/update_api_config.dart" ]; then
-            echo "Running update_api_config.dart script..."
-            # Install dart dependencies first
-            cd packages/komodo_wallet_cli
-            dart pub get
-            cd ../..
-            
-            # Run the update script with the API branch
-            dart run packages/komodo_wallet_cli/bin/update_api_config.dart ${{ inputs.api_branch }}
-            echo "KDF API configuration updated successfully"
-          else
-            echo "Warning: update_api_config.dart script not found at packages/komodo_wallet_cli/bin/update_api_config.dart"
-            echo "Available files in packages/komodo_wallet_cli/bin/:"
-            ls -la packages/komodo_wallet_cli/bin/ || echo "Directory not found"
+          if [[ ! "$SDK_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "SDK commit must be a full lowercase 40-character SHA." >&2
+            exit 1
           fi
 
-      - name: Update pubspec.yaml to use local SDK paths
-        id: update_pubspec
+          git -C sdk fetch --no-tags origin "$SDK_COMMIT_SHA"
+          git -C sdk checkout --detach "$SDK_COMMIT_SHA"
+
+          checked_out_sha="$(git -C sdk rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$SDK_COMMIT_SHA" ]]; then
+            echo "SDK checkout mismatch: expected $SDK_COMMIT_SHA, got $checked_out_sha." >&2
+            exit 1
+          fi
+
+          if [[ -n "$(git -C sdk status --porcelain)" ]]; then
+            echo "Exact SDK checkout is not clean." >&2
+            git -C sdk status --short
+            exit 1
+          fi
+
+          echo "Verified detached SDK commit $checked_out_sha."
+
+      - name: Verify immutable KDF artifact manifest
+        id: verify_kdf_artifact_manifest
         shell: bash
+        env:
+          KDF_COMMIT_SHA: ${{ inputs.kdf_commit_sha }}
         run: |
-          echo "Updating pubspec.yaml files to use local SDK paths..."
+          if [[ ! "$KDF_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "KDF commit must be a full lowercase 40-character SHA." >&2
+            exit 1
+          fi
 
-          # Update main pubspec.yaml
-          echo "Updating main pubspec.yaml..."
-          sed -i 's|komodo_cex_market_data:.*|komodo_cex_market_data:|' pubspec.yaml
-          sed -i '/komodo_cex_market_data:/,/ref: dev/c\
-            komodo_cex_market_data:\
-              path: sdk/packages/komodo_cex_market_data' pubspec.yaml
+          manifest="sdk/packages/komodo_defi_framework/app_build/build_config.json"
+          if [[ ! -f "$manifest" ]]; then
+            echo "KDF artifact manifest is missing: $manifest" >&2
+            exit 1
+          fi
 
-          sed -i 's|komodo_defi_sdk:.*|komodo_defi_sdk:|' pubspec.yaml
-          sed -i '/komodo_defi_sdk:/,/ref: dev/c\
-            komodo_defi_sdk:\
-              path: sdk/packages/komodo_defi_sdk' pubspec.yaml
+          jq -e --arg kdf_sha "$KDF_COMMIT_SHA" '
+            .api.api_commit_hash == $kdf_sha
+            and (.api.api_commit_hash | test("^[0-9a-f]{40}$"))
+            and .api.fetch_at_build_enabled == true
+            and (.api.source_urls | type == "array" and length > 0)
+            and all(
+              .api.source_urls[];
+              . == "https://api.github.com/repos/GLEECBTC/komodo-defi-framework"
+              or . == "https://devbuilds.gleec.com"
+              or . == "https://nebula.decker.im"
+            )
+            and (
+              .api.platforms | keys | sort
+              == ["android-aarch64", "android-armv7", "ios", "linux", "macos", "web", "windows"]
+            )
+            and all(
+              .api.platforms[];
+              (.matching_pattern | type == "string" and length > 0)
+              and (.path | type == "string" and length > 0)
+              and (.valid_zip_sha256_checksums | type == "array")
+              and (.valid_zip_sha256_checksums | length > 0)
+              and all(
+                .valid_zip_sha256_checksums[];
+                test("^[0-9a-f]{64}$")
+              )
+            )
+          ' "$manifest" >/dev/null || {
+            pinned_sha="$(jq -r '.api.api_commit_hash // "missing"' "$manifest")"
+            echo "KDF artifact manifest validation failed (requested $KDF_COMMIT_SHA, pinned $pinned_sha)." >&2
+            exit 1
+          }
 
-          sed -i 's|komodo_defi_types:.*|komodo_defi_types:|' pubspec.yaml
-          sed -i '/komodo_defi_types:/,/ref: dev/c\
-            komodo_defi_types:\
-              path: sdk/packages/komodo_defi_types' pubspec.yaml
+          git -C sdk diff --exit-code -- packages/komodo_defi_framework/app_build/build_config.json
+          echo "Verified immutable KDF artifact manifest for $KDF_COMMIT_SHA."
 
-          sed -i 's|komodo_ui:.*|komodo_ui:|' pubspec.yaml
-          sed -i '/komodo_ui:/,/ref: dev/c\
-            komodo_ui:\
-              path: sdk/packages/komodo_ui' pubspec.yaml
-
-          # Update komodo_ui_kit pubspec.yaml
-          echo "Updating packages/komodo_ui_kit/pubspec.yaml..."
-          sed -i 's|komodo_defi_types:.*|komodo_defi_types:|' packages/komodo_ui_kit/pubspec.yaml
-          sed -i '/komodo_defi_types:/,/ref: dev/c\
-            komodo_defi_types:\
-              path: ../../sdk/packages/komodo_defi_types' packages/komodo_ui_kit/pubspec.yaml
-
-          sed -i 's|komodo_ui:.*|komodo_ui:|' packages/komodo_ui_kit/pubspec.yaml
-          sed -i '/komodo_ui:/,/ref: dev/c\
-            komodo_ui:\
-              path: ../../sdk/packages/komodo_ui' packages/komodo_ui_kit/pubspec.yaml
-
-          echo "Pubspec.yaml files updated successfully"
-
-          # Show the changes made
-          echo "=== Main pubspec.yaml SDK dependencies ==="
-          grep -A2 -B1 "komodo_.*:" pubspec.yaml | grep -A2 -B1 "path: sdk"
-
-          echo "=== UI Kit pubspec.yaml SDK dependencies ==="
-          grep -A2 -B1 "komodo_.*:" packages/komodo_ui_kit/pubspec.yaml | grep -A2 -B1 "path: ../../sdk"
+      - name: Get Preview Channel ID
+        id: get_preview_channel_id
+        shell: bash
+        env:
+          SDK_COMMIT_SHA: ${{ inputs.sdk_commit_sha }}
+          KDF_COMMIT_SHA: ${{ inputs.kdf_commit_sha }}
+        run: |
+          channel_id="sdk-integration-${SDK_COMMIT_SHA:0:7}-${KDF_COMMIT_SHA:0:7}-${GITHUB_SHA:0:7}"
+          echo "preview_channel_id=$channel_id" >> "$GITHUB_OUTPUT"
 
       - name: Install Flutter and dependencies
         id: install_flutter
@@ -173,10 +160,13 @@ jobs:
       - name: Display deployment information
         id: display_info
         shell: bash
+        env:
+          SDK_COMMIT_SHA: ${{ inputs.sdk_commit_sha }}
+          KDF_COMMIT_SHA: ${{ inputs.kdf_commit_sha }}
         run: |
           echo "🚀 SDK Integration Preview deployed successfully!"
-          echo "📦 SDK Branch: ${{ inputs.sdk_branch }}"
-          echo "🔧 API Branch: ${{ inputs.api_branch }}"
+          echo "📦 SDK Commit: $SDK_COMMIT_SHA"
+          echo "🔧 KDF Commit: $KDF_COMMIT_SHA"
           echo "🏷 Channel ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
           echo "🌐 Preview URL: ${{ steps.firebase_deploy.outputs.details_url }}"
           echo "⏰ Preview expires in 7 days"

@@ -66,33 +66,37 @@ class _FormControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(children: [
-      MakerFormErrorList(),
-      SizedBox(height: 24),
-      DexInfoContainer(children: [
-        MakerFormExchangeRate(),
-        SizedBox(height: 8),
-        MakerFormCompareToCex(),
-        SizedBox(height: 8),
-        MakerFormTotalFees(),
-      ]),
-      SizedBox(height: 24),
-      Row(
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          Flexible(flex: 3, child: _ClearButton()),
-          SizedBox(width: 12),
-          Flexible(
-            flex: 7,
-            child: ConnectWalletWrapper(
-              key: Key('connect-wallet-maker-form'),
-              eventType: WalletsManagerEventType.dex,
-              child: MakerFormTradeButton(),
+    return const Column(
+      children: [
+        MakerFormErrorList(),
+        SizedBox(height: 24),
+        DexInfoContainer(
+          children: [
+            MakerFormExchangeRate(),
+            SizedBox(height: 8),
+            MakerFormCompareToCex(),
+            SizedBox(height: 8),
+            MakerFormTotalFees(),
+          ],
+        ),
+        SizedBox(height: 24),
+        Row(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Flexible(flex: 3, child: _ClearButton()),
+            SizedBox(width: 12),
+            Flexible(
+              flex: 7,
+              child: ConnectWalletWrapper(
+                key: Key('connect-wallet-maker-form'),
+                eventType: WalletsManagerEventType.dex,
+                child: MakerFormTradeButton(),
+              ),
             ),
-          ),
-        ],
-      )
-    ]);
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -107,7 +111,7 @@ class _ClearButton extends StatelessWidget {
       onPressed: () {
         makerFormBloc.clear();
       },
-      height: 40,
+      height: 48,
     );
   }
 }
@@ -117,8 +121,6 @@ class _BuyItemHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DexFormGroupHeader(
-      title: LocaleKeys.buy.tr(),
-    );
+    return DexFormGroupHeader(title: LocaleKeys.buy.tr());
   }
 }

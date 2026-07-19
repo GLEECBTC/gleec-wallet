@@ -10,14 +10,15 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/analytics/events/transaction_events.dart';
 import 'package:web_dex/analytics/events/cross_chain_events.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
+import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/dex/entity_details/maker_order/maker_order_details_page.dart';
 import 'package:web_dex/views/dex/entity_details/swap/swap_details_page.dart';
 import 'package:web_dex/views/dex/entity_details/taker_order/taker_order_details_page.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 
 /// Distinguishes what entity the uuid represents
 enum TradingEntityKind { order, swap }
@@ -149,21 +150,27 @@ class _TradingDetailsState extends State<TradingDetails> {
 
     if (entityStatus == null) return const Center(child: UiSpinner());
     final scrollController = ScrollController();
-    return DexScrollbar(
-      scrollController: scrollController,
-      isMobile: isMobile,
-      child: SingleChildScrollView(
-        controller: scrollController,
-        child: Builder(
-          builder: (context) {
-            return Padding(
-              padding: isMobile
-                  ? const EdgeInsets.all(0)
-                  : const EdgeInsets.fromLTRB(15, 23, 15, 20),
-              child: _getDetailsPage(entityStatus),
-            );
-          },
-        ),
+    return ScreenshotSensitive(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
+          return DexScrollbar(
+            scrollController: scrollController,
+            isMobile: spec.usesMobileLists,
+            child: SingleChildScrollView(
+              controller: scrollController,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: Padding(
+                    padding: EdgeInsets.all(spec.gutter),
+                    child: _getDetailsPage(entityStatus),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -24,7 +24,7 @@ class DexListFilterDesktop extends StatefulWidget {
   State<DexListFilterDesktop> createState() => _DexListFilterDesktopState();
 }
 
-const double _itemHeight = 42;
+const double _itemHeight = 48;
 
 class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
   late TradingEntitiesFilter _filterData;
@@ -45,11 +45,14 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: EdgeInsets.all(geometry.space16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Theme.of(context).colorScheme.onSurface,
+        borderRadius: geometry.borderRadius20,
+        color: colors.surfaceRaised,
+        border: Border.all(color: colors.border),
       ),
       child: SizedBox(
         width: double.infinity,
@@ -64,7 +67,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
               children: [
                 ConstrainedBox(
                   constraints: const BoxConstraints.tightFor(
-                      width: 130, height: _itemHeight),
+                    width: 130,
+                    height: _itemHeight,
+                  ),
                   child: DexListFilterCoinDesktop(
                     label: LocaleKeys.buyAsset.tr(),
                     coinAbbr: _filterData.buyCoin,
@@ -81,7 +86,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ),
                 ConstrainedBox(
                   constraints: const BoxConstraints.tightFor(
-                      width: 130, height: _itemHeight),
+                    width: 130,
+                    height: _itemHeight,
+                  ),
                   child: DexListFilterCoinDesktop(
                     label: LocaleKeys.sellAsset.tr(),
                     coinAbbr: _filterData.sellCoin,
@@ -98,7 +105,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ),
                 ConstrainedBox(
                   constraints: const BoxConstraints(
-                      maxWidth: 113, maxHeight: _itemHeight),
+                    maxWidth: 113,
+                    maxHeight: _itemHeight,
+                  ),
                   child: UiDatePicker(
                     formatter: DateFormat('dd.MM.yyyy').format,
                     date: _filterData.startDate,
@@ -114,7 +123,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ),
                 ConstrainedBox(
                   constraints: const BoxConstraints(
-                      maxWidth: 113, maxHeight: _itemHeight),
+                    maxWidth: 113,
+                    maxHeight: _itemHeight,
+                  ),
                   child: UiDatePicker(
                     formatter: DateFormat('dd.MM.yyyy').format,
                     date: _filterData.endDate,
@@ -131,7 +142,7 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: _itemHeight),
                   child: DexListFilterType<TradeSide>(
-                    titile: 'Trade Side',
+                    titile: '${LocaleKeys.taker.tr()}/${LocaleKeys.maker.tr()}',
                     values: [
                       DexListFilterTypeValue<TradeSide>(
                         label: LocaleKeys.taker.tr(),
@@ -157,7 +168,7 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: _itemHeight),
                     child: DexListFilterType<TradingStatus>(
-                      titile: 'Trading Status',
+                      titile: LocaleKeys.status.tr(),
                       values: [
                         DexListFilterTypeValue<TradingStatus>(
                           label: LocaleKeys.successful.tr(),
@@ -181,36 +192,12 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                   ),
               ],
             ),
-            InkWell(
-              onTap: () {
+            OutlinedButton(
+              onPressed: () {
                 _reset();
                 _applyFiltersData();
               },
-              child: Theme(
-                data: Theme.of(context).brightness == Brightness.light
-                    ? newThemeLight
-                    : newThemeDark,
-                child: Builder(
-                  builder: (context) {
-                    final ext =
-                        Theme.of(context).extension<ColorSchemeExtension>();
-                    return UIChip(
-                      showIcon: false,
-                      title: LocaleKeys.clearFilter.tr(),
-                      status: _filterData.isEmpty
-                          ? UIChipState.empty
-                          : UIChipState.selected,
-                      colorScheme: UIChipColorScheme(
-                        emptyContainerColor: ext?.surfCont,
-                        emptyTextColor: ext?.s70,
-                        pressedContainerColor: ext?.surfContLowest,
-                        selectedContainerColor: ext?.primary,
-                        selectedTextColor: ext?.surf,
-                      ),
-                    );
-                  },
-                ),
-              ),
+              child: Text(LocaleKeys.clearFilter.tr()),
             ),
           ],
         ),
@@ -221,10 +208,10 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
   void _applyFiltersData() => widget.onApplyFilter(_filterData);
 
   void _reset() => setState(() {
-        _filterData = TradingEntitiesFilter();
-      });
+    _filterData = TradingEntitiesFilter();
+  });
 
   void _update() => setState(() {
-        _filterData = TradingEntitiesFilter.from(widget.filterData);
-      });
+    _filterData = TradingEntitiesFilter.from(widget.filterData);
+  });
 }

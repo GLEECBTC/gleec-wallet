@@ -42,7 +42,9 @@ class _TextDropdownButtonState<T> extends State<TextDropdownButton<T>> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: dexPageColors.frontPlateInner,
+            color: Theme.of(
+              context,
+            ).calmCoreCompatibility.dexPageTheme.frontPlateInner,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(

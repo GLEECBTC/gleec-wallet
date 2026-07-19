@@ -8,6 +8,7 @@ import 'package:web_dex/router/parsers/dex_route_parser.dart';
 import 'package:web_dex/router/parsers/fiat_route_parser.dart';
 import 'package:web_dex/router/parsers/nft_route_parser.dart';
 import 'package:web_dex/router/parsers/settings_route_parser.dart';
+import 'package:web_dex/router/parsers/unified_swap_route_parser.dart';
 import 'package:web_dex/router/parsers/wallet_route_parser.dart';
 import 'package:web_dex/router/routes.dart';
 
@@ -21,6 +22,9 @@ class RootRouteInformationParser extends RouteInformationParser<AppRoutePath> {
     firstUriSegment.fiat: fiatRouteParser,
     firstUriSegment.dex: dexRouteParser,
     firstUriSegment.bridge: bridgeRouteParser,
+    firstUriSegment.swap: unifiedSwapRouteParser,
+    firstUriSegment.activity: unifiedSwapRouteParser,
+    firstUriSegment.advanced: unifiedSwapRouteParser,
     firstUriSegment.card: cardRouteParser,
     firstUriSegment.nfts: nftRouteParser,
     firstUriSegment.settings: settingsRouteParser,
@@ -30,9 +34,7 @@ class RootRouteInformationParser extends RouteInformationParser<AppRoutePath> {
   Future<AppRoutePath> parseRouteInformation(
     RouteInformation routeInformation,
   ) async {
-    final BaseRouteParser parser = _getRoutParser(
-      Uri.parse(routeInformation.uri.path),
-    );
+    final BaseRouteParser parser = _getRoutParser(routeInformation.uri);
 
     return parser.getRoutePath(routeInformation.uri);
   }

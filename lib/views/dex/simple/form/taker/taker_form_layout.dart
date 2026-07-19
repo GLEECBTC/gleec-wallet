@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_state.dart';
-import 'package:web_dex/common/screen.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/simple/confirm/taker_order_confirmation.dart';
 import 'package:web_dex/views/dex/simple/form/tables/coins_table/taker_sell_coins_table.dart';
 import 'package:web_dex/views/dex/simple/form/tables/orders_table/taker_orders_table.dart';
@@ -19,11 +19,17 @@ class TakerFormLayout extends StatelessWidget {
     return BlocSelector<TakerBloc, TakerState, TakerStep>(
       selector: (state) => state.step,
       builder: (context, step) {
-        return step == TakerStep.confirm
-            ? const TakerOrderConfirmation()
-            : isMobile
-            ? const _TakerFormMobileLayout()
-            : _TakerFormDesktopLayout();
+        if (step == TakerStep.confirm) {
+          return const TakerOrderConfirmation();
+        }
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
+            return spec.usesStackedTradingLayout
+                ? const _TakerFormMobileLayout()
+                : _TakerFormDesktopLayout();
+          },
+        );
       },
     );
   }
@@ -64,56 +70,63 @@ class _TakerFormDesktopLayoutState extends State<_TakerFormDesktopLayout> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.max,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // We want to place form in the middle of the screen,
-        // and orderbook, when shown, should be on the right side
-        // (leaving the form in the middle)
-        const Expanded(flex: 3, child: SizedBox.shrink()),
-        Flexible(
-          flex: 6,
-          child: DexScrollbar(
-            scrollController: _mainScrollController,
-            isMobile: isMobile,
-            child: SingleChildScrollView(
-              key: const Key('taker-form-layout-scroll'),
-              controller: _mainScrollController,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: theme.custom.dexFormWidth,
-                ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const TakerFormContent(),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 52, 16, 0),
-                      child: TakerSellCoinsTable(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: spec.maxContentWidth),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: DexScrollbar(
+                      scrollController: _mainScrollController,
+                      isMobile: false,
+                      child: SingleChildScrollView(
+                        key: const Key('taker-form-layout-scroll'),
+                        controller: _mainScrollController,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: Theme.of(
+                              context,
+                            ).calmCoreCompatibility.dexFormWidth,
+                          ),
+                          child: Stack(
+                            clipBehavior: Clip.hardEdge,
+                            children: [
+                              const TakerFormContent(),
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: TakerSellCoinsTable(),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: TakerOrdersTable(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 167, 16, 0),
-                      child: TakerOrdersTable(),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                SizedBox(width: spec.gutter),
+                SizedBox(
+                  width: spec.orderbookWidth,
+                  child: SingleChildScrollView(
+                    controller: _orderbookScrollController,
+                    child: const TakerOrderbook(),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 20),
-            child: SingleChildScrollView(
-              controller: _orderbookScrollController,
-              child: const TakerOrderbook(),
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -152,7 +165,9 @@ class _TakerFormMobileLayoutState extends State<_TakerFormMobileLayout> {
     return SingleChildScrollView(
       controller: _scrollController,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
+        constraints: BoxConstraints(
+          maxWidth: Theme.of(context).calmCoreCompatibility.dexFormWidth,
+        ),
         child: Stack(
           children: [
             const Column(
@@ -163,11 +178,11 @@ class _TakerFormMobileLayoutState extends State<_TakerFormMobileLayout> {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 52, 16, 0),
+              padding: const EdgeInsets.all(16),
               child: TakerSellCoinsTable(),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 167, 16, 0),
+              padding: const EdgeInsets.all(16),
               child: TakerOrdersTable(),
             ),
           ],

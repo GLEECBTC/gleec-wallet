@@ -7,7 +7,7 @@ class TableSearchField extends StatelessWidget {
   const TableSearchField({
     super.key,
     required this.onChanged,
-    this.height = 44,
+    this.height = 48,
     this.controller,
     this.focusNode,
   });

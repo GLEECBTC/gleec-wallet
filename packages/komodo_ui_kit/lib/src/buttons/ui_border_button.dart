@@ -38,67 +38,81 @@ class UiBorderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = this.icon;
-    final secondaryColor = Theme.of(context).colorScheme.secondary;
+    final materialTheme = Theme.of(context);
+    final colors = materialTheme.extension<GleecColorTokens>();
+    final geometry =
+        materialTheme.extension<GleecGeometry>() ?? GleecGeometry.standard;
+    final secondaryColor = materialTheme.colorScheme.secondary;
     return Opacity(
       opacity: onPressed == null ? 0.4 : 1,
-      child: Container(
-        constraints: BoxConstraints.tightFor(
-          width: width,
-          height: allowMultiline ? null : height,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: width.isFinite ? width : 0,
+          maxWidth: width,
+          minHeight: height < geometry.minimumTapTarget
+              ? geometry.minimumTapTarget
+              : height,
         ),
-        decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(18)),
-          color: borderColor ?? theme.custom.defaultBorderButtonBorder,
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(borderWidth),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color:
-                  backgroundColor ?? theme.custom.defaultBorderButtonBackground,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: onPressed,
-                borderRadius: BorderRadius.circular(15),
-                hoverColor: secondaryColor.withValues(alpha: 0.05),
-                highlightColor: secondaryColor.withValues(alpha: 0.1),
-                focusColor: secondaryColor.withValues(alpha: 0.2),
-                splashColor: secondaryColor.withValues(alpha: 0.4),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-                  child: Builder(
-                    builder: (context) {
-                      if (icon == null) {
-                        return _ButtonText(
-                          prefix: prefix,
-                          text: text,
-                          fontSize: fontSize,
-                          fontWeight: fontWeight,
-                          textColor: textColor,
-                          suffix: suffix,
-                        );
-                      }
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          icon,
-                          Flexible(
-                            child: _ButtonText(
-                              prefix: prefix,
-                              text: text,
-                              fontSize: fontSize,
-                              fontWeight: fontWeight,
-                              textColor: textColor,
-                              suffix: suffix,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: geometry.borderRadius16,
+            color:
+                borderColor ??
+                colors?.controlBorder ??
+                materialTheme.colorScheme.outline,
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(borderWidth),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color:
+                    backgroundColor ??
+                    colors?.surfaceHigh ??
+                    materialTheme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(geometry.radius12),
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: onPressed,
+                  borderRadius: BorderRadius.circular(geometry.radius12),
+                  hoverColor: secondaryColor.withValues(alpha: 0.05),
+                  highlightColor: secondaryColor.withValues(alpha: 0.1),
+                  focusColor: secondaryColor.withValues(alpha: 0.2),
+                  splashColor: secondaryColor.withValues(alpha: 0.4),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    child: Builder(
+                      builder: (context) {
+                        if (icon == null) {
+                          return _ButtonText(
+                            prefix: prefix,
+                            text: text,
+                            fontSize: fontSize,
+                            fontWeight: fontWeight,
+                            textColor: textColor,
+                            suffix: suffix,
+                          );
+                        }
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            icon,
+                            Flexible(
+                              child: _ButtonText(
+                                prefix: prefix,
+                                text: text,
+                                fontSize: fontSize,
+                                fontWeight: fontWeight,
+                                textColor: textColor,
+                                suffix: suffix,
+                              ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -134,24 +148,18 @@ class _ButtonText extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (prefix != null) ...[
-          prefix,
-          const SizedBox(width: 9),
-        ],
+        if (prefix != null) ...[prefix, const SizedBox(width: 9)],
         Flexible(
           child: Text(
             text,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: textColor,
-                  fontWeight: fontWeight,
-                  fontSize: fontSize,
-                ),
+              color: textColor,
+              fontWeight: fontWeight,
+              fontSize: fontSize,
+            ),
           ),
         ),
-        if (suffix != null) ...[
-          const SizedBox(width: 9),
-          suffix,
-        ],
+        if (suffix != null) ...[const SizedBox(width: 9), suffix],
       ],
     );
   }

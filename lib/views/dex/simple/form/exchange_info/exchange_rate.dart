@@ -25,16 +25,14 @@ class ExchangeRate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isEmptyData = rate == null || base == null || rel == null;
+    final typography = GleecTypography.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          '${LocaleKeys.rate.tr()}:',
-          style: theme.custom.tradingFormDetailsLabel,
-        ),
+        Text('${LocaleKeys.rate.tr()}:', style: typography.bodySmall),
         if (isEmptyData)
-          Text('0.00', style: theme.custom.tradingFormDetailsContent)
+          Text('0.00', style: typography.tabularAmountCompact)
         else
           Flexible(
             child: _Rates(
@@ -64,6 +62,8 @@ class _Rates extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -72,17 +72,17 @@ class _Rates extends StatelessWidget {
           children: [
             Text(
               ' 1 ${Coin.normalizeAbbr(base ?? '')} = ',
-              style: theme.custom.tradingFormDetailsContent,
+              style: typography.tabularAmountCompact,
             ),
             Flexible(
               child: AutoScrollText(
                 text: ' $price ${Coin.normalizeAbbr(rel ?? '')}',
-                style: theme.custom.tradingFormDetailsContent,
+                style: typography.tabularAmountCompact,
               ),
             ),
             Text(
               showDetails ? '(${baseFiat(context)})' : '',
-              style: theme.custom.tradingFormDetailsContent,
+              style: typography.tabularAmountCompact,
             ),
           ],
         ),
@@ -92,11 +92,7 @@ class _Rates extends StatelessWidget {
             ' $quotePrice'
             ' ${Coin.normalizeAbbr(base ?? '')}'
             ' (${relFiat(context)})',
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.custom.subBalanceColor,
-              fontWeight: FontWeight.w500,
-            ),
+            style: typography.bodySmall.copyWith(color: colors.textTertiary),
           ),
       ],
     );
@@ -111,7 +107,10 @@ class _Rates extends StatelessWidget {
       return getFormattedFiatAmount(context, base ?? '', Rational.zero);
     }
     return getFormattedFiatAmount(
-        context, base ?? '', rate?.inverse ?? Rational.zero);
+      context,
+      base ?? '',
+      rate?.inverse ?? Rational.zero,
+    );
   }
 
   String get price {

@@ -12,7 +12,6 @@ jobs:
   build_desktop:
     name: Build Desktop (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:

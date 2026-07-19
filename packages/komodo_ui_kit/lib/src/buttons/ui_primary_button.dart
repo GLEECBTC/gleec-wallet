@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
 
@@ -44,11 +45,20 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   @override
   Widget build(BuildContext context) {
     final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final colors = Theme.of(context).extension<GleecColorTokens>();
+    final geometry = Theme.of(context).extension<GleecGeometry>();
     return UIBaseButton(
       isEnabled: widget.onPressed != null,
       width: widget.width,
       height: widget.height + ((textScale - 1).clamp(0.0, 1.0).toDouble() * 32),
-      border: widget.border,
+      border:
+          widget.border ??
+          (_hasFocus
+              ? Border.all(
+                  color: colors?.brand ?? Theme.of(context).colorScheme.primary,
+                  width: geometry?.focusRingWidth ?? 3,
+                )
+              : null),
       child: ElevatedButton(
         focusNode: widget.focusNode,
         onFocusChange: (value) {
@@ -64,7 +74,9 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
           elevation: 1,
           backgroundColor: _backgroundColor,
           foregroundColor: _foregroundColor,
-          padding: widget.padding,
+          padding:
+              widget.padding ??
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
         child: DefaultTextStyle(
           style: _defaultTextStyle,
@@ -77,8 +89,9 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   }
 
   Color get _backgroundColor {
-    // Always use the theme's primary color for both background and text
-    return widget.backgroundColor ?? Theme.of(context).colorScheme.primary;
+    return widget.backgroundColor ??
+        Theme.of(context).extension<GleecColorTokens>()?.brand ??
+        Theme.of(context).colorScheme.primary;
   }
 
   Color get _shadowColor {
@@ -88,6 +101,9 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   }
 
   Color get _foregroundColor {
+    if (widget.backgroundColor == null) {
+      return Theme.of(context).colorScheme.onPrimary;
+    }
     return ThemeData.estimateBrightnessForColor(_backgroundColor) ==
             Brightness.dark
         ? Colors.white
@@ -118,9 +134,14 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
     return baseStyle.merge(widget.textStyle);
   }
 
-  OutlinedBorder get _shape => RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(widget.borderRadius ?? 18)),
-  );
+  OutlinedBorder get _shape {
+    final geometry = Theme.of(context).extension<GleecGeometry>();
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(
+        Radius.circular(widget.borderRadius ?? geometry?.radius16 ?? 16),
+      ),
+    );
+  }
 }
 
 class _ButtonContent extends StatelessWidget {
@@ -135,14 +156,7 @@ class _ButtonContent extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (prefix != null) ...[prefix!, const SizedBox(width: 8)],
-        Flexible(
-          child: Text(
-            text,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-        ),
+        Flexible(child: Text(text, textAlign: TextAlign.center)),
       ],
     );
   }

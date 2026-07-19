@@ -4,7 +4,7 @@ import 'package:web_dex/router/routes.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/views/bridge/bridge_page.dart';
 import 'package:web_dex/features/gnosis_card/presentation/gnosis_card_page.dart';
-import 'package:web_dex/views/dex/dex_page.dart';
+import 'package:web_dex/features/unified_swap/presentation/unified_swap_composition_root.dart';
 import 'package:web_dex/views/fiat/fiat_page.dart';
 import 'package:web_dex/views/market_maker_bot/market_maker_bot_page.dart';
 import 'package:web_dex/views/nfts/nft_page.dart';
@@ -23,7 +23,7 @@ class PageContentRouterDelegate extends RouterDelegate<AppRoutePath>
       case MainMenuValue.fiat:
         return const FiatPage();
       case MainMenuValue.dex:
-        return const DexPage();
+        return const UnifiedSwapCompositionRoot();
       case MainMenuValue.bridge:
         return const BridgePage();
       case MainMenuValue.card:

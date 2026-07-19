@@ -36,7 +36,7 @@ class _CoinProtocol extends StatelessWidget {
       style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
-        color: theme.custom.dexCoinProtocolColor,
+        color: Theme.of(context).calmCoreCompatibility.dexCoinProtocolColor,
       ),
     );
   }
