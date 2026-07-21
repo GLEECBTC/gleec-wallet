@@ -25,8 +25,11 @@ class TakerCoinSelectorClick extends TakerEvent {}
 class TakerOrderSelectorClick extends TakerEvent {}
 
 class TakerSetSellCoin extends TakerEvent {
-  TakerSetSellCoin(this.coin,
-      {this.autoSelectOrderAbbr, this.setOnlyIfNotSet = false});
+  TakerSetSellCoin(
+    this.coin, {
+    this.autoSelectOrderAbbr,
+    this.setOnlyIfNotSet = false,
+  });
 
   final Coin? coin;
   final String? autoSelectOrderAbbr;
@@ -42,12 +45,19 @@ class TakerSelectOrder extends TakerEvent {
 class TakerSetDefaults extends TakerEvent {}
 
 class TakerAddError extends TakerEvent {
-  TakerAddError(this.error);
+  TakerAddError(this.error, {this.walletId, this.formRevision});
 
   final DexFormError error;
+  final String? walletId;
+  final int? formRevision;
 }
 
-class TakerClearErrors extends TakerEvent {}
+class TakerClearErrors extends TakerEvent {
+  TakerClearErrors({this.walletId, this.formRevision});
+
+  final String? walletId;
+  final int? formRevision;
+}
 
 class TakerUpdateBestOrders extends TakerEvent {
   TakerUpdateBestOrders({this.autoSelectOrderAbbr});
@@ -83,12 +93,16 @@ class TakerAmountButtonClick extends TakerEvent {
   final double fraction;
 }
 
-class TakerUpdateFees extends TakerEvent {}
+class TakerUpdateFees extends TakerEvent {
+  const TakerUpdateFees();
+}
 
 class TakerSetPreimage extends TakerEvent {
-  TakerSetPreimage(this.tradePreimage);
+  TakerSetPreimage(this.tradePreimage, {this.walletId, this.formRevision});
 
   final TradePreimage? tradePreimage;
+  final String? walletId;
+  final int? formRevision;
 }
 
 class TakerFormSubmitClick extends TakerEvent {}
@@ -112,3 +126,11 @@ class TakerSetWalletIsReady extends TakerEvent {
 }
 
 class TakerVerifyOrderVolume extends TakerEvent {}
+
+/// Internal lifecycle event used to invalidate state on every wallet change.
+class TakerWalletChanged extends TakerEvent {
+  const TakerWalletChanged(this.walletId, {this.forceSessionChange = false});
+
+  final String? walletId;
+  final bool forceSessionChange;
+}

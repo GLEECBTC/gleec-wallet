@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show KomodoDefiRpcMethodsExtension;
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/mm2/mm2.dart';
@@ -77,9 +79,9 @@ class Mm2Api {
   Future<void> disableCoin(String coinId) async {
     try {
       await _mm2.call(DisableCoinReq(coin: coinId));
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error disabling $coinId: $e',
+        'Unable to disable asset',
         path: 'api=> disableCoin => _call',
         trace: s,
         isError: true,
@@ -101,7 +103,7 @@ class Mm2Api {
     final balance = await getBalance(abbr);
     if (balance == null) {
       log(
-        'Failed to retrieve balance for fallback construction of MaxTakerVolResponse for $abbr',
+        'Unable to construct maximum taker volume fallback',
         path: 'api => _fallbackToBalanceTaker',
         isError: true,
       ).ignore();
@@ -121,9 +123,9 @@ class Mm2Api {
   ) async {
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting active swaps: $e',
+        'Unable to get active swaps',
         path: 'api => getActiveSwaps',
         trace: s,
         isError: true,
@@ -140,9 +142,9 @@ class Mm2Api {
       return await _mm2.call(
         ValidateAddressRequest(coin: coinAbbr, address: address),
       );
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error validating address $coinAbbr: $e',
+        'Unable to validate address',
         path: 'api => validateAddress',
         trace: s,
         isError: true,
@@ -154,9 +156,9 @@ class Mm2Api {
   Future<Map<String, dynamic>?> withdraw(WithdrawRequest request) async {
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error withdrawing ${request.params.coin}: $e',
+        'Unable to prepare withdrawal',
         path: 'api => withdraw',
         trace: s,
         isError: true,
@@ -177,9 +179,9 @@ class Mm2Api {
         );
       }
       return SendRawTransactionResponse.fromJson(response);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error sending raw transaction ${request.coin}: $e',
+        'Unable to broadcast transaction',
         path: 'api => sendRawTransaction',
         trace: s,
         isError: true,
@@ -196,9 +198,9 @@ class Mm2Api {
   ) async {
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error sending raw transaction ${request.coin}: $e',
+        'Unable to get transaction history',
         path: 'api => getTransactions',
         trace: s,
         isError: true,
@@ -212,9 +214,9 @@ class Mm2Api {
   ) async {
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error sending raw transaction ${request.params.coin}: $e',
+        'Unable to get transaction history',
         path: 'api => getTransactions',
         trace: s,
         isError: true,
@@ -228,9 +230,9 @@ class Mm2Api {
   ) async {
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting rewards info: $e',
+        'Unable to get rewards information',
         path: 'api => getRewardsInfo',
         trace: s,
         isError: true,
@@ -256,7 +258,7 @@ class Mm2Api {
         },
         maxAttempts: 4,
         backoffStrategy: const LinearBackoff(
-          initialDelay: Duration(milliseconds:  500),
+          initialDelay: Duration(milliseconds: 500),
           increment: Duration(milliseconds: 250),
           maxDelay: Duration(seconds: 3),
         ),
@@ -264,63 +266,94 @@ class Mm2Api {
       return response;
     } catch (e, s) {
       log(
-        'Error getting best orders ${request.coin}: $e',
+        'Unable to load best orders',
         path: 'api => getBestOrders',
         trace: s,
         isError: true,
       ).ignore();
-      return <String, dynamic>{'error': e.toString()};
+      final isNoPeerLiquidity = e.toString().toLowerCase().contains(
+        'no response from any peer',
+      );
+      return <String, dynamic>{
+        'error': isNoPeerLiquidity
+            ? 'No response from any peer'
+            : 'Unable to load market offers',
+      };
     }
   }
 
-  Future<Map<String, dynamic>> sell(SellRequest request) async {
+  Future<Map<String, dynamic>> sell(
+    SellRequest request, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    await beforeMutation?.call();
     try {
       return await _mm2.call(request);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error sell ${request.base}/${request.rel}: $e',
+        'Unable to submit taker order',
         path: 'api => sell',
         trace: s,
         isError: true,
       ).ignore();
-      return <String, dynamic>{'error': e};
+      return <String, dynamic>{'error': 'Unable to submit taker order'};
     }
   }
 
-  Future<Map<String, dynamic>?> setprice(SetPriceRequest request) async {
+  Future<Map<String, dynamic>?> setprice(
+    SetPriceRequest request, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    await beforeMutation?.call();
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error setprice ${request.base}/${request.rel}: $e',
+        'Unable to submit maker order',
         path: 'api => setprice',
         trace: s,
         isError: true,
       ).ignore();
-      return <String, dynamic>{'error': e};
+      return <String, dynamic>{'error': 'Unable to submit maker order'};
     }
   }
 
-  Future<Map<String, dynamic>> cancelOrder(CancelOrderRequest request) async {
+  Future<Map<String, dynamic>> cancelOrder(
+    CancelOrderRequest request, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    await beforeMutation?.call();
     try {
-      return await _mm2.call(request);
-    } catch (e, s) {
+      final response = await _sdk.client.rpc.orderbook.cancelOrder(
+        uuid: request.uuid,
+      );
+      return <String, dynamic>{
+        'result': <String, dynamic>{'cancelled': response.cancelled},
+      };
+    } catch (_, s) {
       log(
-        'Error cancelOrder ${request.uuid}: $e',
+        'Unable to cancel order',
         path: 'api => cancelOrder',
         trace: s,
         isError: true,
       ).ignore();
-      return <String, dynamic>{'error': e};
+      return <String, dynamic>{'error': 'Unable to cancel order'};
     }
+  }
+
+  static bool isPositiveCancelOrderResponse(Map<String, dynamic> response) {
+    final result = response['result'];
+    return response['error'] == null &&
+        result is Map &&
+        result['cancelled'] == true;
   }
 
   Future<Map<String, dynamic>> getSwapStatus(MySwapStatusReq request) async {
     try {
       return await _mm2.call(request);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error sell getting swap status ${request.uuid}: $e',
+        'Unable to load swap status',
         path: 'api => getSwapStatus',
         trace: s,
         isError: true,
@@ -341,9 +374,9 @@ class Mm2Api {
         return null;
       }
       return MyOrdersResponse.fromJson(response);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting my orders: $e',
+        'Unable to load wallet orders',
         path: 'api => getMyOrders',
         trace: s,
         isError: true,
@@ -365,9 +398,9 @@ class Mm2Api {
         return null;
       }
       return MyRecentSwapsResponse.fromJson(response);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting my recent swaps: $e',
+        'Unable to load recent swaps',
         path: 'api => getMyRecentSwaps',
         trace: s,
         isError: true,
@@ -384,9 +417,9 @@ class Mm2Api {
         return null;
       }
       return OrderStatusResponse.fromJson(response);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting order status $uuid: $e',
+        'Unable to load order status',
         path: 'api => getOrderStatus',
         trace: s,
         isError: true,
@@ -402,9 +435,9 @@ class Mm2Api {
         return null;
       }
       return ImportSwapsResponse.fromJson(response);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error import swaps : $e',
+        'Unable to import swaps',
         path: 'api => importSwaps',
         trace: s,
         isError: true,
@@ -414,22 +447,24 @@ class Mm2Api {
   }
 
   Future<RecoverFundsOfSwapResponse?> recoverFundsOfSwap(
-    RecoverFundsOfSwapRequest request,
-  ) async {
+    RecoverFundsOfSwapRequest request, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    await beforeMutation?.call();
     try {
       final JsonMap json = await _mm2.call(request);
       if (json['error'] != null) {
         log(
-          'Error recovering funds of swap ${request.uuid}: ${json['error']}',
+          'Unable to recover swap funds',
           path: 'api => recoverFundsOfSwap',
           isError: true,
         ).ignore();
         return null;
       }
       return RecoverFundsOfSwapResponse.fromJson(json);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error recovering funds of swap ${request.uuid}: $e',
+        'Unable to recover swap funds',
         path: 'api => recoverFundsOfSwap',
         trace: s,
         isError: true,
@@ -447,9 +482,9 @@ class Mm2Api {
         return await _fallbackToBalanceTaker(request.coin);
       }
       return MaxTakerVolResponse.fromJson(json);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting max taker volume ${request.coin}: $e',
+        'Unable to determine maximum taker volume',
         path: 'api => getMaxTakerVolume',
         trace: s,
         isError: true,
@@ -467,9 +502,9 @@ class Mm2Api {
         return await _fallbackToBalanceMaker(request.coin);
       }
       return MaxMakerVolResponse.fromJson(json);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting max maker volume ${request.coin}: $e',
+        'Unable to determine maximum maker volume',
         path: 'api => getMaxMakerVolume',
         trace: s,
         isError: true,
@@ -482,7 +517,7 @@ class Mm2Api {
     final balance = await getBalance(coinAbbr);
     if (balance == null) {
       log(
-        'Failed to retrieve balance for fallback construction of MaxMakerVolResponse for $coinAbbr',
+        'Unable to construct maximum maker volume fallback',
         path: 'api => _fallbackToBalanceMaker',
         isError: true,
       ).ignore();
@@ -507,9 +542,9 @@ class Mm2Api {
         return null;
       }
       return MinTradingVolResponse.fromJson(json);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting min trading volume ${request.coin}: $e',
+        'Unable to determine minimum trading volume',
         path: 'api => getMinTradingVol',
         trace: s,
         isError: true,
@@ -529,9 +564,9 @@ class Mm2Api {
         return null;
       }
       return OrderBookDepthResponse.fromJson(json, coinsRepository);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting orderbook depth $request: $e',
+        'Unable to load orderbook depth',
         path: 'api => getOrderBookDepth',
         trace: s,
       ).ignore();
@@ -556,9 +591,9 @@ class Mm2Api {
         request: request,
         result: TradePreimageResponse.fromJson(responseJson).result,
       );
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting trade preimage ${request.base}/${request.rel}: $e',
+        'Unable to prepare trade fees',
         path: 'api => getTradePreimage',
         trace: s,
         isError: true,
@@ -581,18 +616,17 @@ class Mm2Api {
   ) async {
     try {
       final JsonMap response = await _mm2.call(marketMakerBotRequest.toJson());
-      log(
-        response.toString(),
-        path: 'api => ${marketMakerBotRequest.method} => _call',
-      ).ignore();
 
       if (response['error'] != null) {
         throw RpcException(RpcError.fromJson(response));
       }
-    } catch (e, s) {
+    } catch (_, s) {
+      // Daemon responses and exceptions can embed exact orders, assets,
+      // amounts, addresses, or authenticated request details. Record only the
+      // operation category; callers retain the typed failure in memory.
       log(
-        'Error starting or stopping simple market maker bot: $e',
-        path: 'api => start_simple_market_maker_bot => _call',
+        'Simple market maker bot request failed',
+        path: 'api => market_maker_bot => _call',
         trace: s,
         isError: true,
       ).ignore();
@@ -626,9 +660,9 @@ class Mm2Api {
         return null;
       }
       return ShowPrivKeyResponse.fromJson(json);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting privkey ${request.coin}: $e',
+        'Unable to get private-key response',
         path: 'api => showPrivKey',
         trace: s,
         isError: true,
@@ -644,7 +678,7 @@ class Mm2Api {
       final JsonMap json = await _mm2.call(request);
       if (json['error'] != null) {
         log(
-          'Error getting directly connected peers: ${json['error']}',
+          'Unable to get directly connected peers',
           isError: true,
           path: 'api => getDirectlyConnectedPeers',
         ).ignore();
@@ -652,9 +686,9 @@ class Mm2Api {
       }
 
       return GetDirectlyConnectedPeersResponse.fromJson(json);
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Error getting directly connected peers',
+        'Unable to get directly connected peers',
         path: 'api => getDirectlyConnectedPeers',
         trace: s,
         isError: true,

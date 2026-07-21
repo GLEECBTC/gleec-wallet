@@ -6,11 +6,34 @@ import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart'
 import 'package:web_dex/features/unified_swap/domain/route_execution_models.dart';
 import 'package:web_dex/features/unified_swap/domain/route_execution_repository.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_model_limits.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_product_policy.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_quote_models.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/kdf_unified_swap_quote_repository.dart';
 
 typedef UnifiedSwapExecutionEligibilityCheck =
     Future<bool> Function(RouteExecutionReview review);
+typedef RouteExecutionCurrentWalletId = Future<String?> Function();
+
+final class KdfRouteExecutionDeadlines {
+  const KdfRouteExecutionDeadlines({
+    this.init = const Duration(seconds: 20),
+    this.reattach = const Duration(seconds: 20),
+    this.control = const Duration(seconds: 20),
+    this.observationInactivity = const Duration(seconds: 90),
+  });
+
+  final Duration init;
+  final Duration reattach;
+  final Duration control;
+  final Duration observationInactivity;
+
+  bool get isValid =>
+      init > Duration.zero &&
+      reattach > Duration.zero &&
+      control > Duration.zero &&
+      observationInactivity > Duration.zero;
+}
 
 /// Wallet-scoped adapter for KDF's durable route-execution task API.
 ///
@@ -21,19 +44,29 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
   KdfRouteExecutionRepository({
     required String walletId,
     required TradeRouteManager manager,
+    required RouteExecutionCurrentWalletId currentWalletId,
     UnifiedSwapExecutionEligibilityCheck? executionEligibilityCheck,
     DateTime Function()? now,
+    this.deadlines = const KdfRouteExecutionDeadlines(),
   }) : _walletId = _validWalletId(walletId),
        _manager = manager,
+       _currentWalletId = currentWalletId,
        _executionEligibilityCheck = executionEligibilityCheck,
-       _now = now ?? _utcNow;
+       _now = now ?? _utcNow {
+    if (!deadlines.isValid) {
+      throw ArgumentError('Route execution deadlines must be positive');
+    }
+  }
 
   final String _walletId;
   final TradeRouteManager _manager;
+  final RouteExecutionCurrentWalletId _currentWalletId;
   final UnifiedSwapExecutionEligibilityCheck? _executionEligibilityCheck;
   final DateTime Function() _now;
+  final KdfRouteExecutionDeadlines deadlines;
   final Map<String, _RegisteredReview> _registeredReviews = {};
   final Map<String, _SessionBinding> _sessions = {};
+  static const _maximumRetainedAuthorities = 100;
   bool _isDisposed = false;
 
   /// Verifies and registers one server-prepared Review/consent authority.
@@ -51,6 +84,11 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
     _registeredReviews.removeWhere(
       (_, registered) => registered.review.isExpiredAt(_now()),
     );
+    if (_registeredReviews.length >= _maximumRetainedAuthorities) {
+      throw const RouteExecutionException(
+        RouteExecutionFailure.serviceUnavailable,
+      );
+    }
     if (!_isUuid(routeExecutionId) || !_validatePreparedExecution(prepared)) {
       throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
     }
@@ -61,6 +99,7 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
         routeExecutionId: routeExecutionId,
         prepared: prepared,
         intent: verified.intent,
+        riskWarnings: verified.riskWarnings,
       );
     } on Object {
       throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
@@ -76,6 +115,93 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
       consent: prepared.routeConsent,
     );
     return review;
+  }
+
+  /// Projects and validates a replacement without changing either authority.
+  RouteExecutionReview previewRegisteredReplacement({
+    required RouteExecutionReview expectedReview,
+    required KdfVerifiedPreparedExecution verified,
+  }) => _validatedRegisteredReplacement(
+    expectedReview: expectedReview,
+    verified: verified,
+  ).replacement;
+
+  /// Atomically supersedes one unconsumed authority after the projected Review
+  /// has also passed the domain/BLoC replacement invariant check.
+  ///
+  /// Projection and registration are checked again as a compare-and-swap. The
+  /// old Review remains registered if validation fails at any point.
+  RouteExecutionReview replaceRegisteredReview({
+    required RouteExecutionReview expectedReview,
+    required RouteExecutionReview expectedReplacement,
+    required KdfVerifiedPreparedExecution verified,
+  }) {
+    final proposal = _validatedRegisteredReplacement(
+      expectedReview: expectedReview,
+      verified: verified,
+    );
+    final registered = proposal.registered;
+    final replacement = proposal.replacement;
+    if (replacement != expectedReplacement ||
+        !identical(_registeredReviews[expectedReview.reviewId], registered)) {
+      throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
+    }
+
+    final replacementRegistration = _RegisteredReview(
+      review: replacement,
+      consent: verified.prepared.routeConsent,
+    );
+    if (replacement.reviewId == expectedReview.reviewId) {
+      _registeredReviews[replacement.reviewId] = replacementRegistration;
+      return replacement;
+    }
+
+    _registeredReviews[replacement.reviewId] = replacementRegistration;
+    final removed = _registeredReviews.remove(expectedReview.reviewId);
+    if (!identical(removed, registered)) {
+      _registeredReviews.remove(replacement.reviewId);
+      if (removed != null) {
+        _registeredReviews[expectedReview.reviewId] = removed;
+      }
+      throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
+    }
+    return replacement;
+  }
+
+  ({_RegisteredReview registered, RouteExecutionReview replacement})
+  _validatedRegisteredReplacement({
+    required RouteExecutionReview expectedReview,
+    required KdfVerifiedPreparedExecution verified,
+  }) {
+    _ensureActive();
+    final registered = _registeredReviews[expectedReview.reviewId];
+    if (registered == null ||
+        registered.review != expectedReview ||
+        expectedReview.walletId != _walletId ||
+        expectedReview.isExpiredAt(_now()) ||
+        !_validatePreparedExecution(verified.prepared)) {
+      throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
+    }
+
+    late final RouteExecutionReview replacement;
+    try {
+      replacement = _preparedReview(
+        walletId: _walletId,
+        routeExecutionId: expectedReview.routeExecutionId,
+        prepared: verified.prepared,
+        intent: verified.intent,
+        riskWarnings: verified.riskWarnings,
+      );
+    } on Object {
+      throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
+    }
+    final collision = _registeredReviews[replacement.reviewId];
+    if (!replacement.isExecutable ||
+        replacement.isExpiredAt(_now()) ||
+        (collision != null && !identical(collision, registered))) {
+      throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
+    }
+    return (registered: registered, replacement: replacement);
   }
 
   /// Removes an unconsumed same-session authority that presentation rejected
@@ -112,26 +238,59 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
       throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
     }
 
-    // Consume before any asynchronous work so one review can authorize at
-    // most one fresh-init attempt, including when transport later fails.
-    _registeredReviews.remove(reviewId);
     if (registered.review.isExpiredAt(_now())) {
       throw const RouteExecutionException(RouteExecutionFailure.reviewExpired);
     }
-    if (!await _isEligible(registered.review)) {
+    final budget = _OperationBudget(deadlines.init);
+    late final bool eligible;
+    try {
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+      eligible = await budget.run(() => _isEligible(registered.review));
+    } on Object {
+      throw const RouteExecutionException(
+        RouteExecutionFailure.capabilityUnavailable,
+      );
+    }
+    if (!eligible) {
       throw const RouteExecutionException(
         RouteExecutionFailure.capabilityUnavailable,
       );
     }
 
+    // Eligibility is a reversible preflight. Re-check after it completes so
+    // concurrent dismiss/init work cannot reuse the same authority, then
+    // consume immediately before the first route-init attempt. Any transport
+    // uncertainty after this point remains one-shot and must reconcile.
+    await _requireCurrentAuthenticatedWallet(walletId, budget);
+    final current = _registeredReviews[reviewId];
+    if (!identical(current, registered)) {
+      throw const RouteExecutionException(RouteExecutionFailure.invalidReview);
+    }
+    if (registered.review.isExpiredAt(_now())) {
+      throw const RouteExecutionException(RouteExecutionFailure.reviewExpired);
+    }
+    _registeredReviews.remove(reviewId);
+
+    var mutationMayHaveStarted = false;
     try {
-      final task = await _manager.initTradeRoute(
-        routeExecutionId: routeExecutionId,
-        routeConsent: registered.consent,
+      final task = await budget.run(
+        () => _manager.initTradeRoute(
+          routeExecutionId: routeExecutionId,
+          routeConsent: registered.consent,
+          beforeMutation: () async {
+            await _requireCurrentAuthenticatedWallet(walletId, budget);
+            mutationMayHaveStarted = true;
+          },
+        ),
       );
-      return _recordSession(task, registered.review.steps.length);
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+      return _recordSession(task, registered.review.steps);
     } on Object catch (error) {
-      throw _asExecutionException(error);
+      final failure = _asExecutionException(error).failure;
+      if (!mutationMayHaveStarted) {
+        throw RouteExecutionException(failure);
+      }
+      throw RouteExecutionUncertainInitException(failure);
     }
   }
 
@@ -153,17 +312,25 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
     _ensureActive();
     _requireWallet(walletId);
     _requireRouteId(routeExecutionId);
+    final budget = _OperationBudget(deadlines.reattach);
     try {
-      final attached = await _manager.reattachTradeRoute(
-        routeExecutionId: routeExecutionId,
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+      final attached = await budget.run(
+        () => _manager.reattachTradeRoute(
+          routeExecutionId: routeExecutionId,
+          beforeMutation: () =>
+              _requireCurrentAuthenticatedWallet(walletId, budget),
+        ),
       );
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+      final stages = _routeSteps(attached.execution.candidate.stages);
       return _recordSession(
         attached.task,
-        attached.execution.candidate.stages.length,
+        stages,
         durableProgress: _progressFromDetails(
           attached.execution.status,
           taskKind: _taskKindForDurableStatus(attached.execution.status),
-          stageCount: attached.execution.candidate.stages.length,
+          stages: stages,
         ),
       );
     } on Object catch (error) {
@@ -184,13 +351,24 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
 
   Stream<RouteExecutionProgress> _observe(_SessionBinding binding) async* {
     try {
+      await _requireCurrentAuthenticatedWallet(
+        _walletId,
+        _OperationBudget(deadlines.control),
+      );
       final durableProgress = binding.durableProgress;
       if (durableProgress != null) {
         yield durableProgress;
         if (!_shouldContinueObservation(durableProgress)) return;
       }
-      await for (final response in _manager.observeStatus(binding.task)) {
-        yield _progress(response.result, stageCount: binding.stageCount);
+      await for (final response
+          in _manager
+              .observeStatus(binding.task)
+              .timeout(deadlines.observationInactivity)) {
+        await _requireCurrentAuthenticatedWallet(
+          _walletId,
+          _OperationBudget(deadlines.control),
+        );
+        yield _progress(response.result, stages: binding.stages);
       }
     } on Object catch (error, stackTrace) {
       Error.throwWithStackTrace(_asExecutionException(error), stackTrace);
@@ -205,10 +383,32 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
     _ensureActive();
     _requireWallet(walletId);
     _requireRouteId(routeExecutionId);
+    final budget = _OperationBudget(deadlines.control);
     try {
-      await _manager.cancelTradeRoute(routeExecutionId: routeExecutionId);
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
     } on Object catch (error) {
       throw _asExecutionException(error);
+    }
+    var mutationMayHaveStarted = false;
+    try {
+      await budget.run(
+        () => _manager.cancelTradeRoute(
+          routeExecutionId: routeExecutionId,
+          beforeMutation: () async {
+            await _requireCurrentAuthenticatedWallet(walletId, budget);
+            mutationMayHaveStarted = true;
+          },
+        ),
+      );
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+    } on TradeRouteControlNotAuthorizedException catch (error) {
+      throw _asExecutionException(error);
+    } on TradeRouteIdentityMismatchException catch (error) {
+      throw _asExecutionException(error);
+    } on Object catch (error) {
+      final failure = _asExecutionException(error).failure;
+      if (!mutationMayHaveStarted) throw RouteExecutionException(failure);
+      throw RouteExecutionUncertainControlException(failure);
     }
   }
 
@@ -220,10 +420,32 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
     _ensureActive();
     _requireWallet(walletId);
     _requireRouteId(routeExecutionId);
+    final budget = _OperationBudget(deadlines.control);
     try {
-      await _manager.stopAfterCurrent(routeExecutionId: routeExecutionId);
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
     } on Object catch (error) {
       throw _asExecutionException(error);
+    }
+    var mutationMayHaveStarted = false;
+    try {
+      await budget.run(
+        () => _manager.stopAfterCurrent(
+          routeExecutionId: routeExecutionId,
+          beforeMutation: () async {
+            await _requireCurrentAuthenticatedWallet(walletId, budget);
+            mutationMayHaveStarted = true;
+          },
+        ),
+      );
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+    } on TradeRouteControlNotAuthorizedException catch (error) {
+      throw _asExecutionException(error);
+    } on TradeRouteIdentityMismatchException catch (error) {
+      throw _asExecutionException(error);
+    } on Object catch (error) {
+      final failure = _asExecutionException(error).failure;
+      if (!mutationMayHaveStarted) throw RouteExecutionException(failure);
+      throw RouteExecutionUncertainControlException(failure);
     }
   }
 
@@ -247,25 +469,47 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
     }
 
     late final kdf.RouteExecutionUserAction action;
+    final budget = _OperationBudget(deadlines.control);
     try {
-      action = await _actionFor(binding, decision);
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+      action = await _actionFor(binding, decision, budget);
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
     } on RouteExecutionException {
       rethrow;
-    } on Object {
-      throw const RouteExecutionException(
-        RouteExecutionFailure.actionNotAuthorized,
-      );
-    }
-    try {
-      final acknowledgement = await _manager.deliverUserAction(
-        task: binding.task,
-        userAction: action,
-      );
-      return RouteActionAcknowledgement(
-        wasDelivered: acknowledgement.wasDelivered,
-      );
     } on Object catch (error) {
       throw _asExecutionException(error);
+    }
+    var mutationMayHaveStarted = false;
+    try {
+      final acknowledgement = await budget.run(
+        () => _manager.deliverUserAction(
+          task: binding.task,
+          userAction: action,
+          beforeMutation: () async {
+            await _requireCurrentAuthenticatedWallet(walletId, budget);
+            mutationMayHaveStarted = true;
+          },
+        ),
+      );
+      if (!acknowledgement.wasDelivered) {
+        throw const RouteExecutionUncertainDecisionException(
+          RouteExecutionFailure.serviceUnavailable,
+        );
+      }
+      await _requireCurrentAuthenticatedWallet(walletId, budget);
+      return RouteActionAcknowledgement(wasDelivered: true);
+    } on RouteExecutionUncertainDecisionException {
+      rethrow;
+    } on TradeRouteActionNotAuthorizedException catch (error) {
+      throw _asExecutionException(error);
+    } on TradeRouteControlNotAuthorizedException catch (error) {
+      throw _asExecutionException(error);
+    } on TradeRouteIdentityMismatchException catch (error) {
+      throw _asExecutionException(error);
+    } on Object catch (error) {
+      final failure = _asExecutionException(error).failure;
+      if (!mutationMayHaveStarted) throw RouteExecutionException(failure);
+      throw RouteExecutionUncertainDecisionException(failure);
     }
   }
 
@@ -282,12 +526,18 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
 
   RouteExecutionSession _recordSession(
     TradeRouteTaskHandle task,
-    int stageCount, {
+    List<RouteReviewStep> stages, {
     RouteExecutionProgress? durableProgress,
   }) {
+    if (!_sessions.containsKey(task.routeExecutionId) &&
+        _sessions.length >= _maximumRetainedAuthorities) {
+      throw const RouteExecutionException(
+        RouteExecutionFailure.serviceUnavailable,
+      );
+    }
     final binding = _SessionBinding(
       task: task,
-      stageCount: stageCount,
+      stages: stages,
       durableProgress: durableProgress,
     );
     _sessions[task.routeExecutionId] = binding;
@@ -311,6 +561,7 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
   Future<kdf.RouteExecutionUserAction> _actionFor(
     _SessionBinding binding,
     RouteExecutionDecision decision,
+    _OperationBudget budget,
   ) async {
     switch (decision.kind) {
       case RouteExecutionActionKind.rejectChange:
@@ -336,12 +587,13 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
             RouteExecutionFailure.actionNotAuthorized,
           );
         }
-        _registeredReviews.remove(recoveryReviewId);
-        return kdf.RouteExecutionUserAction.selectRecoveryRoute(
+        final action = kdf.RouteExecutionUserAction.selectRecoveryRoute(
           actionId: decision.actionId,
           expectedStateRevision: decision.expectedStateRevision,
           recoveryRouteConsent: registered.consent,
         );
+        _registeredReviews.remove(recoveryReviewId);
+        return action;
       case RouteExecutionActionKind.acceptReplacement:
         final proposalDigest = decision.replacementProposalDigest;
         if (proposalDigest == null || !_isCanonicalValue(proposalDigest)) {
@@ -349,8 +601,10 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
             RouteExecutionFailure.actionNotAuthorized,
           );
         }
-        final execution = await _manager.getExecution(
-          routeExecutionId: binding.task.routeExecutionId,
+        final execution = await budget.run(
+          () => _manager.getExecution(
+            routeExecutionId: binding.task.routeExecutionId,
+          ),
         );
         final status = execution.status;
         final pending = status.pendingUserAction;
@@ -410,6 +664,41 @@ final class KdfRouteExecutionRepository implements RouteExecutionRepository {
       );
     }
   }
+
+  Future<void> _requireCurrentAuthenticatedWallet(
+    String walletId,
+    _OperationBudget budget,
+  ) async {
+    _ensureActive();
+    final currentWalletId = await budget.run(_currentWalletId);
+    _ensureActive();
+    if (currentWalletId != _walletId || currentWalletId != walletId) {
+      throw const RouteExecutionException(
+        RouteExecutionFailure.capabilityUnavailable,
+      );
+    }
+  }
+}
+
+/// A monotonic budget shared by preflight and the state-changing RPC.
+///
+/// The injected wall clock remains authoritative for consent expiry, while a
+/// device clock adjustment cannot extend an in-flight execution deadline.
+final class _OperationBudget {
+  _OperationBudget(this.duration) : _stopwatch = Stopwatch()..start();
+
+  final Duration duration;
+  final Stopwatch _stopwatch;
+
+  Future<T> run<T>(Future<T> Function() operation) {
+    final remaining = duration - _stopwatch.elapsed;
+    if (remaining <= Duration.zero) {
+      return Future<T>.error(
+        TimeoutException('Route execution deadline elapsed'),
+      );
+    }
+    return operation().timeout(remaining);
+  }
 }
 
 final class _RegisteredReview {
@@ -422,35 +711,35 @@ final class _RegisteredReview {
 final class _SessionBinding {
   const _SessionBinding({
     required this.task,
-    required this.stageCount,
+    required this.stages,
     required this.durableProgress,
   });
 
   final TradeRouteTaskHandle task;
-  final int stageCount;
+  final List<RouteReviewStep> stages;
   final RouteExecutionProgress? durableProgress;
 }
 
 RouteExecutionProgress _progress(
   kdf.TradeRouteTaskStatus status, {
-  required int stageCount,
+  required List<RouteReviewStep> stages,
 }) {
   return switch (status) {
     kdf.TradeRouteInProgressStatus(:final details) => _progressFromDetails(
       details,
       taskKind: _TaskKind.inProgress,
-      stageCount: stageCount,
+      stages: stages,
     ),
     kdf.TradeRouteUserActionRequiredStatus(:final details) =>
       _progressFromDetails(
         details,
         taskKind: _TaskKind.userActionRequired,
-        stageCount: stageCount,
+        stages: stages,
       ),
     kdf.TradeRouteOkStatus(:final details) => _progressFromDetails(
       details,
       taskKind: _TaskKind.ok,
-      stageCount: stageCount,
+      stages: stages,
     ),
     kdf.TradeRouteErrorStatus(:final details) => throw RouteExecutionException(
       _failureFor(details),
@@ -482,7 +771,7 @@ bool _shouldContinueObservation(RouteExecutionProgress progress) =>
 RouteExecutionProgress _progressFromDetails(
   kdf.RouteExecutionStatus details, {
   required _TaskKind taskKind,
-  required int stageCount,
+  required List<RouteReviewStep> stages,
 }) {
   final pending = _pendingAction(details.pendingUserAction);
   final phase = _executionPhase(details);
@@ -497,16 +786,213 @@ RouteExecutionProgress _progressFromDetails(
     phase: phase.value,
     stateRevision: details.stateRevision,
     stageIndex: details.stageIndex,
-    stageCount: stageCount,
+    stageCount: stages.length,
     controls: _controls(details.controls),
     pendingAction: pending,
     holding: _holding(details.actualHolding),
     transactionHashes: details.txHashes,
+    stages: stages,
+    stageResults: _executionStageResults(details.stageResults, stages),
+    approvalRecovery: _approvalRecovery(details.approvalRecovery),
     updatedAt: details.updatedAt,
     rawOutcomeDiscriminator: outcome.rawDiscriminator,
     rawPhaseDiscriminator: phase.rawDiscriminator,
   );
 }
+
+List<RouteReviewStep> _routeSteps(List<kdf.RouteStage> stages) => [
+  for (var sequence = 0; sequence < stages.length; sequence++)
+    _routeStep(sequence, stages[sequence]),
+];
+
+RouteReviewStep _routeStep(int sequence, kdf.RouteStage stage) {
+  final common = switch (stage) {
+    kdf.KdfAtomicRouteStage(:final common) => common,
+    kdf.ExternalLiquidityRouteStage(:final common) => common,
+    kdf.UnknownRouteStage() => null,
+  };
+  if (common == null || !stage.isExecutable) {
+    throw const RouteExecutionException(RouteExecutionFailure.unknown);
+  }
+  return RouteReviewStep(
+    sequence: sequence,
+    stageId: common.stageId,
+    kind: switch (stage) {
+      kdf.KdfAtomicRouteStage() => RouteReviewStepKind.atomic,
+      kdf.ExternalLiquidityRouteStage() => RouteReviewStepKind.external,
+      kdf.UnknownRouteStage() => RouteReviewStepKind.unknown,
+    },
+    source: _asset(common.fromAsset),
+    destination: _asset(common.toAsset),
+    sourceAmount: common.sourceAmount,
+    expectedReceive: common.expectedReceive,
+    minimumReceive: common.minimumReceive,
+  );
+}
+
+List<RouteStageHistoryEntry> _executionStageResults(
+  List<kdf.RouteStageResult> results,
+  List<RouteReviewStep> stages,
+) => [for (final result in results) _executionStageResult(result, stages)];
+
+RouteStageHistoryEntry _executionStageResult(
+  kdf.RouteStageResult result,
+  List<RouteReviewStep> stages,
+) {
+  final sequence = stages.indexWhere(
+    (stage) => stage.stageId == result.stageId,
+  );
+  if (sequence < 0) {
+    throw const RouteExecutionException(RouteExecutionFailure.unknown);
+  }
+  final phase = _stagePhase(result.routePhase);
+  return RouteStageHistoryEntry(
+    sequence: sequence,
+    stageId: result.stageId,
+    phase: phase.value,
+    startedAt: result.startedAt,
+    updatedAt: result.updatedAt,
+    completedAt: result.completedAt,
+    transactionHashes: result.txHashes,
+    evidence: _stageEvidence(result),
+    holding: _holding(result.actualHolding),
+    rawPhaseDiscriminator: phase.rawDiscriminator,
+  );
+}
+
+List<RouteSafeEvidence> _stageEvidence(kdf.RouteStageResult stage) => [
+  if (stage.sourceReceipt case final receipt?) _sourceReceipt(receipt),
+  if (stage.receivingEvidence case final evidence?)
+    _routeEvidence(
+      evidence,
+      RouteEvidenceKind.receiving,
+      providerStatus: stage.rawProviderStatus,
+      providerSubstatus: stage.rawProviderSubstatus,
+    ),
+  if (stage.refundEvidence case final evidence?)
+    _routeEvidence(
+      evidence,
+      RouteEvidenceKind.refund,
+      providerStatus: stage.rawProviderStatus,
+      providerSubstatus: stage.rawProviderSubstatus,
+    ),
+  if (stage.rawProviderStatus != null &&
+      stage.receivingEvidence is! kdf.ProviderStatusRouteEvidence &&
+      stage.refundEvidence is! kdf.ProviderStatusRouteEvidence)
+    RouteSafeEvidence(
+      kind: RouteEvidenceKind.providerStatus,
+      status: stage.rawProviderStatus,
+      substatus: stage.rawProviderSubstatus,
+    ),
+];
+
+RouteSafeEvidence _sourceReceipt(kdf.ChainTxReceipt receipt) {
+  if (!receipt.isExecutable) {
+    return RouteSafeEvidence(
+      kind: RouteEvidenceKind.unknown,
+      reference: receipt.txHash,
+      rawKindDiscriminator: 'source_receipt',
+    );
+  }
+  return RouteSafeEvidence(
+    kind: RouteEvidenceKind.sourceReceipt,
+    reference: receipt.txHash,
+    status: receipt.statusValue.rawValue,
+    substatus: '${receipt.confirmations}',
+  );
+}
+
+RouteSafeEvidence _routeEvidence(
+  kdf.RouteEvidence evidence,
+  RouteEvidenceKind contextualKind, {
+  String? providerStatus,
+  String? providerSubstatus,
+}) {
+  if (!evidence.isExecutable || evidence is kdf.UnknownRouteEvidence) {
+    return RouteSafeEvidence(
+      kind: RouteEvidenceKind.unknown,
+      reference: _safeEvidenceReference(evidence),
+      rawKindDiscriminator: evidence.evidenceType,
+    );
+  }
+  return RouteSafeEvidence(
+    kind: evidence is kdf.ProviderStatusRouteEvidence
+        ? RouteEvidenceKind.providerStatus
+        : contextualKind,
+    reference: _safeEvidenceReference(evidence),
+    status: evidence is kdf.ProviderStatusRouteEvidence
+        ? providerStatus
+        : _safeEvidenceStatus(evidence),
+    substatus: evidence is kdf.ProviderStatusRouteEvidence
+        ? providerSubstatus
+        : null,
+  );
+}
+
+String? _safeEvidenceStatus(kdf.RouteEvidence evidence) => switch (evidence) {
+  kdf.SourceTransactionRouteEvidence(:final state) => state.rawValue,
+  kdf.AtomicSwapRouteEvidence(:final state) => state.rawValue,
+  _ => null,
+};
+
+String? _safeEvidenceReference(kdf.RouteEvidence evidence) =>
+    switch (evidence) {
+      kdf.ExternalActionRouteEvidence(:final actionDigest) => actionDigest,
+      kdf.SourceTransactionRouteEvidence(:final txHash) => txHash,
+      kdf.AtomicSwapRouteEvidence(
+        :final spendTransactionHash,
+        :final swapUuid,
+      ) =>
+        spendTransactionHash ?? swapUuid,
+      kdf.ProviderStatusRouteEvidence(:final receiving, :final sending) =>
+        receiving?.txHash ?? sending?.txHash,
+      kdf.ProviderTransferRouteEvidence(:final transfer) => transfer.txHash,
+      kdf.UnknownRouteEvidence() => null,
+    };
+
+({RouteStagePhase value, String? rawDiscriminator}) _stagePhase(
+  kdf.WireEnumValue<kdf.RoutePhase> phase,
+) => switch (phase.knownValue) {
+  kdf.RoutePhase.validating => (
+    value: RouteStagePhase.preparing,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.executingStage ||
+  kdf.RoutePhase.waitingSourceReceipt ||
+  kdf.RoutePhase.atomicFill => (
+    value: RouteStagePhase.sending,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.waitingDestination => (
+    value: RouteStagePhase.receiving,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.stopAfterCurrent => (
+    value: RouteStagePhase.reconciliation,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.awaitingUserAction ||
+  kdf.RoutePhase.manualIntervention ||
+  kdf.RoutePhase.partial ||
+  kdf.RoutePhase.refundPending ||
+  kdf.RoutePhase.refunded => (
+    value: RouteStagePhase.recovery,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.completed => (
+    value: RouteStagePhase.completed,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.cancelled => (
+    value: RouteStagePhase.cancelled,
+    rawDiscriminator: null,
+  ),
+  kdf.RoutePhase.failed => (
+    value: RouteStagePhase.failed,
+    rawDiscriminator: null,
+  ),
+  null => (value: RouteStagePhase.unknown, rawDiscriminator: phase.rawValue),
+};
 
 ({RouteExecutionOutcome value, String? rawDiscriminator}) _executionOutcome(
   kdf.RouteExecutionStatus details, {
@@ -849,8 +1335,10 @@ bool _replacementConsentMatchesDurableExecution(
     return _isEvmAddress(authority.resolvedSourceAddress) &&
         (candidateStageIndex != 0 ||
             (durableSourceAddress != null &&
-                authority.resolvedSourceAddress.toLowerCase() ==
-                    durableSourceAddress.toLowerCase())) &&
+                _sameEvmAddress(
+                  authority.resolvedSourceAddress,
+                  durableSourceAddress,
+                ))) &&
         _validApproval(
           authority.approval,
           intent.fromAsset,
@@ -940,6 +1428,30 @@ RouteHolding? _holding(kdf.AssetHolding? holding) => holding == null
         amount: holding.amount,
         address: holding.address,
       );
+
+RouteApprovalRecovery? _approvalRecovery(kdf.ApprovalRecovery? recovery) {
+  if (recovery == null) return null;
+  final instruction = switch (recovery.instructionValue.knownValue) {
+    kdf.ApprovalRecoveryInstruction.revokeAllowanceBeforeRetry =>
+      RouteApprovalRecoveryInstruction.revokeAllowanceBeforeRetry,
+    kdf.ApprovalRecoveryInstruction.noAllowanceRemains =>
+      RouteApprovalRecoveryInstruction.noAllowanceRemains,
+    null => RouteApprovalRecoveryInstruction.unknown,
+  };
+  return RouteApprovalRecovery(
+    token: _asset(recovery.token),
+    validatedSpender: recovery.validatedSpender,
+    remainingAllowance: recovery.remainingAllowance,
+    instruction: _isEvmAddress(recovery.validatedSpender)
+        ? instruction
+        : RouteApprovalRecoveryInstruction.unknown,
+    rawInstructionDiscriminator:
+        recovery.instructionValue.isKnown &&
+            _isEvmAddress(recovery.validatedSpender)
+        ? null
+        : recovery.instructionValue.rawValue,
+  );
+}
 
 UnifiedSwapAssetIdentity _asset(kdf.RouteAsset asset) {
   final chainFamily = switch (asset.chainFamilyValue.knownValue) {
@@ -1180,7 +1692,7 @@ bool _validatePreparedExternalStage(
             .toList(growable: false),
       ) ||
       !_sameWire(intent.maxTotalNetworkFee.toJson(), cap.toJson()) ||
-      authority.resolvedSourceAddress.toLowerCase() != source.toLowerCase() ||
+      !_sameEvmAddress(authority.resolvedSourceAddress, source) ||
       !_sameWire(authority.approval.toJson(), approval.toJson()) ||
       !_sameWire(
         authority.requiredMaxNetworkFee.toJson(),
@@ -1192,8 +1704,7 @@ bool _validatePreparedExternalStage(
       !_feesWithinLimits(review.fees, review.nonNetworkFeeLimits) ||
       !_validApproval(approval, review.fromAsset, review.sourceAmount) ||
       (requireRouteSource &&
-          source.toLowerCase() !=
-              prepared.review.resolvedSourceAddress.toLowerCase())) {
+          !_sameEvmAddress(source, prepared.review.resolvedSourceAddress))) {
     return false;
   }
   return true;
@@ -1266,6 +1777,11 @@ bool _isNativeEvmFeeAsset(kdf.RouteAsset feeAsset, kdf.RouteAsset source) =>
 bool _isEvmAddress(String value) =>
     RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(value);
 
+bool _sameEvmAddress(String left, String right) =>
+    _isEvmAddress(left) &&
+    _isEvmAddress(right) &&
+    left.toLowerCase() == right.toLowerCase();
+
 bool _blocksV1Warning(kdf.WireEnumValue<kdf.RouteWarning> warning) =>
     !warning.isKnown ||
     warning.knownValue == kdf.RouteWarning.clientMaterializedTransaction;
@@ -1275,15 +1791,19 @@ RouteExecutionReview _preparedReview({
   required String routeExecutionId,
   required kdf.PrepareExecutionResult prepared,
   required UnifiedSwapIntent intent,
+  required UnifiedSwapRiskWarnings riskWarnings,
 }) {
   final wire = prepared.review;
   final stages = wire.stages.cast<kdf.KnownPreparedExecutionStageReview>();
   final warnings = <RouteReviewWarning>[];
   final warningKeys = <String>{};
-  void addWarning(kdf.WireEnumValue<kdf.RouteWarning> warning) {
-    final mapped = _reviewWarning(warning);
+  void addMappedWarning(RouteReviewWarning mapped) {
     final key = '${mapped.kind.name}:${mapped.rawKindDiscriminator ?? ''}';
     if (warningKeys.add(key)) warnings.add(mapped);
+  }
+
+  void addWarning(kdf.WireEnumValue<kdf.RouteWarning> warning) {
+    addMappedWarning(_reviewWarning(warning));
   }
 
   for (final warning in wire.warningValues) {
@@ -1294,12 +1814,27 @@ RouteExecutionReview _preparedReview({
       addWarning(warning);
     }
   }
-  if (wire.resolvedSourceAddress.toLowerCase() !=
-      wire.recipient.toLowerCase()) {
-    const warning = RouteReviewWarning(
-      kind: RouteReviewWarningKind.externalRecipient,
+  if (riskWarnings.highPriceImpact) {
+    addMappedWarning(
+      RouteReviewWarning(kind: RouteReviewWarningKind.highPriceImpact),
     );
-    if (warningKeys.add('${warning.kind.name}:')) warnings.add(warning);
+  }
+  if (riskWarnings.lowLiquidity) {
+    addMappedWarning(
+      RouteReviewWarning(kind: RouteReviewWarningKind.lowLiquidity),
+    );
+  }
+  if (intent.unknownTokenConfirmed &&
+      (intent.sourceTokenTrust == UnifiedSwapTokenTrust.unknown ||
+          intent.destinationTokenTrust == UnifiedSwapTokenTrust.unknown)) {
+    addMappedWarning(
+      RouteReviewWarning(kind: RouteReviewWarningKind.unknownToken),
+    );
+  }
+  if (intent.externalRecipientConfirmed) {
+    addMappedWarning(
+      RouteReviewWarning(kind: RouteReviewWarningKind.externalRecipient),
+    );
   }
   return RouteExecutionReview(
     walletId: walletId,
@@ -1331,6 +1866,7 @@ RouteExecutionReview _preparedReview({
     resolvedSourceAddress: wire.resolvedSourceAddress,
     recipient: wire.recipient,
     estimatedDuration: Duration(seconds: wire.estimatedDurationSeconds ?? 0),
+    estimatedDurationKnown: wire.estimatedDurationSeconds != null,
     steps: stages
         .map(
           (stage) => RouteReviewStep(
@@ -1367,6 +1903,20 @@ RouteExecutionReview _preparedReview({
             resetRequired: resetRequired,
           ),
     ],
+    sufficientAllowances: [
+      for (final stage in stages)
+        if (stage.approval case kdf.SufficientAllowancePreparedApproval(
+          :final token,
+          :final spender,
+          :final requiredAmount,
+        ))
+          RouteSufficientAllowanceScope(
+            stageId: stage.stageId,
+            token: _asset(token),
+            spender: spender,
+            requiredAmount: requiredAmount,
+          ),
+    ],
     expiresAt: wire.expiresAt,
     sourceSelectorKind: intent.sourceSelection.kind,
     externalRecipientConfirmed: intent.externalRecipientConfirmed,
@@ -1376,19 +1926,19 @@ RouteExecutionReview _preparedReview({
 RouteReviewWarning _reviewWarning(
   kdf.WireEnumValue<kdf.RouteWarning> warning,
 ) => switch (warning.knownValue) {
-  kdf.RouteWarning.notAtomicEndToEnd => const RouteReviewWarning(
+  kdf.RouteWarning.notAtomicEndToEnd => RouteReviewWarning(
     kind: RouteReviewWarningKind.notAtomicEndToEnd,
   ),
-  kdf.RouteWarning.makerOrderNotReserved => const RouteReviewWarning(
+  kdf.RouteWarning.makerOrderNotReserved => RouteReviewWarning(
     kind: RouteReviewWarningKind.makerOrderNotReserved,
   ),
-  kdf.RouteWarning.bridgeRecoveryRequired => const RouteReviewWarning(
+  kdf.RouteWarning.bridgeRecoveryRequired => RouteReviewWarning(
     kind: RouteReviewWarningKind.bridgeRecoveryRequired,
   ),
-  kdf.RouteWarning.intermediateAssetPossible => const RouteReviewWarning(
+  kdf.RouteWarning.intermediateAssetPossible => RouteReviewWarning(
     kind: RouteReviewWarningKind.intermediateAssetPossible,
   ),
-  kdf.RouteWarning.unrankableFees => const RouteReviewWarning(
+  kdf.RouteWarning.unrankableFees => RouteReviewWarning(
     kind: RouteReviewWarningKind.unrankableFees,
   ),
   kdf.RouteWarning.clientMaterializedTransaction || null => RouteReviewWarning(
@@ -1449,7 +1999,7 @@ String _validWalletId(String walletId) {
 }
 
 bool _isCanonicalValue(String value) =>
-    value.isNotEmpty && value.trim() == value;
+    UnifiedSwapModelLimits.isCanonicalString(value);
 
 bool _isUuid(String value) => RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
@@ -1469,6 +2019,7 @@ RouteExecutionException _asExecutionException(Object error) =>
     : RouteExecutionException(_failureFor(error));
 
 RouteExecutionFailure _failureFor(Object error) {
+  if (error is RouteExecutionException) return error.failure;
   if (error is TradeRouteControlNotAuthorizedException) {
     return RouteExecutionFailure.controlNotAuthorized;
   }

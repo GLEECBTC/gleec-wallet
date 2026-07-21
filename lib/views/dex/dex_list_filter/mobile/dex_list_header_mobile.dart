@@ -11,7 +11,19 @@ import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/model/trading_entities_filter.dart';
 import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 
-class DexListHeaderMobile extends StatelessWidget {
+class DexCancelAllAction {
+  const DexCancelAllAction({
+    required this.targetCount,
+    required this.execute,
+    this.targetDescription,
+  });
+
+  final int targetCount;
+  final Future<CancelAllOrdersResult> Function() execute;
+  final String? targetDescription;
+}
+
+class DexListHeaderMobile extends StatefulWidget {
   const DexListHeaderMobile({
     super.key,
     required this.listType,
@@ -20,7 +32,7 @@ class DexListHeaderMobile extends StatelessWidget {
     required this.onFilterDataChange,
     required this.isFilterShown,
     this.centerWidget,
-    this.onCancelAll,
+    this.cancelAllActionBuilder,
   });
   final DexListType listType;
   final TradingEntitiesFilter? entitiesFilterData;
@@ -28,7 +40,23 @@ class DexListHeaderMobile extends StatelessWidget {
   final VoidCallback onFilterPressed;
   final void Function(TradingEntitiesFilter?) onFilterDataChange;
   final Widget? centerWidget;
-  final VoidCallback? onCancelAll;
+  final DexCancelAllAction Function()? cancelAllActionBuilder;
+
+  @override
+  State<DexListHeaderMobile> createState() => _DexListHeaderMobileState();
+}
+
+class _DexListHeaderMobileState extends State<DexListHeaderMobile> {
+  bool _isCancellingAll = false;
+  String? _cancelAllResult;
+
+  DexListType get listType => widget.listType;
+  TradingEntitiesFilter? get entitiesFilterData => widget.entitiesFilterData;
+  bool get isFilterShown => widget.isFilterShown;
+  VoidCallback get onFilterPressed => widget.onFilterPressed;
+  void Function(TradingEntitiesFilter?) get onFilterDataChange =>
+      widget.onFilterDataChange;
+  Widget? get centerWidget => widget.centerWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -53,20 +81,55 @@ class DexListHeaderMobile extends StatelessWidget {
             ],
             if (listType == DexListType.orders)
               PopupMenuButton<_DexListHeaderAction>(
+                enabled: !_isCancellingAll,
                 icon: const Icon(Icons.more_vert, size: 20),
                 onSelected: (action) async {
                   switch (action) {
                     case _DexListHeaderAction.cancelAll:
+                      final cancelAction = _createCancelAllAction(
+                        tradingEntitiesBloc,
+                      );
+                      if (cancelAction.targetCount <= 0) return;
                       final confirmed = await showDexActionConfirmation(
                         context: context,
                         actionLabel: LocaleKeys.cancelAll.tr(),
+                        targetDescription:
+                            cancelAction.targetDescription ??
+                            'advancedAllOpenOrdersTarget'.tr(
+                              namedArgs: {
+                                'count': '${cancelAction.targetCount}',
+                              },
+                            ),
                         confirmButtonKey: const Key(
                           'dex-mobile-cancel-all-confirm',
                         ),
                       );
-                      if (!confirmed || !context.mounted) return;
-                      (onCancelAll ??
-                          () => tradingEntitiesBloc.cancelAllOrders())();
+                      if (!confirmed || !context.mounted || _isCancellingAll) {
+                        return;
+                      }
+                      setState(() {
+                        _isCancellingAll = true;
+                        _cancelAllResult = null;
+                      });
+                      try {
+                        final result = await cancelAction.execute();
+                        if (mounted) {
+                          setState(() {
+                            _cancelAllResult = _cancelAllResultMessage(result);
+                          });
+                        }
+                      } on Object {
+                        if (mounted) {
+                          setState(() {
+                            _cancelAllResult =
+                                'advancedCancellationRequestFailed'.tr();
+                          });
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isCancellingAll = false);
+                        }
+                      }
                   }
                 },
                 itemBuilder: (context) => [
@@ -84,6 +147,14 @@ class DexListHeaderMobile extends StatelessWidget {
               ),
           ],
         ),
+        if (_cancelAllResult case final result?)
+          Semantics(
+            liveRegion: true,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(result),
+            ),
+          ),
         if (filterData != null)
           Padding(
             padding: const EdgeInsets.only(top: 12.0),
@@ -100,6 +171,18 @@ class DexListHeaderMobile extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+
+  DexCancelAllAction _createCancelAllAction(
+    TradingEntitiesBloc tradingEntitiesBloc,
+  ) {
+    final customBuilder = widget.cancelAllActionBuilder;
+    if (customBuilder != null) return customBuilder();
+    final targetIds = tradingEntitiesBloc.cancellableOrderIds;
+    return DexCancelAllAction(
+      targetCount: targetIds.length,
+      execute: () => tradingEntitiesBloc.cancelExactOrders(targetIds),
     );
   }
 
@@ -355,3 +438,35 @@ class DexListHeaderMobile extends StatelessWidget {
 }
 
 enum _DexListHeaderAction { cancelAll }
+
+String _cancelAllResultMessage(CancelAllOrdersResult result) {
+  if (result.walletChanged) {
+    return 'advancedCancellationWalletChanged'.tr();
+  }
+  if (result.uncertain) {
+    return 'advancedCancellationUncertain'.tr();
+  }
+  if (result.isComplete) {
+    return 'advancedCancellationComplete'.tr(
+      namedArgs: {
+        'cancelled': '${result.cancelledCount}',
+        'attempted': '${result.attemptedCount}',
+      },
+    );
+  }
+  if (result.isPartial) {
+    return 'advancedCancellationPartial'.tr(
+      namedArgs: {
+        'cancelled': '${result.cancelledCount}',
+        'failed': '${result.failedCount}',
+      },
+    );
+  }
+  if (result.attemptedCount == 0) return 'advancedNoOpenOrders'.tr();
+  return 'advancedCancellationTotalFailed'.tr(
+    namedArgs: {
+      'failed': '${result.failedCount}',
+      'attempted': '${result.attemptedCount}',
+    },
+  );
+}

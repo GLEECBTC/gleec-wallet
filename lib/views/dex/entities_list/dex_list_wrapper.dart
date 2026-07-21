@@ -5,6 +5,7 @@ import 'package:web_dex/model/dex_list_type.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/model/trading_entities_filter.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/dex_list_filter/desktop/dex_list_filter_desktop.dart';
 import 'package:web_dex/views/dex/dex_list_filter/mobile/dex_list_filter_mobile.dart';
@@ -119,7 +120,10 @@ class _DexListWrapperState extends State<DexListWrapper> {
   }
 
   void _onSwapItemClick(Swap swap) {
-    routingState.dexState.setDetailsAction(swap.uuid);
+    routingState.dexState.setDetailsAction(
+      swap.uuid,
+      kind: DexTradingEntityKind.swap,
+    );
   }
 }
 

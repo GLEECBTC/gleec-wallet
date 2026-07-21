@@ -16,8 +16,7 @@ import 'package:web_dex/views/dex/entity_details/trading_details_header.dart';
 import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 
 class MakerOrderDetailsPage extends StatefulWidget {
-  const MakerOrderDetailsPage(this.makerOrderStatus, {Key? key})
-    : super(key: key);
+  const MakerOrderDetailsPage(this.makerOrderStatus, {super.key});
 
   final MakerOrderStatus makerOrderStatus;
 
@@ -75,7 +74,13 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
   }
 
   Widget _buildCancelButton() {
-    if (!widget.makerOrderStatus.order.cancelable) {
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
+    if (!widget.makerOrderStatus.order.cancelable ||
+        !tradingEntitiesBloc.canCancelOrder(
+          widget.makerOrderStatus.order.uuid,
+        )) {
       return const SizedBox.shrink();
     }
 
@@ -169,9 +174,16 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
 
   TableRow _buildPrice() {
     final MyOrder order = widget.makerOrderStatus.order;
-    final String price = formatAmt(
-      (order.relAmount / order.baseAmount).toDouble(),
-    );
+    final baseAmount = order.baseAmount.toDouble();
+    final relAmount = order.relAmount.toDouble();
+    final priceValue =
+        baseAmount > 0 &&
+            relAmount > 0 &&
+            baseAmount.isFinite &&
+            relAmount.isFinite
+        ? relAmount / baseAmount
+        : double.nan;
+    final String price = priceValue.isFinite ? formatAmt(priceValue) : '—';
 
     return TableRow(
       children: [
@@ -197,6 +209,10 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
     final confirmed = await showDexActionConfirmation(
       context: context,
       actionLabel: LocaleKeys.cancelOrder.tr(),
+      targetDescription:
+          '${widget.makerOrderStatus.order.base}/'
+          '${widget.makerOrderStatus.order.rel} order\n'
+          '${widget.makerOrderStatus.order.uuid}',
       confirmButtonKey: const Key('dex-details-cancel-order-confirm'),
     );
     if (!confirmed || !mounted) return;
@@ -208,9 +224,25 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
-    final String? error = await tradingEntitiesBloc.cancelOrder(
+    if (!tradingEntitiesBloc.canCancelOrder(
       widget.makerOrderStatus.order.uuid,
-    );
+    )) {
+      if (mounted) {
+        setState(() {
+          _inProgress = false;
+          _cancelingError = 'advancedCancellationFailed'.tr();
+        });
+      }
+      return;
+    }
+    String? error;
+    try {
+      error = await tradingEntitiesBloc.cancelOrder(
+        widget.makerOrderStatus.order.uuid,
+      );
+    } on Object {
+      error = 'advancedCancellationFailed';
+    }
 
     await Future<dynamic>.delayed(const Duration(milliseconds: 1000));
 
@@ -218,7 +250,11 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
     setState(() => _inProgress = false);
 
     if (error != null) {
-      setState(() => _cancelingError = error);
+      setState(
+        () => _cancelingError = error == 'advancedCancellationFailed'
+            ? 'advancedCancellationFailed'.tr()
+            : error,
+      );
     } else {
       routingState.dexState.action = DexAction.none;
       routingState.dexState.uuid = '';

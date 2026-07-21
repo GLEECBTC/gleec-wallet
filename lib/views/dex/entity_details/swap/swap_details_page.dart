@@ -13,7 +13,7 @@ import 'package:web_dex/views/dex/entity_details/trading_details_header.dart';
 import 'package:web_dex/views/dex/entity_details/trading_progress_status.dart';
 
 class SwapDetailsPage extends StatefulWidget {
-  const SwapDetailsPage(this.swapStatus, {Key? key}) : super(key: key);
+  const SwapDetailsPage(this.swapStatus, {super.key});
 
   final Swap swapStatus;
 
@@ -71,7 +71,7 @@ class _SwapDetailsPageState extends State<SwapDetailsPage> {
   String get _headerText {
     if (_isFailed) return LocaleKeys.tradingDetailsTitleFailed.tr();
     final haveEvents = widget.swapStatus.events.isNotEmpty;
-    if (haveEvents) {
+    if (haveEvents && widget.swapStatus.successEvents.isNotEmpty) {
       final isSuccess =
           widget.swapStatus.events.last.event.type ==
           widget.swapStatus.successEvents.last;
@@ -89,12 +89,10 @@ class _SwapDetailsPageState extends State<SwapDetailsPage> {
   }
 
   int get _progress {
-    return min(
-      100,
-      (100 *
-              widget.swapStatus.events.length /
-              (widget.swapStatus.successEvents.length - 1))
-          .ceil(),
+    final denominator = max(1, widget.swapStatus.successEvents.length - 1);
+    return max(
+      0,
+      min(100, (100 * widget.swapStatus.events.length / denominator).ceil()),
     );
   }
 }

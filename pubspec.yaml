@@ -249,6 +249,8 @@ flutter:
     - assets/fiat/fiat_icons_square/
     - assets/fiat/providers/
     - assets/packages/flutter_inappwebview_web/assets/web/
+    - prototypes/gleec-unified-swap/gleec-unified-swap-assets/chains/
+    - prototypes/gleec-unified-swap/gleec-unified-swap-assets/tokens/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware.

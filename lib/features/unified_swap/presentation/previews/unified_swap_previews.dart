@@ -201,7 +201,7 @@ Widget _previewApp({
   );
 }
 
-void previewIntentChanged(UnifiedSwapIntent _) {}
+Future<bool> previewIntentChanged(UnifiedSwapIntent _) async => true;
 void previewCandidateSelected(String _) {}
 void previewReviewRequested(UnifiedSwapQuoteCandidate _) {}
 void previewAction() {}

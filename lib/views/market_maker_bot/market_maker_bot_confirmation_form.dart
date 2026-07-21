@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:rational/rational.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_bloc.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_trade_form/market_maker_trade_form_bloc.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/common/screen.dart';
@@ -25,10 +26,10 @@ import 'package:web_dex/analytics/events/market_bot_events.dart';
 
 class MarketMakerBotConfirmationForm extends StatefulWidget {
   const MarketMakerBotConfirmationForm({
-    Key? key,
+    super.key,
     required this.onCreateOrder,
     required this.onCancel,
-  }) : super(key: key);
+  });
 
   final VoidCallback onCancel;
   final VoidCallback onCreateOrder;
@@ -41,14 +42,6 @@ class MarketMakerBotConfirmationForm extends StatefulWidget {
 class _MarketMakerBotConfirmationFormState
     extends State<MarketMakerBotConfirmationForm> {
   @override
-  void initState() {
-    context.read<MarketMakerTradeFormBloc>().add(
-      const MarketMakerConfirmationPreviewRequested(),
-    );
-    super.initState();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       padding: isMobile
@@ -57,6 +50,10 @@ class _MarketMakerBotConfirmationFormState
       constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
       child: BlocBuilder<MarketMakerTradeFormBloc, MarketMakerTradeFormState>(
         builder: (context, state) {
+          final walletSession = context
+              .watch<MarketMakerBotBloc>()
+              .captureWalletSession();
+          final hasCurrentPreview = state.hasCurrentPreviewFor(walletSession);
           if (state.status == MarketMakerTradeFormStatus.loading) {
             return const UiSpinner();
           }
@@ -66,6 +63,7 @@ class _MarketMakerBotConfirmationFormState
           }
 
           final hasError =
+              !hasCurrentPreview ||
               state.tradePreImageError != null ||
               state.status == MarketMakerTradeFormStatus.error;
 
@@ -105,6 +103,8 @@ class _MarketMakerBotConfirmationFormState
                   ),
                 ),
                 const SizedBox(height: 10),
+                ImportantNote(text: 'marketMakerRestartImpact'.tr()),
+                const SizedBox(height: 10),
                 SwapReceiveAmount(
                   context: context,
                   coin: state.buyCoin.value!,
@@ -130,10 +130,13 @@ class _MarketMakerBotConfirmationFormState
                   rate: state.priceFromUsdWithMarginRational,
                 ),
                 const SizedBox(height: 10),
-                TotalFees(preimage: state.tradePreImage),
+                TotalFees(
+                  preimage: hasCurrentPreview ? state.tradePreImage : null,
+                ),
                 const SizedBox(height: 24),
                 SwapErrorMessage(
-                  errorMessage: state.rawErrorMessage ??
+                  errorMessage:
+                      state.rawErrorMessage ??
                       state.tradePreImageError?.text(
                         state.sellCoin.value,
                         state.buyCoin.value,

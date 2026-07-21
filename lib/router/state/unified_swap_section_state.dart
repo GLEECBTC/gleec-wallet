@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:web_dex/model/trading_entity_id.dart';
 
 enum UnifiedSwapDestination { swap, activity, activityDetails, advanced }
 
@@ -66,9 +67,25 @@ class UnifiedSwapSectionState extends ChangeNotifier {
   UnifiedSwapRouteState get value => _value;
 
   void replace(UnifiedSwapRouteState next) {
-    if (identical(_value, next)) return;
-    _value = next;
+    final resolved = _validated(next);
+    if (identical(_value, resolved) ||
+        (_value.destination == resolved.destination &&
+            _value.routeExecutionId == resolved.routeExecutionId &&
+            identical(_value.legacyHints, resolved.legacyHints))) {
+      return;
+    }
+    _value = resolved;
     notifyListeners();
+  }
+
+  UnifiedSwapRouteState _validated(UnifiedSwapRouteState next) {
+    if (next.destination != UnifiedSwapDestination.activityDetails) {
+      return next;
+    }
+    final routeId = normalizeTradingEntityUuid(next.routeExecutionId);
+    return routeId == null
+        ? const UnifiedSwapRouteState.activity()
+        : UnifiedSwapRouteState.activityDetails(routeId);
   }
 
   void reset() => replace(const UnifiedSwapRouteState.swap());

@@ -12,18 +12,26 @@ import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/features/unified_swap/domain/route_execution_models.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_funding_policy.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_model_limits.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_product_policy.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_quote_models.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_selection_models.dart';
+import 'package:web_dex/features/unified_swap/infrastructure/kdf_route_execution_repository.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/kdf_unified_swap_quote_repository.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/unified_swap_config.dart';
 import 'package:web_dex/router/state/unified_swap_section_state.dart';
+import 'package:web_dex/shared/utils/kdf_wallet_authority.dart';
 
 typedef UnifiedSwapCapabilitiesLoader =
     Future<kdf.TradeRouteCapabilitiesResult> Function({
       required TradeRouteManager manager,
       required List<String> tickers,
     });
+
+typedef UnifiedSwapValuationSnapshotProvider =
+    kdf.ValuationSnapshot? Function();
+
+typedef UnifiedSwapClockValidityCheck = Future<bool> Function();
 
 /// Emits only the approved coarse outcome schema and persists a bounded hash
 /// set so terminal outcomes are not emitted again after app restart.
@@ -67,8 +75,16 @@ final class UnifiedSwapAnalyticsCoordinator {
         )
         .toString();
     final preferences = await SharedPreferences.getInstance();
-    final retained =
+    final stored =
         preferences.getStringList(_deduplicationKey) ?? const <String>[];
+    final retained = <String>[];
+    final first = stored.length > _maximumRetainedDigests
+        ? stored.length - _maximumRetainedDigests
+        : 0;
+    for (var index = first; index < stored.length; index++) {
+      final value = stored[index];
+      if (RegExp(r'^[0-9a-f]{64}$').hasMatch(value)) retained.add(value);
+    }
     if (retained.contains(digest)) return;
     final updated = <String>[...retained, digest];
     final bounded = updated.length <= _maximumRetainedDigests
@@ -95,13 +111,25 @@ final class UnifiedSwapProductionPolicy {
     this.networkFeeNumerator = 125,
     this.networkFeeDenominator = 100,
     this.consentLifetime = const Duration(minutes: 2),
-  });
+    this.quoteDeadline = const Duration(seconds: 30),
+    this.preparationDeadline = const Duration(seconds: 30),
+    this.executionDeadlines = const KdfRouteExecutionDeadlines(),
+  }) : assert(slippageBps >= 0 && slippageBps <= 10_000),
+       assert(
+         quietRefreshMaximumDegradationBps >= 0 &&
+             quietRefreshMaximumDegradationBps <= 10_000,
+       ),
+       assert(networkFeeDenominator > 0),
+       assert(networkFeeNumerator >= networkFeeDenominator);
 
   final int slippageBps;
   final int quietRefreshMaximumDegradationBps;
   final int networkFeeNumerator;
   final int networkFeeDenominator;
   final Duration consentLifetime;
+  final Duration quoteDeadline;
+  final Duration preparationDeadline;
+  final KdfRouteExecutionDeadlines executionDeadlines;
 }
 
 /// A fresh, wallet-verified recovery quote request derived from KDF's durable
@@ -115,9 +143,8 @@ final class UnifiedSwapRecoveryDraft {
     required this.intent,
     required this.recipientIsWalletOwned,
   }) {
-    if (routeExecutionId.trim().isEmpty || actionId.trim().isEmpty) {
-      throw ArgumentError('Recovery route and action IDs must not be empty');
-    }
+    UnifiedSwapModelLimits.requireString(routeExecutionId, 'routeExecutionId');
+    UnifiedSwapModelLimits.requireString(actionId, 'actionId');
     if (expectedStateRevision < 0) {
       throw RangeError.value(expectedStateRevision, 'expectedStateRevision');
     }
@@ -143,11 +170,23 @@ final class UnifiedSwapProductionComposition
     required this.manager,
     required this.config,
     required UnifiedSwapCapabilitiesLoader loadCapabilities,
+    UnifiedSwapValuationSnapshotProvider? valuationSnapshot,
+    UnifiedSwapClockValidityCheck? clockValidityCheck,
     this.tradingStatus,
     this.policy = const UnifiedSwapProductionPolicy(),
     DateTime Function()? now,
   }) : _loadCapabilities = loadCapabilities,
-       _now = now ?? _utcNow;
+       _valuationSnapshot = valuationSnapshot,
+       _clockValidityCheck = clockValidityCheck,
+       _now = now ?? _utcNow {
+    if (policy.consentLifetime <= Duration.zero ||
+        policy.consentLifetime > const Duration(minutes: 5) ||
+        policy.quoteDeadline <= Duration.zero ||
+        policy.preparationDeadline <= Duration.zero ||
+        !policy.executionDeadlines.isValid) {
+      throw ArgumentError('Unified Swap production deadlines are invalid');
+    }
+  }
 
   final KomodoDefiSdk sdk;
   final TradeRouteManager manager;
@@ -155,13 +194,18 @@ final class UnifiedSwapProductionComposition
   final TradingStatusService? tradingStatus;
   final UnifiedSwapProductionPolicy policy;
   final UnifiedSwapCapabilitiesLoader _loadCapabilities;
+  final UnifiedSwapValuationSnapshotProvider? _valuationSnapshot;
+  final UnifiedSwapClockValidityCheck? _clockValidityCheck;
   final DateTime Function() _now;
 
   Future<kdf.TradeRouteCapabilitiesResult>? _capabilitiesRequest;
   DateTime? _capabilitiesValidUntil;
   String? _capabilitiesRequestKey;
 
-  KdfUnifiedSwapQuoteRepository quoteRepository(String walletId) {
+  KdfUnifiedSwapQuoteRepository quoteRepository(
+    String walletId, {
+    required Future<String?> Function() currentWalletId,
+  }) {
     final client = TradeRouteManagerQuoteClient(manager);
     return KdfUnifiedSwapQuoteRepository(
       client: client,
@@ -171,8 +215,22 @@ final class UnifiedSwapProductionComposition
       preparationClient: client,
       preparationLimitsPolicy: _preparationLimits,
       expectedSourceAddress: expectedSourceAddress,
-      eligibilityCheck: isIntentEligible,
+      eligibilityCheck: (intent) async {
+        if (await currentWalletId() != walletId) return false;
+        final before = await _currentSoftwareUser();
+        if (before?.walletId.compoundId != walletId ||
+            !await isIntentEligible(intent)) {
+          return false;
+        }
+        final after = await _currentSoftwareUser();
+        if (after?.walletId.compoundId != walletId) return false;
+        return await currentWalletId() == walletId;
+      },
+      candidateEligibility: _candidateCanReachReview,
+      valuationSnapshot: _valuationSnapshot,
       consentLifetime: policy.consentLifetime,
+      quoteDeadline: policy.quoteDeadline,
+      preparationDeadline: policy.preparationDeadline,
       now: _now,
     );
   }
@@ -183,7 +241,8 @@ final class UnifiedSwapProductionComposition
   /// they do not need to be activated.
   @override
   Future<UnifiedSwapSelectionInventory?> selectionInventory() async {
-    if (!config.canQuote || await _currentSoftwareUser() == null) return null;
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (!config.canQuote || walletId == null) return null;
     final activated = await _activatedExactAssets();
     if (activated.isEmpty) return null;
     final capabilities = await _capabilities();
@@ -227,6 +286,7 @@ final class UnifiedSwapProductionComposition
     _sortAssetOptions(sources);
     _sortAssetOptions(destinations);
     pairs.sort(_compareRoutePairs);
+    if (!await _isSameSoftwareWallet(walletId)) return null;
     return UnifiedSwapSelectionInventory(
       sources: sources,
       destinations: destinations,
@@ -238,6 +298,8 @@ final class UnifiedSwapProductionComposition
   Future<List<UnifiedSwapSourceAddressOption>> sourceAddressOptions(
     UnifiedSwapAssetIdentity source,
   ) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return const [];
     final inventory = await selectionInventory();
     if (inventory?.sourceOption(source) == null) return const [];
     final asset = await _activatedExactAsset(source);
@@ -264,7 +326,9 @@ final class UnifiedSwapProductionComposition
           ),
         );
       }
-      return List.unmodifiable(options);
+      return await _isSameSoftwareWallet(walletId)
+          ? List.unmodifiable(options)
+          : const [];
     } on Object {
       return const [];
     }
@@ -275,6 +339,8 @@ final class UnifiedSwapProductionComposition
     UnifiedSwapIntent current,
     UnifiedSwapAssetIdentity source,
   ) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return null;
     if (current.source.sameIdentity(source)) return null;
     final inventory = await selectionInventory();
     final sourceOption = inventory?.sourceOption(source);
@@ -297,7 +363,7 @@ final class UnifiedSwapProductionComposition
       sourceAddress: sourceAddress.address,
     );
     if (recipient == null) return null;
-    return UnifiedSwapIntent(
+    final next = UnifiedSwapIntent(
       revision: current.revision + 1,
       source: source,
       destination: destination.identity,
@@ -308,6 +374,7 @@ final class UnifiedSwapProductionComposition
       sourceTokenTrust: sourceOption.tokenTrust,
       destinationTokenTrust: destination.tokenTrust,
     );
+    return await _isSameSoftwareWallet(walletId) ? next : null;
   }
 
   @override
@@ -315,6 +382,8 @@ final class UnifiedSwapProductionComposition
     UnifiedSwapIntent current,
     UnifiedSwapAssetIdentity destination,
   ) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return null;
     if (current.destination.sameIdentity(destination)) return null;
     final inventory = await selectionInventory();
     final destinationOption = inventory?.destinationOption(destination);
@@ -334,7 +403,7 @@ final class UnifiedSwapProductionComposition
       sourceAddress: sourceAddress.address,
     );
     if (recipient == null) return null;
-    return current.copyWith(
+    final next = current.copyWith(
       revision: current.revision + 1,
       destination: destination,
       recipient: recipient,
@@ -342,6 +411,7 @@ final class UnifiedSwapProductionComposition
       unknownTokenConfirmed: false,
       externalRecipientConfirmed: false,
     );
+    return await _isSameSoftwareWallet(walletId) ? next : null;
   }
 
   @override
@@ -349,14 +419,17 @@ final class UnifiedSwapProductionComposition
     UnifiedSwapIntent current,
     UnifiedSwapSourceSelection selection,
   ) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return null;
     if (selection == current.sourceSelection) return null;
     final options = await sourceAddressOptions(current.source);
     if (!options.any((option) => option.selection == selection)) return null;
-    return current.copyWith(
+    final next = current.copyWith(
       revision: current.revision + 1,
       sourceSelection: selection,
       externalRecipientConfirmed: false,
     );
+    return await _isSameSoftwareWallet(walletId) ? next : null;
   }
 
   /// Produces wallet-owned defaults without requesting a quote. Legacy URL
@@ -365,6 +438,8 @@ final class UnifiedSwapProductionComposition
   Future<UnifiedSwapIntent?> initialIntent({
     UnifiedSwapLegacyHints legacyHints = const UnifiedSwapLegacyHints(),
   }) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return null;
     final inventory = await selectionInventory();
     if (inventory == null || inventory.isEmpty) return null;
     final preferredPairs = _preferredPairs(inventory, legacyHints);
@@ -387,21 +462,18 @@ final class UnifiedSwapProductionComposition
         sourceAddress: sourceAddress.address,
       );
       if (recipient == null) continue;
-      final hintedAmount = _decimalHintToSmallestUnits(
-        legacyHints.sourceAmount,
-        pair.source.decimals,
-      );
-      return UnifiedSwapIntent(
+      final intent = UnifiedSwapIntent(
         revision: 0,
         source: pair.source,
         destination: pair.destination,
-        sourceAmount: hintedAmount ?? '0',
+        sourceAmount: '0',
         sourceSelection: const UnifiedSwapActiveSourceSelection(),
         recipient: recipient,
         slippageBps: policy.slippageBps,
         sourceTokenTrust: sourceOption.tokenTrust,
         destinationTokenTrust: destinationOption.tokenTrust,
       );
+      return await _isSameSoftwareWallet(walletId) ? intent : null;
     }
     return null;
   }
@@ -467,11 +539,15 @@ final class UnifiedSwapProductionComposition
       activated: activated,
     );
     if (!recipientIsOwned && !intent.externalRecipientConfirmed) return false;
-    return true;
+    return _isSameSoftwareWallet(user.walletId.compoundId);
   }
 
   Future<bool> isReviewEligible(RouteExecutionReview review) async {
-    if (!config.canExecute || !review.isExecutable) return false;
+    if (!config.canExecute ||
+        !review.isExecutable ||
+        !await _hasValidSystemClock()) {
+      return false;
+    }
     final user = await _currentSoftwareUser();
     if (user == null || user.walletId.compoundId != review.walletId) {
       return false;
@@ -480,7 +556,12 @@ final class UnifiedSwapProductionComposition
     final source = _singleAsset(activated, review.source);
     final destination = _catalogExactAsset(review.destination);
     if (source == null || destination == null) return false;
-    if (!_isCompliant(source) || !_isCompliant(destination)) return false;
+    if (!await _refreshTradingEligibility(source, destination)) return false;
+    final refreshedUser = await _currentSoftwareUser();
+    if (refreshedUser == null ||
+        refreshedUser.walletId.compoundId != review.walletId) {
+      return false;
+    }
     final capability = await _runtimeCapability(
       review.source,
       review.destination,
@@ -489,7 +570,7 @@ final class UnifiedSwapProductionComposition
     final decision = const UnifiedSwapCapabilityPolicy().evaluate(
       UnifiedSwapCapabilityContext(
         authenticated: true,
-        walletKind: _walletKind(user),
+        walletKind: _walletKind(refreshedUser),
         source: review.source,
         destination: review.destination,
         sourceActivated: true,
@@ -536,7 +617,19 @@ final class UnifiedSwapProductionComposition
       address: review.recipient,
       activated: activated,
     );
-    return recipientIsOwned || review.externalRecipientConfirmed;
+    if (!recipientIsOwned && !review.externalRecipientConfirmed) return false;
+
+    // Funding and recipient ownership both await mutable wallet services.
+    // Sample clock health and the authenticated wallet together at the final
+    // boundary, with no further asynchronous work before returning eligible.
+    final finalChecks = await Future.wait<bool>([
+      _hasValidSystemClock(),
+      _currentSoftwareUser().then(
+        (current) =>
+            current != null && current.walletId.compoundId == review.walletId,
+      ),
+    ]);
+    return finalChecks.every((value) => value);
   }
 
   /// Resolves recipient ownership without weakening chain-native validation.
@@ -546,17 +639,20 @@ final class UnifiedSwapProductionComposition
     required UnifiedSwapAssetIdentity asset,
     required String address,
   }) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return null;
     final destination = _catalogExactAsset(asset);
     if (destination == null ||
         !await _validateRecipient(asset: asset, address: address)) {
       return null;
     }
-    return _isWalletOwnedDestinationAddress(
+    final owned = await _isWalletOwnedDestinationAddress(
       destination: destination,
       identity: asset,
       address: address,
       activated: await _activatedExactAssets(),
     );
+    return await _isSameSoftwareWallet(walletId) ? owned : null;
   }
 
   /// Re-reads the durable route and derives a new intent from its exact
@@ -579,9 +675,9 @@ final class UnifiedSwapProductionComposition
     }
 
     try {
-      final details = await manager.getExecution(
-        routeExecutionId: progress.routeExecutionId,
-      );
+      final details = await manager
+          .getExecution(routeExecutionId: progress.routeExecutionId)
+          .timeout(policy.executionDeadlines.control);
       final status = details.status;
       final action = status.pendingUserAction;
       final holding = status.actualHolding;
@@ -673,24 +769,29 @@ final class UnifiedSwapProductionComposition
           .isAllowed) {
         return null;
       }
-      return UnifiedSwapRecoveryDraft(
+      final draft = UnifiedSwapRecoveryDraft(
         routeExecutionId: details.routeExecutionId,
         actionId: action.actionId,
         expectedStateRevision: status.stateRevision,
         intent: intent,
         recipientIsWalletOwned: recipientIsOwned,
       );
+      return await _isSameSoftwareWallet(user.walletId.compoundId)
+          ? draft
+          : null;
     } on Object {
       return null;
     }
   }
 
   Future<String?> expectedSourceAddress(UnifiedSwapIntent intent) async {
+    final walletId = (await _currentSoftwareUser())?.walletId.compoundId;
+    if (walletId == null) return null;
     final asset = await _activatedExactAsset(intent.source);
     final address = asset == null
         ? null
         : await _selectedAddress(asset, intent.sourceSelection);
-    return address?.address;
+    return await _isSameSoftwareWallet(walletId) ? address?.address : null;
   }
 
   /// Resolves the only safe V1 Max value currently available from the SDK.
@@ -751,8 +852,17 @@ final class UnifiedSwapProductionComposition
       config: config,
       forExecution: false,
     );
-    return decision.isAllowed ? maximum.amount : null;
+    return decision.isAllowed &&
+            await _isSameSoftwareWallet(user.walletId.compoundId)
+        ? maximum.amount
+        : null;
   }
+
+  /// Performs the SDK's chain-native validation for an exact destination.
+  Future<bool> validateRecipient({
+    required UnifiedSwapAssetIdentity asset,
+    required String address,
+  }) => _validateRecipient(asset: asset, address: address);
 
   Future<bool> _validateRecipient({
     required UnifiedSwapAssetIdentity asset,
@@ -902,16 +1012,20 @@ final class UnifiedSwapProductionComposition
     if (request == null ||
         _capabilitiesRequestKey != requestKey ||
         !(_capabilitiesValidUntil?.isAfter(now) ?? false)) {
-      request = _loadCapabilities(manager: manager, tickers: normalizedTickers);
+      request = _loadCapabilities(
+        manager: manager,
+        tickers: normalizedTickers,
+      ).timeout(policy.quoteDeadline);
       _capabilitiesRequest = request;
       _capabilitiesRequestKey = requestKey;
       _capabilitiesValidUntil = now.add(const Duration(seconds: 30));
     }
     try {
       final result = await request;
+      final receivedAt = _now().toUtc();
       if (result.capabilities.length > 512 ||
-          result.providerMetadataAt.isAfter(now) ||
-          now.difference(result.providerMetadataAt) >
+          result.providerMetadataAt.isAfter(receivedAt) ||
+          receivedAt.difference(result.providerMetadataAt) >
               const Duration(minutes: 5)) {
         return null;
       }
@@ -926,9 +1040,35 @@ final class UnifiedSwapProductionComposition
     }
   }
 
+  Future<bool> _hasValidSystemClock() async {
+    final check = _clockValidityCheck;
+    if (check == null) return false;
+    try {
+      return await check().timeout(policy.executionDeadlines.control);
+    } on Object {
+      return false;
+    }
+  }
+
+  bool _candidateCanReachReview({
+    required UnifiedSwapIntent intent,
+    required kdf.TradeRouteCandidate candidate,
+  }) {
+    for (final stage in candidate.stages) {
+      if (stage is! kdf.ExternalLiquidityRouteStage) continue;
+      final from = stage.common.fromAsset;
+      if (from.chainFamilyValue.knownValue == kdf.ChainFamily.evm &&
+          intent.source.chainFamily == UnifiedSwapChainFamily.evm &&
+          from.chainId == intent.source.chainId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<KdfUser?> _currentSoftwareUser() async {
     try {
-      final user = await sdk.auth.currentUser;
+      final user = await freshKdfCurrentUser(sdk);
       if (user == null ||
           user.walletId.authOptions.privKeyPolicy !=
               const kdf.PrivateKeyPolicy.contextPrivKey()) {
@@ -939,6 +1079,9 @@ final class UnifiedSwapProductionComposition
       return null;
     }
   }
+
+  Future<bool> _isSameSoftwareWallet(String walletId) async =>
+      (await _currentSoftwareUser())?.walletId.compoundId == walletId;
 
   UnifiedSwapWalletKind _walletKind(KdfUser user) => user.isHd
       ? UnifiedSwapWalletKind.softwareHd
@@ -979,6 +1122,24 @@ final class UnifiedSwapProductionComposition
     if (service == null) return false;
     try {
       return service.isTradingEnabled && !service.isAssetBlocked(asset.id);
+    } on Object {
+      return false;
+    }
+  }
+
+  Future<bool> _refreshTradingEligibility(
+    Asset source,
+    Asset destination,
+  ) async {
+    final service = tradingStatus;
+    if (service == null) return false;
+    try {
+      final status = await service.refreshStatus().timeout(
+        policy.executionDeadlines.control,
+      );
+      return status.tradingEnabled &&
+          !status.isAssetBlocked(source.id) &&
+          !status.isAssetBlocked(destination.id);
     } on Object {
       return false;
     }
@@ -1136,9 +1297,11 @@ final class UnifiedSwapProductionComposition
       );
       final addressMatches = nativePubkeys.keys
           .where(
-            (key) =>
-                key.address.toLowerCase() ==
-                exactSource.single.address.toLowerCase(),
+            (key) => _sameWalletAddress(
+              nativeMatches.single.asset,
+              key.address,
+              exactSource.single.address,
+            ),
           )
           .toList(growable: false);
       if (addressMatches.length != 1) return null;
@@ -1360,8 +1523,13 @@ bool _pubkeyMatchesSelector(
 
 bool _sameWalletAddress(Asset asset, String left, String right) =>
     asset.protocol is Erc20Protocol
-    ? left.toLowerCase() == right.toLowerCase()
+    ? _isExactEvmAddress(left) &&
+          _isExactEvmAddress(right) &&
+          left.toLowerCase() == right.toLowerCase()
     : left == right;
+
+bool _isExactEvmAddress(String value) =>
+    RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(value);
 
 final class _ActivatedExactAsset {
   const _ActivatedExactAsset({required this.asset, required this.identity});
@@ -1466,19 +1634,6 @@ String? _normalizedAddressLabel(String? value) {
   return normalized == null || normalized.isEmpty ? null : normalized;
 }
 
-String? _decimalHintToSmallestUnits(String? value, int decimals) {
-  if (value == null ||
-      decimals < 0 ||
-      !RegExp(r'^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$').hasMatch(value)) {
-    return null;
-  }
-  final pieces = value.split('.');
-  final fraction = pieces.length == 1 ? '' : pieces[1];
-  if (fraction.length > decimals) return null;
-  final digits = '${pieces[0]}${fraction.padRight(decimals, '0')}';
-  return BigInt.tryParse(digits)?.toString();
-}
-
 UnifiedSwapAssetIdentity? _routeAsset(kdf.RouteAsset asset) {
   final identity = UnifiedSwapAssetIdentity(
     ticker: asset.ticker,
@@ -1524,8 +1679,7 @@ bool _sameRouteAsset(kdf.RouteAsset left, kdf.RouteAsset right) =>
     left.chainFamilyValue.rawValue == right.chainFamilyValue.rawValue &&
     left.chainId == right.chainId &&
     left.assetKindValue.rawValue == right.assetKindValue.rawValue &&
-    left.contractAddress?.toLowerCase() ==
-        right.contractAddress?.toLowerCase() &&
+    _routeContractIdentity(left) == _routeContractIdentity(right) &&
     left.decimals == right.decimals;
 
 String _feeIdentityKey(String feeType, kdf.RouteAsset asset) => jsonEncode([
@@ -1534,9 +1688,19 @@ String _feeIdentityKey(String feeType, kdf.RouteAsset asset) => jsonEncode([
   asset.chainFamilyValue.rawValue,
   asset.chainId,
   asset.assetKindValue.rawValue,
-  asset.contractAddress?.toLowerCase(),
+  _routeContractIdentity(asset),
   asset.decimals,
 ]);
+
+String? _routeContractIdentity(kdf.RouteAsset asset) {
+  final value = asset.contractAddress;
+  if (asset.chainFamilyValue.knownValue == kdf.ChainFamily.evm &&
+      value != null &&
+      RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(value)) {
+    return value.toLowerCase();
+  }
+  return value;
+}
 
 bool _matchesHdAddress(
   String? derivationPath, {

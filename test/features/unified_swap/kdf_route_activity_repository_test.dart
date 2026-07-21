@@ -58,6 +58,7 @@ void main() {
       final repository = KdfRouteActivityRepository(
         manager: manager,
         walletId: 'wallet-1',
+        currentWalletId: () async => 'wallet-1',
       );
 
       final page = await repository.listExecutions(
@@ -127,6 +128,7 @@ void main() {
       final repository = KdfRouteActivityRepository(
         manager: manager,
         walletId: 'wallet-1',
+        currentWalletId: () async => 'wallet-1',
       );
 
       final detail = await repository.getExecution(
@@ -211,6 +213,31 @@ void main() {
     },
   );
 
+  test('discards a list response when the active wallet changes', () async {
+    var currentWalletId = 'wallet-1';
+    final gateway = _FakeTradeRouteGateway()
+      ..listHandler = ({required limit, state, cursor}) async {
+        currentWalletId = 'wallet-2';
+        return kdf.ListRouteExecutionsResponse.parse({
+          'mmrpc': '2.0',
+          'result': {'executions': <Object?>[], 'next_cursor': null},
+        });
+      };
+    final manager = TradeRouteManager.withGateway(gateway: gateway);
+    addTearDown(manager.dispose);
+    final repository = KdfRouteActivityRepository(
+      manager: manager,
+      walletId: 'wallet-1',
+      currentWalletId: () async => currentWalletId,
+    );
+
+    await _expectFailure(
+      repository.listExecutions(walletId: 'wallet-1'),
+      RouteActivityFailure.invalidRequest,
+    );
+    expect(gateway.listLimits, [50]);
+  });
+
   test('maps typed failures without retaining backend messages', () async {
     final gateway = _FakeTradeRouteGateway();
     final manager = TradeRouteManager.withGateway(gateway: gateway);
@@ -218,6 +245,7 @@ void main() {
     final repository = KdfRouteActivityRepository(
       manager: manager,
       walletId: 'wallet-1',
+      currentWalletId: () async => 'wallet-1',
     );
 
     gateway.listHandler = ({required limit, state, cursor}) async {

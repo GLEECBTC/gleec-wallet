@@ -1,17 +1,15 @@
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/bloc/dex_repository.dart';
+import 'package:web_dex/analytics/events/advanced_trading_events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-import 'package:web_dex/analytics/events/transaction_events.dart';
-import 'package:web_dex/analytics/events/cross_chain_events.dart';
-import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
+import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/model/swap.dart';
-import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
+import 'package:web_dex/model/trading_entity_id.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -38,31 +36,81 @@ class TradingDetails extends StatefulWidget {
 }
 
 class _TradingDetailsState extends State<TradingDetails> {
+  final ScrollController _scrollController = ScrollController();
   Timer? _statusTimer;
   StreamSubscription<SwapStatusEvent>? _swapStatusSubscription;
   StreamSubscription<OrderStatusEvent>? _orderStatusSubscription;
 
   Swap? _swapStatus;
   OrderStatus? _orderStatus;
-  bool _statusUpdateInProgress = false;
-  DateTime? _lastStatusUpdateAt;
+  final Set<int> _statusUpdatesInProgress = <int>{};
+  final Stopwatch _monotonicClock = Stopwatch()..start();
+  int? _lastStatusUpdateTick;
+  bool _statusUnavailable = false;
+  int _statusGeneration = 0;
   bool _loggedSuccess = false;
   bool _loggedFailure = false;
+
+  String? get _normalizedUuid => normalizeTradingEntityUuid(widget.uuid);
 
   @override
   void initState() {
     super.initState();
+
+    _startMonitoring();
+  }
+
+  @override
+  void didUpdateWidget(TradingDetails oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uuid == widget.uuid && oldWidget.kind == widget.kind) return;
+    _statusGeneration++;
+    _statusTimer?.cancel();
+    _swapStatusSubscription?.cancel();
+    _orderStatusSubscription?.cancel();
+    _swapStatusSubscription = null;
+    _orderStatusSubscription = null;
+    _swapStatus = null;
+    _orderStatus = null;
+    _statusUnavailable = false;
+    _lastStatusUpdateTick = null;
+    _loggedSuccess = false;
+    _loggedFailure = false;
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    _startMonitoring();
+  }
+
+  void _startMonitoring() {
+    if (_normalizedUuid == null) {
+      _statusUnavailable = true;
+      return;
+    }
+    final generation = _statusGeneration;
 
     final myOrdersService = RepositoryProvider.of<MyOrdersService>(context);
     final dexRepository = RepositoryProvider.of<DexRepository>(context);
     final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
 
     _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _scheduleStatusUpdate(dexRepository, myOrdersService);
+      _scheduleStatusUpdate(
+        dexRepository,
+        myOrdersService,
+        generation: generation,
+      );
     });
 
-    _scheduleStatusUpdate(dexRepository, myOrdersService, force: true);
-    _initStreaming(sdk, dexRepository, myOrdersService).ignore();
+    _scheduleStatusUpdate(
+      dexRepository,
+      myOrdersService,
+      force: true,
+      generation: generation,
+    );
+    _initStreaming(
+      sdk,
+      dexRepository,
+      myOrdersService,
+      generation: generation,
+    ).ignore();
   }
 
   @override
@@ -70,6 +118,7 @@ class _TradingDetailsState extends State<TradingDetails> {
     _statusTimer?.cancel();
     _swapStatusSubscription?.cancel();
     _orderStatusSubscription?.cancel();
+    _scrollController.dispose();
 
     super.dispose();
   }
@@ -77,37 +126,58 @@ class _TradingDetailsState extends State<TradingDetails> {
   Future<void> _initStreaming(
     KomodoDefiSdk sdk,
     DexRepository dexRepository,
-    MyOrdersService myOrdersService,
-  ) async {
+    MyOrdersService myOrdersService, {
+    required int generation,
+  }) async {
     try {
       if (widget.kind == TradingEntityKind.swap) {
         final subscription = await sdk.subscribeToSwapStatus();
-        if (!mounted) {
+        if (!mounted || generation != _statusGeneration) {
           await subscription.cancel();
           return;
         }
 
         _swapStatusSubscription = subscription;
+        _swapStatusSubscription?.onError((Object _, StackTrace trace) {
+          _streamFailed(generation, trace);
+        });
         _swapStatusSubscription?.onData((event) {
-          if (event.uuid != widget.uuid) return;
-          _scheduleStatusUpdate(dexRepository, myOrdersService);
+          if (generation != _statusGeneration ||
+              normalizeTradingEntityUuid(event.uuid) != _normalizedUuid) {
+            return;
+          }
+          _scheduleStatusUpdate(
+            dexRepository,
+            myOrdersService,
+            generation: generation,
+          );
         });
       } else {
         final subscription = await sdk.subscribeToOrderStatus();
-        if (!mounted) {
+        if (!mounted || generation != _statusGeneration) {
           await subscription.cancel();
           return;
         }
 
         _orderStatusSubscription = subscription;
+        _orderStatusSubscription?.onError((Object _, StackTrace trace) {
+          _streamFailed(generation, trace);
+        });
         _orderStatusSubscription?.onData((event) {
-          if (event.uuid != widget.uuid) return;
-          _scheduleStatusUpdate(dexRepository, myOrdersService);
+          if (generation != _statusGeneration ||
+              normalizeTradingEntityUuid(event.uuid) != _normalizedUuid) {
+            return;
+          }
+          _scheduleStatusUpdate(
+            dexRepository,
+            myOrdersService,
+            generation: generation,
+          );
         });
       }
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        'Failed to initialize trading details stream for ${widget.kind}',
+        'Advanced trading detail updates are temporarily unavailable.',
         path: 'TradingDetails._initStreaming',
         trace: s,
         isError: true,
@@ -115,28 +185,45 @@ class _TradingDetailsState extends State<TradingDetails> {
     }
   }
 
+  void _streamFailed(int generation, StackTrace trace) {
+    log(
+      'Advanced trading detail update stream failed.',
+      path: 'TradingDetails._initStreaming',
+      trace: trace,
+      isError: true,
+    );
+    if (!mounted || generation != _statusGeneration) return;
+    setState(() => _statusUnavailable = true);
+  }
+
   void _scheduleStatusUpdate(
     DexRepository dexRepository,
     MyOrdersService myOrdersService, {
     bool force = false,
+    int? generation,
   }) {
-    if (_statusUpdateInProgress) return;
+    final requestGeneration = generation ?? _statusGeneration;
+    if (requestGeneration != _statusGeneration) return;
+    if (_statusUpdatesInProgress.contains(requestGeneration)) return;
 
-    final lastUpdateAt = _lastStatusUpdateAt;
-    if (!force &&
-        lastUpdateAt != null &&
-        DateTime.now().difference(lastUpdateAt) <
-            const Duration(milliseconds: 500)) {
+    final nowTick = _monotonicClock.elapsedMilliseconds;
+    final lastUpdateTick = _lastStatusUpdateTick;
+    if (!force && lastUpdateTick != null && nowTick - lastUpdateTick < 500) {
       return;
     }
 
-    _statusUpdateInProgress = true;
+    _statusUpdatesInProgress.add(requestGeneration);
     () async {
       try {
-        await _updateStatus(dexRepository, myOrdersService);
-        _lastStatusUpdateAt = DateTime.now();
+        await _updateStatus(
+          dexRepository,
+          myOrdersService,
+          generation: requestGeneration,
+        );
+        if (requestGeneration != _statusGeneration) return;
+        _lastStatusUpdateTick = _monotonicClock.elapsedMilliseconds;
       } finally {
-        _statusUpdateInProgress = false;
+        _statusUpdatesInProgress.remove(requestGeneration);
       }
     }().ignore();
   }
@@ -148,23 +235,66 @@ class _TradingDetailsState extends State<TradingDetails> {
         _orderStatus?.takerOrderStatus ??
         _orderStatus?.makerOrderStatus;
 
-    if (entityStatus == null) return const Center(child: UiSpinner());
-    final scrollController = ScrollController();
+    if (entityStatus == null) {
+      return Center(
+        child: _statusUnavailable
+            ? Semantics(
+                liveRegion: true,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off_outlined, size: 40),
+                    const SizedBox(height: 12),
+                    Text('advancedTradingDetailsUnavailable'.tr()),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _retry,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: Text('advancedTryAgain'.tr()),
+                    ),
+                  ],
+                ),
+              )
+            : const UiSpinner(),
+      );
+    }
     return ScreenshotSensitive(
       child: LayoutBuilder(
         builder: (context, constraints) {
           final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
           return DexScrollbar(
-            scrollController: scrollController,
+            scrollController: _scrollController,
             isMobile: spec.usesMobileLists,
             child: SingleChildScrollView(
-              controller: scrollController,
+              controller: _scrollController,
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 900),
                   child: Padding(
                     padding: EdgeInsets.all(spec.gutter),
-                    child: _getDetailsPage(entityStatus),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (_statusUnavailable) ...[
+                          Semantics(
+                            liveRegion: true,
+                            child: MaterialBanner(
+                              content: Text(
+                                'advancedTradingDetailsLastKnown'.tr(),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: _retry,
+                                  child: Text('advancedTryAgain'.tr()),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _getDetailsPage(entityStatus),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -189,119 +319,124 @@ class _TradingDetailsState extends State<TradingDetails> {
 
   Future<void> _updateStatus(
     DexRepository dexRepository,
-    MyOrdersService myOrdersService,
-  ) async {
+    MyOrdersService myOrdersService, {
+    required int generation,
+  }) async {
     Swap? swapStatus;
     OrderStatus? orderStatus;
+    final uuid = _normalizedUuid;
+    if (uuid == null) {
+      if (mounted && generation == _statusGeneration) {
+        setState(() => _statusUnavailable = true);
+      }
+      return;
+    }
     try {
       if (widget.kind == TradingEntityKind.swap) {
-        swapStatus = await dexRepository.getSwapStatus(widget.uuid);
+        swapStatus = await dexRepository.getSwapStatus(uuid);
       } else if (widget.kind == TradingEntityKind.order) {
-        orderStatus = await myOrdersService.getStatus(widget.uuid);
+        orderStatus = await myOrdersService.getStatus(uuid);
       }
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        e.toString(),
-        path:
-            'trading_details =>_updateStatus ${widget.kind} error | uuid=${widget.uuid}',
+        'Advanced trading details refresh failed.',
+        path: 'TradingDetails._updateStatus',
         trace: s,
         isError: true,
       );
+      if (!mounted || generation != _statusGeneration) return;
+      setState(() => _statusUnavailable = true);
+      return;
     }
 
-    if (!mounted) return;
+    if (!mounted || generation != _statusGeneration) return;
+    final validSwap = swapStatus == null || _isValidSwapStatus(swapStatus);
+    final validOrder = orderStatus == null || _isValidOrderStatus(orderStatus);
+    if ((swapStatus == null && orderStatus == null) ||
+        !validSwap ||
+        !validOrder) {
+      setState(() => _statusUnavailable = true);
+      return;
+    }
     setState(() {
-      _swapStatus = swapStatus;
-      _orderStatus = orderStatus;
+      if (swapStatus != null) _swapStatus = swapStatus;
+      if (orderStatus != null) _orderStatus = orderStatus;
+      _statusUnavailable = false;
     });
 
     if (swapStatus != null) {
-      final authBloc = context.read<AuthBloc>();
-      final walletType = authBloc.state.currentUser?.type;
-      final fromAsset = swapStatus.sellCoin;
-      final toAsset = swapStatus.buyCoin;
-      final int? durationMs =
+      final int? rawDurationMs =
           swapStatus.events.isNotEmpty && swapStatus.myInfo != null
           ? swapStatus.events.last.timestamp -
                 swapStatus.myInfo!.startedAt * 1000
           : null;
+      final durationMs = rawDurationMs == null || rawDurationMs < 0
+          ? null
+          : rawDurationMs;
       if (swapStatus.isSuccessful && !_loggedSuccess) {
         _loggedSuccess = true;
-        // Find trade fee from events
-        double fee = 0;
-        for (var event in swapStatus.events) {
-          if (event.event.data?.feeToSendTakerFee != null) {
-            fee = event.event.data?.feeToSendTakerFee?.amount ?? 0;
-            break;
-          } else if (event.event.data?.takerPaymentTradeFee != null) {
-            fee = event.event.data?.takerPaymentTradeFee?.amount ?? 0;
-            break;
-          } else if (event.event.data?.makerPaymentSpendTradeFee != null) {
-            fee = event.event.data?.makerPaymentSpendTradeFee?.amount ?? 0;
-            break;
-          }
-        }
-        final coinsRepo = RepositoryProvider.of<CoinsRepo>(context);
-        final fromNetwork =
-            coinsRepo.getCoin(fromAsset)?.protocolType ?? 'unknown';
-        final toNetwork = coinsRepo.getCoin(toAsset)?.protocolType ?? 'unknown';
-        context.read<AnalyticsBloc>().logEvent(
-          SwapSucceededEventData(
-            asset: fromAsset,
-            secondaryAsset: toAsset,
-            network: fromNetwork,
-            secondaryNetwork: toNetwork,
-            amount: swapStatus.sellAmount.toDouble(),
-            fee: fee,
-            hdType: walletType ?? 'unknown',
-            durationMs: durationMs,
-          ),
-        );
-        if (swapStatus.isTheSameTicker) {
-          context.read<AnalyticsBloc>().logEvent(
-            BridgeSucceededEventData(
-              asset: fromAsset,
-              secondaryAsset: toAsset,
-              network: fromNetwork,
-              secondaryNetwork: toNetwork,
-              amount: swapStatus.sellAmount.toDouble(),
-              hdType: walletType ?? 'unknown',
-              durationMs: durationMs,
-            ),
-          );
-        }
+        _logLifecycle(AdvancedTradeOutcome.completed, durationMs: durationMs);
       } else if (swapStatus.isFailed && !_loggedFailure) {
         _loggedFailure = true;
-        final coinsRepo = RepositoryProvider.of<CoinsRepo>(context);
-        final fromNetwork =
-            coinsRepo.getCoin(fromAsset)?.protocolType ?? 'unknown';
-        final toNetwork = coinsRepo.getCoin(toAsset)?.protocolType ?? 'unknown';
-        context.read<AnalyticsBloc>().logEvent(
-          SwapFailedEventData(
-            asset: fromAsset,
-            secondaryAsset: toAsset,
-            network: fromNetwork,
-            secondaryNetwork: toNetwork,
-            failureStage: swapStatus.status.name,
-            hdType: walletType ?? 'unknown',
-            durationMs: durationMs,
-          ),
-        );
-        if (swapStatus.isTheSameTicker) {
-          context.read<AnalyticsBloc>().logEvent(
-            BridgeFailedEventData(
-              asset: fromAsset,
-              secondaryAsset: toAsset,
-              network: fromNetwork,
-              secondaryNetwork: toNetwork,
-              failureStage: swapStatus.status.name,
-              failureDetail: swapStatus.status.name,
-              hdType: walletType ?? 'unknown',
-              durationMs: durationMs,
-            ),
-          );
-        }
+        _logLifecycle(AdvancedTradeOutcome.failed, durationMs: durationMs);
       }
     }
+  }
+
+  bool _isValidSwapStatus(Swap status) {
+    final makerAmount = status.makerAmount.toDouble();
+    final takerAmount = status.takerAmount.toDouble();
+    return normalizeTradingEntityUuid(status.uuid) == _normalizedUuid &&
+        status.makerCoin.trim().isNotEmpty &&
+        status.takerCoin.trim().isNotEmpty &&
+        makerAmount.isFinite &&
+        makerAmount > 0 &&
+        takerAmount.isFinite &&
+        takerAmount > 0 &&
+        status.events.every(
+          (event) => event.timestamp >= 0 && event.event.type.trim().isNotEmpty,
+        );
+  }
+
+  bool _isValidOrderStatus(OrderStatus status) {
+    final order =
+        status.takerOrderStatus?.order ?? status.makerOrderStatus?.order;
+    if (order == null ||
+        normalizeTradingEntityUuid(order.uuid) != _normalizedUuid) {
+      return false;
+    }
+    final baseAmount = order.baseAmount.toDouble();
+    final relAmount = order.relAmount.toDouble();
+    return order.base.trim().isNotEmpty &&
+        order.rel.trim().isNotEmpty &&
+        baseAmount.isFinite &&
+        baseAmount > 0 &&
+        relAmount.isFinite &&
+        relAmount > 0;
+  }
+
+  void _retry() {
+    final dexRepository = RepositoryProvider.of<DexRepository>(context);
+    final myOrdersService = RepositoryProvider.of<MyOrdersService>(context);
+    _scheduleStatusUpdate(
+      dexRepository,
+      myOrdersService,
+      force: true,
+      generation: _statusGeneration,
+    );
+  }
+
+  void _logLifecycle(AdvancedTradeOutcome outcome, {required int? durationMs}) {
+    context.read<AnalyticsBloc>().add(
+      AnalyticsAdvancedTradeLifecycleEvent(
+        kind: widget.kind == TradingEntityKind.order
+            ? AdvancedTradeKind.makerOrder
+            : AdvancedTradeKind.takerSwap,
+        outcome: outcome,
+        durationBucket: advancedTradeDurationBucket(
+          durationMs == null ? null : Duration(milliseconds: durationMs),
+        ),
+      ),
+    );
   }
 }

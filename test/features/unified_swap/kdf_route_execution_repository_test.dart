@@ -71,6 +71,7 @@ void main() {
       final repository = KdfRouteExecutionRepository(
         walletId: _walletId,
         manager: manager,
+        currentWalletId: () async => _walletId,
         executionEligibilityCheck: (_) async => true,
         now: () => _now,
       );
@@ -121,7 +122,7 @@ void main() {
 
       expect(
         session,
-        const RouteExecutionSession(routeExecutionId: _routeId, taskId: 41),
+        RouteExecutionSession(routeExecutionId: _routeId, taskId: 41),
       );
       expect(gateway.initConsents.single, same(prepared.routeConsent));
       expect(gateway.initIdempotencyKeys, ['trade-route:$_routeId']);
@@ -147,6 +148,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => now,
     );
@@ -197,6 +199,7 @@ void main() {
       final repository = KdfRouteExecutionRepository(
         walletId: _walletId,
         manager: manager,
+        currentWalletId: () async => _walletId,
         executionEligibilityCheck: (_) async =>
             throw StateError('private compliance failure'),
         now: () => _now,
@@ -295,6 +298,7 @@ void main() {
         final repository = KdfRouteExecutionRepository(
           walletId: _walletId,
           manager: manager,
+          currentWalletId: () async => _walletId,
           executionEligibilityCheck: (_) async => true,
           now: () => _now,
         );
@@ -337,6 +341,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
     );
     addTearDown(repository.dispose);
@@ -392,6 +397,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => _now,
     );
@@ -442,6 +448,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => _now,
     );
@@ -502,6 +509,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => _now,
     );
@@ -556,6 +564,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => _now,
     );
@@ -598,6 +607,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
     );
     addTearDown(repository.dispose);
@@ -642,6 +652,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => _now,
     );
@@ -651,7 +662,7 @@ void main() {
     final acknowledgement = await repository.submitDecision(
       walletId: _walletId,
       session: session,
-      decision: const RouteExecutionDecision(
+      decision: RouteExecutionDecision(
         kind: RouteExecutionActionKind.stopAfterCurrent,
         actionId: _actionId,
         expectedStateRevision: 8,
@@ -667,7 +678,7 @@ void main() {
       repository.submitDecision(
         walletId: _walletId,
         session: session,
-        decision: const RouteExecutionDecision(
+        decision: RouteExecutionDecision(
           kind: RouteExecutionActionKind.acceptReplacement,
           actionId: _actionId,
           expectedStateRevision: 8,
@@ -714,6 +725,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
       now: () => _now,
     );
@@ -723,7 +735,7 @@ void main() {
     final acknowledgement = await repository.submitDecision(
       walletId: _walletId,
       session: session,
-      decision: const RouteExecutionDecision(
+      decision: RouteExecutionDecision(
         kind: RouteExecutionActionKind.acceptReplacement,
         actionId: _actionId,
         expectedStateRevision: 8,
@@ -782,6 +794,7 @@ void main() {
       final repository = KdfRouteExecutionRepository(
         walletId: _walletId,
         manager: manager,
+        currentWalletId: () async => _walletId,
         executionEligibilityCheck: (_) async => true,
         now: () => _now,
       );
@@ -876,7 +889,7 @@ void main() {
           repository.submitDecision(
             walletId: _walletId,
             session: session,
-            decision: const RouteExecutionDecision(
+            decision: RouteExecutionDecision(
               kind: RouteExecutionActionKind.acceptReplacement,
               actionId: _actionId,
               expectedStateRevision: 8,
@@ -896,7 +909,7 @@ void main() {
         repository.submitDecision(
           walletId: _walletId,
           session: session,
-          decision: const RouteExecutionDecision(
+          decision: RouteExecutionDecision(
             kind: RouteExecutionActionKind.acceptReplacement,
             actionId: _actionId,
             expectedStateRevision: 8,
@@ -931,6 +944,7 @@ void main() {
       final repository = KdfRouteExecutionRepository(
         walletId: _walletId,
         manager: manager,
+        currentWalletId: () async => _walletId,
         executionEligibilityCheck: (_) async => true,
         now: () => _now,
       );
@@ -962,6 +976,7 @@ void main() {
     final repository = KdfRouteExecutionRepository(
       walletId: _walletId,
       manager: manager,
+      currentWalletId: () async => _walletId,
       executionEligibilityCheck: (_) async => true,
     );
     addTearDown(repository.dispose);

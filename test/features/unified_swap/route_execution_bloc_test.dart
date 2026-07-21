@@ -88,7 +88,7 @@ void main() {
 
     expect(repository.initCalls, [_routeId]);
     pendingInit.complete(
-      const RouteExecutionSession(routeExecutionId: _routeId, taskId: 1),
+      RouteExecutionSession(routeExecutionId: _routeId, taskId: 1),
     );
     await _waitFor(() => repository.hasListener);
     expect(repository.initCalls, [_routeId]);
@@ -122,7 +122,7 @@ void main() {
 
     expect(repository.reattachCalls, isEmpty);
     pendingInit.complete(
-      const RouteExecutionSession(routeExecutionId: _routeId, taskId: 1),
+      RouteExecutionSession(routeExecutionId: _routeId, taskId: 1),
     );
     await _waitFor(() => repository.hasListener);
     expect(repository.initCalls, [_routeId]);
@@ -207,7 +207,7 @@ void main() {
       await _waitFor(
         () => bloc.state.status == RouteExecutionLoadStatus.unknown,
       );
-      bloc.add(const RouteExecutionCancelRequested());
+      bloc.add(RouteExecutionCancelRequested(_controlTarget(bloc)));
       await _waitFor(
         () => bloc.state.failure == RouteExecutionFailure.controlNotAuthorized,
       );
@@ -228,6 +228,164 @@ void main() {
     await _waitFor(() => repository.reattachCalls.length == 2);
 
     expect(repository.reattachCalls, [_routeId, _routeId]);
+    await bloc.close();
+  });
+
+  test(
+    'progress never regresses and reconciles a conflicting revision',
+    () async {
+      final repository = _FakeRouteExecutionRepository();
+      final bloc = RouteExecutionBloc(repository: repository, now: () => now);
+      bloc.add(const RouteExecutionWalletChanged('wallet'));
+      await _waitFor(() => bloc.state.walletId == 'wallet');
+      bloc.add(const RouteExecutionReattachRequested(_routeId));
+      await _waitFor(() => repository.hasListener);
+      final revisionTwo = _progress(now, stateRevision: 2);
+      repository.progress.add(revisionTwo);
+      await _waitFor(() => bloc.state.progress == revisionTwo);
+
+      repository.progress.add(
+        _progress(
+          now.subtract(const Duration(seconds: 1)),
+          stateRevision: 1,
+          phase: RouteExecutionPhase.validating,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.progress, revisionTwo);
+
+      repository.progress.add(
+        _progress(
+          now.add(const Duration(seconds: 1)),
+          stateRevision: 2,
+          phase: RouteExecutionPhase.sourcePending,
+        ),
+      );
+      await _waitFor(() => repository.reattachCalls.length == 2);
+      expect(bloc.state.progress, revisionTwo);
+      expect(bloc.state.status, RouteExecutionLoadStatus.observing);
+      await bloc.close();
+    },
+  );
+
+  test(
+    'terminal progress is sticky across a contradictory later update',
+    () async {
+      final repository = _FakeRouteExecutionRepository();
+      final bloc = RouteExecutionBloc(repository: repository, now: () => now);
+      bloc.add(const RouteExecutionWalletChanged('wallet'));
+      await _waitFor(() => bloc.state.walletId == 'wallet');
+      bloc.add(const RouteExecutionReattachRequested(_routeId));
+      await _waitFor(() => repository.hasListener);
+      final completed = _progress(
+        now,
+        stateRevision: 3,
+        stageIndex: 1,
+        outcome: RouteExecutionOutcome.completed,
+        phase: RouteExecutionPhase.completed,
+      );
+      repository.progress.add(completed);
+      await _waitFor(
+        () => bloc.state.status == RouteExecutionLoadStatus.completed,
+      );
+
+      repository.progress.add(
+        _progress(
+          now.add(const Duration(seconds: 1)),
+          stateRevision: 4,
+          outcome: RouteExecutionOutcome.active,
+        ),
+      );
+      await _waitFor(() => repository.reattachCalls.length == 2);
+      expect(bloc.state.progress, completed);
+      expect(bloc.state.status, RouteExecutionLoadStatus.completed);
+      await bloc.close();
+    },
+  );
+
+  test('uncertain control reattaches before controls are unlocked', () async {
+    final repository = _FakeRouteExecutionRepository()
+      ..cancelFailure = const RouteExecutionUncertainControlException(
+        RouteExecutionFailure.networkUnavailable,
+      );
+    final bloc = RouteExecutionBloc(repository: repository, now: () => now);
+    bloc.add(const RouteExecutionWalletChanged('wallet'));
+    await _waitFor(() => bloc.state.walletId == 'wallet');
+    bloc.add(const RouteExecutionReattachRequested(_routeId));
+    await _waitFor(() => repository.hasListener);
+    final cancellable = _progress(now, canCancel: true);
+    repository.progress.add(cancellable);
+    await _waitFor(() => bloc.state.progress == cancellable);
+
+    bloc.add(RouteExecutionCancelRequested(_controlTarget(bloc)));
+    await _waitFor(() => repository.reattachCalls.length == 2);
+    expect(repository.cancelCalls, [_routeId]);
+    expect(bloc.state.controlInFlight, isTrue);
+
+    repository.progress.add(cancellable);
+    await _waitFor(() => !bloc.state.controlInFlight);
+    expect(repository.cancelCalls, [_routeId]);
+    await bloc.close();
+  });
+
+  test(
+    'failed uncertain-control reconciliation stays locked until durable proof',
+    () async {
+      final repository = _FakeRouteExecutionRepository()
+        ..cancelFailure = const RouteExecutionUncertainControlException(
+          RouteExecutionFailure.networkUnavailable,
+        );
+      final bloc = RouteExecutionBloc(repository: repository, now: () => now);
+      bloc.add(const RouteExecutionWalletChanged('wallet'));
+      await _waitFor(() => bloc.state.walletId == 'wallet');
+      bloc.add(const RouteExecutionReattachRequested(_routeId));
+      await _waitFor(() => repository.hasListener);
+      final cancellable = _progress(now, canCancel: true);
+      repository.progress.add(cancellable);
+      await _waitFor(() => bloc.state.progress == cancellable);
+      repository.reattachFailure = const RouteExecutionException(
+        RouteExecutionFailure.storageUnavailable,
+      );
+
+      bloc.add(RouteExecutionCancelRequested(_controlTarget(bloc)));
+      await _waitFor(
+        () => bloc.state.status == RouteExecutionLoadStatus.unknown,
+      );
+
+      expect(repository.cancelCalls, [_routeId]);
+      expect(repository.reattachCalls, [_routeId, _routeId]);
+      expect(bloc.state.controlInFlight, isTrue);
+
+      repository.reattachFailure = null;
+      bloc.add(const RouteExecutionReattachRequested(_routeId));
+      await _waitFor(() => repository.reattachCalls.length == 3);
+      expect(bloc.state.controlInFlight, isTrue);
+      repository.progress.add(cancellable);
+      await _waitFor(() => !bloc.state.controlInFlight);
+
+      expect(repository.cancelCalls, [_routeId]);
+      await bloc.close();
+    },
+  );
+
+  test('clean nonterminal observation close reconciles durably', () async {
+    final repository = _FakeRouteExecutionRepository();
+    final bloc = RouteExecutionBloc(repository: repository, now: () => now);
+    bloc.add(const RouteExecutionWalletChanged('wallet'));
+    await _waitFor(() => bloc.state.walletId == 'wallet');
+    bloc.add(const RouteExecutionReattachRequested(_routeId));
+    await _waitFor(() => repository.hasListener);
+    repository.progress.add(_progress(now));
+    await _waitFor(() => bloc.state.progress != null);
+    repository.reattachFailure = const RouteExecutionException(
+      RouteExecutionFailure.storageUnavailable,
+    );
+
+    await repository.progress.close();
+    await _waitFor(() => bloc.state.status == RouteExecutionLoadStatus.unknown);
+
+    expect(repository.reattachCalls, [_routeId, _routeId]);
+    expect(bloc.state.failure, RouteExecutionFailure.serviceUnavailable);
     await bloc.close();
   });
 
@@ -283,17 +441,30 @@ RouteExecutionReview _review(DateTime now) => RouteExecutionReview(
   expiresAt: now.add(const Duration(minutes: 1)),
 );
 
+RouteExecutionControlTarget _controlTarget(RouteExecutionBloc bloc) {
+  final state = bloc.state;
+  final progress = state.progress!;
+  return RouteExecutionControlTarget(
+    walletId: state.walletId!,
+    walletGeneration: state.walletGeneration,
+    routeExecutionId: progress.routeExecutionId,
+    expectedStateRevision: progress.stateRevision,
+  );
+}
+
 RouteExecutionProgress _progress(
   DateTime now, {
   RouteExecutionOutcome outcome = RouteExecutionOutcome.active,
   RouteExecutionPhase phase = RouteExecutionPhase.broadcasting,
   bool canCancel = false,
+  int stateRevision = 1,
+  int stageIndex = 0,
 }) => RouteExecutionProgress(
   routeExecutionId: _routeId,
   outcome: outcome,
   phase: phase,
-  stateRevision: 1,
-  stageIndex: 0,
+  stateRevision: stateRevision,
+  stageIndex: stageIndex,
   stageCount: 1,
   controls: RouteControlCapabilities(
     canCancel: canCancel,
@@ -343,6 +514,7 @@ class _FakeRouteExecutionRepository implements RouteExecutionRepository {
   Completer<RouteExecutionSession>? initCompleter;
   RouteExecutionException? initFailure;
   RouteExecutionException? reattachFailure;
+  RouteExecutionException? cancelFailure;
 
   bool get hasListener => progress.hasListener;
 
@@ -352,6 +524,8 @@ class _FakeRouteExecutionRepository implements RouteExecutionRepository {
     required String routeExecutionId,
   }) async {
     cancelCalls.add(routeExecutionId);
+    final failure = cancelFailure;
+    if (failure != null) throw failure;
   }
 
   @override
@@ -366,7 +540,7 @@ class _FakeRouteExecutionRepository implements RouteExecutionRepository {
     if (failure != null) throw failure;
     final completer = initCompleter;
     if (completer != null) return completer.future;
-    return const RouteExecutionSession(routeExecutionId: _routeId, taskId: 1);
+    return RouteExecutionSession(routeExecutionId: _routeId, taskId: 1);
   }
 
   @override
@@ -381,7 +555,7 @@ class _FakeRouteExecutionRepository implements RouteExecutionRepository {
     reattachCalls.add(routeExecutionId);
     final failure = reattachFailure;
     if (failure != null) throw failure;
-    return const RouteExecutionSession(routeExecutionId: _routeId, taskId: 2);
+    return RouteExecutionSession(routeExecutionId: _routeId, taskId: 2);
   }
 
   @override

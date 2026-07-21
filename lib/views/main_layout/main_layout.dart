@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -6,12 +8,14 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 // TODO(migration): Re-enable once update checker endpoint is migrated
 // import 'package:web_dex/blocs/update_bloc.dart';
 import 'package:web_dex/common/screen.dart';
+import 'package:web_dex/features/unified_swap/presentation/unified_swap_sensitive_dialog.dart';
 
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/router/navigators/main_layout/main_layout_router.dart';
@@ -33,6 +37,12 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
+  final UnifiedSwapSensitiveDialogController _sensitiveDialogController =
+      UnifiedSwapSensitiveDialogController();
+  StreamSubscription<void>? _authObservation;
+  KomodoDefiSdk? _observedSdk;
+  bool _sensitiveDialogControllerDisposed = false;
+
   @override
   void initState() {
     // TODO: localize
@@ -68,7 +78,37 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final sdk = _maybeSdk(context);
+    if (identical(sdk, _observedSdk)) return;
+    _observedSdk = sdk;
+    _invalidateSensitiveDialogs();
+    unawaited(_authObservation?.cancel());
+    _authObservation = sdk?.auth
+        .watchCurrentUser()
+        .map<void>((_) {})
+        .listen(
+          // Every observation is a new auth generation, including the same
+          // wallet ID after sign-out/sign-in (the ABA case).
+          (_) => _invalidateSensitiveDialogs(),
+          onError: (Object _, StackTrace __) => _invalidateSensitiveDialogs(),
+          onDone: _invalidateSensitiveDialogs,
+        );
+  }
+
+  void _invalidateSensitiveDialogs() {
+    if (!_sensitiveDialogControllerDisposed) {
+      _sensitiveDialogController.invalidate();
+    }
+  }
+
+  @override
   void dispose() {
+    _invalidateSensitiveDialogs();
+    _sensitiveDialogControllerDisposed = true;
+    unawaited(_authObservation?.cancel());
+    _sensitiveDialogController.dispose();
     super.dispose();
   }
 
@@ -100,7 +140,14 @@ class _MainLayoutState extends State<MainLayout> {
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
               appBar: null,
-              body: SafeArea(child: MainLayoutRouter()),
+              body: SafeArea(
+                // Advanced Swap has a narrower wallet scope; this outer scope
+                // is the fallback for sibling trading routes such as the bot.
+                child: UnifiedSwapSensitiveDialogScope(
+                  controller: _sensitiveDialogController,
+                  child: MainLayoutRouter(),
+                ),
+              ),
               bottomNavigationBar: (isMobile || isTablet)
                   ? MainMenuBarMobile()
                   : null,
@@ -153,6 +200,14 @@ class _MainLayoutState extends State<MainLayout> {
   Future<bool> _hasAgreedNoTrading() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     return prefs.getInt('wallet_only_agreed') != null;
+  }
+}
+
+KomodoDefiSdk? _maybeSdk(BuildContext context) {
+  try {
+    return context.read<KomodoDefiSdk>();
+  } on Object {
+    return null;
   }
 }
 

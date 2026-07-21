@@ -8,6 +8,9 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/features/unified_swap/application/route_activity_bloc.dart';
 import 'package:web_dex/features/unified_swap/application/route_execution_bloc.dart';
 import 'package:web_dex/features/unified_swap/application/unified_swap_bloc.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_product_policy.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_quote_models.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/kdf_unified_swap_quote_repository.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/kdf_unified_swap_review_coordinator.dart';
 import 'package:web_dex/features/unified_swap/presentation/unified_swap_wallet_scope.dart';
@@ -100,8 +103,12 @@ void main() {
           currentWalletId: () async => 'wallet-1',
           walletIds: const Stream.empty(),
           manager: manager,
-          quoteRepositoryFactory: ({required walletId, required manager}) =>
-              KdfUnifiedSwapQuoteRepository(
+          quoteRepositoryFactory:
+              ({
+                required walletId,
+                required manager,
+                required currentWalletId,
+              }) => KdfUnifiedSwapQuoteRepository(
                 client: _NeverQuoteClient(),
                 walletId: walletId,
                 eligibilityCheck: (_) async => true,
@@ -116,6 +123,112 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('wallet-1|wallet-1|wallet-1|prepared'), findsOneWidget);
+  });
+
+  testWidgets('activated-asset readiness retries an unavailable intent seed', (
+    tester,
+  ) async {
+    final readiness = StreamController<void>.broadcast();
+    final gateway = _Gateway();
+    final manager = TradeRouteManager.withGateway(gateway: gateway);
+    var resolverCalls = 0;
+    addTearDown(readiness.close);
+    addTearDown(manager.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UnifiedSwapWalletScope(
+          currentWalletId: () async => 'wallet-1',
+          walletIds: const Stream.empty(),
+          manager: manager,
+          quoteRepositoryFactory:
+              ({
+                required walletId,
+                required manager,
+                required currentWalletId,
+              }) => KdfUnifiedSwapQuoteRepository(
+                client: _NeverQuoteClient(),
+                walletId: walletId,
+                eligibilityCheck: (_) async => true,
+                validateRecipient:
+                    ({required ticker, required address}) async => true,
+              ),
+          initialIntentResolver: () async =>
+              ++resolverCalls == 1 ? null : _seedIntent,
+          initialIntentRefreshes: readiness.stream,
+          child: const _IntentProbe(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(resolverCalls, 1);
+    expect(find.text('waiting'), findsOneWidget);
+
+    readiness.add(null);
+    await tester.pumpAndSettle();
+
+    expect(resolverCalls, 2);
+    expect(find.text('ETH'), findsOneWidget);
+  });
+
+  testWidgets('same wallet reauthentication invalidates old session guards', (
+    tester,
+  ) async {
+    final walletIds = StreamController<String?>.broadcast();
+    final gateway = _Gateway();
+    final manager = TradeRouteManager.withGateway(gateway: gateway);
+    final resolvers = <UnifiedSwapCurrentWalletId>[];
+    var currentWalletId = 'wallet-1';
+    addTearDown(walletIds.close);
+    addTearDown(manager.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UnifiedSwapWalletScope(
+          currentWalletId: () async => currentWalletId,
+          walletIds: walletIds.stream,
+          manager: manager,
+          quoteRepositoryFactory:
+              ({
+                required walletId,
+                required manager,
+                required currentWalletId,
+              }) {
+                resolvers.add(currentWalletId);
+                return KdfUnifiedSwapQuoteRepository(
+                  client: _NeverQuoteClient(),
+                  walletId: walletId,
+                  eligibilityCheck: (_) async => true,
+                  validateRecipient:
+                      ({required ticker, required address}) async => true,
+                );
+              },
+          child: const _ProductionScopeProbe(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(await resolvers.single(), 'wallet-1');
+
+    currentWalletId = 'wallet-2';
+    walletIds.add('wallet-2');
+    await tester.pumpAndSettle();
+    currentWalletId = 'wallet-1';
+    walletIds.add('wallet-1');
+    await tester.pumpAndSettle();
+
+    expect(resolvers, hasLength(3));
+    expect(await resolvers[0](), isNull);
+    expect(await resolvers[1](), isNull);
+    expect(await resolvers[2](), 'wallet-1');
+
+    walletIds.add('wallet-1');
+    await tester.pumpAndSettle();
+
+    expect(resolvers, hasLength(4));
+    expect(await resolvers[2](), isNull);
+    expect(await resolvers[3](), 'wallet-1');
   });
 }
 
@@ -153,6 +266,20 @@ class _ProductionScopeProbe extends StatelessWidget {
       return Text('$activityWallet|$executionWallet|$quoteWallet|prepared');
     } on Object {
       return const Text('signed-out');
+    }
+  }
+}
+
+class _IntentProbe extends StatelessWidget {
+  const _IntentProbe();
+
+  @override
+  Widget build(BuildContext context) {
+    try {
+      final intent = context.watch<UnifiedSwapBloc>().state.intent;
+      return Text(intent?.source.ticker ?? 'waiting');
+    } on Object {
+      return const Text('waiting');
     }
   }
 }
@@ -215,3 +342,27 @@ class _Gateway implements TradeRouteRpcGateway {
     required kdf.RouteExecutionUserAction userAction,
   }) => throw UnimplementedError();
 }
+
+final _seedIntent = UnifiedSwapIntent(
+  revision: 0,
+  source: const UnifiedSwapAssetIdentity(
+    ticker: 'ETH',
+    chainFamily: UnifiedSwapChainFamily.evm,
+    chainId: '1',
+    kind: UnifiedSwapAssetKind.native,
+    decimals: 18,
+  ),
+  destination: const UnifiedSwapAssetIdentity(
+    ticker: 'USDC',
+    chainFamily: UnifiedSwapChainFamily.evm,
+    chainId: '137',
+    kind: UnifiedSwapAssetKind.token,
+    decimals: 6,
+    contractAddress: '0x1111111111111111111111111111111111111111',
+  ),
+  sourceAmount: '0',
+  sourceSelection: const UnifiedSwapActiveSourceSelection(),
+  recipient: '0x2222222222222222222222222222222222222222',
+  sourceTokenTrust: UnifiedSwapTokenTrust.trusted,
+  destinationTokenTrust: UnifiedSwapTokenTrust.trusted,
+);

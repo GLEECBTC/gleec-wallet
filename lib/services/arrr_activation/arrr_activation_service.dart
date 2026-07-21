@@ -12,6 +12,11 @@ import 'package:web_dex/mm2/mm2_api/rpc/disable_coin/disable_coin_req.dart';
 
 import 'arrr_config.dart';
 
+/// A caller-provided wallet/form guard rejected an automatic activation.
+final class ArrrActivationGuardRejected implements Exception {
+  const ArrrActivationGuardRejected();
+}
+
 /// Service layer - business logic coordination for ARRR activation
 class ArrrActivationService {
   ArrrActivationService(this._sdk, this._mm2)
@@ -30,13 +35,17 @@ class ArrrActivationService {
 
   /// Completer to wait for configuration when needed
   final Map<AssetId, Completer<ZhtlcUserConfig?>> _configCompleters = {};
+  final Map<AssetId, Future<void> Function()?> _configurationGuards = {};
 
   /// Track ongoing activation flows per asset to prevent duplicate runs
-  final Map<AssetId, Future<ArrrActivationResult>> _ongoingActivations = {};
+  final Map<(AssetId, String), Future<ArrrActivationResult>>
+  _ongoingActivations = {};
   final Set<AssetId> _cancelledActivations = <AssetId>{};
 
   /// Subscription to auth state changes
   StreamSubscription<KdfUser?>? _authSubscription;
+  String? _observedWalletId;
+  bool _hasObservedWallet = false;
 
   /// Flag to track if the service is being disposed
   bool _isDisposing = false;
@@ -50,38 +59,56 @@ class ArrrActivationService {
   Future<ArrrActivationResult> activateArrr(
     Asset asset, {
     ZhtlcUserConfig? initialConfig,
+    Future<void> Function()? beforeActivationMutation,
+    String? activationScopeKey,
   }) {
     if (_isDisposing || _configRequestController.isClosed) {
       throw StateError('ArrrActivationService has been disposed');
     }
 
-    final existingActivation = _ongoingActivations[asset.id];
+    final operationKey = (asset.id, activationScopeKey ?? 'default');
+    final existingActivation = _ongoingActivations[operationKey];
     if (existingActivation != null) {
       _log.info(
         'Activation already in progress for ${asset.id.id} - reusing existing future',
       );
       return existingActivation;
     }
+    if (_ongoingActivations.keys.any(
+      (key) => key.$1 == asset.id && key != operationKey,
+    )) {
+      return Future<ArrrActivationResult>.error(
+        const ArrrActivationGuardRejected(),
+      );
+    }
 
     late Future<ArrrActivationResult> activationFuture;
     activationFuture =
-        _activateArrrInternal(asset, initialConfig: initialConfig).whenComplete(
-          () {
-            _ongoingActivations.remove(asset.id);
-            _cancelledActivations.remove(asset.id);
-          },
-        );
-    _ongoingActivations[asset.id] = activationFuture;
+        _activateArrrInternal(
+          asset,
+          initialConfig: initialConfig,
+          beforeActivationMutation: beforeActivationMutation,
+        ).whenComplete(() {
+          if (identical(_ongoingActivations[operationKey], activationFuture)) {
+            _ongoingActivations.remove(operationKey);
+          }
+          _cancelledActivations.remove(asset.id);
+        });
+    _ongoingActivations[operationKey] = activationFuture;
     return activationFuture;
   }
 
   Future<ArrrActivationResult> _activateArrrInternal(
     Asset asset, {
     ZhtlcUserConfig? initialConfig,
+    Future<void> Function()? beforeActivationMutation,
   }) async {
     _cancelledActivations.remove(asset.id);
 
+    await _requireActivationGuard(beforeActivationMutation);
+
     var config = initialConfig ?? await _getOrRequestConfiguration(asset.id);
+    await _requireActivationGuard(beforeActivationMutation);
 
     if (config == null) {
       final requiredSettings = await _getRequiredSettings(asset.id);
@@ -93,6 +120,7 @@ class ArrrActivationService {
 
       final completer = Completer<ZhtlcUserConfig?>();
       _configCompleters[asset.id] = completer;
+      _configurationGuards[asset.id] = beforeActivationMutation;
 
       _log.info('Requesting configuration for ${asset.id.id}');
 
@@ -102,13 +130,23 @@ class ArrrActivationService {
           'Configuration request controller is closed or service is disposing for ${asset.id.id}',
         );
         _configCompleters.remove(asset.id);
+        _configurationGuards.remove(asset.id);
         return ArrrActivationResultError(
           'Configuration system is not available',
         );
       }
 
       // Wait for UI listeners to be ready before emitting request
-      await _waitForUIListeners(asset.id);
+      try {
+        await _waitForUIListeners(asset.id);
+        await _requireActivationGuard(beforeActivationMutation);
+      } catch (_) {
+        if (identical(_configCompleters[asset.id], completer)) {
+          _configCompleters.remove(asset.id);
+          _configurationGuards.remove(asset.id);
+        }
+        rethrow;
+      }
 
       try {
         _configRequestController.add(configRequest);
@@ -119,6 +157,8 @@ class ArrrActivationService {
           e,
           stackTrace,
         );
+        _configCompleters.remove(asset.id);
+        _configurationGuards.remove(asset.id);
         return ArrrActivationResultError(formatKdfUserFacingError(e));
       }
 
@@ -131,7 +171,10 @@ class ArrrActivationService {
           },
         );
       } finally {
-        _configCompleters.remove(asset.id);
+        if (identical(_configCompleters[asset.id], completer)) {
+          _configCompleters.remove(asset.id);
+          _configurationGuards.remove(asset.id);
+        }
       }
 
       if (config == null) {
@@ -142,17 +185,23 @@ class ArrrActivationService {
       }
 
       _log.info('Configuration received for ${asset.id.id}');
+      await _requireActivationGuard(beforeActivationMutation);
     }
 
     _log.info('Starting activation with configuration for ${asset.id.id}');
-    return _performActivation(asset, config);
+    return _performActivation(
+      asset,
+      config,
+      beforeActivationMutation: beforeActivationMutation,
+    );
   }
 
   /// Perform the actual activation with configuration
   Future<ArrrActivationResult> _performActivation(
     Asset asset,
-    ZhtlcUserConfig config,
-  ) async {
+    ZhtlcUserConfig config, {
+    Future<void> Function()? beforeActivationMutation,
+  }) async {
     const maxAttempts = 5;
     var attempt = 0;
 
@@ -163,6 +212,8 @@ class ArrrActivationService {
             throw _ActivationCancelledException();
           }
 
+          await _requireActivationGuard(beforeActivationMutation);
+
           attempt += 1;
           _log.info(
             'Starting ARRR activation attempt $attempt for ${asset.id.id}',
@@ -171,9 +222,11 @@ class ArrrActivationService {
           await _cacheActivationStart(asset.id);
 
           ActivationProgress? lastActivationProgress;
+          await _requireActivationGuard(beforeActivationMutation);
           await for (final activationProgress in _sdk.assets.activateAsset(
             asset,
           )) {
+            await _requireActivationGuard(beforeActivationMutation);
             if (_isActivationCancelled(asset.id)) {
               throw _ActivationCancelledException();
             }
@@ -182,6 +235,7 @@ class ArrrActivationService {
           }
 
           if (lastActivationProgress?.isSuccess ?? false) {
+            await _requireActivationGuard(beforeActivationMutation);
             await _cacheActivationComplete(asset.id);
             return ArrrActivationResultSuccess(
               Stream.value(
@@ -219,18 +273,34 @@ class ArrrActivationService {
       );
 
       return result;
+    } on ArrrActivationGuardRejected {
+      rethrow;
     } on _ActivationCancelledException {
       _log.info('ARRR activation cancelled by user for ${asset.id.id}');
       await _cacheActivationError(asset.id, 'Activation cancelled by user');
       return const ArrrActivationResultError('Activation cancelled by user');
-    } catch (e, stackTrace) {
+    } catch (e) {
+      // The SDK stream can fail without yielding a final progress event. Recheck
+      // the caller's authority before publishing even an error into the shared
+      // activation cache; a wallet change must leave no stale observable state.
+      await _requireActivationGuard(beforeActivationMutation);
+      final displayError = formatKdfUserFacingError(e);
       _log.severe(
         'ARRR activation failed after $maxAttempts attempts for ${asset.id.id}',
-        e,
-        stackTrace,
       );
-      await _cacheActivationError(asset.id, e.toString());
-      return ArrrActivationResultError(e.toString());
+      await _cacheActivationError(asset.id, displayError);
+      return ArrrActivationResultError(displayError);
+    }
+  }
+
+  Future<void> _requireActivationGuard(
+    Future<void> Function()? beforeActivationMutation,
+  ) async {
+    if (beforeActivationMutation == null) return;
+    try {
+      await beforeActivationMutation();
+    } catch (_) {
+      throw const ArrrActivationGuardRejected();
     }
   }
 
@@ -360,8 +430,15 @@ class ArrrActivationService {
     // Save configuration to SDK
     final completer = _configCompleters[assetId];
     try {
+      await _requireActivationGuard(_configurationGuards[assetId]);
       await _configService.saveZhtlcConfig(assetId, config);
+      await _requireActivationGuard(_configurationGuards[assetId]);
       _log.info('Configuration saved to SDK for ${assetId.id}');
+    } on ArrrActivationGuardRejected catch (error, stackTrace) {
+      if (completer != null && !completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+      return;
     } catch (e) {
       final error = ArrrActivationResultError(
         'Failed to save configuration: $e',
@@ -458,15 +535,21 @@ class ArrrActivationService {
 
   /// Handle authentication state changes
   Future<void> _handleAuthStateChange(KdfUser? user) async {
-    if (user == null) {
-      // User signed out - cleanup all active operations
-      await _cleanupOnSignOut();
+    final walletId = user?.walletId.compoundId;
+    if (!_hasObservedWallet) {
+      _hasObservedWallet = true;
+      _observedWalletId = walletId;
+      if (walletId == null) await _cleanupOnWalletChange();
+      return;
     }
+    if (walletId == _observedWalletId) return;
+    _observedWalletId = walletId;
+    await _cleanupOnWalletChange();
   }
 
-  /// Clean up all user-specific state when user signs out
-  Future<void> _cleanupOnSignOut() async {
-    _log.info('User signed out - cleaning up active ZHTLC activations');
+  /// Clean up all user-specific state whenever wallet authority changes.
+  Future<void> _cleanupOnWalletChange() async {
+    _log.info('Wallet changed - cleaning up active ZHTLC activations');
     final cancelledAssetIds = await _markActiveAssetsAsCancelled();
     _cancelSdkActivations(cancelledAssetIds);
 
@@ -480,6 +563,7 @@ class ArrrActivationService {
       }
     }
     _configCompleters.clear();
+    _configurationGuards.clear();
 
     // Clear activation cache as it's user-specific
     var activeAssets = <AssetId>[];
@@ -561,7 +645,7 @@ class ArrrActivationService {
     _isDisposing = true;
 
     final cancelledAssetIds = <AssetId>{
-      ..._ongoingActivations.keys,
+      ..._ongoingActivations.keys.map((key) => key.$1),
       ..._configCompleters.keys,
       ..._activationCache.keys,
     };
@@ -578,6 +662,7 @@ class ArrrActivationService {
       }
     }
     _configCompleters.clear();
+    _configurationGuards.clear();
 
     // Close controller after ensuring all operations are complete
     if (!_configRequestController.isClosed) {
@@ -587,7 +672,7 @@ class ArrrActivationService {
 
   Future<Set<AssetId>> _markActiveAssetsAsCancelled() async {
     final cancelledAssetIds = <AssetId>{
-      ..._ongoingActivations.keys,
+      ..._ongoingActivations.keys.map((key) => key.$1),
       ..._configCompleters.keys,
     };
 

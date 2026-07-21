@@ -129,6 +129,130 @@ void main() {
       ],
     );
   });
+
+  test('refresh invalidates an in-flight continuation page', () async {
+    final repository = _ControlledActivityRepository();
+    final bloc = RouteActivityBloc(repository: repository);
+    bloc.add(const RouteActivityWalletChanged('wallet'));
+    await repository.waitForListRequests(1);
+    repository.completeList(
+      0,
+      RouteActivityPage(
+        executions: [_summary('initial', now)],
+        nextCursor: 'cursor-1',
+      ),
+    );
+    await _waitFor(() => bloc.state.status == RouteActivityLoadStatus.ready);
+
+    bloc.add(const RouteActivityLoadMoreRequested());
+    await repository.waitForListRequests(2);
+    bloc.add(const RouteActivityRefreshRequested());
+    await repository.waitForListRequests(3);
+    final refreshed = _summary(
+      'refreshed',
+      now.add(const Duration(minutes: 1)),
+    );
+    repository.completeList(
+      2,
+      RouteActivityPage(executions: [refreshed], nextCursor: null),
+    );
+    await _waitFor(
+      () => bloc.state.executions.single.routeExecutionId == 'refreshed',
+    );
+
+    repository.completeList(
+      1,
+      RouteActivityPage(
+        executions: [_summary('stale-page', now)],
+        nextCursor: null,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      bloc.state.executions.map((execution) => execution.routeExecutionId),
+      ['refreshed'],
+    );
+    await bloc.close();
+  });
+
+  test('superseded detail refresh cannot leave the list refreshing', () async {
+    final repository = _ControlledActivityRepository();
+    final bloc = RouteActivityBloc(repository: repository);
+    final routeA = _summary('route-a', now);
+    bloc.add(const RouteActivityWalletChanged('wallet'));
+    await repository.waitForListRequests(1);
+    repository.completeList(
+      0,
+      RouteActivityPage(executions: [routeA], nextCursor: null),
+    );
+    await _waitFor(() => bloc.state.status == RouteActivityLoadStatus.ready);
+    bloc.add(const RouteActivityExecutionRequested('route-a'));
+    await repository.waitForDetailRequests(1);
+    repository.completeDetail(0, _detail(routeA));
+    await _waitFor(() => bloc.state.selectedExecution != null);
+
+    bloc.add(const RouteActivityRefreshRequested());
+    await repository.waitForListRequests(2);
+    repository.completeList(
+      1,
+      RouteActivityPage(executions: [routeA], nextCursor: null),
+    );
+    await repository.waitForDetailRequests(2);
+    expect(bloc.state.status, RouteActivityLoadStatus.ready);
+
+    final routeB = _summary('route-b', now.add(const Duration(minutes: 1)));
+    bloc.add(const RouteActivityExecutionRequested('route-b'));
+    await repository.waitForDetailRequests(3);
+    repository.completeDetail(1, _detail(routeA));
+    await Future<void>.delayed(Duration.zero);
+    expect(bloc.state.status, RouteActivityLoadStatus.ready);
+    expect(bloc.state.isDetailLoading, isTrue);
+
+    repository.completeDetail(2, _detail(routeB));
+    await _waitFor(
+      () => bloc.state.selectedExecution?.summary.routeExecutionId == 'route-b',
+    );
+    expect(bloc.state.status, RouteActivityLoadStatus.ready);
+    await bloc.close();
+  });
+
+  test(
+    'refresh during a deep-link detail load preserves the requested route',
+    () async {
+      final repository = _ControlledActivityRepository();
+      final bloc = RouteActivityBloc(repository: repository);
+      final route = _summary('deep-link-route', now);
+      bloc.add(const RouteActivityWalletChanged('wallet'));
+      await repository.waitForListRequests(1);
+      repository.completeList(
+        0,
+        RouteActivityPage(executions: [route], nextCursor: null),
+      );
+      await _waitFor(() => bloc.state.status == RouteActivityLoadStatus.ready);
+
+      bloc.add(const RouteActivityExecutionRequested('deep-link-route'));
+      await repository.waitForDetailRequests(1);
+      expect(bloc.state.requestedRouteExecutionId, 'deep-link-route');
+      expect(bloc.state.selectedExecution, isNull);
+
+      bloc.add(const RouteActivityRefreshRequested());
+      await repository.waitForListRequests(2);
+      repository.completeList(
+        1,
+        RouteActivityPage(executions: [route], nextCursor: null),
+      );
+      await repository.waitForDetailRequests(2);
+      repository.completeDetail(0, _detail(route));
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.selectedExecution, isNull);
+      expect(bloc.state.status, RouteActivityLoadStatus.ready);
+
+      repository.completeDetail(1, _detail(route));
+      await _waitFor(() => bloc.state.selectedExecution != null);
+      expect(bloc.state.requestedRouteExecutionId, 'deep-link-route');
+      await bloc.close();
+    },
+  );
 }
 
 RouteActivitySummary _summary(
@@ -192,13 +316,16 @@ const _usdcPolygon = UnifiedSwapAssetIdentity(
 
 class _ControlledActivityRepository implements RouteActivityRepository {
   final listRequests = <Completer<RouteActivityPage>>[];
+  final detailRequests = <Completer<RouteExecutionDetail>>[];
 
   @override
   Future<RouteExecutionDetail> getExecution({
     required String walletId,
     required String routeExecutionId,
   }) {
-    throw UnimplementedError();
+    final completer = Completer<RouteExecutionDetail>();
+    detailRequests.add(completer);
+    return completer.future;
   }
 
   @override
@@ -216,8 +343,14 @@ class _ControlledActivityRepository implements RouteActivityRepository {
   void completeList(int index, RouteActivityPage page) =>
       listRequests[index].complete(page);
 
+  void completeDetail(int index, RouteExecutionDetail detail) =>
+      detailRequests[index].complete(detail);
+
   Future<void> waitForListRequests(int count) =>
       _waitFor(() => listRequests.length >= count);
+
+  Future<void> waitForDetailRequests(int count) =>
+      _waitFor(() => detailRequests.length >= count);
 }
 
 class _QueuedActivityRepository implements RouteActivityRepository {

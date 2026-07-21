@@ -1,31 +1,97 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart';
 import 'package:web_dex/features/unified_swap/domain/route_execution_models.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
 import 'package:web_dex/features/unified_swap/presentation/swap/swap_widgets.dart';
 import 'package:web_dex/features/unified_swap/presentation/unified_swap_design.dart';
 
-class RouteReviewView extends StatelessWidget {
+class RouteReviewView extends StatefulWidget {
   const RouteReviewView({
     required this.review,
+    required this.desktopIntentEditor,
+    required this.onBack,
     required this.onAccept,
     required this.acceptInFlight,
     required this.executionEnabled,
     required this.clipboardWriter,
     required this.announcement,
     this.failureMessage,
+    this.termsUpdated = false,
+    this.previousReview,
+    this.desktopIntentSurfaceOpen = false,
     this.now,
     super.key,
   });
 
   final RouteExecutionReview review;
+  final Widget desktopIntentEditor;
+  final VoidCallback? onBack;
   final VoidCallback onAccept;
   final bool acceptInFlight;
   final bool executionEnabled;
   final SwapClipboardWriter clipboardWriter;
   final SwapAnnouncement announcement;
   final String? failureMessage;
+  final bool termsUpdated;
+  final RouteExecutionReview? previousReview;
+  final bool desktopIntentSurfaceOpen;
   final DateTime Function()? now;
+
+  @override
+  State<RouteReviewView> createState() => _RouteReviewViewState();
+}
+
+class _RouteReviewViewState extends State<RouteReviewView> {
+  Timer? _expiryTimer;
+
+  RouteExecutionReview get review => widget.review;
+  Widget get desktopIntentEditor => widget.desktopIntentEditor;
+  VoidCallback? get onBack => widget.onBack;
+  VoidCallback get onAccept => widget.onAccept;
+  bool get acceptInFlight => widget.acceptInFlight;
+  bool get executionEnabled => widget.executionEnabled;
+  SwapClipboardWriter get clipboardWriter => widget.clipboardWriter;
+  SwapAnnouncement get announcement => widget.announcement;
+  String? get failureMessage => widget.failureMessage;
+  bool get termsUpdated => widget.termsUpdated;
+  RouteExecutionReview? get previousReview => widget.previousReview;
+  bool get desktopIntentSurfaceOpen => widget.desktopIntentSurfaceOpen;
+  DateTime Function()? get now => widget.now;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleExpiry();
+  }
+
+  @override
+  void didUpdateWidget(RouteReviewView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.review.reviewId != widget.review.reviewId ||
+        oldWidget.review.expiresAt != widget.review.expiresAt ||
+        oldWidget.now != widget.now) {
+      _scheduleExpiry();
+    }
+  }
+
+  void _scheduleExpiry() {
+    _expiryTimer?.cancel();
+    final current = now?.call() ?? DateTime.now().toUtc();
+    final remaining = review.expiresAt.difference(current.toUtc());
+    if (remaining <= Duration.zero) return;
+    _expiryTimer = Timer(remaining + const Duration(milliseconds: 1), () {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,45 +100,69 @@ class RouteReviewView extends StatelessWidget {
     final safeReview = _isSafeReview(review);
     final executable = safeReview && !expired && executionEnabled;
     final colors = UnifiedSwapDesign.colors(context);
-    return ColoredBox(
-      color: colors.canvas,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final desktop =
-              constraints.maxWidth >= UnifiedSwapDesign.desktopBreakpoint;
-          final panel = _ReviewPanel(
-            key: const Key('unified-swap-review'),
-            review: review,
-            expired: expired,
-            safeReview: safeReview,
-            executable: executable,
-            acceptInFlight: acceptInFlight,
-            executionEnabled: executionEnabled,
-            failureMessage: failureMessage,
-            onAccept: onAccept,
-            clipboardWriter: clipboardWriter,
-            announcement: announcement,
-          );
-          if (!desktop) return panel;
-          return Padding(
-            padding: UnifiedSwapDesign.pagePadding(context),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: UnifiedSwapDesign.detailWidth,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _ReviewedIntentPreview(review: review)),
-                    const SizedBox(width: 24),
-                    SizedBox(width: 520, child: panel),
-                  ],
-                ),
-              ),
-            ),
-          );
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !acceptInFlight) onBack?.call();
+      },
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              onBack?.call(),
         },
+        child: ColoredBox(
+          color: colors.canvas,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final desktop =
+                  constraints.maxWidth >= UnifiedSwapDesign.desktopBreakpoint;
+              final panel = _ReviewPanel(
+                key: const Key('unified-swap-review'),
+                desktop: desktop,
+                review: review,
+                expired: expired,
+                safeReview: safeReview,
+                executable: executable,
+                acceptInFlight: acceptInFlight,
+                executionEnabled: executionEnabled,
+                failureMessage: failureMessage,
+                termsUpdated: termsUpdated,
+                previousReview: previousReview,
+                onBack: onBack,
+                onAccept: onAccept,
+                clipboardWriter: clipboardWriter,
+                announcement: announcement,
+              );
+              if (!desktop) return panel;
+              return Padding(
+                padding: UnifiedSwapDesign.pagePadding(context),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: UnifiedSwapDesign.detailWidth,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, detailConstraints) {
+                        final panelWidth = (detailConstraints.maxWidth * .42)
+                            .clamp(380.0, 520.0);
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: desktopIntentEditor),
+                            if (!desktopIntentSurfaceOpen) ...[
+                              const SizedBox(width: 24),
+                              SizedBox(width: panelWidth, child: panel),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -80,6 +170,7 @@ class RouteReviewView extends StatelessWidget {
 
 class _ReviewPanel extends StatelessWidget {
   const _ReviewPanel({
+    required this.desktop,
     required this.review,
     required this.expired,
     required this.safeReview,
@@ -87,12 +178,16 @@ class _ReviewPanel extends StatelessWidget {
     required this.acceptInFlight,
     required this.executionEnabled,
     required this.failureMessage,
+    required this.termsUpdated,
+    required this.previousReview,
+    required this.onBack,
     required this.onAccept,
     required this.clipboardWriter,
     required this.announcement,
     super.key,
   });
 
+  final bool desktop;
   final RouteExecutionReview review;
   final bool expired;
   final bool safeReview;
@@ -100,6 +195,9 @@ class _ReviewPanel extends StatelessWidget {
   final bool acceptInFlight;
   final bool executionEnabled;
   final String? failureMessage;
+  final bool termsUpdated;
+  final RouteExecutionReview? previousReview;
+  final VoidCallback? onBack;
   final VoidCallback onAccept;
   final SwapClipboardWriter clipboardWriter;
   final SwapAnnouncement announcement;
@@ -107,8 +205,13 @@ class _ReviewPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = UnifiedSwapDesign.colors(context);
-    final desktop =
-        MediaQuery.sizeOf(context).width >= UnifiedSwapDesign.desktopBreakpoint;
+    final content = ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: desktop
+          ? const EdgeInsets.all(18)
+          : UnifiedSwapDesign.pagePadding(context),
+      children: [..._reviewContent(context)],
+    );
     return Container(
       decoration: desktop
           ? BoxDecoration(
@@ -123,345 +226,242 @@ class _ReviewPanel extends StatelessWidget {
       clipBehavior: desktop ? Clip.antiAlias : Clip.none,
       child: Column(
         children: [
-          Expanded(
-            child: ListView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: desktop
-                  ? const EdgeInsets.all(18)
-                  : UnifiedSwapDesign.pagePadding(context),
-              children: [
-                UnifiedSwapPageTitle(
-                  title: unifiedSwapText(
-                    context,
-                    'review.title',
-                    'Review swap',
-                  ),
-                  subtitle: unifiedSwapText(
-                    context,
-                    'review.subtitle',
-                    'Confirm the exact outcome, protection, costs, and '
-                        'permission before funds move.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                UnifiedSwapBadge(
-                  label: unifiedSwapText(
-                    context,
-                    'review.readyBadge',
-                    'Ready to review',
-                  ),
-                  tone: UnifiedSwapNoticeTone.brand,
-                ),
-                if (expired) ...[
-                  const SizedBox(height: 12),
-                  _ReviewNotice(
-                    key: const Key('swap-review-expired'),
-                    title: unifiedSwapText(
-                      context,
-                      'review.expiredTitle',
-                      'Review expired',
-                    ),
-                    message: unifiedSwapText(
-                      context,
-                      'review.expiredBody',
-                      'Return to the quote and obtain fresh route terms.',
-                    ),
-                    error: true,
-                  ),
-                ] else if (!safeReview) ...[
-                  const SizedBox(height: 12),
-                  _ReviewNotice(
-                    key: const Key('swap-review-inert'),
-                    title: unifiedSwapText(
-                      context,
-                      'review.inertTitle',
-                      'This Review is not executable',
-                    ),
-                    message: unifiedSwapText(
-                      context,
-                      'review.inertBody',
-                      'The wallet received an unknown route, warning, asset, '
-                          'or network variant. No funds can move.',
-                    ),
-                    error: true,
-                  ),
-                ] else if (!executionEnabled) ...[
-                  const SizedBox(height: 12),
-                  _ReviewNotice(
-                    key: const Key('swap-init-disabled'),
-                    title: unifiedSwapText(
-                      context,
-                      'review.executionDisabledTitle',
-                      'Execution is disabled',
-                    ),
-                    message: unifiedSwapText(
-                      context,
-                      'review.executionDisabledBody',
-                      'You can inspect these terms, but new route execution '
-                          'is currently unavailable.',
-                    ),
-                    error: false,
-                  ),
-                ],
-                if (failureMessage case final failure?) ...[
-                  const SizedBox(height: 12),
-                  _ReviewNotice(
-                    key: const Key('swap-review-execution-failure'),
-                    title: unifiedSwapText(
-                      context,
-                      'review.executionFailedTitle',
-                      'Execution did not start',
-                    ),
-                    message: failure,
-                    error: true,
-                  ),
-                ],
-                const SizedBox(height: 12),
-                _ReviewSummary(review: review),
-                const SizedBox(height: 12),
-                UnifiedSwapNotice(
-                  title: unifiedSwapText(
-                    context,
-                    'review.minimumTitle',
-                    'You’ll receive at least',
-                  ),
-                  message: swapAmount(
-                    review.minimumReceive,
-                    review.destination,
-                  ),
-                  tone: UnifiedSwapNoticeTone.success,
-                  icon: Icons.shield_outlined,
-                ),
-                const SizedBox(height: 12),
-                UnifiedSwapDisclosure(
-                  title: unifiedSwapText(
-                    context,
-                    'review.costsProtection',
-                    'Costs & protection',
-                  ),
-                  child: _CostReview(review: review),
-                ),
-                const SizedBox(height: 8),
-                UnifiedSwapDisclosure(
-                  title: unifiedSwapText(
-                    context,
-                    'review.routeIdentities',
-                    'Route & identities',
-                  ),
-                  child: Column(
-                    children: [
-                      _AddressReview(review: review),
-                      const SizedBox(height: 12),
-                      _RouteSteps(steps: review.steps),
-                      const SizedBox(height: 12),
-                      SwapSectionCard(
-                        title: unifiedSwapText(
-                          context,
-                          'review.executionIdentity',
-                          'Execution identity',
-                        ),
-                        icon: Icons.fingerprint_rounded,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              unifiedSwapText(
-                                context,
-                                'review.fullExecutionId',
-                                'Full execution ID',
-                              ),
-                            ),
-                            SwapCopyableValue(
-                              label: unifiedSwapText(
-                                context,
-                                'common.executionId',
-                                'Execution ID',
-                              ),
-                              value: review.routeExecutionId,
-                              valueKey: 'swap-review-execution-id',
-                              clipboardWriter: clipboardWriter,
-                              announcement: announcement,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              unifiedSwapText(
-                                context,
-                                'review.candidateDigest',
-                                'Candidate digest',
-                              ),
-                            ),
-                            SelectableText(review.candidateDigest),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (review.approvals.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _ApprovalReview(approvals: review.approvals),
-                ] else ...[
-                  const SizedBox(height: 12),
-                  UnifiedSwapNotice(
-                    title: unifiedSwapText(
-                      context,
-                      'review.noApprovalTitle',
-                      'No token approval needed',
-                    ),
-                    message: unifiedSwapText(
-                      context,
-                      'review.noApprovalBody',
-                      'You’ll only sign the swap request when you start.',
-                    ),
-                    tone: UnifiedSwapNoticeTone.info,
-                    icon: Icons.verified_user_outlined,
-                  ),
-                ],
-                if (review.warnings.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _WarningsReview(warnings: review.warnings),
-                ],
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.canvas,
-              border: Border(top: BorderSide(color: colors.border)),
-              boxShadow: [
-                BoxShadow(
-                  color: colors.shadow,
-                  blurRadius: 26,
-                  offset: const Offset(0, -14),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    FilledButton.icon(
-                      key: const Key('swap-review-confirm'),
-                      style: UnifiedSwapDesign.primaryButtonStyle(context),
-                      onPressed: executable && !acceptInFlight
-                          ? onAccept
-                          : null,
-                      icon: acceptInFlight
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.lock_open_rounded),
-                      label: Text(
-                        acceptInFlight
-                            ? unifiedSwapText(
-                                context,
-                                'review.startingSwap',
-                                'Starting swap',
-                              )
-                            : unifiedSwapText(
-                                context,
-                                'review.startSwap',
-                                'Start swap',
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      unifiedSwapText(
-                        context,
-                        'review.leavingNotice',
-                        'Leaving this screen never cancels work after it '
-                            'starts.',
-                      ),
-                      textAlign: TextAlign.center,
-                      style: UnifiedSwapDesign.typography(context).bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          Expanded(child: content),
+          _ReviewFooter(
+            review: review,
+            executable: executable,
+            acceptInFlight: acceptInFlight,
+            onAccept: onAccept,
+            desktop: desktop,
           ),
         ],
       ),
     );
   }
+
+  List<Widget> _reviewContent(BuildContext context) => [
+    _ReviewHeading(onBack: onBack),
+    const SizedBox(height: 12),
+    UnifiedSwapBadge(
+      label: unifiedSwapText(context, 'review.readyBadge', 'Ready to review'),
+      tone: UnifiedSwapNoticeTone.brand,
+    ),
+    if (acceptInFlight) ...[
+      const SizedBox(height: 12),
+      UnifiedSwapNotice(
+        key: const Key('swap-review-revalidating'),
+        title: unifiedSwapText(
+          context,
+          'review.revalidatingTitle',
+          'Checking latest terms',
+        ),
+        message: unifiedSwapText(
+          context,
+          'review.revalidatingBody',
+          'The wallet is verifying balances, costs, route structure, and '
+              'permissions before anything starts.',
+        ),
+        tone: UnifiedSwapNoticeTone.info,
+        icon: Icons.sync_rounded,
+        liveRegion: true,
+      ),
+    ],
+    if (termsUpdated) ...[
+      const SizedBox(height: 12),
+      _ReviewNotice(
+        key: const Key('swap-review-terms-updated'),
+        title: unifiedSwapText(
+          context,
+          'review.refresh.materialTitle',
+          'Route terms updated',
+        ),
+        message: unifiedSwapText(
+          context,
+          'review.refresh.materialBody',
+          'Costs or protected amounts changed. Review these exact new terms '
+              'and confirm again before anything starts.',
+        ),
+        error: false,
+      ),
+      if (previousReview case final previous?) ...[
+        const SizedBox(height: 12),
+        _MaterialChangeComparison(previous: previous, current: review),
+      ],
+    ],
+    if (expired) ...[
+      const SizedBox(height: 12),
+      _ReviewNotice(
+        key: const Key('swap-review-expired'),
+        title: unifiedSwapText(
+          context,
+          'review.expiredTitle',
+          'Review expired',
+        ),
+        message: unifiedSwapText(
+          context,
+          'review.expiredBody',
+          'Return to the quote and obtain fresh route terms.',
+        ),
+        error: true,
+      ),
+    ] else if (!safeReview) ...[
+      const SizedBox(height: 12),
+      _ReviewNotice(
+        key: const Key('swap-review-inert'),
+        title: unifiedSwapText(
+          context,
+          'review.inertTitle',
+          'This Review is not executable',
+        ),
+        message: unifiedSwapText(
+          context,
+          'review.inertBody',
+          'The wallet received an unknown route, warning, asset, or network '
+              'variant. No funds can move.',
+        ),
+        error: true,
+      ),
+    ] else if (!executionEnabled) ...[
+      const SizedBox(height: 12),
+      _ReviewNotice(
+        key: const Key('swap-init-disabled'),
+        title: unifiedSwapText(
+          context,
+          'review.executionDisabledTitle',
+          'Execution is disabled',
+        ),
+        message: unifiedSwapText(
+          context,
+          'review.executionDisabledBody',
+          'You can inspect these terms, but new route execution is currently '
+              'unavailable.',
+        ),
+        error: false,
+      ),
+    ],
+    if (failureMessage case final failure?) ...[
+      const SizedBox(height: 12),
+      _ReviewNotice(
+        key: const Key('swap-review-execution-failure'),
+        title: unifiedSwapText(
+          context,
+          'review.executionFailedTitle',
+          'Execution did not start',
+        ),
+        message: failure,
+        error: true,
+      ),
+    ],
+    if (review.warnings.isNotEmpty) ...[
+      const SizedBox(height: 12),
+      _WarningsReview(warnings: review.warnings),
+    ],
+    const SizedBox(height: 12),
+    _ReviewSummary(review: review),
+    const SizedBox(height: 12),
+    UnifiedSwapNotice(
+      title: unifiedSwapText(
+        context,
+        'review.minimumTitle',
+        'You’ll receive at least',
+      ),
+      message: swapAmount(review.minimumReceive, review.destination),
+      tone: UnifiedSwapNoticeTone.success,
+      icon: Icons.shield_outlined,
+    ),
+    const SizedBox(height: 12),
+    _DecisionFacts(review: review),
+    const SizedBox(height: 12),
+    UnifiedSwapDisclosure(
+      title: unifiedSwapText(
+        context,
+        'review.costsProtection',
+        'Costs & protection',
+      ),
+      child: _CostReview(review: review),
+    ),
+    const SizedBox(height: 8),
+    UnifiedSwapDisclosure(
+      title: unifiedSwapText(
+        context,
+        'review.routeIdentities',
+        'Route & identities',
+      ),
+      child: Column(
+        children: [
+          _AddressReview(
+            review: review,
+            clipboardWriter: clipboardWriter,
+            announcement: announcement,
+          ),
+          const SizedBox(height: 12),
+          _RouteSteps(steps: review.steps),
+        ],
+      ),
+    ),
+    const SizedBox(height: 12),
+    _PermissionSummary(review: review),
+    const SizedBox(height: 16),
+  ];
 }
 
-class _ReviewedIntentPreview extends StatelessWidget {
-  const _ReviewedIntentPreview({required this.review});
+class _ReviewHeading extends StatefulWidget {
+  const _ReviewHeading({required this.onBack});
 
-  final RouteExecutionReview review;
+  final VoidCallback? onBack;
+
+  @override
+  State<_ReviewHeading> createState() => _ReviewHeadingState();
+}
+
+class _ReviewHeadingState extends State<_ReviewHeading> {
+  late final FocusNode _focusNode;
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode(debugLabel: 'Unified Swap Review heading')
+      ..addListener(_handleFocusChanged);
+  }
+
+  void _handleFocusChanged() {
+    if (mounted && _focused != _focusNode.hasFocus) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChanged)
+      ..dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              UnifiedSwapPageTitle(
-                title: unifiedSwapText(context, 'entry.title', 'Swap'),
-              ),
-              const SizedBox(height: 20),
-              UnifiedSwapSurface(
-                borderColor: UnifiedSwapDesign.colors(context).controlBorder,
-                radius: 20,
-                child: _PreviewLeg(
-                  label: unifiedSwapText(context, 'entry.youPay', 'You pay'),
-                  amount: swapAmount(review.sourceAmount, review.source),
-                  asset: review.source,
-                  address: review.resolvedSourceAddress,
-                ),
-              ),
-              Transform.translate(
-                offset: const Offset(0, 0),
-                child: const SizedBox(
-                  height: 48,
-                  child: Center(child: Icon(Icons.swap_vert_rounded)),
-                ),
-              ),
-              UnifiedSwapSurface(
-                borderColor: UnifiedSwapDesign.colors(context).controlBorder,
-                radius: 20,
-                child: _PreviewLeg(
-                  label: unifiedSwapText(
-                    context,
-                    'entry.youReceive',
-                    'You receive',
-                  ),
-                  amount: swapAmount(
-                    review.expectedReceive,
-                    review.destination,
-                  ),
-                  asset: review.destination,
-                  address: review.recipient,
-                ),
-              ),
-              const SizedBox(height: 14),
-              UnifiedSwapNotice(
-                title: unifiedSwapText(
-                  context,
-                  'review.sidePanelTitle',
-                  'Review is open in the side panel',
-                ),
-                message: unifiedSwapText(
-                  context,
-                  'review.sidePanelBody',
-                  'Editing the swap closes this Review and checks a fresh '
-                      'quote.',
-                ),
-                tone: UnifiedSwapNoticeTone.neutral,
-                icon: Icons.info_outline_rounded,
-              ),
-            ],
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      child: Semantics(
+        container: true,
+        header: true,
+        focusable: true,
+        focused: _focused,
+        child: UnifiedSwapPageTitle(
+          title: unifiedSwapText(context, 'review.title', 'Review swap'),
+          subtitle: unifiedSwapText(
+            context,
+            'review.subtitle',
+            'Confirm the exact outcome, protection, costs, and permission '
+                'before funds move.',
+          ),
+          leading: IconButton(
+            key: const Key('swap-review-back'),
+            onPressed: widget.onBack,
+            tooltip: unifiedSwapText(context, 'common.goBack', 'Go back'),
+            icon: const Icon(Icons.arrow_back_rounded),
           ),
         ),
       ),
@@ -469,8 +469,158 @@ class _ReviewedIntentPreview extends StatelessWidget {
   }
 }
 
-class _PreviewLeg extends StatelessWidget {
-  const _PreviewLeg({
+class _ReviewFooter extends StatelessWidget {
+  const _ReviewFooter({
+    required this.review,
+    required this.executable,
+    required this.acceptInFlight,
+    required this.onAccept,
+    required this.desktop,
+  });
+
+  final RouteExecutionReview review;
+  final bool executable;
+  final bool acceptInFlight;
+  final VoidCallback onAccept;
+  final bool desktop;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = UnifiedSwapDesign.colors(context);
+    final footer = SafeArea(
+      top: false,
+      child: Padding(
+        padding: desktop
+            ? const EdgeInsets.fromLTRB(0, 8, 0, 4)
+            : const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Semantics(
+              liveRegion: acceptInFlight,
+              child: FilledButton.icon(
+                key: const Key('swap-review-confirm'),
+                style: UnifiedSwapDesign.primaryButtonStyle(context),
+                onPressed: executable && !acceptInFlight ? onAccept : null,
+                icon: acceptInFlight
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.lock_open_rounded),
+                label: Text(_label(context)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              unifiedSwapText(
+                context,
+                'review.leavingNotice',
+                'Leaving this screen never cancels work after it starts.',
+              ),
+              textAlign: TextAlign.center,
+              style: UnifiedSwapDesign.typography(context).bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+    if (desktop) return footer;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.canvas,
+        border: Border(top: BorderSide(color: colors.border)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow,
+            blurRadius: 26,
+            offset: const Offset(0, -14),
+          ),
+        ],
+      ),
+      child: footer,
+    );
+  }
+
+  String _label(BuildContext context) {
+    if (acceptInFlight) {
+      return unifiedSwapText(
+        context,
+        'review.checkingLatest',
+        'Checking latest terms',
+      );
+    }
+    if (review.approvals.any((approval) => approval.resetRequired)) {
+      return unifiedSwapText(
+        context,
+        'review.continueWithReset',
+        'Continue with reset',
+      );
+    }
+    if (review.approvals.length == 1) {
+      final approval = review.approvals.single;
+      return unifiedSwapText(
+        context,
+        'review.approveExactlyAndStart',
+        'Approve exactly {amount} & start',
+        namedArgs: {'amount': swapAmount(approval.exactAmount, approval.token)},
+      );
+    }
+    if (review.approvals.length > 1) {
+      return unifiedSwapText(
+        context,
+        'review.approveExactAmountsAndStart',
+        'Approve exact amounts & start',
+      );
+    }
+    return unifiedSwapText(context, 'review.startSwap', 'Start swap');
+  }
+}
+
+class _ReviewSummary extends StatelessWidget {
+  const _ReviewSummary({required this.review});
+
+  final RouteExecutionReview review;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwapSectionCard(
+      title: unifiedSwapText(
+        context,
+        'review.transferSummary',
+        'Transfer summary',
+      ),
+      icon: Icons.swap_vert_rounded,
+      child: Column(
+        children: [
+          _TransferLeg(
+            label: unifiedSwapText(context, 'entry.youPay', 'You pay'),
+            amount: swapAmount(review.sourceAmount, review.source),
+            asset: review.source,
+            address: review.resolvedSourceAddress,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Icon(
+              Icons.arrow_downward_rounded,
+              size: 20,
+              color: UnifiedSwapDesign.colors(context).textTertiary,
+            ),
+          ),
+          _TransferLeg(
+            label: unifiedSwapText(context, 'entry.youReceive', 'You receive'),
+            amount: swapAmount(review.expectedReceive, review.destination),
+            asset: review.destination,
+            address: review.recipient,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransferLeg extends StatelessWidget {
+  const _TransferLeg({
     required this.label,
     required this.amount,
     required this.asset,
@@ -484,113 +634,118 @@ class _PreviewLeg extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: UnifiedSwapDesign.typography(context).labelLarge),
-        const SizedBox(height: 14),
-        Row(
+    final network = unifiedSwapNetworkLabel(context, asset);
+    final shortAddress = unifiedSwapShortIdentity(address);
+    return Semantics(
+      label: unifiedSwapText(
+        context,
+        'review.termSemantics',
+        '{label}: {value}. {details}',
+        namedArgs: {
+          'label': label,
+          'value': amount,
+          'details': '$network · $shortAddress',
+        },
+      ),
+      child: ExcludeSemantics(
+        child: Row(
           children: [
-            Expanded(
-              child: Text(
-                amount,
-                style: UnifiedSwapDesign.typography(context).amountDisplay,
-              ),
-            ),
+            UnifiedSwapAssetAvatar(asset: asset, size: 40),
             const SizedBox(width: 12),
-            UnifiedSwapAssetAvatar(asset: asset, size: 38),
-            const SizedBox(width: 10),
-            Text(
-              asset.ticker,
-              style: UnifiedSwapDesign.typography(context).cardTitle,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 2),
+                  Text(amount, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$network · $shortAddress',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        Divider(color: UnifiedSwapDesign.colors(context).border),
-        const SizedBox(height: 8),
-        Text(
-          unifiedSwapShortIdentity(address),
-          style: UnifiedSwapDesign.typography(context).bodySmall,
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _ReviewSummary extends StatelessWidget {
-  const _ReviewSummary({required this.review});
+class _DecisionFacts extends StatelessWidget {
+  const _DecisionFacts({required this.review});
 
   final RouteExecutionReview review;
 
   @override
   Widget build(BuildContext context) {
-    return SwapSectionCard(
-      title: unifiedSwapText(context, 'review.exactTerms', 'Exact terms'),
-      icon: Icons.receipt_long_outlined,
+    final totalCost = _summarizeAmounts(context, [
+      for (final fee in review.fees) _AmountPart(fee.asset, fee.amount),
+    ]);
+    final maximumNetworkCost = _summarizeAmounts(context, [
+      for (final cap in review.networkFeeCaps)
+        _AmountPart(cap.asset, cap.maximumAmount),
+    ]);
+    return UnifiedSwapSurface(
+      semanticLabel: unifiedSwapText(
+        context,
+        'review.keyFacts',
+        'Key swap facts',
+      ),
+      padding: const EdgeInsets.all(14),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 680;
-          final items = [
-            _Term(
-              label: unifiedSwapText(context, 'review.youSend', 'You send'),
-              value: swapAmount(review.sourceAmount, review.source),
-              details: swapAssetLabel(context, review.source),
+          final facts = [
+            _DecisionFact(
+              label: unifiedSwapText(context, 'quote.totalCost', 'Total cost'),
+              value: totalCost,
             ),
-            _Term(
-              label: unifiedSwapText(
-                context,
-                'review.expectedReceive',
-                'Expected receive',
-              ),
-              value: swapAmount(review.expectedReceive, review.destination),
-              details: swapAssetLabel(context, review.destination),
-            ),
-            _Term(
-              label: unifiedSwapText(
-                context,
-                'review.minimumReceive',
-                'Minimum receive',
-              ),
-              value: swapAmount(review.minimumReceive, review.destination),
-              details: unifiedSwapText(
-                context,
-                'review.minimumProtected',
-                'Protected by the consented minimum',
-              ),
-            ),
-            _Term(
+            _DecisionFact(
               label: unifiedSwapText(
                 context,
                 'review.estimatedTime',
-                'Estimated time',
+                'Estimated completion',
               ),
-              value: swapDuration(context, review.estimatedDuration),
-              details: unifiedSwapText(
+              value: review.estimatedDurationKnown
+                  ? swapDuration(context, review.estimatedDuration)
+                  : unifiedSwapText(
+                      context,
+                      'common.unavailable',
+                      'Unavailable',
+                    ),
+            ),
+            _DecisionFact(
+              label: unifiedSwapText(
                 context,
-                'review.estimateDisclaimer',
-                'Estimate, not a guarantee',
+                'review.maximumNetworkCost',
+                'Maximum network cost',
               ),
+              value: maximumNetworkCost,
             ),
           ];
-          if (!wide) {
+          final stack =
+              constraints.maxWidth < 300 ||
+              MediaQuery.textScalerOf(context).scale(1) >= 1.5;
+          if (stack) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (var index = 0; index < items.length; index++) ...[
-                  items[index],
-                  if (index != items.length - 1) const Divider(height: 24),
+                for (var index = 0; index < facts.length; index++) ...[
+                  facts[index],
+                  if (index != facts.length - 1) const Divider(height: 20),
                 ],
               ],
             );
           }
-          const gap = 16.0;
-          final width = (constraints.maxWidth - gap) / 2;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final item in items) SizedBox(width: width, child: item),
+              for (var index = 0; index < facts.length; index++) ...[
+                Expanded(child: facts[index]),
+                if (index != facts.length - 1) const SizedBox(width: 10),
+              ],
             ],
           );
         },
@@ -599,35 +754,160 @@ class _ReviewSummary extends StatelessWidget {
   }
 }
 
-class _Term extends StatelessWidget {
-  const _Term({
+class _MaterialChangeComparison extends StatelessWidget {
+  const _MaterialChangeComparison({
+    required this.previous,
+    required this.current,
+  });
+
+  final RouteExecutionReview previous;
+  final RouteExecutionReview current;
+
+  @override
+  Widget build(BuildContext context) {
+    final oldTotalCost = _summarizeAmounts(context, [
+      for (final fee in previous.fees) _AmountPart(fee.asset, fee.amount),
+    ]);
+    final newTotalCost = _summarizeAmounts(context, [
+      for (final fee in current.fees) _AmountPart(fee.asset, fee.amount),
+    ]);
+    final oldNetworkMaximum = _summarizeAmounts(context, [
+      for (final cap in previous.networkFeeCaps)
+        _AmountPart(cap.asset, cap.maximumAmount),
+    ]);
+    final newNetworkMaximum = _summarizeAmounts(context, [
+      for (final cap in current.networkFeeCaps)
+        _AmountPart(cap.asset, cap.maximumAmount),
+    ]);
+    final oldPermission = _permissionComparisonSummary(context, previous);
+    final newPermission = _permissionComparisonSummary(context, current);
+    return SwapSectionCard(
+      title: unifiedSwapText(
+        context,
+        'review.refresh.comparisonTitle',
+        'Previous and updated terms',
+      ),
+      icon: Icons.compare_arrows_rounded,
+      child: Column(
+        children: [
+          _ChangedFact(
+            label: unifiedSwapText(
+              context,
+              'review.refresh.expectedReceive',
+              'Expected receive',
+            ),
+            previous: swapAmount(
+              previous.expectedReceive,
+              previous.destination,
+            ),
+            current: swapAmount(current.expectedReceive, current.destination),
+          ),
+          const Divider(height: 20),
+          _ChangedFact(
+            label: unifiedSwapText(
+              context,
+              'review.refresh.minimumReceive',
+              'Protected minimum',
+            ),
+            previous: swapAmount(previous.minimumReceive, previous.destination),
+            current: swapAmount(current.minimumReceive, current.destination),
+          ),
+          const Divider(height: 20),
+          _ChangedFact(
+            label: unifiedSwapText(
+              context,
+              'review.refresh.totalCost',
+              'Total cost',
+            ),
+            previous: oldTotalCost,
+            current: newTotalCost,
+          ),
+          const Divider(height: 20),
+          _ChangedFact(
+            label: unifiedSwapText(
+              context,
+              'review.refresh.maximumNetworkCost',
+              'Maximum network cost',
+            ),
+            previous: oldNetworkMaximum,
+            current: newNetworkMaximum,
+          ),
+          const Divider(height: 20),
+          _ChangedFact(
+            label: unifiedSwapText(
+              context,
+              'review.refresh.tokenPermission',
+              'Token permission',
+            ),
+            previous: oldPermission,
+            current: newPermission,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChangedFact extends StatelessWidget {
+  const _ChangedFact({
     required this.label,
-    required this.value,
-    required this.details,
+    required this.previous,
+    required this.current,
   });
 
   final String label;
+  final String previous;
+  final String current;
+
+  @override
+  Widget build(BuildContext context) {
+    final changed = previous != current;
+    return Semantics(
+      label: '$label: $previous, $current',
+      child: ExcludeSemantics(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Text(label)),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                changed ? '$previous → $current' : current,
+                textAlign: TextAlign.end,
+                style: changed
+                    ? const TextStyle(fontWeight: FontWeight.w700)
+                    : UnifiedSwapDesign.typography(context).bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DecisionFact extends StatelessWidget {
+  const _DecisionFact({required this.label, required this.value});
+
+  final String label;
   final String value;
-  final String details;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: unifiedSwapText(
-        context,
-        'review.termSemantics',
-        '{label}: {value}. {details}',
-        namedArgs: {'label': label, 'value': value, 'details': details},
-      ),
+      label: '$label: $value',
       child: ExcludeSemantics(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 2),
-            Text(value, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 2),
-            Text(details, style: Theme.of(context).textTheme.bodySmall),
+            Text(label, style: Theme.of(context).textTheme.labelSmall),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
           ],
         ),
       ),
@@ -636,9 +916,15 @@ class _Term extends StatelessWidget {
 }
 
 class _AddressReview extends StatelessWidget {
-  const _AddressReview({required this.review});
+  const _AddressReview({
+    required this.review,
+    required this.clipboardWriter,
+    required this.announcement,
+  });
 
   final RouteExecutionReview review;
+  final SwapClipboardWriter clipboardWriter;
+  final SwapAnnouncement announcement;
 
   @override
   Widget build(BuildContext context) {
@@ -657,9 +943,12 @@ class _AddressReview extends StatelessWidget {
             ),
             style: Theme.of(context).textTheme.labelLarge,
           ),
-          SelectableText(
-            review.resolvedSourceAddress,
-            key: const Key('swap-review-source-address'),
+          SwapCopyableValue(
+            label: unifiedSwapText(context, 'entry.from', 'From'),
+            value: review.resolvedSourceAddress,
+            valueKey: 'swap-review-source-address',
+            clipboardWriter: clipboardWriter,
+            announcement: announcement,
           ),
           const SizedBox(height: 12),
           Text(
@@ -671,9 +960,12 @@ class _AddressReview extends StatelessWidget {
             ),
             style: Theme.of(context).textTheme.labelLarge,
           ),
-          SelectableText(
-            review.recipient,
-            key: const Key('swap-review-recipient'),
+          SwapCopyableValue(
+            label: unifiedSwapText(context, 'entry.to', 'To'),
+            value: review.recipient,
+            valueKey: 'swap-review-recipient',
+            clipboardWriter: clipboardWriter,
+            announcement: announcement,
           ),
         ],
       ),
@@ -728,7 +1020,7 @@ class _CostReview extends StatelessWidget {
             for (final limit in review.nonNetworkFeeLimits)
               _LineItem(
                 label:
-                    '${limit.stageId == null ? '' : '${unifiedSwapText(context, 'common.stepNumber', 'Step {number}', namedArgs: {'number': '${limit.stageId}'})} · '}'
+                    '${limit.stageId == null ? '' : '${_reviewStepLabel(context, review, limit.stageId!)} · '}'
                     '${swapFeeKind(context, limit.kind)}',
                 value: swapAmount(limit.maximumAmount, limit.asset),
                 unknown: limit.kind == RouteFeeKind.unknown,
@@ -746,12 +1038,7 @@ class _CostReview extends StatelessWidget {
             ),
             for (final cap in review.networkFeeCaps)
               _LineItem(
-                label: unifiedSwapText(
-                  context,
-                  'common.stepNumber',
-                  'Step {number}',
-                  namedArgs: {'number': cap.stageId},
-                ),
+                label: _reviewStepLabel(context, review, cap.stageId),
                 value: swapAmount(cap.maximumAmount, cap.asset),
                 unknown: false,
               ),
@@ -797,6 +1084,23 @@ class _LineItem extends StatelessWidget {
   }
 }
 
+String _reviewStepLabel(
+  BuildContext context,
+  RouteExecutionReview review,
+  String stageId,
+) {
+  final index = review.steps.indexWhere((step) => step.stageId == stageId);
+  if (index < 0) {
+    return unifiedSwapText(context, 'review.routeStep', 'Route step');
+  }
+  return unifiedSwapText(
+    context,
+    'common.stepNumber',
+    'Step {number}',
+    namedArgs: {'number': '${index + 1}'},
+  );
+}
+
 class _RouteSteps extends StatelessWidget {
   const _RouteSteps({required this.steps});
 
@@ -829,13 +1133,13 @@ class _RouteStep extends StatelessWidget {
     final kind = switch (step.kind) {
       RouteReviewStepKind.atomic => unifiedSwapText(
         context,
-        'review.stepKind.atomic',
-        'Direct exchange',
+        'review.stepKind.exchange',
+        'Exchange',
       ),
       RouteReviewStepKind.external => unifiedSwapText(
         context,
-        'review.stepKind.external',
-        'Unified transfer',
+        'review.stepKind.transfer',
+        'Swap transfer',
       ),
       RouteReviewStepKind.unknown => unifiedSwapText(
         context,
@@ -904,63 +1208,142 @@ class _RouteStep extends StatelessWidget {
   }
 }
 
-class _ApprovalReview extends StatelessWidget {
-  const _ApprovalReview({required this.approvals});
+class _PermissionSummary extends StatelessWidget {
+  const _PermissionSummary({required this.review});
 
-  final List<RouteApprovalScope> approvals;
+  final RouteExecutionReview review;
 
   @override
   Widget build(BuildContext context) {
-    return SwapSectionCard(
-      title: unifiedSwapText(
-        context,
-        'review.exactTokenApproval',
-        'Exact token approval',
-      ),
+    final approvals = review.approvals;
+    if (approvals.isEmpty) {
+      if (review.sufficientAllowances.isNotEmpty) {
+        return _sufficientAllowanceNotice(context, review);
+      }
+      return UnifiedSwapNotice(
+        title: unifiedSwapText(
+          context,
+          'review.noApprovalTitle',
+          'No token approval needed',
+        ),
+        message: unifiedSwapText(
+          context,
+          'review.noApprovalBody',
+          'You’ll only sign the swap request when you start.',
+        ),
+        tone: UnifiedSwapNoticeTone.info,
+        icon: Icons.verified_user_outlined,
+      );
+    }
+    final exactAmounts = _summarizeAmounts(context, [
+      for (final approval in approvals)
+        _AmountPart(approval.token, approval.exactAmount),
+    ]);
+    final resetRequired = approvals.any((approval) => approval.resetRequired);
+    final exactNotice = UnifiedSwapNotice(
+      title: resetRequired
+          ? unifiedSwapText(
+              context,
+              'review.resetThenApprovalTitle',
+              'Reset, then exact approval',
+            )
+          : unifiedSwapText(
+              context,
+              'review.exactApprovalOnlyTitle',
+              'Exact approval only',
+            ),
+      message: resetRequired
+          ? unifiedSwapText(
+              context,
+              'review.resetThenApprovalBody',
+              'Reset the current permission, then approve {amount} for this '
+                  'swap only — never unlimited.',
+              namedArgs: {'amount': exactAmounts},
+            )
+          : unifiedSwapText(
+              context,
+              'review.exactApprovalOnlyBody',
+              'Approve {amount} for this swap only — never unlimited.',
+              namedArgs: {'amount': exactAmounts},
+            ),
+      tone: UnifiedSwapNoticeTone.info,
       icon: Icons.verified_user_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var index = 0; index < approvals.length; index++) ...[
-            Text(
-              '${unifiedSwapText(context, 'common.stepNumber', 'Step {number}', namedArgs: {'number': approvals[index].stageId})} · '
-              '${swapAssetLabel(context, approvals[index].token)}',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            Text(
-              unifiedSwapText(
-                context,
-                'review.exactApprovalAmount',
-                'Exact amount: {amount}',
-                namedArgs: {
-                  'amount': swapAmount(
-                    approvals[index].exactAmount,
-                    approvals[index].token,
-                  ),
-                },
-              ),
-            ),
-            Text(unifiedSwapText(context, 'review.spender', 'Spender')),
-            SelectableText(approvals[index].spender),
-            Text(
-              approvals[index].resetRequired
-                  ? unifiedSwapText(
-                      context,
-                      'review.allowanceReset',
-                      'Existing allowance will be reset before exact approval.',
-                    )
-                  : unifiedSwapText(
-                      context,
-                      'review.allowanceNoReset',
-                      'No allowance reset is required.',
-                    ),
-            ),
-            if (index != approvals.length - 1) const Divider(height: 24),
-          ],
-        ],
-      ),
+    );
+    if (review.sufficientAllowances.isEmpty) return exactNotice;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        exactNotice,
+        const SizedBox(height: 8),
+        _sufficientAllowanceNotice(context, review),
+      ],
     );
   }
+}
+
+Widget _sufficientAllowanceNotice(
+  BuildContext context,
+  RouteExecutionReview review,
+) {
+  final coveredAmounts = _summarizeAmounts(context, [
+    for (final allowance in review.sufficientAllowances)
+      _AmountPart(allowance.token, allowance.requiredAmount),
+  ]);
+  return UnifiedSwapNotice(
+    title: unifiedSwapText(
+      context,
+      'review.sufficientApprovalTitle',
+      'No new token approval needed',
+    ),
+    message: unifiedSwapText(
+      context,
+      'review.sufficientApprovalBody',
+      'Your existing permission already covers {amount}. No broader '
+          'permission will be requested.',
+      namedArgs: {'amount': coveredAmounts},
+    ),
+    tone: UnifiedSwapNoticeTone.info,
+    icon: Icons.verified_user_outlined,
+  );
+}
+
+String _permissionComparisonSummary(
+  BuildContext context,
+  RouteExecutionReview review,
+) {
+  if (review.approvals.isEmpty && review.sufficientAllowances.isEmpty) {
+    return unifiedSwapText(
+      context,
+      'review.permissionComparisonNone',
+      'No token approval',
+    );
+  }
+  return [
+    for (final allowance in review.sufficientAllowances)
+      unifiedSwapText(
+        context,
+        'review.permissionComparisonSufficient',
+        'Existing permission · {amount} · spender {spender}',
+        namedArgs: {
+          'amount': swapAmount(allowance.requiredAmount, allowance.token),
+          'spender': allowance.spender,
+        },
+      ),
+    for (final approval in review.approvals)
+      unifiedSwapText(
+        context,
+        approval.resetRequired
+            ? 'review.permissionComparisonReset'
+            : 'review.permissionComparisonExact',
+        approval.resetRequired
+            ? 'Reset, then exact approval · {amount} · spender {spender}'
+            : 'Exact approval · {amount} · spender {spender}',
+        namedArgs: {
+          'amount': swapAmount(approval.exactAmount, approval.token),
+          'spender': approval.spender,
+        },
+      ),
+  ].join('; ');
 }
 
 class _WarningsReview extends StatelessWidget {
@@ -1055,13 +1438,13 @@ String _warning(
   ),
   RouteReviewWarningKind.notAtomicEndToEnd => unifiedSwapText(
     context,
-    'review.warning.notAtomicEndToEnd',
-    'This route is not atomic from end to end.',
+    'review.warning.multistepSettlement',
+    'This route completes in separate protected steps rather than all at once.',
   ),
   RouteReviewWarningKind.makerOrderNotReserved => unifiedSwapText(
     context,
-    'review.warning.makerOrderNotReserved',
-    'The atomic order is rechecked before funds move and may become unavailable.',
+    'review.warning.exchangeAvailability',
+    'Exchange availability is checked again before funds move and may change.',
   ),
   RouteReviewWarningKind.bridgeRecoveryRequired => unifiedSwapText(
     context,
@@ -1090,6 +1473,41 @@ String _warning(
   ),
 };
 
+class _AmountPart {
+  const _AmountPart(this.asset, this.amount);
+
+  final UnifiedSwapAssetIdentity asset;
+  final String amount;
+}
+
+class _AmountTotal {
+  _AmountTotal(this.asset, this.amount);
+
+  final UnifiedSwapAssetIdentity asset;
+  BigInt amount;
+}
+
+String _summarizeAmounts(BuildContext context, List<_AmountPart> parts) {
+  if (parts.isEmpty) {
+    return unifiedSwapText(context, 'common.unavailable', 'Unavailable');
+  }
+  final totals = <_AmountTotal>[];
+  for (final part in parts) {
+    final index = totals.indexWhere(
+      (total) => total.asset.sameIdentity(part.asset),
+    );
+    final amount = BigInt.parse(part.amount);
+    if (index == -1) {
+      totals.add(_AmountTotal(part.asset, amount));
+    } else {
+      totals[index].amount += amount;
+    }
+  }
+  return totals
+      .map((total) => swapAmount('${total.amount}', total.asset))
+      .join(' + ');
+}
+
 bool _isSafeReview(RouteExecutionReview review) =>
     review.isExecutable &&
     review.fees.every(
@@ -1100,7 +1518,10 @@ bool _isSafeReview(RouteExecutionReview review) =>
           limit.kind != RouteFeeKind.unknown && _hasKnownIdentity(limit.asset),
     ) &&
     review.networkFeeCaps.every((cap) => _hasKnownIdentity(cap.asset)) &&
-    review.approvals.every((approval) => _hasKnownIdentity(approval.token));
+    review.approvals.every((approval) => _hasKnownIdentity(approval.token)) &&
+    review.sufficientAllowances.every(
+      (allowance) => _hasKnownIdentity(allowance.token),
+    );
 
 bool _hasKnownIdentity(UnifiedSwapAssetIdentity asset) =>
     asset.chainFamily != UnifiedSwapChainFamily.unknown &&

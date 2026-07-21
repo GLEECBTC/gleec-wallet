@@ -1,3 +1,4 @@
+import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/unified_swap_config.dart';
 
@@ -39,7 +40,12 @@ enum UnifiedSwapCapabilityDenial {
 }
 
 @immutable
-class UnifiedSwapAssetIdentity {
+class UnifiedSwapAssetIdentity extends Equatable {
+  static const maximumTickerLength = 64;
+  static const maximumChainIdLength = 128;
+  static const maximumIdentifierLength = 512;
+  static const maximumDiscriminatorLength = 128;
+
   const UnifiedSwapAssetIdentity({
     required this.ticker,
     required this.chainFamily,
@@ -60,14 +66,34 @@ class UnifiedSwapAssetIdentity {
   final String? rawChainFamilyDiscriminator;
   final String? rawKindDiscriminator;
 
+  bool get hasBoundedIdentity =>
+      ticker.isNotEmpty &&
+      ticker.trim() == ticker &&
+      ticker.length <= maximumTickerLength &&
+      chainId.isNotEmpty &&
+      chainId.trim() == chainId &&
+      chainId.length <= maximumChainIdLength &&
+      decimals >= 0 &&
+      decimals <= 255 &&
+      (contractAddress == null ||
+          (contractAddress!.isNotEmpty &&
+              contractAddress!.trim() == contractAddress &&
+              contractAddress!.length <= maximumIdentifierLength)) &&
+      _isBoundedDiscriminator(rawChainFamilyDiscriminator) &&
+      _isBoundedDiscriminator(rawKindDiscriminator);
+
+  bool get hasKnownBoundedIdentity =>
+      hasBoundedIdentity &&
+      chainFamily != UnifiedSwapChainFamily.unknown &&
+      kind != UnifiedSwapAssetKind.unknown &&
+      rawChainFamilyDiscriminator == null &&
+      rawKindDiscriminator == null;
+
   bool get isValidEvmV1 {
-    if (ticker.isEmpty ||
-        ticker.trim() != ticker ||
-        ticker.length > 64 ||
+    if (!hasKnownBoundedIdentity ||
         chainFamily != UnifiedSwapChainFamily.evm ||
         !RegExp(r'^[1-9][0-9]*$').hasMatch(chainId) ||
-        decimals < 0 ||
-        decimals > 255) {
+        chainId.length > maximumChainIdLength) {
       return false;
     }
     switch (kind) {
@@ -87,12 +113,43 @@ class UnifiedSwapAssetIdentity {
       chainId == other.chainId &&
       kind == other.kind &&
       decimals == other.decimals &&
-      _normalizedContract == other._normalizedContract &&
+      contractIdentity == other.contractIdentity &&
       rawChainFamilyDiscriminator == other.rawChainFamilyDiscriminator &&
       rawKindDiscriminator == other.rawKindDiscriminator;
 
-  String? get _normalizedContract => contractAddress?.toLowerCase();
+  /// Comparison-safe contract/token identity.
+  ///
+  /// Only a grammar-valid EVM address is case-insensitive. Identifiers for
+  /// every other chain family (and malformed EVM values) remain exact because
+  /// case can be part of their identity.
+  String? get contractIdentity {
+    final value = contractAddress;
+    if (chainFamily == UnifiedSwapChainFamily.evm &&
+        value != null &&
+        RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(value)) {
+      return value.toLowerCase();
+    }
+    return value;
+  }
+
+  @override
+  List<Object?> get props => [
+    ticker,
+    chainFamily,
+    chainId,
+    kind,
+    decimals,
+    contractIdentity,
+    rawChainFamilyDiscriminator,
+    rawKindDiscriminator,
+  ];
 }
+
+bool _isBoundedDiscriminator(String? value) =>
+    value == null ||
+    (value.isNotEmpty &&
+        value.trim() == value &&
+        value.length <= UnifiedSwapAssetIdentity.maximumDiscriminatorLength);
 
 @immutable
 class UnifiedSwapRuntimeCapability {
@@ -172,7 +229,8 @@ class UnifiedSwapCapabilityPolicy {
         UnifiedSwapCapabilityDenial.unsupportedWallet,
       );
     }
-    if (!context.source.isValidEvmV1) {
+    if (!context.source.isValidEvmV1 ||
+        !context.destination.hasKnownBoundedIdentity) {
       return const UnifiedSwapCapabilityDecision.denied(
         UnifiedSwapCapabilityDenial.invalidSourceIdentity,
       );

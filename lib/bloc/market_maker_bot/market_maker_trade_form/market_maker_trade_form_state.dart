@@ -29,15 +29,20 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
     required this.updateInterval,
     required this.status,
     required this.stage,
+    required this.draftRevision,
     this.tradePreImageError,
     this.tradePreImage,
     this.maxMakerVolume,
     this.minTradingVolume,
     this.rawErrorMessage,
     this.isLoadingMaxMakerVolume = false,
+    this.walletSession,
+    this.originalConfig,
+    this.previewRevision,
+    this.previewWalletSession,
   });
 
-  MarketMakerTradeFormState.initial()
+  MarketMakerTradeFormState.initial({this.draftRevision = 0})
     : sellCoin = const CoinSelectInput.pure(),
       buyCoin = const CoinSelectInput.pure(),
       minimumTradeVolume = const TradeVolumeInput.pure(0.1),
@@ -53,7 +58,11 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
       maxMakerVolume = null,
       minTradingVolume = null,
       rawErrorMessage = null,
-      isLoadingMaxMakerVolume = false;
+      isLoadingMaxMakerVolume = false,
+      walletSession = null,
+      originalConfig = null,
+      previewRevision = null,
+      previewWalletSession = null;
 
   /// The coin being sold in the trade pair (base coin).
   final CoinSelectInput sellCoin;
@@ -90,6 +99,10 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
   /// The current stage of the form (confirmation or initial).
   final MarketMakerTradeFormStage stage;
 
+  /// Monotonically increases whenever an execution-relevant draft value
+  /// changes. Async work may only publish results for the revision it read.
+  final int draftRevision;
+
   /// The preimage of the trade pair, used to calculate the trade pair fees.
   final TradePreimage? tradePreImage;
 
@@ -102,23 +115,65 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
   /// and error messaging.
   final Rational? minTradingVolume;
 
-  /// Raw error message for displaying unparsed backend errors to users when
-  /// a generic/transport failure persists after retries.
+  /// Sanitized user-facing message for a generic/transport failure that
+  /// persists after retries. Backend error payloads must never be stored here.
   final String? rawErrorMessage;
 
   /// Indicates whether the max maker volume is currently being fetched.
   final bool isLoadingMaxMakerVolume;
 
+  /// Wallet session that owns this edit or confirmation draft.
+  ///
+  /// Carrying this through confirmation prevents a draft prepared from a
+  /// previous wallet snapshot from mutating whichever wallet is current later.
+  final MarketMakerBotWalletSession? walletSession;
+
+  /// Exact configuration snapshot that opened edit mode.
+  ///
+  /// New strategies leave this null. Existing strategies carry it through the
+  /// confirmation flow so the lifecycle BLoC can reject a stale edit instead
+  /// of re-adding a strategy removed by a newer snapshot.
+  final TradeCoinPairConfig? originalConfig;
+
+  /// Draft revision for which [tradePreImage] was successfully fetched.
+  final int? previewRevision;
+
+  /// Wallet session for which [tradePreImage] was successfully fetched.
+  final MarketMakerBotWalletSession? previewWalletSession;
+
+  /// Whether the confirmation currently represents this exact draft and
+  /// wallet session.
+  bool get hasCurrentPreview => hasCurrentPreviewFor(walletSession);
+
+  bool hasCurrentPreviewFor(MarketMakerBotWalletSession? session) {
+    return session != null &&
+        stage == MarketMakerTradeFormStage.confirmationRequired &&
+        status == MarketMakerTradeFormStatus.success &&
+        isValid &&
+        tradePreImageError == null &&
+        rawErrorMessage == null &&
+        tradePreImage != null &&
+        previewRevision == draftRevision &&
+        previewWalletSession == session &&
+        walletSession == session;
+  }
+
   /// The price of the trade pair derived from the USD price of the coins.
   /// Price = baseCoinUsdPrice / relCoinUsdPrice.
   double? get priceFromUsd {
-    final baseUsdPrice = sellCoin.value?.usdPrice?.price;
-    final relUsdPrice = buyCoin.value?.usdPrice?.price;
-    final price = relUsdPrice != null && baseUsdPrice != null
-        ? baseUsdPrice / relUsdPrice
-        : null;
+    final baseUsdPrice = sellCoin.value?.usdPrice?.price?.toDouble();
+    final relUsdPrice = buyCoin.value?.usdPrice?.price?.toDouble();
+    if (baseUsdPrice == null ||
+        relUsdPrice == null ||
+        !baseUsdPrice.isFinite ||
+        !relUsdPrice.isFinite ||
+        baseUsdPrice <= 0 ||
+        relUsdPrice <= 0) {
+      return null;
+    }
 
-    return price?.toDouble();
+    final price = baseUsdPrice / relUsdPrice;
+    return price.isFinite && price > 0 ? price : null;
   }
 
   /// The price of the trade pair derived from the USD price of the coins
@@ -126,11 +181,15 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
   /// the usd market price (cex rate).
   double? get priceFromUsdWithMargin {
     final price = priceFromUsd;
-    final spreadPercentage = double.tryParse(tradeMargin.value) ?? 0;
-    if (price != null) {
-      return price * (1 + (spreadPercentage / 100));
+    final spreadPercentage = double.tryParse(tradeMargin.value);
+    if (price == null ||
+        spreadPercentage == null ||
+        !spreadPercentage.isFinite) {
+      return null;
     }
-    return price;
+
+    final adjustedPrice = price * (1 + (spreadPercentage / 100));
+    return adjustedPrice.isFinite && adjustedPrice > 0 ? adjustedPrice : null;
   }
 
   /// The price of the trade pair derived from the USD price of the coins
@@ -146,7 +205,14 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
   double get priceFromAmount {
     final sellAmount = double.tryParse(this.sellAmount.value) ?? 0;
     final buyAmount = double.tryParse(this.buyAmount.value) ?? 0;
-    return sellAmount != 0 ? buyAmount / sellAmount : 0;
+    if (!sellAmount.isFinite ||
+        !buyAmount.isFinite ||
+        sellAmount <= 0 ||
+        buyAmount < 0) {
+      return 0;
+    }
+    final price = buyAmount / sellAmount;
+    return price.isFinite && price >= 0 ? price : 0;
   }
 
   /// The margin percentage derived from the amount of the coins.
@@ -167,8 +233,8 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
       return newMargin;
     }
 
-    newMargin = (amountPrice / currentPrice - 1) * 100;
-    return newMargin;
+    final calculatedMargin = (amountPrice / currentPrice - 1) * 100;
+    return calculatedMargin.isFinite ? calculatedMargin : newMargin;
   }
 
   MarketMakerTradeFormState copyWith({
@@ -181,13 +247,18 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
     TradeMarginInput? tradeMargin,
     UpdateIntervalInput? updateInterval,
     MarketMakerTradeFormStatus? status,
-    MarketMakerTradeFormError? preImageError,
+    MarketMakerTradeFormError? Function()? preImageError,
     MarketMakerTradeFormStage? stage,
-    TradePreimage? tradePreImage,
-    Rational? maxMakerVolume,
-    Rational? minTradingVolume,
-    String? rawErrorMessage,
+    int? draftRevision,
+    TradePreimage? Function()? tradePreImage,
+    Rational? Function()? maxMakerVolume,
+    Rational? Function()? minTradingVolume,
+    String? Function()? rawErrorMessage,
     bool? isLoadingMaxMakerVolume,
+    MarketMakerBotWalletSession? Function()? walletSession,
+    TradeCoinPairConfig? Function()? originalConfig,
+    int? Function()? previewRevision,
+    MarketMakerBotWalletSession? Function()? previewWalletSession,
   }) {
     return MarketMakerTradeFormState(
       sellCoin: sellCoin ?? this.sellCoin,
@@ -199,31 +270,67 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
       tradeMargin: tradeMargin ?? this.tradeMargin,
       updateInterval: updateInterval ?? this.updateInterval,
       status: status ?? this.status,
-      tradePreImageError: preImageError,
+      tradePreImageError: preImageError == null
+          ? tradePreImageError
+          : preImageError(),
       stage: stage ?? this.stage,
-      tradePreImage: tradePreImage ?? this.tradePreImage,
-      maxMakerVolume: maxMakerVolume ?? this.maxMakerVolume,
-      minTradingVolume: minTradingVolume ?? this.minTradingVolume,
-      rawErrorMessage: rawErrorMessage ?? this.rawErrorMessage,
+      draftRevision: draftRevision ?? this.draftRevision,
+      tradePreImage: tradePreImage == null
+          ? this.tradePreImage
+          : tradePreImage(),
+      maxMakerVolume: maxMakerVolume == null
+          ? this.maxMakerVolume
+          : maxMakerVolume(),
+      minTradingVolume: minTradingVolume == null
+          ? this.minTradingVolume
+          : minTradingVolume(),
+      rawErrorMessage: rawErrorMessage == null
+          ? this.rawErrorMessage
+          : rawErrorMessage(),
       isLoadingMaxMakerVolume:
           isLoadingMaxMakerVolume ?? this.isLoadingMaxMakerVolume,
+      walletSession: walletSession == null
+          ? this.walletSession
+          : walletSession(),
+      originalConfig: originalConfig == null
+          ? this.originalConfig
+          : originalConfig(),
+      previewRevision: previewRevision == null
+          ? this.previewRevision
+          : previewRevision(),
+      previewWalletSession: previewWalletSession == null
+          ? this.previewWalletSession
+          : previewWalletSession(),
     );
   }
 
   /// Converts the form state to a [TradeCoinPairConfig] object to be used
   /// in the market maker bot parameters.
   TradeCoinPairConfig toTradePairConfig() {
-    final baseCoinId = sellCoin.value?.abbr ?? '';
-    final relCoinId = buyCoin.value?.abbr ?? '';
-    final spreadPercentage = double.parse(tradeMargin.value);
+    final baseCoinId = sellCoin.value?.abbr;
+    final relCoinId = buyCoin.value?.abbr;
+    final spreadPercentage = double.tryParse(tradeMargin.value);
+    final interval = updateInterval.isValid ? updateInterval.interval : null;
+    if (!isValid ||
+        baseCoinId == null ||
+        relCoinId == null ||
+        spreadPercentage == null ||
+        !spreadPercentage.isFinite ||
+        interval == null ||
+        minimumTradeVolume.value > maximumTradeVolume.value) {
+      throw const FormatException('Invalid market maker configuration');
+    }
     final spread = 1 + (spreadPercentage / 100);
+    if (!spread.isFinite) {
+      throw const FormatException('Invalid market maker configuration');
+    }
 
     return TradeCoinPairConfig(
       name: TradeCoinPairConfig.getSimpleName(baseCoinId, relCoinId),
       baseCoinId: baseCoinId,
       relCoinId: relCoinId,
       spread: spread.toString(),
-      priceElapsedValidity: updateInterval.interval.seconds,
+      priceElapsedValidity: interval.seconds,
       maxVolume: TradeVolume.percentage(maximumTradeVolume.value),
       minVolume: TradeVolume.percentage(minimumTradeVolume.value),
     );
@@ -242,6 +349,7 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
   @override
   bool get isValid {
     return super.isValid &&
+        minimumTradeVolume.value <= maximumTradeVolume.value &&
         tradePreImageError == null &&
         status != MarketMakerTradeFormStatus.error;
   }
@@ -258,11 +366,16 @@ class MarketMakerTradeFormState extends Equatable with FormzMixin {
     updateInterval,
     tradePreImageError,
     stage,
+    draftRevision,
     status,
     tradePreImage,
     maxMakerVolume,
     minTradingVolume,
     rawErrorMessage,
     isLoadingMaxMakerVolume,
+    walletSession,
+    originalConfig,
+    previewRevision,
+    previewWalletSession,
   ];
 }

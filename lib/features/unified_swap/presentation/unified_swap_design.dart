@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
 
@@ -41,10 +44,10 @@ abstract final class UnifiedSwapDesign {
   static EdgeInsets pagePadding(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     if (width >= desktopBreakpoint) {
-      return const EdgeInsets.fromLTRB(40, 40, 40, 56);
+      return const EdgeInsets.fromLTRB(24, 40, 24, 56);
     }
-    if (width >= 700) return const EdgeInsets.fromLTRB(36, 24, 36, 40);
-    return const EdgeInsets.fromLTRB(24, 24, 24, 32);
+    if (width >= 700) return const EdgeInsets.fromLTRB(16, 24, 16, 40);
+    return const EdgeInsets.fromLTRB(16, 24, 16, 32);
   }
 
   static ButtonStyle primaryButtonStyle(BuildContext context) {
@@ -375,7 +378,7 @@ class UnifiedSwapAssetAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = UnifiedSwapDesign.colors(context);
     final ticker = asset.ticker.trim().toLowerCase();
-    final hasBundledArtwork = const {
+    final hasPrototypeArtwork = const {
       'btc',
       'eth',
       'usdc',
@@ -403,11 +406,11 @@ class UnifiedSwapAssetAvatar extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: hasBundledArtwork
+            child: hasPrototypeArtwork
                 ? ClipOval(
                     child: Image.asset(
-                      'packages/komodo_defi_framework/assets/coin_icons/png/'
-                      '$ticker.png',
+                      'prototypes/gleec-unified-swap/'
+                      'gleec-unified-swap-assets/tokens/$ticker.png',
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => fallback,
                     ),
@@ -436,10 +439,24 @@ class _ChainBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = UnifiedSwapDesign.colors(context);
     final assetPath = switch ((asset.chainFamily, asset.chainId)) {
+      (UnifiedSwapChainFamily.evm, '1') =>
+        'prototypes/gleec-unified-swap/'
+            'gleec-unified-swap-assets/chains/ethereum.svg',
       (UnifiedSwapChainFamily.evm, '137') =>
-        'assets/blockchain_icons/svg/32px/polygon.svg',
-      (UnifiedSwapChainFamily.evm, _) =>
-        'assets/blockchain_icons/svg/32px/eth.svg',
+        'prototypes/gleec-unified-swap/'
+            'gleec-unified-swap-assets/chains/polygon.svg',
+      (UnifiedSwapChainFamily.evm, '42161') =>
+        'prototypes/gleec-unified-swap/'
+            'gleec-unified-swap-assets/chains/arbitrum.png',
+      (UnifiedSwapChainFamily.evm, '56') =>
+        'assets/blockchain_icons/svg/32px/bsc.svg',
+      (UnifiedSwapChainFamily.tron, _) =>
+        'prototypes/gleec-unified-swap/'
+            'gleec-unified-swap-assets/chains/tron.png',
+      (UnifiedSwapChainFamily.utxo, _)
+          when asset.ticker.toUpperCase() == 'BTC' =>
+        'prototypes/gleec-unified-swap/'
+            'gleec-unified-swap-assets/chains/bitcoin.png',
       _ => null,
     };
     return DecoratedBox(
@@ -463,7 +480,9 @@ class _ChainBadge extends StatelessWidget {
                     ),
                   ),
                 )
-              : SvgPicture.asset(assetPath),
+              : assetPath.endsWith('.svg')
+              ? SvgPicture.asset(assetPath)
+              : Image.asset(assetPath, fit: BoxFit.contain),
         ),
       ),
     );
@@ -782,49 +801,59 @@ class UnifiedSwapPickerSheet extends StatelessWidget {
     required this.title,
     required this.child,
     this.subtitle,
+    this.showDragHandle = true,
+    this.fillAvailable = false,
     super.key,
   });
 
   final String title;
   final String? subtitle;
   final Widget child;
+  final bool showDragHandle;
+  final bool fillAvailable;
 
   @override
   Widget build(BuildContext context) {
     final colors = UnifiedSwapDesign.colors(context);
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
       child: Material(
         color: colors.surfaceRaised,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+          padding: EdgeInsets.fromLTRB(18, 12, 18, 24 + keyboardInset),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: fillAvailable ? MainAxisSize.max : MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colors.borderStrong,
-                    borderRadius: BorderRadius.circular(999),
+              if (showDragHandle) ...[
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.borderStrong,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            title,
-                            style: UnifiedSwapDesign.typography(
-                              context,
-                            ).sectionTitle,
+                        Focus(
+                          autofocus: true,
+                          child: Semantics(
+                            header: true,
+                            child: Text(
+                              title,
+                              style: UnifiedSwapDesign.typography(
+                                context,
+                              ).sectionTitle,
+                            ),
                           ),
                         ),
                         if (subtitle case final subtitle?) ...[
@@ -841,7 +870,7 @@ class UnifiedSwapPickerSheet extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   IconButton(
-                    onPressed: () => Navigator.maybePop(context),
+                    onPressed: () => completeUnifiedSwapPicker(context),
                     tooltip: MaterialLocalizations.of(
                       context,
                     ).closeButtonTooltip,
@@ -859,12 +888,204 @@ class UnifiedSwapPickerSheet extends StatelessWidget {
   }
 }
 
+/// Hosts prototype pickers as an in-flow surface. Narrow viewports replace the
+/// form with a full content sheet; desktop keeps the form visible beside a
+/// non-modal panel. Confirmation dialogs remain regular modal routes.
+class UnifiedSwapPickerHost extends StatefulWidget {
+  const UnifiedSwapPickerHost({
+    required this.child,
+    this.onPresentationChanged,
+    super.key,
+  });
+
+  final Widget child;
+  final ValueChanged<bool>? onPresentationChanged;
+
+  static _UnifiedSwapPickerHostState? _stateOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_UnifiedSwapPickerHostScope>()
+      ?.state;
+
+  static void dismiss(BuildContext context) =>
+      _stateOf(context)?._complete(null);
+
+  @override
+  State<UnifiedSwapPickerHost> createState() => _UnifiedSwapPickerHostState();
+}
+
+class _UnifiedSwapPickerHostState extends State<UnifiedSwapPickerHost> {
+  _UnifiedSwapPickerRequest? _request;
+
+  Future<T?> present<T>({
+    required String title,
+    String? subtitle,
+    required WidgetBuilder builder,
+  }) {
+    final replacingRequest = _request != null;
+    _complete(null, notifyPresentation: false);
+    final completer = Completer<Object?>();
+    final previousFocus = FocusManager.instance.primaryFocus;
+    setState(() {
+      _request = _UnifiedSwapPickerRequest(
+        title: title,
+        subtitle: subtitle,
+        builder: builder,
+        completer: completer,
+        previousFocus: previousFocus,
+      );
+    });
+    if (!replacingRequest) widget.onPresentationChanged?.call(true);
+    return completer.future.then((value) => value as T?);
+  }
+
+  void _complete(Object? value, {bool notifyPresentation = true}) {
+    final request = _request;
+    if (request == null) return;
+    _request = null;
+    if (mounted) setState(() {});
+    if (notifyPresentation) widget.onPresentationChanged?.call(false);
+    if (!request.completer.isCompleted) request.completer.complete(value);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final focus = request.previousFocus;
+      if (focus != null && focus.canRequestFocus) focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    final request = _request;
+    if (request != null && !request.completer.isCompleted) {
+      request.completer.complete(null);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = _UnifiedSwapPickerHostScope(state: this, child: widget.child);
+    final request = _request;
+    if (request == null) return scope;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _complete(null);
+      },
+      child: _UnifiedSwapPickerHostScope(
+        state: this,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final desktop =
+                constraints.maxWidth >= UnifiedSwapDesign.desktopBreakpoint;
+            final sheet = CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.escape): () =>
+                    _complete(null),
+              },
+              child: _UnifiedSwapPickerCompletionScope(
+                onComplete: _complete,
+                child: UnifiedSwapPickerSheet(
+                  title: request.title,
+                  subtitle: request.subtitle,
+                  showDragHandle: !desktop,
+                  fillAvailable: true,
+                  child: request.builder(context),
+                ),
+              ),
+            );
+            if (!desktop) return sheet;
+            final panelWidth = (constraints.maxWidth * .42).clamp(360.0, 520.0);
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: UnifiedSwapDesign.detailWidth + 80,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: widget.child),
+                      const SizedBox(width: 24),
+                      SizedBox(
+                        width: panelWidth,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: sheet,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _UnifiedSwapPickerRequest {
+  const _UnifiedSwapPickerRequest({
+    required this.title,
+    required this.builder,
+    required this.completer,
+    required this.previousFocus,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final WidgetBuilder builder;
+  final Completer<Object?> completer;
+  final FocusNode? previousFocus;
+}
+
+class _UnifiedSwapPickerHostScope extends InheritedWidget {
+  const _UnifiedSwapPickerHostScope({
+    required this.state,
+    required super.child,
+  });
+
+  final _UnifiedSwapPickerHostState state;
+
+  @override
+  bool updateShouldNotify(_UnifiedSwapPickerHostScope oldWidget) =>
+      oldWidget.state != state;
+}
+
+class _UnifiedSwapPickerCompletionScope extends InheritedWidget {
+  const _UnifiedSwapPickerCompletionScope({
+    required this.onComplete,
+    required super.child,
+  });
+
+  final ValueChanged<Object?> onComplete;
+
+  @override
+  bool updateShouldNotify(_UnifiedSwapPickerCompletionScope oldWidget) =>
+      oldWidget.onComplete != onComplete;
+}
+
+void completeUnifiedSwapPicker<T>(BuildContext context, [T? value]) {
+  final scope = context
+      .dependOnInheritedWidgetOfExactType<_UnifiedSwapPickerCompletionScope>();
+  if (scope != null) {
+    scope.onComplete(value);
+    return;
+  }
+  Navigator.maybePop<T>(context, value);
+}
+
 Future<T?> showUnifiedSwapPicker<T>({
   required BuildContext context,
   required String title,
   String? subtitle,
   required WidgetBuilder builder,
 }) {
+  final host = UnifiedSwapPickerHost._stateOf(context);
+  if (host != null) {
+    return host.present<T>(title: title, subtitle: subtitle, builder: builder);
+  }
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,

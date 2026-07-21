@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 
@@ -131,8 +132,8 @@ class FileLoaderWeb implements FileLoader {
         ..remove();
 
       web.URL.revokeObjectURL(url);
-    } catch (e) {
-      log('Error compressing and saving file: $e').ignore();
+    } catch (_) {
+      log('Unable to compress and save file', isError: true).ignore();
     }
   }
 
@@ -143,22 +144,42 @@ class FileLoaderWeb implements FileLoader {
     LoadFileType? fileType,
   }) async {
     final uploadInput = web.HTMLInputElement()..type = 'file';
+    final selectionCompletion = Completer<void>();
+    var selectionSettled = false;
+
+    void completeSelection() {
+      if (selectionSettled) return;
+      selectionSettled = true;
+      selectionCompletion.complete();
+    }
+
+    void reportError(String error) {
+      if (selectionSettled) return;
+      onError(error);
+      completeSelection();
+    }
+
+    void reportUpload(String name, String content) {
+      if (selectionSettled) return;
+      onUpload(name, content);
+      completeSelection();
+    }
 
     if (fileType != null) {
       uploadInput.accept = _getMimeType(fileType);
     }
 
-    uploadInput.click();
     uploadInput.onChange.listen((event) {
       final web.FileList? files = uploadInput.files;
-      if (files == null) {
+      if (files == null || files.length == 0) {
+        completeSelection();
         return;
       }
 
       if (files.length == 1) {
         final file = files.item(0);
         if (file == null) {
-          onError('No file was selected.');
+          reportError('No file was selected.');
           return;
         }
         final reader = web.FileReader();
@@ -166,26 +187,38 @@ class FileLoaderWeb implements FileLoader {
         reader.onLoadEnd.listen((_) {
           final result = reader.result;
           if (result == null) {
-            onError('Failed to read ${file.name}.');
+            reportError('Failed to read ${file.name}.');
             return;
           }
 
           final dartResult = result.dartify();
           if (dartResult case final String content) {
-            onUpload(file.name, content);
+            reportUpload(file.name, content);
             return;
           }
 
-          onError('Unsupported file content returned for ${file.name}.');
+          reportError('Unsupported file content returned for ${file.name}.');
         });
 
         reader.onerror = ((JSAny _) {
-          onError(reader.error?.message ?? 'Failed to read ${file.name}.');
+          reportError(reader.error?.message ?? 'Failed to read ${file.name}.');
           return null;
         }).toJS;
         reader.readAsText(file);
+        return;
       }
+      reportError('Select exactly one file.');
     });
+
+    // The file input emits `cancel` when the picker closes without a file.
+    // Completing without an error keeps cancellation distinct from failure
+    // and ensures callers can release their in-progress lease.
+    web.EventStreamProviders.cancelEvent.forElement(uploadInput).listen((_) {
+      completeSelection();
+    });
+
+    uploadInput.click();
+    await selectionCompletion.future;
   }
 
   String _getMimeType(LoadFileType type) {

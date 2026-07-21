@@ -9,6 +9,8 @@ import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
 import 'package:web_dex/model/dex_list_type.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/dex_state.dart';
+import 'package:web_dex/router/state/unified_swap_section_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/ui/clock_warning_banner.dart';
 import 'package:web_dex/shared/widgets/hidden_without_wallet.dart';
@@ -20,19 +22,29 @@ import 'package:web_dex/views/dex/entity_details/trading_details.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_handler.dart';
 
 class DexPage extends StatefulWidget {
-  const DexPage({super.key});
+  const DexPage({this.legacyHints = const UnifiedSwapLegacyHints(), super.key});
+
+  final UnifiedSwapLegacyHints legacyHints;
 
   @override
   State<DexPage> createState() => _DexPageState();
 }
 
 class _DexPageState extends State<DexPage> {
-  bool isTradingDetails = false;
+  late bool isTradingDetails;
 
   @override
   void initState() {
-    routingState.dexState.addListener(_onRouteChange);
     super.initState();
+    isTradingDetails = routingState.dexState.isTradingDetails;
+    _seedLegacyHints();
+    routingState.dexState.addListener(_onRouteChange);
+  }
+
+  @override
+  void didUpdateWidget(DexPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.legacyHints != widget.legacyHints) _seedLegacyHints();
   }
 
   @override
@@ -66,17 +78,9 @@ class _DexPageState extends State<DexPage> {
       child: BlocBuilder<DexTabBarBloc, DexTabBarState>(
         builder: (context, state) {
           // Defensive bounds check for tabIndex
-          final bool inRange =
-              state.tabIndex >= 0 && state.tabIndex < DexListType.values.length;
-          final tab = inRange
-              ? DexListType.values[state.tabIndex]
-              : DexListType.swap;
-          // Explicit mapping: only orders tab shows order entities, all others show swaps
-          final kind = switch (tab) {
-            DexListType.orders => TradingEntityKind.order,
-            DexListType.swap => TradingEntityKind.swap,
-            DexListType.inProgress => TradingEntityKind.swap,
-            DexListType.history => TradingEntityKind.swap,
+          final kind = switch (routingState.dexState.entityKind) {
+            DexTradingEntityKind.order => TradingEntityKind.order,
+            DexTradingEntityKind.swap => TradingEntityKind.swap,
           };
           return isTradingDetails
               ? TradingDetails(uuid: routingState.dexState.uuid, kind: kind)
@@ -88,7 +92,19 @@ class _DexPageState extends State<DexPage> {
   }
 
   void _onRouteChange() {
+    if (!mounted) return;
     setState(() => isTradingDetails = routingState.dexState.isTradingDetails);
+  }
+
+  void _seedLegacyHints() {
+    if (widget.legacyHints.isEmpty || routingState.dexState.isTradingDetails) {
+      return;
+    }
+    routingState.dexState.setLegacyFormHints(
+      fromCurrency: widget.legacyHints.sourceAsset,
+      fromAmount: widget.legacyHints.sourceAmount,
+      toCurrency: widget.legacyHints.destinationAsset,
+    );
   }
 }
 

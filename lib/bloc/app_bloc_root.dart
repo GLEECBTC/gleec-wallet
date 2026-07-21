@@ -89,6 +89,28 @@ class _AppBlocRootState extends State<AppBlocRoot> {
   KomodoDefiSdk get komodoDefiSdk => widget.komodoDefiSdk;
 
   GnosisCardDependencies? _gnosisCardDependencies;
+  MyOrdersService? _myOrdersService;
+  TradingEntitiesBloc? _tradingEntitiesBloc;
+  DexRepository? _dexRepository;
+  late final SystemClockRepository _systemClockRepository;
+  late final SettingsRepository _settingsRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    _systemClockRepository = SystemClockRepository();
+    _settingsRepository = SettingsRepository();
+    routingState.selectedMenu = MainMenuValue.defaultMenu();
+  }
+
+  @override
+  void dispose() {
+    _tradingEntitiesBloc?.dispose();
+    _dexRepository?.dispose();
+    _systemClockRepository.dispose();
+    unawaited(_settingsRepository.dispose());
+    super.dispose();
+  }
 
   // TODO: Refactor to clean up the bloat in this main file
   Future<void> _clearCachesIfPerformanceModeChanged(
@@ -121,13 +143,16 @@ class _AppBlocRootState extends State<AppBlocRoot> {
 
     final mm2Api = RepositoryProvider.of<Mm2Api>(context);
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
-    final myOrdersService = MyOrdersService(mm2Api);
-    final tradingEntitiesBloc = TradingEntitiesBloc(
+    final myOrdersService = _myOrdersService ??= MyOrdersService(mm2Api);
+    final tradingEntitiesBloc = _tradingEntitiesBloc ??= TradingEntitiesBloc(
       komodoDefiSdk,
       mm2Api,
       myOrdersService,
+    )..runUpdate();
+    final dexRepository = _dexRepository ??= DexRepository(
+      mm2Api,
+      komodoDefiSdk,
     );
-    final dexRepository = DexRepository(mm2Api);
     final gnosisCardDependencies = _gnosisCardDependencies ??=
         GnosisCardDependencies.fromEnvironment(komodoDefiSdk, coinsRepository);
 
@@ -159,10 +184,6 @@ class _AppBlocRootState extends State<AppBlocRoot> {
       portfolioGrowthRepo,
     );
 
-    // startup bloc run steps
-    tradingEntitiesBloc.runUpdate();
-    routingState.selectedMenu = MainMenuValue.defaultMenu();
-
     return MultiRepositoryProvider(
       providers: [
         // Keep ipfs gateway manager near root to keep in-memory cache of failing
@@ -174,18 +195,29 @@ class _AppBlocRootState extends State<AppBlocRoot> {
         RepositoryProvider(
           create: (_) => NftsRepo(api: mm2Api.nft, coinsRepo: coinsRepository),
         ),
-        RepositoryProvider(create: (_) => tradingEntitiesBloc),
-        RepositoryProvider(create: (_) => dexRepository),
+        RepositoryProvider.value(value: tradingEntitiesBloc),
+        RepositoryProvider.value(value: dexRepository),
         RepositoryProvider(
           create: (_) => MakerFormBloc(
             api: mm2Api,
             kdfSdk: komodoDefiSdk,
             coinsRepository: coinsRepository,
             dexRepository: dexRepository,
+            analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
+            tradingStatusService: context.read<TradingStatusService>(),
+            finalSystemClockCheck: () =>
+                _systemClockRepository.isSystemClockValid(failClosed: true),
           ),
+          dispose: (bloc) => bloc.dispose(),
         ),
-        RepositoryProvider(create: (_) => OrderbookBloc(sdk: komodoDefiSdk)),
-        RepositoryProvider(create: (_) => myOrdersService),
+        RepositoryProvider(
+          create: (_) => OrderbookBloc(sdk: komodoDefiSdk),
+          dispose: (bloc) => bloc.dispose(),
+        ),
+        RepositoryProvider.value(value: myOrdersService),
+        RepositoryProvider<SystemClockRepository>.value(
+          value: _systemClockRepository,
+        ),
         RepositoryProvider.value(value: gnosisCardDependencies),
         RepositoryProvider(
           create: (_) => KmdRewardsBloc(coinsRepository, mm2Api),
@@ -226,15 +258,14 @@ class _AppBlocRootState extends State<AppBlocRoot> {
             ),
           ),
           BlocProvider<SettingsBloc>(
-            create: (context) =>
-                SettingsBloc(storedPrefs, SettingsRepository()),
+            create: (context) => SettingsBloc(storedPrefs, _settingsRepository),
           ),
           BlocProvider<AnalyticsBloc>(
             lazy: false,
             create: (context) => AnalyticsBloc(
               analytics: GetIt.I<AnalyticsRepo>(),
               storedData: storedPrefs,
-              repository: SettingsRepository(),
+              repository: _settingsRepository,
             ),
           ),
           BlocProvider<TakerBloc>(
@@ -243,6 +274,9 @@ class _AppBlocRootState extends State<AppBlocRoot> {
               dexRepository: dexRepository,
               coinsRepository: coinsRepository,
               analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
+              tradingStatusService: context.read<TradingStatusService>(),
+              finalSystemClockCheck: () =>
+                  _systemClockRepository.isSystemClockValid(failClosed: true),
             ),
           ),
           BlocProvider<BridgeBloc>(
@@ -265,13 +299,15 @@ class _AppBlocRootState extends State<AppBlocRoot> {
                   BitrefillBloc()..add(const BitrefillLoadRequested()),
             ),
           BlocProvider<MarketMakerBotBloc>(
+            lazy: false,
             create: (context) => MarketMakerBotBloc(
-              MarketMakerBotRepository(mm2Api, SettingsRepository()),
+              MarketMakerBotRepository(mm2Api, _settingsRepository),
               MarketMakerBotOrderListRepository(
                 myOrdersService,
-                SettingsRepository(),
+                _settingsRepository,
                 coinsRepository,
               ),
+              komodoDefiSdk,
             ),
           ),
           BlocProvider<TradingStatusBloc>(
@@ -281,16 +317,14 @@ class _AppBlocRootState extends State<AppBlocRoot> {
                   ..add(TradingStatusWatchStarted()),
           ),
           BlocProvider<SystemHealthBloc>(
-            create: (_) =>
-                SystemHealthBloc(SystemClockRepository(), mm2Api)
-                  ..add(SystemHealthPeriodicCheckStarted()),
+            create: (_) => SystemHealthBloc(_systemClockRepository, mm2Api),
           ),
           BlocProvider<CoinsManagerBloc>(
             create: (context) => CoinsManagerBloc(
               coinsRepo: coinsRepository,
               sdk: komodoDefiSdk,
               analyticsBloc: context.read<AnalyticsBloc>(),
-              settingsRepository: SettingsRepository(),
+              settingsRepository: _settingsRepository,
               tradingEntitiesBloc: context.read<TradingEntitiesBloc>(),
             ),
           ),

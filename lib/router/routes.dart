@@ -1,5 +1,6 @@
 import 'package:web_dex/model/first_uri_segment.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
+import 'package:web_dex/model/trading_entity_id.dart';
 import 'package:web_dex/router/state/bridge_section_state.dart';
 import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/router/state/fiat_state.dart';
@@ -23,10 +24,14 @@ class UnifiedSwapRoutePath implements AppRoutePath {
   factory UnifiedSwapRoutePath.activity() =>
       UnifiedSwapRoutePath._(const UnifiedSwapRouteState.activity());
 
-  factory UnifiedSwapRoutePath.activityDetails(String routeExecutionId) =>
-      UnifiedSwapRoutePath._(
-        UnifiedSwapRouteState.activityDetails(routeExecutionId),
-      );
+  factory UnifiedSwapRoutePath.activityDetails(String routeExecutionId) {
+    final normalizedId = normalizeTradingEntityUuid(routeExecutionId);
+    return normalizedId == null
+        ? UnifiedSwapRoutePath.activity()
+        : UnifiedSwapRoutePath._(
+            UnifiedSwapRouteState.activityDetails(normalizedId),
+          );
+  }
 
   factory UnifiedSwapRoutePath.advanced({
     UnifiedSwapLegacyHints legacyHints = const UnifiedSwapLegacyHints(),
@@ -92,21 +97,29 @@ class DexRoutePath implements AppRoutePath {
     this.toCurrency = '',
     this.toAmount = '',
     this.orderType = '',
-  }) : uuid = '';
+  }) : uuid = '',
+       entityKind = DexTradingEntityKind.swap;
 
   @override
   String get location {
     if (action == DexAction.tradingDetails) {
-      return '/${firstUriSegment.dex}/trading_details/$uuid';
+      return '/${firstUriSegment.dex}/trading_details/${entityKind.name}/'
+          '${Uri.encodeComponent(uuid)}';
     }
 
     final List<String> queryParams = [];
 
-    if (fromCurrency.isNotEmpty) queryParams.add('from_currency=$fromCurrency');
-    if (fromAmount.isNotEmpty) queryParams.add('from_amount=$fromAmount');
-    if (toCurrency.isNotEmpty) queryParams.add('to_currency=$toCurrency');
-    if (toAmount.isNotEmpty) queryParams.add('to_amount=$toAmount');
-    if (orderType.isNotEmpty) queryParams.add('order_type=$orderType');
+    void addParameter(String key, String value) {
+      if (value.isNotEmpty) {
+        queryParams.add('$key=${Uri.encodeQueryComponent(value)}');
+      }
+    }
+
+    addParameter('from_currency', fromCurrency);
+    addParameter('from_amount', fromAmount);
+    addParameter('to_currency', toCurrency);
+    addParameter('to_amount', toAmount);
+    addParameter('order_type', orderType);
 
     final String queryString = queryParams.isNotEmpty
         ? '?${queryParams.join('&')}'
@@ -114,15 +127,23 @@ class DexRoutePath implements AppRoutePath {
     return '/${firstUriSegment.dex}$queryString';
   }
 
-  DexRoutePath.swapDetails(this.action, this.uuid)
-    : fromCurrency = '',
-      fromAmount = '',
-      toCurrency = '',
-      toAmount = '',
-      orderType = '';
+  DexRoutePath.swapDetails(
+    DexAction action,
+    String uuid, {
+    this.entityKind = DexTradingEntityKind.swap,
+  }) : action = normalizeTradingEntityUuid(uuid) == null
+           ? DexAction.none
+           : action,
+       uuid = normalizeTradingEntityUuid(uuid) ?? '',
+       fromCurrency = '',
+       fromAmount = '',
+       toCurrency = '',
+       toAmount = '',
+       orderType = '';
 
   final String uuid;
   DexAction action = DexAction.none;
+  final DexTradingEntityKind entityKind;
 
   final String fromCurrency;
   final String fromAmount;

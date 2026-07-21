@@ -47,7 +47,7 @@ class OrdersTableContent extends StatelessWidget {
             }
 
             final BaseError? error = bestOrders.error;
-            if (error != null) return _ErrorMessage(error);
+            if (error != null) return const _ErrorMessage();
 
             final Map<String, List<BestOrder>> ordersMap = bestOrders.result!;
             final AuthorizeMode mode = context.watch<AuthBloc>().state.mode;
@@ -79,8 +79,7 @@ class OrdersTableContent extends StatelessWidget {
 }
 
 class _ErrorMessage extends StatelessWidget {
-  const _ErrorMessage(this.error);
-  final BaseError error;
+  const _ErrorMessage();
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +97,7 @@ class _ErrorMessage extends StatelessWidget {
               const SizedBox(width: 4),
               Flexible(
                 child: SelectableText(
-                  error.message,
+                  LocaleKeys.somethingWrong.tr(),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),

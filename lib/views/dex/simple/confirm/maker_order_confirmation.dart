@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -5,17 +7,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
+import 'package:web_dex/bloc/dex_tab_bar/dex_tab_bar_bloc.dart';
 import 'package:web_dex/blocs/maker_form_bloc.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
-import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
-import 'package:web_dex/analytics/events/transaction_events.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/model/advanced_trade_preparation.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/trade_preimage.dart';
-import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/shared/ui/ui_light_button.dart';
 import 'package:web_dex/shared/utils/balances_formatter.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
@@ -23,8 +23,8 @@ import 'package:web_dex/shared/widgets/coin_item/coin_item.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item_size.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
 import 'package:web_dex/views/dex/dex_helpers.dart';
-import 'package:web_dex/views/dex/simple/form/maker/maker_form_exchange_rate.dart';
-import 'package:web_dex/views/dex/simple/form/maker/maker_form_total_fees.dart';
+import 'package:web_dex/views/dex/simple/form/exchange_info/exchange_rate.dart';
+import 'package:web_dex/views/dex/simple/form/exchange_info/total_fees.dart';
 
 class MakerOrderConfirmation extends StatefulWidget {
   const MakerOrderConfirmation({
@@ -41,12 +41,52 @@ class MakerOrderConfirmation extends StatefulWidget {
 }
 
 class _MakerOrderConfirmationState extends State<MakerOrderConfirmation> {
+  final ScrollController _scrollController = ScrollController();
+  StreamSubscription<PreparedMakerOrder?>? _preparedSubscription;
+  StreamSubscription<AdvancedTradeSubmissionStatus>? _statusSubscription;
+  StreamSubscription<AdvancedTradeSubmissionFailure?>? _failureSubscription;
+  MakerFormBloc? _makerFormBloc;
+  PreparedMakerOrder? _preparedOrder;
+  AdvancedTradeSubmissionStatus _submissionStatus =
+      AdvancedTradeSubmissionStatus.idle;
+  AdvancedTradeSubmissionFailure? _submissionFailure;
   String? _errorMessage;
   bool _inProgress = false;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final bloc = RepositoryProvider.of<MakerFormBloc>(context);
+    if (identical(bloc, _makerFormBloc)) return;
+    _preparedSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _failureSubscription?.cancel();
+    _makerFormBloc = bloc;
+    _preparedOrder = bloc.preparedOrder;
+    _submissionStatus = bloc.submissionStatus;
+    _submissionFailure = bloc.submissionFailure;
+    _preparedSubscription = bloc.outPreparedOrder.listen((value) {
+      if (mounted) setState(() => _preparedOrder = value);
+    });
+    _statusSubscription = bloc.outSubmissionStatus.listen((value) {
+      if (mounted) setState(() => _submissionStatus = value);
+    });
+    _failureSubscription = bloc.outSubmissionFailure.listen((value) {
+      if (mounted) setState(() => _submissionFailure = value);
+    });
+  }
+
+  @override
+  void dispose() {
+    _preparedSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _failureSubscription?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
     final colors = GleecColorTokens.of(context);
     final geometry = GleecGeometry.of(context);
@@ -61,67 +101,64 @@ class _MakerOrderConfirmationState extends State<MakerOrderConfirmation> {
         border: Border.all(color: colors.border),
         borderRadius: geometry.borderRadius24,
       ),
-      child: StreamBuilder<TradePreimage?>(
-        initialData: makerFormBloc.preimage,
-        stream: makerFormBloc.outPreimage,
-        builder:
-            (
-              BuildContext context,
-              AsyncSnapshot<TradePreimage?> preimageSnapshot,
-            ) {
-              final preimage = preimageSnapshot.data;
-              if (preimage == null) return const UiSpinner();
+      child: _buildPreparedContent(coinsRepository),
+    );
+  }
 
-              final Coin? sellCoin = coinsRepository.getCoin(
-                preimage.request.base,
-              );
-              final Coin? buyCoin = coinsRepository.getCoin(
-                preimage.request.rel,
-              );
-              final Rational? sellAmount = preimage.request.volume;
-              final Rational buyAmount =
-                  (sellAmount ?? Rational.zero) * preimage.request.price;
+  Widget _buildPreparedContent(CoinsRepo coinsRepository) {
+    final prepared = _preparedOrder;
+    if (prepared == null) return _buildUnavailableState();
+    final TradePreimage preimage = prepared.preimage;
+    final sellCoin = coinsRepository.getCoinFromId(prepared.baseAssetId);
+    final buyCoin = coinsRepository.getCoinFromId(prepared.relAssetId);
+    final sellAmount = prepared.volume;
+    final buyAmount = sellAmount * prepared.price;
+    if (sellCoin == null || buyCoin == null) {
+      return Center(child: Text(LocaleKeys.dexErrorMessage.tr()));
+    }
 
-              if (sellCoin == null || buyCoin == null) {
-                return Center(child: Text(LocaleKeys.dexErrorMessage.tr()));
-              }
-
-              return SingleChildScrollView(
-                key: const Key('maker-order-conformation-scroll'),
-                controller: ScrollController(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildTitle(),
-                    const SizedBox(height: 37),
-                    _buildReceive(buyCoin, buyAmount),
-                    _buildFiatReceive(
-                      sellCoin: sellCoin,
-                      buyCoin: buyCoin,
-                      sellAmount: sellAmount,
-                      buyAmount: buyAmount,
-                    ),
-                    const SizedBox(height: 23),
-                    _buildSend(sellCoin, sellAmount),
-                    const SizedBox(height: 24),
-                    const MakerFormExchangeRate(),
-                    const SizedBox(height: 10),
-                    const MakerFormTotalFees(),
-                    const SizedBox(height: 24),
-                    _buildError(),
-                    Flexible(child: _buildButtons(sellCoin, buyCoin)),
-                  ],
-                ),
-              );
-            },
+    return SingleChildScrollView(
+      key: const Key('maker-order-conformation-scroll'),
+      controller: _scrollController,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _buildTitle(),
+          const SizedBox(height: 37),
+          _buildReceive(buyCoin, buyAmount),
+          _buildFiatReceive(
+            sellCoin: sellCoin,
+            buyCoin: buyCoin,
+            sellAmount: sellAmount,
+            buyAmount: buyAmount,
+          ),
+          const SizedBox(height: 23),
+          _buildSend(sellCoin, sellAmount),
+          const SizedBox(height: 24),
+          ExchangeRate(
+            rate: prepared.price,
+            base: prepared.base,
+            rel: prepared.rel,
+          ),
+          const SizedBox(height: 10),
+          TotalFees(preimage: preimage),
+          const SizedBox(height: 24),
+          _buildError(),
+          _buildSubmissionNotice(),
+          _buildButtons(sellCoin, buyCoin),
+        ],
       ),
     );
   }
 
   Widget _buildBackButton() {
     return UiLightButton(
-      onPressed: _inProgress ? null : widget.onCancel,
+      onPressed:
+          _inProgress ||
+              _submissionStatus == AdvancedTradeSubmissionStatus.uncertain
+          ? null
+          : widget.onCancel,
       text: LocaleKeys.back.tr(),
     );
   }
@@ -158,7 +195,13 @@ class _MakerOrderConfirmationState extends State<MakerOrderConfirmation> {
                 ),
               )
             : null,
-        onPressed: _inProgress || !tradingEnabled ? null : _startSwap,
+        onPressed:
+            _inProgress ||
+                !tradingEnabled ||
+                _preparedOrder == null ||
+                _submissionStatus != AdvancedTradeSubmissionStatus.prepared
+            ? null
+            : _startSwap,
         text: tradingEnabled
             ? LocaleKeys.confirm.tr()
             : LocaleKeys.tradingDisabled.tr(),
@@ -179,6 +222,104 @@ class _MakerOrderConfirmationState extends State<MakerOrderConfirmation> {
         ),
       ),
     );
+  }
+
+  Widget _buildUnavailableState() {
+    if (_submissionStatus == AdvancedTradeSubmissionStatus.uncertain) {
+      return Semantics(
+        liveRegion: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.sync_problem_rounded, size: 44),
+            const SizedBox(height: 12),
+            Text(
+              'advancedTradeUncertainBody'.tr(),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const Key('maker-uncertain-view-activity'),
+              onPressed: _viewAdvancedActivity,
+              icon: const Icon(Icons.history_rounded),
+              label: Text('advancedTradeRefreshActivity'.tr()),
+            ),
+          ],
+        ),
+      );
+    }
+    if (_submissionStatus == AdvancedTradeSubmissionStatus.failed ||
+        _submissionFailure != null) {
+      return Semantics(
+        liveRegion: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _submissionFailureMessage(_submissionFailure),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            _buildBackButton(),
+          ],
+        ),
+      );
+    }
+    return const Center(child: UiSpinner());
+  }
+
+  Widget _buildSubmissionNotice() {
+    final message = switch (_submissionStatus) {
+      AdvancedTradeSubmissionStatus.submitting =>
+        'advancedTradeSubmitting'.tr(),
+      AdvancedTradeSubmissionStatus.accepted => 'advancedOrderAccepted'.tr(),
+      AdvancedTradeSubmissionStatus.failed => _submissionFailureMessage(
+        _submissionFailure,
+      ),
+      AdvancedTradeSubmissionStatus.uncertain =>
+        'advancedTradeUncertainShort'.tr(),
+      AdvancedTradeSubmissionStatus.idle ||
+      AdvancedTradeSubmissionStatus.prepared => null,
+    };
+    if (message == null) return const SizedBox.shrink();
+    return Semantics(
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Text(message, textAlign: TextAlign.center),
+      ),
+    );
+  }
+
+  String _submissionFailureMessage(AdvancedTradeSubmissionFailure? failure) {
+    return switch (failure) {
+      AdvancedTradeSubmissionFailure.walletChanged =>
+        'advancedTradeWalletChanged'.tr(),
+      AdvancedTradeSubmissionFailure.preparationExpired =>
+        'advancedTradeExpired'.tr(),
+      AdvancedTradeSubmissionFailure.tradingUnavailable =>
+        'advancedTradeUnavailable'.tr(),
+      AdvancedTradeSubmissionFailure.clockInvalid =>
+        'advancedTradeClockInvalid'.tr(),
+      AdvancedTradeSubmissionFailure.uncertain =>
+        'advancedTradeUncertainBody'.tr(),
+      AdvancedTradeSubmissionFailure.preparationInvalid ||
+      AdvancedTradeSubmissionFailure.rejected ||
+      AdvancedTradeSubmissionFailure.unknown ||
+      null => 'advancedTradeInvalid'.tr(),
+    };
+  }
+
+  Future<void> _viewAdvancedActivity() async {
+    try {
+      await RepositoryProvider.of<TradingEntitiesBloc>(context).fetch();
+    } on Object {
+      if (mounted) {
+        setState(() => _errorMessage = 'advancedActivityRefreshFailed'.tr());
+      }
+    }
+    if (!mounted) return;
+    context.read<DexTabBarBloc>().add(const TabChanged(1));
   }
 
   Widget _buildFiatReceive({
@@ -316,45 +457,45 @@ class _MakerOrderConfirmationState extends State<MakerOrderConfirmation> {
   }
 
   Future<void> _startSwap() async {
+    if (_preparedOrder == null ||
+        _submissionStatus != AdvancedTradeSubmissionStatus.prepared ||
+        _inProgress) {
+      return;
+    }
     setState(() {
       _errorMessage = null;
       _inProgress = true;
     });
 
-    final authBloc = context.read<AuthBloc>();
-    final walletType = authBloc.state.currentUser?.type ?? '';
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
-    final sellCoin = makerFormBloc.sellCoin!;
-    final buyCoin = makerFormBloc.buyCoin!;
-    context.read<AnalyticsBloc>().logEvent(
-      SwapInitiatedEventData(
-        asset: sellCoin.abbr,
-        secondaryAsset: buyCoin.abbr,
-        network: sellCoin.protocolType,
-        secondaryNetwork: buyCoin.protocolType,
-        hdType: walletType,
-      ),
-    );
-
     final TextError? error = await makerFormBloc.makeOrder();
 
-    final tradingEntitiesBloc =
-        // ignore: use_build_context_synchronously
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
-    await tradingEntitiesBloc.fetch();
+    if (!mounted) return;
 
-    // Delay helps to avoid buttons enabled/disabled state blinking
-    // if setprice RPC was proceeded very fast
-    await Future<dynamic>.delayed(const Duration(milliseconds: 500));
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
+
+    if (!mounted) return;
     setState(() => _inProgress = false);
 
-    if (error != null) {
-      // We log swap failures when the actual swap fails, not on order submission.
-      setState(() => _errorMessage = error.error);
+    if (_submissionStatus == AdvancedTradeSubmissionStatus.uncertain) return;
+    if (error != null ||
+        _submissionStatus != AdvancedTradeSubmissionStatus.accepted) {
+      setState(() {
+        _errorMessage = _submissionFailureMessage(_submissionFailure);
+      });
       return;
     }
 
-    // Swap success is tracked when the trade completes in trading_details.dart.
+    try {
+      await tradingEntitiesBloc.fetch();
+    } on Object {
+      if (mounted) {
+        setState(() => _errorMessage = 'advancedActivityRefreshFailed'.tr());
+      }
+    }
+    if (!mounted) return;
     makerFormBloc.clear();
     widget.onCreateOrder();
   }

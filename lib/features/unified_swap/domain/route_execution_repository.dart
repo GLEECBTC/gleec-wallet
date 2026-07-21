@@ -39,3 +39,21 @@ class RouteExecutionException implements Exception {
 
   final RouteExecutionFailure failure;
 }
+
+/// The one-shot init authority was consumed and an init attempt may have
+/// reached KDF. Callers must reconcile by route ID and must never retry init.
+class RouteExecutionUncertainInitException extends RouteExecutionException {
+  const RouteExecutionUncertainInitException(super.failure);
+}
+
+/// A route control may have reached KDF. Reattach the durable execution before
+/// enabling another control attempt; blindly retrying could reverse intent.
+class RouteExecutionUncertainControlException extends RouteExecutionException {
+  const RouteExecutionUncertainControlException(super.failure);
+}
+
+/// A user decision may have reached KDF. Reattach the durable execution before
+/// offering the decision again so an action is never delivered twice.
+class RouteExecutionUncertainDecisionException extends RouteExecutionException {
+  const RouteExecutionUncertainDecisionException(super.failure);
+}

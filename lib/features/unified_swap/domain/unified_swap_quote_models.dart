@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_model_limits.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_product_policy.dart';
 
 enum UnifiedSwapQuoteStatus { idle, loading, ready, expired, unavailable }
@@ -83,7 +84,8 @@ final class UnifiedSwapHdPathSourceSelection
     extends UnifiedSwapSourceSelection {
   UnifiedSwapHdPathSourceSelection(this.derivationPath) {
     if (derivationPath.trim().isEmpty ||
-        derivationPath.trim() != derivationPath) {
+        derivationPath.trim() != derivationPath ||
+        derivationPath.length > UnifiedSwapModelLimits.derivationPathLength) {
       throw ArgumentError.value(derivationPath, 'derivationPath');
     }
   }
@@ -104,7 +106,10 @@ final class UnifiedSwapHdPathSourceSelection
 final class UnifiedSwapUnknownSourceSelection
     extends UnifiedSwapSourceSelection {
   UnifiedSwapUnknownSourceSelection(this.rawDiscriminator) {
-    if (rawDiscriminator.trim().isEmpty) {
+    if (rawDiscriminator.trim().isEmpty ||
+        rawDiscriminator.trim() != rawDiscriminator ||
+        rawDiscriminator.length >
+            UnifiedSwapAssetIdentity.maximumDiscriminatorLength) {
       throw ArgumentError.value(rawDiscriminator, 'rawDiscriminator');
     }
   }
@@ -141,11 +146,16 @@ class UnifiedSwapIntent extends Equatable {
     if (revision < 0) {
       throw ArgumentError.value(revision, 'revision', 'Must not be negative');
     }
-    if (recipient.trim().isEmpty) {
+    if (recipient.trim().isEmpty ||
+        recipient.trim() != recipient ||
+        recipient.length > UnifiedSwapAssetIdentity.maximumIdentifierLength) {
       throw ArgumentError.value(recipient, 'recipient', 'Must not be empty');
     }
     if (slippageBps < 0 || slippageBps > 10_000) {
       throw RangeError.range(slippageBps, 0, 10_000, 'slippageBps');
+    }
+    if (!source.hasBoundedIdentity || !destination.hasBoundedIdentity) {
+      throw ArgumentError('Swap asset identities exceed supported bounds');
     }
   }
 
@@ -228,19 +238,38 @@ class UnifiedSwapQuoteCandidate extends Equatable {
     required String expectedReceive,
     required String minimumReceive,
     required List<RouteExecutionFee> fees,
-    required this.expiresAt,
+    required DateTime expiresAt,
     required this.rankable,
     required this.isExecutable,
     this.rank,
     this.valuation,
     this.priceImpactBps,
+    this.estimatedDuration,
+    this.stageCount,
     this.authoritativeLowLiquidity = false,
     this.rawUnknownDiscriminator,
   }) : expectedReceive = _smallestUnitAmount(expectedReceive),
        minimumReceive = _smallestUnitAmount(minimumReceive),
-       fees = List.unmodifiable(fees) {
-    if (candidateId.isEmpty || candidateDigest.isEmpty) {
-      throw ArgumentError('Candidate identity must not be empty');
+       fees = List.unmodifiable(fees),
+       expiresAt = expiresAt.toUtc() {
+    UnifiedSwapModelLimits.requireString(candidateId, 'candidateId');
+    UnifiedSwapModelLimits.requireString(
+      candidateDigest,
+      'candidateDigest',
+      maximumLength: UnifiedSwapModelLimits.digestLength,
+    );
+    UnifiedSwapModelLimits.requireListLength(fees.length, 'fees');
+    UnifiedSwapModelLimits.requireOptionalString(
+      rawUnknownDiscriminator,
+      'rawUnknownDiscriminator',
+      maximumLength: UnifiedSwapModelLimits.aggregateTextLength,
+    );
+    if (BigInt.parse(this.expectedReceive) <= BigInt.zero) {
+      throw ArgumentError('expectedReceive must be greater than zero');
+    }
+    if (BigInt.parse(this.minimumReceive) >
+        BigInt.parse(this.expectedReceive)) {
+      throw ArgumentError('minimumReceive must not exceed expectedReceive');
     }
     if (topology == UnifiedSwapTopology.unknown && isExecutable) {
       throw ArgumentError('An unknown topology cannot be executable');
@@ -253,9 +282,31 @@ class UnifiedSwapQuoteCandidate extends Equatable {
         'A rankable candidate requires both a rank and wallet valuation',
       );
     }
+    if (rank != null && rank! < 0) {
+      throw RangeError.value(rank!, 'rank', 'Must not be negative');
+    }
     if (priceImpactBps != null &&
         (priceImpactBps! < 0 || priceImpactBps! > 10_000)) {
       throw RangeError.range(priceImpactBps!, 0, 10_000, 'priceImpactBps');
+    }
+    if (estimatedDuration != null && estimatedDuration!.isNegative) {
+      throw ArgumentError.value(
+        estimatedDuration,
+        'estimatedDuration',
+        'must not be negative',
+      );
+    }
+    if (stageCount != null &&
+        (stageCount! < 0 || stageCount! > UnifiedSwapModelLimits.routeStages)) {
+      throw RangeError.range(
+        stageCount!,
+        0,
+        UnifiedSwapModelLimits.routeStages,
+        'stageCount',
+      );
+    }
+    if (isExecutable && (stageCount == null || stageCount == 0)) {
+      throw ArgumentError('An executable candidate must contain a stage');
     }
   }
 
@@ -271,10 +322,21 @@ class UnifiedSwapQuoteCandidate extends Equatable {
   final int? rank;
   final UnifiedSwapValuationProof? valuation;
   final int? priceImpactBps;
+  final Duration? estimatedDuration;
+  final int? stageCount;
   final bool authoritativeLowLiquidity;
   final String? rawUnknownDiscriminator;
 
   bool isExpiredAt(DateTime value) => !expiresAt.isAfter(value.toUtc());
+
+  bool get isSafelyExecutable =>
+      isExecutable &&
+      topology != UnifiedSwapTopology.unknown &&
+      fees.every(
+        (fee) =>
+            fee.kind != RouteFeeKind.unknown &&
+            fee.asset.hasKnownBoundedIdentity,
+      );
 
   UnifiedSwapRiskWarnings get riskWarnings => unifiedSwapRiskWarnings(
     priceImpactBps: priceImpactBps,
@@ -297,6 +359,8 @@ class UnifiedSwapQuoteCandidate extends Equatable {
     rank,
     valuation,
     priceImpactBps,
+    estimatedDuration,
+    stageCount,
     authoritativeLowLiquidity,
     rawUnknownDiscriminator,
   ];
@@ -304,16 +368,42 @@ class UnifiedSwapQuoteCandidate extends Equatable {
 
 @immutable
 class UnifiedSwapQuoteEvaluation extends Equatable {
+  static const maximumCandidateCount = 100;
+
   UnifiedSwapQuoteEvaluation({
     required this.evaluationId,
     required this.intentRevision,
     required List<UnifiedSwapQuoteCandidate> candidates,
   }) : candidates = List.unmodifiable(candidates) {
-    if (evaluationId.isEmpty) {
-      throw ArgumentError.value(
-        evaluationId,
-        'evaluationId',
-        'Must not be empty',
+    UnifiedSwapModelLimits.requireString(evaluationId, 'evaluationId');
+    if (intentRevision < 0) {
+      throw RangeError.value(
+        intentRevision,
+        'intentRevision',
+        'Must not be negative',
+      );
+    }
+    if (this.candidates.length > maximumCandidateCount) {
+      throw RangeError.range(
+        this.candidates.length,
+        0,
+        maximumCandidateCount,
+        'candidates.length',
+      );
+    }
+    final candidateIds = this.candidates
+        .map((candidate) => candidate.candidateId)
+        .toSet();
+    final candidateDigests = this.candidates
+        .map((candidate) => candidate.candidateDigest)
+        .toSet();
+    final ranked = this.candidates.where((candidate) => candidate.rankable);
+    final ranks = ranked.map((candidate) => candidate.rank).toSet();
+    if (candidateIds.length != this.candidates.length ||
+        candidateDigests.length != this.candidates.length ||
+        ranks.length != ranked.length) {
+      throw ArgumentError(
+        'Candidate IDs, digests, and assigned ranks must be unique',
       );
     }
   }
@@ -351,7 +441,8 @@ class UnifiedSwapQuoteEvaluation extends Equatable {
 }
 
 String _smallestUnitAmount(String value) {
-  if (!RegExp(r'^(?:0|[1-9][0-9]*)$').hasMatch(value)) {
+  if (value.length > UnifiedSwapModelLimits.amountDigits ||
+      !RegExp(r'^(?:0|[1-9][0-9]*)$').hasMatch(value)) {
     throw ArgumentError.value(
       value,
       'amount',
@@ -367,7 +458,7 @@ List<Object?> _identityProps(UnifiedSwapAssetIdentity identity) => [
   identity.chainId,
   identity.kind,
   identity.decimals,
-  identity.contractAddress?.toLowerCase(),
+  identity.contractIdentity,
   identity.rawChainFamilyDiscriminator,
   identity.rawKindDiscriminator,
 ];

@@ -17,6 +17,9 @@ class _MockTradingEntitiesBloc extends Mock implements TradingEntitiesBloc {}
 
 class _MockMyOrder extends Mock implements MyOrder {}
 
+const _orderUuid = '550e8400-e29b-41d4-a716-446655440001';
+const _swapUuid = '550e8400-e29b-41d4-a716-446655440002';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
@@ -29,8 +32,11 @@ void main() {
   ) async {
     final bloc = _MockTradingEntitiesBloc();
     final order = _MockMyOrder();
-    when(() => order.uuid).thenReturn('order-1');
-    when(() => bloc.cancelOrder('order-1')).thenAnswer((_) async => null);
+    when(() => order.uuid).thenReturn(_orderUuid);
+    when(() => order.base).thenReturn('KMD');
+    when(() => order.rel).thenReturn('BTC');
+    when(() => bloc.canCancelOrder(_orderUuid)).thenReturn(true);
+    when(() => bloc.cancelOrder(_orderUuid)).thenAnswer((_) async => null);
 
     await tester.pumpWidget(
       _localizedApp(bloc, Scaffold(body: OrderCancelButton(order: order))),
@@ -44,14 +50,22 @@ void main() {
     await tester.tap(find.byKey(const Key('dex-order-cancel-confirm')));
     await tester.pumpAndSettle();
 
-    verify(() => bloc.cancelOrder('order-1')).called(1);
+    verify(() => bloc.cancelOrder(_orderUuid)).called(1);
   });
 
   testWidgets('mobile cancel all dispatches only after confirmation', (
     tester,
   ) async {
     final bloc = _MockTradingEntitiesBloc();
-    when(bloc.cancelAllOrders).thenAnswer((_) async {});
+    when(() => bloc.cancellableOrderIds).thenReturn(const [_orderUuid]);
+    when(() => bloc.cancelExactOrders(const [_orderUuid])).thenAnswer(
+      (_) async => const CancelAllOrdersResult(
+        attemptedCount: 1,
+        cancelledCount: 1,
+        failedCount: 0,
+        walletChanged: false,
+      ),
+    );
 
     await tester.pumpWidget(
       _localizedApp(
@@ -73,22 +87,31 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel all').last);
     await tester.pumpAndSettle();
-    verifyNever(bloc.cancelAllOrders);
+    verifyNever(() => bloc.cancelExactOrders(any()));
 
     await tester.tap(find.byKey(const Key('dex-mobile-cancel-all-confirm')));
     await tester.pumpAndSettle();
 
-    verify(bloc.cancelAllOrders).called(1);
+    verify(() => bloc.cancelExactOrders(const [_orderUuid])).called(1);
   });
 
   testWidgets('recovery dispatches only after confirmation', (tester) async {
     final bloc = _MockTradingEntitiesBloc();
-    when(() => bloc.recoverFundsOfSwap('swap-1')).thenAnswer((_) async => null);
+    when(() => bloc.outRecoveryStatuses).thenAnswer(
+      (_) => const Stream<Map<String, RecoverySubmissionStatus>>.empty(),
+    );
+    when(
+      () => bloc.recoveryStatusFor(_swapUuid),
+    ).thenReturn(RecoverySubmissionStatus.idle);
+    when(() => bloc.canRecoverSwap(_swapUuid)).thenReturn(true);
+    when(
+      () => bloc.recoverFundsOfSwap(_swapUuid),
+    ).thenAnswer((_) async => null);
 
     await tester.pumpWidget(
       _localizedApp(
         bloc,
-        const Scaffold(body: SwapRecoverButton(uuid: 'swap-1')),
+        const Scaffold(body: SwapRecoverButton(uuid: _swapUuid)),
       ),
     );
     await tester.pumpAndSettle();
@@ -100,7 +123,7 @@ void main() {
     await tester.tap(find.byKey(const Key('dex-details-recover-confirm')));
     await tester.pump();
 
-    verify(() => bloc.recoverFundsOfSwap('swap-1')).called(1);
+    verify(() => bloc.recoverFundsOfSwap(_swapUuid)).called(1);
     await tester.pump(const Duration(seconds: 1));
   });
 }

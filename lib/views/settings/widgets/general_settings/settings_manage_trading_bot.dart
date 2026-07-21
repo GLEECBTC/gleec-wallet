@@ -7,14 +7,37 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_bloc.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_wallet_session.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
-import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
+import 'package:web_dex/model/settings/market_maker_bot_settings.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 import 'package:web_dex/views/settings/widgets/common/settings_section.dart';
+
+const int _maximumMakerOrderImportBytes = 256 * 1024;
+const int _maximumMakerOrderImportCodeUnits = _maximumMakerOrderImportBytes;
+
+enum _MakerOrderImportFailure {
+  empty,
+  tooLarge,
+  unsupportedFormat,
+  missingConfigList,
+  tooManyConfigs,
+  invalidConfig,
+  duplicateConfig,
+  disabledConfig,
+  botActive,
+}
+
+final class _MakerOrderImportException implements Exception {
+  const _MakerOrderImportException(this.failure);
+
+  final _MakerOrderImportFailure failure;
+}
 
 class SettingsManageTradingBot extends StatefulWidget {
   const SettingsManageTradingBot({super.key});
@@ -37,9 +60,9 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _EnableTradingBotSwitcher(settingsRepository: _settingsRepository),
+          const _EnableTradingBotSwitcher(),
           const SizedBox(height: 14),
-          _SaveOrdersSwitcher(settingsRepository: _settingsRepository),
+          const _SaveOrdersSwitcher(),
           const SizedBox(height: 14),
           Wrap(
             spacing: 12,
@@ -141,24 +164,39 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
   }
 
   Future<void> _importMakerOrders() async {
+    if (_isImporting) return;
     setState(() => _isImporting = true);
+
+    final applyCompletion = Completer<void>();
+    var callbackHandled = false;
+
+    void completeApply() {
+      if (!applyCompletion.isCompleted) applyCompletion.complete();
+    }
 
     try {
       await FileLoader.fromPlatform().upload(
         fileType: LoadFileType.text,
         onUpload: (_, content) {
-          unawaited(_applyImportedOrders(content));
+          if (callbackHandled) return;
+          callbackHandled = true;
+          unawaited(_applyImportedOrders(content).whenComplete(completeApply));
         },
         onError: (error) {
+          if (callbackHandled) return;
+          callbackHandled = true;
           _showMessage(
-            'makerOrdersImportFailed'.tr(args: [error]),
+            'makerOrdersImportFailed'.tr(args: [_readableError(error)]),
             isError: true,
           );
-          if (mounted) {
-            setState(() => _isImporting = false);
-          }
+          completeApply();
         },
       );
+      // Native pickers invoke the callback before returning. The web loader
+      // now also waits for selection or cancellation before returning. If a
+      // file was selected, keep the single import lease until validation,
+      // lifecycle reconciliation and persistence have all completed.
+      if (callbackHandled) await applyCompletion.future;
     } catch (error) {
       _showMessage(
         'makerOrdersImportFailed'.tr(args: [_readableError(error)]),
@@ -174,25 +212,43 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
 
   Future<void> _applyImportedOrders(String? rawContent) async {
     try {
+      if (rawContent != null &&
+          rawContent.length > _maximumMakerOrderImportCodeUnits) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.tooLarge,
+        );
+      }
       final content = rawContent?.trim() ?? '';
       if (content.isEmpty) {
-        throw const FormatException('File is empty');
+        throw const _MakerOrderImportException(_MakerOrderImportFailure.empty);
+      }
+      if (utf8.encode(content).length > _maximumMakerOrderImportBytes) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.tooLarge,
+        );
       }
 
       final importedConfigs = _decodeTradePairConfigs(content);
-      final stored = await _settingsRepository.loadSettings();
-      final updatedMmSettings = stored.marketMakerBotSettings.copyWith(
-        tradeCoinPairConfigs: importedConfigs,
+      final walletSession = await _ensureBotIsStoppedForImport();
+      if (walletSession == null || !mounted) return;
+      final botBloc = context.read<MarketMakerBotBloc>();
+      final settingsBloc = context.read<SettingsBloc>();
+      final completed = await botBloc.runStoppedConfigurationMutation(
+        walletSession: walletSession,
+        mutation: (beforeWrite) async {
+          await settingsBloc.updateMarketMakerBotSettingsAndWait(
+            (current) =>
+                current.copyWith(tradeCoinPairConfigs: importedConfigs),
+            beforeWrite: beforeWrite,
+          );
+        },
       );
-
-      await _settingsRepository.updateSettings(
-        stored.copyWith(marketMakerBotSettings: updatedMmSettings),
-      );
-
+      if (!completed) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.botActive,
+        );
+      }
       if (!mounted) return;
-      context.read<SettingsBloc>().add(
-        MarketMakerBotSettingsChanged(updatedMmSettings),
-      );
       _showMessage(
         'makerOrdersImportSuccess'.tr(
           args: [importedConfigs.length.toString()],
@@ -203,52 +259,160 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
         'makerOrdersImportFailed'.tr(args: [_readableError(error)]),
         isError: true,
       );
-    } finally {
-      if (mounted) {
-        setState(() => _isImporting = false);
-      }
     }
   }
 
   List<TradeCoinPairConfig> _decodeTradePairConfigs(String jsonPayload) {
-    final decoded = jsonDecode(jsonPayload);
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(jsonPayload);
+    } on FormatException {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.unsupportedFormat,
+      );
+    }
+
     final dynamic rawConfigs;
     if (decoded is List) {
       rawConfigs = decoded;
     } else if (decoded is Map<String, dynamic>) {
-      rawConfigs =
-          decoded['trade_coin_pair_configs'] ??
-          decoded['tradeCoinPairConfigs'] ??
-          decoded['orders'];
+      final candidates = <Object?>[
+        decoded['trade_coin_pair_configs'],
+        decoded['tradeCoinPairConfigs'],
+        decoded['orders'],
+      ].where((value) => value != null).toList(growable: false);
+      if (candidates.length != 1) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.missingConfigList,
+        );
+      }
+      final version = decoded['version'];
+      if (version != null && version != 1) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.unsupportedFormat,
+        );
+      }
+      rawConfigs = candidates.single;
     } else {
-      throw const FormatException('Unsupported file format');
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.unsupportedFormat,
+      );
     }
 
     if (rawConfigs is! List) {
-      throw const FormatException('Missing maker order configuration list');
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.missingConfigList,
+      );
+    }
+    if (rawConfigs.isEmpty) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.invalidConfig,
+      );
+    }
+    if (rawConfigs.length >
+        MarketMakerBotSettings.maximumTradePairConfigCount) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.tooManyConfigs,
+      );
     }
 
     final dedupedByName = <String, TradeCoinPairConfig>{};
     for (final item in rawConfigs) {
       if (item is! Map) {
-        continue;
-      }
-
-      try {
-        final config = TradeCoinPairConfig.fromJson(
-          Map<String, dynamic>.from(item),
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.invalidConfig,
         );
-        dedupedByName[config.name] = config;
-      } catch (_) {
-        // Skip malformed entries and continue parsing.
       }
+
+      final TradeCoinPairConfig config;
+      try {
+        config = TradeCoinPairConfig.fromJson(Map<String, dynamic>.from(item));
+      } catch (_) {
+        // Imports are atomic. A file with one bad entry must not silently
+        // replace a known-good strategy with an incomplete subset.
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.invalidConfig,
+        );
+      }
+
+      if (!config.enable) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.disabledConfig,
+        );
+      }
+      final key = config.name.toUpperCase();
+      if (dedupedByName.containsKey(key)) {
+        throw const _MakerOrderImportException(
+          _MakerOrderImportFailure.duplicateConfig,
+        );
+      }
+      dedupedByName[key] = config;
     }
 
-    if (dedupedByName.isEmpty) {
-      throw const FormatException('No valid maker order configurations found');
+    return List<TradeCoinPairConfig>.unmodifiable(dedupedByName.values);
+  }
+
+  Future<MarketMakerBotWalletSession?> _ensureBotIsStoppedForImport() async {
+    final botBloc = context.read<MarketMakerBotBloc>();
+    final walletSession = botBloc.captureWalletSession();
+    if (walletSession == null) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.botActive,
+      );
+    }
+    if (botBloc.isConfigurationMutationSafe(walletSession)) {
+      return walletSession;
     }
 
-    return dedupedByName.values.toList();
+    final stored = await _settingsRepository.loadSettings();
+    if (!mounted || botBloc.captureWalletSession() != walletSession) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.botActive,
+      );
+    }
+    final configuredPairs = List<TradeCoinPairConfig>.unmodifiable(
+      stored.marketMakerBotSettings.tradeCoinPairConfigs,
+    );
+    final labels =
+        configuredPairs
+            .map((pair) => '${pair.baseCoinId}/${pair.relCoinId}')
+            .toSet()
+            .toList()
+          ..sort();
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: LocaleKeys.mmBotStop.tr(),
+      targetDescription:
+          '${'marketMakerStopTarget'.tr(namedArgs: {'count': '${configuredPairs.length}', 'pairs': labels.isEmpty ? '—' : labels.join(', ')})}\n\n'
+          '${'marketMakerBootstrapStopImpact'.tr()}',
+      confirmButtonKey: const Key('import-maker-orders-stop-confirm'),
+    );
+    if (!confirmed || !mounted) return null;
+    if (botBloc.captureWalletSession() != walletSession) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.botActive,
+      );
+    }
+    final result = await botBloc.stopAndWait(
+      walletSession: walletSession,
+      expectedTradePairs: configuredPairs,
+    );
+    if (!result.isStopped || !mounted) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.botActive,
+      );
+    }
+    _requireBotProvenStopped(walletSession);
+    return walletSession;
+  }
+
+  void _requireBotProvenStopped(MarketMakerBotWalletSession walletSession) {
+    final botBloc = context.read<MarketMakerBotBloc>();
+    if (!botBloc.isConfigurationMutationSafe(walletSession)) {
+      throw const _MakerOrderImportException(
+        _MakerOrderImportFailure.botActive,
+      );
+    }
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -266,58 +430,189 @@ class _SettingsManageTradingBotState extends State<SettingsManageTradingBot> {
   }
 
   String _readableError(Object error) {
-    final value = error.toString().trim();
-    if (value.startsWith('Exception: ')) {
-      return value.replaceFirst('Exception: ', '').trim();
+    if (error case _MakerOrderImportException(:final failure)) {
+      return switch (failure) {
+        _MakerOrderImportFailure.empty => 'The selected file is empty.',
+        _MakerOrderImportFailure.tooLarge => 'The selected file is too large.',
+        _MakerOrderImportFailure.unsupportedFormat =>
+          'The selected file format is not supported.',
+        _MakerOrderImportFailure.missingConfigList =>
+          'The maker order list is missing or ambiguous.',
+        _MakerOrderImportFailure.tooManyConfigs =>
+          'The file contains too many maker orders.',
+        _MakerOrderImportFailure.invalidConfig =>
+          'The file contains an invalid maker order.',
+        _MakerOrderImportFailure.duplicateConfig =>
+          'The file contains a duplicate maker order.',
+        _MakerOrderImportFailure.disabledConfig =>
+          'Imported maker orders must be enabled.',
+        _MakerOrderImportFailure.botActive =>
+          'Stop the market maker bot before importing orders.',
+      };
     }
-    return value.isEmpty ? LocaleKeys.somethingWrong.tr() : value;
+    // File-system and parser errors can contain local paths, payload excerpts,
+    // endpoints or credentials. Do not surface their raw text.
+    return LocaleKeys.somethingWrong.tr();
   }
 }
 
-class _EnableTradingBotSwitcher extends StatelessWidget {
-  const _EnableTradingBotSwitcher({required this.settingsRepository});
+class _EnableTradingBotSwitcher extends StatefulWidget {
+  const _EnableTradingBotSwitcher();
 
-  final SettingsRepository settingsRepository;
+  @override
+  State<_EnableTradingBotSwitcher> createState() =>
+      _EnableTradingBotSwitcherState();
+}
+
+class _EnableTradingBotSwitcherState extends State<_EnableTradingBotSwitcher> {
+  bool _isUpdating = false;
 
   @override
   Widget build(BuildContext context) {
+    final botIsUpdating = context.select<MarketMakerBotBloc, bool>(
+      (bloc) => bloc.state.isUpdating,
+    );
     return BlocBuilder<SettingsBloc, SettingsState>(
-      builder: (context, state) => Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          UiSwitcher(
-            key: const Key('enable-trading-bot-switcher'),
-            value: state.mmBotSettings.isMMBotEnabled,
-            onChanged: (value) => _onSwitcherChanged(context, value),
-          ),
-          const SizedBox(width: 15),
-          Flexible(child: Text(LocaleKeys.enableTradingBot.tr())),
-        ],
-      ),
+      builder: (context, state) {
+        final isBusy = _isUpdating || botIsUpdating;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            IgnorePointer(
+              ignoring: isBusy,
+              child: Opacity(
+                opacity: isBusy ? 0.55 : 1,
+                child: UiSwitcher(
+                  key: const Key('enable-trading-bot-switcher'),
+                  value: state.mmBotSettings.isMMBotEnabled,
+                  onChanged: (value) {
+                    unawaited(_onSwitcherChanged(value));
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 15),
+            Flexible(child: Text(LocaleKeys.enableTradingBot.tr())),
+            if (isBusy) ...[
+              const SizedBox(width: 8),
+              const SizedBox(width: 16, height: 16, child: UiSpinner()),
+            ],
+          ],
+        );
+      },
     );
   }
 
-  Future<void> _onSwitcherChanged(BuildContext context, bool value) async {
-    final stored = await settingsRepository.loadSettings();
-    final settings = stored.marketMakerBotSettings.copyWith(
-      isMMBotEnabled: value,
+  Future<void> _onSwitcherChanged(bool value) async {
+    if (_isUpdating) return;
+    final settingsBloc = context.read<SettingsBloc>();
+    if (settingsBloc.state.mmBotSettings.isMMBotEnabled == value) return;
+
+    setState(() => _isUpdating = true);
+    try {
+      if (value) {
+        await settingsBloc.updateMarketMakerBotSettingsAndWait(
+          (current) => current.copyWith(isMMBotEnabled: true),
+        );
+        return;
+      }
+
+      await _confirmStopAndDisable(settingsBloc);
+    } on Object {
+      _showMessage('marketMakerDisableFailed'.tr(), isError: true);
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _confirmStopAndDisable(SettingsBloc settingsBloc) async {
+    final botBloc = context.read<MarketMakerBotBloc>();
+    final walletSession = botBloc.captureWalletSession();
+    if (walletSession == null) {
+      _showMessage('marketMakerWalletChanged'.tr(), isError: true);
+      return;
+    }
+
+    final configuredPairs = List<TradeCoinPairConfig>.unmodifiable(
+      settingsBloc.state.mmBotSettings.tradeCoinPairConfigs,
     );
+    final labels =
+        configuredPairs
+            .map((pair) => '${pair.baseCoinId}/${pair.relCoinId}')
+            .toSet()
+            .toList()
+          ..sort();
 
-    if (!context.mounted) return;
-    context.read<SettingsBloc>().add(MarketMakerBotSettingsChanged(settings));
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: 'disableTradingBot'.tr(),
+      targetDescription:
+          '${'marketMakerAllConfiguredPairsTarget'.tr(namedArgs: {'count': '${configuredPairs.length}', 'pairs': labels.isEmpty ? '—' : labels.join(', ')})}\n\n'
+          '${'marketMakerDisableImpact'.tr()}',
+      confirmButtonKey: const Key('disable-trading-bot-confirm'),
+    );
+    if (!confirmed || !mounted) return;
+    if (botBloc.captureWalletSession() != walletSession) {
+      _showMessage('marketMakerWalletChanged'.tr(), isError: true);
+      return;
+    }
 
-    if (!value) {
-      context.read<MarketMakerBotBloc>().add(
-        const MarketMakerBotStopRequested(),
+    if (!botBloc.isConfigurationMutationSafe(walletSession)) {
+      final result = await botBloc.stopAndWait(
+        walletSession: walletSession,
+        expectedTradePairs: configuredPairs,
+      );
+      if (!mounted) return;
+      if (!result.isStopped) {
+        _showMessage(
+          result.walletChanged
+              ? 'marketMakerWalletChanged'.tr()
+              : 'marketMakerDisableFailed'.tr(),
+          isError: true,
+        );
+        return;
+      }
+    }
+    final completed = await botBloc.runStoppedConfigurationMutation(
+      walletSession: walletSession,
+      mutation: (beforeWrite) {
+        return settingsBloc.updateMarketMakerBotSettingsAndWait(
+          (current) => current.copyWith(isMMBotEnabled: false),
+          beforeWrite: beforeWrite,
+        );
+      },
+    );
+    if (!mounted) return;
+    if (!completed) {
+      _showMessage(
+        botBloc.captureWalletSession() == walletSession
+            ? 'marketMakerDisableFailed'.tr()
+            : 'marketMakerWalletChanged'.tr(),
+        isError: true,
       );
     }
   }
+
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      ),
+    );
+  }
 }
 
-class _SaveOrdersSwitcher extends StatelessWidget {
-  const _SaveOrdersSwitcher({required this.settingsRepository});
+class _SaveOrdersSwitcher extends StatefulWidget {
+  const _SaveOrdersSwitcher();
 
-  final SettingsRepository settingsRepository;
+  @override
+  State<_SaveOrdersSwitcher> createState() => _SaveOrdersSwitcherState();
+}
+
+class _SaveOrdersSwitcherState extends State<_SaveOrdersSwitcher> {
+  bool _isUpdating = false;
 
   @override
   Widget build(BuildContext context) {
@@ -328,7 +623,7 @@ class _SaveOrdersSwitcher extends StatelessWidget {
           UiSwitcher(
             key: const Key('save-orders-switcher'),
             value: state.mmBotSettings.saveOrdersBetweenLaunches,
-            onChanged: (value) => _onSwitcherChanged(context, value),
+            onChanged: _onSwitcherChanged,
           ),
           const SizedBox(width: 15),
           Flexible(child: Text('saveOrders'.tr())),
@@ -337,13 +632,27 @@ class _SaveOrdersSwitcher extends StatelessWidget {
     );
   }
 
-  Future<void> _onSwitcherChanged(BuildContext context, bool value) async {
-    final stored = await settingsRepository.loadSettings();
-    final settings = stored.marketMakerBotSettings.copyWith(
-      saveOrdersBetweenLaunches: value,
-    );
-
-    if (!context.mounted) return;
-    context.read<SettingsBloc>().add(MarketMakerBotSettingsChanged(settings));
+  Future<void> _onSwitcherChanged(bool value) async {
+    final settingsBloc = context.read<SettingsBloc>();
+    if (_isUpdating ||
+        settingsBloc.state.mmBotSettings.saveOrdersBetweenLaunches == value) {
+      return;
+    }
+    setState(() => _isUpdating = true);
+    try {
+      await settingsBloc.updateMarketMakerBotSettingsAndWait(
+        (current) => current.copyWith(saveOrdersBetweenLaunches: value),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text('marketMakerSettingsSaveFailed'.tr()),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
   }
 }

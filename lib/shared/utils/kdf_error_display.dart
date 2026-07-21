@@ -28,13 +28,14 @@ extension KdfErrorLocalizedMessage on MmRpcException {
   ///    translated message
   /// 2. If a locale key mapping exists but no translation, returns the
   ///    English fallback message
-  /// 3. If no mapping exists, returns the technical error message
-  /// 4. As a last resort, returns a generic error message
+  /// 3. If no mapping exists, returns a generic error message
   String get localizedMessage {
     final msg = userMessage;
     if (msg == null) {
-      // No mapping - use technical message or default
-      return message ?? KdfErrorMessages.defaultError.fallbackMessage;
+      // RPC messages may embed addresses, amounts, identifiers, request
+      // payloads, or backend internals. Unknown variants stay generic in
+      // customer-facing UI; typed mappings remain specific.
+      return KdfErrorMessages.defaultError.fallbackMessage;
     }
 
     // Try to get translation
@@ -57,12 +58,12 @@ extension KdfErrorLocalizedMessage on MmRpcException {
 extension GeneralErrorLocalizedMessage on GeneralErrorResponse {
   /// Returns the localized user-friendly message for this error.
   ///
-  /// First attempts to look up a message based on [errorType], then falls
-  /// back to the raw error message.
+  /// Looks up a message based on [errorType] and otherwise returns safe,
+  /// generic copy without exposing the raw daemon response.
   String get localizedMessage {
     final msg = KdfErrorMessages.forErrorType(errorType);
     if (msg == null) {
-      return error ?? KdfErrorMessages.defaultError.fallbackMessage;
+      return KdfErrorMessages.defaultError.fallbackMessage;
     }
 
     final translated = msg.localeKey.tr();
@@ -99,20 +100,10 @@ String formatKdfUserFacingError(Object error) {
     return error.message;
   }
 
-  final raw = error.toString().trim();
-  if (raw.isEmpty) {
-    return LocaleKeys.somethingWrong.tr();
-  }
-
-  const exceptionPrefix = 'Exception: ';
-  if (raw.startsWith(exceptionPrefix)) {
-    final message = raw.substring(exceptionPrefix.length).trim();
-    if (message.isNotEmpty) {
-      return message;
-    }
-  }
-
-  return raw;
+  // Never surface an arbitrary exception string. In trading paths it can
+  // contain exact orders, addresses, balances, provider payloads, or auth
+  // details. Unknown failures deliberately collapse to localized safe copy.
+  return LocaleKeys.somethingWrong.tr();
 }
 
 /// Technical detail string for expandable error UI (mirrors withdraw-form logic).

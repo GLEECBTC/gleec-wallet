@@ -3,8 +3,10 @@ import 'package:web_dex/mm2/mm2_api/rpc/cancel_order/cancel_order_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_orders/my_orders_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/order_status_response.dart';
+import 'package:web_dex/model/my_orders/maker_order.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/model/my_orders/taker_order.dart';
+import 'package:web_dex/model/trading_entity_id.dart';
 import 'package:web_dex/services/mappers/my_orders_mappers.dart';
 
 class MyOrdersService {
@@ -13,48 +15,82 @@ class MyOrdersService {
   final Mm2Api _mm2Api;
 
   Future<List<MyOrder>?> getOrders() async {
-    final MyOrdersResponse? response = await _mm2Api.getMyOrders();
+    try {
+      final MyOrdersResponse? response = await _mm2Api.getMyOrders();
 
-    if (response == null) {
+      if (response == null) {
+        return null;
+      }
+
+      return mapMyOrdersResponseToOrders(response);
+    } catch (_) {
+      // A failed or malformed response is not an authoritative empty order
+      // snapshot. Callers retain their last known controls and mark them stale.
       return null;
     }
-
-    return mapMyOrdersResponseToOrders(response);
   }
 
   Future<OrderStatus?> getStatus(String uuid) async {
+    final normalizedUuid = normalizeTradingEntityUuid(uuid);
+    if (normalizedUuid == null) return null;
+
     try {
-      final OrderStatusResponse? response = await _mm2Api.getOrderStatus(uuid);
+      final OrderStatusResponse? response = await _mm2Api.getOrderStatus(
+        normalizedUuid,
+      );
       if (response == null) {
         return null;
       }
       final dynamic order = response.order;
       if (order is TakerOrder) {
+        if (normalizeTradingEntityUuid(order.request.uuid) != normalizedUuid) {
+          return null;
+        }
         return OrderStatus(
           takerOrderStatus: TakerOrderStatus(
-            order: mapMyOrderResponseTakerOrderToOrder(order, uuid),
+            order: mapMyOrderResponseTakerOrderToOrder(order, normalizedUuid),
             cancellationReason: _getTakerOrderCancellationReason(
-                response.cancellationReason ?? ''),
+              response.cancellationReason ?? '',
+            ),
           ),
         );
-      } else {
+      } else if (order is MakerOrder) {
+        if (normalizeTradingEntityUuid(order.uuid) != normalizedUuid) {
+          return null;
+        }
         return OrderStatus(
           makerOrderStatus: MakerOrderStatus(
-            order: mapMyOrderResponseMakerOrderToOrder(order, uuid),
+            order: mapMyOrderResponseMakerOrderToOrder(order, normalizedUuid),
             cancellationReason: _getMakerOrderCancellationReason(
-                response.cancellationReason ?? ''),
+              response.cancellationReason ?? '',
+            ),
           ),
         );
       }
+      return null;
     } catch (_) {
       return null;
     }
   }
 
-  Future<String?> cancelOrder(String uuid) async {
-    final Map<String, dynamic> response =
-        await _mm2Api.cancelOrder(CancelOrderRequest(uuid: uuid));
-    return response['error'];
+  Future<String?> cancelOrder(
+    String uuid, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    final normalizedUuid = normalizeTradingEntityUuid(uuid);
+    if (normalizedUuid == null) return 'Unable to cancel order';
+
+    try {
+      final Map<String, dynamic> response = await _mm2Api.cancelOrder(
+        CancelOrderRequest(uuid: normalizedUuid),
+        beforeMutation: beforeMutation,
+      );
+      return Mm2Api.isPositiveCancelOrderResponse(response)
+          ? null
+          : 'Unable to cancel order';
+    } catch (_) {
+      return 'Unable to cancel order';
+    }
   }
 
   TakerOrderCancellationReason _getTakerOrderCancellationReason(String reason) {

@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:web_dex/bloc/dex_tab_bar/dex_tab_bar_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/market_maker_bot/tab_type_enum.dart';
 
@@ -19,11 +18,11 @@ enum DexListType implements ITabTypeEnum {
       case swap:
         return LocaleKeys.swap.tr();
       case orders:
-        return '${LocaleKeys.orders.tr()}${isMobile ? '' : ' (${bloc.ordersCount})'}';
+        return '${LocaleKeys.orders.tr()} (${bloc.ordersCount})';
       case inProgress:
-        return '${LocaleKeys.inProgress.tr()}${isMobile ? '' : ' (${bloc.inProgressCount})'}';
+        return '${LocaleKeys.inProgress.tr()} (${bloc.inProgressCount})';
       case history:
-        return '${LocaleKeys.history.tr()}${isMobile ? '' : ' (${bloc.completedCount})'}';
+        return '${LocaleKeys.history.tr()} (${bloc.completedCount})';
     }
   }
 

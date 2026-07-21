@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart';
 import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_model_limits.dart';
 
 enum RouteReviewStepKind { atomic, external, unknown }
 
@@ -102,7 +103,13 @@ enum RouteLiveAnnouncement {
 
 @immutable
 class RouteReviewWarning extends Equatable {
-  const RouteReviewWarning({required this.kind, this.rawKindDiscriminator});
+  RouteReviewWarning({required this.kind, this.rawKindDiscriminator}) {
+    UnifiedSwapModelLimits.requireRawDiscriminator(
+      rawKindDiscriminator,
+      'rawKindDiscriminator',
+      isUnknown: kind == RouteReviewWarningKind.unknown,
+    );
+  }
 
   final RouteReviewWarningKind kind;
   final String? rawKindDiscriminator;
@@ -131,11 +138,19 @@ class RouteReviewStep extends Equatable {
     if (sequence < 0) {
       throw ArgumentError.value(sequence, 'sequence', 'Must not be negative');
     }
-    if (stageId.trim().isEmpty) {
-      throw ArgumentError.value(stageId, 'stageId', 'Must not be empty');
-    }
+    UnifiedSwapModelLimits.requireString(stageId, 'stageId');
+    UnifiedSwapModelLimits.requireRawDiscriminator(
+      rawKindDiscriminator,
+      'rawKindDiscriminator',
+      isUnknown: kind == RouteReviewStepKind.unknown,
+    );
     if (BigInt.parse(minimumReceive) > BigInt.parse(expectedReceive)) {
       throw ArgumentError('minimumReceive must not exceed expectedReceive');
+    }
+    if (!source.hasBoundedIdentity || !destination.hasBoundedIdentity) {
+      throw ArgumentError(
+        'Review step asset identity exceeds supported bounds',
+      );
     }
   }
 
@@ -151,10 +166,11 @@ class RouteReviewStep extends Equatable {
 
   bool get isExecutable =>
       kind != RouteReviewStepKind.unknown &&
-      source.chainFamily != UnifiedSwapChainFamily.unknown &&
-      source.kind != UnifiedSwapAssetKind.unknown &&
-      destination.chainFamily != UnifiedSwapChainFamily.unknown &&
-      destination.kind != UnifiedSwapAssetKind.unknown;
+      source.hasKnownBoundedIdentity &&
+      destination.hasKnownBoundedIdentity &&
+      _isPositiveAmount(sourceAmount) &&
+      _isPositiveAmount(expectedReceive) &&
+      _isPositiveAmount(minimumReceive);
 
   @override
   List<Object?> get props => [
@@ -179,11 +195,14 @@ class RouteApprovalScope extends Equatable {
     required String exactAmount,
     required this.resetRequired,
   }) : exactAmount = _smallestUnitAmount(exactAmount) {
-    if (stageId.trim().isEmpty || spender.trim().isEmpty) {
-      if (stageId.trim().isEmpty) {
-        throw ArgumentError.value(stageId, 'stageId', 'Must not be empty');
-      }
-      throw ArgumentError.value(spender, 'spender', 'Must not be empty');
+    UnifiedSwapModelLimits.requireString(stageId, 'stageId');
+    UnifiedSwapModelLimits.requireString(
+      spender,
+      'spender',
+      maximumLength: UnifiedSwapModelLimits.addressLength,
+    );
+    if (!token.hasBoundedIdentity) {
+      throw ArgumentError('Approval token identity exceeds supported bounds');
     }
   }
 
@@ -193,13 +212,56 @@ class RouteApprovalScope extends Equatable {
   final String exactAmount;
   final bool resetRequired;
 
+  bool get isExecutable =>
+      _hasKnownAssetIdentity(token) &&
+      _isExecutableAddress(token, spender) &&
+      _isPositiveAmount(exactAmount);
+
   @override
   List<Object?> get props => [
     stageId,
     ..._identityProps(token),
-    spender,
+    _addressIdentity(token, spender),
     exactAmount,
     resetRequired,
+  ];
+}
+
+@immutable
+class RouteSufficientAllowanceScope extends Equatable {
+  RouteSufficientAllowanceScope({
+    required this.stageId,
+    required this.token,
+    required this.spender,
+    required String requiredAmount,
+  }) : requiredAmount = _smallestUnitAmount(requiredAmount) {
+    UnifiedSwapModelLimits.requireString(stageId, 'stageId');
+    UnifiedSwapModelLimits.requireString(
+      spender,
+      'spender',
+      maximumLength: UnifiedSwapModelLimits.addressLength,
+    );
+    if (!token.hasBoundedIdentity) {
+      throw ArgumentError('Allowance token identity exceeds supported bounds');
+    }
+  }
+
+  final String stageId;
+  final UnifiedSwapAssetIdentity token;
+  final String spender;
+  final String requiredAmount;
+
+  bool get isExecutable =>
+      _hasKnownAssetIdentity(token) &&
+      _isExecutableAddress(token, spender) &&
+      _isPositiveAmount(requiredAmount);
+
+  @override
+  List<Object?> get props => [
+    stageId,
+    ..._identityProps(token),
+    _addressIdentity(token, spender),
+    requiredAmount,
   ];
 }
 
@@ -222,9 +284,11 @@ class RouteExecutionReview extends Equatable {
     required this.resolvedSourceAddress,
     required this.recipient,
     required this.estimatedDuration,
+    this.estimatedDurationKnown = true,
     required List<RouteReviewStep> steps,
     required List<RouteReviewWarning> warnings,
     required List<RouteApprovalScope> approvals,
+    List<RouteSufficientAllowanceScope> sufficientAllowances = const [],
     required DateTime expiresAt,
     this.sourceSelectorKind = UnifiedSwapSourceSelectorKind.active,
     this.externalRecipientConfirmed = false,
@@ -240,18 +304,59 @@ class RouteExecutionReview extends Equatable {
        ),
        warnings = List.unmodifiable(warnings),
        approvals = List.unmodifiable(approvals),
+       sufficientAllowances = List.unmodifiable(sufficientAllowances),
        expiresAt = expiresAt.toUtc() {
-    if (walletId.trim().isEmpty ||
-        routeExecutionId.trim().isEmpty ||
-        reviewId.trim().isEmpty ||
-        consentDigest.trim().isEmpty ||
-        candidateDigest.trim().isEmpty ||
-        resolvedSourceAddress.trim().isEmpty ||
-        recipient.trim().isEmpty) {
-      throw ArgumentError(
-        'Review identity and address fields must not be empty',
-      );
+    UnifiedSwapModelLimits.requireString(walletId, 'walletId');
+    UnifiedSwapModelLimits.requireString(routeExecutionId, 'routeExecutionId');
+    UnifiedSwapModelLimits.requireString(reviewId, 'reviewId');
+    UnifiedSwapModelLimits.requireString(
+      consentDigest,
+      'consentDigest',
+      maximumLength: UnifiedSwapModelLimits.digestLength,
+    );
+    UnifiedSwapModelLimits.requireString(
+      candidateDigest,
+      'candidateDigest',
+      maximumLength: UnifiedSwapModelLimits.digestLength,
+    );
+    UnifiedSwapModelLimits.requireString(
+      resolvedSourceAddress,
+      'resolvedSourceAddress',
+      maximumLength: UnifiedSwapModelLimits.addressLength,
+    );
+    UnifiedSwapModelLimits.requireString(
+      recipient,
+      'recipient',
+      maximumLength: UnifiedSwapModelLimits.addressLength,
+    );
+    if (!source.hasBoundedIdentity || !destination.hasBoundedIdentity) {
+      throw ArgumentError('Review asset identity exceeds supported bounds');
     }
+    UnifiedSwapModelLimits.requireListLength(fees.length, 'fees');
+    UnifiedSwapModelLimits.requireListLength(
+      nonNetworkFeeLimits.length,
+      'nonNetworkFeeLimits',
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      networkFeeCaps.length,
+      'networkFeeCaps',
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      steps.length,
+      'steps',
+      maximumLength: UnifiedSwapModelLimits.routeStages,
+    );
+    UnifiedSwapModelLimits.requireListLength(warnings.length, 'warnings');
+    UnifiedSwapModelLimits.requireListLength(
+      approvals.length,
+      'approvals',
+      maximumLength: UnifiedSwapModelLimits.routeStages,
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      sufficientAllowances.length,
+      'sufficientAllowances',
+      maximumLength: UnifiedSwapModelLimits.routeStages,
+    );
     if (BigInt.parse(minimumReceive) > BigInt.parse(expectedReceive)) {
       throw ArgumentError('minimumReceive must not exceed expectedReceive');
     }
@@ -261,6 +366,52 @@ class RouteExecutionReview extends Equatable {
         'estimatedDuration',
         'Must not be negative',
       );
+    }
+    final permissionStageIds = [
+      ...this.approvals.map((approval) => approval.stageId),
+      ...this.sufficientAllowances.map((allowance) => allowance.stageId),
+    ];
+    if (permissionStageIds.toSet().length != permissionStageIds.length) {
+      throw ArgumentError(
+        'A route stage must not expose conflicting permission states',
+      );
+    }
+    final stepIds = this.steps.map((step) => step.stageId).toList();
+    final networkCapStageIds = this.networkFeeCaps
+        .map((cap) => cap.stageId)
+        .toList();
+    if (stepIds.toSet().length != stepIds.length ||
+        this.steps.indexed.any((entry) => entry.$1 != entry.$2.sequence) ||
+        permissionStageIds.any((stageId) => !stepIds.contains(stageId)) ||
+        networkCapStageIds.toSet().length != networkCapStageIds.length ||
+        networkCapStageIds.any((stageId) => !stepIds.contains(stageId)) ||
+        this.nonNetworkFeeLimits.any(
+          (limit) => limit.stageId == null || !stepIds.contains(limit.stageId),
+        )) {
+      throw ArgumentError(
+        'Review stages must be ordered, unique, and own every limit',
+      );
+    }
+    if (this.steps.isNotEmpty) {
+      final first = this.steps.first;
+      final last = this.steps.last;
+      if (first.source != source ||
+          first.sourceAmount != this.sourceAmount ||
+          last.destination != destination ||
+          last.expectedReceive != this.expectedReceive ||
+          last.minimumReceive != this.minimumReceive ||
+          this.steps.indexed.skip(1).any((entry) {
+            final previous = this.steps[entry.$1 - 1];
+            final current = entry.$2;
+            final currentSourceAmount = BigInt.parse(current.sourceAmount);
+            return current.source != previous.destination ||
+                currentSourceAmount < BigInt.parse(previous.minimumReceive) ||
+                currentSourceAmount > BigInt.parse(previous.expectedReceive);
+          })) {
+        throw ArgumentError(
+          'Review stages must preserve exact route and amount continuity',
+        );
+      }
     }
   }
 
@@ -280,9 +431,11 @@ class RouteExecutionReview extends Equatable {
   final String resolvedSourceAddress;
   final String recipient;
   final Duration estimatedDuration;
+  final bool estimatedDurationKnown;
   final List<RouteReviewStep> steps;
   final List<RouteReviewWarning> warnings;
   final List<RouteApprovalScope> approvals;
+  final List<RouteSufficientAllowanceScope> sufficientAllowances;
   final DateTime expiresAt;
   final UnifiedSwapSourceSelectorKind sourceSelectorKind;
   final bool externalRecipientConfirmed;
@@ -292,6 +445,11 @@ class RouteExecutionReview extends Equatable {
   bool get isExecutable =>
       _hasKnownAssetIdentity(source) &&
       _hasKnownAssetIdentity(destination) &&
+      _isPositiveAmount(sourceAmount) &&
+      _isPositiveAmount(expectedReceive) &&
+      _isPositiveAmount(minimumReceive) &&
+      _isExecutableAddress(source, resolvedSourceAddress) &&
+      _isExecutableAddress(destination, recipient) &&
       steps.isNotEmpty &&
       steps.every((step) => step.isExecutable) &&
       warnings.every((warning) => warning.isKnown) &&
@@ -306,7 +464,8 @@ class RouteExecutionReview extends Equatable {
             _hasKnownAssetIdentity(limit.asset),
       ) &&
       networkFeeCaps.every((cap) => _hasKnownAssetIdentity(cap.asset)) &&
-      approvals.every((approval) => _hasKnownAssetIdentity(approval.token)) &&
+      approvals.every((approval) => approval.isExecutable) &&
+      sufficientAllowances.every((allowance) => allowance.isExecutable) &&
       sourceSelectorKind != UnifiedSwapSourceSelectorKind.unknown;
 
   @override
@@ -324,12 +483,14 @@ class RouteExecutionReview extends Equatable {
     fees,
     nonNetworkFeeLimits,
     networkFeeCaps,
-    resolvedSourceAddress,
-    recipient,
+    _addressIdentity(source, resolvedSourceAddress),
+    _addressIdentity(destination, recipient),
     estimatedDuration,
+    estimatedDurationKnown,
     steps,
     warnings,
     approvals,
+    sufficientAllowances,
     expiresAt,
     sourceSelectorKind,
     externalRecipientConfirmed,
@@ -349,8 +510,37 @@ class RoutePendingAction extends Equatable {
        rawAllowedActionDiscriminators = List.unmodifiable(
          rawAllowedActionDiscriminators,
        ) {
-    if (actionId.trim().isEmpty) {
-      throw ArgumentError.value(actionId, 'actionId', 'Must not be empty');
+    UnifiedSwapModelLimits.requireString(actionId, 'actionId');
+    UnifiedSwapModelLimits.requireListLength(
+      allowedActions.length,
+      'allowedActions',
+      maximumLength: RouteExecutionActionKind.values.length,
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      rawAllowedActionDiscriminators.length,
+      'rawAllowedActionDiscriminators',
+      maximumLength: RouteExecutionActionKind.values.length,
+    );
+    if (allowedActions.toSet().length != allowedActions.length) {
+      throw ArgumentError('Allowed actions must not contain duplicates');
+    }
+    UnifiedSwapModelLimits.requireRawDiscriminator(
+      rawReasonDiscriminator,
+      'rawReasonDiscriminator',
+      isUnknown: reason == RoutePendingActionReason.unknown,
+    );
+    for (final discriminator in rawAllowedActionDiscriminators) {
+      UnifiedSwapModelLimits.requireString(
+        discriminator,
+        'rawAllowedActionDiscriminators',
+        maximumLength: UnifiedSwapModelLimits.discriminatorLength,
+      );
+    }
+    if (rawAllowedActionDiscriminators.toSet().length !=
+        rawAllowedActionDiscriminators.length) {
+      throw ArgumentError(
+        'Raw allowed-action discriminators must not contain duplicates',
+      );
     }
   }
 
@@ -403,11 +593,32 @@ class RouteReplacementProposal extends Equatable {
        minimumReceive = _smallestUnitAmount(minimumReceive),
        fees = List.unmodifiable(fees),
        expiresAt = expiresAt.toUtc() {
-    if (proposalDigest.trim().isEmpty || stageId.trim().isEmpty) {
-      throw ArgumentError('Replacement identity must not be empty');
+    UnifiedSwapModelLimits.requireString(
+      proposalDigest,
+      'proposalDigest',
+      maximumLength: UnifiedSwapModelLimits.digestLength,
+    );
+    UnifiedSwapModelLimits.requireString(stageId, 'stageId');
+    UnifiedSwapModelLimits.requireOptionalString(
+      providerStepDigest,
+      'providerStepDigest',
+      maximumLength: UnifiedSwapModelLimits.digestLength,
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      changedFields.length,
+      'changedFields',
+      maximumLength: UnifiedSwapModelLimits.changedFields,
+    );
+    UnifiedSwapModelLimits.requireListLength(fees.length, 'fees');
+    for (final field in changedFields) {
+      UnifiedSwapModelLimits.requireString(
+        field,
+        'changedFields',
+        maximumLength: UnifiedSwapModelLimits.discriminatorLength,
+      );
     }
-    if (providerStepDigest != null && providerStepDigest!.trim().isEmpty) {
-      throw ArgumentError.value(providerStepDigest, 'providerStepDigest');
+    if (changedFields.toSet().length != changedFields.length) {
+      throw ArgumentError('Changed fields must not contain duplicates');
     }
     if (BigInt.parse(minimumReceive) > BigInt.parse(expectedReceive)) {
       throw ArgumentError('minimumReceive must not exceed expectedReceive');
@@ -435,6 +646,8 @@ class RouteReplacementProposal extends Equatable {
       changedFields.isNotEmpty &&
       changedFields.toSet().length == changedFields.length &&
       changedFields.every(knownChangedFields.contains) &&
+      _isPositiveAmount(expectedReceive) &&
+      _isPositiveAmount(minimumReceive) &&
       fees.every(
         (fee) =>
             fee.kind != RouteFeeKind.unknown &&
@@ -461,7 +674,11 @@ class RouteReplacementProposal extends Equatable {
 @immutable
 class RouteReplacementNetworkFee extends Equatable {
   RouteReplacementNetworkFee({required this.asset, required String amount})
-    : amount = _smallestUnitAmount(amount);
+    : amount = _smallestUnitAmount(amount) {
+    if (!asset.hasBoundedIdentity) {
+      throw ArgumentError('Replacement fee asset exceeds supported bounds');
+    }
+  }
 
   final UnifiedSwapAssetIdentity asset;
   final String amount;
@@ -486,19 +703,65 @@ class RouteExecutionProgress extends Equatable {
     required this.holding,
     required List<String> transactionHashes,
     required DateTime updatedAt,
+    List<RouteReviewStep> stages = const [],
+    List<RouteStageHistoryEntry> stageResults = const [],
+    this.approvalRecovery,
     this.rawOutcomeDiscriminator,
     this.rawPhaseDiscriminator,
   }) : transactionHashes = List.unmodifiable(transactionHashes),
+       stages = List.unmodifiable(
+         [...stages]
+           ..sort((left, right) => left.sequence.compareTo(right.sequence)),
+       ),
+       stageResults = List.unmodifiable(
+         [...stageResults]
+           ..sort((left, right) => left.sequence.compareTo(right.sequence)),
+       ),
        updatedAt = updatedAt.toUtc() {
-    if (routeExecutionId.trim().isEmpty) {
-      throw ArgumentError.value(
-        routeExecutionId,
-        'routeExecutionId',
-        'Must not be empty',
-      );
-    }
-    if (stateRevision < 0 || stageIndex < 0 || stageCount < 0) {
+    UnifiedSwapModelLimits.requireString(routeExecutionId, 'routeExecutionId');
+    if (stateRevision < 0 ||
+        stageIndex < 0 ||
+        stageCount < 0 ||
+        stageIndex > stageCount ||
+        stageCount > UnifiedSwapModelLimits.routeStages) {
       throw ArgumentError('Progress indexes and revision must not be negative');
+    }
+    _validateTransactionHashes(transactionHashes, 'transactionHashes');
+    UnifiedSwapModelLimits.requireListLength(
+      stages.length,
+      'stages',
+      maximumLength: UnifiedSwapModelLimits.routeStages,
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      stageResults.length,
+      'stageResults',
+      maximumLength: UnifiedSwapModelLimits.routeStages,
+    );
+    UnifiedSwapModelLimits.requireRawDiscriminator(
+      rawOutcomeDiscriminator,
+      'rawOutcomeDiscriminator',
+      isUnknown: outcome == RouteExecutionOutcome.unknown,
+    );
+    UnifiedSwapModelLimits.requireRawDiscriminator(
+      rawPhaseDiscriminator,
+      'rawPhaseDiscriminator',
+      isUnknown: phase == RouteExecutionPhase.unknown,
+    );
+    if (this.stages.isNotEmpty &&
+        (this.stages.length != stageCount ||
+            this.stages.indexed.any(
+              (entry) => entry.$1 != entry.$2.sequence,
+            ))) {
+      throw ArgumentError('Planned stages must exactly match the route order');
+    }
+    final resultSequences = this.stageResults
+        .map((result) => result.sequence)
+        .toSet();
+    final resultIds = this.stageResults.map((result) => result.stageId).toSet();
+    if (this.stageResults.any((result) => result.sequence >= stageCount) ||
+        resultSequences.length != this.stageResults.length ||
+        resultIds.length != this.stageResults.length) {
+      throw ArgumentError('Stage results must map uniquely into the route');
     }
   }
 
@@ -512,6 +775,9 @@ class RouteExecutionProgress extends Equatable {
   final RoutePendingAction? pendingAction;
   final RouteHolding? holding;
   final List<String> transactionHashes;
+  final List<RouteReviewStep> stages;
+  final List<RouteStageHistoryEntry> stageResults;
+  final RouteApprovalRecovery? approvalRecovery;
   final DateTime updatedAt;
   final String? rawOutcomeDiscriminator;
   final String? rawPhaseDiscriminator;
@@ -519,7 +785,31 @@ class RouteExecutionProgress extends Equatable {
   bool get isExecutable =>
       outcome != RouteExecutionOutcome.unknown &&
       phase != RouteExecutionPhase.unknown &&
-      (pendingAction?.isExecutable ?? true);
+      _outcomeMatchesPhase(outcome, phase) &&
+      (!_isTerminalOutcome(outcome) ||
+          (!controls.canCancel &&
+              !controls.canStopAfterCurrent &&
+              pendingAction == null)) &&
+      (pendingAction == null ||
+          outcome == RouteExecutionOutcome.attentionRequired ||
+          outcome == RouteExecutionOutcome.recovery) &&
+      (pendingAction?.isExecutable ?? true) &&
+      (holding?.isExecutable ?? true) &&
+      stages.every((stage) => stage.isExecutable) &&
+      stageResults.every(
+        (result) =>
+            result.phase != RouteStagePhase.unknown &&
+            result.evidence.every(
+              (evidence) => evidence.kind != RouteEvidenceKind.unknown,
+            ) &&
+            (stages.isEmpty ||
+                stages.any(
+                  (stage) =>
+                      stage.sequence == result.sequence &&
+                      stage.stageId == result.stageId,
+                )),
+      ) &&
+      (approvalRecovery?.isExecutable ?? true);
 
   RouteLiveAnnouncement get announcement {
     if (!isExecutable) return RouteLiveAnnouncement.statusUnavailable;
@@ -578,6 +868,9 @@ class RouteExecutionProgress extends Equatable {
     pendingAction,
     holding,
     transactionHashes,
+    stages,
+    stageResults,
+    approvalRecovery,
     updatedAt,
     rawOutcomeDiscriminator,
     rawPhaseDiscriminator,
@@ -586,10 +879,13 @@ class RouteExecutionProgress extends Equatable {
 
 @immutable
 class RouteExecutionSession extends Equatable {
-  const RouteExecutionSession({
+  RouteExecutionSession({
     required this.routeExecutionId,
     required this.taskId,
-  });
+  }) {
+    UnifiedSwapModelLimits.requireString(routeExecutionId, 'routeExecutionId');
+    if (taskId < 0) throw RangeError.value(taskId, 'taskId');
+  }
 
   final String routeExecutionId;
   final int taskId;
@@ -600,13 +896,35 @@ class RouteExecutionSession extends Equatable {
 
 @immutable
 class RouteExecutionDecision extends Equatable {
-  const RouteExecutionDecision({
+  RouteExecutionDecision({
     required this.kind,
     required this.actionId,
     required this.expectedStateRevision,
     this.recoveryReviewId,
     this.replacementProposalDigest,
-  });
+  }) {
+    UnifiedSwapModelLimits.requireString(actionId, 'actionId');
+    UnifiedSwapModelLimits.requireOptionalString(
+      recoveryReviewId,
+      'recoveryReviewId',
+    );
+    UnifiedSwapModelLimits.requireOptionalString(
+      replacementProposalDigest,
+      'replacementProposalDigest',
+      maximumLength: UnifiedSwapModelLimits.digestLength,
+    );
+    if (expectedStateRevision < 0) {
+      throw RangeError.value(expectedStateRevision, 'expectedStateRevision');
+    }
+    final hasRecovery = recoveryReviewId != null;
+    final hasReplacement = replacementProposalDigest != null;
+    if ((kind == RouteExecutionActionKind.selectRecoveryRoute) != hasRecovery ||
+        (kind == RouteExecutionActionKind.acceptReplacement) !=
+            hasReplacement ||
+        (hasRecovery && hasReplacement)) {
+      throw ArgumentError('Decision authority does not match its action kind');
+    }
+  }
 
   final RouteExecutionActionKind kind;
   final String actionId;
@@ -635,7 +953,8 @@ class RouteActionAcknowledgement extends Equatable {
 }
 
 String _smallestUnitAmount(String value) {
-  if (!RegExp(r'^(?:0|[1-9][0-9]*)$').hasMatch(value)) {
+  if (value.length > UnifiedSwapModelLimits.amountDigits ||
+      !RegExp(r'^(?:0|[1-9][0-9]*)$').hasMatch(value)) {
     throw ArgumentError.value(
       value,
       'amount',
@@ -645,9 +964,41 @@ String _smallestUnitAmount(String value) {
   return value;
 }
 
+String _addressIdentity(UnifiedSwapAssetIdentity asset, String address) =>
+    asset.chainFamily == UnifiedSwapChainFamily.evm &&
+        RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(address)
+    ? address.toLowerCase()
+    : address;
+
 bool _hasKnownAssetIdentity(UnifiedSwapAssetIdentity asset) =>
-    asset.chainFamily != UnifiedSwapChainFamily.unknown &&
-    asset.kind != UnifiedSwapAssetKind.unknown;
+    asset.hasKnownBoundedIdentity;
+
+bool _isPositiveAmount(String amount) => BigInt.parse(amount) > BigInt.zero;
+
+bool _isExecutableAddress(UnifiedSwapAssetIdentity asset, String address) =>
+    asset.chainFamily != UnifiedSwapChainFamily.evm ||
+    RegExp(r'^0x[0-9a-fA-F]{40}$').hasMatch(address);
+
+bool _isTerminalOutcome(RouteExecutionOutcome outcome) =>
+    outcome == RouteExecutionOutcome.completed ||
+    outcome == RouteExecutionOutcome.cancelled ||
+    outcome == RouteExecutionOutcome.failed;
+
+bool _outcomeMatchesPhase(
+  RouteExecutionOutcome outcome,
+  RouteExecutionPhase phase,
+) => switch (outcome) {
+  RouteExecutionOutcome.completed => phase == RouteExecutionPhase.completed,
+  RouteExecutionOutcome.cancelled => phase == RouteExecutionPhase.cancelled,
+  RouteExecutionOutcome.failed => phase == RouteExecutionPhase.failed,
+  RouteExecutionOutcome.active ||
+  RouteExecutionOutcome.attentionRequired ||
+  RouteExecutionOutcome.recovery =>
+    phase != RouteExecutionPhase.completed &&
+        phase != RouteExecutionPhase.cancelled &&
+        phase != RouteExecutionPhase.failed,
+  RouteExecutionOutcome.unknown => false,
+};
 
 List<Object?> _identityProps(UnifiedSwapAssetIdentity identity) => [
   identity.ticker,
@@ -655,7 +1006,21 @@ List<Object?> _identityProps(UnifiedSwapAssetIdentity identity) => [
   identity.chainId,
   identity.kind,
   identity.decimals,
-  identity.contractAddress?.toLowerCase(),
+  identity.contractIdentity,
   identity.rawChainFamilyDiscriminator,
   identity.rawKindDiscriminator,
 ];
+
+void _validateTransactionHashes(List<String> hashes, String name) {
+  UnifiedSwapModelLimits.requireListLength(
+    hashes.length,
+    name,
+    maximumLength: UnifiedSwapModelLimits.nestedItems,
+  );
+  for (final hash in hashes) {
+    UnifiedSwapModelLimits.requireString(hash, name);
+  }
+  if (hashes.toSet().length != hashes.length) {
+    throw ArgumentError('$name must not contain duplicates');
+  }
+}

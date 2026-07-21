@@ -17,12 +17,12 @@ import 'swap_history_sort_mixin.dart';
 
 class HistoryList extends StatefulWidget {
   const HistoryList({
-    Key? key,
+    super.key,
     this.filter,
     required this.onItemClick,
     this.entitiesFilterData,
     this.onFilterChange,
-  }) : super(key: key);
+  });
 
   final bool Function(Swap)? filter;
   final Function(Swap) onItemClick;
@@ -47,7 +47,7 @@ class _HistoryListState extends State<HistoryList>
 
   List<Swap> _unprocessedSwaps = [];
 
-  String? error;
+  bool _hasError = false;
   bool _hasReceivedData = false;
   @override
   void initState() {
@@ -58,7 +58,7 @@ class _HistoryListState extends State<HistoryList>
 
   @override
   Widget build(BuildContext context) {
-    if (error != null) {
+    if (_hasError) {
       return const DexErrorMessage();
     }
 
@@ -97,7 +97,9 @@ class _HistoryListState extends State<HistoryList>
                       final Swap swap = _processedSwaps[index];
 
                       return HistoryItem(
-                        key: Key('swap-item-${swap.uuid}'),
+                        key: ValueKey<int>(
+                          Object.hash('advanced-swap-item', swap.uuid),
+                        ),
                         swap,
                         onClick: () => widget.onItemClick(swap),
                       );
@@ -135,8 +137,9 @@ class _HistoryListState extends State<HistoryList>
         })
         .listen(
           _processSwapFilters,
-          onError: (e) {
-            setState(() => error = e.toString());
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _hasError = true);
           },
           cancelOnError: false,
         );
@@ -156,7 +159,7 @@ class _HistoryListState extends State<HistoryList>
         : completedSwaps.toList();
 
     setState(() {
-      error = null;
+      _hasError = false;
       _hasReceivedData = true;
       _processedSwaps = sortSwaps(context, filteredSwaps, sortData: _sortData);
     });

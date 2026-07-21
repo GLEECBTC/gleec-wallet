@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:app_theme/app_theme.dart';
 import 'package:bloc/bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:komodo_defi_framework/komodo_defi_framework.dart';
 import 'package:web_dex/bloc/settings/settings_event.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/common/screen.dart';
+import 'package:web_dex/model/settings/market_maker_bot_settings.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/platform/platform.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -13,7 +17,6 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   SettingsBloc(StoredSettings stored, SettingsRepository repository)
     : _settingsRepo = repository,
       super(SettingsState.fromStored(stored)) {
-    _storedSettings = stored;
     theme.mode = state.themeMode;
 
     // Initialize diagnostic logging with the stored setting
@@ -21,17 +24,59 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     KdfApiClient.enableDebugLogging = stored.diagnosticLoggingEnabled;
     KomodoDefiFramework.enableDebugLogging = stored.diagnosticLoggingEnabled;
 
-    on<ThemeModeChanged>(_onThemeModeChanged);
-    on<MarketMakerBotSettingsChanged>(_onMarketMakerBotSettingsChanged);
-    on<TestCoinsEnabledChanged>(_onTestCoinsEnabledChanged);
-    on<WeakPasswordsAllowedChanged>(_onWeakPasswordsAllowedChanged);
-    on<HideZeroBalanceAssetsChanged>(_onHideZeroBalanceAssetsChanged);
-    on<DiagnosticLoggingChanged>(_onDiagnosticLoggingChanged);
-    on<HideBalancesChanged>(_onHideBalancesChanged);
+    on<SettingsEvent>(_onEvent, transformer: sequential());
+    _settingsSubscription = _settingsRepo.watchSettings().listen((settings) {
+      if (!isClosed) add(SettingsSnapshotChanged(settings));
+    });
   }
 
-  late StoredSettings _storedSettings;
   final SettingsRepository _settingsRepo;
+  StreamSubscription<StoredSettings>? _settingsSubscription;
+
+  Future<void> updateMarketMakerBotSettingsAndWait(
+    MarketMakerBotSettings Function(MarketMakerBotSettings current) transform, {
+    Future<void> Function()? beforeWrite,
+  }) {
+    final completion = Completer<void>();
+    add(
+      MarketMakerBotSettingsChanged(
+        transform,
+        completion: completion,
+        beforeWrite: beforeWrite,
+      ),
+    );
+    return completion.future;
+  }
+
+  Future<void> _onEvent(
+    SettingsEvent event,
+    Emitter<SettingsState> emitter,
+  ) async {
+    switch (event) {
+      case SettingsSnapshotChanged():
+        emitter(SettingsState.fromStored(event.settings));
+      case ThemeModeChanged():
+        await _onThemeModeChanged(event, emitter);
+      case MarketMakerBotSettingsChanged():
+        await _onMarketMakerBotSettingsChanged(event, emitter);
+      case TestCoinsEnabledChanged():
+        await _onTestCoinsEnabledChanged(event, emitter);
+      case WeakPasswordsAllowedChanged():
+        await _onWeakPasswordsAllowedChanged(event, emitter);
+      case HideZeroBalanceAssetsChanged():
+        await _onHideZeroBalanceAssetsChanged(event, emitter);
+      case DiagnosticLoggingChanged():
+        await _onDiagnosticLoggingChanged(event, emitter);
+      case HideBalancesChanged():
+        await _onHideBalancesChanged(event, emitter);
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    await _settingsSubscription?.cancel();
+    return super.close();
+  }
 
   Future<void> _onThemeModeChanged(
     ThemeModeChanged event,
@@ -40,8 +85,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     if (materialPageContext == null) return;
     final newMode = event.mode;
     theme.mode = newMode;
-    _storedSettings = _storedSettings.copyWith(mode: newMode);
-    await _settingsRepo.updateSettings(_storedSettings);
+    await _settingsRepo.updateSettingsWith(
+      (current) => current.copyWith(mode: newMode),
+    );
     changeHtmlTheme(newMode.index);
     emitter(state.copyWith(mode: newMode));
 
@@ -52,21 +98,38 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     MarketMakerBotSettingsChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(
-      marketMakerBotSettings: event.settings,
-    );
-    await _settingsRepo.updateSettings(_storedSettings);
-    emitter(state.copyWith(marketMakerBotSettings: event.settings));
+    try {
+      final updated = await _settingsRepo.updateSettingsWith(
+        (current) => current.copyWith(
+          marketMakerBotSettings: event.transform(
+            current.marketMakerBotSettings,
+          ),
+        ),
+        beforeWrite: event.beforeWrite,
+      );
+      final nextSettings = updated.marketMakerBotSettings;
+      emitter(state.copyWith(marketMakerBotSettings: nextSettings));
+      if (event.completion case final completion?
+          when !completion.isCompleted) {
+        completion.complete();
+      }
+    } catch (error, stackTrace) {
+      final completion = event.completion;
+      if (completion != null && !completion.isCompleted) {
+        completion.completeError(error, stackTrace);
+        return;
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   Future<void> _onTestCoinsEnabledChanged(
     TestCoinsEnabledChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(
-      testCoinsEnabled: event.testCoinsEnabled,
+    await _settingsRepo.updateSettingsWith(
+      (current) => current.copyWith(testCoinsEnabled: event.testCoinsEnabled),
     );
-    await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(testCoinsEnabled: event.testCoinsEnabled));
   }
 
@@ -74,10 +137,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     WeakPasswordsAllowedChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(
-      weakPasswordsAllowed: event.weakPasswordsAllowed,
+    await _settingsRepo.updateSettingsWith(
+      (current) =>
+          current.copyWith(weakPasswordsAllowed: event.weakPasswordsAllowed),
     );
-    await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(weakPasswordsAllowed: event.weakPasswordsAllowed));
   }
 
@@ -85,10 +148,10 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     HideZeroBalanceAssetsChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(
-      hideZeroBalanceAssets: event.hideZeroBalanceAssets,
+    await _settingsRepo.updateSettingsWith(
+      (current) =>
+          current.copyWith(hideZeroBalanceAssets: event.hideZeroBalanceAssets),
     );
-    await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(hideZeroBalanceAssets: event.hideZeroBalanceAssets));
   }
 
@@ -101,10 +164,11 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     KdfApiClient.enableDebugLogging = event.diagnosticLoggingEnabled;
     KomodoDefiFramework.enableDebugLogging = event.diagnosticLoggingEnabled;
 
-    _storedSettings = _storedSettings.copyWith(
-      diagnosticLoggingEnabled: event.diagnosticLoggingEnabled,
+    await _settingsRepo.updateSettingsWith(
+      (current) => current.copyWith(
+        diagnosticLoggingEnabled: event.diagnosticLoggingEnabled,
+      ),
     );
-    await _settingsRepo.updateSettings(_storedSettings);
     emitter(
       state.copyWith(diagnosticLoggingEnabled: event.diagnosticLoggingEnabled),
     );
@@ -114,10 +178,9 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     HideBalancesChanged event,
     Emitter<SettingsState> emitter,
   ) async {
-    _storedSettings = _storedSettings.copyWith(
-      hideBalances: event.hideBalances,
+    await _settingsRepo.updateSettingsWith(
+      (current) => current.copyWith(hideBalances: event.hideBalances),
     );
-    await _settingsRepo.updateSettings(_storedSettings);
     emitter(state.copyWith(hideBalances: event.hideBalances));
   }
 }

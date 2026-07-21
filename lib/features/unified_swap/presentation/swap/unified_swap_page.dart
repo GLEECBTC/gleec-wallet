@@ -16,6 +16,8 @@ import 'package:web_dex/features/unified_swap/presentation/swap/route_review_vie
 import 'package:web_dex/features/unified_swap/presentation/swap/swap_entry_view.dart';
 import 'package:web_dex/features/unified_swap/presentation/swap/swap_widgets.dart';
 import 'package:web_dex/features/unified_swap/presentation/unified_swap_design.dart';
+import 'package:web_dex/features/unified_swap/presentation/unified_swap_sensitive_dialog.dart';
+import 'package:web_dex/router/state/routing_state.dart';
 
 typedef UnifiedSwapReviewBuilder =
     Future<RouteExecutionReview?> Function({
@@ -39,9 +41,12 @@ class UnifiedSwapPage extends StatefulWidget {
     this.executionBloc,
     this.reviewBuilder,
     this.maximumAmountResolver,
+    this.recipientValidator,
     this.selectionGateway,
     this.recoveryReviewSelector,
     this.initialRouteExecutionId,
+    this.initialAmountDraft,
+    this.onViewActivity,
     this.clipboardWriter = defaultSwapClipboardWriter,
     this.announcement = defaultSwapAnnouncement,
     this.manageLifecycle = true,
@@ -54,9 +59,12 @@ class UnifiedSwapPage extends StatefulWidget {
   final RouteExecutionBloc? executionBloc;
   final UnifiedSwapReviewBuilder? reviewBuilder;
   final UnifiedSwapMaximumAmountResolver? maximumAmountResolver;
+  final UnifiedSwapRecipientValidator? recipientValidator;
   final UnifiedSwapSelectionGateway? selectionGateway;
   final UnifiedSwapRecoveryReviewSelector? recoveryReviewSelector;
   final String? initialRouteExecutionId;
+  final String? initialAmountDraft;
+  final ValueChanged<String>? onViewActivity;
   final SwapClipboardWriter clipboardWriter;
   final SwapAnnouncement announcement;
   final bool manageLifecycle;
@@ -77,6 +85,16 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
   int _reviewGeneration = 0;
   UnifiedSwapRecoveryDraft? _recoveryDraft;
   RouteExecutionReview? _recoveryReview;
+  String? _editDismissedReviewId;
+  bool _reviewPickerOpen = false;
+  String? _reviewPickerReviewId;
+  int _reviewPickerRevision = 0;
+  final GlobalKey _entryKey = GlobalKey(
+    debugLabel: 'Unified Swap editable entry',
+  );
+  final FocusNode _reviewOpenerFocusNode = FocusNode(
+    debugLabel: 'Unified Swap Review opener',
+  );
 
   @override
   void initState() {
@@ -93,6 +111,7 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
     if (!identical(_executionBloc, execution)) _reattachRequestedFor = null;
     _executionBloc = execution;
     _requestInitialReattach();
+    _syncBrowserNavigationBlock();
   }
 
   @override
@@ -111,6 +130,7 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
       _reattachRequestedFor = null;
     }
     _requestInitialReattach();
+    _syncBrowserNavigationBlock();
   }
 
   @override
@@ -130,8 +150,20 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
   @override
   void dispose() {
     _reviewGeneration++;
+    _reviewOpenerFocusNode.dispose();
     if (widget.manageLifecycle) WidgetsBinding.instance.removeObserver(this);
+    routingState.isBrowserNavigationBlocked = false;
     super.dispose();
+  }
+
+  void _syncBrowserNavigationBlock() {
+    final status = _executionBloc?.state.status;
+    routingState.isBrowserNavigationBlocked =
+        status != null &&
+        status != RouteExecutionLoadStatus.idle &&
+        status != RouteExecutionLoadStatus.completed &&
+        status != RouteExecutionLoadStatus.cancelled &&
+        status != RouteExecutionLoadStatus.failed;
   }
 
   void _requestInitialReattach() {
@@ -147,6 +179,24 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
     }
     _reattachRequestedFor = routeExecutionId;
     execution.add(RouteExecutionReattachRequested(routeExecutionId));
+  }
+
+  void _submitControl(
+    RouteExecutionBloc expectedBloc,
+    RouteExecutionControlTarget expectedTarget, {
+    required bool stopAfterCurrent,
+  }) {
+    if (!mounted ||
+        expectedBloc.isClosed ||
+        !identical(_executionBloc, expectedBloc) ||
+        expectedBloc.state.controlTarget != expectedTarget) {
+      return;
+    }
+    expectedBloc.add(
+      stopAfterCurrent
+          ? RouteExecutionStopAfterCurrentRequested(expectedTarget)
+          : RouteExecutionCancelRequested(expectedTarget),
+    );
   }
 
   Future<void> _prepareReview(UnifiedSwapQuoteCandidate candidate) async {
@@ -331,7 +381,10 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
       }
       var intent = draft.intent;
       if (!draft.recipientIsWalletOwned) {
-        final confirmed = await _confirmExternalRecipient(recovery: true);
+        final confirmed = await _confirmExternalRecipient(
+          recovery: true,
+          intent: intent,
+        );
         if (!mounted || generation != _reviewGeneration || !confirmed) return;
         intent = intent.copyWith(externalRecipientConfirmed: true);
       }
@@ -348,61 +401,104 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
     }
   }
 
-  Future<void> _onIntentChanged(UnifiedSwapIntent intent) async {
+  Future<bool> _onIntentChanged(
+    UnifiedSwapIntent intent, {
+    VoidCallback? onWillCommit,
+  }) async {
     final quote = _quoteBloc;
-    if (quote == null) return;
+    if (quote == null || !mounted) return false;
+    bool commit(UnifiedSwapIntent next) {
+      if (!mounted) return false;
+      onWillCommit?.call();
+      quote.add(UnifiedSwapIntentChanged(next));
+      return true;
+    }
+
     final previous = quote.state.intent;
     final recipientContextUnchanged =
         previous != null &&
         intent.recipient == previous.recipient &&
         intent.destination.sameIdentity(previous.destination);
-    if (previous == null ||
-        recipientContextUnchanged ||
-        intent.externalRecipientConfirmed) {
-      quote.add(UnifiedSwapIntentChanged(intent));
-      return;
+    if (previous == null || recipientContextUnchanged) {
+      final next = recipientContextUnchanged
+          ? intent.copyWith(
+              externalRecipientConfirmed: previous.externalRecipientConfirmed,
+            )
+          : intent;
+      if (_reviewFailure != null) setState(() => _reviewFailure = null);
+      return commit(next);
+    }
+    if (intent.externalRecipientConfirmed) {
+      if (_reviewFailure != null) setState(() => _reviewFailure = null);
+      return commit(intent);
     }
     final composition = _productionComposition(context);
     if (composition == null) {
-      quote.add(UnifiedSwapIntentChanged(intent));
-      return;
+      setState(() {
+        _reviewFailure = unifiedSwapText(
+          context,
+          'recipient.verificationUnavailable',
+          'The wallet could not verify ownership of this recipient. The swap '
+              'stayed unchanged.',
+        );
+      });
+      return false;
     }
     final generation = ++_reviewGeneration;
-    final owned = await composition.recipientIsWalletOwned(
-      asset: intent.destination,
-      address: intent.recipient,
-    );
+    bool? owned;
+    try {
+      owned = await composition.recipientIsWalletOwned(
+        asset: intent.destination,
+        address: intent.recipient,
+      );
+    } on Object {
+      if (mounted && generation == _reviewGeneration) {
+        setState(() {
+          _reviewFailure = unifiedSwapText(
+            context,
+            'recipient.verificationUnavailable',
+            'The wallet could not verify ownership of this recipient. The '
+                'swap stayed unchanged.',
+          );
+        });
+      }
+      return false;
+    }
     if (!mounted ||
         generation != _reviewGeneration ||
         quote.state.intent?.revision != previous.revision) {
-      return;
+      return false;
     }
     if (owned == null) {
-      quote.add(UnifiedSwapIntentChanged(intent));
-      return;
+      setState(() {
+        _reviewFailure = unifiedSwapText(
+          context,
+          'recipient.verificationUnavailable',
+          'The wallet could not verify ownership of this recipient. The swap '
+              'stayed unchanged.',
+        );
+      });
+      return false;
     }
     if (owned) {
-      quote.add(
-        UnifiedSwapIntentChanged(
-          intent.copyWith(externalRecipientConfirmed: false),
-        ),
-      );
-      return;
+      if (_reviewFailure != null) setState(() => _reviewFailure = null);
+      return commit(intent.copyWith(externalRecipientConfirmed: false));
     }
-    if (await _confirmExternalRecipient(recovery: false) &&
+    if (await _confirmExternalRecipient(recovery: false, intent: intent) &&
         mounted &&
         generation == _reviewGeneration &&
         quote.state.intent?.revision == previous.revision) {
-      quote.add(
-        UnifiedSwapIntentChanged(
-          intent.copyWith(externalRecipientConfirmed: true),
-        ),
-      );
+      if (_reviewFailure != null) setState(() => _reviewFailure = null);
+      return commit(intent.copyWith(externalRecipientConfirmed: true));
     }
+    return false;
   }
 
-  Future<bool> _confirmExternalRecipient({required bool recovery}) async {
-    final result = await showDialog<bool>(
+  Future<bool> _confirmExternalRecipient({
+    required bool recovery,
+    required UnifiedSwapIntent intent,
+  }) async {
+    final result = await showUnifiedSwapSensitiveConfirmation(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
@@ -419,21 +515,94 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
                   'External recipient',
                 ),
         ),
-        content: Text(
-          recovery
-              ? unifiedSwapText(
-                  dialogContext,
-                  'recipient.recoveryBody',
-                  'Recovery will use the original external destination '
-                      'address. Confirm it again before requesting a fresh '
-                      'route.',
-                )
-              : unifiedSwapText(
-                  dialogContext,
-                  'recipient.externalBody',
-                  'This address is not owned by the active wallet. Confirm the '
-                      'destination network and recipient before continuing.',
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  recovery
+                      ? unifiedSwapText(
+                          dialogContext,
+                          'recipient.recoveryBody',
+                          'Recovery will use the original external destination '
+                              'address. Confirm it again before requesting a '
+                              'fresh route.',
+                        )
+                      : unifiedSwapText(
+                          dialogContext,
+                          'recipient.externalBody',
+                          'This address is not owned by the active wallet. '
+                              'Confirm the destination network and recipient '
+                              'before continuing.',
+                        ),
                 ),
+                const SizedBox(height: 16),
+                SwapSectionCard(
+                  title: unifiedSwapText(
+                    dialogContext,
+                    'recipient.youWillReceive',
+                    'You will receive',
+                  ),
+                  icon: Icons.call_received_rounded,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        intent.destination.ticker,
+                        style: UnifiedSwapDesign.typography(
+                          dialogContext,
+                        ).cardTitle,
+                      ),
+                      Text(
+                        unifiedSwapNetworkLabel(
+                          dialogContext,
+                          intent.destination,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SwapCopyableValue(
+                  label: unifiedSwapText(
+                    dialogContext,
+                    'recipient.fullAddress',
+                    'Full receiving address',
+                  ),
+                  value: intent.recipient,
+                  valueKey: 'swap-external-recipient',
+                  clipboardWriter: widget.clipboardWriter,
+                  announcement: widget.announcement,
+                ),
+                const SizedBox(height: 12),
+                UnifiedSwapNotice(
+                  title: unifiedSwapText(
+                    dialogContext,
+                    'recipient.checkExternalTitle',
+                    'Check this external address',
+                  ),
+                  message: unifiedSwapText(
+                    dialogContext,
+                    'recipient.checkExternalBody',
+                    'Make sure you control it and that it supports {asset} on '
+                        '{network}. Completed transfers can’t be reversed.',
+                    namedArgs: {
+                      'asset': intent.destination.ticker,
+                      'network': unifiedSwapNetworkLabel(
+                        dialogContext,
+                        intent.destination,
+                      ),
+                    },
+                  ),
+                  tone: UnifiedSwapNoticeTone.warning,
+                  icon: Icons.location_on_outlined,
+                ),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(
@@ -455,7 +624,7 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
         ],
       ),
     );
-    return result ?? false;
+    return result;
   }
 
   void _acceptRecoveryReview() {
@@ -488,6 +657,69 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
     });
   }
 
+  void _dismissPreparedReview(
+    RouteExecutionReview review, {
+    bool restoreFocus = true,
+  }) {
+    final execution = _executionBloc;
+    if (execution == null ||
+        execution.state.status != RouteExecutionLoadStatus.reviewRequired ||
+        execution.state.review != review) {
+      return;
+    }
+    if (widget.reviewBuilder == null) {
+      _reviewCoordinator(context)?.discardReview(review);
+    }
+    _reviewGeneration++;
+    setState(() {
+      _reviewInFlight = false;
+      _reviewFailure = null;
+    });
+    execution.add(const RouteExecutionReviewDismissed());
+    if (restoreFocus) _restoreReviewOpenerFocus();
+  }
+
+  void _beginPreparedReviewEdit(RouteExecutionReview review) {
+    if (_editDismissedReviewId == review.reviewId) return;
+    final execution = _executionBloc;
+    if (execution == null ||
+        execution.state.status != RouteExecutionLoadStatus.reviewRequired ||
+        execution.state.review != review) {
+      return;
+    }
+    _editDismissedReviewId = review.reviewId;
+    _dismissPreparedReview(review, restoreFocus: false);
+  }
+
+  void _handleReviewPickerPresentation(
+    RouteExecutionReview review,
+    bool visible,
+  ) {
+    final execution = _executionBloc;
+    if (visible) {
+      if (execution?.state.status != RouteExecutionLoadStatus.reviewRequired ||
+          execution?.state.review != review) {
+        return;
+      }
+      _reviewPickerRevision++;
+      if (_reviewPickerOpen && _reviewPickerReviewId == review.reviewId) return;
+      setState(() {
+        _reviewPickerOpen = true;
+        _reviewPickerReviewId = review.reviewId;
+      });
+      return;
+    }
+    final revision = ++_reviewPickerRevision;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || revision != _reviewPickerRevision) return;
+      if (_editDismissedReviewId == review.reviewId) return;
+      setState(() {
+        _reviewPickerOpen = false;
+        _reviewPickerReviewId = null;
+      });
+    });
+  }
+
   void _cancelRecovery() {
     final review = _recoveryReview;
     if (review != null) _reviewCoordinator(context)?.discardReview(review);
@@ -498,6 +730,89 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
       _recoveryDraftInFlight = false;
       _reviewFailure = null;
     });
+    _restoreReviewOpenerFocus();
+  }
+
+  void _restoreReviewOpenerFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _reviewOpenerFocusNode.canRequestFocus) {
+        _reviewOpenerFocusNode.requestFocus();
+      }
+    });
+  }
+
+  Future<void> _requestLeaveExecution(
+    BuildContext pickerContext,
+    RouteExecutionState executionState,
+  ) async {
+    final routeExecutionId = executionState.routeExecutionId;
+    final onViewActivity = widget.onViewActivity;
+    if (routeExecutionId == null || onViewActivity == null) return;
+    if (_isTerminalExecutionStatus(executionState.status)) {
+      onViewActivity(routeExecutionId);
+      return;
+    }
+    await showUnifiedSwapPicker<void>(
+      context: pickerContext,
+      title: unifiedSwapText(
+        pickerContext,
+        'execution.continuesTitle',
+        'Swap continues in Activity',
+      ),
+      subtitle: unifiedSwapText(
+        pickerContext,
+        'execution.continuesSubtitle',
+        'You can leave this screen and return to the exact saved step.',
+      ),
+      builder: (surfaceContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          UnifiedSwapStatusHero(
+            title: unifiedSwapText(
+              surfaceContext,
+              'execution.continuesTitle',
+              'Swap continues in Activity',
+            ),
+            message: unifiedSwapText(
+              surfaceContext,
+              'execution.continuesBody',
+              'Closing progress only stops local observation. It never '
+                  'cancels backend execution.',
+            ),
+            icon: Icons.schedule_rounded,
+            tone: UnifiedSwapNoticeTone.brand,
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            key: const Key('swap-leave-view-activity'),
+            style: UnifiedSwapDesign.primaryButtonStyle(surfaceContext),
+            onPressed: () {
+              completeUnifiedSwapPicker(surfaceContext);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) onViewActivity(routeExecutionId);
+              });
+            },
+            child: Text(
+              unifiedSwapText(
+                surfaceContext,
+                'execution.viewActivity',
+                'View Activity',
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            key: const Key('swap-leave-dismiss'),
+            style: UnifiedSwapDesign.secondaryButtonStyle(surfaceContext),
+            onPressed: () => completeUnifiedSwapPicker(surfaceContext),
+            child: Text(
+              unifiedSwapText(surfaceContext, 'common.dismiss', 'Dismiss'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _announce(RouteLiveAnnouncement announcement) async {
@@ -550,8 +865,9 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
       return BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
         bloc: quote,
         builder: (context, quoteState) => UnifiedSwapEntryView(
+          key: _entryKey,
           state: quoteState,
-          onIntentChanged: (intent) => unawaited(_onIntentChanged(intent)),
+          onIntentChanged: _onIntentChanged,
           onCandidateSelected: (id) =>
               quote.add(UnifiedSwapCandidateSelected(id)),
           onRevalidate: () =>
@@ -565,10 +881,15 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
                 'wallet-scoped execution coordinator.',
           ),
           maximumAmountResolver: widget.maximumAmountResolver,
+          recipientValidator:
+              widget.recipientValidator ??
+              _productionComposition(context)?.validateRecipient,
           selectionGateway:
               widget.selectionGateway ?? _productionComposition(context),
           reviewInFlight: _reviewInFlight,
           reviewFailure: _reviewFailure,
+          reviewFocusNode: _reviewOpenerFocusNode,
+          initialAmountDraft: widget.initialAmountDraft,
           now: widget.now,
         ),
       );
@@ -576,11 +897,31 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
     return BlocListener<RouteExecutionBloc, RouteExecutionState>(
       bloc: execution,
       listenWhen: (previous, current) =>
+          previous.status != current.status ||
           previous.announcement != current.announcement ||
-          previous.walletId != current.walletId,
+          previous.walletId != current.walletId ||
+          previous.freshQuote != current.freshQuote,
       listener: (context, state) {
+        _syncBrowserNavigationBlock();
         _requestInitialReattach();
         unawaited(_announce(state.announcement));
+        final freshQuote = state.freshQuote;
+        if (freshQuote != null) {
+          quote.add(
+            UnifiedSwapFreshEvaluationAdopted(
+              intent: freshQuote.intent,
+              evaluation: freshQuote.evaluation,
+            ),
+          );
+          setState(() {
+            _reviewFailure = unifiedSwapText(
+              context,
+              'review.refresh.structureChanged',
+              'The route changed. Review the fresh options before continuing.',
+            );
+          });
+          _restoreReviewOpenerFocus();
+        }
         final draft = _recoveryDraft;
         if (draft != null && !_recoveryProgressMatches(draft, state.progress)) {
           _cancelRecovery();
@@ -589,6 +930,18 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
       child: BlocBuilder<RouteExecutionBloc, RouteExecutionState>(
         bloc: execution,
         builder: (context, executionState) {
+          if (executionState.status !=
+              RouteExecutionLoadStatus.reviewRequired) {
+            _editDismissedReviewId = null;
+          }
+          if (_reviewPickerOpen &&
+              (executionState.status !=
+                      RouteExecutionLoadStatus.reviewRequired ||
+                  executionState.review?.reviewId != _reviewPickerReviewId)) {
+            _reviewPickerOpen = false;
+            _reviewPickerReviewId = null;
+            _reviewPickerRevision++;
+          }
           if (_recoveryDraft case final draft?) {
             return _recoveryBody(
               quote: quote,
@@ -596,12 +949,78 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
               draft: draft,
             );
           }
-          if (executionState.status ==
-                  RouteExecutionLoadStatus.reviewRequired &&
+          if ((executionState.status ==
+                      RouteExecutionLoadStatus.reviewRequired ||
+                  executionState.status == RouteExecutionLoadStatus.starting) &&
               executionState.review != null) {
             final review = executionState.review!;
+            final reviewEditable =
+                executionState.status ==
+                RouteExecutionLoadStatus.reviewRequired;
             return RouteReviewView(
+              key: ValueKey<int>(Object.hash('swap-review', review.reviewId)),
               review: review,
+              desktopIntentEditor:
+                  BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
+                    bloc: quote,
+                    builder: (context, quoteState) => ExcludeFocus(
+                      excluding: !reviewEditable,
+                      child: AbsorbPointer(
+                        absorbing: !reviewEditable,
+                        child: UnifiedSwapEntryView(
+                          key: _entryKey,
+                          state: quoteState,
+                          onIntentChanged: (intent) => _onIntentChanged(
+                            intent,
+                            onWillCommit: () =>
+                                _beginPreparedReviewEdit(review),
+                          ),
+                          onIntentEditStarted: reviewEditable
+                              ? () => _beginPreparedReviewEdit(review)
+                              : null,
+                          onCandidateSelected: (id) {
+                            if (!reviewEditable) return;
+                            _beginPreparedReviewEdit(review);
+                            quote.add(UnifiedSwapCandidateSelected(id));
+                          },
+                          onRevalidate: () {
+                            if (!reviewEditable) return;
+                            _beginPreparedReviewEdit(review);
+                            quote.add(const UnifiedSwapRevalidationRequested());
+                          },
+                          onReviewRequested: _prepareReview,
+                          canReview: false,
+                          reviewUnavailableMessage: unifiedSwapText(
+                            context,
+                            'review.sidePanelBody',
+                            'Editing the swap closes this Review and checks a '
+                                'fresh quote.',
+                          ),
+                          maximumAmountResolver: widget.maximumAmountResolver,
+                          recipientValidator:
+                              widget.recipientValidator ??
+                              _productionComposition(
+                                context,
+                              )?.validateRecipient,
+                          selectionGateway:
+                              widget.selectionGateway ??
+                              _productionComposition(context),
+                          intentEditable: reviewEditable,
+                          reviewInFlight: !reviewEditable,
+                          reviewFailure: _reviewFailure,
+                          reviewFocusNode: _reviewOpenerFocusNode,
+                          onPickerPresentationChanged: (visible) =>
+                              _handleReviewPickerPresentation(review, visible),
+                          now: widget.now,
+                        ),
+                      ),
+                    ),
+                  ),
+              onBack:
+                  executionState.status ==
+                      RouteExecutionLoadStatus.reviewRequired
+                  ? () => _dismissPreparedReview(review)
+                  : null,
               onAccept: () => execution.add(
                 RouteExecutionReviewAccepted(
                   reviewId: review.reviewId,
@@ -616,40 +1035,77 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
               failureMessage: _reviewExecutionFailure(
                 context,
                 executionState.failure,
+                executionState.reviewRefreshStatus,
               ),
+              termsUpdated:
+                  executionState.reviewRefreshStatus ==
+                  RouteReviewRefreshStatus.materialChange,
+              previousReview: executionState.previousReview,
+              desktopIntentSurfaceOpen:
+                  reviewEditable &&
+                  _reviewPickerOpen &&
+                  _reviewPickerReviewId == review.reviewId,
               now: widget.now,
             );
           }
           if (executionState.status != RouteExecutionLoadStatus.idle) {
-            return RouteExecutionView(
-              state: executionState,
-              onReattach: () {
-                final routeExecutionId = executionState.routeExecutionId;
-                if (routeExecutionId != null) {
-                  execution.add(
-                    RouteExecutionReattachRequested(routeExecutionId),
-                  );
-                }
-              },
-              onCancel: () =>
-                  execution.add(const RouteExecutionCancelRequested()),
-              onStopAfterCurrent: () => execution.add(
-                const RouteExecutionStopAfterCurrentRequested(),
+            return UnifiedSwapPickerHost(
+              child: Builder(
+                builder: (pickerContext) => RouteExecutionView(
+                  state: executionState,
+                  onReattach: () {
+                    final routeExecutionId = executionState.routeExecutionId;
+                    if (routeExecutionId != null) {
+                      execution.add(
+                        RouteExecutionReattachRequested(routeExecutionId),
+                      );
+                    }
+                  },
+                  onCancel: () {
+                    final target = executionState.controlTarget;
+                    if (target != null) {
+                      _submitControl(
+                        execution,
+                        target,
+                        stopAfterCurrent: false,
+                      );
+                    }
+                  },
+                  onStopAfterCurrent: () {
+                    final target = executionState.controlTarget;
+                    if (target != null) {
+                      _submitControl(execution, target, stopAfterCurrent: true);
+                    }
+                  },
+                  onDecision: (kind) => unawaited(_submitDecision(kind)),
+                  canSelectRecoveryRoute:
+                      widget.recoveryReviewSelector != null ||
+                      (_productionComposition(context) != null &&
+                          widget.config.canExecute),
+                  clipboardWriter: widget.clipboardWriter,
+                  announcement: widget.announcement,
+                  onClose: widget.onViewActivity == null
+                      ? null
+                      : () => unawaited(
+                          _requestLeaveExecution(pickerContext, executionState),
+                        ),
+                  onViewActivity:
+                      widget.onViewActivity == null ||
+                          executionState.routeExecutionId == null
+                      ? null
+                      : () => widget.onViewActivity!(
+                          executionState.routeExecutionId!,
+                        ),
+                ),
               ),
-              onDecision: (kind) => unawaited(_submitDecision(kind)),
-              canSelectRecoveryRoute:
-                  widget.recoveryReviewSelector != null ||
-                  (_productionComposition(context) != null &&
-                      widget.config.canExecute),
-              clipboardWriter: widget.clipboardWriter,
-              announcement: widget.announcement,
             );
           }
           return BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
             bloc: quote,
             builder: (context, quoteState) => UnifiedSwapEntryView(
+              key: _entryKey,
               state: quoteState,
-              onIntentChanged: (intent) => unawaited(_onIntentChanged(intent)),
+              onIntentChanged: _onIntentChanged,
               onCandidateSelected: (id) =>
                   quote.add(UnifiedSwapCandidateSelected(id)),
               onRevalidate: () =>
@@ -663,10 +1119,15 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
                 executionState,
               ),
               maximumAmountResolver: widget.maximumAmountResolver,
+              recipientValidator:
+                  widget.recipientValidator ??
+                  _productionComposition(context)?.validateRecipient,
               selectionGateway:
                   widget.selectionGateway ?? _productionComposition(context),
               reviewInFlight: _reviewInFlight,
               reviewFailure: _reviewFailure,
+              reviewFocusNode: _reviewOpenerFocusNode,
+              initialAmountDraft: widget.initialAmountDraft,
               now: widget.now,
             ),
           );
@@ -684,6 +1145,29 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
     final body = review != null
         ? RouteReviewView(
             review: review,
+            desktopIntentEditor: BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
+              bloc: quote,
+              builder: (context, quoteState) => UnifiedSwapEntryView(
+                key: ValueKey('recovery-review-${draft.expectedStateRevision}'),
+                state: quoteState,
+                onIntentChanged: (_) async => false,
+                onCandidateSelected: (_) {},
+                onRevalidate: () {},
+                onReviewRequested: (_) {},
+                canReview: false,
+                reviewUnavailableMessage: unifiedSwapText(
+                  context,
+                  'review.recoveryUnavailable',
+                  'Recovery requires a fresh prepared Review for the exact '
+                      'verified holding.',
+                ),
+                intentEditable: false,
+                reviewInFlight: executionState.controlInFlight,
+                reviewFailure: _reviewFailure,
+                now: widget.now,
+              ),
+            ),
+            onBack: executionState.controlInFlight ? null : _cancelRecovery,
             onAccept: _acceptRecoveryReview,
             acceptInFlight: executionState.controlInFlight,
             executionEnabled:
@@ -712,8 +1196,7 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
               return UnifiedSwapEntryView(
                 key: ValueKey('recovery-${draft.expectedStateRevision}'),
                 state: quoteState,
-                onIntentChanged: (intent) =>
-                    unawaited(_onIntentChanged(intent)),
+                onIntentChanged: _onIntentChanged,
                 onCandidateSelected: (id) =>
                     quote.add(UnifiedSwapCandidateSelected(id)),
                 onRevalidate: () =>
@@ -733,6 +1216,7 @@ class _UnifiedSwapPageState extends State<UnifiedSwapPage>
                 intentEditable: false,
                 reviewInFlight: _reviewInFlight,
                 reviewFailure: _reviewFailure,
+                reviewFocusNode: _reviewOpenerFocusNode,
                 now: widget.now,
               );
             },
@@ -829,6 +1313,11 @@ bool _recoveryProgressMatches(
       );
 }
 
+bool _isTerminalExecutionStatus(RouteExecutionLoadStatus status) =>
+    status == RouteExecutionLoadStatus.completed ||
+    status == RouteExecutionLoadStatus.cancelled ||
+    status == RouteExecutionLoadStatus.failed;
+
 bool _recoveryIntentMatches(
   UnifiedSwapRecoveryDraft draft,
   UnifiedSwapIntent? intent,
@@ -864,55 +1353,66 @@ bool _isQuietPreparedReceive({
 String? _reviewExecutionFailure(
   BuildContext context,
   RouteExecutionFailure? failure,
-) => switch (failure) {
-  RouteExecutionFailure.invalidReview => unifiedSwapText(
-    context,
-    'review.failure.invalidReview',
-    'The Review no longer matches exact wallet consent.',
-  ),
-  RouteExecutionFailure.reviewExpired => unifiedSwapText(
-    context,
-    'review.failure.expired',
-    'The Review expired. Obtain a fresh quote before continuing.',
-  ),
-  RouteExecutionFailure.capabilityUnavailable => unifiedSwapText(
-    context,
-    'review.failure.capabilityChanged',
-    'Wallet capability changed before funds moved.',
-  ),
-  RouteExecutionFailure.conflict => unifiedSwapText(
-    context,
-    'review.failure.conflict',
-    'Durable route identity conflicts with this Review.',
-  ),
-  RouteExecutionFailure.networkUnavailable => unifiedSwapText(
-    context,
-    'review.failure.network',
-    'The wallet could not safely start route observation.',
-  ),
-  RouteExecutionFailure.storageUnavailable => unifiedSwapText(
-    context,
-    'review.failure.storage',
-    'Durable route storage is temporarily unavailable.',
-  ),
-  RouteExecutionFailure.serviceUnavailable => unifiedSwapText(
-    context,
-    'review.failure.service',
-    'Execution is temporarily unavailable.',
-  ),
-  RouteExecutionFailure.controlNotAuthorized ||
-  RouteExecutionFailure.actionNotAuthorized ||
-  RouteExecutionFailure.notFound ||
-  RouteExecutionFailure.unknown =>
-    failure == null
-        ? null
-        : unifiedSwapText(
-            context,
-            'review.failure.unknown',
-            'Execution could not start safely.',
-          ),
-  null => null,
-};
+  RouteReviewRefreshStatus refreshStatus,
+) {
+  if (failure != null &&
+      refreshStatus == RouteReviewRefreshStatus.latestTermsUnavailable) {
+    return unifiedSwapText(
+      context,
+      'review.refresh.unavailable',
+      'Latest route terms could not be verified. Nothing started; try again.',
+    );
+  }
+  return switch (failure) {
+    RouteExecutionFailure.invalidReview => unifiedSwapText(
+      context,
+      'review.failure.invalidReview',
+      'The Review no longer matches exact wallet consent.',
+    ),
+    RouteExecutionFailure.reviewExpired => unifiedSwapText(
+      context,
+      'review.failure.expired',
+      'The Review expired. Obtain a fresh quote before continuing.',
+    ),
+    RouteExecutionFailure.capabilityUnavailable => unifiedSwapText(
+      context,
+      'review.failure.capabilityChanged',
+      'Wallet capability changed before funds moved.',
+    ),
+    RouteExecutionFailure.conflict => unifiedSwapText(
+      context,
+      'review.failure.conflict',
+      'Durable route identity conflicts with this Review.',
+    ),
+    RouteExecutionFailure.networkUnavailable => unifiedSwapText(
+      context,
+      'review.failure.network',
+      'The wallet could not safely start route observation.',
+    ),
+    RouteExecutionFailure.storageUnavailable => unifiedSwapText(
+      context,
+      'review.failure.storage',
+      'Durable route storage is temporarily unavailable.',
+    ),
+    RouteExecutionFailure.serviceUnavailable => unifiedSwapText(
+      context,
+      'review.failure.service',
+      'Execution is temporarily unavailable.',
+    ),
+    RouteExecutionFailure.controlNotAuthorized ||
+    RouteExecutionFailure.actionNotAuthorized ||
+    RouteExecutionFailure.notFound ||
+    RouteExecutionFailure.unknown =>
+      failure == null
+          ? null
+          : unifiedSwapText(
+              context,
+              'review.failure.unknown',
+              'Execution could not start safely.',
+            ),
+    null => null,
+  };
+}
 
 String? _announcement(
   BuildContext context,

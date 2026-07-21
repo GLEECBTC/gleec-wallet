@@ -1,4 +1,5 @@
 import 'package:web_dex/router/parsers/base_route_parser.dart';
+import 'package:web_dex/model/trading_entity_id.dart';
 import 'package:web_dex/router/routes.dart';
 import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/router/state/unified_swap_section_state.dart';
@@ -23,12 +24,30 @@ class _DexRouteParser implements BaseRouteParser {
 
   @override
   AppRoutePath getRoutePath(Uri uri) {
-    if (uri.pathSegments.length == 3) {
-      if (uri.pathSegments[1] == 'trading_details' &&
-          uri.pathSegments[2].isNotEmpty) {
+    if (uri.pathSegments.length == 4 &&
+        uri.pathSegments[1] == 'trading_details' &&
+        normalizeTradingEntityUuid(uri.pathSegments[3]) != null) {
+      final uuid = normalizeTradingEntityUuid(uri.pathSegments[3])!;
+      final kind = switch (uri.pathSegments[2]) {
+        'swap' => DexTradingEntityKind.swap,
+        'order' => DexTradingEntityKind.order,
+        _ => null,
+      };
+      if (kind != null) {
         return DexRoutePath.swapDetails(
           DexAction.tradingDetails,
-          uri.pathSegments[2],
+          uuid,
+          entityKind: kind,
+        );
+      }
+    }
+    if (uri.pathSegments.length == 3) {
+      if (uri.pathSegments[1] == 'trading_details' &&
+          normalizeTradingEntityUuid(uri.pathSegments[2]) != null) {
+        return DexRoutePath.swapDetails(
+          DexAction.tradingDetails,
+          normalizeTradingEntityUuid(uri.pathSegments[2])!,
+          entityKind: DexTradingEntityKind.swap,
         );
       }
     }

@@ -10,11 +10,11 @@ import 'package:web_dex/views/dex/entity_details/trading_details_total_time.dart
 /// timing and progress steps.
 class SwapDetails extends StatelessWidget {
   const SwapDetails({
-    Key? key,
+    super.key,
     required this.swapStatus,
     required this.isFailed,
     this.belowUuid,
-  }) : super(key: key);
+  });
 
   final Swap swapStatus;
   final bool isFailed;
@@ -78,7 +78,9 @@ class SwapDetails extends StatelessWidget {
     if (swapStatus.events.isEmpty) {
       return null;
     }
-    if (swapStatus.events.last.event.type == swapStatus.successEvents.last ||
+    if ((swapStatus.successEvents.isNotEmpty &&
+            swapStatus.events.last.event.type ==
+                swapStatus.successEvents.last) ||
         isFailed) {
       return swapStatus.events.last.timestamp;
     }

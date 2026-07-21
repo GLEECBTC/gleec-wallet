@@ -134,13 +134,16 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
         const UnifiedSwapRouteState.advanced(),
       );
     }
-    routingState.dexState.action = path.action;
-    routingState.dexState.uuid = path.uuid;
-    routingState.dexState.fromCurrency = path.fromCurrency;
-    routingState.dexState.fromAmount = path.fromAmount;
-    routingState.dexState.toCurrency = path.toCurrency;
-    routingState.dexState.toAmount = path.toAmount;
-    routingState.dexState.orderType = path.orderType;
+    routingState.dexState.replaceRoute(
+      action: path.action,
+      entityKind: path.entityKind,
+      uuid: path.uuid,
+      fromCurrency: path.fromCurrency,
+      fromAmount: path.fromAmount,
+      toCurrency: path.toCurrency,
+      toAmount: path.toAmount,
+      orderType: path.orderType,
+    );
   }
 
   void _setNewUnifiedSwapRoutePath(UnifiedSwapRoutePath path) {
@@ -209,6 +212,7 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       return DexRoutePath.swapDetails(
         routingState.dexState.action,
         routingState.dexState.uuid,
+        entityKind: routingState.dexState.entityKind,
       );
     }
 

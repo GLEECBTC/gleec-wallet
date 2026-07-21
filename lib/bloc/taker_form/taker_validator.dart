@@ -42,33 +42,93 @@ class TakerValidator {
 
   final Function(TakerEvent) add;
   TakerState get state => _bloc.state;
+  int _validationGeneration = 0;
 
-  Future<bool> validate() async {
-    final bool isFormValid = await validateForm();
-    if (!isFormValid) return false;
+  _TakerValidationScope _beginValidation() => _TakerValidationScope(
+    walletId: state.walletId,
+    formRevision: state.formRevision,
+    generation: ++_validationGeneration,
+  );
 
-    final bool tradingWithSelf = await _checkTradeWithSelf();
-    if (tradingWithSelf) return false;
+  bool _isCurrent(_TakerValidationScope scope) =>
+      scope.generation == _validationGeneration &&
+      scope.walletId == state.walletId &&
+      scope.formRevision == state.formRevision;
 
-    final bool isPreimageValid = await _validatePreimage();
-    if (!isPreimageValid) return false;
-
-    return true;
+  void _emit(_TakerValidationScope scope, TakerEvent event) {
+    if (!_isCurrent(scope)) return;
+    if (event is TakerAddError) {
+      add(
+        TakerAddError(
+          event.error,
+          walletId: scope.walletId,
+          formRevision: scope.formRevision,
+        ),
+      );
+    } else if (event is TakerClearErrors) {
+      add(
+        TakerClearErrors(
+          walletId: scope.walletId,
+          formRevision: scope.formRevision,
+        ),
+      );
+    } else {
+      add(event);
+    }
   }
 
-  Future<bool> _validatePreimage() async {
-    add(TakerClearErrors());
+  Future<bool> validate() async {
+    return await validateAndGetPreimage() != null;
+  }
 
-    final preimageData = await _getPreimageData();
+  /// Validates the current revision and returns the exact preimage that was
+  /// validated. The caller must still verify its wallet/revision before use.
+  Future<TradePreimage?> validateAndGetPreimage() async {
+    final scope = _beginValidation();
+    try {
+      final bool isFormValid = await _validateForm(scope);
+      if (!isFormValid || !_isCurrent(scope)) return null;
+
+      final bool tradingWithSelf = await _checkTradeWithSelf(scope);
+      if (tradingWithSelf || !_isCurrent(scope)) return null;
+
+      return _validatePreimage(scope);
+    } catch (_) {
+      if (_isCurrent(scope)) {
+        _emit(
+          scope,
+          TakerAddError(DexFormError(error: LocaleKeys.somethingWrong.tr())),
+        );
+      }
+      return null;
+    }
+  }
+
+  Future<TradePreimage?> _validatePreimage(_TakerValidationScope scope) async {
+    _emit(scope, TakerClearErrors());
+
+    final sellCoin = state.sellCoin;
+    final selectedOrder = state.selectedOrder;
+    final sellAmount = state.sellAmount;
+    if (sellCoin == null || selectedOrder == null || sellAmount == null) {
+      return null;
+    }
+
+    final preimageData = await _getPreimageData(
+      base: sellCoin.abbr,
+      rel: selectedOrder.coin,
+      price: selectedOrder.price,
+      volume: sellAmount,
+    );
+    if (!_isCurrent(scope)) return null;
     final preimageError = _parsePreimageError(preimageData);
 
     if (preimageError != null) {
-      add(TakerAddError(preimageError));
-      return false;
+      _emit(scope, TakerAddError(preimageError));
+      return null;
     }
 
-    add(TakerSetPreimage(preimageData.data));
-    return true;
+    return preimageData.data;
   }
 
   DexFormError? _parsePreimageError(
@@ -77,29 +137,40 @@ class TakerValidator {
     final BaseError? error = preimageData.error;
 
     if (error is TradePreimageNotSufficientBalanceError) {
-      return _insufficientBalanceError(
-        Rational.parse(error.required),
-        error.coin,
-      );
+      final required = _parseBoundedPositiveRational(error.required);
+      if (required == null) {
+        return DexFormError(error: LocaleKeys.somethingWrong.tr());
+      }
+      return _insufficientBalanceError(required, _safeAssetLabel(error.coin));
     } else if (error is TradePreimageNotSufficientBaseCoinBalanceError) {
-      return _insufficientBalanceError(
-        Rational.parse(error.required),
-        error.coin,
-      );
+      final required = _parseBoundedPositiveRational(error.required);
+      if (required == null) {
+        return DexFormError(error: LocaleKeys.somethingWrong.tr());
+      }
+      return _insufficientBalanceError(required, _safeAssetLabel(error.coin));
     } else if (error is TradePreimageTransportError) {
       return DexFormError(error: LocaleKeys.notEnoughBalanceForGasError.tr());
     } else if (error is TradePreimageNoSuchCoinError) {
       return DexFormError(
-        error: LocaleKeys.connectionToServersFailing.tr(args: [error.coin]),
+        error: LocaleKeys.connectionToServersFailing.tr(
+          args: [_safeAssetLabel(error.coin)],
+        ),
       );
     } else if (error is TradePreimageVolumeTooLowError) {
+      final threshold = _parseBoundedPositiveRational(error.threshold);
+      if (threshold == null) {
+        return DexFormError(error: LocaleKeys.somethingWrong.tr());
+      }
       return DexFormError(
         error: LocaleKeys.lowTradeVolumeError.tr(
-          args: [formatAmt(double.parse(error.threshold)), error.coin],
+          args: [formatDexAmt(threshold), _safeAssetLabel(error.coin)],
         ),
       );
     } else if (error != null) {
-      return DexFormError(error: error.message);
+      // Daemon-provided error strings may contain raw payloads or be
+      // attacker-sized. Known conditions are mapped above; everything else
+      // stays generic at this user-facing boundary.
+      return DexFormError(error: LocaleKeys.somethingWrong.tr());
     } else if (preimageData.data == null) {
       return DexFormError(error: LocaleKeys.somethingWrong.tr());
     }
@@ -108,73 +179,106 @@ class TakerValidator {
   }
 
   Future<bool> validateForm() async {
-    add(TakerClearErrors());
+    final scope = _beginValidation();
+    try {
+      return await _validateForm(scope);
+    } catch (_) {
+      if (_isCurrent(scope)) {
+        _emit(
+          scope,
+          TakerAddError(DexFormError(error: LocaleKeys.somethingWrong.tr())),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _validateForm(_TakerValidationScope scope) async {
+    _emit(scope, TakerClearErrors());
 
     if (!_isSellCoinSelected) {
-      add(TakerAddError(_selectSellCoinError()));
+      _emit(scope, TakerAddError(_selectSellCoinError()));
       return false;
     }
 
     if (!_isOrderSelected) {
-      add(TakerAddError(_selectOrderError()));
+      _emit(scope, TakerAddError(_selectOrderError()));
       return false;
     }
 
-    if (!await _validateCoinAndParent(state.sellCoin!.abbr)) return false;
-    if (!await _validateCoinAndParent(state.selectedOrder!.coin)) return false;
+    if (!await _validateCoinAndParent(state.sellCoin!.abbr, scope)) {
+      return false;
+    }
+    if (!_isCurrent(scope)) return false;
+    if (!await _validateCoinAndParent(state.selectedOrder!.coin, scope)) {
+      return false;
+    }
+    if (!_isCurrent(scope)) return false;
 
-    if (!_validateAmount()) return false;
+    if (!_validateAmount(scope)) return false;
 
     return true;
   }
 
-  bool _validateAmount() {
-    if (!_validateMinAmount()) return false;
-    if (!_validateMaxAmount()) return false;
+  bool _validateAmount(_TakerValidationScope scope) {
+    if (!_validateMinAmount(scope)) return false;
+    if (!_validateMaxAmount(scope)) return false;
 
     return true;
   }
 
-  Future<bool> _checkTradeWithSelf() async {
-    add(TakerClearErrors());
+  Future<bool> _checkTradeWithSelf(_TakerValidationScope scope) async {
+    _emit(scope, TakerClearErrors());
 
     if (state.selectedOrder == null) return false;
     final BestOrder selectedOrder = state.selectedOrder!;
 
-    final selectedOrderAddress = selectedOrder.address;
-    final asset = _sdk.getSdkAsset(selectedOrder.coin);
-    final cached = _sdk.pubkeys.lastKnown(asset.id);
-    final ownPubkeys = cached ?? await _sdk.pubkeys.getPubkeys(asset);
-    final ownAddresses = ownPubkeys.keys
-        .where((pubkeyInfo) => pubkeyInfo.isActiveForSwap)
-        .map((e) => e.address)
-        .toSet();
+    try {
+      final selectedOrderAddress = selectedOrder.address;
+      final asset = _sdk.getSdkAsset(selectedOrder.coin);
+      final cached = _sdk.pubkeys.lastKnown(asset.id);
+      final ownPubkeys = cached ?? await _sdk.pubkeys.getPubkeys(asset);
+      if (!_isCurrent(scope)) return true;
+      final ownAddresses = ownPubkeys.keys
+          .where((pubkeyInfo) => pubkeyInfo.isActiveForSwap)
+          .map((e) => e.address)
+          .toSet();
 
-    if (ownAddresses.contains(selectedOrderAddress.addressData)) {
-      add(TakerAddError(_tradingWithSelfError()));
+      if (ownAddresses.contains(selectedOrderAddress.addressData)) {
+        _emit(scope, TakerAddError(_tradingWithSelfError()));
+        return true;
+      }
+      return false;
+    } catch (_) {
+      if (_isCurrent(scope)) {
+        _emit(
+          scope,
+          TakerAddError(DexFormError(error: LocaleKeys.somethingWrong.tr())),
+        );
+      }
+      // Ownership uncertainty must fail closed.
       return true;
     }
-    return false;
   }
 
-  bool _validateMaxAmount() {
+  bool _validateMaxAmount(_TakerValidationScope scope) {
     final Rational? availableBalance = state.maxSellAmount;
     if (availableBalance == null) return true; // validated on preimage side
 
     final Rational? maxOrderVolume = state.selectedOrder?.maxVolume;
     if (maxOrderVolume == null) {
-      add(TakerAddError(_selectOrderError()));
+      _emit(scope, TakerAddError(_selectOrderError()));
       return false;
     }
 
     final Rational? sellAmount = state.sellAmount;
     if (sellAmount == null || sellAmount == Rational.zero) {
-      add(TakerAddError(_enterSellAmountError()));
+      _emit(scope, TakerAddError(_enterSellAmountError()));
       return false;
     }
 
     if (maxOrderVolume <= availableBalance && sellAmount > maxOrderVolume) {
-      add(TakerAddError(_setOrderMaxError(maxOrderVolume)));
+      _emit(scope, TakerAddError(_setOrderMaxError(maxOrderVolume)));
       return false;
     }
 
@@ -185,13 +289,14 @@ class TakerValidator {
       ])!;
 
       if (availableBalance < minAmount) {
-        add(
+        _emit(
+          scope,
           TakerAddError(
             _insufficientBalanceError(minAmount, state.sellCoin!.abbr),
           ),
         );
       } else {
-        add(TakerAddError(_setMaxError(availableBalance)));
+        _emit(scope, TakerAddError(_setMaxError(availableBalance)));
       }
 
       return false;
@@ -200,7 +305,7 @@ class TakerValidator {
     return true;
   }
 
-  bool _validateMinAmount() {
+  bool _validateMinAmount(_TakerValidationScope scope) {
     final Rational minTradingVolume = state.minSellAmount ?? Rational.zero;
     final Rational minOrderVolume =
         state.selectedOrder?.minVolume ?? Rational.zero;
@@ -212,13 +317,14 @@ class TakerValidator {
     if (sellAmount < minAmount) {
       final Rational available = state.maxSellAmount ?? Rational.zero;
       if (available < minAmount) {
-        add(
+        _emit(
+          scope,
           TakerAddError(
             _insufficientBalanceError(minAmount, state.sellCoin!.abbr),
           ),
         );
       } else {
-        add(TakerAddError(_setMinError(minAmount)));
+        _emit(scope, TakerAddError(_setMinError(minAmount)));
       }
 
       return false;
@@ -227,22 +333,36 @@ class TakerValidator {
     return true;
   }
 
-  Future<bool> _validateCoinAndParent(String abbr) async {
-    final coin = _sdk.getSdkAsset(abbr);
-    final activatedAssetIds = await _coinsRepo.getActivatedAssetIds();
-    final parentId = coin.id.parentId;
+  Future<bool> _validateCoinAndParent(
+    String abbr,
+    _TakerValidationScope scope,
+  ) async {
+    try {
+      final coin = _sdk.getSdkAsset(abbr);
+      final activatedAssetIds = await _coinsRepo.getActivatedAssetIds();
+      if (!_isCurrent(scope)) return false;
+      final parentId = coin.id.parentId;
 
-    if (!activatedAssetIds.contains(coin.id)) {
-      add(TakerAddError(_coinNotActiveError(coin.id.id)));
+      if (!activatedAssetIds.contains(coin.id)) {
+        _emit(scope, TakerAddError(_coinNotActiveError(coin.id.id)));
+        return false;
+      }
+
+      if (parentId != null && !activatedAssetIds.contains(parentId)) {
+        _emit(scope, TakerAddError(_coinNotActiveError(parentId.id)));
+        return false;
+      }
+
+      return true;
+    } catch (_) {
+      if (_isCurrent(scope)) {
+        _emit(
+          scope,
+          TakerAddError(DexFormError(error: LocaleKeys.somethingWrong.tr())),
+        );
+      }
       return false;
     }
-
-    if (parentId != null && !activatedAssetIds.contains(parentId)) {
-      add(TakerAddError(_coinNotActiveError(parentId.id)));
-      return false;
-    }
-
-    return true;
   }
 
   bool get _isSellCoinSelected => state.sellCoin != null;
@@ -250,42 +370,48 @@ class TakerValidator {
   bool get _isOrderSelected => state.selectedOrder != null;
 
   bool get canRequestPreimage {
-    // used to fetch the coin balance via the new balance function
-    final sdk = GetIt.I<KomodoDefiSdk>();
+    try {
+      // used to fetch the coin balance via the new balance function
+      final sdk = GetIt.I<KomodoDefiSdk>();
 
-    final Coin? sellCoin = state.sellCoin;
-    if (sellCoin == null) return false;
-    if (sellCoin.isSuspended) return false;
+      final Coin? sellCoin = state.sellCoin;
+      if (sellCoin == null) return false;
+      if (sellCoin.isSuspended) return false;
 
-    final Rational? sellAmount = state.sellAmount;
-    if (sellAmount == null) return false;
-    if (sellAmount == Rational.zero) return false;
-    final Rational? minSellAmount = state.minSellAmount;
-    if (minSellAmount != null && sellAmount < minSellAmount) return false;
-    final Rational? maxSellAmount = state.maxSellAmount;
-    if (maxSellAmount != null && sellAmount > maxSellAmount) return false;
+      final Rational? sellAmount = state.sellAmount;
+      if (sellAmount == null || sellAmount <= Rational.zero) return false;
+      final Rational? minSellAmount = state.minSellAmount;
+      if (minSellAmount != null && sellAmount < minSellAmount) return false;
+      final Rational? maxSellAmount = state.maxSellAmount;
+      if (maxSellAmount != null && sellAmount > maxSellAmount) return false;
 
-    final Coin? parentSell = sellCoin.parentCoin;
-    if (parentSell != null) {
-      if (parentSell.isSuspended) return false;
-      if (parentSell.balance(sdk) == 0.00) return false;
+      final Coin? parentSell = sellCoin.parentCoin;
+      if (parentSell != null) {
+        if (parentSell.isSuspended) return false;
+        final balance = parentSell.balance(sdk);
+        if (balance == null || !balance.isFinite || balance <= 0) return false;
+      }
+
+      final BestOrder? selectedOrder = state.selectedOrder;
+      if (selectedOrder == null) return false;
+      final Coin? buyCoin = _coinsRepo.getCoin(selectedOrder.coin);
+      if (buyCoin == null) return false;
+
+      final Coin? parentBuy = buyCoin.parentCoin;
+      if (parentBuy != null) {
+        if (parentBuy.isSuspended) return false;
+        final balance = parentBuy.balance(sdk);
+        if (balance == null || !balance.isFinite || balance <= 0) return false;
+      }
+
+      return true;
+    } catch (_) {
+      return false;
     }
-
-    final BestOrder? selectedOrder = state.selectedOrder;
-    if (selectedOrder == null) return false;
-    final Coin? buyCoin = _coinsRepo.getCoin(selectedOrder.coin);
-    if (buyCoin == null) return false;
-
-    final Coin? parentBuy = buyCoin.parentCoin;
-    if (parentBuy != null) {
-      if (parentBuy.isSuspended) return false;
-      if (parentBuy.balance(sdk) == 0.00) return false;
-    }
-
-    return true;
   }
 
   void verifyOrderVolume() {
+    final scope = _beginValidation();
     final Coin? sellCoin = state.sellCoin;
     final BestOrder? selectedOrder = state.selectedOrder;
     final Rational? sellAmount = state.sellAmount;
@@ -294,41 +420,50 @@ class TakerValidator {
     if (selectedOrder == null) return;
     if (sellAmount == null) return;
 
-    add(TakerClearErrors());
+    _emit(scope, TakerClearErrors());
     if (sellAmount > selectedOrder.maxVolume) {
-      add(TakerAddError(_setOrderMaxError(selectedOrder.maxVolume)));
+      _emit(scope, TakerAddError(_setOrderMaxError(selectedOrder.maxVolume)));
       return;
     }
   }
 
-  DataFromService<TradePreimage, BaseError>? get _cachedPreimage {
+  DataFromService<TradePreimage, BaseError>? _cachedPreimage({
+    required String base,
+    required String rel,
+    required Rational price,
+    required Rational volume,
+  }) {
     final preimage = state.tradePreimage;
     if (preimage == null) return null;
 
     final request = preimage.request;
-    if (state.sellCoin?.abbr != request.base) return null;
-    if (state.selectedOrder?.coin != request.rel) return null;
-    if (state.selectedOrder?.price != request.price) return null;
-    if (state.sellAmount != request.volume) return null;
+    if (base != request.base) return null;
+    if (rel != request.rel) return null;
+    if (price != request.price) return null;
+    if (volume != request.volume) return null;
 
     return DataFromService(data: preimage);
   }
 
-  Future<DataFromService<TradePreimage, BaseError>> _getPreimageData() async {
-    final cached = _cachedPreimage;
+  Future<DataFromService<TradePreimage, BaseError>> _getPreimageData({
+    required String base,
+    required String rel,
+    required Rational price,
+    required Rational volume,
+  }) async {
+    final cached = _cachedPreimage(
+      base: base,
+      rel: rel,
+      price: price,
+      volume: volume,
+    );
     if (cached != null) return cached;
 
     try {
-      return await _dexRepo.getTradePreimage(
-        state.sellCoin!.abbr,
-        state.selectedOrder!.coin,
-        state.selectedOrder!.price,
-        'sell',
-        state.sellAmount,
-      );
+      return await _dexRepo.getTradePreimage(base, rel, price, 'sell', volume);
     } catch (e, s) {
       log(
-        e.toString(),
+        'Unable to request a taker preimage',
         trace: s,
         path: 'taker_validator::_getPreimageData',
         isError: true,
@@ -411,4 +546,33 @@ class TakerValidator {
   DexFormError _tradingWithSelfError() {
     return DexFormError(error: LocaleKeys.dexTradingWithSelfError.tr());
   }
+
+  String _safeAssetLabel(String value) {
+    final candidate = value.trim();
+    if (candidate.isNotEmpty &&
+        candidate.length <= 64 &&
+        RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(candidate)) {
+      return candidate;
+    }
+    return state.sellCoin?.abbr ?? '';
+  }
+
+  Rational? _parseBoundedPositiveRational(String value) {
+    final candidate = value.trim();
+    if (candidate.isEmpty || candidate.length > 128) return null;
+    final parsed = Rational.tryParse(candidate);
+    return parsed != null && parsed > Rational.zero ? parsed : null;
+  }
+}
+
+class _TakerValidationScope {
+  const _TakerValidationScope({
+    required this.walletId,
+    required this.formRevision,
+    required this.generation,
+  });
+
+  final String? walletId;
+  final int formRevision;
+  final int generation;
 }

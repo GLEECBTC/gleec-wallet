@@ -7,6 +7,7 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/analytics/events/market_bot_events.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_bloc.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_trade_form/market_maker_trade_form_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
@@ -164,7 +165,8 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
                           key: const Key('$keyPrefix-connect-wallet-button'),
                           eventType: WalletsManagerEventType.dex,
                           child: AddMarketMakerBotTradeButton(
-                            enabled: state.isValid,
+                            enabled:
+                                state.isValid && !state.isLoadingMaxMakerVolume,
                             onPressed: _onMakeOrderPressed,
                             sellCoin: state.sellCoin.value,
                             buyCoin: state.buyCoin.value,
@@ -190,6 +192,17 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
 
   void _onMakeOrderPressed() {
     final tradeForm = context.read<MarketMakerTradeFormBloc>().state;
+    final walletSession = context
+        .read<MarketMakerBotBloc>()
+        .captureWalletSession();
+    if (walletSession == null ||
+        (tradeForm.walletSession != null &&
+            tradeForm.walletSession != walletSession)) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('marketMakerWalletChanged'.tr())));
+      return;
+    }
     final pairsCount =
         tradeForm.sellCoin.value != null && tradeForm.buyCoin.value != null
         ? 1
@@ -202,7 +215,10 @@ class _MarketMakerBotFormContentState extends State<MarketMakerBotFormContent> {
     );
 
     context.read<MarketMakerTradeFormBloc>().add(
-      const MarketMakerConfirmationPreviewRequested(),
+      MarketMakerConfirmationPreviewRequested(
+        walletSession: walletSession,
+        draftRevision: tradeForm.draftRevision,
+      ),
     );
   }
 

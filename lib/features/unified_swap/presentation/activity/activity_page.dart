@@ -14,10 +14,17 @@ class RouteActivityPage extends StatefulWidget {
     this.showDetails = false,
     this.initialRouteExecutionId,
     this.onExecutionSelected,
+    this.onStartSwap,
     this.onBack,
     this.onCancelRequested,
     this.onStopAfterCurrentRequested,
     this.onRecoveryRequested,
+    this.onProgressRequested,
+    this.onProgressReattachRequested,
+    this.progressReattachFailed = false,
+    this.resumeProgress = false,
+    this.liveControlInFlight = false,
+    this.liveControlFailure,
     this.clipboardWriter = defaultActivityClipboardWriter,
     this.announcement = defaultActivityAnnouncement,
     this.manageLifecycle = true,
@@ -28,10 +35,17 @@ class RouteActivityPage extends StatefulWidget {
   final bool showDetails;
   final String? initialRouteExecutionId;
   final ValueChanged<String>? onExecutionSelected;
+  final VoidCallback? onStartSwap;
   final VoidCallback? onBack;
   final ValueChanged<String>? onCancelRequested;
   final ValueChanged<String>? onStopAfterCurrentRequested;
   final ValueChanged<String>? onRecoveryRequested;
+  final ValueChanged<String>? onProgressRequested;
+  final ValueChanged<String>? onProgressReattachRequested;
+  final bool progressReattachFailed;
+  final bool resumeProgress;
+  final bool liveControlInFlight;
+  final String? liveControlFailure;
   final ActivityClipboardWriter clipboardWriter;
   final ActivityAnnouncement announcement;
   final bool manageLifecycle;
@@ -43,7 +57,9 @@ class RouteActivityPage extends StatefulWidget {
 class _RouteActivityPageState extends State<RouteActivityPage>
     with WidgetsBindingObserver {
   RouteActivityBloc? _bloc;
+  String? _observedWalletId;
   String? _requestedRouteExecutionId;
+  bool _entryRefreshRequested = false;
 
   @override
   void initState() {
@@ -57,9 +73,12 @@ class _RouteActivityPageState extends State<RouteActivityPage>
     final nextBloc = widget.bloc ?? _maybeActivityBloc(context);
     if (!identical(_bloc, nextBloc)) {
       _requestedRouteExecutionId = null;
+      _entryRefreshRequested = false;
+      _observedWalletId = nextBloc?.state.walletId;
     }
     _bloc = nextBloc;
     _requestInitialDetail();
+    _requestEntryRefresh();
   }
 
   @override
@@ -68,12 +87,16 @@ class _RouteActivityPageState extends State<RouteActivityPage>
     if (oldWidget.bloc != widget.bloc) {
       _bloc = widget.bloc ?? _maybeActivityBloc(context);
       _requestedRouteExecutionId = null;
+      _entryRefreshRequested = false;
+      _observedWalletId = _bloc?.state.walletId;
     }
     if (oldWidget.initialRouteExecutionId != widget.initialRouteExecutionId ||
         oldWidget.showDetails != widget.showDetails) {
       _requestedRouteExecutionId = null;
-      _requestInitialDetail();
+      _entryRefreshRequested = false;
     }
+    _requestInitialDetail();
+    _requestEntryRefresh();
   }
 
   @override
@@ -103,6 +126,25 @@ class _RouteActivityPageState extends State<RouteActivityPage>
     }
     _requestedRouteExecutionId = routeExecutionId;
     bloc.add(RouteActivityExecutionRequested(routeExecutionId));
+  }
+
+  void _requestEntryRefresh({bool allowMissingDetail = false}) {
+    final bloc = _bloc;
+    if (_entryRefreshRequested || bloc == null || bloc.state.walletId == null) {
+      return;
+    }
+    if (widget.showDetails && !allowMissingDetail) {
+      final routeExecutionId = widget.initialRouteExecutionId;
+      if (routeExecutionId == null ||
+          routeExecutionId.trim().isEmpty ||
+          bloc.state.isDetailLoading ||
+          bloc.state.selectedExecution?.summary.routeExecutionId !=
+              routeExecutionId) {
+        return;
+      }
+    }
+    _entryRefreshRequested = true;
+    bloc.add(const RouteActivityRefreshRequested());
   }
 
   Future<void> _refresh() async {
@@ -163,13 +205,33 @@ class _RouteActivityPageState extends State<RouteActivityPage>
     return BlocConsumer<RouteActivityBloc, RouteActivityState>(
       bloc: bloc,
       listenWhen: (previous, current) =>
-          previous.walletId != current.walletId && current.walletId != null,
+          (previous.walletId != current.walletId && current.walletId != null) ||
+          (widget.showDetails &&
+              (previous.isDetailLoading != current.isDetailLoading ||
+                  previous.selectedExecution?.summary.routeExecutionId !=
+                      current.selectedExecution?.summary.routeExecutionId)),
       listener: (context, state) {
         // A deep link may be built before its wallet scope is authenticated.
         // Retry only after the BLoC accepts that scope; otherwise the detail
         // event is intentionally ignored by the application layer.
-        _requestedRouteExecutionId = null;
+        if (_observedWalletId != state.walletId) {
+          _observedWalletId = state.walletId;
+          _requestedRouteExecutionId = null;
+          _entryRefreshRequested = false;
+        }
         _requestInitialDetail();
+        final routeExecutionId = widget.initialRouteExecutionId;
+        final hasExactDetail =
+            routeExecutionId != null &&
+            state.selectedExecution?.summary.routeExecutionId ==
+                routeExecutionId;
+        if (hasExactDetail) {
+          _requestEntryRefresh();
+        } else if (widget.showDetails &&
+            !state.isDetailLoading &&
+            state.failure != null) {
+          _requestEntryRefresh(allowMissingDetail: true);
+        }
       },
       builder: (context, state) {
         if (state.walletId == null) {
@@ -222,6 +284,12 @@ class _RouteActivityPageState extends State<RouteActivityPage>
             onCancelRequested: widget.onCancelRequested,
             onStopAfterCurrentRequested: widget.onStopAfterCurrentRequested,
             onRecoveryRequested: widget.onRecoveryRequested,
+            onProgressRequested: widget.onProgressRequested,
+            onProgressReattachRequested: widget.onProgressReattachRequested,
+            progressReattachFailed: widget.progressReattachFailed,
+            resumeProgress: widget.resumeProgress,
+            liveControlInFlight: widget.liveControlInFlight,
+            liveControlFailure: widget.liveControlFailure,
           );
         }
         return RouteActivityListView(
@@ -229,6 +297,7 @@ class _RouteActivityPageState extends State<RouteActivityPage>
           onRefresh: _refresh,
           onLoadMore: _loadMore,
           onExecutionSelected: _openExecution,
+          onStartSwap: widget.onStartSwap,
           clipboardWriter: widget.clipboardWriter,
           announcement: widget.announcement,
         );

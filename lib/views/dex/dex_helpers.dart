@@ -212,47 +212,86 @@ int getCoinPairsCountFromCoinAbbrMap(
 /// ```
 /// unit tests: [compare_dex_to_cex_tests]
 double compareToCex(double baseUsdPrice, double relUsdPrice, Rational rate) {
-  if (baseUsdPrice == 0 || relUsdPrice == 0) return 0;
-  if (rate == Rational.zero) return 0;
+  if (!baseUsdPrice.isFinite ||
+      !relUsdPrice.isFinite ||
+      baseUsdPrice <= 0 ||
+      relUsdPrice <= 0 ||
+      rate <= Rational.zero) {
+    return 0;
+  }
 
-  final double dexRate = rate.toDouble();
-  final double cexRate = baseUsdPrice / relUsdPrice;
+  try {
+    final dexRate = rate.toDouble();
+    final cexRate = baseUsdPrice / relUsdPrice;
+    if (!dexRate.isFinite ||
+        dexRate <= 0 ||
+        !cexRate.isFinite ||
+        cexRate <= 0) {
+      return 0;
+    }
 
-  return (dexRate - cexRate) * 100 / cexRate;
+    final comparison = (dexRate - cexRate) * 100 / cexRate;
+    return comparison.isFinite ? comparison : 0;
+  } catch (_) {
+    return 0;
+  }
 }
 
-final Set<String> _activationInFlight = <String>{};
+final Map<String, Future<List<DexFormError>>> _activationsInFlight = {};
 
 Future<List<DexFormError>> activateCoinIfNeeded(
   String? abbr,
-  CoinsRepo coinsRepository,
-) async {
-  final List<DexFormError> errors = [];
-  if (abbr == null) return errors;
+  CoinsRepo coinsRepository, {
+  String? activationScopeKey,
+  Future<void> Function()? beforeActivationMutation,
+}) async {
+  if (abbr == null) return const [];
 
   final Coin? coin = coinsRepository.getCoin(abbr);
-  if (coin == null) return errors;
+  if (coin == null) return const [];
 
-  if (_activationInFlight.contains(coin.abbr)) {
-    return errors;
-  }
+  final operationKey =
+      '${identityHashCode(coinsRepository)}:'
+      '${activationScopeKey ?? 'shared'}:${coin.id}';
+  final existing = _activationsInFlight[operationKey];
+  if (existing != null) return existing;
 
-  _activationInFlight.add(coin.abbr);
+  final operation = _activateCoin(
+    coin,
+    coinsRepository,
+    activationScopeKey: activationScopeKey,
+    beforeActivationMutation: beforeActivationMutation,
+  );
+  _activationsInFlight[operationKey] = operation;
   try {
-    // sdk handles parent activation logic, so simply call
-    // activation here
-    await coinsRepository.activateCoinsSync([coin]);
-  } catch (e) {
-    errors.add(
-      DexFormError(
-        error: '${LocaleKeys.unableToActiveCoin.tr(args: [coin.abbr])}: $e',
-      ),
-    );
+    return await operation;
   } finally {
-    _activationInFlight.remove(coin.abbr);
+    if (identical(_activationsInFlight[operationKey], operation)) {
+      _activationsInFlight.remove(operationKey);
+    }
   }
+}
 
-  return errors;
+Future<List<DexFormError>> _activateCoin(
+  Coin coin,
+  CoinsRepo coinsRepository, {
+  String? activationScopeKey,
+  Future<void> Function()? beforeActivationMutation,
+}) async {
+  try {
+    // The SDK handles parent activation. The guard is repeated inside the
+    // repository immediately before metadata and activation mutations.
+    await coinsRepository.activateCoinsSync(
+      [coin],
+      activationScopeKey: activationScopeKey,
+      beforeActivationMutation: beforeActivationMutation,
+    );
+    return const [];
+  } catch (_) {
+    return [
+      DexFormError(error: LocaleKeys.unableToActiveCoin.tr(args: [coin.abbr])),
+    ];
+  }
 }
 
 Future<void> reInitTradingForms(BuildContext context) async {
@@ -321,7 +360,8 @@ Rational? calculateBuyAmount({
 /// The method then formats the total fee amount and returns it as a string.
 ///
 /// Parameters:
-/// - [totalFeesInitial] (List<TradePreimageExtendedFeeInfo>?): List of fee information objects.
+/// - [totalFeesInitial] (`List<TradePreimageExtendedFeeInfo>?`): List of fee
+///   information objects.
 /// - [getCoin] (Coin Function(String abbr)): Function to retrieve Coin objects based on abbreviation.
 ///
 /// Return Value:

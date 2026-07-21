@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_repository.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_model_limits.dart';
 
 sealed class RouteActivityEvent extends Equatable {
   const RouteActivityEvent();
@@ -56,15 +57,41 @@ class RouteActivityState extends Equatable {
     this.status = RouteActivityLoadStatus.idle,
     List<RouteActivitySummary> executions = const [],
     this.nextCursor,
+    this.requestedRouteExecutionId,
     this.selectedExecution,
     this.isDetailLoading = false,
     this.failure,
-  }) : executions = List.unmodifiable(executions);
+  }) : executions = List.unmodifiable(executions) {
+    UnifiedSwapModelLimits.requireOptionalString(walletId, 'walletId');
+    UnifiedSwapModelLimits.requireOptionalString(nextCursor, 'nextCursor');
+    UnifiedSwapModelLimits.requireOptionalString(
+      requestedRouteExecutionId,
+      'requestedRouteExecutionId',
+    );
+    UnifiedSwapModelLimits.requireListLength(
+      executions.length,
+      'executions',
+      maximumLength: UnifiedSwapModelLimits.activityItems,
+    );
+    if (executions.map((item) => item.routeExecutionId).toSet().length !=
+        executions.length) {
+      throw ArgumentError('Activity state must not contain duplicate routes');
+    }
+    if (requestedRouteExecutionId != null &&
+        selectedExecution != null &&
+        selectedExecution!.summary.routeExecutionId !=
+            requestedRouteExecutionId) {
+      throw ArgumentError(
+        'The selected execution must match the requested route',
+      );
+    }
+  }
 
   final String? walletId;
   final RouteActivityLoadStatus status;
   final List<RouteActivitySummary> executions;
   final String? nextCursor;
+  final String? requestedRouteExecutionId;
   final RouteExecutionDetail? selectedExecution;
   final bool isDetailLoading;
   final RouteActivityFailure? failure;
@@ -77,7 +104,7 @@ class RouteActivityState extends Equatable {
         group: <RouteActivitySummary>[],
     };
     for (final execution in executions) {
-      result[execution.status.group]!.add(execution);
+      result[execution.group]!.add(execution);
     }
     return {
       for (final entry in result.entries)
@@ -92,6 +119,8 @@ class RouteActivityState extends Equatable {
     List<RouteActivitySummary>? executions,
     String? nextCursor,
     bool clearNextCursor = false,
+    String? requestedRouteExecutionId,
+    bool clearRequestedRouteExecutionId = false,
     RouteExecutionDetail? selectedExecution,
     bool clearSelectedExecution = false,
     bool? isDetailLoading,
@@ -103,6 +132,9 @@ class RouteActivityState extends Equatable {
       status: status ?? this.status,
       executions: executions ?? this.executions,
       nextCursor: clearNextCursor ? null : nextCursor ?? this.nextCursor,
+      requestedRouteExecutionId: clearRequestedRouteExecutionId
+          ? null
+          : requestedRouteExecutionId ?? this.requestedRouteExecutionId,
       selectedExecution: clearSelectedExecution
           ? null
           : selectedExecution ?? this.selectedExecution,
@@ -117,6 +149,7 @@ class RouteActivityState extends Equatable {
     status,
     executions,
     nextCursor,
+    requestedRouteExecutionId,
     selectedExecution,
     isDetailLoading,
     failure,
@@ -198,7 +231,9 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
     final scopeGeneration = _scopeGeneration;
     final listGeneration = ++_listGeneration;
     final detailGeneration = ++_detailGeneration;
-    final selectedRouteId = state.selectedExecution?.summary.routeExecutionId;
+    final selectedRouteId =
+        state.requestedRouteExecutionId ??
+        state.selectedExecution?.summary.routeExecutionId;
     emit(
       state.copyWith(
         status: RouteActivityLoadStatus.refreshing,
@@ -212,10 +247,23 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
       if (!_isCurrentList(walletId, scopeGeneration, listGeneration, emit)) {
         return;
       }
+      final detailWasSuperseded = _detailGeneration != detailGeneration;
+      emit(
+        state.copyWith(
+          status: RouteActivityLoadStatus.ready,
+          executions: _sortExecutions(page.executions),
+          nextCursor: page.nextCursor,
+          clearNextCursor: page.nextCursor == null,
+          isDetailLoading: detailWasSuperseded
+              ? state.isDetailLoading
+              : selectedRouteId != null,
+          clearFailure: true,
+        ),
+      );
 
-      RouteExecutionDetail? detail;
-      if (selectedRouteId != null) {
-        detail = await _repository.getExecution(
+      if (selectedRouteId == null || detailWasSuperseded) return;
+      try {
+        final detail = await _repository.getExecution(
           walletId: walletId,
           routeExecutionId: selectedRouteId,
         );
@@ -227,18 +275,40 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         )) {
           return;
         }
+        if (detail.summary.routeExecutionId != selectedRouteId) {
+          _emitRefreshedDetailFailure(
+            walletId,
+            scopeGeneration,
+            detailGeneration,
+            RouteActivityFailure.serviceUnavailable,
+            emit,
+          );
+          return;
+        }
+        emit(
+          state.copyWith(
+            selectedExecution: detail,
+            isDetailLoading: false,
+            clearFailure: true,
+          ),
+        );
+      } on RouteActivityException catch (error) {
+        _emitRefreshedDetailFailure(
+          walletId,
+          scopeGeneration,
+          detailGeneration,
+          error.failure,
+          emit,
+        );
+      } on Object {
+        _emitRefreshedDetailFailure(
+          walletId,
+          scopeGeneration,
+          detailGeneration,
+          RouteActivityFailure.unknown,
+          emit,
+        );
       }
-      emit(
-        state.copyWith(
-          status: RouteActivityLoadStatus.ready,
-          executions: _sortExecutions(page.executions),
-          nextCursor: page.nextCursor,
-          clearNextCursor: page.nextCursor == null,
-          selectedExecution: detail,
-          isDetailLoading: false,
-          clearFailure: true,
-        ),
-      );
     } on RouteActivityException catch (error) {
       _emitReconciliationFailure(
         walletId,
@@ -246,6 +316,7 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         listGeneration,
         error.failure,
         emit,
+        detailGeneration: detailGeneration,
       );
     } on Object {
       _emitReconciliationFailure(
@@ -254,6 +325,7 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         listGeneration,
         RouteActivityFailure.unknown,
         emit,
+        detailGeneration: detailGeneration,
       );
     }
   }
@@ -266,7 +338,7 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
     final cursor = state.nextCursor;
     if (walletId == null ||
         cursor == null ||
-        state.status == RouteActivityLoadStatus.loadingMore) {
+        state.status != RouteActivityLoadStatus.ready) {
       return;
     }
     final scopeGeneration = _scopeGeneration;
@@ -284,6 +356,10 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         cursor: cursor,
       );
       if (!_isCurrentList(walletId, scopeGeneration, listGeneration, emit)) {
+        return;
+      }
+      if (state.status != RouteActivityLoadStatus.loadingMore ||
+          state.nextCursor != cursor) {
         return;
       }
       emit(
@@ -319,11 +395,15 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
     Emitter<RouteActivityState> emit,
   ) async {
     final walletId = state.walletId;
-    if (walletId == null || event.routeExecutionId.trim().isEmpty) return;
+    if (walletId == null ||
+        !UnifiedSwapModelLimits.isCanonicalString(event.routeExecutionId)) {
+      return;
+    }
     final scopeGeneration = _scopeGeneration;
     final detailGeneration = ++_detailGeneration;
     emit(
       state.copyWith(
+        requestedRouteExecutionId: event.routeExecutionId,
         isDetailLoading: true,
         clearSelectedExecution: true,
         clearFailure: true,
@@ -341,6 +421,16 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         detailGeneration,
         emit,
       )) {
+        return;
+      }
+      if (detail.summary.routeExecutionId != event.routeExecutionId) {
+        _emitDetailFailure(
+          walletId,
+          scopeGeneration,
+          detailGeneration,
+          RouteActivityFailure.serviceUnavailable,
+          emit,
+        );
         return;
       }
       emit(
@@ -435,8 +525,9 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
     int scopeGeneration,
     int listGeneration,
     RouteActivityFailure failure,
-    Emitter<RouteActivityState> emit,
-  ) {
+    Emitter<RouteActivityState> emit, {
+    int? detailGeneration,
+  }) {
     if (!_isCurrentList(walletId, scopeGeneration, listGeneration, emit)) {
       return;
     }
@@ -445,7 +536,10 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         status: state.executions.isEmpty
             ? RouteActivityLoadStatus.unavailable
             : RouteActivityLoadStatus.ready,
-        isDetailLoading: false,
+        isDetailLoading:
+            detailGeneration != null && _detailGeneration != detailGeneration
+            ? state.isDetailLoading
+            : false,
         failure: failure,
       ),
     );
@@ -458,7 +552,8 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
     RouteActivityFailure failure,
     Emitter<RouteActivityState> emit,
   ) {
-    if (!_isCurrentList(walletId, scopeGeneration, listGeneration, emit)) {
+    if (!_isCurrentList(walletId, scopeGeneration, listGeneration, emit) ||
+        state.status != RouteActivityLoadStatus.loadingMore) {
       return;
     }
     emit(
@@ -483,6 +578,19 @@ class RouteActivityBloc extends Bloc<RouteActivityEvent, RouteActivityState> {
         failure: failure,
       ),
     );
+  }
+
+  void _emitRefreshedDetailFailure(
+    String walletId,
+    int scopeGeneration,
+    int detailGeneration,
+    RouteActivityFailure failure,
+    Emitter<RouteActivityState> emit,
+  ) {
+    if (!_isCurrentDetail(walletId, scopeGeneration, detailGeneration, emit)) {
+      return;
+    }
+    emit(state.copyWith(isDetailLoading: false, failure: failure));
   }
 }
 

@@ -17,12 +17,12 @@ import 'package:web_dex/views/dex/orderbook/orderbook_table_title.dart';
 class OrderbookTable extends StatelessWidget {
   const OrderbookTable(
     this.orderbook, {
-    Key? key,
+    super.key,
     this.myOrder,
     this.selectedOrderUuid,
     this.onAskClick,
     this.onBidClick,
-  }) : super(key: key);
+  });
 
   final Orderbook orderbook;
   final Order? myOrder;
@@ -166,16 +166,13 @@ class OrderbookTable extends StatelessWidget {
         itemCount: asks.length,
         itemBuilder: (context, i) {
           final Order ask = asks[i];
-          late double volFraction;
-          try {
-            volFraction = (ask.maxVolume / highestVolume).toDouble();
-          } catch (_) {
-            volFraction = 1;
-          }
+          final volFraction = _safeVolumeFraction(ask.maxVolume, highestVolume);
 
           return OrderbookTableItem(
             ask,
-            key: Key('orderbook-ask-item-${ask.uuid ?? 'target'}'),
+            key: ValueKey<int>(
+              Object.hash('orderbook-ask-item', ask.uuid ?? 'target'),
+            ),
             volumeFraction: volFraction,
             onClick: onAskClick,
             isSelected: ask.uuid == selectedOrderUuid,
@@ -227,16 +224,11 @@ class OrderbookTable extends StatelessWidget {
         itemCount: bids.length,
         itemBuilder: (context, i) {
           final Order bid = bids[i];
-          late double volFraction;
-          try {
-            volFraction = (bid.maxVolume / highestVolume).toDouble();
-          } catch (_) {
-            volFraction = 1;
-          }
+          final volFraction = _safeVolumeFraction(bid.maxVolume, highestVolume);
 
           return OrderbookTableItem(
             bid,
-            key: Key('orderbook-bid-item-${bid.uuid}'),
+            key: ValueKey<int>(Object.hash('orderbook-bid-item', bid.uuid)),
             volumeFraction: volFraction,
             onClick: onBidClick,
             isSelected: bid.uuid == selectedOrderUuid,
@@ -256,4 +248,16 @@ class OrderbookTable extends StatelessWidget {
 
     return highest;
   }
+}
+
+double _safeVolumeFraction(Rational volume, Rational highestVolume) {
+  final volumeValue = volume.toDouble();
+  final highestValue = highestVolume.toDouble();
+  if (!volumeValue.isFinite ||
+      !highestValue.isFinite ||
+      volumeValue <= 0 ||
+      highestValue <= 0) {
+    return 0;
+  }
+  return (volumeValue / highestValue).clamp(0, 1).toDouble();
 }

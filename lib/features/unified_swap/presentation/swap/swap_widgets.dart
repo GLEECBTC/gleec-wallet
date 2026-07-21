@@ -56,7 +56,7 @@ class _SwapCopyableValueState extends State<SwapCopyableValue> {
         unifiedSwapText(
           context,
           'common.copyFailed',
-          '{label} could not be copied.',
+          '{label} could not be copied. Select the value and copy it manually.',
           namedArgs: {'label': widget.label},
         ),
         error: true,
@@ -421,11 +421,4 @@ String swapDuration(BuildContext context, Duration duration) {
 }
 
 bool isSafeSwapCandidate(UnifiedSwapQuoteCandidate candidate) =>
-    candidate.isExecutable &&
-    candidate.topology != UnifiedSwapTopology.unknown &&
-    candidate.fees.every(
-      (fee) =>
-          fee.kind != RouteFeeKind.unknown &&
-          fee.asset.chainFamily != UnifiedSwapChainFamily.unknown &&
-          fee.asset.kind != UnifiedSwapAssetKind.unknown,
-    );
+    candidate.isSafelyExecutable;

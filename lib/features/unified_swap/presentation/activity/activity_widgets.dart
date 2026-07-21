@@ -55,7 +55,8 @@ class _RouteActivityExecutionIdState extends State<RouteActivityExecutionId> {
         unifiedSwapText(
           context,
           'activity.copyExecutionIdFailed',
-          'The execution ID could not be copied.',
+          'The execution ID could not be copied automatically. Select and '
+              'copy it manually.',
         ),
         isError: true,
       );
@@ -105,11 +106,12 @@ class _RouteActivityExecutionIdState extends State<RouteActivityExecutionId> {
         children: [
           Flexible(
             child: ExcludeSemantics(
-              child: Text(
+              child: SelectableText(
                 widget.routeExecutionId,
-                key: Key('activity-execution-id-${widget.routeExecutionId}'),
+                key: ValueKey<int>(
+                  Object.hash('activity-execution-id', widget.routeExecutionId),
+                ),
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: widget.compact
                     ? textTheme.bodySmall
                     : textTheme.bodyMedium,
@@ -118,7 +120,9 @@ class _RouteActivityExecutionIdState extends State<RouteActivityExecutionId> {
           ),
           const SizedBox(width: 4),
           IconButton(
-            key: Key('activity-copy-${widget.routeExecutionId}'),
+            key: ValueKey<int>(
+              Object.hash('activity-copy', widget.routeExecutionId),
+            ),
             onPressed: _copying ? null : _copy,
             tooltip: unifiedSwapText(
               context,
@@ -137,6 +141,109 @@ class _RouteActivityExecutionIdState extends State<RouteActivityExecutionId> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class RouteActivityCopyButton extends StatefulWidget {
+  const RouteActivityCopyButton({
+    required this.value,
+    required this.label,
+    required this.valueKey,
+    required this.clipboardWriter,
+    required this.announcement,
+    this.compact = false,
+    super.key,
+  });
+
+  final String value;
+  final String label;
+  final String valueKey;
+  final ActivityClipboardWriter clipboardWriter;
+  final ActivityAnnouncement announcement;
+  final bool compact;
+
+  @override
+  State<RouteActivityCopyButton> createState() =>
+      _RouteActivityCopyButtonState();
+}
+
+class _RouteActivityCopyButtonState extends State<RouteActivityCopyButton> {
+  bool _copying = false;
+
+  Future<void> _copy() async {
+    if (_copying) return;
+    setState(() => _copying = true);
+    try {
+      await widget.clipboardWriter(widget.value);
+    } on Object {
+      if (!mounted) return;
+      _showMessage(
+        unifiedSwapText(
+          context,
+          'common.copyFailed',
+          '{label} could not be copied automatically. Select and copy it '
+              'manually.',
+          namedArgs: {'label': widget.label},
+        ),
+        isError: true,
+      );
+      return;
+    } finally {
+      if (mounted) setState(() => _copying = false);
+    }
+
+    if (!mounted) return;
+    final message = unifiedSwapText(
+      context,
+      'common.copied',
+      '{label} copied.',
+      namedArgs: {'label': widget.label},
+    );
+    _showMessage(message);
+    try {
+      await widget.announcement(context, message);
+    } on Object {
+      // Clipboard success remains authoritative even if the platform does not
+      // support an explicit accessibility announcement.
+    }
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    final colors = Theme.of(context).colorScheme;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Semantics(liveRegion: true, child: Text(message)),
+        backgroundColor: isError ? colors.error : null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tooltip = unifiedSwapText(
+      context,
+      'common.copyFull',
+      'Copy full {label}',
+      namedArgs: {'label': widget.label.toLowerCase()},
+    );
+    final progress = const SizedBox.square(
+      dimension: 18,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    );
+    if (widget.compact) {
+      return IconButton(
+        key: Key('activity-copy-${widget.valueKey}'),
+        onPressed: _copying ? null : _copy,
+        tooltip: tooltip,
+        icon: _copying ? progress : const Icon(Icons.copy_rounded),
+      );
+    }
+    return TextButton.icon(
+      key: Key('activity-copy-${widget.valueKey}'),
+      onPressed: _copying ? null : _copy,
+      icon: _copying ? progress : const Icon(Icons.copy_rounded),
+      label: Text(tooltip),
     );
   }
 }

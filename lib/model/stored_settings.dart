@@ -54,6 +54,69 @@ class StoredSettings {
     );
   }
 
+  /// Strict parser for settings that will participate in an authoritative
+  /// read-modify-write transaction. Present malformed values are rejected
+  /// instead of being defaulted, skipped, or silently repaired.
+  factory StoredSettings.fromJsonStrict(Map<String, dynamic>? json) {
+    if (json == null) return StoredSettings.initial();
+
+    final rawThemeMode = json['themeModeIndex'];
+    final themeModeIndex = rawThemeMode ?? ThemeMode.dark.index;
+    if (themeModeIndex is! int ||
+        themeModeIndex < 0 ||
+        themeModeIndex >= ThemeMode.values.length) {
+      throw const FormatException('Invalid stored theme mode');
+    }
+
+    final rawAnalytics = json[storedAnalyticsSettingsKey];
+    AnalyticsSettings analytics;
+    if (rawAnalytics == null) {
+      analytics = AnalyticsSettings.initial();
+    } else {
+      if (rawAnalytics is! Map) {
+        throw const FormatException('Invalid analytics settings');
+      }
+      final analyticsJson = Map<String, dynamic>.from(rawAnalytics);
+      final sendAllowed = analyticsJson['send_allowed'];
+      if (sendAllowed != null && sendAllowed is! bool) {
+        throw const FormatException('Invalid analytics setting');
+      }
+      analytics = AnalyticsSettings(
+        isSendAllowed: sendAllowed is bool ? sendAllowed : true,
+      );
+    }
+
+    final rawMarketMaker = json[storedMarketMakerSettingsKey];
+    if (rawMarketMaker != null && rawMarketMaker is! Map) {
+      throw const FormatException('Invalid market maker settings');
+    }
+    final marketMaker = MarketMakerBotSettings.fromJsonStrict(
+      rawMarketMaker == null
+          ? null
+          : Map<String, dynamic>.from(rawMarketMaker as Map),
+    );
+
+    bool strictBool(String key, bool defaultValue) {
+      final value = json[key];
+      if (value == null && !json.containsKey(key)) return defaultValue;
+      if (value is! bool) {
+        throw const FormatException('Invalid stored boolean setting');
+      }
+      return value;
+    }
+
+    return StoredSettings(
+      mode: ThemeMode.values[themeModeIndex],
+      analytics: analytics,
+      marketMakerBotSettings: marketMaker,
+      testCoinsEnabled: strictBool('testCoinsEnabled', true),
+      weakPasswordsAllowed: strictBool('weakPasswordsAllowed', false),
+      hideZeroBalanceAssets: strictBool('hideZeroBalanceAssets', false),
+      diagnosticLoggingEnabled: strictBool('diagnosticLoggingEnabled', false),
+      hideBalances: strictBool('hideBalances', false),
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'themeModeIndex': mode.index,

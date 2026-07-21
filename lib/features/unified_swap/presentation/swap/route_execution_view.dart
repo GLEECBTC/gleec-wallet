@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:web_dex/features/unified_swap/application/route_execution_bloc.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart';
 import 'package:web_dex/features/unified_swap/domain/route_execution_models.dart';
 import 'package:web_dex/features/unified_swap/presentation/swap/swap_widgets.dart';
 import 'package:web_dex/features/unified_swap/presentation/unified_swap_design.dart';
+import 'package:web_dex/features/unified_swap/presentation/unified_swap_sensitive_dialog.dart';
 
 class RouteExecutionView extends StatelessWidget {
   const RouteExecutionView({
@@ -15,6 +18,8 @@ class RouteExecutionView extends StatelessWidget {
     required this.canSelectRecoveryRoute,
     required this.clipboardWriter,
     required this.announcement,
+    this.onClose,
+    this.onViewActivity,
     super.key,
   });
 
@@ -26,6 +31,8 @@ class RouteExecutionView extends StatelessWidget {
   final bool canSelectRecoveryRoute;
   final SwapClipboardWriter clipboardWriter;
   final SwapAnnouncement announcement;
+  final VoidCallback? onClose;
+  final VoidCallback? onViewActivity;
 
   @override
   Widget build(BuildContext context) {
@@ -40,168 +47,309 @@ class RouteExecutionView extends StatelessWidget {
         state.status == RouteExecutionLoadStatus.attentionRequired ||
         state.status == RouteExecutionLoadStatus.failed ||
         unknown;
-    return ColoredBox(
-      color: colors.canvas,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: UnifiedSwapDesign.contentWidth,
-          ),
-          child: ListView(
-            key: const Key('unified-swap-execution'),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: UnifiedSwapDesign.pagePadding(context),
-            children: [
-              UnifiedSwapPageTitle(
-                title: recoveryLike
-                    ? unifiedSwapText(
-                        context,
-                        'execution.recoveryTitle',
-                        'Recovery',
-                      )
-                    : unifiedSwapText(
-                        context,
-                        'execution.progressTitle',
-                        'Swap progress',
-                      ),
-              ),
-              const SizedBox(height: 12),
-              UnifiedSwapStatusHero(
-                title: _title(context, state.status),
-                message: _description(context, state.status),
-                icon: _statusIcon(state.status, progress?.phase),
-                tone: _statusTone(state.status, unknown),
-                key: const Key('swap-execution-status'),
-              ),
-              if (state.status == RouteExecutionLoadStatus.starting ||
-                  state.status == RouteExecutionLoadStatus.reattaching) ...[
-                const SizedBox(height: 12),
-                const UnifiedSwapSkeleton(
-                  key: Key('swap-execution-loading'),
-                  height: 8,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) onClose?.call();
+      },
+      child: ColoredBox(
+        color: colors.canvas,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: UnifiedSwapDesign.contentWidth,
+            ),
+            child: ListView(
+              key: const Key('unified-swap-execution'),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: UnifiedSwapDesign.pagePadding(context),
+              children: [
+                UnifiedSwapPageTitle(
+                  title: recoveryLike
+                      ? unifiedSwapText(
+                          context,
+                          'execution.recoveryTitle',
+                          'Recovery',
+                        )
+                      : unifiedSwapText(
+                          context,
+                          'execution.progressTitle',
+                          'Swap progress',
+                        ),
+                  leading: onClose == null
+                      ? null
+                      : IconButton(
+                          key: const Key('swap-execution-close'),
+                          onPressed: onClose,
+                          tooltip: unifiedSwapText(
+                            context,
+                            'execution.close',
+                            'Close',
+                          ),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
                 ),
-              ],
-              if (state.failure case final failure?) ...[
                 const SizedBox(height: 12),
-                _ExecutionNotice(
-                  key: const Key('swap-execution-failure'),
-                  title: unifiedSwapText(
-                    context,
-                    'execution.statusAttentionTitle',
-                    'Status needs attention',
-                  ),
-                  message: _failure(context, failure),
-                  error: true,
+                UnifiedSwapStatusHero(
+                  title: _heroTitle(context, state.status, progress),
+                  message: _heroDescription(context, state.status, progress),
+                  icon: _statusIcon(state.status, progress?.phase),
+                  tone: _statusTone(state.status, unknown),
+                  key: const Key('swap-execution-status'),
                 ),
-              ],
-              if (unknown) ...[
-                const SizedBox(height: 12),
-                _ExecutionNotice(
-                  key: const Key('swap-execution-unknown'),
-                  title: unifiedSwapText(
-                    context,
-                    'execution.statusUnavailableTitle',
-                    'Status unavailable',
+                if (state.status == RouteExecutionLoadStatus.starting ||
+                    state.status == RouteExecutionLoadStatus.reattaching) ...[
+                  const SizedBox(height: 12),
+                  const UnifiedSwapSkeleton(
+                    key: Key('swap-execution-loading'),
+                    height: 8,
                   ),
-                  message: unifiedSwapText(
-                    context,
-                    'execution.statusUnavailableBody',
-                    'The wallet received an unknown route status. Movement '
-                        'controls are disabled while Activity and recovery '
-                        'remain available.',
+                ],
+                if (state.failure case final failure?) ...[
+                  const SizedBox(height: 12),
+                  _ExecutionNotice(
+                    key: const Key('swap-execution-failure'),
+                    title: unifiedSwapText(
+                      context,
+                      'execution.statusAttentionTitle',
+                      'Status needs attention',
+                    ),
+                    message: _failure(context, failure),
+                    error: true,
                   ),
-                  error: true,
-                ),
-              ],
-              if (recoveryLike && progress != null) ...[
-                const SizedBox(height: 12),
-                _RecoveryQuestions(progress: progress, unknown: unknown),
-              ],
-              if (routeExecutionId != null) ...[
-                const SizedBox(height: 12),
-                SwapSectionCard(
-                  title: unifiedSwapText(
-                    context,
-                    'common.executionId',
-                    'Execution ID',
+                ],
+                if (unknown) ...[
+                  const SizedBox(height: 12),
+                  _ExecutionNotice(
+                    key: const Key('swap-execution-unknown'),
+                    title: unifiedSwapText(
+                      context,
+                      'execution.statusUnavailableTitle',
+                      'Status unavailable',
+                    ),
+                    message: unifiedSwapText(
+                      context,
+                      'execution.statusUnavailableBody',
+                      'The wallet received an unknown route status. Movement '
+                          'controls are disabled while Activity and recovery '
+                          'remain available.',
+                    ),
+                    error: true,
                   ),
-                  icon: Icons.fingerprint_rounded,
-                  child: SwapCopyableValue(
-                    label: unifiedSwapText(
+                ],
+                if (recoveryLike && progress != null) ...[
+                  const SizedBox(height: 12),
+                  _RecoveryQuestions(progress: progress, unknown: unknown),
+                ],
+                if (routeExecutionId != null) ...[
+                  const SizedBox(height: 12),
+                  SwapSectionCard(
+                    title: unifiedSwapText(
                       context,
                       'common.executionId',
                       'Execution ID',
                     ),
-                    value: routeExecutionId,
-                    valueKey: 'swap-progress-execution-id',
-                    clipboardWriter: clipboardWriter,
-                    announcement: announcement,
-                  ),
-                ),
-              ],
-              if (progress != null) ...[
-                const SizedBox(height: 12),
-                _ProgressCard(progress: progress),
-                if (progress.holding != null) ...[
-                  const SizedBox(height: 12),
-                  _HoldingCard(holding: progress.holding!),
-                ],
-                if (progress.transactionHashes.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _TransactionCard(
-                    hashes: progress.transactionHashes,
-                    clipboardWriter: clipboardWriter,
-                    announcement: announcement,
-                  ),
-                ],
-                if (progress.pendingAction != null) ...[
-                  const SizedBox(height: 12),
-                  _PendingActionCard(
-                    progress: progress,
-                    controlInFlight: state.controlInFlight,
-                    canSelectRecoveryRoute: canSelectRecoveryRoute,
-                    onDecision: onDecision,
-                  ),
-                ],
-                const SizedBox(height: 12),
-                _ServerControls(
-                  progress: progress,
-                  controlInFlight: state.controlInFlight,
-                  onCancel: onCancel,
-                  onStopAfterCurrent: onStopAfterCurrent,
-                ),
-              ],
-              if (routeExecutionId != null &&
-                  (state.status == RouteExecutionLoadStatus.unknown ||
-                      state.status == RouteExecutionLoadStatus.failed)) ...[
-                const SizedBox(height: 16),
-                FilledButton.tonalIcon(
-                  key: const Key('swap-execution-reattach'),
-                  onPressed: state.controlInFlight ? null : onReattach,
-                  icon: const Icon(Icons.sync_rounded),
-                  label: Text(
-                    unifiedSwapText(
-                      context,
-                      'execution.reattach',
-                      'Reattach and reconcile',
+                    icon: Icons.fingerprint_rounded,
+                    child: SwapCopyableValue(
+                      label: unifiedSwapText(
+                        context,
+                        'common.executionId',
+                        'Execution ID',
+                      ),
+                      value: routeExecutionId,
+                      valueKey: 'swap-progress-execution-id',
+                      clipboardWriter: clipboardWriter,
+                      announcement: announcement,
                     ),
                   ),
+                ],
+                if (progress != null) ...[
+                  const SizedBox(height: 12),
+                  _ProgressCard(progress: progress),
+                  if (progress.holding != null) ...[
+                    const SizedBox(height: 12),
+                    _HoldingCard(
+                      holding: progress.holding!,
+                      clipboardWriter: clipboardWriter,
+                      announcement: announcement,
+                    ),
+                  ],
+                  if (progress.approvalRecovery != null) ...[
+                    const SizedBox(height: 12),
+                    _ApprovalRecoveryCard(
+                      recovery: progress.approvalRecovery!,
+                      clipboardWriter: clipboardWriter,
+                      announcement: announcement,
+                    ),
+                  ],
+                  if (progress.transactionHashes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _TransactionCard(
+                      hashes: progress.transactionHashes,
+                      clipboardWriter: clipboardWriter,
+                      announcement: announcement,
+                    ),
+                  ],
+                  if (progress.pendingAction != null) ...[
+                    const SizedBox(height: 12),
+                    _PendingActionCard(
+                      progress: progress,
+                      controlInFlight: state.controlInFlight,
+                      canSelectRecoveryRoute: canSelectRecoveryRoute,
+                      onDecision: onDecision,
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _ServerControls(
+                    progress: progress,
+                    controlInFlight: state.controlInFlight,
+                    onCancel: onCancel,
+                    onStopAfterCurrent: onStopAfterCurrent,
+                  ),
+                ],
+                if (routeExecutionId != null &&
+                    (state.status == RouteExecutionLoadStatus.unknown ||
+                        state.status == RouteExecutionLoadStatus.failed)) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.tonalIcon(
+                    key: const Key('swap-execution-reattach'),
+                    onPressed: state.controlInFlight ? null : onReattach,
+                    icon: const Icon(Icons.sync_rounded),
+                    label: Text(
+                      unifiedSwapText(
+                        context,
+                        'execution.reattach',
+                        'Reattach and reconcile',
+                      ),
+                    ),
+                  ),
+                ],
+                if (onViewActivity != null) ...[
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    key: const Key('swap-view-activity'),
+                    style: UnifiedSwapDesign.secondaryButtonStyle(context),
+                    onPressed: onViewActivity,
+                    icon: const Icon(Icons.history_rounded),
+                    label: Text(
+                      unifiedSwapText(
+                        context,
+                        'execution.viewInActivity',
+                        'View in Activity',
+                      ),
+                    ),
+                  ),
+                ],
+                if (onClose != null && _isTerminal(state.status)) ...[
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    key: const Key('swap-execution-done'),
+                    style: UnifiedSwapDesign.primaryButtonStyle(context),
+                    onPressed: onClose,
+                    child: Text(
+                      unifiedSwapText(context, 'execution.done', 'Done'),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Text(
+                  unifiedSwapText(
+                    context,
+                    'execution.leavingNotice',
+                    'Leaving this screen only stops local observation. It never '
+                        'cancels backend execution.',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: UnifiedSwapDesign.typography(context).bodySmall,
                 ),
               ],
-              const SizedBox(height: 16),
-              Text(
-                unifiedSwapText(
-                  context,
-                  'execution.leavingNotice',
-                  'Leaving this screen only stops local observation. It never '
-                      'cancels backend execution.',
-                ),
-                textAlign: TextAlign.center,
-                style: UnifiedSwapDesign.typography(context).bodySmall,
-              ),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ApprovalRecoveryCard extends StatelessWidget {
+  const _ApprovalRecoveryCard({
+    required this.recovery,
+    required this.clipboardWriter,
+    required this.announcement,
+  });
+
+  final RouteApprovalRecovery recovery;
+  final SwapClipboardWriter clipboardWriter;
+  final SwapAnnouncement announcement;
+
+  @override
+  Widget build(BuildContext context) {
+    final allowance = swapAmount(recovery.remainingAllowance, recovery.token);
+    final instruction = recovery.instruction;
+    final revoke =
+        instruction ==
+        RouteApprovalRecoveryInstruction.revokeAllowanceBeforeRetry;
+    final known = instruction != RouteApprovalRecoveryInstruction.unknown;
+    return SwapSectionCard(
+      title: unifiedSwapText(
+        context,
+        'execution.approvalRecovery.title',
+        'Token permission after this attempt',
+      ),
+      icon: Icons.admin_panel_settings_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(switch (instruction) {
+            RouteApprovalRecoveryInstruction.revokeAllowanceBeforeRetry =>
+              unifiedSwapText(
+                context,
+                'execution.approvalRecovery.revokeBeforeRetry',
+                'An allowance of {amount} remains. Revoke it in your '
+                    'wallet before retrying this swap.',
+                namedArgs: {'amount': allowance},
+              ),
+            RouteApprovalRecoveryInstruction.noAllowanceRemains =>
+              unifiedSwapText(
+                context,
+                'execution.approvalRecovery.noAllowanceRemains',
+                'No token allowance remains, so no revoke is required '
+                    'before retrying.',
+              ),
+            RouteApprovalRecoveryInstruction.unknown => unifiedSwapText(
+              context,
+              'execution.approvalRecovery.unknown',
+              'The remaining token permission could not be verified. '
+                  'Reconcile the swap before retrying.',
+            ),
+          }),
+          if (known) ...[
+            const SizedBox(height: 12),
+            SwapCopyableValue(
+              label: unifiedSwapText(
+                context,
+                'execution.approvalRecovery.validatedSpender',
+                'Validated permission address',
+              ),
+              value: recovery.validatedSpender,
+              valueKey: 'swap-approval-recovery-spender',
+              clipboardWriter: clipboardWriter,
+              announcement: announcement,
+            ),
+          ],
+          if (revoke) ...[
+            const SizedBox(height: 10),
+            Text(
+              unifiedSwapText(
+                context,
+                'execution.approvalRecovery.walletOnly',
+                'For safety, revoke through your wallet’s token permissions. '
+                    'This status does not authorize a revoke action.',
+              ),
+              style: UnifiedSwapDesign.typography(context).bodySmall,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -216,7 +364,7 @@ class _RecoveryQuestions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final holding = progress.holding;
-    final hasEvidence = progress.transactionHashes.isNotEmpty;
+    final lastConfirmed = _lastConfirmedProgressEvidence(progress);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -237,30 +385,30 @@ class _RecoveryQuestions extends StatelessWidget {
             'Where are the funds?',
           ),
           answer: holding == null
-              ? unifiedSwapText(
-                  context,
-                  'recovery.locationUnverified',
-                  'Current location is not yet verified',
-                )
+              ? lastConfirmed?.holding != null
+                    ? unifiedSwapText(
+                        context,
+                        'recovery.lastConfirmedCurrentUnknown',
+                        'Last confirmed location · current location unknown',
+                      )
+                    : lastConfirmed != null
+                    ? unifiedSwapText(
+                        context,
+                        'recovery.lastConfirmedEvidenceCurrentUnknown',
+                        'Last confirmed evidence · current location unknown',
+                      )
+                    : unifiedSwapText(
+                        context,
+                        'recovery.locationUnverified',
+                        'Current location is not yet verified',
+                      )
               : unifiedSwapText(
                   context,
                   'recovery.verifiedHolding',
                   'Verified current holding',
                 ),
           details: holding == null
-              ? hasEvidence
-                    ? unifiedSwapText(
-                        context,
-                        'recovery.pendingEvidence',
-                        'A transaction may still be pending. Reconciliation '
-                            'continues from the last confirmed evidence.',
-                      )
-                    : unifiedSwapText(
-                        context,
-                        'recovery.noVerifiedLocation',
-                        'No verified current fund location is available. The '
-                            'wallet will not guess.',
-                      )
+              ? _lastConfirmedProgressDetails(context, lastConfirmed)
               : unifiedSwapText(
                   context,
                   'recovery.holdingLocation',
@@ -398,52 +546,99 @@ class _ProgressCard extends StatelessWidget {
   }
 }
 
-class _HumanTimeline extends StatelessWidget {
+class _HumanTimeline extends StatefulWidget {
   const _HumanTimeline({required this.progress});
 
   final RouteExecutionProgress progress;
 
   @override
+  State<_HumanTimeline> createState() => _HumanTimelineState();
+}
+
+class _HumanTimelineState extends State<_HumanTimeline> {
+  bool _expanded = false;
+
+  @override
+  void didUpdateWidget(_HumanTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.progress.routeExecutionId !=
+            widget.progress.routeExecutionId ||
+        oldWidget.progress.stageCount != widget.progress.stageCount) {
+      _expanded = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final progress = widget.progress;
     final count = progress.stageCount;
     final current = progress.stageIndex.clamp(0, count - 1);
-    final indices = <int>{};
-    if (count <= 7) {
-      indices.addAll(List.generate(count, (index) => index));
-    } else {
-      indices
-        ..add(0)
-        ..addAll([
-          (current - 1).clamp(0, count - 1),
-          current,
-          (current + 1).clamp(0, count - 1),
-        ])
-        ..add(count - 1);
-    }
-    final ordered = indices.toList()..sort();
+    final ordered = _visibleTimelineIndices(
+      count: count,
+      current: current,
+      expanded: _expanded,
+    );
+    final collapsedCompletedCount = ordered.isEmpty ? 0 : ordered.first;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (collapsedCompletedCount > 0)
+          _CollapsedStages(count: collapsedCompletedCount),
         for (
           var visibleIndex = 0;
           visibleIndex < ordered.length;
           visibleIndex++
         ) ...[
-          if (visibleIndex > 0 &&
-              ordered[visibleIndex] - ordered[visibleIndex - 1] > 1)
-            _CollapsedStages(
-              count: ordered[visibleIndex] - ordered[visibleIndex - 1] - 1,
-            ),
           _TimelineStage(
             index: ordered[visibleIndex],
             current: current,
-            terminalFailure:
-                progress.outcome == RouteExecutionOutcome.failed ||
-                progress.outcome == RouteExecutionOutcome.cancelled,
+            plan: _stagePlan(progress, ordered[visibleIndex]),
+            result: _stageResult(progress, ordered[visibleIndex]),
+            outcome: progress.outcome,
+            last: visibleIndex == ordered.length - 1,
+          ),
+        ],
+        if (count > 12 && current > 0) ...[
+          const SizedBox(height: 4),
+          TextButton.icon(
+            key: const Key('swap-timeline-expand'),
+            onPressed: () => setState(() => _expanded = !_expanded),
+            icon: Icon(
+              _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+            ),
+            label: Text(
+              _expanded
+                  ? unifiedSwapText(
+                      context,
+                      'execution.showFewerSteps',
+                      'Show fewer steps',
+                    )
+                  : unifiedSwapText(
+                      context,
+                      'execution.showAllSteps',
+                      'Show all {count} steps',
+                      namedArgs: {'count': '$count'},
+                    ),
+            ),
           ),
         ],
       ],
     );
   }
+}
+
+List<int> _visibleTimelineIndices({
+  required int count,
+  required int current,
+  required bool expanded,
+}) {
+  if (expanded || count <= 12) {
+    return List.generate(count, (index) => index);
+  }
+  // Long routes keep the current and every remaining semantic stage visible.
+  // Only the completed prefix is collapsed, so the 17-stage stress route at
+  // stage 13 presents "12 completed" plus the five stages still relevant.
+  return List.generate(count - current, (offset) => current + offset);
 }
 
 class _CollapsedStages extends StatelessWidget {
@@ -460,11 +655,11 @@ class _CollapsedStages extends StatelessWidget {
         child: UnifiedSwapBadge(
           label: unifiedSwapText(
             context,
-            'execution.completedSteps',
-            '{count} completed steps',
+            'execution.completedStagesCollapsed',
+            '{count} completed stages · evidence preserved',
             namedArgs: {'count': '$count'},
           ),
-          tone: UnifiedSwapNoticeTone.success,
+          tone: UnifiedSwapNoticeTone.neutral,
         ),
       ),
     );
@@ -475,21 +670,45 @@ class _TimelineStage extends StatelessWidget {
   const _TimelineStage({
     required this.index,
     required this.current,
-    required this.terminalFailure,
+    required this.plan,
+    required this.result,
+    required this.outcome,
+    required this.last,
   });
 
   final int index;
   final int current;
-  final bool terminalFailure;
+  final RouteReviewStep? plan;
+  final RouteStageHistoryEntry? result;
+  final RouteExecutionOutcome outcome;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
     final colors = UnifiedSwapDesign.colors(context);
-    final done = index < current;
-    final active = index == current;
-    final failed = active && terminalFailure;
+    final failed =
+        result?.phase == RouteStagePhase.failed ||
+        (index == current && outcome == RouteExecutionOutcome.failed);
+    final cancelled =
+        result?.phase == RouteStagePhase.cancelled ||
+        (index == current && outcome == RouteExecutionOutcome.cancelled);
+    final needsAttention =
+        index == current &&
+        (outcome == RouteExecutionOutcome.attentionRequired ||
+            outcome == RouteExecutionOutcome.recovery);
+    final done =
+        outcome == RouteExecutionOutcome.completed ||
+        result?.phase == RouteStagePhase.completed ||
+        result?.completedAt != null ||
+        index < current;
+    final active =
+        index == current && !failed && !cancelled && !needsAttention && !done;
     final toneColor = failed
         ? colors.danger
+        : cancelled
+        ? colors.textSecondary
+        : needsAttention
+        ? colors.warning
         : done
         ? colors.success
         : active
@@ -497,6 +716,10 @@ class _TimelineStage extends StatelessWidget {
         : colors.controlBorder;
     final background = failed
         ? colors.dangerContainer
+        : cancelled
+        ? colors.surfaceHighest
+        : needsAttention
+        ? colors.warningContainer
         : done
         ? colors.successContainer
         : active
@@ -521,6 +744,10 @@ class _TimelineStage extends StatelessWidget {
                     child: Icon(
                       failed
                           ? Icons.error_outline_rounded
+                          : cancelled
+                          ? Icons.block_rounded
+                          : needsAttention
+                          ? Icons.priority_high_rounded
                           : done
                           ? Icons.check_rounded
                           : active
@@ -531,7 +758,7 @@ class _TimelineStage extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (!active || !terminalFailure)
+                if (!last)
                   Expanded(
                     child: Container(
                       width: 2,
@@ -548,23 +775,39 @@ class _TimelineStage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    unifiedSwapText(
-                      context,
-                      'common.stepNumber',
-                      'Step {number}',
-                      namedArgs: {'number': '${index + 1}'},
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      _timelineStageTitle(context, index, plan),
+                      style: UnifiedSwapDesign.typography(context).labelLarge,
                     ),
-                    style: UnifiedSwapDesign.typography(context).labelLarge,
                   ),
                   const SizedBox(height: 3),
                   Text(
                     failed
                         ? unifiedSwapText(
                             context,
-                            'execution.timeline.needsAttention',
-                            'Needs attention',
+                            'execution.timeline.failed',
+                            'Failed',
                           )
+                        : cancelled
+                        ? unifiedSwapText(
+                            context,
+                            'execution.timeline.cancelled',
+                            'Cancelled',
+                          )
+                        : needsAttention
+                        ? outcome == RouteExecutionOutcome.recovery
+                              ? unifiedSwapText(
+                                  context,
+                                  'execution.timeline.recovery',
+                                  'Recovery',
+                                )
+                              : unifiedSwapText(
+                                  context,
+                                  'execution.timeline.needsAttention',
+                                  'Needs attention',
+                                )
                         : done
                         ? unifiedSwapText(
                             context,
@@ -584,6 +827,53 @@ class _TimelineStage extends StatelessWidget {
                           ),
                     style: UnifiedSwapDesign.typography(context).bodySmall,
                   ),
+                  if (plan != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      plan!.kind == RouteReviewStepKind.atomic
+                          ? unifiedSwapText(
+                              context,
+                              'execution.timeline.directExchange',
+                              'Direct exchange',
+                            )
+                          : unifiedSwapText(
+                              context,
+                              'execution.timeline.unifiedTransfer',
+                              'Unified transfer',
+                            ),
+                      style: UnifiedSwapDesign.typography(context).bodySmall,
+                    ),
+                  ],
+                  if (result != null) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      _stagePhaseLabel(context, result!.phase),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (result!.holding case final holding?)
+                      Text(
+                        unifiedSwapText(
+                          context,
+                          'execution.timeline.verifiedHolding',
+                          'Verified holding: {amount} on {network}',
+                          namedArgs: {
+                            'amount': swapAmount(holding.amount, holding.asset),
+                            'network': unifiedSwapNetworkLabel(
+                              context,
+                              holding.asset,
+                            ),
+                          },
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    for (final evidence in result!.evidence)
+                      Text(
+                        _timelineEvidence(context, evidence),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -595,9 +885,15 @@ class _TimelineStage extends StatelessWidget {
 }
 
 class _HoldingCard extends StatelessWidget {
-  const _HoldingCard({required this.holding});
+  const _HoldingCard({
+    required this.holding,
+    required this.clipboardWriter,
+    required this.announcement,
+  });
 
   final RouteHolding holding;
+  final SwapClipboardWriter clipboardWriter;
+  final SwapAnnouncement announcement;
 
   @override
   Widget build(BuildContext context) {
@@ -634,7 +930,17 @@ class _HoldingCard extends StatelessWidget {
               'Verified address',
             ),
           ),
-          SelectableText(holding.address),
+          SwapCopyableValue(
+            label: unifiedSwapText(
+              context,
+              'execution.verifiedAddress',
+              'Verified address',
+            ),
+            value: holding.address,
+            valueKey: 'swap-verified-holding-address',
+            clipboardWriter: clipboardWriter,
+            announcement: announcement,
+          ),
           const SizedBox(height: 8),
           Text(
             unifiedSwapText(
@@ -698,7 +1004,7 @@ class _TransactionCard extends StatelessWidget {
   }
 }
 
-class _PendingActionCard extends StatelessWidget {
+class _PendingActionCard extends StatefulWidget {
   const _PendingActionCard({
     required this.progress,
     required this.controlInFlight,
@@ -710,6 +1016,53 @@ class _PendingActionCard extends StatelessWidget {
   final bool controlInFlight;
   final bool canSelectRecoveryRoute;
   final ValueChanged<RouteExecutionActionKind> onDecision;
+
+  @override
+  State<_PendingActionCard> createState() => _PendingActionCardState();
+}
+
+class _PendingActionCardState extends State<_PendingActionCard> {
+  Timer? _replacementExpiryTimer;
+
+  RouteExecutionProgress get progress => widget.progress;
+  bool get controlInFlight => widget.controlInFlight;
+  bool get canSelectRecoveryRoute => widget.canSelectRecoveryRoute;
+  ValueChanged<RouteExecutionActionKind> get onDecision => widget.onDecision;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleReplacementExpiry();
+  }
+
+  @override
+  void didUpdateWidget(_PendingActionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldExpiry =
+        oldWidget.progress.pendingAction?.replacementProposal?.expiresAt;
+    final expiry = progress.pendingAction?.replacementProposal?.expiresAt;
+    if (oldExpiry != expiry) _scheduleReplacementExpiry();
+  }
+
+  void _scheduleReplacementExpiry() {
+    _replacementExpiryTimer?.cancel();
+    final expiry = progress.pendingAction?.replacementProposal?.expiresAt;
+    if (expiry == null) return;
+    final remaining = expiry.difference(DateTime.now().toUtc());
+    if (remaining <= Duration.zero) return;
+    _replacementExpiryTimer = Timer(
+      remaining + const Duration(milliseconds: 1),
+      () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _replacementExpiryTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -731,6 +1084,15 @@ class _PendingActionCard extends StatelessWidget {
       );
     }
     final allowed = pending.allowedActions;
+    final replacement = pending.replacementProposal;
+    final replacementStage = replacement == null
+        ? null
+        : _stagePlanById(progress, replacement.stageId);
+    final canAcceptReplacement =
+        allowed.contains(RouteExecutionActionKind.acceptReplacement) &&
+        replacement != null &&
+        replacementStage != null &&
+        !replacement.isExpiredAt(DateTime.now().toUtc());
     return SwapSectionCard(
       title: _pendingTitle(context, pending.reason),
       icon: Icons.priority_high_rounded,
@@ -738,22 +1100,30 @@ class _PendingActionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(_pendingMessage(context, pending.reason)),
-          if (allowed.contains(RouteExecutionActionKind.acceptReplacement)) ...[
+          if (canAcceptReplacement) ...[
+            const SizedBox(height: 8),
+            _ReplacementProposalReview(
+              proposal: replacement,
+              stage: replacementStage,
+            ),
+          ] else if (allowed.contains(
+            RouteExecutionActionKind.acceptReplacement,
+          )) ...[
             const SizedBox(height: 8),
             _ExecutionNotice(
               key: const Key('swap-replacement-review-required'),
               title: unifiedSwapText(
                 context,
                 'execution.updatedConsentTitle',
-                'Updated consent required',
+                'Updated terms unavailable',
               ),
               message: unifiedSwapText(
                 context,
                 'execution.updatedConsentBody',
-                'Accepting changed route terms stays disabled until the '
-                    'wallet can show and bind an exact replacement Review.',
+                'The wallet cannot safely display the complete typed update. '
+                    'Accepting it remains disabled.',
               ),
-              error: false,
+              error: true,
             ),
           ],
           if (allowed.contains(RouteExecutionActionKind.selectRecoveryRoute) &&
@@ -795,13 +1165,33 @@ class _PendingActionCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (canAcceptReplacement)
+                FilledButton(
+                  key: const Key('swap-decision-accept-replacement'),
+                  onPressed: controlInFlight
+                      ? null
+                      : () => onDecision(
+                          RouteExecutionActionKind.acceptReplacement,
+                        ),
+                  child: Text(
+                    unifiedSwapText(
+                      context,
+                      'execution.acceptUpdatedRoute',
+                      'Accept updated route',
+                    ),
+                  ),
+                ),
               if (allowed.contains(RouteExecutionActionKind.stopAfterCurrent))
                 OutlinedButton(
                   key: const Key('swap-decision-stop'),
                   onPressed: controlInFlight
                       ? null
-                      : () => onDecision(
-                          RouteExecutionActionKind.stopAfterCurrent,
+                      : () => _confirmStopAfterCurrent(
+                          context,
+                          progress.routeExecutionId,
+                          () => onDecision(
+                            RouteExecutionActionKind.stopAfterCurrent,
+                          ),
                         ),
                   child: Text(
                     unifiedSwapText(
@@ -831,6 +1221,132 @@ class _PendingActionCard extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReplacementProposalReview extends StatelessWidget {
+  const _ReplacementProposalReview({
+    required this.proposal,
+    required this.stage,
+  });
+
+  final RouteReplacementProposal proposal;
+  final RouteReviewStep stage;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwapSectionCard(
+      title: unifiedSwapText(
+        context,
+        'execution.updatedRouteTerms',
+        'Updated route terms',
+      ),
+      icon: Icons.compare_arrows_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ReplacementLine(
+            label: unifiedSwapText(
+              context,
+              'review.expectedReceive',
+              'Expected receive',
+            ),
+            previous: swapAmount(stage.expectedReceive, stage.destination),
+            updated: swapAmount(proposal.expectedReceive, stage.destination),
+          ),
+          _ReplacementLine(
+            label: unifiedSwapText(
+              context,
+              'review.minimumReceive',
+              'Minimum receive',
+            ),
+            previous: swapAmount(stage.minimumReceive, stage.destination),
+            updated: swapAmount(proposal.minimumReceive, stage.destination),
+          ),
+          if (proposal.fees.isNotEmpty) ...[
+            const Divider(height: 20),
+            Text(
+              unifiedSwapText(
+                context,
+                'execution.updatedFees',
+                'Updated costs',
+              ),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            for (final fee in proposal.fees)
+              Text(
+                '${swapFeeKind(context, fee.kind)} · '
+                '${swapAmount(fee.amount, fee.asset)}',
+              ),
+          ],
+          if (proposal.requiredTotalNetworkFee case final networkFee?) ...[
+            const SizedBox(height: 8),
+            Text(
+              unifiedSwapText(
+                context,
+                'execution.updatedMaximumNetworkCost',
+                'Updated maximum network cost: {amount}',
+                namedArgs: {
+                  'amount': swapAmount(networkFee.amount, networkFee.asset),
+                },
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            unifiedSwapText(
+              context,
+              'execution.updatedTermsConsent',
+              'Accepting applies only these typed changes to the current '
+                  'route. No broader permission is granted.',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReplacementLine extends StatelessWidget {
+  const _ReplacementLine({
+    required this.label,
+    required this.previous,
+    required this.updated,
+  });
+
+  final String label;
+  final String previous;
+  final String updated;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: Text(label)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: previous,
+                    style: const TextStyle(
+                      decoration: TextDecoration.lineThrough,
+                    ),
+                  ),
+                  TextSpan(text: ' → $updated'),
+                ],
+              ),
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
@@ -906,7 +1422,13 @@ class _ServerControls extends StatelessWidget {
           if (canStop)
             OutlinedButton(
               key: const Key('swap-control-stop'),
-              onPressed: controlInFlight ? null : onStopAfterCurrent,
+              onPressed: controlInFlight
+                  ? null
+                  : () => _confirmStopAfterCurrent(
+                      context,
+                      progress.routeExecutionId,
+                      onStopAfterCurrent,
+                    ),
               child: Text(
                 unifiedSwapText(
                   context,
@@ -920,7 +1442,11 @@ class _ServerControls extends StatelessWidget {
               key: const Key('swap-control-cancel'),
               onPressed: controlInFlight
                   ? null
-                  : () => _confirmCancellation(context, onCancel),
+                  : () => _confirmCancellation(
+                      context,
+                      progress.routeExecutionId,
+                      onCancel,
+                    ),
               child: Text(
                 unifiedSwapText(
                   context,
@@ -972,113 +1498,299 @@ class _ExecutionNotice extends StatelessWidget {
   }
 }
 
-String _title(BuildContext context, RouteExecutionLoadStatus status) =>
-    switch (status) {
-      RouteExecutionLoadStatus.starting => unifiedSwapText(
+String _heroTitle(
+  BuildContext context,
+  RouteExecutionLoadStatus status,
+  RouteExecutionProgress? progress,
+) {
+  if (status == RouteExecutionLoadStatus.observing && progress != null) {
+    return switch (progress.phase) {
+      RouteExecutionPhase.validating => unifiedSwapText(
         context,
-        'execution.status.startingTitle',
-        'Starting Unified Swap',
+        'execution.hero.preparing',
+        'Preparing swap',
       ),
-      RouteExecutionLoadStatus.reattaching => unifiedSwapText(
+      RouteExecutionPhase.awaitingApproval => unifiedSwapText(
         context,
-        'execution.status.reattachingTitle',
-        'Reattaching to execution',
+        'execution.hero.approvalRequired',
+        'Approval required',
       ),
-      RouteExecutionLoadStatus.observing => unifiedSwapText(
+      RouteExecutionPhase.approvalPending => unifiedSwapText(
         context,
-        'execution.status.observingTitle',
-        'Unified Swap in progress',
+        'execution.hero.approving',
+        'Approving exact amount',
       ),
-      RouteExecutionLoadStatus.attentionRequired => unifiedSwapText(
+      RouteExecutionPhase.awaitingSignature => unifiedSwapText(
+        context,
+        'execution.hero.signatureRequired',
+        'Signature required',
+      ),
+      RouteExecutionPhase.signed => unifiedSwapText(
+        context,
+        'execution.hero.signatureReceived',
+        'Signature received',
+      ),
+      RouteExecutionPhase.broadcasting => unifiedSwapText(
+        context,
+        'execution.hero.broadcasting',
+        'Sending transaction',
+      ),
+      RouteExecutionPhase.sourcePending => unifiedSwapText(
+        context,
+        'execution.hero.sourcePending',
+        'Waiting for source confirmation',
+      ),
+      RouteExecutionPhase.sourceConfirmed => unifiedSwapText(
+        context,
+        'execution.hero.sourceConfirmed',
+        'Source confirmed',
+      ),
+      RouteExecutionPhase.bridgePending => unifiedSwapText(
+        context,
+        'execution.hero.transferPending',
+        'Transfer in progress',
+      ),
+      RouteExecutionPhase.destinationConfirmed => unifiedSwapText(
+        context,
+        'execution.hero.destinationConfirmed',
+        'Destination confirmed',
+      ),
+      RouteExecutionPhase.atomicFill => unifiedSwapText(
+        context,
+        'execution.hero.exchanging',
+        'Completing exchange',
+      ),
+      RouteExecutionPhase.awaitingUserAction => unifiedSwapText(
         context,
         'execution.status.attentionTitle',
         'Action required',
       ),
-      RouteExecutionLoadStatus.recovery => unifiedSwapText(
+      RouteExecutionPhase.stopAfterCurrent => unifiedSwapText(
         context,
-        'execution.status.recoveryTitle',
-        'Recovery information available',
+        'execution.hero.stopping',
+        'Stopping after current step',
       ),
-      RouteExecutionLoadStatus.completed => unifiedSwapText(
+      RouteExecutionPhase.partial ||
+      RouteExecutionPhase.refundPending ||
+      RouteExecutionPhase.refunded ||
+      RouteExecutionPhase.manualIntervention => _recoveryHeadline(
+        context,
+        progress,
+      ),
+      RouteExecutionPhase.completed => unifiedSwapText(
         context,
         'execution.status.completedTitle',
         'Unified Swap completed',
       ),
-      RouteExecutionLoadStatus.cancelled => unifiedSwapText(
+      RouteExecutionPhase.cancelled => unifiedSwapText(
         context,
         'execution.status.cancelledTitle',
         'Unified Swap cancelled',
       ),
-      RouteExecutionLoadStatus.failed => unifiedSwapText(
+      RouteExecutionPhase.failed => unifiedSwapText(
         context,
         'execution.status.failedTitle',
-        'Unified Swap needs attention',
+        'Unified Swap failed',
       ),
-      RouteExecutionLoadStatus.unknown => unifiedSwapText(
+      RouteExecutionPhase.unknown => unifiedSwapText(
         context,
         'execution.status.unknownTitle',
         'Execution status unavailable',
       ),
-      RouteExecutionLoadStatus.idle ||
-      RouteExecutionLoadStatus.reviewRequired => unifiedSwapText(
-        context,
-        'execution.status.idleTitle',
-        'Unified Swap',
-      ),
     };
+  }
+  if ((status == RouteExecutionLoadStatus.attentionRequired ||
+          status == RouteExecutionLoadStatus.recovery) &&
+      progress != null) {
+    return _recoveryHeadline(context, progress);
+  }
+  return switch (status) {
+    RouteExecutionLoadStatus.starting => unifiedSwapText(
+      context,
+      'execution.status.startingTitle',
+      'Starting Unified Swap',
+    ),
+    RouteExecutionLoadStatus.reattaching => unifiedSwapText(
+      context,
+      'execution.status.reattachingTitle',
+      'Reattaching to execution',
+    ),
+    RouteExecutionLoadStatus.observing => unifiedSwapText(
+      context,
+      'execution.status.observingTitle',
+      'Unified Swap in progress',
+    ),
+    RouteExecutionLoadStatus.attentionRequired => unifiedSwapText(
+      context,
+      'execution.status.attentionTitle',
+      'Action required',
+    ),
+    RouteExecutionLoadStatus.recovery => unifiedSwapText(
+      context,
+      'execution.status.recoveryTitle',
+      'Recovery information available',
+    ),
+    RouteExecutionLoadStatus.completed => unifiedSwapText(
+      context,
+      'execution.status.completedTitle',
+      'Unified Swap completed',
+    ),
+    RouteExecutionLoadStatus.cancelled => unifiedSwapText(
+      context,
+      'execution.status.cancelledTitle',
+      'Unified Swap cancelled',
+    ),
+    RouteExecutionLoadStatus.failed => unifiedSwapText(
+      context,
+      'execution.status.failedTitle',
+      'Unified Swap failed',
+    ),
+    RouteExecutionLoadStatus.unknown => unifiedSwapText(
+      context,
+      'execution.status.unknownTitle',
+      'Execution status unavailable',
+    ),
+    RouteExecutionLoadStatus.idle || RouteExecutionLoadStatus.reviewRequired =>
+      unifiedSwapText(context, 'execution.status.idleTitle', 'Unified Swap'),
+  };
+}
 
-String _description(
+String _heroDescription(
   BuildContext context,
   RouteExecutionLoadStatus status,
-) => switch (status) {
-  RouteExecutionLoadStatus.starting => unifiedSwapText(
-    context,
-    'execution.status.startingBody',
-    'The exact reviewed route is being registered with the wallet engine.',
-  ),
-  RouteExecutionLoadStatus.reattaching => unifiedSwapText(
-    context,
-    'execution.status.reattachingBody',
-    'The wallet is rebuilding live observation from durable route activity.',
-  ),
-  RouteExecutionLoadStatus.observing => unifiedSwapText(
-    context,
-    'execution.status.observingBody',
-    'Status is authoritative. You may leave this screen safely.',
-  ),
-  RouteExecutionLoadStatus.attentionRequired => unifiedSwapText(
-    context,
-    'execution.status.attentionBody',
-    'Review the verified fund location and only the actions shown below.',
-  ),
-  RouteExecutionLoadStatus.recovery => unifiedSwapText(
-    context,
-    'execution.status.recoveryBody',
-    'Funds have a verified location. Keep reconciliation available.',
-  ),
-  RouteExecutionLoadStatus.completed => unifiedSwapText(
-    context,
-    'execution.status.completedBody',
-    'The route reached its authoritative completed state.',
-  ),
-  RouteExecutionLoadStatus.cancelled => unifiedSwapText(
-    context,
-    'execution.status.cancelledBody',
-    'The route reached its authoritative cancelled state.',
-  ),
-  RouteExecutionLoadStatus.failed => unifiedSwapText(
-    context,
-    'execution.status.failedBody',
-    'Do not start a duplicate route. Reattach and review recovery details.',
-  ),
-  RouteExecutionLoadStatus.unknown => unifiedSwapText(
-    context,
-    'execution.status.unknownBody',
-    'No movement action is available until the status is understood.',
-  ),
-  RouteExecutionLoadStatus.idle ||
-  RouteExecutionLoadStatus.reviewRequired => '',
-};
+  RouteExecutionProgress? progress,
+) {
+  if (status == RouteExecutionLoadStatus.observing && progress != null) {
+    return switch (progress.phase) {
+      RouteExecutionPhase.validating => unifiedSwapText(
+        context,
+        'execution.hero.preparingBody',
+        'The wallet is validating the exact route before anything moves.',
+      ),
+      RouteExecutionPhase.awaitingApproval => unifiedSwapText(
+        context,
+        'execution.hero.approvalRequiredBody',
+        'Review and sign only the exact token permission shown for this swap.',
+      ),
+      RouteExecutionPhase.approvalPending => unifiedSwapText(
+        context,
+        'execution.hero.approvingBody',
+        'The exact token approval is waiting for network confirmation.',
+      ),
+      RouteExecutionPhase.awaitingSignature => unifiedSwapText(
+        context,
+        'execution.hero.signatureRequiredBody',
+        'Nothing moves until you review and sign the current transaction.',
+      ),
+      RouteExecutionPhase.signed => unifiedSwapText(
+        context,
+        'execution.hero.signatureReceivedBody',
+        'The wallet is checking whether the signed transaction was broadcast.',
+      ),
+      RouteExecutionPhase.broadcasting ||
+      RouteExecutionPhase.sourcePending => unifiedSwapText(
+        context,
+        'execution.hero.sourcePendingBody',
+        'The source transaction is being reconciled on its network.',
+      ),
+      RouteExecutionPhase.sourceConfirmed ||
+      RouteExecutionPhase.bridgePending => unifiedSwapText(
+        context,
+        'execution.hero.transferPendingBody',
+        'The source is confirmed and the next route boundary is being checked.',
+      ),
+      RouteExecutionPhase.destinationConfirmed ||
+      RouteExecutionPhase.atomicFill => unifiedSwapText(
+        context,
+        'execution.hero.finishingBody',
+        'The destination result is confirmed and final route work is finishing.',
+      ),
+      RouteExecutionPhase.awaitingUserAction ||
+      RouteExecutionPhase.stopAfterCurrent ||
+      RouteExecutionPhase.partial ||
+      RouteExecutionPhase.refundPending ||
+      RouteExecutionPhase.refunded ||
+      RouteExecutionPhase.manualIntervention => _recoveryDetails(
+        context,
+        progress,
+      ),
+      RouteExecutionPhase.completed => unifiedSwapText(
+        context,
+        'execution.status.completedBody',
+        'The route reached its authoritative completed state.',
+      ),
+      RouteExecutionPhase.cancelled => unifiedSwapText(
+        context,
+        'execution.status.cancelledBody',
+        'The route reached its authoritative cancelled state.',
+      ),
+      RouteExecutionPhase.failed => unifiedSwapText(
+        context,
+        'execution.status.failedBody',
+        'The route failed. Review the verified evidence before taking action.',
+      ),
+      RouteExecutionPhase.unknown => unifiedSwapText(
+        context,
+        'execution.status.unknownBody',
+        'No movement action is available until the status is understood.',
+      ),
+    };
+  }
+  if ((status == RouteExecutionLoadStatus.attentionRequired ||
+          status == RouteExecutionLoadStatus.recovery) &&
+      progress != null) {
+    return _recoveryDetails(context, progress);
+  }
+  return switch (status) {
+    RouteExecutionLoadStatus.starting => unifiedSwapText(
+      context,
+      'execution.status.startingBody',
+      'The exact reviewed route is being registered with the wallet engine.',
+    ),
+    RouteExecutionLoadStatus.reattaching => unifiedSwapText(
+      context,
+      'execution.status.reattachingBody',
+      'The wallet is rebuilding live observation from durable route activity.',
+    ),
+    RouteExecutionLoadStatus.observing => unifiedSwapText(
+      context,
+      'execution.status.observingBody',
+      'Status is authoritative. You may leave this screen safely.',
+    ),
+    RouteExecutionLoadStatus.attentionRequired => unifiedSwapText(
+      context,
+      'execution.status.attentionBody',
+      'Review the verified fund location and only the actions shown below.',
+    ),
+    RouteExecutionLoadStatus.recovery => unifiedSwapText(
+      context,
+      'execution.status.recoveryBody',
+      'Funds have a verified location. Keep reconciliation available.',
+    ),
+    RouteExecutionLoadStatus.completed => unifiedSwapText(
+      context,
+      'execution.status.completedBody',
+      'The route reached its authoritative completed state.',
+    ),
+    RouteExecutionLoadStatus.cancelled => unifiedSwapText(
+      context,
+      'execution.status.cancelledBody',
+      'The route reached its authoritative cancelled state.',
+    ),
+    RouteExecutionLoadStatus.failed => unifiedSwapText(
+      context,
+      'execution.status.failedBody',
+      'The route failed. Review the verified evidence before taking action.',
+    ),
+    RouteExecutionLoadStatus.unknown => unifiedSwapText(
+      context,
+      'execution.status.unknownBody',
+      'No movement action is available until the status is understood.',
+    ),
+    RouteExecutionLoadStatus.idle ||
+    RouteExecutionLoadStatus.reviewRequired => '',
+  };
+}
 
 String _phase(BuildContext context, RouteExecutionPhase phase) {
   final fallback = switch (phase) {
@@ -1093,7 +1805,7 @@ String _phase(BuildContext context, RouteExecutionPhase phase) {
     RouteExecutionPhase.bridgePending => 'Transfer pending',
     RouteExecutionPhase.destinationConfirmed => 'Destination confirmed',
     RouteExecutionPhase.atomicFill => 'Exchange',
-    RouteExecutionPhase.partial => 'Partially completed',
+    RouteExecutionPhase.partial => 'Intermediate holding',
     RouteExecutionPhase.awaitingUserAction => 'Awaiting your action',
     RouteExecutionPhase.stopAfterCurrent => 'Stopping after current step',
     RouteExecutionPhase.refundPending => 'Refund pending',
@@ -1123,6 +1835,194 @@ String _outcome(BuildContext context, RouteExecutionOutcome outcome) {
     fallback,
   );
 }
+
+RouteReviewStep? _stagePlan(RouteExecutionProgress progress, int sequence) {
+  for (final stage in progress.stages) {
+    if (stage.sequence == sequence) return stage;
+  }
+  return null;
+}
+
+RouteReviewStep? _stagePlanById(
+  RouteExecutionProgress progress,
+  String stageId,
+) {
+  for (final stage in progress.stages) {
+    if (stage.stageId == stageId) return stage;
+  }
+  return null;
+}
+
+RouteStageHistoryEntry? _stageResult(
+  RouteExecutionProgress progress,
+  int sequence,
+) {
+  for (final result in progress.stageResults) {
+    if (result.sequence == sequence) return result;
+  }
+  return null;
+}
+
+String _timelineStageTitle(
+  BuildContext context,
+  int index,
+  RouteReviewStep? stage,
+) {
+  if (stage == null) {
+    return unifiedSwapText(
+      context,
+      'common.stepNumber',
+      'Step {number}',
+      namedArgs: {'number': '${index + 1}'},
+    );
+  }
+  return unifiedSwapText(
+    context,
+    'execution.timeline.routeLeg',
+    '{source} on {sourceNetwork} → {destination} on {destinationNetwork}',
+    namedArgs: {
+      'source': stage.source.ticker,
+      'sourceNetwork': unifiedSwapNetworkLabel(context, stage.source),
+      'destination': stage.destination.ticker,
+      'destinationNetwork': unifiedSwapNetworkLabel(context, stage.destination),
+    },
+  );
+}
+
+String _stagePhaseLabel(BuildContext context, RouteStagePhase phase) {
+  final fallback = switch (phase) {
+    RouteStagePhase.preparing => 'Preparing',
+    RouteStagePhase.approval => 'Approval',
+    RouteStagePhase.sending => 'Sending',
+    RouteStagePhase.receiving => 'Receiving',
+    RouteStagePhase.reconciliation => 'Reconciling',
+    RouteStagePhase.recovery => 'Recovery',
+    RouteStagePhase.completed => 'Completed',
+    RouteStagePhase.cancelled => 'Cancelled',
+    RouteStagePhase.failed => 'Failed',
+    RouteStagePhase.unknown => 'Unknown stage status',
+  };
+  return unifiedSwapText(
+    context,
+    'execution.timeline.phase.${phase.name}',
+    fallback,
+  );
+}
+
+String _timelineEvidence(BuildContext context, RouteSafeEvidence evidence) {
+  final label = switch (evidence.kind) {
+    RouteEvidenceKind.sourceReceipt => unifiedSwapText(
+      context,
+      'execution.timeline.sourceReceipt',
+      'Source receipt',
+    ),
+    RouteEvidenceKind.receiving => unifiedSwapText(
+      context,
+      'execution.timeline.receivingEvidence',
+      'Receiving evidence',
+    ),
+    RouteEvidenceKind.refund => unifiedSwapText(
+      context,
+      'execution.timeline.refundEvidence',
+      'Refund evidence',
+    ),
+    RouteEvidenceKind.providerStatus => unifiedSwapText(
+      context,
+      'execution.timeline.routeStatusEvidence',
+      'Route status evidence',
+    ),
+    RouteEvidenceKind.unknown => unifiedSwapText(
+      context,
+      'execution.timeline.unknownEvidence',
+      'Unknown evidence',
+    ),
+  };
+  final details = <String>[
+    if (evidence.status case final String status) status,
+    if (evidence.substatus case final String substatus) substatus,
+    if (evidence.reference case final String reference)
+      unifiedSwapShortIdentity(reference, leading: 8, tail: 6),
+  ];
+  return details.isEmpty ? label : '$label · ${details.join(' · ')}';
+}
+
+typedef _LastConfirmedProgressEvidence = ({
+  RouteHolding? holding,
+  RouteSafeEvidence? evidence,
+  String? transactionHash,
+});
+
+_LastConfirmedProgressEvidence? _lastConfirmedProgressEvidence(
+  RouteExecutionProgress progress,
+) {
+  for (final stage in progress.stageResults.reversed) {
+    if (stage.holding case final holding?) {
+      return (holding: holding, evidence: null, transactionHash: null);
+    }
+  }
+  for (final stage in progress.stageResults.reversed) {
+    for (final evidence in stage.evidence.reversed) {
+      if (evidence.kind != RouteEvidenceKind.unknown) {
+        return (holding: null, evidence: evidence, transactionHash: null);
+      }
+    }
+    if (stage.transactionHashes case [..., final transactionHash]) {
+      return (holding: null, evidence: null, transactionHash: transactionHash);
+    }
+  }
+  if (progress.transactionHashes case [..., final transactionHash]) {
+    return (holding: null, evidence: null, transactionHash: transactionHash);
+  }
+  return null;
+}
+
+String _lastConfirmedProgressDetails(
+  BuildContext context,
+  _LastConfirmedProgressEvidence? lastConfirmed,
+) {
+  if (lastConfirmed?.holding case final holding?) {
+    return unifiedSwapText(
+      context,
+      'recovery.lastConfirmedHolding',
+      'Last confirmed: {amount} at {address} on {network}. Current location '
+          'is not verified.',
+      namedArgs: {
+        'amount': swapAmount(holding.amount, holding.asset),
+        'address': unifiedSwapShortIdentity(holding.address),
+        'network': unifiedSwapNetworkLabel(context, holding.asset),
+      },
+    );
+  }
+  if (lastConfirmed?.evidence case final evidence?) {
+    return unifiedSwapText(
+      context,
+      'recovery.authoritativeEvidenceCurrentUnknown',
+      '{evidence} is recorded for the last route boundary. Current fund '
+          'location is not verified.',
+      namedArgs: {'evidence': _timelineEvidence(context, evidence)},
+    );
+  }
+  if (lastConfirmed?.transactionHash case final hash?) {
+    return unifiedSwapText(
+      context,
+      'recovery.transactionEvidenceCurrentUnknown',
+      'Transaction evidence {hash} is recorded and may still be pending. '
+          'Current fund location is not verified.',
+      namedArgs: {'hash': unifiedSwapShortIdentity(hash, leading: 8, tail: 6)},
+    );
+  }
+  return unifiedSwapText(
+    context,
+    'recovery.noVerifiedLocation',
+    'No verified current fund location is available. The wallet will not '
+        'guess.',
+  );
+}
+
+bool _isTerminal(RouteExecutionLoadStatus status) =>
+    status == RouteExecutionLoadStatus.completed ||
+    status == RouteExecutionLoadStatus.cancelled ||
+    status == RouteExecutionLoadStatus.failed;
 
 String _pendingTitle(BuildContext context, RoutePendingActionReason reason) {
   final fallback = switch (reason) {
@@ -1179,10 +2079,25 @@ IconData _statusIcon(
   RouteExecutionLoadStatus.unknown => Icons.help_outline_rounded,
   RouteExecutionLoadStatus.starting ||
   RouteExecutionLoadStatus.reattaching => Icons.sync_rounded,
-  RouteExecutionLoadStatus.observing =>
-    phase == RouteExecutionPhase.signed
-        ? Icons.manage_search_rounded
-        : Icons.route_rounded,
+  RouteExecutionLoadStatus.observing => switch (phase) {
+    RouteExecutionPhase.awaitingApproval ||
+    RouteExecutionPhase.approvalPending => Icons.verified_user_outlined,
+    RouteExecutionPhase.awaitingSignature => Icons.draw_outlined,
+    RouteExecutionPhase.signed => Icons.manage_search_rounded,
+    RouteExecutionPhase.broadcasting ||
+    RouteExecutionPhase.sourcePending => Icons.send_rounded,
+    RouteExecutionPhase.sourceConfirmed ||
+    RouteExecutionPhase.bridgePending => Icons.route_rounded,
+    RouteExecutionPhase.destinationConfirmed ||
+    RouteExecutionPhase.completed => Icons.check_rounded,
+    RouteExecutionPhase.stopAfterCurrent => Icons.stop_circle_outlined,
+    RouteExecutionPhase.partial ||
+    RouteExecutionPhase.refundPending ||
+    RouteExecutionPhase.refunded ||
+    RouteExecutionPhase.manualIntervention =>
+      Icons.settings_backup_restore_rounded,
+    _ => Icons.route_rounded,
+  },
   RouteExecutionLoadStatus.idle ||
   RouteExecutionLoadStatus.reviewRequired => Icons.swap_horiz_rounded,
 };
@@ -1221,7 +2136,7 @@ String _recoveryHeadline(
     RouteExecutionPhase.partial => unifiedSwapText(
       context,
       'recovery.partialHeadline',
-      'The swap completed only in part',
+      'The route completed with an intermediate asset',
     ),
     RouteExecutionPhase.manualIntervention => unifiedSwapText(
       context,
@@ -1253,8 +2168,9 @@ String _recoveryDetails(BuildContext context, RouteExecutionProgress progress) {
     RouteExecutionPhase.partial => unifiedSwapText(
       context,
       'recovery.partialBody',
-      'One or more steps completed. Later steps remain stopped until the '
-          'holding and evidence are verified.',
+      'A different or intermediate asset was received. This does not by '
+          'itself mean that only part of the amount arrived. Later steps '
+          'remain stopped until the holding and evidence are verified.',
     ),
     RouteExecutionPhase.manualIntervention => unifiedSwapText(
       context,
@@ -1320,12 +2236,15 @@ String _executionDate(BuildContext context, DateTime value) {
 
 Future<void> _confirmCancellation(
   BuildContext context,
+  String routeExecutionId,
   VoidCallback onConfirmed,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showUnifiedSwapSensitiveConfirmation(
     context: context,
+    barrierDismissible: false,
     builder: (dialogContext) => AlertDialog(
       key: const Key('swap-cancel-confirmation'),
+      scrollable: true,
       title: Text(
         unifiedSwapText(
           dialogContext,
@@ -1333,13 +2252,15 @@ Future<void> _confirmCancellation(
           'Cancel this swap?',
         ),
       ),
-      content: Text(
-        unifiedSwapText(
+      content: _exactExecutionRouteTarget(
+        dialogContext,
+        body: unifiedSwapText(
           dialogContext,
           'execution.cancelDialogBody',
           'Cancellation is available only at the current verified route '
               'boundary. Already completed steps cannot be reversed.',
         ),
+        routeExecutionId: routeExecutionId,
       ),
       actions: [
         OutlinedButton(
@@ -1362,5 +2283,82 @@ Future<void> _confirmCancellation(
       ],
     ),
   );
-  if (confirmed == true) onConfirmed();
+  if (confirmed) onConfirmed();
 }
+
+Future<void> _confirmStopAfterCurrent(
+  BuildContext context,
+  String routeExecutionId,
+  VoidCallback onConfirmed,
+) async {
+  final confirmed = await showUnifiedSwapSensitiveConfirmation(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => AlertDialog(
+      key: const Key('swap-stop-confirmation'),
+      scrollable: true,
+      title: Text(
+        unifiedSwapText(
+          dialogContext,
+          'execution.stopDialogTitle',
+          'Stop after the current step?',
+        ),
+      ),
+      content: _exactExecutionRouteTarget(
+        dialogContext,
+        body: unifiedSwapText(
+          dialogContext,
+          'execution.stopDialogBody',
+          'The current step will finish, then the route will stop at the next '
+              'server-authorized boundary. Completed steps cannot be reversed.',
+        ),
+        routeExecutionId: routeExecutionId,
+      ),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text(
+            unifiedSwapText(dialogContext, 'execution.keepGoing', 'Keep going'),
+          ),
+        ),
+        FilledButton(
+          key: const Key('swap-confirm-stop'),
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text(
+            unifiedSwapText(
+              dialogContext,
+              'execution.confirmStop',
+              'Stop after current step',
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+  if (confirmed) onConfirmed();
+}
+
+Widget _exactExecutionRouteTarget(
+  BuildContext context, {
+  required String body,
+  required String routeExecutionId,
+}) => Column(
+  mainAxisSize: MainAxisSize.min,
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(body),
+    const SizedBox(height: 12),
+    Text(
+      unifiedSwapText(
+        context,
+        'common.exactTargetIntro',
+        'This action applies only to:',
+      ),
+    ),
+    const SizedBox(height: 4),
+    SelectableText(
+      '${unifiedSwapText(context, 'common.executionId', 'Execution ID')}: '
+      '$routeExecutionId',
+    ),
+  ],
+);

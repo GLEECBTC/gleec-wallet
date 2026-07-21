@@ -42,6 +42,14 @@ class ZhtlcActivationCancelled implements Exception {
   String toString() => 'ZhtlcActivationCancelled: $coinId';
 }
 
+/// The wallet/form scope that authorized an automatic activation changed.
+///
+/// This is distinct from an activation failure: callers must fail closed
+/// without publishing a suspended asset into a different wallet.
+final class CoinActivationScopeChanged implements Exception {
+  const CoinActivationScopeChanged();
+}
+
 class CoinsRepo {
   CoinsRepo({
     required KomodoDefiSdk kdfSdk,
@@ -378,7 +386,10 @@ class CoinsRepo {
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
+    Future<void> Function()? beforeActivationMutation,
+    String? activationScopeKey,
   }) async {
+    await _requireActivationScope(beforeActivationMutation);
     final isSignedIn = await _kdfSdk.auth.isSignedIn();
     if (!isSignedIn) {
       final coinIdList = assets.map((e) => e.id.id).join(', ');
@@ -387,6 +398,7 @@ class CoinsRepo {
     }
 
     final walletType = (await _kdfSdk.currentWallet())?.config.type;
+    await _requireActivationScope(beforeActivationMutation);
     if (walletType == WalletType.trezor) {
       final unsupportedSiaAssets = assets.where(
         (asset) => asset.id.subClass == CoinSubClass.sia,
@@ -450,6 +462,8 @@ class CoinsRepo {
         zhtlcAssets.map((asset) => _assetToCoinWithoutAddress(asset)).toList(),
         notifyListeners: notifyListeners,
         addToWalletMetadata: addToWalletMetadata,
+        beforeActivationMutation: beforeActivationMutation,
+        activationScopeKey: activationScopeKey,
       );
     }
 
@@ -463,7 +477,9 @@ class CoinsRepo {
       // Ensure the wallet metadata is updated with the assets before activation
       // This is to ensure that the wallet metadata is always in sync with the assets
       // being activated, even if activation fails.
+      await _requireActivationScope(beforeActivationMutation);
       await _addAssetsToWalletMetdata(assets.map((asset) => asset.id));
+      await _requireActivationScope(beforeActivationMutation);
     }
 
     Exception? lastActivationException;
@@ -477,6 +493,7 @@ class CoinsRepo {
           asset.id,
           forceRefresh: true,
         );
+        await _requireActivationScope(beforeActivationMutation);
 
         if (isAlreadyActivated) {
           _log.info(
@@ -490,7 +507,9 @@ class CoinsRepo {
           // Use retry with exponential backoff for activation
           await retry<void>(
             () async {
+              await _requireActivationScope(beforeActivationMutation);
               final didActivate = await _kdfSdk.ensureAssetActivated(asset);
+              await _requireActivationScope(beforeActivationMutation);
               if (!didActivate) {
                 throw Exception('Activation failed for ${asset.id.id}');
               }
@@ -500,6 +519,7 @@ class CoinsRepo {
               initialDelay: initialRetryDelay,
               maxDelay: maxRetryDelay,
             ),
+            shouldRetry: (error) => error is! CoinActivationScopeChanged,
           );
 
           _log.info('Asset activated: ${asset.id.id}');
@@ -537,6 +557,8 @@ class CoinsRepo {
             _subscribeToBalanceUpdates(parentAsset);
           }
         }
+      } on CoinActivationScopeChanged {
+        rethrow;
       } catch (e, s) {
         lastActivationException = e is Exception ? e : Exception(e.toString());
         _log.shout(
@@ -638,6 +660,8 @@ class CoinsRepo {
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
+    Future<void> Function()? beforeActivationMutation,
+    String? activationScopeKey,
   }) async {
     final assets = coins
         .map((coin) => _kdfSdk.assets.available[coin.id])
@@ -654,7 +678,20 @@ class CoinsRepo {
       maxRetryAttempts: maxRetryAttempts,
       initialRetryDelay: initialRetryDelay,
       maxRetryDelay: maxRetryDelay,
+      beforeActivationMutation: beforeActivationMutation,
+      activationScopeKey: activationScopeKey,
     );
+  }
+
+  Future<void> _requireActivationScope(
+    Future<void> Function()? beforeActivationMutation,
+  ) async {
+    if (beforeActivationMutation == null) return;
+    try {
+      await beforeActivationMutation();
+    } catch (_) {
+      throw const CoinActivationScopeChanged();
+    }
   }
 
   /// Deactivates the given coins and cancels their balance watchers.
@@ -1020,9 +1057,12 @@ class CoinsRepo {
     List<Coin> coins, {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
+    Future<void> Function()? beforeActivationMutation,
+    String? activationScopeKey,
   }) async {
     final activatedAssets = await _kdfSdk.activatedAssetsCache
         .getActivatedAssets();
+    await _requireActivationScope(beforeActivationMutation);
 
     for (final asset in assets) {
       final coin = coins.firstWhere((coin) => coin.id == asset.id);
@@ -1037,7 +1077,9 @@ class CoinsRepo {
 
         // Add to wallet metadata if requested
         if (addToWalletMetadata) {
+          await _requireActivationScope(beforeActivationMutation);
           await _addAssetsToWalletMetdata([asset.id]);
+          await _requireActivationScope(beforeActivationMutation);
         }
 
         // Broadcast active state for already activated assets
@@ -1076,6 +1118,8 @@ class CoinsRepo {
           coin,
           notifyListeners: notifyListeners,
           addToWalletMetadata: addToWalletMetadata,
+          beforeActivationMutation: beforeActivationMutation,
+          activationScopeKey: activationScopeKey,
         );
       }
     }
@@ -1089,6 +1133,8 @@ class CoinsRepo {
     Coin coin, {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
+    Future<void> Function()? beforeActivationMutation,
+    String? activationScopeKey,
   }) async {
     try {
       _log.info('Starting ZHTLC activation for ${asset.id.id}');
@@ -1099,14 +1145,23 @@ class CoinsRepo {
       // This ensures CoinsRepo waits for user inputs for config params from the dialog
       // before proceeding with activation, and doesn't broadcast activation status
       // until config parameters are received and (desktop) params files downloaded.
-      final result = await _arrrActivationService.activateArrr(asset);
-      result.when(
+      final result = await _arrrActivationService.activateArrr(
+        asset,
+        beforeActivationMutation: () async {
+          await _requireActivationScope(beforeActivationMutation);
+        },
+        activationScopeKey: activationScopeKey,
+      );
+      await _requireActivationScope(beforeActivationMutation);
+      await result.when<Future<void>>(
         success: (progress) async {
           _log.info('ZHTLC asset activated successfully: ${asset.id.id}');
 
           // Add assets after activation regardless of success or failure
           if (addToWalletMetadata) {
+            await _requireActivationScope(beforeActivationMutation);
             await _addAssetsToWalletMetdata([asset.id]);
+            await _requireActivationScope(beforeActivationMutation);
           }
 
           if (notifyListeners) {
@@ -1141,7 +1196,7 @@ class CoinsRepo {
           }
           _invalidateActivatedAssetsCache();
         },
-        error: (message) {
+        error: (message) async {
           _log.severe(
             'ZHTLC asset activation failed: ${asset.id.id} - $message',
           );
@@ -1161,7 +1216,7 @@ class CoinsRepo {
 
           throw Exception('zcoin activaiton failed: $message');
         },
-        needsConfiguration: (coinId, requiredSettings) {
+        needsConfiguration: (coinId, requiredSettings) async {
           _log.severe(
             'ZHTLC activation should not return needsConfiguration in future-based call',
           );
@@ -1178,6 +1233,10 @@ class CoinsRepo {
           );
         },
       );
+    } on ArrrActivationGuardRejected {
+      throw const CoinActivationScopeChanged();
+    } on CoinActivationScopeChanged {
+      rethrow;
     } catch (e, s) {
       _log.severe('Error activating ZHTLC asset ${asset.id.id}', e, s);
 

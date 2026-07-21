@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/bloc/dex_tab_bar/dex_tab_bar_bloc.dart';
@@ -11,9 +10,7 @@ import 'package:web_dex/bloc/market_maker_bot/market_maker_order_list/market_mak
 import 'package:web_dex/bloc/market_maker_bot/market_maker_trade_form/market_maker_trade_form_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
-import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/dex_list_type.dart';
-import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/views/dex/entity_details/trading_details.dart';
@@ -28,7 +25,6 @@ class MarketMakerBotPage extends StatefulWidget {
 
 class _MarketMakerBotPageState extends State<MarketMakerBotPage> {
   bool isTradingDetails = false;
-  final Map<String, TradeCoinPairConfig> _orderConfigByUuid = {};
 
   @override
   void initState() {
@@ -72,45 +68,33 @@ class _MarketMakerBotPageState extends State<MarketMakerBotPage> {
           ),
         ),
         BlocProvider<MarketMakerOrderListBloc>(
-          create: (BuildContext context) => MarketMakerOrderListBloc(
-            MarketMakerBotOrderListRepository(
-              myOrdersService,
-              SettingsRepository(),
-              coinsRepository,
-            ),
-          ),
-        ),
-      ],
-      child: MultiBlocListener(
-        listeners: [
-          BlocListener<AuthBloc, AuthBlocState>(
-            listener: (context, state) {
-              if (state.mode == AuthorizeMode.noLogin) {
-                context.read<MarketMakerBotBloc>().add(
-                  const MarketMakerBotStopRequested(),
-                );
-                _orderConfigByUuid.clear();
-              }
-            },
-          ),
-          BlocListener<MarketMakerOrderListBloc, MarketMakerOrderListState>(
-            listenWhen: (previous, current) =>
-                previous.makerBotOrders != current.makerBotOrders,
-            listener: (context, state) => _handleOrderListUpdate(state),
-          ),
-        ],
-        child: BlocBuilder<DexTabBarBloc, DexTabBarState>(
-          builder: (context, state) {
-            final tab = _safeDexListType(state);
-            final kind = _kindForTab(tab);
-            return isTradingDetails
-                ? TradingDetails(
-                    uuid: routingState.marketMakerState.uuid,
-                    kind: kind,
-                  )
-                : MarketMakerBotView();
+          create: (BuildContext context) {
+            final botBloc = context.read<MarketMakerBotBloc>();
+            return MarketMakerOrderListBloc(
+              MarketMakerBotOrderListRepository(
+                myOrdersService,
+                SettingsRepository(),
+                coinsRepository,
+              ),
+              captureWalletSession: botBloc.captureWalletSession,
+              captureOrderOwnership: botBloc.captureOrderOwnership,
+              isFreshWalletSession: botBloc.isFreshWalletSession,
+            );
           },
         ),
+      ],
+      child: BlocBuilder<DexTabBarBloc, DexTabBarState>(
+        builder: (context, state) {
+          final tab = _safeDexListType(state);
+          final kind = _kindForTab(tab);
+          final canShowDetails = isTradingDetails && tab != DexListType.orders;
+          return canShowDetails
+              ? TradingDetails(
+                  uuid: routingState.marketMakerState.uuid,
+                  kind: kind,
+                )
+              : MarketMakerBotView();
+        },
       ),
     );
     return pageContent;
@@ -137,44 +121,5 @@ class _MarketMakerBotPageState extends State<MarketMakerBotPage> {
       DexListType.inProgress => TradingEntityKind.swap,
       DexListType.history => TradingEntityKind.swap,
     };
-  }
-
-  void _handleOrderListUpdate(MarketMakerOrderListState state) {
-    for (final pair in state.makerBotOrders) {
-      final orderUuid = pair.order?.uuid;
-      if (orderUuid != null && orderUuid.isNotEmpty) {
-        _orderConfigByUuid[orderUuid] = pair.config;
-      }
-    }
-
-    if (!routingState.marketMakerState.isTradingDetails) return;
-
-    final currentTab = _safeDexListType(context.read<DexTabBarBloc>().state);
-    if (currentTab != DexListType.orders) return;
-
-    final currentUuid = routingState.marketMakerState.uuid;
-    if (currentUuid.isEmpty) return;
-
-    final hasCurrentUuid = state.makerBotOrders.any(
-      (pair) => pair.order?.uuid == currentUuid,
-    );
-    if (hasCurrentUuid) return;
-
-    final previousConfig = _orderConfigByUuid[currentUuid];
-    if (previousConfig == null) return;
-
-    String? replacementUuid;
-    for (final pair in state.makerBotOrders) {
-      final orderUuid = pair.order?.uuid;
-      if (orderUuid == null || orderUuid.isEmpty) continue;
-      if (pair.config == previousConfig) {
-        replacementUuid = orderUuid;
-        break;
-      }
-    }
-
-    if (replacementUuid != null && replacementUuid != currentUuid) {
-      routingState.marketMakerState.uuid = replacementUuid;
-    }
   }
 }

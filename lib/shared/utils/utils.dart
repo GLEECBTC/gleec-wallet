@@ -117,7 +117,7 @@ String doubleToString(double dv, [int fractions = 8]) {
 
 /// Converts a map [fract] containing numerator and denominator to a [Rational] value.
 /// Parameters:
-/// - [fract] (Map<String, dynamic>?): The map containing numerator and denominator values.
+/// - [fract] (`Map<String, dynamic>?`): numerator and denominator values.
 ///
 /// Return Value:
 /// - (Rational?): The [Rational] value representing the numerator and denominator,
@@ -138,14 +138,26 @@ Rational? fract2rat(Map<String, dynamic>? fract, [bool willLog = true]) {
   if (fract == null) return null;
 
   try {
-    final String numerStr = fract['numer'].toString();
-    final String denomStr = fract['denom'].toString();
-    final rat = Rational(BigInt.parse(numerStr), BigInt.parse(denomStr));
-    return rat;
-  } catch (e) {
-    if (willLog) {
-      log('Error fract2rat: $e', isError: true);
+    final numerValue = fract['numer'];
+    final denomValue = fract['denom'];
+    if (numerValue == null || denomValue == null) return null;
+    final numerStr = numerValue.toString();
+    final denomStr = denomValue.toString();
+    const maximumRationalComponentLength = 256;
+    final integerPattern = RegExp(r'^-?[0-9]+$');
+    if (numerStr.isEmpty ||
+        denomStr.isEmpty ||
+        numerStr.length > maximumRationalComponentLength ||
+        denomStr.length > maximumRationalComponentLength ||
+        !integerPattern.hasMatch(numerStr) ||
+        !integerPattern.hasMatch(denomStr)) {
+      return null;
     }
+    final denominator = BigInt.parse(denomStr);
+    if (denominator == BigInt.zero) return null;
+    return Rational(BigInt.parse(numerStr), denominator);
+  } catch (_) {
+    if (willLog) log('Unable to parse rational value', isError: true);
     return null;
   }
 }
@@ -157,8 +169,7 @@ Rational? fract2rat(Map<String, dynamic>? fract, [bool willLog = true]) {
 /// - [toLog] (bool): Whether to log errors. Default is true.
 ///
 /// Return Value:
-/// - (Map<String, dynamic>?): The map containing 'numer' and 'denom' keys and values,
-///                            or null if conversion fails or [rat] is null.
+/// - (`Map<String, dynamic>?`): 'numer' and 'denom', or null on failure.
 ///
 /// Example Usage:
 /// ```dart
@@ -544,9 +555,10 @@ int get nowMs => DateTime.now().millisecondsSinceEpoch;
 String? assertString(dynamic value) {
   if (value == null) return null;
 
-  switch (value.runtimeType) {
-    case int:
-    case double:
+  // Numeric wire values are stringified without a narrowing conversion.
+  switch (value) {
+    case int _:
+    case double _:
       return value.toString();
     default:
       return value as String?;
@@ -573,22 +585,24 @@ int? assertInt(dynamic value) {
 double assertDouble(dynamic value) {
   if (value == null) return double.nan;
 
-  switch (value.runtimeType) {
-    case double:
-      return value as double;
-    case int:
-      return (value as int).toDouble();
-    case String:
-      return double.tryParse(value as String) ?? double.nan;
-    case bool:
-      return (value as bool) ? 1.0 : 0.0;
-    case num:
-      return (value as num).toDouble();
+  switch (value) {
+    case final double number:
+      return number;
+    case final int number:
+      return number.toDouble();
+    case final String text:
+      return double.tryParse(text) ?? double.nan;
+    case final bool flag:
+      return flag ? 1.0 : 0.0;
     default:
       try {
         return double.parse(value.toString());
-      } catch (e, s) {
-        log('Error converting to double: $e', trace: s, isError: true);
+      } catch (_, stackTrace) {
+        log(
+          'Unable to convert value to a number',
+          trace: stackTrace,
+          isError: true,
+        );
         return double.nan;
       }
   }
@@ -705,6 +719,7 @@ void confirmBeforeDisablingCoin(
       ordersCount: openOrders,
     ).then((confirmed) {
       if (!confirmed) return;
+      if (!context.mounted) return;
       tradingEntitiesBloc.cancelOrdersForCoin(coin.abbr);
       for (final child in childCoins) {
         tradingEntitiesBloc.cancelOrdersForCoin(child.abbr);

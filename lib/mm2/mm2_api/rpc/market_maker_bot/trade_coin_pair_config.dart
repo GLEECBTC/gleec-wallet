@@ -5,7 +5,78 @@ import 'trade_volume.dart';
 
 /// Represents the settings for a trading pair.
 class TradeCoinPairConfig extends Equatable {
-  const TradeCoinPairConfig({
+  factory TradeCoinPairConfig({
+    required String name,
+    required String baseCoinId,
+    required String relCoinId,
+    bool? maxBalancePerTrade,
+    TradeVolume? minVolume,
+    TradeVolume? maxVolume,
+    double? minBasePriceUsd,
+    double? minRelPriceUsd,
+    double? minPairPrice,
+    required String spread,
+    int? baseConfs,
+    bool? baseNota,
+    int? relConfs,
+    bool? relNota,
+    bool enable = true,
+    int? priceElapsedValidity,
+    bool? checkLastBidirectionalTradeThreshHold,
+  }) {
+    final canonicalName = getSimpleName(baseCoinId, relCoinId);
+    _validateCoinIdentifier(baseCoinId);
+    _validateCoinIdentifier(relCoinId);
+
+    if (baseCoinId.toUpperCase() == relCoinId.toUpperCase()) {
+      throw const FormatException('Trading pair assets must be different');
+    }
+    if (name.length > maximumPairNameLength ||
+        name.toUpperCase() != canonicalName) {
+      throw const FormatException('Invalid trading pair name');
+    }
+
+    _validateSpread(spread);
+    _validateOptionalUsdValue(minBasePriceUsd);
+    _validateOptionalUsdValue(minRelPriceUsd);
+    _validateOptionalUsdValue(minPairPrice);
+    _validateConfirmations(baseConfs);
+    _validateConfirmations(relConfs);
+    _validatePriceElapsedValidity(priceElapsedValidity);
+
+    if (maxBalancePerTrade == true && maxVolume != null) {
+      throw const FormatException('Conflicting maximum volume settings');
+    }
+    if (minVolume != null &&
+        maxVolume != null &&
+        minVolume.type == maxVolume.type &&
+        minVolume.value > maxVolume.value) {
+      throw const FormatException('Minimum volume exceeds maximum volume');
+    }
+
+    return TradeCoinPairConfig._(
+      name: canonicalName,
+      baseCoinId: baseCoinId,
+      relCoinId: relCoinId,
+      maxBalancePerTrade: maxBalancePerTrade,
+      minVolume: minVolume,
+      maxVolume: maxVolume,
+      minBasePriceUsd: minBasePriceUsd,
+      minRelPriceUsd: minRelPriceUsd,
+      minPairPrice: minPairPrice,
+      spread: spread,
+      baseConfs: baseConfs,
+      baseNota: baseNota,
+      relConfs: relConfs,
+      relNota: relNota,
+      enable: enable,
+      priceElapsedValidity: priceElapsedValidity,
+      checkLastBidirectionalTradeThreshHold:
+          checkLastBidirectionalTradeThreshHold,
+    );
+  }
+
+  const TradeCoinPairConfig._({
     required this.name,
     required this.baseCoinId,
     required this.relCoinId,
@@ -24,6 +95,20 @@ class TradeCoinPairConfig extends Equatable {
     this.priceElapsedValidity,
     this.checkLastBidirectionalTradeThreshHold,
   });
+
+  static const int maximumCoinIdentifierLength = 128;
+  static const int maximumPairNameLength = maximumCoinIdentifierLength * 2 + 1;
+  static const int maximumEncodedNumberLength = 128;
+  static const int maximumConfirmations = 10000;
+  // KDF supports a 30-second validity window; keep imported/legacy configs
+  // compatible even though the current UI starts at one minute.
+  static const int minimumPriceElapsedValiditySeconds = 30;
+  static const int maximumPriceElapsedValiditySeconds = 86400;
+  static const double maximumSpread = 11;
+
+  static final RegExp _coinIdentifierPattern = RegExp(
+    r'^[A-Za-z0-9][A-Za-z0-9._:-]*$',
+  );
 
   /// The name of the trading pair
   final String name;
@@ -73,8 +158,8 @@ class TradeCoinPairConfig extends Equatable {
   /// Whether the rel coin requires a notarization
   final bool? relNota;
 
-  /// Whether to enable the trading pair. Defaults to false.
-  /// The trading pair will be ignored if true
+  /// Whether to enable the trading pair. Defaults to true.
+  /// The trading pair will be ignored if false.
   final bool enable;
 
   /// Will cancel current orders for this pair and not submit a new order if
@@ -136,30 +221,159 @@ class TradeCoinPairConfig extends Equatable {
       '$baseCoinId/$relCoinId'.toUpperCase();
 
   factory TradeCoinPairConfig.fromJson(Map<String, dynamic> json) {
+    final baseCoinId = _requiredString(json['base']);
+    final relCoinId = _requiredString(json['rel']);
+    // The name is app metadata and was absent from valid legacy KDF cfg maps.
+    // Derive it when absent, but reject a supplied name that does not identify
+    // this exact pair.
+    final name = json['name'] == null
+        ? getSimpleName(baseCoinId, relCoinId)
+        : _requiredString(json['name']);
+
     return TradeCoinPairConfig(
-      name: json['name'] as String,
-      baseCoinId: json['base'] as String,
-      relCoinId: json['rel'] as String,
-      maxBalancePerTrade: json['max'] as bool?,
+      name: name,
+      baseCoinId: baseCoinId,
+      relCoinId: relCoinId,
+      maxBalancePerTrade: _optionalBool(json['max']),
       minVolume: json['min_volume'] != null
-          ? TradeVolume.fromJson(json['min_volume'] as Map<String, dynamic>)
+          ? TradeVolume.fromJson(_requiredMap(json['min_volume']))
           : null,
       maxVolume: json['max_volume'] != null
-          ? TradeVolume.fromJson(json['max_volume'] as Map<String, dynamic>)
+          ? TradeVolume.fromJson(_requiredMap(json['max_volume']))
           : null,
-      minBasePriceUsd: (json['min_base_price'] as num?)?.toDouble(),
-      minRelPriceUsd: (json['min_rel_price'] as num?)?.toDouble(),
-      minPairPrice: (json['min_pair_price'] as num?)?.toDouble(),
-      spread: json['spread'] as String,
-      baseConfs: (json['base_confs'] as num?)?.toInt(),
-      baseNota: json['base_nota'] as bool?,
-      relConfs: (json['rel_confs'] as num?)?.toInt(),
-      relNota: json['rel_nota'] as bool?,
-      enable: json['enable'] as bool,
-      priceElapsedValidity: (json['price_elapsed_validity'] as num?)?.toInt(),
-      checkLastBidirectionalTradeThreshHold:
-          json['check_last_bidirectional_trade_thresh_hold'] as bool?,
+      minBasePriceUsd: _optionalNumber(json['min_base_price']),
+      minRelPriceUsd: _optionalNumber(json['min_rel_price']),
+      minPairPrice: _optionalNumber(json['min_pair_price']),
+      spread: _requiredNumberString(json['spread']),
+      baseConfs: _optionalInteger(json['base_confs']),
+      baseNota: _optionalBool(json['base_nota']),
+      relConfs: _optionalInteger(json['rel_confs']),
+      relNota: _optionalBool(json['rel_nota']),
+      enable: _requiredBool(json['enable']),
+      priceElapsedValidity: _optionalInteger(json['price_elapsed_validity']),
+      checkLastBidirectionalTradeThreshHold: _optionalBool(
+        json['check_last_bidirectional_trade_thresh_hold'],
+      ),
     );
+  }
+
+  static String _requiredString(Object? rawValue) {
+    if (rawValue is! String || rawValue.isEmpty) {
+      throw const FormatException('Missing trading pair field');
+    }
+    return rawValue;
+  }
+
+  static Map<String, dynamic> _requiredMap(Object? rawValue) {
+    if (rawValue is! Map) {
+      throw const FormatException('Invalid trading pair field');
+    }
+    try {
+      return Map<String, dynamic>.from(rawValue);
+    } on TypeError {
+      throw const FormatException('Invalid trading pair field');
+    }
+  }
+
+  static bool _requiredBool(Object? rawValue) {
+    if (rawValue is! bool) {
+      throw const FormatException('Invalid trading pair flag');
+    }
+    return rawValue;
+  }
+
+  static bool? _optionalBool(Object? rawValue) {
+    if (rawValue == null) return null;
+    return _requiredBool(rawValue);
+  }
+
+  static String _requiredNumberString(Object? rawValue) {
+    if (rawValue is String &&
+        rawValue.isNotEmpty &&
+        rawValue.length <= maximumEncodedNumberLength &&
+        rawValue == rawValue.trim()) {
+      return rawValue;
+    }
+    if (rawValue is num && rawValue.toDouble().isFinite) {
+      return rawValue.toString();
+    }
+    throw const FormatException('Invalid trading pair number');
+  }
+
+  static double? _optionalNumber(Object? rawValue) {
+    if (rawValue == null) return null;
+    final encoded = _requiredNumberString(rawValue);
+    final value = double.tryParse(encoded);
+    if (value == null || !value.isFinite) {
+      throw const FormatException('Invalid trading pair number');
+    }
+    return value;
+  }
+
+  static int? _optionalInteger(Object? rawValue) {
+    if (rawValue == null) return null;
+
+    if (rawValue is int) return rawValue;
+    if (rawValue is num) {
+      final value = rawValue.toDouble();
+      if (value.isFinite && value == value.truncateToDouble()) {
+        return value.toInt();
+      }
+      throw const FormatException('Invalid trading pair integer');
+    }
+    if (rawValue is String &&
+        rawValue.isNotEmpty &&
+        rawValue.length <= maximumEncodedNumberLength &&
+        rawValue == rawValue.trim()) {
+      final value = int.tryParse(rawValue);
+      if (value != null) return value;
+    }
+
+    throw const FormatException('Invalid trading pair integer');
+  }
+
+  static void _validateCoinIdentifier(String value) {
+    if (value.length > maximumCoinIdentifierLength ||
+        !_coinIdentifierPattern.hasMatch(value)) {
+      throw const FormatException('Invalid coin identifier');
+    }
+  }
+
+  static void _validateSpread(String encodedValue) {
+    if (encodedValue.isEmpty ||
+        encodedValue.length > maximumEncodedNumberLength ||
+        encodedValue != encodedValue.trim()) {
+      throw const FormatException('Invalid trading spread');
+    }
+    final value = double.tryParse(encodedValue);
+    if (value == null ||
+        !value.isFinite ||
+        value <= 1 ||
+        value > maximumSpread) {
+      throw const FormatException('Invalid trading spread');
+    }
+  }
+
+  static void _validateOptionalUsdValue(double? value) {
+    if (value == null) return;
+    if (!value.isFinite || value < 0 || value > TradeVolume.maximumUsdValue) {
+      throw const FormatException('Invalid USD threshold');
+    }
+  }
+
+  static void _validateConfirmations(int? value) {
+    if (value == null) return;
+    if (value < 0 || value > maximumConfirmations) {
+      throw const FormatException('Invalid confirmation count');
+    }
+  }
+
+  static void _validatePriceElapsedValidity(int? value) {
+    if (value == null) return;
+    if (value < minimumPriceElapsedValiditySeconds ||
+        value > maximumPriceElapsedValiditySeconds) {
+      throw const FormatException('Invalid price update interval');
+    }
   }
 
   /// Converts the object to a JSON serializable map. NOTE: removes null values

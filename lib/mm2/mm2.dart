@@ -36,8 +36,8 @@ final class MM2 {
     try {
       await _kdfSdk.dispose();
       log('KomodoDefiSdk disposed successfully');
-    } catch (e) {
-      log('Error disposing KomodoDefiSdk: $e', isError: true);
+    } catch (_) {
+      log('Unable to dispose KomodoDefiSdk', isError: true);
     }
   }
 
@@ -87,8 +87,11 @@ final class MM2 {
                 : requestWithUserpass as JsonMap);
 
       return await _kdfSdk.client.executeRpc(jsonRequest);
-    } catch (e) {
-      log('RPC call error: $e', path: 'mm2 => call', isError: true).ignore();
+    } catch (_) {
+      // RPC errors can embed exact order/swap identifiers, amounts, assets,
+      // addresses, or daemon payloads. Callers map them to typed/user-safe
+      // failures; this shared boundary only records the operation category.
+      log('RPC call failed', path: 'mm2 => call', isError: true).ignore();
       rethrow;
     }
   }
@@ -115,7 +118,17 @@ final class MM2 {
   }
 
   void _handleSdkLog(String message) {
-    log(message, path: 'KomodoDefiSdk').ignore();
+    // Framework messages may include raw RPC responses, activation payloads,
+    // addresses, amounts, or identifiers when verbose logging is enabled.
+    // Keep only a payload-free failure signal at the application boundary.
+    final normalized = message.toLowerCase();
+    if (normalized.contains('error') || normalized.contains('fail')) {
+      log(
+        'Komodo DeFi SDK operation failed',
+        path: 'KomodoDefiSdk',
+        isError: true,
+      ).ignore();
+    }
   }
 }
 

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:web_dex/features/unified_swap/application/route_activity_bloc.dart';
 import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart';
+import 'package:web_dex/features/unified_swap/domain/unified_swap_capability_policy.dart';
 import 'package:web_dex/features/unified_swap/presentation/activity/activity_widgets.dart';
 import 'package:web_dex/features/unified_swap/presentation/unified_swap_design.dart';
+import 'package:web_dex/features/unified_swap/presentation/unified_swap_sensitive_dialog.dart';
 
 class RouteActivityDetailView extends StatelessWidget {
   const RouteActivityDetailView({
@@ -15,6 +17,12 @@ class RouteActivityDetailView extends StatelessWidget {
     this.onCancelRequested,
     this.onStopAfterCurrentRequested,
     this.onRecoveryRequested,
+    this.onProgressRequested,
+    this.onProgressReattachRequested,
+    this.progressReattachFailed = false,
+    this.resumeProgress = false,
+    this.liveControlInFlight = false,
+    this.liveControlFailure,
     super.key,
   });
 
@@ -27,6 +35,12 @@ class RouteActivityDetailView extends StatelessWidget {
   final ValueChanged<String>? onCancelRequested;
   final ValueChanged<String>? onStopAfterCurrentRequested;
   final ValueChanged<String>? onRecoveryRequested;
+  final ValueChanged<String>? onProgressRequested;
+  final ValueChanged<String>? onProgressReattachRequested;
+  final bool progressReattachFailed;
+  final bool resumeProgress;
+  final bool liveControlInFlight;
+  final String? liveControlFailure;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +88,7 @@ class RouteActivityDetailView extends StatelessWidget {
         ],
       );
     }
+    final allowsLiveProgress = _allowsLiveProgress(detail);
 
     return ColoredBox(
       color: UnifiedSwapDesign.colors(context).canvas,
@@ -94,7 +109,9 @@ class RouteActivityDetailView extends StatelessWidget {
               padding: UnifiedSwapDesign.pagePadding(context),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1040),
+                  constraints: const BoxConstraints(
+                    maxWidth: UnifiedSwapDesign.contentWidth,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -109,58 +126,72 @@ class RouteActivityDetailView extends StatelessWidget {
                           detail.summary.status ==
                               RouteActivityStatus.unknown) ...[
                         const SizedBox(height: 12),
-                        _ActivityRecoverySummary(detail: detail),
+                        _ActivityRecoverySummary(
+                          detail: detail,
+                          clipboardWriter: clipboardWriter,
+                          announcement: announcement,
+                        ),
                       ],
                       if (state.failure != null) ...[
                         const SizedBox(height: 12),
                         RouteActivityFailureNotice(onRetry: onRetry),
                       ],
                       const SizedBox(height: 12),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final wide = constraints.maxWidth >= 760;
-                          final width = wide
-                              ? (constraints.maxWidth - 12) / 2
-                              : constraints.maxWidth;
-                          return Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: width,
-                                child: _RouteTermsCard(detail: detail),
-                              ),
-                              SizedBox(
-                                width: width,
-                                child: _RouteControlsCard(
-                                  detail: detail,
-                                  onCancelRequested: onCancelRequested,
-                                  onStopAfterCurrentRequested:
-                                      onStopAfterCurrentRequested,
-                                  onRecoveryRequested: onRecoveryRequested,
-                                ),
-                              ),
-                              if (detail.holding case final holding?)
-                                SizedBox(
-                                  width: width,
-                                  child: _HoldingCard(holding: holding),
-                                ),
-                              if (detail.consent.fees.isNotEmpty ||
-                                  detail
-                                      .consent
-                                      .nonNetworkFeeLimits
-                                      .isNotEmpty ||
-                                  detail.consent.networkFeeCaps.isNotEmpty)
-                                SizedBox(
-                                  width: width,
-                                  child: _FeesCard(detail: detail),
-                                ),
-                            ],
-                          );
-                        },
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _RouteTermsCard(detail: detail),
+                          if (detail.authoritativeStatus != null ||
+                              detail.summary.terminalError != null) ...[
+                            const SizedBox(height: 12),
+                            _AuthoritativeStatusCard(detail: detail),
+                          ],
+                          const SizedBox(height: 12),
+                          _RouteControlsCard(
+                            detail: detail,
+                            controlInFlight: liveControlInFlight,
+                            controlFailure: liveControlFailure,
+                            onCancelRequested: allowsLiveProgress
+                                ? onCancelRequested
+                                : null,
+                            onStopAfterCurrentRequested: allowsLiveProgress
+                                ? onStopAfterCurrentRequested
+                                : null,
+                            onRecoveryRequested: allowsLiveProgress
+                                ? onRecoveryRequested
+                                : null,
+                          ),
+                          if (detail.holding case final holding?) ...[
+                            const SizedBox(height: 12),
+                            _HoldingCard(
+                              holding: holding,
+                              clipboardWriter: clipboardWriter,
+                              announcement: announcement,
+                            ),
+                          ],
+                          if (detail.consent.fees.isNotEmpty ||
+                              detail.consent.nonNetworkFeeLimits.isNotEmpty ||
+                              detail.consent.networkFeeCaps.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            _FeesCard(detail: detail),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 12),
                       _StagesCard(stages: detail.stages),
+                      if (allowsLiveProgress &&
+                          (onProgressRequested != null ||
+                              onProgressReattachRequested != null)) ...[
+                        const SizedBox(height: 12),
+                        _LiveProgressAction(
+                          routeExecutionId: routeExecutionId,
+                          resumeProgress: resumeProgress,
+                          onProgressRequested: onProgressRequested,
+                          onProgressReattachRequested:
+                              onProgressReattachRequested,
+                          progressReattachFailed: progressReattachFailed,
+                        ),
+                      ],
                       if (detail.revisions.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         _RevisionsCard(revisions: detail.revisions),
@@ -177,14 +208,145 @@ class RouteActivityDetailView extends StatelessWidget {
   }
 }
 
+bool _allowsLiveProgress(RouteExecutionDetail detail) {
+  if (detail.summary.status.isTerminal ||
+      detail.summary.status == RouteActivityStatus.unknown ||
+      detail.summary.terminalError != null) {
+    return false;
+  }
+  final status = detail.authoritativeStatus;
+  if (status == null || !status.isExecutable) return false;
+  final terminal =
+      status.executionPhase == RouteActivityExecutionPhase.failed ||
+      status.executionPhase == RouteActivityExecutionPhase.cancelled ||
+      status.executionPhase == RouteActivityExecutionPhase.refunded ||
+      status.routePhase == RouteExecutionRoutePhase.completed ||
+      status.routePhase == RouteExecutionRoutePhase.failed ||
+      status.routePhase == RouteExecutionRoutePhase.cancelled ||
+      status.routePhase == RouteExecutionRoutePhase.refunded;
+  final historicalRefund =
+      detail.controls.reconciliationOnly &&
+      (status.executionPhase == RouteActivityExecutionPhase.refundPending ||
+          status.executionPhase == RouteActivityExecutionPhase.refunded ||
+          status.routePhase == RouteExecutionRoutePhase.refundPending ||
+          status.routePhase == RouteExecutionRoutePhase.refunded);
+  return !terminal && !historicalRefund;
+}
+
+class _LiveProgressAction extends StatelessWidget {
+  const _LiveProgressAction({
+    required this.routeExecutionId,
+    required this.resumeProgress,
+    required this.onProgressRequested,
+    required this.onProgressReattachRequested,
+    required this.progressReattachFailed,
+  });
+
+  final String routeExecutionId;
+  final bool resumeProgress;
+  final ValueChanged<String>? onProgressRequested;
+  final ValueChanged<String>? onProgressReattachRequested;
+  final bool progressReattachFailed;
+
+  @override
+  Widget build(BuildContext context) {
+    final openProgress = onProgressRequested;
+    if (openProgress != null) {
+      return FilledButton.icon(
+        key: Key(
+          resumeProgress
+              ? 'activity-resume-swap'
+              : 'activity-view-swap-progress',
+        ),
+        style: UnifiedSwapDesign.primaryButtonStyle(context),
+        onPressed: () => openProgress(routeExecutionId),
+        icon: Icon(
+          resumeProgress ? Icons.play_arrow_rounded : Icons.route_rounded,
+        ),
+        label: Text(
+          resumeProgress
+              ? unifiedSwapText(
+                  context,
+                  'activity.detail.resumeSwap',
+                  'Resume swap',
+                )
+              : unifiedSwapText(
+                  context,
+                  'activity.detail.viewSwapProgress',
+                  'View swap progress',
+                ),
+        ),
+      );
+    }
+
+    final reconnect = onProgressReattachRequested!;
+    if (!progressReattachFailed) {
+      return FilledButton.icon(
+        key: const Key('activity-resume-swap'),
+        style: UnifiedSwapDesign.primaryButtonStyle(context),
+        onPressed: () => reconnect(routeExecutionId),
+        icon: const Icon(Icons.play_arrow_rounded),
+        label: Text(
+          unifiedSwapText(context, 'activity.detail.resumeSwap', 'Resume swap'),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        UnifiedSwapNotice(
+          key: const Key('activity-live-progress-unavailable'),
+          title: unifiedSwapText(
+            context,
+            'activity.detail.liveProgressUnavailable',
+            'Live progress is temporarily unavailable',
+          ),
+          message: unifiedSwapText(
+            context,
+            'activity.detail.liveProgressUnavailableBody',
+            'Activity still shows the durable record. Reconnect to this '
+                'exact swap before relying on live progress or controls.',
+          ),
+          tone: UnifiedSwapNoticeTone.warning,
+          icon: Icons.sync_problem_rounded,
+        ),
+        const SizedBox(height: 8),
+        FilledButton.tonalIcon(
+          key: const Key('activity-retry-live-progress'),
+          style: UnifiedSwapDesign.primaryButtonStyle(context),
+          onPressed: () => reconnect(routeExecutionId),
+          icon: const Icon(Icons.sync_rounded),
+          label: Text(
+            unifiedSwapText(
+              context,
+              'activity.detail.retryLiveProgress',
+              'Retry live progress',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ActivityRecoverySummary extends StatelessWidget {
-  const _ActivityRecoverySummary({required this.detail});
+  const _ActivityRecoverySummary({
+    required this.detail,
+    required this.clipboardWriter,
+    required this.announcement,
+  });
 
   final RouteExecutionDetail detail;
+  final ActivityClipboardWriter clipboardWriter;
+  final ActivityAnnouncement announcement;
 
   @override
   Widget build(BuildContext context) {
     final holding = detail.holding;
+    final lastConfirmed = holding == null
+        ? _lastConfirmedStageEvidence(detail)
+        : null;
+    final lastConfirmedHolding = lastConfirmed?.holding;
     final unknown = detail.summary.status == RouteActivityStatus.unknown;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -249,33 +411,55 @@ class _ActivityRecoverySummary extends StatelessWidget {
             'Where are the funds?',
           ),
           answer: holding == null
-              ? unifiedSwapText(
-                  context,
-                  'activity.recovery.locationUnverified',
-                  'Current location is not verified',
-                )
+              ? lastConfirmed == null
+                    ? unifiedSwapText(
+                        context,
+                        'activity.recovery.locationUnknownTitle',
+                        'Current location unknown',
+                      )
+                    : lastConfirmedHolding == null
+                    ? unifiedSwapText(
+                        context,
+                        'activity.recovery.lastConfirmedEvidenceTitle',
+                        'Last confirmed evidence · current location unknown',
+                      )
+                    : unifiedSwapText(
+                        context,
+                        'activity.recovery.lastConfirmedLocationTitle',
+                        'Last confirmed location · current location unknown',
+                      )
               : unifiedSwapText(
                   context,
                   'recovery.verifiedHolding',
                   'Verified current holding',
                 ),
           details: holding == null
-              ? unifiedSwapText(
-                  context,
-                  'activity.recovery.noInferredLocation',
-                  'The wallet does not infer or fabricate a location.',
-                )
+              ? _lastConfirmedDetails(context, detail, lastConfirmed)
               : unifiedSwapText(
                   context,
-                  'activity.recovery.holdingLocation',
-                  '{amount} at {address}.',
+                  'activity.recovery.verifiedHoldingLocation',
+                  '{amount} at {address} on {network}.',
                   namedArgs: {
                     'amount': routeActivityAmount(
                       holding.amount,
                       holding.asset,
                     ),
                     'address': unifiedSwapShortIdentity(holding.address),
+                    'network': unifiedSwapNetworkLabel(context, holding.asset),
                   },
+                ),
+          child: lastConfirmedHolding == null
+              ? null
+              : RouteActivityCopyButton(
+                  value: lastConfirmedHolding.address,
+                  label: unifiedSwapText(
+                    context,
+                    'activity.detail.holdingAddress',
+                    'Holding address',
+                  ),
+                  valueKey: 'last-confirmed-holding-address',
+                  clipboardWriter: clipboardWriter,
+                  announcement: announcement,
                 ),
         ),
         UnifiedSwapQuestion(
@@ -350,6 +534,12 @@ class _DetailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = detail.summary;
+    final source = summary.sourceAmount == null
+        ? summary.source.ticker
+        : routeActivityAmount(summary.sourceAmount!, summary.source);
+    final destination = summary.expectedReceive == null
+        ? summary.destination.ticker
+        : routeActivityAmount(summary.expectedReceive!, summary.destination);
     return Semantics(
       container: true,
       child: Column(
@@ -360,8 +550,7 @@ class _DetailHeader extends StatelessWidget {
               final title = Semantics(
                 header: true,
                 child: Text(
-                  '${summary.source.ticker} → '
-                  '${summary.destination.ticker}',
+                  '$source → $destination',
                   style: UnifiedSwapDesign.typography(context).pageTitle,
                 ),
               );
@@ -486,23 +675,313 @@ class _RouteTermsCard extends StatelessWidget {
   }
 }
 
+class _AuthoritativeStatusCard extends StatelessWidget {
+  const _AuthoritativeStatusCard({required this.detail});
+
+  final RouteExecutionDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return RouteActivitySectionCard(
+      title: unifiedSwapText(
+        context,
+        'activity.detail.durableStatus',
+        'Durable execution status',
+      ),
+      icon: Icons.verified_outlined,
+      semanticLabel: unifiedSwapText(
+        context,
+        'activity.detail.durableStatusSemantics',
+        'Authoritative execution status and evidence',
+      ),
+      child: _StatusEvidenceContent(
+        status: detail.authoritativeStatus,
+        terminalError: detail.summary.terminalError,
+      ),
+    );
+  }
+}
+
+class _StatusEvidenceContent extends StatelessWidget {
+  const _StatusEvidenceContent({
+    required this.status,
+    required this.terminalError,
+  });
+
+  final RouteAuthoritativeStatus? status;
+  final RouteTerminalError? terminalError;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = this.status;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (status == null)
+          UnifiedSwapNotice(
+            key: const Key('activity-authoritative-status-unavailable'),
+            title: unifiedSwapText(
+              context,
+              'activity.detail.statusUnavailable',
+              'Status record unavailable',
+            ),
+            message: unifiedSwapText(
+              context,
+              'activity.detail.statusUnavailableBody',
+              'No typed durable status record is available. Controls remain '
+                  'inert until the wallet can verify it.',
+            ),
+            tone: UnifiedSwapNoticeTone.warning,
+            icon: Icons.help_outline_rounded,
+          )
+        else ...[
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.executionPhase',
+              'Execution phase',
+            ),
+            value: _executionPhaseLabel(context, status.executionPhase),
+          ),
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.routePhase',
+              'Route phase',
+            ),
+            value: _executionRoutePhaseLabel(context, status.routePhase),
+          ),
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.stateRevision',
+              'State revision',
+            ),
+            value: '${status.stateRevision}',
+          ),
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.currentStage',
+              'Current stage',
+            ),
+            value: '${status.stageIndex + 1}',
+          ),
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.stopRequested',
+              'Stop after current',
+            ),
+            value: status.stopAfterCurrent
+                ? unifiedSwapText(context, 'common.yes', 'Yes')
+                : unifiedSwapText(context, 'common.no', 'No'),
+          ),
+          _DetailRow(
+            label: unifiedSwapText(context, 'common.updated', 'Updated'),
+            value: routeActivityDate(context, status.updatedAt),
+          ),
+          if (status.completedAt case final completedAt?)
+            _DetailRow(
+              label: unifiedSwapText(
+                context,
+                'activity.detail.completedAt',
+                'Completed',
+              ),
+              value: routeActivityDate(context, completedAt),
+            ),
+          if (!status.isExecutable) ...[
+            const SizedBox(height: 8),
+            UnifiedSwapNotice(
+              key: const Key('activity-authoritative-status-unknown'),
+              title: unifiedSwapText(
+                context,
+                'activity.detail.unknownStatusEvidence',
+                'Some status evidence is unknown',
+              ),
+              message: unifiedSwapText(
+                context,
+                'activity.detail.unknownStatusEvidenceBody',
+                'The wallet cannot safely interpret part of this status. '
+                    'Movement controls are disabled.',
+              ),
+              tone: UnifiedSwapNoticeTone.warning,
+              icon: Icons.gpp_maybe_outlined,
+            ),
+          ],
+          if (status.transactionHashes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              unifiedSwapText(
+                context,
+                'execution.transactions',
+                'Transactions',
+              ),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            for (final hash in status.transactionHashes)
+              SelectableText(hash, maxLines: 2),
+          ],
+          if (status.evidence.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              unifiedSwapText(
+                context,
+                'activity.detail.statusEvidence',
+                'Current status evidence',
+              ),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            for (var index = 0; index < status.evidence.length; index++) ...[
+              _EvidenceEntry(evidence: status.evidence[index]),
+              if (index < status.evidence.length - 1) const Divider(height: 20),
+            ],
+          ],
+          if (status.approvalRecovery case final recovery?) ...[
+            const SizedBox(height: 12),
+            _ApprovalRecoveryContent(recovery: recovery),
+          ],
+        ],
+        if (terminalError case final error?) ...[
+          if (status != null) const SizedBox(height: 12),
+          UnifiedSwapNotice(
+            key: const Key('activity-terminal-error'),
+            title: error.isKnown
+                ? unifiedSwapText(
+                    context,
+                    'activity.detail.terminalError',
+                    'Recorded terminal error',
+                  )
+                : unifiedSwapText(
+                    context,
+                    'activity.detail.terminalErrorUnknown',
+                    'Unknown terminal error type',
+                  ),
+            message: error.isKnown
+                ? unifiedSwapText(
+                    context,
+                    'activity.detail.terminalErrorBody',
+                    'The durable journal records a typed terminal failure. '
+                        'Diagnostic details remain available to support.',
+                  )
+                : unifiedSwapText(
+                    context,
+                    'activity.detail.terminalErrorUnknownBody',
+                    'The journal contains an unrecognized terminal failure. '
+                        'No meaning or recovery action was inferred.',
+                  ),
+            tone: UnifiedSwapNoticeTone.warning,
+            icon: error.isKnown
+                ? Icons.error_outline_rounded
+                : Icons.help_outline_rounded,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ApprovalRecoveryContent extends StatelessWidget {
+  const _ApprovalRecoveryContent({required this.recovery});
+
+  final RouteApprovalRecovery recovery;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          unifiedSwapText(
+            context,
+            'activity.detail.approvalRecovery',
+            'Approval recovery',
+          ),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 4),
+        _DetailRow(
+          label: unifiedSwapText(context, 'activity.detail.token', 'Token'),
+          value: routeActivityAssetLabel(context, recovery.token),
+        ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.remainingAllowance',
+            'Remaining allowance',
+          ),
+          value: routeActivityAmount(
+            recovery.remainingAllowance,
+            recovery.token,
+          ),
+        ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.validatedSpender',
+            'Validated spender',
+          ),
+          value: recovery.validatedSpender,
+          selectable: true,
+        ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.recoveryInstruction',
+            'Instruction',
+          ),
+          value: _approvalRecoveryLabel(context, recovery.instruction),
+        ),
+        if (!recovery.isExecutable) ...[
+          const SizedBox(height: 6),
+          UnifiedSwapNotice(
+            key: const Key('activity-approval-recovery-unknown'),
+            title: unifiedSwapText(
+              context,
+              'activity.detail.approvalRecoveryUnknown',
+              'Approval recovery is not understood',
+            ),
+            message: unifiedSwapText(
+              context,
+              'activity.detail.approvalRecoveryUnknownBody',
+              'The exact record is shown, but the wallet will not infer or '
+                  'offer an approval action for an unknown instruction.',
+            ),
+            tone: UnifiedSwapNoticeTone.warning,
+            icon: Icons.gpp_maybe_outlined,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _RouteControlsCard extends StatelessWidget {
   const _RouteControlsCard({
     required this.detail,
     required this.onCancelRequested,
     required this.onStopAfterCurrentRequested,
     required this.onRecoveryRequested,
+    required this.controlInFlight,
+    required this.controlFailure,
   });
 
   final RouteExecutionDetail detail;
   final ValueChanged<String>? onCancelRequested;
   final ValueChanged<String>? onStopAfterCurrentRequested;
   final ValueChanged<String>? onRecoveryRequested;
+  final bool controlInFlight;
+  final String? controlFailure;
 
   @override
   Widget build(BuildContext context) {
     final controls = detail.controls;
-    final known = detail.summary.status != RouteActivityStatus.unknown;
+    final authoritativeStatus = detail.authoritativeStatus;
+    final known =
+        detail.summary.status != RouteActivityStatus.unknown &&
+        (authoritativeStatus?.isExecutable ?? true) &&
+        (detail.summary.terminalError?.isKnown ?? true);
     final routeExecutionId = detail.summary.routeExecutionId;
     final canCancel =
         known &&
@@ -531,6 +1010,31 @@ class _RouteControlsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (controlInFlight) ...[
+            LinearProgressIndicator(
+              key: const Key('activity-control-progress'),
+              semanticsLabel: unifiedSwapText(
+                context,
+                'activity.detail.controlBusy',
+                'Applying route control',
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (controlFailure case final message?) ...[
+            UnifiedSwapNotice(
+              key: const Key('activity-control-failure'),
+              title: unifiedSwapText(
+                context,
+                'activity.detail.controlFailedTitle',
+                'Control was not applied',
+              ),
+              message: message,
+              tone: UnifiedSwapNoticeTone.danger,
+              icon: Icons.error_outline_rounded,
+            ),
+            const SizedBox(height: 10),
+          ],
           if (!known)
             Text(
               unifiedSwapText(
@@ -567,10 +1071,13 @@ class _RouteControlsCard extends StatelessWidget {
                 if (canCancel)
                   OutlinedButton.icon(
                     key: const Key('activity-control-cancel'),
-                    onPressed: () => _confirmActivityCancellation(
-                      context,
-                      () => onCancelRequested!(routeExecutionId),
-                    ),
+                    onPressed: controlInFlight
+                        ? null
+                        : () => _confirmActivityCancellation(
+                            context,
+                            routeExecutionId,
+                            () => onCancelRequested!(routeExecutionId),
+                          ),
                     icon: const Icon(Icons.cancel_outlined),
                     label: Text(
                       unifiedSwapText(
@@ -583,10 +1090,14 @@ class _RouteControlsCard extends StatelessWidget {
                 if (canStop)
                   FilledButton.tonalIcon(
                     key: const Key('activity-control-stop'),
-                    onPressed: () => _confirmActivityStop(
-                      context,
-                      () => onStopAfterCurrentRequested!(routeExecutionId),
-                    ),
+                    onPressed: controlInFlight
+                        ? null
+                        : () => _confirmActivityStop(
+                            context,
+                            routeExecutionId,
+                            () =>
+                                onStopAfterCurrentRequested!(routeExecutionId),
+                          ),
                     icon: const Icon(Icons.stop_circle_outlined),
                     label: Text(
                       unifiedSwapText(
@@ -599,10 +1110,13 @@ class _RouteControlsCard extends StatelessWidget {
                 if (canRecover)
                   FilledButton.icon(
                     key: const Key('activity-control-recovery'),
-                    onPressed: () => _confirmActivityRecovery(
-                      context,
-                      () => onRecoveryRequested!(routeExecutionId),
-                    ),
+                    onPressed: controlInFlight
+                        ? null
+                        : () => _confirmActivityRecovery(
+                            context,
+                            routeExecutionId,
+                            () => onRecoveryRequested!(routeExecutionId),
+                          ),
                     icon: const Icon(Icons.settings_backup_restore_rounded),
                     label: Text(
                       unifiedSwapText(
@@ -621,9 +1135,15 @@ class _RouteControlsCard extends StatelessWidget {
 }
 
 class _HoldingCard extends StatelessWidget {
-  const _HoldingCard({required this.holding});
+  const _HoldingCard({
+    required this.holding,
+    required this.clipboardWriter,
+    required this.announcement,
+  });
 
   final RouteHolding holding;
+  final ActivityClipboardWriter clipboardWriter;
+  final ActivityAnnouncement announcement;
 
   @override
   Widget build(BuildContext context) {
@@ -652,6 +1172,18 @@ class _HoldingCard extends StatelessWidget {
             ),
             value: holding.address,
             selectable: true,
+            action: RouteActivityCopyButton(
+              value: holding.address,
+              label: unifiedSwapText(
+                context,
+                'activity.detail.holdingAddress',
+                'Holding address',
+              ),
+              valueKey: 'holding-address',
+              clipboardWriter: clipboardWriter,
+              announcement: announcement,
+              compact: true,
+            ),
           ),
         ],
       ),
@@ -696,7 +1228,9 @@ class _FeesCard extends StatelessWidget {
                 '{kind} maximum',
                 namedArgs: {'kind': _feeLabel(context, limit.kind)},
               ),
-              value: routeActivityAmount(limit.maximumAmount, limit.asset),
+              value:
+                  '${routeActivityAmount(limit.maximumAmount, limit.asset)}'
+                  '${limit.stageId == null ? '' : ' · ${unifiedSwapText(context, 'activity.detail.stageIdInline', 'stage {id}', namedArgs: {'id': limit.stageId!})}'}',
             ),
           for (final cap in consent.networkFeeCaps)
             _DetailRow(
@@ -705,7 +1239,9 @@ class _FeesCard extends StatelessWidget {
                 'activity.detail.stageNetworkMaximum',
                 'Stage network maximum',
               ),
-              value: routeActivityAmount(cap.maximumAmount, cap.asset),
+              value:
+                  '${routeActivityAmount(cap.maximumAmount, cap.asset)} · '
+                  '${unifiedSwapText(context, 'activity.detail.stageIdInline', 'stage {id}', namedArgs: {'id': cap.stageId})}',
             ),
         ],
       ),
@@ -844,18 +1380,333 @@ class _StageEntry extends StatelessWidget {
             Text(
               unifiedSwapText(context, 'activity.detail.evidence', 'Evidence'),
             ),
-            for (final evidence in stage.evidence)
-              Text(
-                evidence.reference == null
-                    ? _evidenceLabel(context, evidence.kind)
-                    : '${_evidenceLabel(context, evidence.kind)} · '
-                          '${evidence.reference}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+            const SizedBox(height: 6),
+            for (var index = 0; index < stage.evidence.length; index++) ...[
+              _EvidenceEntry(evidence: stage.evidence[index]),
+              if (index < stage.evidence.length - 1) const Divider(height: 20),
+            ],
           ],
         ],
       ),
+    );
+  }
+}
+
+class _EvidenceEntry extends StatelessWidget {
+  const _EvidenceEntry({required this.evidence});
+
+  final RouteSafeEvidence evidence;
+
+  @override
+  Widget build(BuildContext context) {
+    final receipt = evidence.receipt;
+    final provider = evidence.provider;
+    final unknown = !evidence.isExecutable;
+    final colors = UnifiedSwapDesign.colors(context);
+    return UnifiedSwapSurface(
+      padding: const EdgeInsets.all(12),
+      radius: 12,
+      borderColor: unknown ? colors.warning : colors.border,
+      backgroundColor: unknown ? colors.warningContainer : colors.surface,
+      semanticLabel: unknown
+          ? unifiedSwapText(
+              context,
+              'activity.detail.unknownEvidenceSemantics',
+              'Unknown evidence; no meaning inferred',
+            )
+          : _evidenceLabel(context, evidence.kind),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                unknown ? Icons.help_outline_rounded : Icons.verified_outlined,
+                size: 18,
+                color: unknown ? colors.warning : colors.brandHover,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _evidenceLabel(context, evidence.kind),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          if (unknown) ...[
+            const SizedBox(height: 4),
+            Text(
+              unifiedSwapText(
+                context,
+                'activity.detail.unknownEvidenceBody',
+                'This evidence type is preserved for support diagnostics, but '
+                    'the wallet does not infer or display its infrastructure '
+                    'meaning.',
+              ),
+            ),
+          ],
+          if (evidence.reference case final reference?)
+            _DetailRow(
+              label: unifiedSwapText(
+                context,
+                'activity.detail.reference',
+                'Reference',
+              ),
+              value: reference,
+              selectable: true,
+            ),
+          if (evidence.secondaryReference case final secondary?)
+            _DetailRow(
+              label: unifiedSwapText(
+                context,
+                'activity.detail.secondaryReference',
+                'Multi-step reference',
+              ),
+              value: secondary,
+              selectable: true,
+            ),
+          if (evidence.state case final state?)
+            _DetailRow(
+              label: unifiedSwapText(
+                context,
+                'activity.detail.evidenceState',
+                'Evidence state',
+              ),
+              value: _evidenceStateLabel(context, state),
+            ),
+          if (receipt != null) ...[
+            const Divider(height: 20),
+            _ReceiptEvidence(receipt: receipt),
+          ],
+          if (provider != null) ...[
+            const Divider(height: 20),
+            _ProviderEvidenceDetails(provider: provider),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiptEvidence extends StatelessWidget {
+  const _ReceiptEvidence({required this.receipt});
+
+  final RouteTransactionReceipt receipt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          unifiedSwapText(
+            context,
+            'activity.detail.chainReceipt',
+            'Chain receipt',
+          ),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.receiptStatus',
+            'Receipt status',
+          ),
+          value: _transactionStatusLabel(context, receipt.status),
+        ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.confirmations',
+            'Confirmations',
+          ),
+          value: receipt.confirmations < 0
+              ? unifiedSwapText(
+                  context,
+                  'activity.detail.confirmationsUnknown',
+                  'Unknown',
+                )
+              : '${receipt.confirmations}',
+        ),
+        _DetailRow(
+          label: unifiedSwapText(context, 'activity.detail.chain', 'Chain'),
+          value:
+              '${_chainFamilyLabel(context, receipt.chainFamily)} · '
+              '${receipt.chainId}',
+        ),
+        if (receipt.blockHeight case final height?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.blockHeight',
+              'Block height',
+            ),
+            value: height,
+          ),
+        if (receipt.blockHash case final hash?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.blockHash',
+              'Block hash',
+            ),
+            value: hash,
+            selectable: true,
+          ),
+        if (receipt.networkFee case final fee?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.networkFeePaid',
+              'Network fee',
+            ),
+            value: routeActivityAmount(fee.amount, fee.asset),
+          ),
+        if (receipt.gasUsed case final gas?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.gasUsed',
+              'Gas used',
+            ),
+            value: gas,
+          ),
+        if (receipt.effectiveGasPrice case final price?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.effectiveGasPrice',
+              'Effective gas price',
+            ),
+            value: price,
+          ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.observedAt',
+            'Observed',
+          ),
+          value: routeActivityDate(context, receipt.observedAt),
+        ),
+        if (receipt.revertReason case final reason?) ...[
+          const SizedBox(height: 6),
+          UnifiedSwapNotice(
+            key: const Key('activity-receipt-revert'),
+            title: unifiedSwapText(
+              context,
+              'activity.detail.revertReason',
+              'Transaction revert reason',
+            ),
+            message: reason,
+            tone: UnifiedSwapNoticeTone.danger,
+            icon: Icons.error_outline_rounded,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProviderEvidenceDetails extends StatelessWidget {
+  const _ProviderEvidenceDetails({required this.provider});
+
+  final RouteProviderEvidence provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          unifiedSwapText(
+            context,
+            'activity.detail.providerEvidence',
+            'Service transfer evidence',
+          ),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        if (provider.fromAddress case final address?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.providerFrom',
+              'Sending address',
+            ),
+            value: address,
+            selectable: true,
+          ),
+        if (provider.toAddress case final address?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.providerTo',
+              'Receiving address',
+            ),
+            value: address,
+            selectable: true,
+          ),
+        for (final transfer in provider.transfers) ...[
+          const Divider(height: 20),
+          _ProviderTransferDetails(transfer: transfer),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProviderTransferDetails extends StatelessWidget {
+  const _ProviderTransferDetails({required this.transfer});
+
+  final RouteEvidenceTransfer transfer;
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = transfer.asset;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _transferDirectionLabel(context, transfer.direction),
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        _DetailRow(
+          label: unifiedSwapText(
+            context,
+            'activity.detail.transactionHash',
+            'Transaction hash',
+          ),
+          value: transfer.transactionHash,
+          selectable: true,
+        ),
+        if (transfer.amount case final amount?)
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.transferAmount',
+              'Transfer amount',
+            ),
+            value: asset == null
+                ? unifiedSwapText(
+                    context,
+                    'activity.detail.smallestUnits',
+                    '{amount} smallest units',
+                    namedArgs: {'amount': amount},
+                  )
+                : _providerTransferAmount(amount, asset),
+          ),
+        if (asset != null) ...[
+          _DetailRow(
+            label: unifiedSwapText(
+              context,
+              'activity.detail.transferToken',
+              'Transfer token',
+            ),
+            value: '${asset.symbol} · ${asset.tokenIdentifier}',
+            selectable: true,
+          ),
+        ],
+      ],
     );
   }
 }
@@ -876,42 +1727,66 @@ class _RevisionsCard extends StatelessWidget {
       icon: Icons.history_toggle_off_rounded,
       child: Column(
         children: [
-          for (final revision in revisions)
-            Material(
-              color: Colors.transparent,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.archive_outlined),
-                title: Text(
-                  unifiedSwapText(
-                    context,
-                    'activity.detail.revisionNumber',
-                    'Revision {number}',
-                    namedArgs: {'number': '${revision.revision + 1}'},
-                  ),
-                ),
-                subtitle: Text(
-                  unifiedSwapText(
-                    context,
-                    'activity.detail.archivedAt',
-                    '{phase} · archived {date}',
-                    namedArgs: {
-                      'phase': routeActivityPhaseLabel(context, revision.phase),
-                      'date': routeActivityDate(context, revision.archivedAt),
-                    },
-                  ),
-                ),
-                trailing: Text(
-                  unifiedSwapText(
-                    context,
-                    'activity.detail.stageCount',
-                    '{count} stages',
-                    namedArgs: {'count': '${revision.stages.length}'},
-                  ),
-                ),
-              ),
-            ),
+          for (final revision in revisions) _RevisionEntry(revision: revision),
         ],
+      ),
+    );
+  }
+}
+
+class _RevisionEntry extends StatelessWidget {
+  const _RevisionEntry({required this.revision});
+
+  final RouteExecutionRevision revision;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = revision.authoritativeStatus;
+    final title = Text(
+      unifiedSwapText(
+        context,
+        'activity.detail.revisionNumber',
+        'Revision {number}',
+        namedArgs: {'number': '${revision.revision + 1}'},
+      ),
+    );
+    final phase = status == null
+        ? routeActivityPhaseLabel(context, revision.phase)
+        : '${_executionPhaseLabel(context, status.executionPhase)} · '
+              '${_executionRoutePhaseLabel(context, status.routePhase)}';
+    final subtitle = Text(
+      unifiedSwapText(
+        context,
+        'activity.detail.archivedAtWithStages',
+        '{phase} · {count} stages · archived {date}',
+        namedArgs: {
+          'phase': phase,
+          'count': '${revision.stages.length}',
+          'date': routeActivityDate(context, revision.archivedAt),
+        },
+      ),
+    );
+    if (status == null) {
+      return Material(
+        color: Colors.transparent,
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.archive_outlined),
+          title: title,
+          subtitle: subtitle,
+        ),
+      );
+    }
+    return Material(
+      color: Colors.transparent,
+      child: ExpansionTile(
+        key: Key('activity-revision-${revision.revision}'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 12),
+        leading: const Icon(Icons.archive_outlined),
+        title: title,
+        subtitle: subtitle,
+        children: [_StatusEvidenceContent(status: status, terminalError: null)],
       ),
     );
   }
@@ -922,11 +1797,13 @@ class _DetailRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.selectable = false,
+    this.action,
   });
 
   final String label;
   final String value;
   final bool selectable;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -937,6 +1814,16 @@ class _DetailRow extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           )
         : Text(value, textAlign: TextAlign.end);
+    final valueWithAction = action == null
+        ? valueWidget
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: valueWidget),
+              const SizedBox(width: 4),
+              action!,
+            ],
+          );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -947,11 +1834,91 @@ class _DetailRow extends StatelessWidget {
             child: Text(label, style: Theme.of(context).textTheme.bodySmall),
           ),
           const SizedBox(width: 12),
-          Expanded(flex: 6, child: valueWidget),
+          Expanded(flex: 6, child: valueWithAction),
         ],
       ),
     );
   }
+}
+
+typedef _LastConfirmedStageEvidence = ({
+  RouteHolding? holding,
+  RouteSafeEvidence? evidence,
+});
+
+_LastConfirmedStageEvidence? _lastConfirmedStageEvidence(
+  RouteExecutionDetail detail,
+) {
+  for (final stage in detail.stages.reversed) {
+    if (stage.holding case final holding?) {
+      return (holding: holding, evidence: null);
+    }
+  }
+  for (final stage in detail.stages.reversed) {
+    for (final evidence in stage.evidence.reversed) {
+      if (_isConfirmedEvidence(evidence)) {
+        return (holding: null, evidence: evidence);
+      }
+    }
+  }
+  return null;
+}
+
+bool _isConfirmedEvidence(RouteSafeEvidence evidence) =>
+    evidence.isExecutable &&
+    (evidence.receipt?.status == RouteTransactionStatus.confirmed ||
+        evidence.state == RouteEvidenceState.confirmed ||
+        evidence.state == RouteEvidenceState.completed);
+
+String _lastConfirmedDetails(
+  BuildContext context,
+  RouteExecutionDetail detail,
+  _LastConfirmedStageEvidence? lastConfirmed,
+) {
+  if (lastConfirmed?.holding case final holding?) {
+    return unifiedSwapText(
+      context,
+      'activity.recovery.lastConfirmedHolding',
+      'Last confirmed: {amount} at {address} on {network}. Current location '
+          'is not verified.',
+      namedArgs: {
+        'amount': routeActivityAmount(holding.amount, holding.asset),
+        'address': unifiedSwapShortIdentity(holding.address),
+        'network': unifiedSwapNetworkLabel(context, holding.asset),
+      },
+    );
+  }
+  if (lastConfirmed?.evidence case final evidence?) {
+    final evidenceParts = <String>[
+      _evidenceLabel(context, evidence.kind),
+      if (evidence.reference case final reference?) reference,
+    ];
+    final network = switch (evidence.kind) {
+      RouteEvidenceKind.sourceReceipt || RouteEvidenceKind.refund =>
+        unifiedSwapNetworkLabel(context, detail.consent.source),
+      RouteEvidenceKind.receiving => unifiedSwapNetworkLabel(
+        context,
+        detail.consent.destination,
+      ),
+      RouteEvidenceKind.providerStatus || RouteEvidenceKind.unknown => null,
+    };
+    return unifiedSwapText(
+      context,
+      'activity.recovery.lastConfirmedEvidence',
+      'Last confirmed evidence: {evidence}{network}. Current location is '
+          'unknown.',
+      namedArgs: {
+        'evidence': evidenceParts.join(' · '),
+        'network': network == null ? '' : ' on $network',
+      },
+    );
+  }
+  return unifiedSwapText(
+    context,
+    'activity.recovery.noConfirmedLocation',
+    'Current location is unknown. No authoritative last-confirmed location '
+        'is available.',
+  );
 }
 
 String _feeLabel(BuildContext context, RouteFeeKind kind) {
@@ -977,14 +1944,177 @@ String _evidenceLabel(BuildContext context, RouteEvidenceKind kind) {
   return unifiedSwapText(context, 'activity.evidence.${kind.name}', fallback);
 }
 
+String _evidenceStateLabel(BuildContext context, RouteEvidenceState state) {
+  final fallback = switch (state) {
+    RouteEvidenceState.broadcast => 'Broadcast',
+    RouteEvidenceState.confirmed => 'Confirmed',
+    RouteEvidenceState.published => 'Multi-step swap submitted',
+    RouteEvidenceState.temporarilyUnavailable =>
+      'Exchange status temporarily unavailable',
+    RouteEvidenceState.invalidEvidence => 'Exchange evidence unavailable',
+    RouteEvidenceState.failed => 'Multi-step exchange failed',
+    RouteEvidenceState.completed => 'Multi-step exchange completed',
+    RouteEvidenceState.unknown => 'Unknown',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.evidenceState.${state.name}',
+    fallback,
+  );
+}
+
+String _transactionStatusLabel(
+  BuildContext context,
+  RouteTransactionStatus status,
+) {
+  final fallback = switch (status) {
+    RouteTransactionStatus.notFound => 'Not found',
+    RouteTransactionStatus.pending => 'Pending',
+    RouteTransactionStatus.confirmed => 'Confirmed',
+    RouteTransactionStatus.reverted => 'Reverted',
+    RouteTransactionStatus.unknown => 'Unknown',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.transactionStatus.${status.name}',
+    fallback,
+  );
+}
+
+String _executionPhaseLabel(
+  BuildContext context,
+  RouteActivityExecutionPhase phase,
+) {
+  final fallback = switch (phase) {
+    RouteActivityExecutionPhase.planned => 'Planned',
+    RouteActivityExecutionPhase.awaitingApproval => 'Awaiting approval',
+    RouteActivityExecutionPhase.approvalPending => 'Approval pending',
+    RouteActivityExecutionPhase.awaitingUserAction => 'Awaiting user action',
+    RouteActivityExecutionPhase.awaitingSignature => 'Awaiting signature',
+    RouteActivityExecutionPhase.signed => 'Signed',
+    RouteActivityExecutionPhase.broadcasting => 'Broadcasting',
+    RouteActivityExecutionPhase.sourcePending => 'Source pending',
+    RouteActivityExecutionPhase.sourceConfirmed => 'Source confirmed',
+    RouteActivityExecutionPhase.bridgePending => 'Bridge pending',
+    RouteActivityExecutionPhase.destinationConfirmed => 'Destination confirmed',
+    RouteActivityExecutionPhase.refundPending => 'Refund pending',
+    RouteActivityExecutionPhase.partial => 'Completed in a different asset',
+    RouteActivityExecutionPhase.refunded => 'Refunded',
+    RouteActivityExecutionPhase.manualIntervention => 'Manual intervention',
+    RouteActivityExecutionPhase.failed => 'Failed',
+    RouteActivityExecutionPhase.cancelled => 'Cancelled',
+    RouteActivityExecutionPhase.unknown => 'Unknown',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.executionPhase.${phase.name}',
+    fallback,
+  );
+}
+
+String _executionRoutePhaseLabel(
+  BuildContext context,
+  RouteExecutionRoutePhase phase,
+) {
+  final fallback = switch (phase) {
+    RouteExecutionRoutePhase.validating => 'Validating',
+    RouteExecutionRoutePhase.executingStage => 'Executing stage',
+    RouteExecutionRoutePhase.waitingSourceReceipt =>
+      'Waiting for source receipt',
+    RouteExecutionRoutePhase.waitingDestination => 'Waiting for destination',
+    RouteExecutionRoutePhase.atomicFill => 'Multi-step exchange',
+    RouteExecutionRoutePhase.awaitingUserAction => 'Awaiting user action',
+    RouteExecutionRoutePhase.stopAfterCurrent => 'Stopping after current stage',
+    RouteExecutionRoutePhase.manualIntervention => 'Manual intervention',
+    RouteExecutionRoutePhase.partial => 'Completed in a different asset',
+    RouteExecutionRoutePhase.refundPending => 'Refund pending',
+    RouteExecutionRoutePhase.refunded => 'Refunded',
+    RouteExecutionRoutePhase.completed => 'Completed',
+    RouteExecutionRoutePhase.failed => 'Failed',
+    RouteExecutionRoutePhase.cancelled => 'Cancelled',
+    RouteExecutionRoutePhase.unknown => 'Unknown',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.executionRoutePhase.${phase.name}',
+    fallback,
+  );
+}
+
+String _approvalRecoveryLabel(
+  BuildContext context,
+  RouteApprovalRecoveryInstruction instruction,
+) {
+  final fallback = switch (instruction) {
+    RouteApprovalRecoveryInstruction.revokeAllowanceBeforeRetry =>
+      'Revoke allowance before retrying',
+    RouteApprovalRecoveryInstruction.noAllowanceRemains =>
+      'No allowance remains',
+    RouteApprovalRecoveryInstruction.unknown => 'Unknown instruction',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.approvalRecovery.${instruction.name}',
+    fallback,
+  );
+}
+
+String _transferDirectionLabel(
+  BuildContext context,
+  RouteEvidenceTransferDirection direction,
+) {
+  final fallback = switch (direction) {
+    RouteEvidenceTransferDirection.sending => 'Sending transfer',
+    RouteEvidenceTransferDirection.receiving => 'Receiving transfer',
+    RouteEvidenceTransferDirection.transfer => 'Service transfer',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.transferDirection.${direction.name}',
+    fallback,
+  );
+}
+
+String _chainFamilyLabel(BuildContext context, UnifiedSwapChainFamily family) {
+  final fallback = switch (family) {
+    UnifiedSwapChainFamily.evm => 'EVM',
+    UnifiedSwapChainFamily.tron => 'TRON',
+    UnifiedSwapChainFamily.utxo => 'UTXO',
+    UnifiedSwapChainFamily.solana => 'Solana',
+    UnifiedSwapChainFamily.sui => 'Sui',
+    UnifiedSwapChainFamily.other => 'Other',
+    UnifiedSwapChainFamily.unknown => 'Unknown',
+  };
+  return unifiedSwapText(
+    context,
+    'activity.chainFamily.${family.name}',
+    fallback,
+  );
+}
+
+String _providerTransferAmount(
+  String smallestUnits,
+  RouteEvidenceTransferAsset asset,
+) {
+  if (asset.decimals <= 0) return '$smallestUnits ${asset.symbol}';
+  final padded = smallestUnits.padLeft(asset.decimals + 1, '0');
+  final split = padded.length - asset.decimals;
+  final whole = padded.substring(0, split);
+  final fraction = padded.substring(split).replaceFirst(RegExp(r'0+$'), '');
+  return '${fraction.isEmpty ? whole : '$whole.$fraction'} ${asset.symbol}';
+}
+
 Future<void> _confirmActivityCancellation(
   BuildContext context,
+  String routeExecutionId,
   VoidCallback onConfirmed,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showUnifiedSwapSensitiveConfirmation(
     context: context,
+    barrierDismissible: false,
     builder: (dialogContext) => AlertDialog(
       key: const Key('activity-cancel-confirmation'),
+      scrollable: true,
       title: Text(
         unifiedSwapText(
           dialogContext,
@@ -992,13 +2122,15 @@ Future<void> _confirmActivityCancellation(
           'Cancel this swap?',
         ),
       ),
-      content: Text(
-        unifiedSwapText(
+      content: _exactActivityRouteTarget(
+        dialogContext,
+        body: unifiedSwapText(
           dialogContext,
           'activity.cancelDialogBody',
           'Only the current server-authorized boundary can be cancelled. '
               'Completed transfers cannot be reversed.',
         ),
+        routeExecutionId: routeExecutionId,
       ),
       actions: [
         OutlinedButton(
@@ -1021,17 +2153,20 @@ Future<void> _confirmActivityCancellation(
       ],
     ),
   );
-  if (confirmed == true) onConfirmed();
+  if (confirmed) onConfirmed();
 }
 
 Future<void> _confirmActivityStop(
   BuildContext context,
+  String routeExecutionId,
   VoidCallback onConfirmed,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showUnifiedSwapSensitiveConfirmation(
     context: context,
+    barrierDismissible: false,
     builder: (dialogContext) => AlertDialog(
       key: const Key('activity-stop-confirmation'),
+      scrollable: true,
       title: Text(
         unifiedSwapText(
           dialogContext,
@@ -1039,13 +2174,15 @@ Future<void> _confirmActivityStop(
           'Stop after this stage?',
         ),
       ),
-      content: Text(
-        unifiedSwapText(
+      content: _exactActivityRouteTarget(
+        dialogContext,
+        body: unifiedSwapText(
           dialogContext,
           'activity.stopDialogBody',
           'The current stage will continue. No later stage will start unless '
               'the latest durable controls still authorize this action.',
         ),
+        routeExecutionId: routeExecutionId,
       ),
       actions: [
         OutlinedButton(
@@ -1072,17 +2209,20 @@ Future<void> _confirmActivityStop(
       ],
     ),
   );
-  if (confirmed == true) onConfirmed();
+  if (confirmed) onConfirmed();
 }
 
 Future<void> _confirmActivityRecovery(
   BuildContext context,
+  String routeExecutionId,
   VoidCallback onConfirmed,
 ) async {
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showUnifiedSwapSensitiveConfirmation(
     context: context,
+    barrierDismissible: false,
     builder: (dialogContext) => AlertDialog(
       key: const Key('activity-recovery-confirmation'),
+      scrollable: true,
       title: Text(
         unifiedSwapText(
           dialogContext,
@@ -1090,13 +2230,15 @@ Future<void> _confirmActivityRecovery(
           'Review a recovery route?',
         ),
       ),
-      content: Text(
-        unifiedSwapText(
+      content: _exactActivityRouteTarget(
+        dialogContext,
+        body: unifiedSwapText(
           dialogContext,
           'activity.recoveryDialogBody',
           'Recovery starts from the verified holding and still requires a '
               'fresh quote, prepared Review, and explicit consent.',
         ),
+        routeExecutionId: routeExecutionId,
       ),
       actions: [
         OutlinedButton(
@@ -1119,5 +2261,30 @@ Future<void> _confirmActivityRecovery(
       ],
     ),
   );
-  if (confirmed == true) onConfirmed();
+  if (confirmed) onConfirmed();
 }
+
+Widget _exactActivityRouteTarget(
+  BuildContext context, {
+  required String body,
+  required String routeExecutionId,
+}) => Column(
+  mainAxisSize: MainAxisSize.min,
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(body),
+    const SizedBox(height: 12),
+    Text(
+      unifiedSwapText(
+        context,
+        'common.exactTargetIntro',
+        'This action applies only to:',
+      ),
+    ),
+    const SizedBox(height: 4),
+    SelectableText(
+      '${unifiedSwapText(context, 'common.executionId', 'Execution ID')}: '
+      '$routeExecutionId',
+    ),
+  ],
+);

@@ -8,6 +8,7 @@ import 'package:web_dex/blocs/trading_entities_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/focusable_widget.dart';
@@ -64,7 +65,10 @@ class _OrderItemState extends State<OrderItem> {
               ),
             FocusableWidget(
               onTap: () {
-                routingState.dexState.setDetailsAction(order.uuid);
+                routingState.dexState.setDetailsAction(
+                  order.uuid,
+                  kind: DexTradingEntityKind.order,
+                );
               },
               borderRadius: geometry.borderRadius16,
               child: Container(

@@ -18,8 +18,7 @@ import 'package:web_dex/views/dex/entities_list/common/swap_actions_menu.dart';
 import 'package:web_dex/views/dex/entities_list/common/trade_amount_desktop.dart';
 
 class HistoryItem extends StatefulWidget {
-  const HistoryItem(this.swap, {Key? key, required this.onClick})
-    : super(key: key);
+  const HistoryItem(this.swap, {super.key, required this.onClick});
 
   final Swap swap;
   final VoidCallback onClick;
@@ -30,6 +29,7 @@ class HistoryItem extends StatefulWidget {
 
 class _HistoryItemState extends State<HistoryItem> {
   bool _isRecovering = false;
+  String? _recoveryResult;
 
   @override
   Widget build(BuildContext context) {
@@ -50,70 +50,105 @@ class _HistoryItemState extends State<HistoryItem> {
       context,
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isCompact = DexResponsiveSpec.fromWidth(
-          constraints.maxWidth,
-        ).usesMobileLists;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (isCompact)
-              Text(
-                tradingEntitiesBloc.getTypeString(isTaker),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isTaker ? colors.info : colors.brand,
-                ),
-              ),
-            FocusableWidget(
-              key: Key('swap-item-$uuid'),
-              onTap: widget.onClick,
-              borderRadius: geometry.borderRadius16,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
+    return StreamBuilder<Map<String, RecoverySubmissionStatus>>(
+      initialData: const {},
+      stream: tradingEntitiesBloc.outRecoveryStatuses,
+      builder: (context, recoverySnapshot) {
+        final recoveryStatus =
+            recoverySnapshot.data?[uuid] ??
+            tradingEntitiesBloc.recoveryStatusFor(uuid);
+        final recoveryLocked = recoveryStatus != RecoverySubmissionStatus.idle;
+        final recovering =
+            _isRecovering ||
+            recoveryStatus == RecoverySubmissionStatus.submitting;
+        final recoveryMessage = switch (recoveryStatus) {
+          RecoverySubmissionStatus.accepted => 'advancedRecoverySubmitted'.tr(),
+          RecoverySubmissionStatus.uncertain =>
+            'advancedRecoveryUncertain'.tr(),
+          RecoverySubmissionStatus.submitting =>
+            'advancedRecoverySubmitting'.tr(),
+          RecoverySubmissionStatus.idle => _recoveryResult,
+        };
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = DexResponsiveSpec.fromWidth(
+              constraints.maxWidth,
+            ).usesMobileLists;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isCompact)
+                  Text(
+                    tradingEntitiesBloc.getTypeString(isTaker),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isTaker ? colors.info : colors.brand,
+                    ),
+                  ),
+                FocusableWidget(
+                  key: ValueKey<int>(uuid.hashCode),
+                  onTap: widget.onClick,
                   borderRadius: geometry.borderRadius16,
-                  color: colors.surfaceRaised,
-                  border: Border.all(color: colors.border),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      borderRadius: geometry.borderRadius16,
+                      color: colors.surfaceRaised,
+                      border: Border.all(color: colors.border),
+                    ),
+                    child: isCompact
+                        ? _HistoryItemMobile(
+                            key: ValueKey<int>(Object.hash(uuid, 'mobile')),
+                            swap: widget.swap,
+                            uuid: uuid,
+                            isRecovering: recovering,
+                            buyAmount: buyAmount,
+                            buyCoin: buyCoin,
+                            date: date,
+                            isSuccessful: isSuccessful,
+                            sellAmount: sellAmount,
+                            sellCoin: sellCoin,
+                            onRecoverPressed:
+                                isRecoverable &&
+                                    !recoveryLocked &&
+                                    tradingEntitiesBloc.canRecoverSwap(uuid)
+                                ? _onRecoverPressed
+                                : null,
+                          )
+                        : _HistoryItemDesktop(
+                            key: ValueKey<int>(Object.hash(uuid, 'desktop')),
+                            uuid: uuid,
+                            isRecovering: recovering,
+                            buyAmount: buyAmount,
+                            buyCoin: buyCoin,
+                            date: date,
+                            isSuccessful: isSuccessful,
+                            isTaker: isTaker,
+                            sellAmount: sellAmount,
+                            sellCoin: sellCoin,
+                            typeColor: isTaker ? colors.info : colors.brand,
+                            onRecoverPressed:
+                                isRecoverable &&
+                                    !recoveryLocked &&
+                                    tradingEntitiesBloc.canRecoverSwap(uuid)
+                                ? _onRecoverPressed
+                                : null,
+                          ),
+                  ),
                 ),
-                child: isCompact
-                    ? _HistoryItemMobile(
-                        key: Key('swap-item-$uuid-mobile'),
-                        swap: widget.swap,
-                        uuid: uuid,
-                        isRecovering: _isRecovering,
-                        buyAmount: buyAmount,
-                        buyCoin: buyCoin,
-                        date: date,
-                        isSuccessful: isSuccessful,
-                        sellAmount: sellAmount,
-                        sellCoin: sellCoin,
-                        onRecoverPressed: isRecoverable
-                            ? _onRecoverPressed
-                            : null,
-                      )
-                    : _HistoryItemDesktop(
-                        key: Key('swap-item-$uuid-desktop'),
-                        uuid: uuid,
-                        isRecovering: _isRecovering,
-                        buyAmount: buyAmount,
-                        buyCoin: buyCoin,
-                        date: date,
-                        isSuccessful: isSuccessful,
-                        isTaker: isTaker,
-                        sellAmount: sellAmount,
-                        sellCoin: sellCoin,
-                        typeColor: isTaker ? colors.info : colors.brand,
-                        onRecoverPressed: isRecoverable
-                            ? _onRecoverPressed
-                            : null,
-                      ),
-              ),
-            ),
-          ],
+                if (recoveryMessage case final message?)
+                  Semantics(
+                    liveRegion: true,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(message),
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
@@ -121,29 +156,60 @@ class _HistoryItemState extends State<HistoryItem> {
 
   Future<void> _onRecoverPressed() async {
     if (_isRecovering) return;
-    final confirmed = await showDexActionConfirmation(
-      context: context,
-      actionLabel: LocaleKeys.recover.tr(),
-      confirmButtonKey: const Key('dex-history-recover-confirm'),
-    );
-    if (!confirmed || !mounted) return;
-    setState(() {
-      _isRecovering = true;
-    });
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
-    await tradingEntitiesBloc.recoverFundsOfSwap(widget.swap.uuid);
+    if (tradingEntitiesBloc.recoveryStatusFor(widget.swap.uuid) !=
+            RecoverySubmissionStatus.idle ||
+        !tradingEntitiesBloc.canRecoverSwap(widget.swap.uuid)) {
+      return;
+    }
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: LocaleKeys.recover.tr(),
+      targetDescription:
+          '${widget.swap.sellCoin}/${widget.swap.buyCoin} swap\n'
+          '${widget.swap.uuid}',
+      confirmButtonKey: const Key('dex-history-recover-confirm'),
+    );
+    if (!confirmed || !mounted) return;
+    if (tradingEntitiesBloc.recoveryStatusFor(widget.swap.uuid) !=
+            RecoverySubmissionStatus.idle ||
+        !tradingEntitiesBloc.canRecoverSwap(widget.swap.uuid)) {
+      return;
+    }
+    setState(() {
+      _isRecovering = true;
+    });
+    Object? result;
+    try {
+      result = await tradingEntitiesBloc.recoverFundsOfSwap(widget.swap.uuid);
+    } on Object {
+      result = null;
+    }
     if (!mounted) return;
+    final recoveryStatus = tradingEntitiesBloc.recoveryStatusFor(
+      widget.swap.uuid,
+    );
     setState(() {
       _isRecovering = false;
+      _recoveryResult = switch (recoveryStatus) {
+        RecoverySubmissionStatus.accepted => 'advancedRecoverySubmitted'.tr(),
+        RecoverySubmissionStatus.uncertain => 'advancedRecoveryUncertain'.tr(),
+        RecoverySubmissionStatus.submitting =>
+          'advancedRecoverySubmitting'.tr(),
+        RecoverySubmissionStatus.idle =>
+          result == null
+              ? 'advancedRecoveryFailed'.tr()
+              : 'advancedRecoverySubmitted'.tr(),
+      };
     });
   }
 }
 
 class _HistoryItemDesktop extends StatelessWidget {
   const _HistoryItemDesktop({
-    Key? key,
+    super.key,
     required this.uuid,
     required this.isRecovering,
     required this.sellCoin,
@@ -155,7 +221,7 @@ class _HistoryItemDesktop extends StatelessWidget {
     required this.date,
     required this.typeColor,
     required this.onRecoverPressed,
-  }) : super(key: key);
+  });
   final String uuid;
 
   final bool isRecovering;
@@ -203,7 +269,7 @@ class _HistoryItemDesktop extends StatelessWidget {
           ),
         ),
         Expanded(
-          key: Key('history-item-$uuid-sell-amount'),
+          key: ValueKey<int>(Object.hash('history-sell-amount', uuid)),
           child: TradeAmountDesktop(coinAbbr: sellCoin, amount: sellAmount),
         ),
         Expanded(
@@ -267,7 +333,7 @@ class _HistoryItemDesktop extends StatelessWidget {
 
 class _HistoryItemMobile extends StatelessWidget {
   const _HistoryItemMobile({
-    Key? key,
+    super.key,
     required this.swap,
     required this.uuid,
     required this.isRecovering,
@@ -278,7 +344,7 @@ class _HistoryItemMobile extends StatelessWidget {
     required this.isSuccessful,
     required this.date,
     required this.onRecoverPressed,
-  }) : super(key: key);
+  });
   final Swap swap;
   final String uuid;
   final bool isRecovering;

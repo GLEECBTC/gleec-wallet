@@ -13,17 +13,15 @@ class AnalyticsBloc extends Bloc<AnalyticsEvent, AnalyticsState> {
     required AnalyticsRepo analytics,
     required StoredSettings storedData,
     required SettingsRepository repository,
-  })  : _analytics = analytics,
-        _storedData = storedData,
-        _settingsRepo = repository,
-        super(AnalyticsState.fromSettings(storedData.analytics)) {
+  }) : _analytics = analytics,
+       _settingsRepo = repository,
+       super(AnalyticsState.fromSettings(storedData.analytics)) {
     on<AnalyticsActivateEvent>(_onActivate);
     on<AnalyticsDeactivateEvent>(_onDeactivate);
     on<AnalyticsSendDataEvent>(_onSendData);
   }
 
   final AnalyticsRepo _analytics;
-  final StoredSettings _storedData;
   final SettingsRepository _settingsRepo;
 
   Future<void> _onActivate(
@@ -32,9 +30,9 @@ class AnalyticsBloc extends Bloc<AnalyticsEvent, AnalyticsState> {
   ) async {
     await _analytics.activate();
     emit(state.copyWith(isSendDataAllowed: true));
-    await _settingsRepo.updateSettings(
-      _storedData.copyWith(
-        analytics: _storedData.analytics.copyWith(isSendAllowed: true),
+    await _settingsRepo.updateSettingsWith(
+      (current) => current.copyWith(
+        analytics: current.analytics.copyWith(isSendAllowed: true),
       ),
     );
   }
@@ -45,9 +43,9 @@ class AnalyticsBloc extends Bloc<AnalyticsEvent, AnalyticsState> {
   ) async {
     await _analytics.deactivate();
     emit(state.copyWith(isSendDataAllowed: false));
-    await _settingsRepo.updateSettings(
-      _storedData.copyWith(
-        analytics: _storedData.analytics.copyWith(isSendAllowed: false),
+    await _settingsRepo.updateSettingsWith(
+      (current) => current.copyWith(
+        analytics: current.analytics.copyWith(isSendAllowed: false),
       ),
     );
   }

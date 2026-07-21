@@ -6,7 +6,7 @@ import 'package:web_dex/shared/utils/formatters.dart';
 
 class AmountInputField extends StatefulWidget {
   const AmountInputField({
-    Key? key,
+    super.key,
     required this.stream,
     required this.initialData,
     required this.isEnabled,
@@ -18,7 +18,7 @@ class AmountInputField extends StatefulWidget {
     this.background,
     this.textAlign,
     this.textStyle,
-  }) : super(key: key);
+  });
 
   final Stream<Rational?> stream;
   final Rational? initialData;
@@ -44,7 +44,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
   void initState() {
     super.initState();
 
-    _dataListener = widget.stream.listen(_onDataChange);
+    _dataListener = widget.stream.listen(_onDataChange, onError: (_) {});
     _onDataChange(widget.initialData);
   }
 
@@ -59,7 +59,9 @@ class _AmountInputFieldState extends State<AmountInputField> {
   @override
   Widget build(BuildContext context) {
     final InputBorder border = OutlineInputBorder(
-        borderSide: BorderSide.none, borderRadius: BorderRadius.circular(18));
+      borderSide: BorderSide.none,
+      borderRadius: BorderRadius.circular(18),
+    );
 
     return SizedBox(
       height: widget.height,
@@ -69,11 +71,9 @@ class _AmountInputFieldState extends State<AmountInputField> {
         controller: _controller,
         enabled: widget.isEnabled,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
-            ?.copyWith(fontSize: 14)
-            .merge(widget.textStyle),
+        style: Theme.of(
+          context,
+        ).textTheme.titleSmall?.copyWith(fontSize: 14).merge(widget.textStyle),
         textInputAction: TextInputAction.done,
         onChanged: widget.onChanged,
         textAlign: widget.textAlign ?? TextAlign.left,
@@ -94,13 +94,20 @@ class _AmountInputFieldState extends State<AmountInputField> {
   void _onDataChange(Rational? value) {
     if (!mounted) return;
     final String currentText = _controller.text;
-    if (currentText.isNotEmpty && parseLocaleAwareRational(currentText) == value) return;
+    if (currentText.isNotEmpty) {
+      try {
+        if (parseLocaleAwareRational(currentText) == value) return;
+      } catch (_) {
+        // Replace malformed or partial input with the canonical bloc value.
+      }
+    }
 
     final String newText = value == null ? '' : formatDexAmt(value);
 
     _controller.value = TextEditingValue(
-        text: newText,
-        selection: TextSelection.collapsed(offset: newText.length),
-        composing: TextRange.empty);
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+      composing: TextRange.empty,
+    );
   }
 }

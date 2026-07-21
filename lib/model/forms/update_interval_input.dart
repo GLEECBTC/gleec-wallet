@@ -18,7 +18,7 @@ enum UpdateIntervalValidationError {
 class UpdateIntervalInput
     extends FormzInput<String, UpdateIntervalValidationError> {
   const UpdateIntervalInput.pure() : super.pure('300');
-  const UpdateIntervalInput.dirty([String value = '300']) : super.dirty(value);
+  const UpdateIntervalInput.dirty([super.value = '300']) : super.dirty();
 
   TradeBotUpdateInterval get interval =>
       TradeBotUpdateInterval.fromString(value);
@@ -27,6 +27,10 @@ class UpdateIntervalInput
   UpdateIntervalValidationError? validator(String value) {
     if (value.isEmpty) {
       return UpdateIntervalValidationError.empty;
+    }
+
+    if (value.length > 16 || value != value.trim()) {
+      return UpdateIntervalValidationError.invalid;
     }
 
     final interval = int.tryParse(value);
@@ -40,6 +44,10 @@ class UpdateIntervalInput
 
     if (interval < 60) {
       return UpdateIntervalValidationError.tooLow;
+    }
+
+    if (TradeBotUpdateInterval.tryFromSeconds(interval) == null) {
+      return UpdateIntervalValidationError.invalid;
     }
 
     return null;

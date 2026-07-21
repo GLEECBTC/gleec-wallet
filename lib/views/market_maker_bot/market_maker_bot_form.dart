@@ -1,4 +1,5 @@
 import 'package:app_theme/app_theme.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -47,11 +48,30 @@ class MarketMakerBotForm extends StatelessWidget {
 
   void _onCreateOrderPressed(BuildContext context) {
     final marketMakerTradeFormBloc = context.read<MarketMakerTradeFormBloc>();
-    final tradePair = marketMakerTradeFormBloc.state.toTradePairConfig();
+    final marketMakerBotBloc = context.read<MarketMakerBotBloc>();
+    final formState = marketMakerTradeFormBloc.state;
+    final walletSession = formState.previewWalletSession;
+    if (!formState.hasCurrentPreviewFor(walletSession) ||
+        walletSession == null ||
+        marketMakerBotBloc.captureWalletSession() != walletSession) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('marketMakerWalletChanged'.tr())));
+      return;
+    }
+    final tradePair = formState.toTradePairConfig();
 
-    context.read<MarketMakerBotBloc>().add(
-      MarketMakerBotOrderUpdateRequested(tradePair),
+    final accepted = marketMakerBotBloc.requestOrderUpdate(
+      tradePair,
+      walletSession: walletSession,
+      originalConfig: formState.originalConfig,
     );
+    if (!accepted) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('marketMakerLifecycleBusy'.tr())));
+      return;
+    }
 
     context.read<DexTabBarBloc>().add(const TabChanged(2));
 

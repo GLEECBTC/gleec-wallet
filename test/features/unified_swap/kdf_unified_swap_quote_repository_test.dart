@@ -48,7 +48,7 @@ void main() {
         walletId: 'wallet-a',
         eligibilityCheck: (_) async => true,
         validateRecipient: ({required ticker, required address}) async =>
-            ticker == 'ETH' && address == _recipient,
+            ticker == 'BTC' && address == _recipient,
         valuationSnapshot: () => _valuation(now),
         now: () => now,
       );
@@ -200,6 +200,30 @@ void main() {
     }
   });
 
+  test('an eligibility transition after quoting discards the result', () async {
+    final client = _FakeQuoteClient(_result(_candidateJson(vectors)));
+    var eligibilityCalls = 0;
+    final repository = KdfUnifiedSwapQuoteRepository(
+      client: client,
+      walletId: 'wallet-a',
+      eligibilityCheck: (_) async => ++eligibilityCalls == 1,
+      validateRecipient: ({required ticker, required address}) async => true,
+      now: () => now,
+    );
+
+    await expectLater(
+      repository.evaluate(_intent(32)),
+      throwsA(
+        isA<UnifiedSwapQuoteException>().having(
+          (error) => error.failure,
+          'failure',
+          UnifiedSwapQuoteFailure.capabilityUnavailable,
+        ),
+      ),
+    );
+    expect(client.calls, 1);
+  });
+
   test(
     'missing or stale wallet valuation makes the candidate unrankable',
     () async {
@@ -254,7 +278,7 @@ void main() {
     'candidate digest mismatch remains visible but non-executable',
     () async {
       final candidate = _candidateJson(vectors);
-      candidate['expected_receive'] = '99999';
+      candidate['candidate_digest'] = List.filled(64, '0').join();
       final client = _FakeQuoteClient(_result(candidate));
       final repository = KdfUnifiedSwapQuoteRepository(
         client: client,
@@ -358,7 +382,7 @@ void main() {
       walletId: 'wallet-a',
       eligibilityCheck: (_) async {
         eligibilityCalls++;
-        if (eligibilityCalls > 1) {
+        if (eligibilityCalls > 2) {
           throw StateError('private compliance failure');
         }
         return true;
@@ -575,6 +599,160 @@ void main() {
       );
     }
   });
+
+  test('rejects a duplicate candidate identity set', () async {
+    final candidate = kdf.TradeRouteCandidate.fromJson(_candidateJson(vectors));
+    final result = kdf.TradeRouteQuoteResult(
+      evaluationId: '00000000-0000-4000-8000-000000000098',
+      observedAt: now,
+      evaluationExpiresAt: now.add(const Duration(minutes: 1)),
+      candidates: [candidate, candidate],
+    );
+    final repository = KdfUnifiedSwapQuoteRepository(
+      client: _FakeQuoteClient(result),
+      walletId: 'wallet-a',
+      eligibilityCheck: (_) async => true,
+      validateRecipient: ({required ticker, required address}) async => true,
+      now: () => now,
+    );
+
+    await expectLater(
+      repository.evaluate(_intent(80)),
+      throwsA(
+        isA<UnifiedSwapQuoteException>().having(
+          (error) => error.failure,
+          'failure',
+          UnifiedSwapQuoteFailure.capabilityUnavailable,
+        ),
+      ),
+    );
+  });
+
+  test('rejects an already expired evaluation envelope', () async {
+    final repository = KdfUnifiedSwapQuoteRepository(
+      client: _FakeQuoteClient(
+        _result(_candidateJson(vectors), evaluationExpiresAt: now),
+      ),
+      walletId: 'wallet-a',
+      eligibilityCheck: (_) async => true,
+      validateRecipient: ({required ticker, required address}) async => true,
+      now: () => now,
+    );
+
+    await expectLater(
+      repository.evaluate(_intent(81)),
+      throwsA(
+        isA<UnifiedSwapQuoteException>().having(
+          (error) => error.failure,
+          'failure',
+          UnifiedSwapQuoteFailure.quoteExpired,
+        ),
+      ),
+    );
+  });
+
+  test(
+    'candidate policy keeps an unsupported route visible but inert',
+    () async {
+      final repository = KdfUnifiedSwapQuoteRepository(
+        client: _FakeQuoteClient(_result(_candidateJson(vectors))),
+        walletId: 'wallet-a',
+        eligibilityCheck: (_) async => true,
+        candidateEligibility: ({required intent, required candidate}) => false,
+        validateRecipient: ({required ticker, required address}) async => true,
+        now: () => now,
+      );
+
+      final evaluation = await repository.evaluate(_intent(82));
+
+      expect(evaluation.candidates.single.isExecutable, isFalse);
+      expect(
+        evaluation.candidates.single.rawUnknownDiscriminator,
+        contains('funding_authority_unavailable'),
+      );
+    },
+  );
+
+  test('rejects a quote envelope observed in the future', () async {
+    final result = kdf.TradeRouteQuoteResult(
+      evaluationId: '00000000-0000-4000-8000-000000000097',
+      observedAt: now.add(const Duration(seconds: 1)),
+      evaluationExpiresAt: now.add(const Duration(minutes: 1)),
+      candidates: [kdf.TradeRouteCandidate.fromJson(_candidateJson(vectors))],
+    );
+    final repository = KdfUnifiedSwapQuoteRepository(
+      client: _FakeQuoteClient(result),
+      walletId: 'wallet-a',
+      eligibilityCheck: (_) async => true,
+      validateRecipient: ({required ticker, required address}) async => true,
+      now: () => now,
+    );
+
+    await expectLater(
+      repository.evaluate(_intent(83)),
+      throwsA(
+        isA<UnifiedSwapQuoteException>().having(
+          (error) => error.failure,
+          'failure',
+          UnifiedSwapQuoteFailure.quoteExpired,
+        ),
+      ),
+    );
+  });
+
+  test('rejects a disconnected asset path', () async {
+    final candidate = _candidateJson(vectors);
+    final stages = candidate['stages']! as List<dynamic>;
+    _map(stages[1])['from_asset'] = {
+      ..._map(_map(stages[1])['from_asset']),
+      'ticker': 'DAI',
+    };
+    _rebindCandidateDigest(candidate);
+    final repository = KdfUnifiedSwapQuoteRepository(
+      client: _FakeQuoteClient(_result(candidate)),
+      walletId: 'wallet-a',
+      eligibilityCheck: (_) async => true,
+      validateRecipient: ({required ticker, required address}) async => true,
+      now: () => now,
+    );
+
+    await expectLater(
+      repository.evaluate(_intent(84)),
+      throwsA(
+        isA<UnifiedSwapQuoteException>().having(
+          (error) => error.failure,
+          'failure',
+          UnifiedSwapQuoteFailure.capabilityUnavailable,
+        ),
+      ),
+    );
+  });
+
+  test('rejects impossible intermediate-stage economics', () async {
+    final candidate = _candidateJson(vectors);
+    final secondStage = _map((candidate['stages']! as List<dynamic>)[1]);
+    secondStage['source_amount'] = '1';
+    secondStage['trade_source_amount'] = '1';
+    _rebindCandidateDigest(candidate);
+    final repository = KdfUnifiedSwapQuoteRepository(
+      client: _FakeQuoteClient(_result(candidate)),
+      walletId: 'wallet-a',
+      eligibilityCheck: (_) async => true,
+      validateRecipient: ({required ticker, required address}) async => true,
+      now: () => now,
+    );
+
+    await expectLater(
+      repository.evaluate(_intent(85)),
+      throwsA(
+        isA<UnifiedSwapQuoteException>().having(
+          (error) => error.failure,
+          'failure',
+          UnifiedSwapQuoteFailure.capabilityUnavailable,
+        ),
+      ),
+    );
+  });
 }
 
 final class _FakeQuoteClient
@@ -631,8 +809,8 @@ UnifiedSwapIntent _intent(
 }) => UnifiedSwapIntent(
   revision: revision,
   source: _eth,
-  destination: _eth,
-  sourceAmount: '100',
+  destination: _btc,
+  sourceAmount: '1000000000000000000',
   sourceSelection: sourceSelection,
   recipient: _recipient,
   sourceTokenTrust: UnifiedSwapTokenTrust.trusted,
@@ -731,7 +909,7 @@ Map<String, dynamic> _deepCopy(Map<String, dynamic> value) =>
 
 Map<String, dynamic> _map(Object? value) => value! as Map<String, dynamic>;
 
-const _recipient = '0x2222222222222222222222222222222222222222';
+const _recipient = 'bc1qrecipient';
 
 const _eth = UnifiedSwapAssetIdentity(
   ticker: 'ETH',

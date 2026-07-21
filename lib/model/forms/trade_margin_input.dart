@@ -19,11 +19,14 @@ class TradeMarginInput extends FormzInput<String, TradeMarginValidationError> {
   final double max;
 
   const TradeMarginInput.pure({this.min = 0, this.max = 1000})
-      : super.pure('3');
-  const TradeMarginInput.dirty(String value, {this.min = 0, this.max = 1000})
-      : super.dirty(value);
+    : super.pure('3');
+  const TradeMarginInput.dirty(super.value, {this.min = 0, this.max = 1000})
+    : super.dirty();
 
-  double get valueAsDouble => double.tryParse(value) ?? 0;
+  double get valueAsDouble {
+    final parsed = double.tryParse(value);
+    return parsed != null && parsed.isFinite ? parsed : 0;
+  }
 
   @override
   TradeMarginValidationError? validator(String value) {
@@ -31,8 +34,12 @@ class TradeMarginInput extends FormzInput<String, TradeMarginValidationError> {
       return TradeMarginValidationError.empty;
     }
 
+    if (value.length > 64 || value != value.trim()) {
+      return TradeMarginValidationError.invalidNumber;
+    }
+
     final margin = double.tryParse(value);
-    if (margin == null) {
+    if (margin == null || !margin.isFinite) {
       return TradeMarginValidationError.invalidNumber;
     }
 

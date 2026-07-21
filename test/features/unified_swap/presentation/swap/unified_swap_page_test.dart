@@ -330,7 +330,7 @@ void main() {
           initialState: RouteExecutionState(
             walletId: _walletId,
             status: RouteExecutionLoadStatus.observing,
-            session: const RouteExecutionSession(
+            session: RouteExecutionSession(
               routeExecutionId: _routeId,
               taskId: 7,
             ),
@@ -397,7 +397,7 @@ void main() {
           initialState: RouteExecutionState(
             walletId: _walletId,
             status: RouteExecutionLoadStatus.unknown,
-            session: const RouteExecutionSession(
+            session: RouteExecutionSession(
               routeExecutionId: _routeId,
               taskId: 7,
             ),
@@ -654,7 +654,7 @@ RouteExecutionReview _review({List<RouteExecutionFee>? fees}) =>
           minimumReceive: '2450000',
         ),
       ],
-      warnings: const [
+      warnings: [
         RouteReviewWarning(kind: RouteReviewWarningKind.externalRecipient),
       ],
       approvals: [

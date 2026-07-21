@@ -14,6 +14,7 @@ class RouteActivityListView extends StatefulWidget {
     required this.onExecutionSelected,
     required this.clipboardWriter,
     required this.announcement,
+    this.onStartSwap,
     super.key,
   });
 
@@ -23,25 +24,88 @@ class RouteActivityListView extends StatefulWidget {
   final ValueChanged<String> onExecutionSelected;
   final ActivityClipboardWriter clipboardWriter;
   final ActivityAnnouncement announcement;
+  final VoidCallback? onStartSwap;
 
   @override
   State<RouteActivityListView> createState() => _RouteActivityListViewState();
 }
 
 class _RouteActivityListViewState extends State<RouteActivityListView> {
-  RouteActivityGroup _selected = RouteActivityGroup.active;
+  RouteActivityGroup _selected = RouteActivityGroup.attentionRequired;
+  bool _selectionRestored = false;
+  bool _selectionPinned = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _restoreSelection();
+  }
+
+  void _restoreSelection() {
+    if (_selectionRestored) return;
+    _selectionRestored = true;
+    final stored = PageStorage.maybeOf(
+      context,
+    )?.readState(context, identifier: _selectionStorageId);
+    final restored = _groupNamed(stored);
+    if (restored != null) {
+      _selected = restored;
+      _selectionPinned = true;
+      return;
+    }
+    _selectFirstAvailableGroup();
+  }
 
   @override
   void didUpdateWidget(RouteActivityListView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final grouped = widget.state.grouped;
-    if (grouped[_selected]!.isEmpty) {
-      _selected = RouteActivityGroup.values.firstWhere(
-        (group) => grouped[group]!.isNotEmpty,
-        orElse: () => RouteActivityGroup.active,
-      );
+    if (oldWidget.state.walletId != widget.state.walletId) {
+      _selected = RouteActivityGroup.attentionRequired;
+      _selectionPinned = false;
+      _selectionRestored = false;
+      _restoreSelection();
     }
+    if (!_selectionPinned) _selectFirstAvailableGroup();
   }
+
+  void _selectFirstAvailableGroup() {
+    final grouped = widget.state.grouped;
+    const priority = [
+      RouteActivityGroup.attentionRequired,
+      RouteActivityGroup.active,
+      RouteActivityGroup.completed,
+    ];
+    final next = priority.firstWhere(
+      (group) => grouped[group]!.isNotEmpty,
+      orElse: () => RouteActivityGroup.attentionRequired,
+    );
+    if (next == _selected) return;
+    _selected = next;
+  }
+
+  void _selectGroup(RouteActivityGroup group) {
+    if (group == _selected) {
+      if (!_selectionPinned) {
+        _selectionPinned = true;
+        _persistSelection();
+      }
+      return;
+    }
+    setState(() {
+      _selected = group;
+      _selectionPinned = true;
+    });
+    _persistSelection();
+  }
+
+  void _persistSelection() {
+    PageStorage.maybeOf(
+      context,
+    )?.writeState(context, _selected.name, identifier: _selectionStorageId);
+  }
+
+  String get _selectionStorageId =>
+      'route-activity-selected-group-${widget.state.walletId.hashCode}';
 
   @override
   Widget build(BuildContext context) {
@@ -97,11 +161,13 @@ class _RouteActivityListViewState extends State<RouteActivityListView> {
     }
     if (state.executions.isEmpty && !state.hasMore) {
       return RouteActivityPlaceholder(
-        icon: Icons.history_rounded,
+        icon: Icons.swap_horiz_rounded,
         title: LocaleKeys.unifiedSwap_activityEmptyTitle.tr(),
         message: LocaleKeys.unifiedSwap_activityEmptyBody.tr(),
-        actionLabel: unifiedSwapText(context, 'common.refresh', 'Refresh'),
-        onAction: widget.onRefresh,
+        actionLabel: widget.onStartSwap == null
+            ? unifiedSwapText(context, 'common.refresh', 'Refresh')
+            : unifiedSwapText(context, 'activity.startSwap', 'Start a swap'),
+        onAction: widget.onStartSwap ?? widget.onRefresh,
       );
     }
 
@@ -113,7 +179,9 @@ class _RouteActivityListViewState extends State<RouteActivityListView> {
         onRefresh: widget.onRefresh,
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 820),
+            constraints: const BoxConstraints(
+              maxWidth: UnifiedSwapDesign.contentWidth,
+            ),
             child: ListView(
               key: const Key('route-activity-list'),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -127,12 +195,32 @@ class _RouteActivityListViewState extends State<RouteActivityListView> {
                 const SizedBox(height: 18),
                 _ActivityFilters(
                   selected: _selected,
+                  hasMore: state.hasMore,
                   counts: {
                     for (final group in RouteActivityGroup.values)
                       group: grouped[group]!.length,
                   },
-                  onSelected: (group) => setState(() => _selected = group),
+                  onSelected: _selectGroup,
                 ),
+                if (state.hasMore) ...[
+                  const SizedBox(height: 12),
+                  UnifiedSwapNotice(
+                    key: const Key('activity-results-partial'),
+                    title: unifiedSwapText(
+                      context,
+                      'activity.loadedResultsTitle',
+                      'Showing loaded activity',
+                    ),
+                    message: unifiedSwapText(
+                      context,
+                      'activity.loadedResultsBody',
+                      'Bucket counts cover the journal pages loaded so far. '
+                          'Load more before treating a category as empty.',
+                    ),
+                    tone: UnifiedSwapNoticeTone.info,
+                    icon: Icons.info_outline_rounded,
+                  ),
+                ],
                 if (state.status == RouteActivityLoadStatus.refreshing) ...[
                   const SizedBox(height: 12),
                   const UnifiedSwapSkeleton(
@@ -147,40 +235,44 @@ class _RouteActivityListViewState extends State<RouteActivityListView> {
                 const SizedBox(height: 14),
                 if (executions.isEmpty)
                   UnifiedSwapNotice(
-                    title: _emptyTitle(context, _selected),
-                    message: unifiedSwapText(
-                      context,
-                      'activity.bucketEmptyBody',
-                      'Routes in this state will appear here.',
-                    ),
+                    title: state.hasMore
+                        ? unifiedSwapText(
+                            context,
+                            'activity.noLoadedBucketResults',
+                            'No loaded swaps in this category yet',
+                          )
+                        : _emptyTitle(context, _selected),
+                    message: state.hasMore
+                        ? unifiedSwapText(
+                            context,
+                            'activity.bucketPartialBody',
+                            'More authoritative journal pages remain. Load '
+                                'more to continue checking this category.',
+                          )
+                        : unifiedSwapText(
+                            context,
+                            'activity.bucketEmptyBody',
+                            'Routes in this state will appear here.',
+                          ),
                     tone: UnifiedSwapNoticeTone.neutral,
                     icon: Icons.inbox_outlined,
                   )
                 else
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final columns = constraints.maxWidth >= 760 ? 2 : 1;
-                      const spacing = 10.0;
-                      final cardWidth =
-                          (constraints.maxWidth - spacing * (columns - 1)) /
-                          columns;
-                      return Wrap(
-                        spacing: spacing,
-                        runSpacing: spacing,
-                        children: [
-                          for (final execution in executions)
-                            SizedBox(
-                              width: cardWidth,
-                              child: _ActivitySummaryCard(
-                                execution: execution,
-                                onSelected: widget.onExecutionSelected,
-                                clipboardWriter: widget.clipboardWriter,
-                                announcement: widget.announcement,
-                              ),
-                            ),
-                        ],
-                      );
-                    },
+                  Column(
+                    children: [
+                      for (
+                        var index = 0;
+                        index < executions.length;
+                        index++
+                      ) ...[
+                        _ActivitySummaryCard(
+                          execution: executions[index],
+                          onSelected: widget.onExecutionSelected,
+                        ),
+                        if (index < executions.length - 1)
+                          const SizedBox(height: 10),
+                      ],
+                    ],
                   ),
                 if (state.hasMore) ...[
                   const SizedBox(height: 16),
@@ -223,6 +315,14 @@ class _RouteActivityListViewState extends State<RouteActivityListView> {
   }
 }
 
+RouteActivityGroup? _groupNamed(Object? value) {
+  if (value is! String) return null;
+  for (final group in RouteActivityGroup.values) {
+    if (group.name == value) return group;
+  }
+  return null;
+}
+
 class _ActivityListHeader extends StatelessWidget {
   const _ActivityListHeader({
     required this.refreshing,
@@ -253,11 +353,13 @@ class _ActivityListHeader extends StatelessWidget {
 class _ActivityFilters extends StatelessWidget {
   const _ActivityFilters({
     required this.selected,
+    required this.hasMore,
     required this.counts,
     required this.onSelected,
   });
 
   final RouteActivityGroup selected;
+  final bool hasMore;
   final Map<RouteActivityGroup, int> counts;
   final ValueChanged<RouteActivityGroup> onSelected;
 
@@ -278,6 +380,7 @@ class _ActivityFilters extends StatelessWidget {
               ),
               group: RouteActivityGroup.values[index],
               count: counts[RouteActivityGroup.values[index]] ?? 0,
+              hasMore: hasMore,
               selected: selected == RouteActivityGroup.values[index],
               onPressed: () => onSelected(RouteActivityGroup.values[index]),
             ),
@@ -294,6 +397,7 @@ class _ActivityFilterButton extends StatelessWidget {
   const _ActivityFilterButton({
     required this.group,
     required this.count,
+    required this.hasMore,
     required this.selected,
     required this.onPressed,
     super.key,
@@ -301,6 +405,7 @@ class _ActivityFilterButton extends StatelessWidget {
 
   final RouteActivityGroup group;
   final int count;
+  final bool hasMore;
   final bool selected;
   final VoidCallback onPressed;
 
@@ -310,6 +415,15 @@ class _ActivityFilterButton extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
+      label: unifiedSwapText(
+        context,
+        'activity.filterSemantics',
+        hasMore
+            ? '{label}, {count} loaded swaps; more activity is available'
+            : '{label}, {count} swaps',
+        namedArgs: {'label': _groupLabel(context, group), 'count': '$count'},
+      ),
+      excludeSemantics: true,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
@@ -323,8 +437,29 @@ class _ActivityFilterButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: Text(
-          '${_groupLabel(context, group)}${count > 0 ? ' $count' : ''}',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_groupLabel(context, group)),
+            const SizedBox(width: 6),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: selected ? colors.brand : colors.surfaceHighest,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                child: Text(
+                  '$count',
+                  style: UnifiedSwapDesign.typography(context).bodySmall
+                      .copyWith(
+                        color: selected ? Colors.white : colors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -335,18 +470,13 @@ class _ActivitySummaryCard extends StatelessWidget {
   const _ActivitySummaryCard({
     required this.execution,
     required this.onSelected,
-    required this.clipboardWriter,
-    required this.announcement,
   });
 
   final RouteActivitySummary execution;
   final ValueChanged<String> onSelected;
-  final ActivityClipboardWriter clipboardWriter;
-  final ActivityAnnouncement announcement;
 
   @override
   Widget build(BuildContext context) {
-    final isInert = execution.status == RouteActivityStatus.unknown;
     final colors = UnifiedSwapDesign.colors(context);
     final semanticsLabel = StringBuffer()
       ..write(
@@ -364,18 +494,37 @@ class _ActivitySummaryCard extends StatelessWidget {
           },
         ),
       );
+    semanticsLabel
+      ..write(', ')
+      ..write(_statusDescription(context, execution));
+    if (_showsActionRequired(execution)) {
+      semanticsLabel
+        ..write(', ')
+        ..write(
+          unifiedSwapText(
+            context,
+            'activity.row.actionRequiredBadge',
+            'Action required',
+          ),
+        );
+    }
     return Semantics(
-      key: Key('activity-card-semantics-${execution.routeExecutionId}'),
+      key: ValueKey<int>(
+        Object.hash('activity-card-semantics', execution.routeExecutionId),
+      ),
       container: true,
-      button: !isInert,
-      enabled: !isInert,
+      button: true,
+      enabled: true,
       label: semanticsLabel.toString(),
+      excludeSemantics: true,
       child: Material(
-        key: Key('activity-card-${execution.routeExecutionId}'),
+        key: ValueKey<int>(
+          Object.hash('activity-card', execution.routeExecutionId),
+        ),
         color: colors.surface,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          onTap: isInert ? null : () => onSelected(execution.routeExecutionId),
+          onTap: () => onSelected(execution.routeExecutionId),
           borderRadius: BorderRadius.circular(14),
           child: Container(
             constraints: const BoxConstraints(minHeight: 132),
@@ -387,13 +536,9 @@ class _ActivitySummaryCard extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final compact =
-                    constraints.maxWidth < 420 ||
-                    MediaQuery.textScalerOf(context).scale(16) >= 24;
-                final identity = _ActivityIdentity(
-                  execution: execution,
-                  clipboardWriter: clipboardWriter,
-                  announcement: announcement,
-                );
+                    constraints.maxWidth < 320 ||
+                    MediaQuery.textScalerOf(context).scale(16) >= 30;
+                final identity = _ActivityIdentity(execution: execution);
                 final meta = _ActivityMeta(execution: execution);
                 if (compact) {
                   return Column(
@@ -402,10 +547,7 @@ class _ActivitySummaryCard extends StatelessWidget {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          UnifiedSwapAssetAvatar(
-                            asset: execution.destination,
-                            size: 42,
-                          ),
+                          _ActivityAssetPair(execution: execution),
                           const SizedBox(width: 12),
                           Expanded(child: identity),
                         ],
@@ -418,10 +560,7 @@ class _ActivitySummaryCard extends StatelessWidget {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    UnifiedSwapAssetAvatar(
-                      asset: execution.destination,
-                      size: 42,
-                    ),
+                    _ActivityAssetPair(execution: execution),
                     const SizedBox(width: 12),
                     Expanded(child: identity),
                     const SizedBox(width: 8),
@@ -438,42 +577,69 @@ class _ActivitySummaryCard extends StatelessWidget {
 }
 
 class _ActivityIdentity extends StatelessWidget {
-  const _ActivityIdentity({
-    required this.execution,
-    required this.clipboardWriter,
-    required this.announcement,
-  });
+  const _ActivityIdentity({required this.execution});
 
   final RouteActivitySummary execution;
-  final ActivityClipboardWriter clipboardWriter;
-  final ActivityAnnouncement announcement;
 
   @override
   Widget build(BuildContext context) {
+    final source = execution.sourceAmount == null
+        ? execution.source.ticker
+        : routeActivityAmount(execution.sourceAmount!, execution.source);
+    final destination = execution.expectedReceive == null
+        ? execution.destination.ticker
+        : routeActivityAmount(
+            execution.expectedReceive!,
+            execution.destination,
+          );
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${unifiedSwapText(context, 'common.assetOnNetwork', '{asset} on {network}', namedArgs: {'asset': execution.source.ticker, 'network': unifiedSwapNetworkLabel(context, execution.source)})} → '
-          '${unifiedSwapText(context, 'common.assetOnNetwork', '{asset} on {network}', namedArgs: {'asset': execution.destination.ticker, 'network': unifiedSwapNetworkLabel(context, execution.destination)})}',
+          '$source · ${unifiedSwapNetworkLabel(context, execution.source)}',
           style: UnifiedSwapDesign.typography(context).labelLarge,
+        ),
+        Text(
+          '→ $destination · '
+          '${unifiedSwapNetworkLabel(context, execution.destination)}',
+          style: UnifiedSwapDesign.typography(context).bodySmall,
         ),
         const SizedBox(height: 4),
         Text(
-          _statusDescription(context, execution.status),
+          _statusDescription(context, execution),
           style: UnifiedSwapDesign.typography(context).bodyMedium,
-        ),
-        const SizedBox(height: 4),
-        RouteActivityExecutionId(
-          routeExecutionId: execution.routeExecutionId,
-          clipboardWriter: clipboardWriter,
-          announcement: announcement,
-          compact: true,
         ),
       ],
     );
   }
+}
+
+class _ActivityAssetPair extends StatelessWidget {
+  const _ActivityAssetPair({required this.execution});
+
+  final RouteActivitySummary execution;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 48,
+    height: 44,
+    child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        PositionedDirectional(
+          start: 0,
+          top: 0,
+          child: UnifiedSwapAssetAvatar(asset: execution.source, size: 34),
+        ),
+        PositionedDirectional(
+          end: 0,
+          bottom: 0,
+          child: UnifiedSwapAssetAvatar(asset: execution.destination, size: 34),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ActivityMeta extends StatelessWidget {
@@ -484,11 +650,28 @@ class _ActivityMeta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        RouteActivityStatusChip(status: execution.status),
-        const SizedBox(height: 4),
+        if (_showsActionRequired(execution)) ...[
+          UnifiedSwapBadge(
+            key: ValueKey<int>(
+              Object.hash(
+                'activity-action-required',
+                execution.routeExecutionId,
+              ),
+            ),
+            label: unifiedSwapText(
+              context,
+              'activity.row.actionRequiredBadge',
+              'Action required',
+            ),
+            icon: Icons.priority_high_rounded,
+            tone: UnifiedSwapNoticeTone.warning,
+          ),
+          const SizedBox(height: 4),
+        ],
         Text(
           routeActivityDate(context, execution.updatedAt),
           textAlign: TextAlign.end,
@@ -537,36 +720,52 @@ String _emptyTitle(BuildContext context, RouteActivityGroup group) =>
       ),
     };
 
-String _statusDescription(BuildContext context, RouteActivityStatus status) =>
-    switch (status) {
-      RouteActivityStatus.active => unifiedSwapText(
-        context,
-        'activity.progressing',
-        'Swap in progress',
-      ),
-      RouteActivityStatus.attentionRequired => unifiedSwapText(
-        context,
-        'activity.actionRequired',
-        'Action required',
-      ),
-      RouteActivityStatus.completed => unifiedSwapText(
-        context,
-        'activity.received',
-        'Funds received',
-      ),
-      RouteActivityStatus.cancelled => unifiedSwapText(
-        context,
-        'activity.cancelled',
-        'Swap cancelled',
-      ),
-      RouteActivityStatus.failed => unifiedSwapText(
-        context,
-        'activity.failed',
-        'Recovery may be available',
-      ),
-      RouteActivityStatus.unknown => unifiedSwapText(
-        context,
-        'activity.unknown',
-        'Status unavailable',
-      ),
-    };
+String _statusDescription(
+  BuildContext context,
+  RouteActivitySummary execution,
+) => switch (execution.status) {
+  RouteActivityStatus.active => unifiedSwapText(
+    context,
+    'activity.row.active',
+    'Swap in progress',
+  ),
+  RouteActivityStatus.attentionRequired =>
+    execution.requiresUserAction
+        ? unifiedSwapText(
+            context,
+            'activity.row.actionRequired',
+            'Action required',
+          )
+        : unifiedSwapText(
+            context,
+            'activity.row.attentionRequired',
+            'Needs attention',
+          ),
+  RouteActivityStatus.completed => unifiedSwapText(
+    context,
+    'activity.row.completed',
+    'Received',
+  ),
+  RouteActivityStatus.cancelled => unifiedSwapText(
+    context,
+    'activity.row.cancelled',
+    'Cancelled before funds moved',
+  ),
+  RouteActivityStatus.failed =>
+    (execution.requiresUserAttention || execution.requiresUserAction)
+        ? unifiedSwapText(
+            context,
+            'activity.row.failedAttention',
+            'Recovery may be available',
+          )
+        : unifiedSwapText(context, 'activity.row.failed', 'Swap failed'),
+  RouteActivityStatus.unknown => unifiedSwapText(
+    context,
+    'activity.row.unknown',
+    'Status unavailable',
+  ),
+};
+
+bool _showsActionRequired(RouteActivitySummary execution) =>
+    execution.status != RouteActivityStatus.unknown &&
+    execution.requiresUserAction;

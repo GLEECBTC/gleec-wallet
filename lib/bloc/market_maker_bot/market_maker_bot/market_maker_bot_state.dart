@@ -9,32 +9,43 @@ final class MarketMakerBotState extends Equatable {
   /// TODO: change to enum error type.
   final String? errorMessage;
 
-  const MarketMakerBotState({required this.status, this.errorMessage});
+  /// Whether this app session has authoritatively confirmed that the bot is
+  /// stopped and all of its tracked orders are absent.
+  ///
+  /// A visually stopped initial state is not proof that no external or prior
+  /// bot instance is running, so config mutations must gate on this value.
+  final bool lifecycleProvenStopped;
+
+  const MarketMakerBotState({
+    required this.status,
+    this.errorMessage,
+    this.lifecycleProvenStopped = false,
+  });
 
   /// The initial state of the bot. Defaults [status] to stopped
   /// and [errorMessage] to null.
   const MarketMakerBotState.initial()
-      : this(status: MarketMakerBotStatus.stopped);
+    : this(status: MarketMakerBotStatus.stopped);
 
   /// The bot is starting. Defaults [status] to starting
   /// and [errorMessage] to null.
   const MarketMakerBotState.starting()
-      : this(status: MarketMakerBotStatus.starting);
+    : this(status: MarketMakerBotStatus.starting);
 
   /// The bot is stopping. Defaults [status] to stopping
   /// and [errorMessage] to null.
   const MarketMakerBotState.stopping()
-      : this(status: MarketMakerBotStatus.stopping);
+    : this(status: MarketMakerBotStatus.stopping);
 
   /// The bot is running. Defaults [status] to running
   /// and [errorMessage] to null.
   const MarketMakerBotState.running()
-      : this(status: MarketMakerBotStatus.running);
+    : this(status: MarketMakerBotStatus.running);
 
   /// The bot is stopped. Defaults [status] to stopped
   /// and [errorMessage] to null.
   const MarketMakerBotState.stopped()
-      : this(status: MarketMakerBotStatus.stopped);
+    : this(status: MarketMakerBotStatus.stopped, lifecycleProvenStopped: true);
 
   bool get isRunning => status == MarketMakerBotStatus.running;
   bool get isUpdating =>
@@ -44,13 +55,16 @@ final class MarketMakerBotState extends Equatable {
   MarketMakerBotState copyWith({
     MarketMakerBotStatus? status,
     String? error,
+    bool? lifecycleProvenStopped,
   }) {
     return MarketMakerBotState(
       status: status ?? this.status,
       errorMessage: error,
+      lifecycleProvenStopped:
+          lifecycleProvenStopped ?? this.lifecycleProvenStopped,
     );
   }
 
   @override
-  List<Object?> get props => [status, errorMessage];
+  List<Object?> get props => [status, errorMessage, lifecycleProvenStopped];
 }

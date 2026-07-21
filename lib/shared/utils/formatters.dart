@@ -10,6 +10,10 @@ import 'package:web_dex/shared/constants.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
 final List<TextInputFormatter> currencyInputFormatters = [
+  // Parsing arbitrarily large pasted numerals into Rational/BigInt can block
+  // the UI isolate. This comfortably exceeds every supported asset amount
+  // while keeping all trading and transfer inputs computationally bounded.
+  LengthLimitingTextInputFormatter(128),
   DecimalTextInputFormatter(decimalRange: decimalRange),
   FilteringTextInputFormatter.allow(numberRegExp),
 ];
@@ -54,9 +58,9 @@ String durationFormat(
 /// unit test: [testNumberWithoutExponent]
 String getNumberWithoutExponent(String value) {
   try {
-    return Rational.parse(value)
-        .toDecimal(scaleOnInfinitePrecision: 10)
-        .toString();
+    return Rational.parse(
+      value,
+    ).toDecimal(scaleOnInfinitePrecision: 10).toString();
   } catch (_) {
     return value;
   }
@@ -128,10 +132,7 @@ class DecimalTextInputFormatter extends TextInputFormatter {
       );
     }
 
-    return TextEditingValue(
-      text: truncated,
-      selection: newSelection,
-    );
+    return TextEditingValue(text: truncated, selection: newSelection);
   }
 }
 
@@ -145,8 +146,10 @@ String getFormattedDate(int timestamp, [bool isUtc = false]) {
       timestampMilliseconds > _maxTimestampMillisecond) {
     return 'Date is out of the range';
   }
-  final dateTime =
-      DateTime.fromMillisecondsSinceEpoch(timestampMilliseconds, isUtc: isUtc);
+  final dateTime = DateTime.fromMillisecondsSinceEpoch(
+    timestampMilliseconds,
+    isUtc: isUtc,
+  );
   if (dateTime.year < 0) {
     return '${DateFormat('dd MMM yyyy, HH:mm', 'en_US').format(dateTime)} BC';
   }
@@ -174,19 +177,19 @@ String cutTrailingZeros(String str) {
 String formatDexAmt(dynamic amount) {
   if (amount == null) return '';
 
-  switch (amount.runtimeType) {
-    case double:
-      return cutTrailingZeros((amount as double).toStringAsFixed(8));
-    case Rational:
+  switch (amount) {
+    case final double value:
+      return cutTrailingZeros(value.toStringAsFixed(8));
+    case final Rational value:
       return cutTrailingZeros(
-        (amount as Rational)
+        value
             .toDecimal(scaleOnInfinitePrecision: scaleOnInfinitePrecision)
             .toStringAsFixed(8),
       );
-    case String:
-      return cutTrailingZeros(double.parse(amount).toStringAsFixed(8));
-    case int:
-      return cutTrailingZeros(amount.toDouble().toStringAsFixed(2));
+    case final String value:
+      return cutTrailingZeros(double.parse(value).toStringAsFixed(8));
+    case final int value:
+      return cutTrailingZeros(value.toDouble().toStringAsFixed(2));
     default:
       return amount.toString();
   }
@@ -308,9 +311,11 @@ void formatAmountInput(TextEditingController controller, Rational? value) {
 
   final newText = value == null
       ? ''
-      : cutTrailingZeros(value
-          .toDecimal(scaleOnInfinitePrecision: scaleOnInfinitePrecision)
-          .toStringAsFixed(8));
+      : cutTrailingZeros(
+          value
+              .toDecimal(scaleOnInfinitePrecision: scaleOnInfinitePrecision)
+              .toStringAsFixed(8),
+        );
   controller.value = TextEditingValue(
     text: newText,
     selection: TextSelection.collapsed(offset: newText.length),

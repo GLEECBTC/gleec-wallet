@@ -66,12 +66,16 @@ class MarketMakerTradeFormSwapCoinsRequested extends MarketMakerTradeFormEvent {
 }
 
 class MarketMakerTradeFormEditOrderRequested extends MarketMakerTradeFormEvent {
-  const MarketMakerTradeFormEditOrderRequested(this.tradePair);
+  const MarketMakerTradeFormEditOrderRequested(
+    this.tradePair, {
+    required this.walletSession,
+  });
 
   final TradePair tradePair;
+  final MarketMakerBotWalletSession walletSession;
 
   @override
-  List<Object> get props => [tradePair];
+  List<Object> get props => [tradePair, walletSession];
 }
 
 class MarketMakerTradeFormAskOrderbookSelected
@@ -86,7 +90,16 @@ class MarketMakerTradeFormAskOrderbookSelected
 
 class MarketMakerConfirmationPreviewRequested
     extends MarketMakerTradeFormEvent {
-  const MarketMakerConfirmationPreviewRequested();
+  const MarketMakerConfirmationPreviewRequested({
+    required this.walletSession,
+    required this.draftRevision,
+  });
+
+  final MarketMakerBotWalletSession? walletSession;
+  final int draftRevision;
+
+  @override
+  List<Object?> get props => [walletSession, draftRevision];
 }
 
 class MarketMakerConfirmationPreviewCancelRequested

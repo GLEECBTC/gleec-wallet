@@ -10,8 +10,7 @@ class AppStorage implements BaseStorage {
   @override
   Future<bool> write(String key, dynamic data) async {
     try {
-      await _writeToSharedPrefs(key, data);
-      return true;
+      return await _writeToSharedPrefs(key, data);
     } catch (_) {
       return false;
     }
@@ -32,14 +31,14 @@ class AppStorage implements BaseStorage {
       } else {
         return value;
       }
-    } catch (e, s) {
+    } catch (_, s) {
       log(
-        e.toString(),
+        'Unable to read application storage',
         path: 'web_storage => read',
         trace: s,
         isError: true,
       );
-      return null;
+      rethrow;
     }
   }
 
@@ -49,24 +48,20 @@ class AppStorage implements BaseStorage {
     return prefs.remove(key);
   }
 
-  Future<void> _writeToSharedPrefs(String key, dynamic data) async {
+  Future<bool> _writeToSharedPrefs(String key, dynamic data) async {
     final SharedPreferences prefs = await _getPreferences();
 
-    switch (data.runtimeType) {
-      case bool:
-        await prefs.setBool(key, data);
-        break;
-      case double:
-        await prefs.setDouble(key, data);
-        break;
-      case int:
-        await prefs.setInt(key, data);
-        break;
-      case String:
-        await prefs.setString(key, data);
-        break;
+    switch (data) {
+      case final bool value:
+        return prefs.setBool(key, value);
+      case final double value:
+        return prefs.setDouble(key, value);
+      case final int value:
+        return prefs.setInt(key, value);
+      case final String value:
+        return prefs.setString(key, value);
       default:
-        await prefs.setString(key, jsonEncode(data));
+        return prefs.setString(key, jsonEncode(data));
     }
   }
 

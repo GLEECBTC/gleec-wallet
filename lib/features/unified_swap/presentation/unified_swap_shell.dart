@@ -2,13 +2,17 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:web_dex/features/unified_swap/application/route_activity_bloc.dart';
 import 'package:web_dex/features/unified_swap/application/route_execution_bloc.dart';
+import 'package:web_dex/features/unified_swap/domain/route_activity_models.dart'
+    hide RouteActivityPage;
 import 'package:web_dex/features/unified_swap/domain/route_execution_models.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/unified_swap_config.dart';
 import 'package:web_dex/features/unified_swap/infrastructure/unified_swap_production_composition.dart';
 import 'package:web_dex/features/unified_swap/presentation/activity/activity_page.dart';
 import 'package:web_dex/features/unified_swap/presentation/swap/unified_swap_page.dart';
 import 'package:web_dex/features/unified_swap/presentation/unified_swap_design.dart';
+import 'package:web_dex/features/unified_swap/presentation/unified_swap_sensitive_dialog.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/router/state/routing_state.dart';
@@ -21,10 +25,17 @@ import 'package:web_dex/views/dex/dex_page.dart';
 /// The shell replaces the legacy wallet chrome only while Unified Swap is
 /// active. The Gleec logo returns to Wallet and the overflow keeps the existing
 /// global destinations reachable without nesting the old navigation.
-class UnifiedSwapShell extends StatelessWidget {
+class UnifiedSwapShell extends StatefulWidget {
   const UnifiedSwapShell({super.key, this.config = const UnifiedSwapConfig()});
 
   final UnifiedSwapConfig config;
+
+  @override
+  State<UnifiedSwapShell> createState() => _UnifiedSwapShellState();
+}
+
+class _UnifiedSwapShellState extends State<UnifiedSwapShell> {
+  UnifiedSwapConfig get config => widget.config;
 
   @override
   Widget build(BuildContext context) {
@@ -45,13 +56,16 @@ class UnifiedSwapShell extends StatelessWidget {
                 _UnifiedSwapHeader(
                   selected: selected,
                   showNavigation: desktop,
-                  onSelected: _select,
+                  onSelected: (destination) => _select(context, destination),
+                  onWallet: () => _selectGlobal(context, MainMenuValue.wallet),
+                  onGlobalSelected: (destination) =>
+                      _selectGlobal(context, destination),
                 ),
                 Expanded(child: _body(context, route)),
                 if (!desktop)
                   _UnifiedSwapBottomNavigation(
                     selected: selected,
-                    onSelected: _select,
+                    onSelected: (destination) => _select(context, destination),
                   ),
               ],
             );
@@ -69,9 +83,29 @@ class UnifiedSwapShell extends StatelessWidget {
         : destination;
   }
 
-  void _select(UnifiedSwapDestination destination) {
+  Future<void> _select(
+    BuildContext context,
+    UnifiedSwapDestination destination,
+  ) async {
+    if (_navigationDestination(
+          routingState.unifiedSwapState.value.destination,
+        ) ==
+        _navigationDestination(destination)) {
+      return;
+    }
+    if (!await _confirmDeparture(context)) return;
+    if (!mounted || !context.mounted) return;
+    routingState.dexState.reset();
     switch (destination) {
       case UnifiedSwapDestination.swap:
+        final execution = _maybeExecutionBloc(context);
+        final status = execution?.state.status;
+        if (execution != null &&
+            (status == RouteExecutionLoadStatus.completed ||
+                status == RouteExecutionLoadStatus.cancelled ||
+                status == RouteExecutionLoadStatus.failed)) {
+          execution.add(RouteExecutionWalletChanged(execution.state.walletId));
+        }
         routingState.unifiedSwapState.replace(
           const UnifiedSwapRouteState.swap(),
         );
@@ -87,6 +121,76 @@ class UnifiedSwapShell extends StatelessWidget {
     }
   }
 
+  Future<void> _selectGlobal(
+    BuildContext context,
+    MainMenuValue destination,
+  ) async {
+    if (!await _confirmDeparture(context)) return;
+    if (!mounted || !context.mounted) return;
+    routingState.dexState.reset();
+    routingState.selectedMenu = destination;
+  }
+
+  Future<bool> _confirmDeparture(BuildContext context) async {
+    final state = _maybeExecutionBloc(context)?.state;
+    if (state == null ||
+        state.status == RouteExecutionLoadStatus.idle ||
+        state.status == RouteExecutionLoadStatus.completed ||
+        state.status == RouteExecutionLoadStatus.cancelled ||
+        state.status == RouteExecutionLoadStatus.failed) {
+      return true;
+    }
+    final reviewing = state.status == RouteExecutionLoadStatus.reviewRequired;
+    return showUnifiedSwapSensitiveConfirmation(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          unifiedSwapText(
+            dialogContext,
+            reviewing
+                ? 'navigation.leaveReviewTitle'
+                : 'navigation.leaveExecutionTitle',
+            reviewing ? 'Leave this Review?' : 'Leave swap progress?',
+          ),
+        ),
+        content: Text(
+          unifiedSwapText(
+            dialogContext,
+            reviewing
+                ? 'navigation.leaveReviewBody'
+                : 'navigation.leaveExecutionBody',
+            reviewing
+                ? 'No swap has started. Leaving discards this prepared '
+                      'Review.'
+                : 'The swap continues in Activity. Leaving this screen '
+                      'does not cancel it.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              unifiedSwapText(dialogContext, 'common.stay', 'Stay here'),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              unifiedSwapText(dialogContext, 'common.leave', 'Leave'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _viewActivity(String routeExecutionId) {
+    routingState.unifiedSwapState.replace(
+      UnifiedSwapRouteState.activityDetails(routeExecutionId),
+    );
+  }
+
   Widget _body(BuildContext context, UnifiedSwapRouteState route) {
     switch (route.destination) {
       case UnifiedSwapDestination.swap:
@@ -95,14 +199,13 @@ class UnifiedSwapShell extends StatelessWidget {
           config: config,
           maximumAmountResolver: production?.maximumAmount,
           selectionGateway: production,
+          initialAmountDraft: route.legacyHints.sourceAmount,
+          onViewActivity: _viewActivity,
         );
       case UnifiedSwapDestination.activity:
         return RouteActivityPage(
-          onExecutionSelected: (routeExecutionId) {
-            routingState.unifiedSwapState.replace(
-              UnifiedSwapRouteState.activityDetails(routeExecutionId),
-            );
-          },
+          onStartSwap: () => _select(context, UnifiedSwapDestination.swap),
+          onExecutionSelected: _viewActivity,
         );
       case UnifiedSwapDestination.activityDetails:
         return _UnifiedSwapActivityDetail(
@@ -110,14 +213,15 @@ class UnifiedSwapShell extends StatelessWidget {
           routeExecutionId: route.routeExecutionId,
         );
       case UnifiedSwapDestination.advanced:
-        return const DexPage();
+        return DexPage(legacyHints: route.legacyHints);
     }
   }
 }
 
-/// Connects read-only Activity history to the wallet-scoped durable execution
-/// coordinator. Controls are exposed only after that coordinator has reattached
-/// the exact route and KDF has supplied a current executable snapshot.
+/// Connects authoritative Activity history to the wallet-scoped durable
+/// execution coordinator. Live progress and controls are exposed only after
+/// that coordinator has reattached the exact route and KDF has supplied a
+/// current executable snapshot.
 class _UnifiedSwapActivityDetail extends StatefulWidget {
   const _UnifiedSwapActivityDetail({
     required this.config,
@@ -136,7 +240,12 @@ class _UnifiedSwapActivityDetailState
     extends State<_UnifiedSwapActivityDetail> {
   RouteExecutionBloc? _executionBloc;
   String? _requestedRouteExecutionId;
+  String? _failedRouteExecutionId;
   bool _showLiveExecution = false;
+  bool _labelLiveActionAsResume = false;
+  bool _openProgressAfterReattach = false;
+  bool _controlAttemptPending = false;
+  String? _controlFailureRouteExecutionId;
 
   @override
   void didChangeDependencies() {
@@ -145,8 +254,12 @@ class _UnifiedSwapActivityDetailState
     if (!identical(next, _executionBloc)) {
       _executionBloc = next;
       _requestedRouteExecutionId = null;
+      _failedRouteExecutionId = null;
+      _labelLiveActionAsResume = false;
+      _openProgressAfterReattach = false;
+      _controlAttemptPending = false;
+      _controlFailureRouteExecutionId = null;
     }
-    _requestReattachment();
   }
 
   @override
@@ -154,47 +267,81 @@ class _UnifiedSwapActivityDetailState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.routeExecutionId != widget.routeExecutionId) {
       _requestedRouteExecutionId = null;
+      _failedRouteExecutionId = null;
       _showLiveExecution = false;
-      _requestReattachment();
+      _labelLiveActionAsResume = false;
+      _openProgressAfterReattach = false;
+      _controlAttemptPending = false;
+      _controlFailureRouteExecutionId = null;
     }
   }
 
-  void _requestReattachment() {
+  void _requestProgressReattachment(String requestedRouteExecutionId) {
     final bloc = _executionBloc;
     final routeExecutionId = widget.routeExecutionId;
-    final status = bloc?.state.status;
     if (bloc == null ||
         bloc.state.walletId == null ||
         routeExecutionId == null ||
+        requestedRouteExecutionId != routeExecutionId ||
         routeExecutionId.trim().isEmpty ||
         _requestedRouteExecutionId == routeExecutionId ||
-        status == RouteExecutionLoadStatus.starting ||
-        status == RouteExecutionLoadStatus.reattaching) {
+        !_hasResumableActivityDetail(routeExecutionId) ||
+        !_canRequestProgressReattachment(bloc.state, routeExecutionId)) {
       return;
     }
-    _requestedRouteExecutionId = routeExecutionId;
+    setState(() {
+      _labelLiveActionAsResume = true;
+      _requestedRouteExecutionId = routeExecutionId;
+      _failedRouteExecutionId = null;
+      _openProgressAfterReattach = true;
+    });
     bloc.add(RouteExecutionReattachRequested(routeExecutionId));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _requestedRouteExecutionId != routeExecutionId) {
+        return;
+      }
+      final current = _executionBloc?.state;
+      final accepted =
+          current != null &&
+          (current.status == RouteExecutionLoadStatus.reattaching ||
+              current.session?.routeExecutionId == routeExecutionId ||
+              current.progress?.routeExecutionId == routeExecutionId);
+      if (!accepted) {
+        setState(() {
+          _requestedRouteExecutionId = null;
+          _openProgressAfterReattach = false;
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final routeExecutionId = widget.routeExecutionId;
     final bloc = _executionBloc;
-    if (routeExecutionId == null || bloc == null) {
+    final activityBloc = _maybeActivityBloc(context);
+    if (routeExecutionId == null || bloc == null || activityBloc == null) {
       return RouteActivityPage(
         showDetails: true,
         initialRouteExecutionId: routeExecutionId,
         onBack: _backToActivity,
       );
     }
+    final hasResumableActivityDetail = context.select<RouteActivityBloc, bool>(
+      (activity) => _isResumableActivityDetail(
+        activity.state.selectedExecution,
+        routeExecutionId,
+      ),
+    );
     return BlocConsumer<RouteExecutionBloc, RouteExecutionState>(
       bloc: bloc,
       listenWhen: (previous, current) =>
-          (previous.status == RouteExecutionLoadStatus.starting ||
-              previous.status == RouteExecutionLoadStatus.reattaching) &&
-          current.status != RouteExecutionLoadStatus.starting &&
-          current.status != RouteExecutionLoadStatus.reattaching,
-      listener: (_, __) => _requestReattachment(),
+          _attachmentSettled(previous, current) ||
+          _activityProjectionChanged(previous, current, routeExecutionId),
+      listener: (_, state) => _executionStateChanged(
+        routeExecutionId: routeExecutionId,
+        state: state,
+      ),
       builder: (context, state) {
         if (_showLiveExecution) {
           final production = _maybeProductionComposition(context);
@@ -202,29 +349,61 @@ class _UnifiedSwapActivityDetailState
             config: widget.config,
             initialRouteExecutionId: routeExecutionId,
             maximumAmountResolver: production?.maximumAmount,
+            selectionGateway: production,
+            onViewActivity: (_) => setState(() => _showLiveExecution = false),
           );
         }
         final progress = state.progress;
         final matches =
             state.session?.routeExecutionId == routeExecutionId &&
             progress?.routeExecutionId == routeExecutionId &&
-            progress!.isExecutable &&
-            !state.controlInFlight;
+            progress!.isExecutable;
         final controls = progress?.controls;
+        final controlTarget = state.controlTarget;
         final pending = progress?.pendingAction;
+        final liveProgressReady =
+            hasResumableActivityDetail &&
+            matches &&
+            state.failure == null &&
+            _isLiveProgressStatus(state.status) &&
+            !_isTerminalOutcome(progress.outcome);
+        final canRetryLiveProgress =
+            hasResumableActivityDetail &&
+            _failedRouteExecutionId == routeExecutionId &&
+            state.failure != null &&
+            _isRetryableProgressFailure(state.failure!) &&
+            !state.controlInFlight;
+        final canResumeLiveProgress =
+            hasResumableActivityDetail &&
+            !liveProgressReady &&
+            !canRetryLiveProgress &&
+            _requestedRouteExecutionId != routeExecutionId &&
+            _canRequestProgressReattachment(state, routeExecutionId);
         return RouteActivityPage(
           showDetails: true,
           initialRouteExecutionId: routeExecutionId,
           onBack: _backToActivity,
           onCancelRequested:
-              matches && controls!.canCancel && !controls.reconciliationOnly
-              ? _cancel
+              matches &&
+                  controlTarget != null &&
+                  controls!.canCancel &&
+                  !controls.reconciliationOnly
+              ? (confirmedRouteExecutionId) => _cancel(
+                  confirmedRouteExecutionId,
+                  expectedBloc: bloc,
+                  expectedTarget: controlTarget,
+                )
               : null,
           onStopAfterCurrentRequested:
               matches &&
+                  controlTarget != null &&
                   controls!.canStopAfterCurrent &&
                   !controls.reconciliationOnly
-              ? _stopAfterCurrent
+              ? (confirmedRouteExecutionId) => _stopAfterCurrent(
+                  confirmedRouteExecutionId,
+                  expectedBloc: bloc,
+                  expectedTarget: controlTarget,
+                )
               : null,
           onRecoveryRequested:
               matches &&
@@ -235,26 +414,208 @@ class _UnifiedSwapActivityDetailState
                   )
               ? _openRecovery
               : null,
+          onProgressRequested: liveProgressReady ? _openProgress : null,
+          onProgressReattachRequested: canRetryLiveProgress
+              ? _retryProgress
+              : canResumeLiveProgress
+              ? _resumeProgress
+              : null,
+          progressReattachFailed: canRetryLiveProgress,
+          resumeProgress: _labelLiveActionAsResume,
+          liveControlInFlight: matches && state.controlInFlight,
+          liveControlFailure:
+              _controlFailureRouteExecutionId == routeExecutionId
+              ? unifiedSwapText(
+                  context,
+                  'activity.detail.controlFailed',
+                  'The requested control could not be applied. The latest '
+                      'route state is still shown; review it before trying '
+                      'again.',
+                )
+              : null,
         );
       },
     );
   }
 
-  void _cancel(String routeExecutionId) {
-    if (_matchesCurrentSession(routeExecutionId)) {
-      _executionBloc!.add(const RouteExecutionCancelRequested());
+  void _executionStateChanged({
+    required String routeExecutionId,
+    required RouteExecutionState state,
+  }) {
+    final inFlight =
+        state.status == RouteExecutionLoadStatus.starting ||
+        state.status == RouteExecutionLoadStatus.reattaching;
+    final exactBinding =
+        state.session?.routeExecutionId == routeExecutionId ||
+        state.progress?.routeExecutionId == routeExecutionId;
+    if (_controlAttemptPending && !state.controlInFlight && exactBinding) {
+      _controlAttemptPending = false;
+      _controlFailureRouteExecutionId = state.failure == null
+          ? null
+          : routeExecutionId;
+      if (mounted) setState(() {});
     }
+    if (!inFlight &&
+        state.failure != null &&
+        (_requestedRouteExecutionId == routeExecutionId || exactBinding)) {
+      // Keep a failed exact handoff explicitly retryable, but do not turn a
+      // transient failure into an automatic reattach loop.
+      _requestedRouteExecutionId = null;
+      _failedRouteExecutionId = routeExecutionId;
+      _openProgressAfterReattach = false;
+    } else if (state.failure == null && exactBinding) {
+      _failedRouteExecutionId = null;
+      if (_openProgressAfterReattach &&
+          _hasResumableActivityDetail(routeExecutionId) &&
+          _hasExactLiveProgress(state, routeExecutionId)) {
+        _requestedRouteExecutionId = null;
+        _openProgressAfterReattach = false;
+        if (mounted) setState(() => _showLiveExecution = true);
+      }
+    }
+    _refreshActivity();
   }
 
-  void _stopAfterCurrent(String routeExecutionId) {
-    if (_matchesCurrentSession(routeExecutionId)) {
-      _executionBloc!.add(const RouteExecutionStopAfterCurrentRequested());
+  void _cancel(
+    String routeExecutionId, {
+    required RouteExecutionBloc expectedBloc,
+    required RouteExecutionControlTarget expectedTarget,
+  }) {
+    final bloc = _executionBloc;
+    if (!mounted ||
+        bloc == null ||
+        bloc.isClosed ||
+        !identical(bloc, expectedBloc) ||
+        expectedTarget.routeExecutionId != routeExecutionId ||
+        bloc.state.controlTarget != expectedTarget ||
+        !_hasResumableActivityDetail(routeExecutionId) ||
+        !_matchesCurrentSession(routeExecutionId)) {
+      return;
     }
+    setState(() {
+      _controlAttemptPending = true;
+      _controlFailureRouteExecutionId = null;
+    });
+    bloc.add(RouteExecutionCancelRequested(expectedTarget));
+  }
+
+  void _stopAfterCurrent(
+    String routeExecutionId, {
+    required RouteExecutionBloc expectedBloc,
+    required RouteExecutionControlTarget expectedTarget,
+  }) {
+    final bloc = _executionBloc;
+    if (!mounted ||
+        bloc == null ||
+        bloc.isClosed ||
+        !identical(bloc, expectedBloc) ||
+        expectedTarget.routeExecutionId != routeExecutionId ||
+        bloc.state.controlTarget != expectedTarget ||
+        !_hasResumableActivityDetail(routeExecutionId) ||
+        !_matchesCurrentSession(routeExecutionId)) {
+      return;
+    }
+    setState(() {
+      _controlAttemptPending = true;
+      _controlFailureRouteExecutionId = null;
+    });
+    bloc.add(RouteExecutionStopAfterCurrentRequested(expectedTarget));
   }
 
   void _openRecovery(String routeExecutionId) {
-    if (!_matchesCurrentSession(routeExecutionId)) return;
+    if (!_hasResumableActivityDetail(routeExecutionId) ||
+        !_matchesCurrentSession(routeExecutionId)) {
+      return;
+    }
     setState(() => _showLiveExecution = true);
+  }
+
+  void _openProgress(String routeExecutionId) {
+    final state = _executionBloc?.state;
+    final progress = state?.progress;
+    if (!_hasResumableActivityDetail(routeExecutionId) ||
+        !_matchesCurrentSession(routeExecutionId) ||
+        state == null ||
+        progress == null ||
+        !progress.isExecutable ||
+        state.controlInFlight ||
+        state.failure != null ||
+        !_isLiveProgressStatus(state.status) ||
+        _isTerminalOutcome(progress.outcome)) {
+      return;
+    }
+    setState(() => _showLiveExecution = true);
+  }
+
+  void _resumeProgress(String routeExecutionId) {
+    _requestProgressReattachment(routeExecutionId);
+  }
+
+  void _retryProgress(String routeExecutionId) {
+    final state = _executionBloc?.state;
+    if (routeExecutionId != widget.routeExecutionId ||
+        _failedRouteExecutionId != routeExecutionId ||
+        state == null ||
+        state.controlInFlight ||
+        state.failure == null ||
+        !_isRetryableProgressFailure(state.failure!)) {
+      return;
+    }
+    _requestedRouteExecutionId = null;
+    _requestProgressReattachment(routeExecutionId);
+  }
+
+  bool _canRequestProgressReattachment(
+    RouteExecutionState state,
+    String routeExecutionId,
+  ) {
+    if (state.walletId == null ||
+        state.controlInFlight ||
+        state.status == RouteExecutionLoadStatus.reviewRequired ||
+        state.status == RouteExecutionLoadStatus.starting ||
+        state.status == RouteExecutionLoadStatus.reattaching ||
+        _wouldDisplaceNonterminalSession(state, routeExecutionId) ||
+        _hasExactLiveProgress(state, routeExecutionId)) {
+      return false;
+    }
+    final retryingExactFailure =
+        _failedRouteExecutionId == routeExecutionId &&
+        state.failure != null &&
+        _isRetryableProgressFailure(state.failure!);
+    if (retryingExactFailure) return true;
+    if (_failedRouteExecutionId == routeExecutionId && state.failure != null) {
+      // Permanent, conflicting, or unsupported exact handoffs stay inert.
+      return false;
+    }
+    if (_requestedRouteExecutionId == routeExecutionId ||
+        state.session?.routeExecutionId == routeExecutionId ||
+        state.progress?.routeExecutionId == routeExecutionId) {
+      // An acknowledged or in-flight exact handoff owns this route. Wait for
+      // executable progress; unknown or incomplete snapshots stay inert.
+      return false;
+    }
+    return true;
+  }
+
+  bool _hasResumableActivityDetail(String routeExecutionId) {
+    final activity = _maybeActivityBloc(context);
+    return activity != null &&
+        _isResumableActivityDetail(
+          activity.state.selectedExecution,
+          routeExecutionId,
+        );
+  }
+
+  void _refreshActivity() {
+    final activity = _maybeActivityBloc(context);
+    if (activity == null || activity.state.walletId == null) return;
+    if (activity.state.isDetailLoading &&
+        activity.state.selectedExecution == null) {
+      // An exact Activity GET owns the detail generation while it is loading.
+      // Let it settle before reconciliation so the handoff cannot cancel it.
+      return;
+    }
+    activity.add(const RouteActivityRefreshRequested());
   }
 
   bool _matchesCurrentSession(String routeExecutionId) =>
@@ -285,16 +646,131 @@ UnifiedSwapProductionComposition? _maybeProductionComposition(
   }
 }
 
+RouteActivityBloc? _maybeActivityBloc(BuildContext context) {
+  try {
+    return context.read<RouteActivityBloc>();
+  } on Object {
+    return null;
+  }
+}
+
+bool _attachmentSettled(
+  RouteExecutionState previous,
+  RouteExecutionState current,
+) =>
+    (previous.status == RouteExecutionLoadStatus.starting ||
+        previous.status == RouteExecutionLoadStatus.reattaching) &&
+    current.status != RouteExecutionLoadStatus.starting &&
+    current.status != RouteExecutionLoadStatus.reattaching;
+
+bool _activityProjectionChanged(
+  RouteExecutionState previous,
+  RouteExecutionState current,
+  String routeExecutionId,
+) {
+  final previousProgress = previous.progress;
+  final currentProgress = current.progress;
+  final concernsExactRoute =
+      previousProgress?.routeExecutionId == routeExecutionId ||
+      currentProgress?.routeExecutionId == routeExecutionId ||
+      current.session?.routeExecutionId == routeExecutionId;
+  if (!concernsExactRoute) return false;
+  return previousProgress?.stateRevision != currentProgress?.stateRevision ||
+      previousProgress?.outcome != currentProgress?.outcome ||
+      previousProgress?.controls != currentProgress?.controls ||
+      previous.status != current.status ||
+      previous.controlInFlight != current.controlInFlight ||
+      previous.failure != current.failure;
+}
+
+bool _isLiveProgressStatus(RouteExecutionLoadStatus status) =>
+    status == RouteExecutionLoadStatus.observing ||
+    status == RouteExecutionLoadStatus.attentionRequired ||
+    status == RouteExecutionLoadStatus.recovery;
+
+bool _isTerminalOutcome(RouteExecutionOutcome outcome) =>
+    outcome == RouteExecutionOutcome.completed ||
+    outcome == RouteExecutionOutcome.cancelled ||
+    outcome == RouteExecutionOutcome.failed;
+
+bool _isRetryableProgressFailure(RouteExecutionFailure failure) =>
+    failure == RouteExecutionFailure.networkUnavailable ||
+    failure == RouteExecutionFailure.storageUnavailable ||
+    failure == RouteExecutionFailure.serviceUnavailable ||
+    failure == RouteExecutionFailure.unknown;
+
+bool _hasExactLiveProgress(RouteExecutionState state, String routeExecutionId) {
+  final progress = state.progress;
+  return state.session?.routeExecutionId == routeExecutionId &&
+      progress?.routeExecutionId == routeExecutionId &&
+      progress!.isExecutable &&
+      !state.controlInFlight &&
+      state.failure == null &&
+      _isLiveProgressStatus(state.status) &&
+      !_isTerminalOutcome(progress.outcome);
+}
+
+bool _wouldDisplaceNonterminalSession(
+  RouteExecutionState state,
+  String routeExecutionId,
+) {
+  final session = state.session;
+  if (session == null || session.routeExecutionId == routeExecutionId) {
+    return false;
+  }
+  final progress = state.progress;
+  if (progress == null ||
+      progress.routeExecutionId != session.routeExecutionId) {
+    return true;
+  }
+  return !_isTerminalOutcome(progress.outcome);
+}
+
+bool _isResumableActivityDetail(
+  RouteExecutionDetail? detail,
+  String routeExecutionId,
+) {
+  if (detail == null ||
+      detail.summary.routeExecutionId != routeExecutionId ||
+      detail.summary.status.isTerminal ||
+      detail.summary.status == RouteActivityStatus.unknown ||
+      detail.summary.terminalError != null) {
+    return false;
+  }
+  final status = detail.authoritativeStatus;
+  if (status == null || !status.isExecutable) return false;
+  final executionTerminal =
+      status.executionPhase == RouteActivityExecutionPhase.failed ||
+      status.executionPhase == RouteActivityExecutionPhase.cancelled ||
+      status.executionPhase == RouteActivityExecutionPhase.refunded;
+  final routeTerminal =
+      status.routePhase == RouteExecutionRoutePhase.completed ||
+      status.routePhase == RouteExecutionRoutePhase.failed ||
+      status.routePhase == RouteExecutionRoutePhase.cancelled ||
+      status.routePhase == RouteExecutionRoutePhase.refunded;
+  final historicalRefund =
+      detail.controls.reconciliationOnly &&
+      (status.executionPhase == RouteActivityExecutionPhase.refundPending ||
+          status.executionPhase == RouteActivityExecutionPhase.refunded ||
+          status.routePhase == RouteExecutionRoutePhase.refundPending ||
+          status.routePhase == RouteExecutionRoutePhase.refunded);
+  return !executionTerminal && !routeTerminal && !historicalRefund;
+}
+
 class _UnifiedSwapHeader extends StatelessWidget {
   const _UnifiedSwapHeader({
     required this.selected,
     required this.showNavigation,
     required this.onSelected,
+    required this.onWallet,
+    required this.onGlobalSelected,
   });
 
   final UnifiedSwapDestination selected;
   final bool showNavigation;
   final ValueChanged<UnifiedSwapDestination> onSelected;
+  final VoidCallback onWallet;
+  final ValueChanged<MainMenuValue> onGlobalSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -320,7 +796,7 @@ class _UnifiedSwapHeader extends StatelessWidget {
                 ),
                 child: InkWell(
                   key: const Key('unified-swap-logo'),
-                  onTap: () => routingState.selectedMenu = MainMenuValue.wallet,
+                  onTap: onWallet,
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
@@ -369,7 +845,7 @@ class _UnifiedSwapHeader extends StatelessWidget {
                   ),
                 ),
               const SizedBox(width: 8),
-              _GlobalOverflowButton(),
+              _GlobalOverflowButton(onSelected: onGlobalSelected),
             ],
           ),
         ),
@@ -533,6 +1009,10 @@ class _UnifiedSwapNavigationItem extends StatelessWidget {
 }
 
 class _GlobalOverflowButton extends StatelessWidget {
+  const _GlobalOverflowButton({required this.onSelected});
+
+  final ValueChanged<MainMenuValue> onSelected;
+
   @override
   Widget build(BuildContext context) {
     final colors = UnifiedSwapDesign.colors(context);
@@ -543,7 +1023,7 @@ class _GlobalOverflowButton extends StatelessWidget {
         'shell.moreDestinations',
         'More wallet destinations',
       ),
-      onSelected: (destination) => routingState.selectedMenu = destination,
+      onSelected: onSelected,
       itemBuilder: (context) => [
         for (final destination in const [
           MainMenuValue.wallet,

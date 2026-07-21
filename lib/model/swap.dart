@@ -3,8 +3,17 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
+import 'package:web_dex/model/trading_entity_id.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:equatable/equatable.dart';
+
+const int _maximumSwapEvents = 512;
+const int _maximumEventDefinitions = 128;
+const int _maximumShortTextLength = 128;
+const int _maximumEvidenceTextLength = 1024;
+const int _maximumNumericTextLength = 128;
+const int _maximumEpochMilliseconds = 8640000000000;
+const int _maximumEpochSeconds = 8640000000;
 
 class Swap extends Equatable {
   const Swap({
@@ -25,34 +34,46 @@ class Swap extends Equatable {
   });
 
   factory Swap.fromJson(Map<String, dynamic> json) {
-    final Rational makerAmount =
-        fract2rat(json['maker_amount_fraction']) ??
-        Rational.parse(json['maker_amount'] ?? '0');
-    final Rational takerAmount =
-        fract2rat(json['taker_amount_fraction']) ??
-        Rational.parse(json['taker_amount'] ?? '0');
-    final TradeSide type = json['type'] == 'Taker'
-        ? TradeSide.taker
-        : TradeSide.maker;
+    final makerAmount = _positiveRational(
+      json['maker_amount_fraction'],
+      json['maker_amount'],
+      'maker_amount',
+    );
+    final takerAmount = _positiveRational(
+      json['taker_amount_fraction'],
+      json['taker_amount'],
+      'taker_amount',
+    );
+    final type = switch (json['type']) {
+      'Taker' => TradeSide.taker,
+      'Maker' => TradeSide.maker,
+      _ => throw const FormatException('Invalid swap side'),
+    };
+    final uuid = normalizeTradingEntityUuid(json['uuid']);
+    if (uuid == null) throw const FormatException('Invalid swap identifier');
+    final rawOrderUuid = json['my_order_uuid'];
+    final myOrderUuid = rawOrderUuid == null || rawOrderUuid == ''
+        ? ''
+        : normalizeTradingEntityUuid(rawOrderUuid) ?? '';
+    final events = _recoverableSwapEvents(json['events']);
+    final successEvents = _recoverableEventDefinitions(json['success_events']);
+    final errorEvents = _recoverableEventDefinitions(json['error_events']);
+    final recoverableValue = json['recoverable'];
     return Swap(
       type: type,
-      uuid: json['uuid'],
-      myOrderUuid: json['my_order_uuid'] ?? '',
-      events: List<Map<String, dynamic>>.from(
-        json['events'],
-      ).map((e) => SwapEventItem.fromJson(e)).toList(),
+      uuid: uuid,
+      myOrderUuid: myOrderUuid,
+      events: events,
       makerAmount: makerAmount,
-      makerCoin: json['maker_coin'] ?? '',
+      makerCoin: _assetSymbol(json['maker_coin'], 'maker_coin'),
       takerAmount: takerAmount,
-      takerCoin: json['taker_coin'] ?? '',
-      gui: json['gui'] ?? '',
-      mmVersion: json['mm_version'] ?? '',
-      successEvents: List.castFrom<dynamic, String>(json['success_events']),
-      errorEvents: List.castFrom<dynamic, String>(json['error_events']),
-      myInfo: json['my_info'] != null
-          ? SwapMyInfo.fromJson(Map<String, dynamic>.from(json['my_info']))
-          : null,
-      recoverable: json['recoverable'] ?? false,
+      takerCoin: _assetSymbol(json['taker_coin'], 'taker_coin'),
+      gui: _recoverableShortText(json['gui']),
+      mmVersion: _recoverableShortText(json['mm_version']),
+      successEvents: successEvents,
+      errorEvents: errorEvents,
+      myInfo: _recoverableSwapMyInfo(json['my_info']),
+      recoverable: recoverableValue is bool ? recoverableValue : false,
     );
   }
 
@@ -74,7 +95,7 @@ class Swap extends Equatable {
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{};
 
-    data['type'] = type;
+    data['type'] = type == TradeSide.taker ? 'Taker' : 'Maker';
     data['uuid'] = uuid;
     data['my_order_uuid'] = myOrderUuid;
     data['events'] = events.map((e) => e.toJson()).toList();
@@ -94,11 +115,14 @@ class Swap extends Equatable {
     return data;
   }
 
-  bool get isCompleted => events.any(
-    (e) =>
-        e.event.type == successEvents.last ||
-        errorEvents.contains(e.event.type),
-  );
+  bool get isCompleted {
+    final terminalSuccess = successEvents.isEmpty ? null : successEvents.last;
+    return events.any(
+      (event) =>
+          (terminalSuccess != null && event.event.type == terminalSuccess) ||
+          errorEvents.contains(event.event.type),
+    );
+  }
 
   bool get isFailed =>
       events.firstWhereOrNull(
@@ -187,10 +211,17 @@ class Swap extends Equatable {
 
 class SwapEventItem extends Equatable {
   const SwapEventItem({required this.timestamp, required this.event});
-  factory SwapEventItem.fromJson(Map<String, dynamic> json) => SwapEventItem(
-    timestamp: assertInt(json['timestamp']) ?? 0,
-    event: SwapEvent.fromJson(json['event']),
-  );
+  factory SwapEventItem.fromJson(Map<String, dynamic> json) {
+    final timestamp = _boundedNonNegativeInt(
+      json['timestamp'],
+      maximum: _maximumEpochMilliseconds,
+      field: 'timestamp',
+    );
+    return SwapEventItem(
+      timestamp: timestamp,
+      event: SwapEvent.fromJson(_stringMap(json['event'], 'event')),
+    );
+  }
   final int timestamp;
   final SwapEvent event;
 
@@ -213,10 +244,11 @@ class SwapEvent extends Equatable {
   const SwapEvent({required this.type, required this.data});
 
   factory SwapEvent.fromJson(Map<String, dynamic> json) {
+    final type = _eventName(json['type'], 'event.type');
     return SwapEvent(
-      type: json['type'],
-      data: (json['data'] != null && json['type'] != "WatcherMessageSent")
-          ? SwapEventData.fromJson(json['data'])
+      type: type,
+      data: (json['data'] != null && type != 'WatcherMessageSent')
+          ? SwapEventData.fromJson(_stringMap(json['data'], 'event.data'))
           : null,
     );
   }
@@ -260,39 +292,74 @@ class SwapEventData extends Equatable {
     required this.txHash,
   });
 
-  factory SwapEventData.fromJson(Map<String, dynamic> json) => SwapEventData(
-    takerCoin: json['taker_coin'],
-    makerCoin: json['maker_coin'],
-    maker: json['maker'],
-    myPersistentPub: json['my_persistent_pub'],
-    lockDuration: assertInt(json['lock_duration']),
-    makerAmount: json['maker_amount'] == null
+  factory SwapEventData.fromJson(Map<String, dynamic> json) {
+    final rawUuid = json['uuid'];
+    final uuid = rawUuid == null ? null : normalizeTradingEntityUuid(rawUuid);
+    if (rawUuid != null && uuid == null) {
+      throw const FormatException('Invalid event identifier');
+    }
+    final transaction = json['transaction'];
+    final transactionHash = transaction == null
         ? null
-        : double.tryParse(json['maker_amount'].toString()),
-    takerAmount: json['taker_amount'] == null
-        ? null
-        : double.tryParse(json['taker_amount'].toString()),
-    makerPaymentConfirmations: assertInt(json['maker_payment_confirmations']),
-    makerPaymentRequiresNota: json['maker_payment_requires_nota'],
-    takerPaymentConfirmations: assertInt(json['taker_payment_confirmations']),
-    takerPaymentRequiresNota: json['taker_payment_requires_nota'],
-    takerPaymentLock: assertInt(json['taker_payment_lock']),
-    uuid: json['uuid'],
-    startedAt: assertInt(json['started_at']),
-    makerPaymentWait: assertInt(json['maker_payment_wait']),
-    makerCoinStartBlock: assertInt(json['maker_coin_start_block']),
-    takerCoinStartBlock: assertInt(json['taker_coin_start_block']),
-    feeToSendTakerFee: json['fee_to_send_taker_fee'] != null
-        ? TradeFee.fromJson(json['fee_to_send_taker_fee'])
-        : null,
-    takerPaymentTradeFee: json['taker_payment_trade_fee'] != null
-        ? TradeFee.fromJson(json['taker_payment_trade_fee'])
-        : null,
-    makerPaymentSpendTradeFee: json['maker_payment_spend_trade_fee'] != null
-        ? TradeFee.fromJson(json['maker_payment_spend_trade_fee'])
-        : null,
-    txHash: json['tx_hash'] ?? json['transaction']?['tx_hash'],
-  );
+        : _stringMap(transaction, 'transaction')['tx_hash'];
+    return SwapEventData(
+      takerCoin: _optionalAssetSymbol(json['taker_coin']),
+      makerCoin: _optionalAssetSymbol(json['maker_coin']),
+      maker: _optionalBoundedString(
+        json['maker'],
+        maximum: _maximumEvidenceTextLength,
+      ),
+      myPersistentPub: _optionalBoundedString(
+        json['my_persistent_pub'],
+        maximum: _maximumEvidenceTextLength,
+      ),
+      lockDuration: _optionalNonNegativeInt(json['lock_duration']),
+      makerAmount: _optionalNonNegativeDouble(json['maker_amount']),
+      takerAmount: _optionalNonNegativeDouble(json['taker_amount']),
+      makerPaymentConfirmations: _optionalNonNegativeInt(
+        json['maker_payment_confirmations'],
+      ),
+      makerPaymentRequiresNota: _optionalBool(
+        json['maker_payment_requires_nota'],
+      ),
+      takerPaymentConfirmations: _optionalNonNegativeInt(
+        json['taker_payment_confirmations'],
+      ),
+      takerPaymentRequiresNota: _optionalBool(
+        json['taker_payment_requires_nota'],
+      ),
+      takerPaymentLock: _optionalNonNegativeInt(json['taker_payment_lock']),
+      uuid: uuid,
+      startedAt: _optionalNonNegativeInt(
+        json['started_at'],
+        maximum: _maximumEpochSeconds,
+      ),
+      makerPaymentWait: _optionalNonNegativeInt(json['maker_payment_wait']),
+      makerCoinStartBlock: _optionalNonNegativeInt(
+        json['maker_coin_start_block'],
+      ),
+      takerCoinStartBlock: _optionalNonNegativeInt(
+        json['taker_coin_start_block'],
+      ),
+      feeToSendTakerFee: json['fee_to_send_taker_fee'] != null
+          ? TradeFee.fromJson(_stringMap(json['fee_to_send_taker_fee'], 'fee'))
+          : null,
+      takerPaymentTradeFee: json['taker_payment_trade_fee'] != null
+          ? TradeFee.fromJson(
+              _stringMap(json['taker_payment_trade_fee'], 'fee'),
+            )
+          : null,
+      makerPaymentSpendTradeFee: json['maker_payment_spend_trade_fee'] != null
+          ? TradeFee.fromJson(
+              _stringMap(json['maker_payment_spend_trade_fee'], 'fee'),
+            )
+          : null,
+      txHash: _optionalBoundedString(
+        json['tx_hash'] ?? transactionHash,
+        maximum: _maximumEvidenceTextLength,
+      ),
+    );
+  }
 
   final String? takerCoin;
   final String? makerCoin;
@@ -338,6 +405,7 @@ class SwapEventData extends Equatable {
     data['fee_to_send_taker_fee'] = feeToSendTakerFee?.toJson();
     data['taker_payment_trade_fee'] = takerPaymentTradeFee?.toJson();
     data['maker_payment_spend_trade_fee'] = makerPaymentSpendTradeFee?.toJson();
+    data['tx_hash'] = txHash;
     return data;
   }
 
@@ -378,11 +446,12 @@ class TradeFee extends Equatable {
 
   factory TradeFee.fromJson(Map<String, dynamic> json) {
     return TradeFee(
-      coin: json['coin'],
-      amount: json['amount'] == null
-          ? null
-          : double.tryParse(json['amount'].toString()),
-      paidFromTradingVol: json['paid_from_trading_vol'],
+      coin: _assetSymbol(json['coin'], 'fee.coin'),
+      amount: _optionalNonNegativeDouble(json['amount']),
+      paidFromTradingVol: _requiredBool(
+        json['paid_from_trading_vol'],
+        'fee.paid_from_trading_vol',
+      ),
     );
   }
 
@@ -412,12 +481,21 @@ class SwapMyInfo extends Equatable {
   });
 
   factory SwapMyInfo.fromJson(Map<String, dynamic> json) {
+    final myAmount = _requiredPositiveDouble(json['my_amount'], 'my_amount');
+    final otherAmount = _requiredPositiveDouble(
+      json['other_amount'],
+      'other_amount',
+    );
     return SwapMyInfo(
-      myCoin: json['my_coin'],
-      otherCoin: json['other_coin'],
-      myAmount: double.parse(json['my_amount'].toString()),
-      otherAmount: double.parse(json['other_amount'].toString()),
-      startedAt: assertInt(json['started_at']) ?? 0,
+      myCoin: _assetSymbol(json['my_coin'], 'my_coin'),
+      otherCoin: _assetSymbol(json['other_coin'], 'other_coin'),
+      myAmount: myAmount,
+      otherAmount: otherAmount,
+      startedAt: _boundedNonNegativeInt(
+        json['started_at'],
+        maximum: _maximumEpochSeconds,
+        field: 'started_at',
+      ),
     );
   }
 
@@ -445,4 +523,192 @@ class SwapMyInfo extends Equatable {
     otherAmount,
     startedAt,
   ];
+}
+
+Map<String, dynamic> _stringMap(Object? value, String field) {
+  if (value is! Map) throw FormatException('Invalid $field');
+  try {
+    return Map<String, dynamic>.from(value);
+  } catch (_) {
+    throw FormatException('Invalid $field');
+  }
+}
+
+List<SwapEventItem> _recoverableSwapEvents(Object? value) {
+  if (value is! List) return const [];
+  final events = <SwapEventItem>[];
+  var lastTimestamp = -1;
+  for (final raw in value.take(_maximumSwapEvents)) {
+    if (raw is! Map) continue;
+    try {
+      final event = SwapEventItem.fromJson(Map<String, dynamic>.from(raw));
+      if (event.timestamp < lastTimestamp) continue;
+      events.add(event);
+      lastTimestamp = event.timestamp;
+    } on Object {
+      // Auxiliary evidence must not hide a valid recoverable swap record.
+    }
+  }
+  return List<SwapEventItem>.unmodifiable(events);
+}
+
+List<String> _recoverableEventDefinitions(Object? value) {
+  if (value is! List) return const [];
+  final definitions = <String>[];
+  final seen = <String>{};
+  for (final raw in value.take(_maximumEventDefinitions)) {
+    try {
+      final definition = _eventName(raw, 'event definition');
+      if (seen.add(definition)) definitions.add(definition);
+    } on Object {
+      // Invalid auxiliary lifecycle labels are inert and never terminal.
+    }
+  }
+  return List<String>.unmodifiable(definitions);
+}
+
+String _recoverableShortText(Object? value) {
+  try {
+    return _optionalBoundedString(value, maximum: _maximumShortTextLength) ??
+        '';
+  } on Object {
+    return '';
+  }
+}
+
+SwapMyInfo? _recoverableSwapMyInfo(Object? value) {
+  if (value == null) return null;
+  try {
+    return SwapMyInfo.fromJson(_stringMap(value, 'my_info'));
+  } on Object {
+    return null;
+  }
+}
+
+String _eventName(Object? value, String field) {
+  if (value is! String ||
+      value.isEmpty ||
+      value.length > _maximumShortTextLength ||
+      !RegExp(r'^[A-Za-z][A-Za-z0-9_:-]*$').hasMatch(value)) {
+    throw FormatException('Invalid $field');
+  }
+  return value;
+}
+
+String _assetSymbol(Object? value, String field) {
+  if (value is! String ||
+      value.isEmpty ||
+      value.length > 64 ||
+      value.trim() != value ||
+      !RegExp(r'^[A-Za-z0-9][A-Za-z0-9._-]*$').hasMatch(value)) {
+    throw FormatException('Invalid $field');
+  }
+  return value;
+}
+
+String? _optionalAssetSymbol(Object? value) {
+  return value == null ? null : _assetSymbol(value, 'asset');
+}
+
+String? _optionalBoundedString(Object? value, {required int maximum}) {
+  if (value == null) return null;
+  if (value is! String || value.length > maximum || value.trim() != value) {
+    throw const FormatException('Invalid text value');
+  }
+  return value;
+}
+
+Rational _positiveRational(Object? fraction, Object? decimal, String field) {
+  Rational? result;
+  if (fraction is Map) {
+    final values = _stringMap(fraction, field);
+    final numerator = values['numer']?.toString();
+    final denominator = values['denom']?.toString();
+    if (_isBoundedInteger(numerator) && _isBoundedInteger(denominator)) {
+      try {
+        final parsedDenominator = BigInt.parse(denominator!);
+        if (parsedDenominator != BigInt.zero) {
+          result = Rational(BigInt.parse(numerator!), parsedDenominator);
+        }
+      } catch (_) {
+        result = null;
+      }
+    }
+  }
+  if (result == null) {
+    final value = decimal?.toString();
+    if (value == null || value.length > _maximumNumericTextLength) {
+      throw FormatException('Invalid $field');
+    }
+    result = Rational.tryParse(value);
+  }
+  if (result == null || result <= Rational.zero) {
+    throw FormatException('Invalid $field');
+  }
+  return result;
+}
+
+bool _isBoundedInteger(String? value) {
+  return value != null &&
+      value.isNotEmpty &&
+      value.length <= _maximumNumericTextLength &&
+      RegExp(r'^-?[0-9]+$').hasMatch(value);
+}
+
+int _boundedNonNegativeInt(
+  Object? value, {
+  required int maximum,
+  required String field,
+}) {
+  final text = value?.toString();
+  if (text == null ||
+      text.isEmpty ||
+      text.length > 20 ||
+      !RegExp(r'^[0-9]+$').hasMatch(text)) {
+    throw FormatException('Invalid $field');
+  }
+  final parsed = int.tryParse(text);
+  if (parsed == null || parsed < 0 || parsed > maximum) {
+    throw FormatException('Invalid $field');
+  }
+  return parsed;
+}
+
+int? _optionalNonNegativeInt(
+  Object? value, {
+  int maximum = 0x7fffffffffffffff,
+}) {
+  return value == null
+      ? null
+      : _boundedNonNegativeInt(value, maximum: maximum, field: 'integer');
+}
+
+double _requiredPositiveDouble(Object? value, String field) {
+  final result = _optionalNonNegativeDouble(value);
+  if (result == null || result <= 0) throw FormatException('Invalid $field');
+  return result;
+}
+
+double? _optionalNonNegativeDouble(Object? value) {
+  if (value == null) return null;
+  final text = value.toString();
+  if (text.isEmpty || text.length > _maximumNumericTextLength) {
+    throw const FormatException('Invalid numeric value');
+  }
+  final parsed = double.tryParse(text);
+  if (parsed == null || !parsed.isFinite || parsed < 0) {
+    throw const FormatException('Invalid numeric value');
+  }
+  return parsed;
+}
+
+bool? _optionalBool(Object? value) {
+  if (value == null) return null;
+  if (value is! bool) throw const FormatException('Invalid boolean value');
+  return value;
+}
+
+bool _requiredBool(Object? value, String field) {
+  if (value is! bool) throw FormatException('Invalid $field');
+  return value;
 }

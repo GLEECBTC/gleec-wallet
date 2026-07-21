@@ -14,7 +14,7 @@ import 'package:web_dex/shared/widgets/copied_text.dart';
 
 class TradingDetailsCoinPair extends StatelessWidget {
   const TradingDetailsCoinPair({
-    Key? key,
+    super.key,
     required this.baseCoin,
     required this.baseAmount,
     required this.relCoin,
@@ -22,7 +22,7 @@ class TradingDetailsCoinPair extends StatelessWidget {
     this.swapId,
     this.isOrder = false,
     this.belowUuid,
-  }) : super(key: key);
+  });
   final String baseCoin;
   final Rational baseAmount;
   final String relCoin;
@@ -81,7 +81,9 @@ class TradingDetailsCoinPair extends StatelessWidget {
               children: [
                 Flexible(
                   child: CopiedText(
-                    key: Key('uuid-${swapId}'),
+                    key: ValueKey<int>(
+                      Object.hash('trading-entity-uuid', swapId),
+                    ),
                     text: isOrder
                         ? LocaleKeys.orderUuid.tr(args: [swapId])
                         : LocaleKeys.swapUuid.tr(args: [swapId]),

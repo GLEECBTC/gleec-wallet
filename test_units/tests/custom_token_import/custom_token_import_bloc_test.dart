@@ -190,6 +190,8 @@ class _FakeCoinsRepo implements CoinsRepo {
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
+    Future<void> Function()? beforeActivationMutation,
+    String? activationScopeKey,
   }) async {
     activateCalls.add(List<Asset>.from(assets));
     for (final asset in assets) {

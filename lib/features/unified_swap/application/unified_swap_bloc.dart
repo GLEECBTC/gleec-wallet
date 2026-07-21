@@ -49,6 +49,22 @@ final class UnifiedSwapRevalidationRequested extends UnifiedSwapEvent {
   const UnifiedSwapRevalidationRequested();
 }
 
+/// Adopts the fresh evaluation produced by acceptance preflight after the
+/// reviewed route changed structurally. The exact quote repository has already
+/// retained its digest-bound bindings; this event only updates presentation.
+final class UnifiedSwapFreshEvaluationAdopted extends UnifiedSwapEvent {
+  const UnifiedSwapFreshEvaluationAdopted({
+    required this.intent,
+    required this.evaluation,
+  });
+
+  final UnifiedSwapIntent intent;
+  final UnifiedSwapQuoteEvaluation evaluation;
+
+  @override
+  List<Object?> get props => [intent, evaluation];
+}
+
 final class UnifiedSwapWalletChanged extends UnifiedSwapEvent {
   const UnifiedSwapWalletChanged(this.walletId);
 
@@ -144,6 +160,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       _onRevalidationRequested,
       transformer: restartable(),
     );
+    on<UnifiedSwapFreshEvaluationAdopted>(_onFreshEvaluationAdopted);
     on<UnifiedSwapWalletChanged>(_onWalletChanged);
     on<_UnifiedSwapExpiryReached>(_onExpiryReached);
   }
@@ -260,10 +277,13 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
         );
         return;
       }
+      final selectedCandidateId = _defaultCandidateId(candidates);
       emit(
         state.copyWith(
           status: UnifiedSwapQuoteStatus.ready,
           evaluation: current,
+          selectedCandidateId: selectedCandidateId,
+          clearSelectedCandidate: selectedCandidateId == null,
           clearFailure: true,
         ),
       );
@@ -298,7 +318,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     if (state.status != UnifiedSwapQuoteStatus.ready) return;
     final candidate = _candidateById(state.candidates, event.candidateId);
     if (candidate == null ||
-        !candidate.isExecutable ||
+        !candidate.isSafelyExecutable ||
         candidate.isExpiredAt(_now())) {
       return;
     }
@@ -311,6 +331,49 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   ) {
     final intent = state.intent;
     if (intent != null) add(UnifiedSwapIntentChanged(intent));
+  }
+
+  void _onFreshEvaluationAdopted(
+    UnifiedSwapFreshEvaluationAdopted event,
+    Emitter<UnifiedSwapState> emit,
+  ) {
+    if (state.walletId == null ||
+        state.intent != event.intent ||
+        event.evaluation.intentRevision != event.intent.revision) {
+      return;
+    }
+    _intentGeneration++;
+    _expiryTimer?.cancel();
+    final candidates = event.evaluation.candidates
+        .where((candidate) => !candidate.isExpiredAt(_now()))
+        .toList(growable: false);
+    final evaluation = UnifiedSwapQuoteEvaluation(
+      evaluationId: event.evaluation.evaluationId,
+      intentRevision: event.evaluation.intentRevision,
+      candidates: candidates,
+    );
+    if (candidates.isEmpty) {
+      emit(
+        state.copyWith(
+          status: UnifiedSwapQuoteStatus.expired,
+          evaluation: evaluation,
+          clearSelectedCandidate: true,
+          failure: UnifiedSwapQuoteFailure.quoteExpired,
+        ),
+      );
+      return;
+    }
+    final selectedCandidateId = _defaultCandidateId(candidates);
+    emit(
+      state.copyWith(
+        status: UnifiedSwapQuoteStatus.ready,
+        evaluation: evaluation,
+        selectedCandidateId: selectedCandidateId,
+        clearSelectedCandidate: selectedCandidateId == null,
+        clearFailure: true,
+      ),
+    );
+    _scheduleExpiry(evaluation);
   }
 
   void _onWalletChanged(
@@ -340,11 +403,15 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       final selectionIsCurrent = candidates.any(
         (candidate) => candidate.candidateId == state.selectedCandidateId,
       );
+      final selectedCandidateId = selectionIsCurrent
+          ? state.selectedCandidateId
+          : _defaultCandidateId(candidates);
       emit(
         state.copyWith(
           status: UnifiedSwapQuoteStatus.ready,
           evaluation: current,
-          clearSelectedCandidate: !selectionIsCurrent,
+          selectedCandidateId: selectedCandidateId,
+          clearSelectedCandidate: selectedCandidateId == null,
           clearFailure: true,
         ),
       );
@@ -381,6 +448,20 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     return super.close();
   }
 }
+
+String? _defaultCandidateId(List<UnifiedSwapQuoteCandidate> candidates) {
+  final safe = candidates.where(_isSafeCandidate).toList(growable: false);
+  final ranked = safe.where((candidate) => candidate.rankable).toList()
+    ..sort((left, right) => left.rank!.compareTo(right.rank!));
+  if (ranked.isNotEmpty) return ranked.first.candidateId;
+
+  // When KDF cannot compare multiple routes honestly, require an explicit
+  // customer choice. A sole safe route needs no artificial comparison step.
+  return safe.length == 1 ? safe.single.candidateId : null;
+}
+
+bool _isSafeCandidate(UnifiedSwapQuoteCandidate candidate) =>
+    candidate.isSafelyExecutable;
 
 UnifiedSwapQuoteCandidate? _candidateById(
   Iterable<UnifiedSwapQuoteCandidate> candidates,
