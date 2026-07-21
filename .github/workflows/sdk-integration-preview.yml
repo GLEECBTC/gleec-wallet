@@ -132,6 +132,12 @@ jobs:
             flutter build web --no-pub --profile
             --dart-define=CARD_FEATURE_ENABLED=true
             --dart-define=GNOSIS_CARD_MODE=mock
+            --dart-define=UNIFIED_SWAP_QUOTE_ENABLED=true
+            --dart-define=UNIFIED_SWAP_INIT_ENABLED=true
+            --dart-define=KDF_LIFI_ENABLED=true
+            --dart-define=KDF_LIFI_CASE_A_ENABLED=true
+            --dart-define=KDF_LIFI_TRANSPORT=gleec_proxy
+            --dart-define=KDF_LIFI_PROXY_URL=https://kdf-proxy.nitride.app/lifi/v1
           # Optionally provide feedback service configuration if available
           FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
           FEEDBACK_PRODUCTION_URL: ${{ secrets.FEEDBACK_PRODUCTION_URL }}
