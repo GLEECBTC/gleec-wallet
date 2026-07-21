@@ -14,6 +14,7 @@ const int _maximumEvidenceTextLength = 1024;
 const int _maximumNumericTextLength = 128;
 const int _maximumEpochMilliseconds = 8640000000000;
 const int _maximumEpochSeconds = 8640000000;
+const int _maximumJavaScriptSafeInteger = 9007199254740991;
 
 class Swap extends Equatable {
   const Swap({
@@ -676,7 +677,7 @@ int _boundedNonNegativeInt(
 
 int? _optionalNonNegativeInt(
   Object? value, {
-  int maximum = 0x7fffffffffffffff,
+  int maximum = _maximumJavaScriptSafeInteger,
 }) {
   return value == null
       ? null
