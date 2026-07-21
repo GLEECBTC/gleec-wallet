@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -5,11 +6,11 @@ import 'package:flutter_svg/svg.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/focusable_widget.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/entities_list/common/buy_price_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/coin_amount_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/entity_item_status_wrapper.dart';
@@ -24,6 +25,8 @@ class InProgressItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     final String sellCoin = swap.sellCoin;
     final Rational sellAmount = swap.sellAmount;
     final String buyCoin = swap.buyCoin;
@@ -37,59 +40,63 @@ class InProgressItem extends StatelessWidget {
     );
     final String typeText = tradingEntitiesBloc.getTypeString(isTaker);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (isMobile)
-          Text(
-            typeText,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _protocolColor,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = DexResponsiveSpec.fromWidth(
+          constraints.maxWidth,
+        ).usesMobileLists;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isCompact)
+              Text(
+                typeText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isTaker ? colors.info : colors.brand,
+                ),
+              ),
+            FocusableWidget(
+              borderRadius: geometry.borderRadius16,
+              onTap: onClick,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  borderRadius: geometry.borderRadius16,
+                  color: colors.surfaceRaised,
+                  border: Border.all(color: colors.border),
+                ),
+                child: isCompact
+                    ? _InProgressItemMobile(
+                        swap: swap,
+                        buyAmount: buyAmount,
+                        buyCoin: buyCoin,
+                        date: date,
+                        sellAmount: sellAmount,
+                        sellCoin: sellCoin,
+                        status: swap.status,
+                        statusStep: swap.statusStep,
+                      )
+                    : _InProgressItemDesktop(
+                        buyAmount: buyAmount,
+                        buyCoin: buyCoin,
+                        date: date,
+                        protocolColor: isTaker ? colors.info : colors.brand,
+                        sellAmount: sellAmount,
+                        sellCoin: sellCoin,
+                        status: swap.status,
+                        statusStep: swap.statusStep,
+                        typeText: typeText,
+                      ),
+              ),
             ),
-          ),
-        FocusableWidget(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onClick,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            child: isMobile
-                ? _InProgressItemMobile(
-                    swap: swap,
-                    buyAmount: buyAmount,
-                    buyCoin: buyCoin,
-                    date: date,
-                    sellAmount: sellAmount,
-                    sellCoin: sellCoin,
-                    status: swap.status,
-                    statusStep: swap.statusStep,
-                  )
-                : _InProgressItemDesktop(
-                    buyAmount: buyAmount,
-                    buyCoin: buyCoin,
-                    date: date,
-                    protocolColor: _protocolColor,
-                    sellAmount: sellAmount,
-                    sellCoin: sellCoin,
-                    status: swap.status,
-                    statusStep: swap.statusStep,
-                    typeText: typeText,
-                  ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
-
-  Color get _protocolColor => swap.isTaker
-      ? const Color.fromRGBO(47, 179, 239, 1)
-      : const Color.fromRGBO(106, 77, 227, 1);
 }
 
 class _InProgressItemDesktop extends StatelessWidget {
@@ -117,6 +124,7 @@ class _InProgressItemDesktop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
@@ -138,11 +146,11 @@ class _InProgressItemDesktop extends StatelessWidget {
                     width: 12,
                     height: 12,
                     colorFilter: ColorFilter.mode(
-                      Theme.of(context).colorScheme.secondary,
+                      colors.pending,
                       BlendMode.srcIn,
                     ),
                   ),
-                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  backgroundColor: colors.pendingContainer,
                 ),
               ),
             ],
@@ -207,6 +215,8 @@ class _InProgressItemMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -280,8 +290,9 @@ class _InProgressItemMobile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
           width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(9),
-            color: Theme.of(context).colorScheme.onSurface,
+            borderRadius: geometry.borderRadius12,
+            color: colors.surfaceHigh,
+            border: Border.all(color: colors.border),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.max,

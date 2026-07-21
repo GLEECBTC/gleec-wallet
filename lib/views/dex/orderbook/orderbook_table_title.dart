@@ -15,15 +15,15 @@ class OrderbookTableTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = TextStyle(
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
+    final titleStyle = typography.labelMedium.copyWith(
       fontSize: titleTextSize,
-      fontWeight: FontWeight.w500,
-      color: dexPageColors.activeText,
+      color: colors.textSecondary,
     );
-    final coinStyle = TextStyle(
+    final coinStyle = typography.labelSmall.copyWith(
       fontSize: 10,
-      fontWeight: FontWeight.w700,
-      color: dexPageColors.blueText,
+      color: colors.brand,
     );
 
     final coin = suffix;

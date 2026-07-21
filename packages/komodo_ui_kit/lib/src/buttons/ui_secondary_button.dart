@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
 
@@ -39,11 +40,21 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
   bool _hasFocus = false;
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final colors = Theme.of(context).extension<GleecColorTokens>();
+    final geometry = Theme.of(context).extension<GleecGeometry>();
     return UIBaseButton(
       isEnabled: widget.onPressed != null,
       width: widget.width,
-      height: widget.height,
-      border: widget.border,
+      height: widget.height + ((textScale - 1).clamp(0.0, 1.0).toDouble() * 32),
+      border:
+          widget.border ??
+          (_hasFocus
+              ? Border.all(
+                  color: colors?.brand ?? Theme.of(context).colorScheme.primary,
+                  width: geometry?.focusRingWidth ?? 3,
+                )
+              : null),
       child: ElevatedButton(
         focusNode: widget.focusNode,
         onFocusChange: (value) {
@@ -51,21 +62,21 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
             _hasFocus = value;
           });
         },
-        onPressed: widget.onPressed ?? () {},
+        onPressed: widget.onPressed,
         key: widget.buttonKey,
         style: ElevatedButton.styleFrom(
           shape: _shape,
-          side: BorderSide(
-            color: _borderColor,
-            width: 1,
-          ),
+          side: BorderSide(color: _borderColor, width: 1),
           shadowColor: _shadowColor,
           elevation: 1,
-          backgroundColor: Colors.transparent,
-          foregroundColor: _borderColor,
-          padding: EdgeInsets.zero,
+          backgroundColor:
+              colors?.surfaceHigh ?? Theme.of(context).colorScheme.surface,
+          foregroundColor:
+              colors?.textPrimary ?? Theme.of(context).colorScheme.onSurface,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
-        child: widget.child ??
+        child:
+            widget.child ??
             _ButtonContent(
               text: widget.text,
               textStyle: widget.textStyle,
@@ -76,18 +87,21 @@ class _UiSecondaryButtonState extends State<UiSecondaryButton> {
   }
 
   Color get _borderColor {
-    return widget.borderColor ?? Theme.of(context).colorScheme.secondary;
+    return widget.borderColor ??
+        Theme.of(context).extension<GleecColorTokens>()?.controlBorder ??
+        Theme.of(context).colorScheme.outline;
   }
 
   Color get _shadowColor {
-    return _hasFocus
-        ? widget.shadowColor ?? Theme.of(context).colorScheme.primary
-        : Colors.transparent;
+    return _hasFocus ? widget.shadowColor ?? _borderColor : Colors.transparent;
   }
 
-  OutlinedBorder get _shape => const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(18)),
-      );
+  OutlinedBorder get _shape {
+    final geometry = Theme.of(context).extension<GleecGeometry>();
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(geometry?.radius16 ?? 16)),
+    );
+  }
 }
 
 class _ButtonContent extends StatelessWidget {
@@ -106,17 +120,21 @@ class _ButtonContent extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (prefix != null) prefix!,
-        Text(text, style: textStyle ?? _defaultTextStyle(context)),
+        if (prefix != null) ...[prefix!, const SizedBox(width: 8)],
+        Flexible(
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: textStyle ?? _defaultTextStyle(context),
+          ),
+        ),
       ],
     );
   }
 
   TextStyle? _defaultTextStyle(BuildContext context) {
-    return Theme.of(context).textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-          color: Theme.of(context).colorScheme.secondary,
-        );
+    return Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 14);
   }
 }

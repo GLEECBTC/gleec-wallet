@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gleec UI Design Gate"
+  short_description: "Audit Gleec UI quality before implementation."
+  default_prompt: "Use -ui-pro-design-gate to check this feature design against Gleec quality and accessibility requirements."

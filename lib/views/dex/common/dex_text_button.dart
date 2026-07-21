@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class DexTextButton extends StatelessWidget {
@@ -14,30 +15,33 @@ class DexTextButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: isActive ? theme.primaryColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isActive
-                ? (Color.lerp(theme.primaryColor, Colors.white, 0.1) ??
-                    theme.primaryColor)
-                : theme.disabledColor,
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    final typography = GleecTypography.of(context);
+    return Semantics(
+      button: true,
+      selected: isActive,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: geometry.borderRadius12,
+        child: Container(
+          constraints: BoxConstraints(
+            minHeight: geometry.minimumTapTarget,
+            minWidth: geometry.minimumTapTarget,
           ),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-            color: isActive
-                ? theme.primaryTextTheme.labelLarge?.color
-                : theme.textTheme.labelLarge?.color,
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(horizontal: geometry.space16),
+          decoration: BoxDecoration(
+            color: isActive ? colors.selected : colors.surfaceHigh,
+            borderRadius: geometry.borderRadius12,
+            border: Border.all(color: isActive ? colors.brand : colors.border),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: typography.labelLarge.copyWith(
+              color: isActive ? colors.brandHover : colors.textSecondary,
+            ),
           ),
         ),
       ),

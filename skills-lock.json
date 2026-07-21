@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "generated_at": "2026-07-10",
+  "skills": {
+    "flutter-add-widget-preview": {
+      "version": "2026-04-21",
+      "source": "https://github.com/flutter/skills",
+      "revision": "0d624f342a8418f7560c8047943b98913070b6aa",
+      "path": "skills/flutter-add-widget-preview",
+      "license": "BSD-3-Clause"
+    },
+    "flutter-add-widget-test": {
+      "version": "2026-04-21",
+      "source": "https://github.com/flutter/skills",
+      "revision": "0d624f342a8418f7560c8047943b98913070b6aa",
+      "path": "skills/flutter-add-widget-test",
+      "license": "BSD-3-Clause"
+    },
+    "flutter-build-responsive-layout": {
+      "version": "2026-04-21",
+      "source": "https://github.com/flutter/skills",
+      "revision": "0d624f342a8418f7560c8047943b98913070b6aa",
+      "path": "skills/flutter-build-responsive-layout",
+      "license": "BSD-3-Clause"
+    },
+    "flutter-fix-layout-issues": {
+      "version": "2026-04-21",
+      "source": "https://github.com/flutter/skills",
+      "revision": "0d624f342a8418f7560c8047943b98913070b6aa",
+      "path": "skills/flutter-fix-layout-issues",
+      "license": "BSD-3-Clause"
+    },
+    "flutter-bloc-development": {
+      "version": "1.0.0",
+      "source": "project adaptation",
+      "provenance": "/Users/charl/Code/UTXO/gleec-wallet-dev/.agents and current Gleec architecture",
+      "license": "GPL-3.0-only"
+    },
+    "gleec-ui-pro-design-gate": {
+      "version": "1.0.0",
+      "source": "project adaptation",
+      "provenance": "Gleec theme/UI kit plus ui-ux-pro-max review guidance",
+      "license": "GPL-3.0-only"
+    },
+    "gleec-ui-design-implementation": {
+      "version": "1.0.0",
+      "source": "project adaptation",
+      "provenance": "Gleec design system and responsive Flutter guidance",
+      "license": "GPL-3.0-only"
+    },
+    "refactoring-guru-patterns": {
+      "version": "1.0.0",
+      "source": "project adaptation",
+      "provenance": "Pattern vocabulary linked to https://refactoring.guru/design-patterns",
+      "license": "GPL-3.0-only"
+    },
+    "gleec-gnosis-pay-integration": {
+      "version": "1.0.0",
+      "source": "project-authored",
+      "provenance": "Official Gnosis Pay documentation and Account Kit boundaries",
+      "license": "GPL-3.0-only"
+    }
+  }
+}

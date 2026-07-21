@@ -17,20 +17,37 @@ class UiSimpleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final materialTheme = Theme.of(context);
+    final colors = materialTheme.extension<GleecColorTokens>();
+    final geometry =
+        materialTheme.extension<GleecGeometry>() ?? GleecGeometry.standard;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(
+          borderRadius == 8 ? geometry.radius12 : borderRadius,
+        ),
         onTap: disabled ? null : onPressed,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(8, 2, 8, 2),
-          decoration: BoxDecoration(
-            color: disabled
-                ? Colors.transparent
-                : theme.custom.simpleButtonBackgroundColor,
-            borderRadius: BorderRadius.circular(borderRadius),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: geometry.minimumTapTarget,
+            minHeight: geometry.minimumTapTarget,
           ),
-          child: child,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: disabled
+                  ? Colors.transparent
+                  : colors?.selected ??
+                        materialTheme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(
+                borderRadius == 8 ? geometry.radius12 : borderRadius,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Center(child: child),
+            ),
+          ),
         ),
       ),
     );

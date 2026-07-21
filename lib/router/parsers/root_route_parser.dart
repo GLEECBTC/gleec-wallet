@@ -3,10 +3,12 @@ import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/model/first_uri_segment.dart';
 import 'package:web_dex/router/parsers/base_route_parser.dart';
 import 'package:web_dex/router/parsers/bridge_route_parser.dart';
+import 'package:web_dex/router/parsers/card_route_parser.dart';
 import 'package:web_dex/router/parsers/dex_route_parser.dart';
 import 'package:web_dex/router/parsers/fiat_route_parser.dart';
 import 'package:web_dex/router/parsers/nft_route_parser.dart';
 import 'package:web_dex/router/parsers/settings_route_parser.dart';
+import 'package:web_dex/router/parsers/unified_swap_route_parser.dart';
 import 'package:web_dex/router/parsers/wallet_route_parser.dart';
 import 'package:web_dex/router/routes.dart';
 
@@ -16,19 +18,23 @@ class RootRouteInformationParser extends RouteInformationParser<AppRoutePath> {
   final CoinsBloc coinsBloc;
 
   Map<String, BaseRouteParser> get _parsers => {
-        firstUriSegment.wallet: WalletRouteParser(coinsBloc),
-        firstUriSegment.fiat: fiatRouteParser,
-        firstUriSegment.dex: dexRouteParser,
-        firstUriSegment.bridge: bridgeRouteParser,
-        firstUriSegment.nfts: nftRouteParser,
-        firstUriSegment.settings: settingsRouteParser,
-      };
+    firstUriSegment.wallet: WalletRouteParser(coinsBloc),
+    firstUriSegment.fiat: fiatRouteParser,
+    firstUriSegment.dex: dexRouteParser,
+    firstUriSegment.bridge: bridgeRouteParser,
+    firstUriSegment.swap: unifiedSwapRouteParser,
+    firstUriSegment.activity: unifiedSwapRouteParser,
+    firstUriSegment.advanced: unifiedSwapRouteParser,
+    firstUriSegment.card: cardRouteParser,
+    firstUriSegment.nfts: nftRouteParser,
+    firstUriSegment.settings: settingsRouteParser,
+  };
 
   @override
   Future<AppRoutePath> parseRouteInformation(
-      RouteInformation routeInformation) async {
-    final BaseRouteParser parser =
-        _getRoutParser(Uri.parse(routeInformation.uri.path));
+    RouteInformation routeInformation,
+  ) async {
+    final BaseRouteParser parser = _getRoutParser(routeInformation.uri);
 
     return parser.getRoutePath(routeInformation.uri);
   }
@@ -41,8 +47,8 @@ class RootRouteInformationParser extends RouteInformationParser<AppRoutePath> {
   BaseRouteParser _getRoutParser(Uri uri) {
     final defaultRouteParser =
         dexRouteParser.handlesDeepLinkParameters(uri.queryParameters.keys)
-            ? dexRouteParser
-            : WalletRouteParser(coinsBloc);
+        ? dexRouteParser
+        : WalletRouteParser(coinsBloc);
 
     if (uri.pathSegments.isEmpty) return defaultRouteParser;
     return _parsers[uri.pathSegments.first] ?? defaultRouteParser;

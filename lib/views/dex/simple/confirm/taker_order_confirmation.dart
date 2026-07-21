@@ -13,7 +13,6 @@ import 'package:web_dex/blocs/trading_entities_bloc.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/analytics/events/transaction_events.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/dex_form_error.dart';
@@ -41,9 +40,18 @@ class _TakerOrderConfirmationState extends State<TakerOrderConfirmation> {
   @override
   Widget build(BuildContext context) {
     final coinsBloc = RepositoryProvider.of<CoinsRepo>(context);
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Container(
-      padding: EdgeInsets.only(top: isMobile ? 18.0 : 9.00),
-      constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
+      padding: EdgeInsets.all(geometry.space24),
+      constraints: BoxConstraints(
+        maxWidth: Theme.of(context).calmCoreCompatibility.dexFormWidth,
+      ),
+      decoration: BoxDecoration(
+        color: colors.surfaceRaised,
+        border: Border.all(color: colors.border),
+        borderRadius: geometry.borderRadius24,
+      ),
       child: BlocConsumer<TakerBloc, TakerState>(
         listenWhen: (prev, current) => current.swapUuid != null,
         listener: _onSwapStarted,
@@ -196,9 +204,9 @@ class _TakerOrderConfirmationState extends State<TakerOrderConfirmation> {
     final double receiveAmtFiat = getFiatAmount(buyCoin, buyAmount);
 
     if (sellAmtFiat < receiveAmtFiat) {
-      color = theme.custom.increaseColor;
+      color = Theme.of(context).calmCoreCompatibility.increaseColor;
     } else if (sellAmtFiat > receiveAmtFiat) {
-      color = theme.custom.decreaseColor;
+      color = Theme.of(context).calmCoreCompatibility.decreaseColor;
     }
 
     if (sellAmtFiat > 0 && receiveAmtFiat > 0) {
@@ -235,9 +243,9 @@ class _TakerOrderConfirmationState extends State<TakerOrderConfirmation> {
       children: [
         SelectableText(
           LocaleKeys.swapConfirmationYouReceive.tr(),
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge?.copyWith(color: theme.custom.dexSubTitleColor),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            color: Theme.of(context).calmCoreCompatibility.dexSubTitleColor,
+          ),
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -249,7 +257,7 @@ class _TakerOrderConfirmationState extends State<TakerOrderConfirmation> {
             SelectableText(
               Coin.normalizeAbbr(coin.abbr),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: theme.custom.balanceColor,
+                color: Theme.of(context).calmCoreCompatibility.balanceColor,
               ),
             ),
             if (coin.mode == CoinMode.segwit)
@@ -268,7 +276,7 @@ class _TakerOrderConfirmationState extends State<TakerOrderConfirmation> {
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: theme.custom.subCardBackgroundColor,
+        color: Theme.of(context).calmCoreCompatibility.subCardBackgroundColor,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -277,7 +285,7 @@ class _TakerOrderConfirmationState extends State<TakerOrderConfirmation> {
           SelectableText(
             LocaleKeys.swapConfirmationYouSending.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: theme.custom.dexSubTitleColor,
+              color: Theme.of(context).calmCoreCompatibility.dexSubTitleColor,
             ),
           ),
           const SizedBox(height: 10),

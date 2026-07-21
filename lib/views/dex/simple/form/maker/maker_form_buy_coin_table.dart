@@ -13,39 +13,42 @@ class MakerFormBuyCoinTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     return StreamBuilder<bool>(
-        initialData: makerFormBloc.showBuyCoinSelect,
-        stream: makerFormBloc.outShowBuyCoinSelect,
-        builder: (context, isOpenSnapshot) {
-          if (isOpenSnapshot.data != true) return const SizedBox.shrink();
+      initialData: makerFormBloc.showBuyCoinSelect,
+      stream: makerFormBloc.outShowBuyCoinSelect,
+      builder: (context, isOpenSnapshot) {
+        if (isOpenSnapshot.data != true) return const SizedBox.shrink();
 
-          return StreamBuilder<Coin?>(
-              initialData: makerFormBloc.buyCoin,
-              stream: makerFormBloc.outBuyCoin,
-              builder: (context, coinSnapshot) {
-                final Coin? coin = coinSnapshot.data;
+        return StreamBuilder<Coin?>(
+          initialData: makerFormBloc.buyCoin,
+          stream: makerFormBloc.outBuyCoin,
+          builder: (context, coinSnapshot) {
+            final Coin? coin = coinSnapshot.data;
 
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 167, 16, 10),
-                  child: CoinsTable(
-                    key: const Key('maker-buy-coins-table'),
-                    head: Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
-                      child: MakerFormBuySwitcher(
-                          controller: TradeCoinController(
-                        coin: coin,
-                        isEnabled: coin != null,
-                        isOpened: true,
-                        onTap: () => makerFormBloc.showBuyCoinSelect = false,
-                      )),
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: CoinsTable(
+                key: const Key('maker-buy-coins-table'),
+                head: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
+                  child: MakerFormBuySwitcher(
+                    controller: TradeCoinController(
+                      coin: coin,
+                      isEnabled: coin != null,
+                      isOpened: true,
+                      onTap: () => makerFormBloc.showBuyCoinSelect = false,
                     ),
-                    maxHeight: 250,
-                    onSelect: (Coin coin) {
-                      makerFormBloc.buyCoin = coin;
-                      makerFormBloc.showBuyCoinSelect = false;
-                    },
                   ),
-                );
-              });
-        });
+                ),
+                maxHeight: 250,
+                onSelect: (Coin coin) {
+                  makerFormBloc.buyCoin = coin;
+                  makerFormBloc.showBuyCoinSelect = false;
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

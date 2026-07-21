@@ -167,6 +167,9 @@ dependencies:
     #   ref: dev
     # ^0.4.0+3 # Option 3: Pub.dev dependency
 
+  komodo_defi_rpc_methods:
+    path: sdk/packages/komodo_defi_rpc_methods
+
   komodo_defi_types:
     path: sdk/packages/komodo_defi_types # Option 1: Local path via sdk submodule (pinned). See docs/SDK_SUBMODULE_MANAGEMENT.md
     # git: # Option 2: Git dependency
@@ -197,6 +200,10 @@ dependencies:
   flutter_window_close: ^1.3.0
 
 dev_dependencies:
+  bloc_test: ^10.0.0
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.4
   test: ^1.30.0 # dart.dev
 
   # The "flutter_lints" package below contains a set of recommended lints to

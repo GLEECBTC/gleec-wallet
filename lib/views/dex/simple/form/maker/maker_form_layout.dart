@@ -6,10 +6,10 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/dex_tab_bar/dex_tab_bar_bloc.dart';
 import 'package:web_dex/blocs/maker_form_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/simple/confirm/maker_order_confirmation.dart';
 import 'package:web_dex/views/dex/simple/form/maker/maker_form_buy_coin_table.dart';
 import 'package:web_dex/views/dex/simple/form/maker/maker_form_content.dart';
@@ -94,9 +94,14 @@ class _MakerFormLayoutState extends State<MakerFormLayout> {
             );
           }
 
-          return isMobile
-              ? const _MakerFormMobileLayout()
-              : const _MakerFormDesktopLayout();
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
+              return spec.usesStackedTradingLayout
+                  ? const _MakerFormMobileLayout()
+                  : const _MakerFormDesktopLayout();
+            },
+          );
         },
       ),
     );
@@ -140,50 +145,57 @@ class _MakerFormDesktopLayoutState extends State<_MakerFormDesktopLayout> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.max,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // We want to place form in the middle of the screen,
-        // and orderbook, when shown, should be on the right side
-        // (leaving the form in the middle)
-        const Expanded(flex: 3, child: SizedBox.shrink()),
-        Flexible(
-          flex: 6,
-          child: DexScrollbar(
-            scrollController: _mainScrollController,
-            isMobile: isMobile,
-            child: SingleChildScrollView(
-              key: const Key('maker-form-layout-scroll'),
-              controller: _mainScrollController,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: theme.custom.dexFormWidth,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: spec.maxContentWidth),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: DexScrollbar(
+                      scrollController: _mainScrollController,
+                      isMobile: false,
+                      child: SingleChildScrollView(
+                        key: const Key('maker-form-layout-scroll'),
+                        controller: _mainScrollController,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: Theme.of(
+                              context,
+                            ).calmCoreCompatibility.dexFormWidth,
+                          ),
+                          child: const Stack(
+                            clipBehavior: Clip.hardEdge,
+                            children: [
+                              MakerFormContent(),
+                              MakerFormSellCoinTable(),
+                              MakerFormBuyCoinTable(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                child: const Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    MakerFormContent(),
-                    MakerFormSellCoinTable(),
-                    MakerFormBuyCoinTable(),
-                  ],
+                SizedBox(width: spec.gutter),
+                SizedBox(
+                  width: spec.orderbookWidth,
+                  child: SingleChildScrollView(
+                    controller: _orderbookScrollController,
+                    child: const MakerFormOrderbook(),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 20),
-            child: SingleChildScrollView(
-              controller: _orderbookScrollController,
-              child: const MakerFormOrderbook(),
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -223,7 +235,9 @@ class _MakerFormMobileLayoutState extends State<_MakerFormMobileLayout> {
       key: const Key('maker-form-layout-scroll'),
       controller: _scrollController,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
+        constraints: BoxConstraints(
+          maxWidth: Theme.of(context).calmCoreCompatibility.dexFormWidth,
+        ),
         child: const Stack(
           children: [
             Column(

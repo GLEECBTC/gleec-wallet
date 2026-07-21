@@ -9,6 +9,7 @@ import 'package:web_dex/router/state/market_maker_bot_state.dart';
 import 'package:web_dex/router/state/nfts_state.dart';
 import 'package:web_dex/router/state/settings_section_state.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
+import 'package:web_dex/router/state/unified_swap_section_state.dart';
 
 class RoutingState {
   final WalletState walletState = WalletState();
@@ -18,6 +19,7 @@ class RoutingState {
   final MarketMakerBotState marketMakerState = MarketMakerBotState();
   final NFTsState nftsState = NFTsState();
   final SettingsSectionState settingsState = SettingsSectionState();
+  final UnifiedSwapSectionState unifiedSwapState = UnifiedSwapSectionState();
   final MainMenuState _mainMenu = MainMenuState();
 
   MainMenuValue get selectedMenu => _mainMenu.selectedMenu;
@@ -49,6 +51,7 @@ class RoutingState {
     marketMakerState.reset();
     nftsState.reset();
     settingsState.reset();
+    unifiedSwapState.reset();
   }
 
   void addListener(void Function() notifyListeners) {
@@ -60,6 +63,7 @@ class RoutingState {
     marketMakerState.addListener(notifyListeners);
     nftsState.addListener(notifyListeners);
     settingsState.addListener(notifyListeners);
+    unifiedSwapState.addListener(notifyListeners);
   }
 
   bool _shouldCallResetWhenMenuChanged(MainMenuValue menu) {
@@ -80,6 +84,7 @@ class RoutingState {
     marketMakerState.resetOnLogOut();
     nftsState.resetOnLogOut();
     settingsState.resetOnLogOut();
+    unifiedSwapState.reset();
   }
 }
 

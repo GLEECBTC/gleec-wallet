@@ -33,23 +33,31 @@ class OrderbookTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highestVolume = _getHighestVolume();
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
 
     return Container(
       key: const Key('orderbook-asks-bids-container'),
-      constraints: const BoxConstraints(maxHeight: 375),
+      constraints: const BoxConstraints(maxHeight: 480),
+      decoration: BoxDecoration(
+        color: colors.surfaceHigh,
+        border: Border.all(color: colors.border),
+        borderRadius: geometry.borderRadius16,
+      ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: geometry.borderRadius16,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(),
-            Flexible(child: _buildAsks(highestVolume)),
+            Flexible(child: _buildAsks(context, highestVolume)),
             Container(
-              height: 30,
+              constraints: const BoxConstraints(minHeight: 48),
               alignment: Alignment.centerLeft,
+              color: colors.surfaceHighest,
               child: _buildSpotPrice(context),
             ),
-            Flexible(child: _buildBids(highestVolume)),
+            Flexible(child: _buildBids(context, highestVolume)),
           ],
         ),
       ),
@@ -82,7 +90,7 @@ class OrderbookTable extends StatelessWidget {
           style: style.copyWith(fontWeight: FontWeight.w500),
         ),
         const Text(' ≈ ', style: style),
-        Text('\$$baseUsdPrice', style: style)
+        Text('\$$baseUsdPrice', style: style),
       ],
     );
   }
@@ -97,10 +105,14 @@ class OrderbookTable extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              OrderbookTableTitle(LocaleKeys.price.tr(),
-                  suffix: Coin.normalizeAbbr(orderbook.rel)),
-              OrderbookTableTitle(LocaleKeys.volume.tr(),
-                  suffix: Coin.normalizeAbbr(orderbook.base)),
+              OrderbookTableTitle(
+                LocaleKeys.price.tr(),
+                suffix: Coin.normalizeAbbr(orderbook.rel),
+              ),
+              OrderbookTableTitle(
+                LocaleKeys.volume.tr(),
+                suffix: Coin.normalizeAbbr(orderbook.base),
+              ),
             ],
           ),
           const SizedBox(height: 1),
@@ -111,7 +123,7 @@ class OrderbookTable extends StatelessWidget {
     );
   }
 
-  Widget _buildAsks(Rational highestVolume) {
+  Widget _buildAsks(BuildContext context, Rational highestVolume) {
     final List<Order> asks = List.from(orderbook.asks);
     if (myOrder?.direction == OrderDirection.ask) {
       asks.add(myOrder!);
@@ -135,7 +147,7 @@ class OrderbookTable extends StatelessWidget {
             LocaleKeys.orderBookNoAsks.tr(),
             style: TextStyle(
               fontSize: 11,
-              color: theme.custom.asksColor,
+              color: Theme.of(context).calmCoreCompatibility.asksColor,
             ),
           ),
         ],
@@ -173,7 +185,7 @@ class OrderbookTable extends StatelessWidget {
     );
   }
 
-  Widget _buildBids(Rational highestVolume) {
+  Widget _buildBids(BuildContext context, Rational highestVolume) {
     final List<Order> bids = List.from(orderbook.bids);
     if (myOrder?.direction == OrderDirection.bid) {
       bids.add(myOrder!);
@@ -197,7 +209,7 @@ class OrderbookTable extends StatelessWidget {
             LocaleKeys.orderBookNoBids.tr(),
             style: TextStyle(
               fontSize: 11,
-              color: theme.custom.bidsColor,
+              color: Theme.of(context).calmCoreCompatibility.bidsColor,
             ),
           ),
         ],
@@ -235,10 +247,7 @@ class OrderbookTable extends StatelessWidget {
   }
 
   Rational _getHighestVolume() {
-    final List<Order> allOrders = [
-      ...orderbook.asks,
-      ...orderbook.bids,
-    ];
+    final List<Order> allOrders = [...orderbook.asks, ...orderbook.bids];
     Rational highest = Rational.zero;
 
     for (Order order in allOrders) {

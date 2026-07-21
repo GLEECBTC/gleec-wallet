@@ -20,25 +20,22 @@ class Assets {
   static const seedNotBackedUp = '$assetsPath/ui_icons/seed_not_backed_up.svg';
 }
 
-enum ColorFilterEnum {
-  expandMode,
-  headerIconColor,
-}
+enum ColorFilterEnum { expandMode, headerIconColor }
 
 class DexSvgImage extends StatelessWidget {
   final String path;
   final ColorFilterEnum? colorFilter;
   final double? size;
-  const DexSvgImage(
-      {super.key, required this.path, this.colorFilter, this.size});
+  const DexSvgImage({
+    super.key,
+    required this.path,
+    this.colorFilter,
+    this.size,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SvgPicture.asset(
-      path,
-      colorFilter: _getColorFilter(),
-      width: size,
-    );
+    return SvgPicture.asset(path, colorFilter: _getColorFilter(), width: size);
   }
 
   ColorFilter? _getColorFilter() {
@@ -66,24 +63,32 @@ class RewardBackground extends StatelessWidget {
 }
 
 class NavIcon extends StatelessWidget {
-  const NavIcon({
-    required this.item,
-    required this.isActive,
-    super.key,
-  });
+  const NavIcon({required this.item, required this.isActive, super.key});
 
   final MainMenuValue item;
   final bool isActive;
 
   @override
   Widget build(BuildContext context) {
+    if (item == MainMenuValue.card || item == MainMenuValue.more) {
+      final color = isActive
+          ? theme.custom.mainMenuSelectedItemColor
+          : theme.custom.mainMenuItemColor;
+      return Icon(
+        item == MainMenuValue.card
+            ? Icons.credit_card_rounded
+            : Icons.more_horiz_rounded,
+        color: color,
+        size: isTablet ? 30 : 20,
+      );
+    }
     final String iconPath = '/${item.name.split('.').last}';
     final String screenPath = isMobile ? '/mobile' : '/desktop';
     final String themePath = isMobile
         ? ''
         : theme.mode == ThemeMode.dark
-            ? '/dark'
-            : '/light';
+        ? '/dark'
+        : '/light';
     final String activeSuffix = isActive ? '_active' : '';
 
     return SvgPicture.asset(

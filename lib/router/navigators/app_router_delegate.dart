@@ -15,6 +15,7 @@ import 'package:web_dex/router/state/fiat_state.dart';
 import 'package:web_dex/router/state/market_maker_bot_state.dart';
 import 'package:web_dex/router/state/nfts_state.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/router/state/unified_swap_section_state.dart';
 import 'package:web_dex/views/main_layout/main_layout.dart';
 
 class AppRouterDelegate extends RouterDelegate<AppRoutePath>
@@ -80,8 +81,12 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       _setNewFiatRoutePath(configurationToSet);
     } else if (configurationToSet is DexRoutePath) {
       _setNewDexRoutePath(configurationToSet);
+    } else if (configurationToSet is UnifiedSwapRoutePath) {
+      _setNewUnifiedSwapRoutePath(configurationToSet);
     } else if (configurationToSet is BridgeRoutePath) {
       _setNewBridgeRoutePath(configurationToSet);
+    } else if (configurationToSet is CardRoutePath) {
+      routingState.selectedMenu = MainMenuValue.card;
     } else if (configurationToSet is NftRoutePath) {
       _setNewNftsRoutePath(configurationToSet);
     } else if (configurationToSet is SettingsRoutePath) {
@@ -124,6 +129,11 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
 
   void _setNewDexRoutePath(DexRoutePath path) {
     routingState.selectedMenu = MainMenuValue.dex;
+    if (path.action == DexAction.tradingDetails) {
+      routingState.unifiedSwapState.replace(
+        const UnifiedSwapRouteState.advanced(),
+      );
+    }
     routingState.dexState.action = path.action;
     routingState.dexState.uuid = path.uuid;
     routingState.dexState.fromCurrency = path.fromCurrency;
@@ -131,6 +141,14 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
     routingState.dexState.toCurrency = path.toCurrency;
     routingState.dexState.toAmount = path.toAmount;
     routingState.dexState.orderType = path.orderType;
+  }
+
+  void _setNewUnifiedSwapRoutePath(UnifiedSwapRoutePath path) {
+    routingState.selectedMenu = MainMenuValue.dex;
+    // A previously opened legacy DEX detail must not continue to own route
+    // restoration after the customer explicitly enters Unified Swap.
+    routingState.dexState.reset();
+    routingState.unifiedSwapState.replace(path.route);
   }
 
   void _setNewMarketMakerBotRoutePath(MarketMakerBotRoutePath path) {
@@ -148,12 +166,14 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
     return {
       MainMenuValue.wallet: _currentWalletConfiguration,
       MainMenuValue.fiat: _currentFiatConfiguration,
-      MainMenuValue.dex: _currentDexConfiguration,
+      MainMenuValue.dex: _currentUnifiedSwapConfiguration,
       MainMenuValue.bridge: _currentBridgeConfiguration,
+      MainMenuValue.card: CardRoutePath.card(),
       MainMenuValue.marketMakerBot: _currentMarketMakerBotConfiguration,
       MainMenuValue.nft: _currentNftConfiguration,
       MainMenuValue.settings: _currentSettingsConfiguration,
       MainMenuValue.support: _currentSettingsConfiguration,
+      MainMenuValue.more: _currentSettingsConfiguration,
     };
   }
 
@@ -199,6 +219,23 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       toCurrency: routingState.dexState.toCurrency,
       orderType: routingState.dexState.orderType,
     );
+  }
+
+  AppRoutePath get _currentUnifiedSwapConfiguration {
+    if (routingState.dexState.action == DexAction.tradingDetails) {
+      return _currentDexConfiguration;
+    }
+    final route = routingState.unifiedSwapState.value;
+    switch (route.destination) {
+      case UnifiedSwapDestination.swap:
+        return UnifiedSwapRoutePath.swap();
+      case UnifiedSwapDestination.activity:
+        return UnifiedSwapRoutePath.activity();
+      case UnifiedSwapDestination.activityDetails:
+        return UnifiedSwapRoutePath.activityDetails(route.routeExecutionId!);
+      case UnifiedSwapDestination.advanced:
+        return UnifiedSwapRoutePath.advanced();
+    }
   }
 
   AppRoutePath get _currentMarketMakerBotConfiguration {

@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,12 +8,10 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/shared/ui/ui_light_button.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 
 class OrderCancelButton extends StatefulWidget {
-  const OrderCancelButton({
-    Key? key,
-    required this.order,
-  }) : super(key: key);
+  const OrderCancelButton({Key? key, required this.order}) : super(key: key);
 
   final MyOrder order;
 
@@ -25,30 +24,34 @@ class _OrderCancelButtonState extends State<OrderCancelButton> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
     return UiLightButton(
       text: LocaleKeys.cancel.tr(),
-      width: 80,
-      height: 22,
+      width: 112,
+      height: 48,
       prefix: _isCancelling ? const UiSpinner(width: 12, height: 12) : null,
-      backgroundColor: Colors.transparent,
-      border: Border.all(
-        color: const Color.fromRGBO(234, 234, 234, 1),
-        width: 1.0,
-      ),
-      textStyle: const TextStyle(fontSize: 12),
-      onPressed: _isCancelling
-          ? null
-          : () => onCancel(widget.order), //isCancelling ? null : onCancel,
+      backgroundColor: colors.dangerContainer,
+      border: Border.all(color: colors.danger),
+      textStyle: TextStyle(color: colors.danger),
+      onPressed: _isCancelling ? null : () => onCancel(widget.order),
     );
   }
 
   Future<void> onCancel(MyOrder order) async {
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: LocaleKeys.cancelOrder.tr(),
+      confirmButtonKey: const Key('dex-order-cancel-confirm'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _isCancelling = true;
     });
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
     final String? error = await tradingEntitiesBloc.cancelOrder(order.uuid);
+    if (!mounted) return;
     setState(() {
       _isCancelling = false;
     });

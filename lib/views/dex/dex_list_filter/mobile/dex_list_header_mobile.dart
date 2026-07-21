@@ -3,13 +3,13 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/dex_list_type.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/model/trading_entities_filter.dart';
+import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 
 class DexListHeaderMobile extends StatelessWidget {
   const DexListHeaderMobile({
@@ -54,9 +54,17 @@ class DexListHeaderMobile extends StatelessWidget {
             if (listType == DexListType.orders)
               PopupMenuButton<_DexListHeaderAction>(
                 icon: const Icon(Icons.more_vert, size: 20),
-                onSelected: (action) {
+                onSelected: (action) async {
                   switch (action) {
                     case _DexListHeaderAction.cancelAll:
+                      final confirmed = await showDexActionConfirmation(
+                        context: context,
+                        actionLabel: LocaleKeys.cancelAll.tr(),
+                        confirmButtonKey: const Key(
+                          'dex-mobile-cancel-all-confirm',
+                        ),
+                      );
+                      if (!confirmed || !context.mounted) return;
                       (onCancelAll ??
                           () => tradingEntitiesBloc.cancelAllOrders())();
                   }
@@ -248,51 +256,29 @@ class DexListHeaderMobile extends StatelessWidget {
   }
 
   Widget _buildFilterButton(BuildContext context) {
-    return InkWell(
-      radius: 18,
-      borderRadius: BorderRadius.circular(18),
-      onTap: onFilterPressed,
-      child: Container(
-        width: 100,
-        height: 30,
-        decoration: BoxDecoration(
-          border: Border.all(color: theme.custom.specificButtonBorderColor),
-          color: theme.custom.specificButtonBackgroundColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Row(
-            children: [
-              isFilterShown
-                  ? Icon(
-                      Icons.close,
-                      color: Theme.of(context).textTheme.labelLarge?.color,
-                      size: 14,
-                    )
-                  : SvgPicture.asset(
-                      '$assetsPath/ui_icons/filters.svg',
-                      colorFilter: ColorFilter.mode(
-                        Theme.of(context).textTheme.labelLarge?.color ??
-                            Colors.white,
-                        BlendMode.srcIn,
-                      ),
-                      width: 14,
-                    ),
-              Padding(
-                padding: const EdgeInsets.only(left: 12.0),
-                child: Text(
-                  isFilterShown
-                      ? LocaleKeys.close.tr()
-                      : LocaleKeys.filters.tr(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    return SizedBox(
+      width: 120,
+      child: OutlinedButton.icon(
+        onPressed: onFilterPressed,
+        icon: isFilterShown
+            ? const Icon(Icons.close, size: 18)
+            : SvgPicture.asset(
+                '$assetsPath/ui_icons/filters.svg',
+                colorFilter: ColorFilter.mode(
+                  colors.textSecondary,
+                  BlendMode.srcIn,
                 ),
+                width: 18,
               ),
-            ],
-          ),
+        label: Text(
+          isFilterShown ? LocaleKeys.close.tr() : LocaleKeys.filters.tr(),
+          maxLines: 2,
+          textAlign: TextAlign.center,
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: Size(120, geometry.minimumTapTarget),
         ),
       ),
     );
@@ -304,37 +290,46 @@ class DexListHeaderMobile extends StatelessWidget {
     VoidCallback removeFilter,
     BuildContext context,
   ) {
-    return Flexible(
-      child: Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: InkWell(
-          onTap: removeFilter,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: theme.custom.specificButtonBackgroundColor,
-              border: Border.all(color: const Color.fromRGBO(237, 237, 237, 1)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$text: $value',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    final typography = GleecTypography.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 260, minHeight: 48),
+        child: Material(
+          color: colors.surfaceHigh,
+          borderRadius: geometry.borderRadius16,
+          child: InkWell(
+            onTap: removeFilter,
+            borderRadius: geometry.borderRadius16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: geometry.borderRadius16,
+                border: Border.all(color: colors.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      '$text: $value',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: typography.bodyMedium,
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(left: 6.0),
-                  child: Icon(
-                    Icons.close,
-                    color: Theme.of(context).textTheme.labelLarge?.color,
-                    size: 12,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6.0),
+                    child: Icon(
+                      Icons.close,
+                      color: colors.textSecondary,
+                      size: 18,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -343,25 +338,17 @@ class DexListHeaderMobile extends StatelessWidget {
   }
 
   Widget _buildResetAllButton(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Padding(
       padding: const EdgeInsets.only(right: 6),
-      child: InkWell(
-        onTap: () => onFilterDataChange(null),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          child: Text(
-            LocaleKeys.resetAll.tr(),
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
+      child: ElevatedButton(
+        onPressed: () => onFilterDataChange(null),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: colors.brand,
+          minimumSize: Size(96, geometry.minimumTapTarget),
         ),
+        child: Text(LocaleKeys.resetAll.tr()),
       ),
     );
   }

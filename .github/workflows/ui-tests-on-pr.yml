@@ -91,7 +91,6 @@ jobs:
       # Run integration tests
       - name: Test air_dex ${{ matrix.browser }}
         id: integration_tests
-        continue-on-error: true
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHROME_EXECUTABLE: ${{ matrix.browser == 'chrome' && steps.setup_chrome.outputs.chrome-path || '' }}
@@ -102,9 +101,10 @@ jobs:
             -n ${{ matrix.browser }} \
             -m ${{ matrix.mode }}
 
-      # Post-test steps (upload logs, coverage, and failure check)
+      # Preserve diagnostics even though the integration test remains blocking.
       - name: Upload driver logs
         id: upload_logs
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ runner.os }}-${{ matrix.browser }}-logs
@@ -117,12 +117,6 @@ jobs:
       # flutter integration test structure (flutter drive is deprecated)
       # - name: Generate coverage report
       #   if: ${{ matrix.browser == 'chrome' }}
-      #   continue-on-error: true
       #   uses: ./.github/actions/code-coverage
       #   with:
       #     test_file: 'test_integration'
-
-      - name: Fail workflow if tests failed
-        id: check_test_result
-        if: ${{ steps.integration_tests.outcome == 'failure' }}
-        run: exit 1

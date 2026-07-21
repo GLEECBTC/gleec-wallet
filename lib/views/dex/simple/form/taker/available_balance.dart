@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:rational/rational.dart';
@@ -16,18 +17,11 @@ class AvailableBalance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelStyle =
-        theme.textTheme.bodySmall?.copyWith(
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-          color: theme.colorScheme.onSurfaceVariant,
-        ) ??
-        TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w400,
-          color: theme.colorScheme.onSurfaceVariant,
-        );
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
+    final labelStyle = typography.bodySmall.copyWith(
+      color: colors.textTertiary,
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -57,6 +51,8 @@ class _Balance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
     final Rational balance = availableBalance ?? Rational.zero;
     String value = formatAmt(balance.toDouble());
     switch (state) {
@@ -79,17 +75,10 @@ class _Balance extends StatelessWidget {
 
     return AutoScrollText(
       text: value,
-      style:
-          Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
-          ) ??
-          TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
+      style: typography.tabularAmountCompact.copyWith(
+        fontSize: 12,
+        color: colors.textPrimary,
+      ),
       textAlign: TextAlign.end,
     );
   }

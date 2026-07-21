@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gleec Gnosis Pay Integration"
+  short_description: "Build secure mock-first Gnosis Pay card flows."
+  default_prompt: "Use -gnosis-pay-integration to implement or review a Gnosis Pay card workflow."

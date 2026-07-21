@@ -5,9 +5,58 @@ import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/router/state/fiat_state.dart';
 import 'package:web_dex/router/state/market_maker_bot_state.dart';
 import 'package:web_dex/router/state/nfts_state.dart';
+import 'package:web_dex/router/state/unified_swap_section_state.dart';
 
 abstract class AppRoutePath {
   final String location = '';
+}
+
+class UnifiedSwapRoutePath implements AppRoutePath {
+  UnifiedSwapRoutePath._(this.route);
+
+  factory UnifiedSwapRoutePath.swap({
+    UnifiedSwapLegacyHints legacyHints = const UnifiedSwapLegacyHints(),
+  }) => UnifiedSwapRoutePath._(
+    UnifiedSwapRouteState.swap(legacyHints: legacyHints),
+  );
+
+  factory UnifiedSwapRoutePath.activity() =>
+      UnifiedSwapRoutePath._(const UnifiedSwapRouteState.activity());
+
+  factory UnifiedSwapRoutePath.activityDetails(String routeExecutionId) =>
+      UnifiedSwapRoutePath._(
+        UnifiedSwapRouteState.activityDetails(routeExecutionId),
+      );
+
+  factory UnifiedSwapRoutePath.advanced({
+    UnifiedSwapLegacyHints legacyHints = const UnifiedSwapLegacyHints(),
+  }) => UnifiedSwapRoutePath._(
+    UnifiedSwapRouteState.advanced(legacyHints: legacyHints),
+  );
+
+  final UnifiedSwapRouteState route;
+
+  @override
+  String get location {
+    switch (route.destination) {
+      case UnifiedSwapDestination.swap:
+        return '/${firstUriSegment.swap}';
+      case UnifiedSwapDestination.activity:
+        return '/${firstUriSegment.activity}';
+      case UnifiedSwapDestination.activityDetails:
+        return '/${firstUriSegment.activity}/'
+            '${Uri.encodeComponent(route.routeExecutionId!)}';
+      case UnifiedSwapDestination.advanced:
+        return '/${firstUriSegment.advanced}';
+    }
+  }
+}
+
+class CardRoutePath implements AppRoutePath {
+  CardRoutePath.card() : location = '/${firstUriSegment.card}';
+
+  @override
+  final String location;
 }
 
 class WalletRoutePath implements AppRoutePath {

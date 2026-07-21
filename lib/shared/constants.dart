@@ -12,6 +12,12 @@ const Duration kActivationPollingInterval = Duration(
   milliseconds: _activationPollingIntervalMs,
 );
 
+// TODO: Disable the card feature before this code is included in a release.
+const bool isCardFeatureEnabled = bool.fromEnvironment(
+  'CARD_FEATURE_ENABLED',
+  defaultValue: true,
+);
+
 // stored app preferences
 const String storedSettingsKey = '_atomicDexStoredSettings';
 // New settings key to avoid breaking older versions reading the legacy key

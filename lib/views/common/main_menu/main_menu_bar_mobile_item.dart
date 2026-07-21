@@ -10,11 +10,13 @@ class MainMenuBarMobileItem extends StatelessWidget {
     required this.value,
     required this.isActive,
     this.enabled = true,
+    this.onTap,
   }) : super(key: Key('main-menu-${value.name}'));
 
   final MainMenuValue value;
   final bool enabled;
   final bool isActive;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -24,9 +26,7 @@ class MainMenuBarMobileItem extends StatelessWidget {
         type: MaterialType.transparency,
         child: InkWell(
           onTap: enabled
-              ? () {
-                  routingState.selectedMenu = value;
-                }
+              ? onTap ?? () => routingState.selectedMenu = value
               : null,
           highlightColor: Colors.transparent,
           child: Padding(
@@ -42,18 +42,26 @@ class MainMenuBarMobileItem extends StatelessWidget {
                 AutoScrollText(
                   text: value.title,
                   style: isActive
-                      ? theme.currentGlobal.bottomNavigationBarTheme
-                          .selectedLabelStyle
-                          ?.copyWith(
-                          color: theme.currentGlobal.bottomNavigationBarTheme
-                              .selectedItemColor,
-                        )
-                      : theme.currentGlobal.bottomNavigationBarTheme
-                          .unselectedLabelStyle
-                          ?.copyWith(
-                          color: theme.currentGlobal.bottomNavigationBarTheme
-                              .unselectedItemColor,
-                        ),
+                      ? theme
+                            .currentGlobal
+                            .bottomNavigationBarTheme
+                            .selectedLabelStyle
+                            ?.copyWith(
+                              color: theme
+                                  .currentGlobal
+                                  .bottomNavigationBarTheme
+                                  .selectedItemColor,
+                            )
+                      : theme
+                            .currentGlobal
+                            .bottomNavigationBarTheme
+                            .unselectedLabelStyle
+                            ?.copyWith(
+                              color: theme
+                                  .currentGlobal
+                                  .bottomNavigationBarTheme
+                                  .unselectedItemColor,
+                            ),
                 ),
               ],
             ),

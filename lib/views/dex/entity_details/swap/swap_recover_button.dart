@@ -9,6 +9,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/recover_funds_of_swap/recover_funds_of_swap_response.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
 
 class SwapRecoverButton extends StatefulWidget {
   const SwapRecoverButton({Key? key, required this.uuid}) : super(key: key);
@@ -31,52 +32,13 @@ class _SwapRecoverButtonState extends State<SwapRecoverButton> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Flexible(child: SelectableText(LocaleKeys.swapRecoverButtonTitle.tr())),
-        const SizedBox(
-          height: 10,
-        ),
+        const SizedBox(height: 10),
         Flexible(
           child: _isLoading
-              ? const Center(
-                  child: UiSpinner(
-                    width: 48,
-                    height: 48,
-                  ),
-                )
+              ? const Center(child: UiSpinner(width: 48, height: 48))
               : UiPrimaryButton(
                   text: LocaleKeys.swapRecoverButtonText.tr(),
-                  onPressed: () async {
-                    if (_isLoading) {
-                      return;
-                    }
-                    setState(() {
-                      _isLoading = true;
-                      _isFailedRecover = false;
-                      _recoverResponse = null;
-                      _message = '';
-                    });
-                    final tradingEntitiesBloc =
-                        RepositoryProvider.of<TradingEntitiesBloc>(context);
-                    final response = await tradingEntitiesBloc
-                        .recoverFundsOfSwap(widget.uuid);
-                    await Future<dynamic>.delayed(const Duration(seconds: 1));
-                    if (response == null) {
-                      setState(() {
-                        _message =
-                            LocaleKeys.swapRecoverButtonErrorMessage.tr();
-                        _isFailedRecover = true;
-                      });
-                    } else {
-                      setState(() {
-                        _message =
-                            LocaleKeys.swapRecoverButtonSuccessMessage.tr();
-                        _recoverResponse = response;
-                        _isFailedRecover = false;
-                      });
-                    }
-                    setState(() {
-                      _isLoading = false;
-                    });
-                  },
+                  onPressed: _isLoading ? null : _recoverFunds,
                 ),
         ),
         Padding(
@@ -85,6 +47,40 @@ class _SwapRecoverButtonState extends State<SwapRecoverButton> {
         ),
       ],
     );
+  }
+
+  Future<void> _recoverFunds() async {
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: LocaleKeys.recover.tr(),
+      confirmButtonKey: const Key('dex-details-recover-confirm'),
+    );
+    if (!confirmed || !mounted || _isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _isFailedRecover = false;
+      _recoverResponse = null;
+      _message = '';
+    });
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
+    final response = await tradingEntitiesBloc.recoverFundsOfSwap(widget.uuid);
+    await Future<dynamic>.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
+
+    setState(() {
+      if (response == null) {
+        _message = LocaleKeys.swapRecoverButtonErrorMessage.tr();
+        _isFailedRecover = true;
+      } else {
+        _message = LocaleKeys.swapRecoverButtonSuccessMessage.tr();
+        _recoverResponse = response;
+        _isFailedRecover = false;
+      }
+      _isLoading = false;
+    });
   }
 
   Widget _buildMessage() {
@@ -112,7 +108,7 @@ class _SwapRecoverButtonState extends State<SwapRecoverButton> {
           _message,
           style: TextStyle(
             fontWeight: FontWeight.w500,
-            color: theme.custom.successColor,
+            color: GleecColorTokens.of(context).success,
           ),
         ),
         Padding(

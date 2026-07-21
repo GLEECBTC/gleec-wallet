@@ -5,12 +5,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/shared/ui/ui_light_button.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/focusable_widget.dart';
+import 'package:web_dex/views/dex/common/dex_confirmation_dialog.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/entities_list/common/coin_amount_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/entity_item_status_wrapper.dart';
 import 'package:web_dex/views/dex/entities_list/common/swap_actions_menu.dart';
@@ -32,6 +33,8 @@ class _HistoryItemState extends State<HistoryItem> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     final String uuid = widget.swap.uuid;
     final String sellCoin = widget.swap.sellCoin;
     final Rational sellAmount = widget.swap.sellAmount;
@@ -47,65 +50,83 @@ class _HistoryItemState extends State<HistoryItem> {
       context,
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (isMobile)
-          Text(
-            tradingEntitiesBloc.getTypeString(isTaker),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _typeColor,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = DexResponsiveSpec.fromWidth(
+          constraints.maxWidth,
+        ).usesMobileLists;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isCompact)
+              Text(
+                tradingEntitiesBloc.getTypeString(isTaker),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isTaker ? colors.info : colors.brand,
+                ),
+              ),
+            FocusableWidget(
+              key: Key('swap-item-$uuid'),
+              onTap: widget.onClick,
+              borderRadius: geometry.borderRadius16,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  borderRadius: geometry.borderRadius16,
+                  color: colors.surfaceRaised,
+                  border: Border.all(color: colors.border),
+                ),
+                child: isCompact
+                    ? _HistoryItemMobile(
+                        key: Key('swap-item-$uuid-mobile'),
+                        swap: widget.swap,
+                        uuid: uuid,
+                        isRecovering: _isRecovering,
+                        buyAmount: buyAmount,
+                        buyCoin: buyCoin,
+                        date: date,
+                        isSuccessful: isSuccessful,
+                        sellAmount: sellAmount,
+                        sellCoin: sellCoin,
+                        onRecoverPressed: isRecoverable
+                            ? _onRecoverPressed
+                            : null,
+                      )
+                    : _HistoryItemDesktop(
+                        key: Key('swap-item-$uuid-desktop'),
+                        uuid: uuid,
+                        isRecovering: _isRecovering,
+                        buyAmount: buyAmount,
+                        buyCoin: buyCoin,
+                        date: date,
+                        isSuccessful: isSuccessful,
+                        isTaker: isTaker,
+                        sellAmount: sellAmount,
+                        sellCoin: sellCoin,
+                        typeColor: isTaker ? colors.info : colors.brand,
+                        onRecoverPressed: isRecoverable
+                            ? _onRecoverPressed
+                            : null,
+                      ),
+              ),
             ),
-          ),
-        FocusableWidget(
-          key: Key('swap-item-$uuid'),
-          onTap: widget.onClick,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            child: isMobile
-                ? _HistoryItemMobile(
-                    key: Key('swap-item-$uuid-mobile'),
-                    swap: widget.swap,
-                    uuid: uuid,
-                    isRecovering: _isRecovering,
-                    buyAmount: buyAmount,
-                    buyCoin: buyCoin,
-                    date: date,
-                    isSuccessful: isSuccessful,
-                    sellAmount: sellAmount,
-                    sellCoin: sellCoin,
-                    onRecoverPressed: isRecoverable ? _onRecoverPressed : null,
-                  )
-                : _HistoryItemDesktop(
-                    key: Key('swap-item-$uuid-desktop'),
-                    uuid: uuid,
-                    isRecovering: _isRecovering,
-                    buyAmount: buyAmount,
-                    buyCoin: buyCoin,
-                    date: date,
-                    isSuccessful: isSuccessful,
-                    isTaker: isTaker,
-                    sellAmount: sellAmount,
-                    sellCoin: sellCoin,
-                    typeColor: _typeColor,
-                    onRecoverPressed: isRecoverable ? _onRecoverPressed : null,
-                  ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
   Future<void> _onRecoverPressed() async {
     if (_isRecovering) return;
+    final confirmed = await showDexActionConfirmation(
+      context: context,
+      actionLabel: LocaleKeys.recover.tr(),
+      confirmButtonKey: const Key('dex-history-recover-confirm'),
+    );
+    if (!confirmed || !mounted) return;
     setState(() {
       _isRecovering = true;
     });
@@ -113,14 +134,11 @@ class _HistoryItemState extends State<HistoryItem> {
       context,
     );
     await tradingEntitiesBloc.recoverFundsOfSwap(widget.swap.uuid);
+    if (!mounted) return;
     setState(() {
       _isRecovering = false;
     });
   }
-
-  Color get _typeColor => widget.swap.isTaker
-      ? theme.custom.dexPageTheme.takerLabelColor
-      : theme.custom.dexPageTheme.makerLabelColor;
 }
 
 class _HistoryItemDesktop extends StatelessWidget {
@@ -156,6 +174,7 @@ class _HistoryItemDesktop extends StatelessWidget {
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
+    final colors = GleecColorTokens.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -170,29 +189,14 @@ class _HistoryItemDesktop extends StatelessWidget {
                       : LocaleKeys.failed.tr(),
                   width: 100,
                   icon: isSuccessful
-                      ? Icon(
-                          Icons.check,
-                          size: 12,
-                          color: theme
-                              .custom
-                              .dexPageTheme
-                              .successfulSwapStatusColor,
-                        )
-                      : Icon(
-                          Icons.circle,
-                          size: 12,
-                          color:
-                              theme.custom.dexPageTheme.failedSwapStatusColor,
-                        ),
+                      ? Icon(Icons.check, size: 12, color: colors.success)
+                      : Icon(Icons.circle, size: 12, color: colors.danger),
                   textColor: isSuccessful
-                      ? theme.custom.dexPageTheme.successfulSwapStatusColor
-                      : Theme.of(context).textTheme.bodyMedium?.color,
+                      ? colors.success
+                      : colors.textSecondary,
                   backgroundColor: isSuccessful
-                      ? theme
-                            .custom
-                            .dexPageTheme
-                            .successfulSwapStatusBackgroundColor
-                      : Theme.of(context).colorScheme.surface,
+                      ? colors.successContainer
+                      : colors.dangerContainer,
                 ),
               ),
             ],
@@ -238,21 +242,18 @@ class _HistoryItemDesktop extends StatelessWidget {
             children: [
               onRecoverPressed != null
                   ? UiLightButton(
-                      width: 80,
-                      height: 22,
-                      backgroundColor: theme.currentGlobal.colorScheme.error,
+                      width: 112,
+                      height: 48,
+                      backgroundColor: colors.dangerContainer,
                       text: isRecovering ? '' : LocaleKeys.recover.tr(),
                       prefix: isRecovering
-                          ? const UiSpinner(
+                          ? UiSpinner(
                               width: 12,
                               height: 12,
-                              color: Colors.orange,
+                              color: colors.danger,
                             )
                           : null,
-                      textStyle: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
+                      textStyle: TextStyle(color: colors.danger),
                       onPressed: onRecoverPressed,
                     )
                   : const SizedBox(width: 80),
@@ -291,6 +292,8 @@ class _HistoryItemMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -323,18 +326,14 @@ class _HistoryItemMobile extends StatelessWidget {
               children: [
                 if (onRecoverPressed != null)
                   UiLightButton(
-                    width: 70,
-                    height: 22,
+                    width: 112,
+                    height: 48,
                     prefix: isRecovering
-                        ? const UiSpinner(color: Colors.orange)
+                        ? UiSpinner(color: colors.danger)
                         : null,
-                    backgroundColor:
-                        theme.custom.dexPageTheme.failedSwapStatusColor,
+                    backgroundColor: colors.dangerContainer,
                     text: isRecovering ? '' : LocaleKeys.recover.tr(),
-                    textStyle: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                    ),
+                    textStyle: TextStyle(color: colors.danger),
                     onPressed: onRecoverPressed,
                   ),
                 if (onRecoverPressed != null) const SizedBox(width: 4),
@@ -373,27 +372,18 @@ class _HistoryItemMobile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: geometry.borderRadius12,
             color: isSuccessful
-                ? theme.custom.dexPageTheme.successfulSwapStatusBackgroundColor
-                : Theme.of(context).colorScheme.surface,
+                ? colors.successContainer
+                : colors.dangerContainer,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               isSuccessful
-                  ? Icon(
-                      Icons.check,
-                      size: 12,
-                      color:
-                          theme.custom.dexPageTheme.successfulSwapStatusColor,
-                    )
-                  : Icon(
-                      Icons.circle,
-                      size: 12,
-                      color: theme.custom.dexPageTheme.failedSwapStatusColor,
-                    ),
+                  ? Icon(Icons.check, size: 12, color: colors.success)
+                  : Icon(Icons.circle, size: 12, color: colors.danger),
               Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: Text(

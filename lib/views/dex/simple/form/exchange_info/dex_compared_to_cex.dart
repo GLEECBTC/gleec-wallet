@@ -45,12 +45,14 @@ class _View extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const header = TextStyle(fontSize: 14, fontWeight: FontWeight.w500);
-    Color? color = header.color;
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
+    final header = typography.bodyMedium;
+    Color color = colors.textSecondary;
     if (diff > 0) {
-      color = theme.custom.increaseColor;
+      color = colors.success;
     } else if (diff < 0) {
-      color = theme.custom.decreaseColor;
+      color = colors.danger;
     }
 
     final double maxWidth = min(220, screenWidth - 190);
@@ -67,10 +69,7 @@ class _View extends StatelessWidget {
           maxWidth: maxWidth,
           child: SvgPicture.asset(
             '$assetsPath/others/round_question_mark.svg',
-            colorFilter: ColorFilter.mode(
-              Theme.of(context).textTheme.bodySmall?.color ?? Colors.white,
-              BlendMode.srcIn,
-            ),
+            colorFilter: ColorFilter.mode(colors.textTertiary, BlendMode.srcIn),
           ),
         ),
         const Spacer(),

@@ -2,11 +2,7 @@ import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class ActionButton extends StatefulWidget {
-  const ActionButton({
-    required this.child,
-    required this.onTap,
-    super.key,
-  });
+  const ActionButton({required this.child, required this.onTap, super.key});
 
   final void Function(Offset, Size) onTap;
   final Widget child;
@@ -41,7 +37,9 @@ class _ActionButton extends State<ActionButton> {
               decoration: BoxDecoration(
                 border: Border.all(
                   color: _hasFocus
-                      ? theme.custom.headerFloatBoxColor
+                      ? Theme.of(
+                          context,
+                        ).calmCoreCompatibility.headerFloatBoxColor
                       : Colors.transparent,
                 ),
                 borderRadius: BorderRadius.circular(10),

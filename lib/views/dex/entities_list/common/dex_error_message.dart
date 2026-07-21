@@ -1,3 +1,4 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -7,13 +8,18 @@ class DexErrorMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeData = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 70, 12, 70),
-      alignment: Alignment.topCenter,
-      child: Text(
-        LocaleKeys.dexErrorMessage.tr(),
-        style: TextStyle(color: themeData.colorScheme.error),
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 70, 12, 70),
+        alignment: Alignment.topCenter,
+        child: Text(
+          LocaleKeys.dexErrorMessage.tr(),
+          textAlign: TextAlign.center,
+          style: typography.bodyMedium.copyWith(color: colors.danger),
+        ),
       ),
     );
   }

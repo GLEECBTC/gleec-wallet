@@ -35,16 +35,12 @@ class _OrderbookTableItemState extends State<OrderbookTableItem> {
   void initState() {
     final coinsRepository = RepositoryProvider.of<CoinsRepo>(context);
     _isPreview = widget.order.uuid == orderPreviewUuid;
-    _isTradeWithSelf = widget.order.address ==
+    _isTradeWithSelf =
+        widget.order.address ==
         coinsRepository.getCoin(widget.order.rel)?.address;
-    _style = const TextStyle(fontSize: 11, fontWeight: FontWeight.w500);
-    _color = _isPreview
-        ? theme.custom.targetColor
-        : widget.order.direction == OrderDirection.ask
-            ? theme.custom.asksColor
-            : theme.custom.bidsColor;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       setState(() {
         _scale = 1;
       });
@@ -54,10 +50,25 @@ class _OrderbookTableItemState extends State<OrderbookTableItem> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
+    _style = typography.tabularAmountCompact.copyWith(fontSize: 12);
+    _color = _isPreview
+        ? colors.brand
+        : widget.order.direction == OrderDirection.ask
+        ? colors.danger
+        : colors.success;
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (_isPreview) {
+      final motion = GleecMotion.of(context);
       return AnimatedScale(
-        duration: const Duration(milliseconds: 200),
+        duration: motion.resolve(context, motion.standard),
+        curve: motion.standardCurve,
         scale: _scale,
         child: _buildItem(),
       );
@@ -70,7 +81,7 @@ class _OrderbookTableItemState extends State<OrderbookTableItem> {
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: GleecGeometry.of(context).borderRadius12,
         onTap: widget.onClick == null || _isPreview
             ? null
             : () {
@@ -93,22 +104,14 @@ class _OrderbookTableItemState extends State<OrderbookTableItem> {
     if (_isTradeWithSelf) {
       return Positioned(
         left: 2,
-        child: Icon(
-          Icons.circle,
-          size: 4,
-          color: _color,
-        ),
+        child: Icon(Icons.circle, size: 4, color: _color),
       );
     }
 
     if (_isPreview || widget.isSelected) {
       return Positioned(
         left: 0,
-        child: Icon(
-          Icons.forward,
-          size: 8,
-          color: _color,
-        ),
+        child: Icon(Icons.forward, size: 8, color: _color),
       );
     }
 
@@ -119,47 +122,48 @@ class _OrderbookTableItemState extends State<OrderbookTableItem> {
     return FractionallySizedBox(
       widthFactor: widget.volumeFraction,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 21),
-        child: Container(
-          color: _color.withValues(alpha: 0.1),
-        ),
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Container(color: _color.withValues(alpha: 0.1)),
       ),
     );
   }
 
   Widget _buildTextData() {
-    return Container(
-      decoration: BoxDecoration(
-        border: _isPreview
-            ? Border(
-                bottom: BorderSide(
-                  width: 0.5,
-                  color: _color.withValues(alpha: 0.3),
-                ),
-                top: BorderSide(
-                  width: 0.5,
-                  color: _color.withValues(alpha: 0.3),
-                ),
-              )
-            : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          const SizedBox(width: 10),
-          Expanded(
-            child: AutoScrollText(
-              text: widget.order.price.toDouble().toStringAsFixed(8),
-              style: _style.copyWith(color: _color),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Container(
+        decoration: BoxDecoration(
+          border: _isPreview
+              ? Border(
+                  bottom: BorderSide(
+                    width: 0.5,
+                    color: _color.withValues(alpha: 0.3),
+                  ),
+                  top: BorderSide(
+                    width: 0.5,
+                    color: _color.withValues(alpha: 0.3),
+                  ),
+                )
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            const SizedBox(width: 10),
+            Expanded(
+              child: AutoScrollText(
+                text: widget.order.price.toDouble().toStringAsFixed(8),
+                style: _style.copyWith(color: _color),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(formatAmt(widget.order.maxVolume.toDouble()),
-              style: _style.copyWith(
-                color: _isPreview ? _color : null,
-              )),
-          const SizedBox(width: 4),
-        ],
+            const SizedBox(width: 10),
+            Text(
+              formatAmt(widget.order.maxVolume.toDouble()),
+              style: _style.copyWith(color: _isPreview ? _color : null),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
       ),
     );
   }

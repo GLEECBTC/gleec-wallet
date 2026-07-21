@@ -1,12 +1,7 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class UiTooltip extends StatelessWidget {
-  const UiTooltip({
-    required this.message,
-    required this.child,
-    super.key,
-  });
+  const UiTooltip({required this.message, required this.child, super.key});
 
   final String message;
   final Widget child;
@@ -17,7 +12,7 @@ class UiTooltip extends StatelessWidget {
       message: message,
       preferBelow: false,
       decoration: BoxDecoration(
-        color: theme.currentGlobal.colorScheme.surface,
+        color: Theme.of(context).colorScheme.surface,
         boxShadow: const [
           BoxShadow(
             color: Colors.black12,

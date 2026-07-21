@@ -32,34 +32,35 @@ class SwapDetailsStep extends StatelessWidget {
   final String? txHash;
   final Coin? coin;
 
-  Color get _circleColor {
+  Color _circleColor(GleecColorTokens colors) {
     if (isFailedStep) {
-      return theme.custom.tradingDetailsTheme.swapStepCircleFailedColor;
+      return colors.danger;
     }
     if (isDisabled) {
-      return theme.custom.tradingDetailsTheme.swapStepCircleDisabledColor;
+      return colors.borderStrong;
     }
-
-    return theme.custom.tradingDetailsTheme.swapStepCircleNormalColor;
+    if (isProcessedStep) return colors.success;
+    return colors.brand;
   }
 
-  Color get _textColor {
+  Color _textColor(GleecColorTokens colors) {
     if (isFailedStep) {
-      return theme.custom.tradingDetailsTheme.swapStepTextFailedColor;
+      return colors.danger;
     }
     if (isDisabled) {
-      return theme.custom.tradingDetailsTheme.swapStepTextDisabledColor;
+      return colors.textTertiary;
     }
     if (isCurrentStep) {
-      return theme.custom.tradingDetailsTheme.swapStepTextCurrentColor;
+      return colors.brand;
     }
-
-    return const Color.fromRGBO(106, 77, 227, 1);
+    return colors.textPrimary;
   }
 
   @override
   Widget build(BuildContext context) {
     final ThemeData themeData = Theme.of(context);
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
     final String? txHash = this.txHash;
     final Coin? coin = this.coin;
 
@@ -75,7 +76,7 @@ class SwapDetailsStep extends StatelessWidget {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: _circleColor,
+                  color: _circleColor(colors),
                   shape: BoxShape.circle,
                 ),
                 child: Padding(
@@ -95,7 +96,7 @@ class SwapDetailsStep extends StatelessWidget {
                   height: 40,
                   width: 1,
                   color: isProcessedStep
-                      ? theme.custom.progressBarPassedColor
+                      ? colors.success
                       : themeData.textTheme.bodyMedium?.color?.withValues(
                               alpha: 0.3,
                             ) ??
@@ -108,22 +109,17 @@ class SwapDetailsStep extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.max,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: AutoScrollText(
-                        text: event,
-                        style: TextStyle(
-                          color: _textColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
+                    AutoScrollText(
+                      text: event,
+                      style: typography.labelLarge.copyWith(
+                        color: _textColor(colors),
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: 4.0),
+                      padding: const EdgeInsets.only(top: 4.0),
                       child: _buildAdditionalInfo(context),
                     ),
                   ],
@@ -140,24 +136,17 @@ class SwapDetailsStep extends StatelessWidget {
                           isTruncated: true,
                           fontSize: 11,
                           iconSize: 14,
-                          backgroundColor:
-                              theme.custom.specificButtonBackgroundColor,
+                          backgroundColor: colors.surfaceHighest,
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(left: 6.0, right: 10),
-                        child: Material(
-                          child: Tooltip(
-                            message: LocaleKeys.viewOnExplorer.tr(),
-                            child: InkWell(
-                              child: const Icon(
-                                Icons.open_in_browser,
-                                size: 20,
-                              ),
-                              onTap: () => launchURLString(
-                                getTxExplorerUrl(coin, txHash),
-                              ),
-                            ),
+                        child: Tooltip(
+                          message: LocaleKeys.viewOnExplorer.tr(),
+                          child: IconButton(
+                            icon: const Icon(Icons.open_in_browser, size: 20),
+                            onPressed: () =>
+                                launchURLString(getTxExplorerUrl(coin, txHash)),
                           ),
                         ),
                       ),
@@ -173,34 +162,24 @@ class SwapDetailsStep extends StatelessWidget {
   }
 
   Widget _buildAdditionalInfo(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final typography = GleecTypography.of(context);
     if (isFailedStep) {
       return SelectableText(
         LocaleKeys.swapDetailsStepStatusFailed.tr(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: _textColor,
-        ),
+        style: typography.bodySmall.copyWith(color: _textColor(colors)),
       );
     }
     if (isCurrentStep) {
       return SelectableText(
         LocaleKeys.swapDetailsStepStatusInProcess.tr(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: _textColor,
-        ),
+        style: typography.bodySmall.copyWith(color: _textColor(colors)),
       );
     }
     if (!isDisabled) {
       return SelectableText(
         _getTimeSpent(context),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
-          color: theme.custom.tradingDetailsTheme.swapStepTimerColor,
-        ),
+        style: typography.bodySmall.copyWith(color: colors.textTertiary),
       );
     }
     return const Text('');

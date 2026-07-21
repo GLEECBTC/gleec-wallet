@@ -41,13 +41,13 @@ class DexListFilterType<T> extends StatelessWidget {
 }
 
 class _DexListFilterTypeDesktop<T> extends StatelessWidget {
-  const _DexListFilterTypeDesktop(
-      {Key? key,
-      required this.values,
-      required this.selectedValues,
-      required this.onChange,
-      required this.title})
-      : super(key: key);
+  const _DexListFilterTypeDesktop({
+    Key? key,
+    required this.values,
+    required this.selectedValues,
+    required this.onChange,
+    required this.title,
+  }) : super(key: key);
 
   final List<DexListFilterTypeValue<T>> values;
   final List<T>? selectedValues;
@@ -57,27 +57,27 @@ class _DexListFilterTypeDesktop<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: Theme.of(context).brightness == Brightness.light
-          ? newThemeLight
-          : newThemeDark,
-      child: Builder(builder: (context) {
-        final ext = Theme.of(context).extension<ColorSchemeExtension>();
-        return MultiSelectDropdownButton<T>(
-          title: title,
-          items: values.map((e) => e.value).toList(),
-          displayItem: (p0) =>
-              values.firstWhere((element) => element.value == p0).label,
-          selectedItems: selectedValues,
-          onChanged: onChange,
-          colorScheme: UIChipColorScheme(
-            emptyContainerColor: ext?.surfCont,
-            emptyTextColor: ext?.s70,
-            pressedContainerColor: ext?.surfContLowest,
-            selectedContainerColor: ext?.primary,
-            selectedTextColor: ext?.surf,
-          ),
-        );
-      }),
+      data: Theme.of(context),
+      child: Builder(
+        builder: (context) {
+          final ext = Theme.of(context).extension<ColorSchemeExtension>();
+          return MultiSelectDropdownButton<T>(
+            title: title,
+            items: values.map((e) => e.value).toList(),
+            displayItem: (p0) =>
+                values.firstWhere((element) => element.value == p0).label,
+            selectedItems: selectedValues,
+            onChanged: onChange,
+            colorScheme: UIChipColorScheme(
+              emptyContainerColor: ext?.surfCont,
+              emptyTextColor: ext?.s70,
+              pressedContainerColor: ext?.surfContLowest,
+              selectedContainerColor: ext?.primary,
+              selectedTextColor: ext?.surf,
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -106,10 +106,7 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ),
         Expanded(
@@ -126,15 +123,23 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
     );
   }
 
-  Widget _buildItem(final List<DexListFilterTypeValue<T>> values, String label,
-      BuildContext context) {
+  Widget _buildItem(
+    final List<DexListFilterTypeValue<T>> values,
+    String label,
+    BuildContext context,
+  ) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    final typography = GleecTypography.of(context);
     const double borderWidth = 2.0;
     const double topPadding = 6.0;
     final selectedValues = this.selectedValues;
-    final bool isSelected = selectedValues != null &&
+    final bool isSelected =
+        selectedValues != null &&
         selectedValues.length == values.length &&
-        selectedValues
-            .every((sv) => values.where((v) => v.value == sv).isNotEmpty);
+        selectedValues.every(
+          (sv) => values.where((v) => v.value == sv).isNotEmpty,
+        );
 
     return Padding(
       padding: isSelected
@@ -148,19 +153,21 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
       child: InkWell(
         onTap: () => onChange(values.map((e) => e.value).toList()),
         child: Container(
+          constraints: BoxConstraints(minHeight: geometry.minimumTapTarget),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
+            color: isSelected ? colors.selected : colors.surfaceHigh,
+            borderRadius: geometry.borderRadius16,
             border: isSelected
-                ? Border.all(
-                    color: theme.custom.defaultBorderButtonBorder, width: 2)
-                : null,
+                ? Border.all(color: colors.brand, width: 2)
+                : Border.all(color: colors.border),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+            textAlign: TextAlign.center,
+            style: typography.labelMedium.copyWith(
+              color: isSelected ? colors.brand : colors.textSecondary,
             ),
           ),
         ),
@@ -170,10 +177,7 @@ class _DexListFilterTypeMobile<T> extends StatelessWidget {
 }
 
 class DexListFilterTypeValue<T> {
-  DexListFilterTypeValue({
-    required this.label,
-    required this.value,
-  });
+  DexListFilterTypeValue({required this.label, required this.value});
   final String label;
   final T value;
 }

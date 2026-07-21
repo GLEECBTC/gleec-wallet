@@ -10,7 +10,6 @@ import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/bloc/taker_form/taker_state.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/ui/ui_light_button.dart';
 import 'package:web_dex/shared/widgets/connect_wallet/connect_wallet_wrapper.dart';
@@ -78,7 +77,9 @@ class _FormControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth - 32),
+      constraints: BoxConstraints(
+        maxWidth: Theme.of(context).calmCoreCompatibility.dexFormWidth - 32,
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -88,7 +89,7 @@ class _FormControls extends StatelessWidget {
             child: ConnectWalletWrapper(
               key: const Key('connect-wallet-taker-form'),
               eventType: WalletsManagerEventType.dex,
-              buttonSize: Size(112, isMobile ? 52 : 40),
+              buttonSize: const Size(112, 48),
               child: const TradeButton(),
             ),
           ),
@@ -105,7 +106,7 @@ class ResetSwapFormButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return UiLightButton(
       width: 112,
-      height: isMobile ? 52 : 40,
+      height: 48,
       text: LocaleKeys.clear.tr(),
       onPressed: () => context.read<TakerBloc>().add(TakerClear()),
     );
@@ -148,17 +149,11 @@ class TradeButton extends StatelessWidget {
                     ? LocaleKeys.swapNow.tr()
                     : LocaleKeys.tradingDisabled.tr(),
                 prefix: inProgress ? const TradeButtonSpinner() : null,
-                child: _DexTradeButtonContent(
-                  text: isTradingEnabled
-                      ? LocaleKeys.swapNow.tr()
-                      : LocaleKeys.tradingDisabled.tr(),
-                  prefix: inProgress ? const TradeButtonSpinner() : null,
-                ),
                 onPressed: disabled || !isTradingEnabled
                     ? null
                     : () =>
                           context.read<TakerBloc>().add(TakerFormSubmitClick()),
-                height: isMobile ? 52 : 40,
+                height: 48,
               ),
             );
           },
@@ -179,31 +174,10 @@ class TradeButtonSpinner extends StatelessWidget {
         width: 10,
         height: 10,
         strokeWidth: 1,
-        color: theme.custom.defaultGradientButtonTextColor,
+        color: Theme.of(
+          context,
+        ).calmCoreCompatibility.defaultGradientButtonTextColor,
       ),
-    );
-  }
-}
-
-class _DexTradeButtonContent extends StatelessWidget {
-  const _DexTradeButtonContent({required this.text, this.prefix});
-
-  final String text;
-  final Widget? prefix;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (prefix != null) prefix!,
-        Flexible(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(text, maxLines: 1, textAlign: TextAlign.center),
-          ),
-        ),
-      ],
     );
   }
 }

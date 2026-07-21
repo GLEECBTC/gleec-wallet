@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "captureDefinitions": {
+    "workbench_canvas": "A QA-workbench screenshot containing a wallet canvas configured to the named width; the PNG dimensions describe the outer capture, not the canvas.",
+    "raw_viewport": "A direct browser screenshot whose PNG dimensions exactly equal the named CSS viewport."
+  },
+  "rawViewportCaptures": [
+    {
+      "file": "19-raw-viewport-entry-390x844-dark.png",
+      "surface": "Swap entry",
+      "width": 390,
+      "height": 844,
+      "theme": "dark"
+    },
+    {
+      "file": "20-raw-viewport-activity-attention-390x844-dark.png",
+      "surface": "Activity needs attention",
+      "width": 390,
+      "height": 844,
+      "theme": "dark"
+    },
+    {
+      "file": "21-raw-viewport-recovery-ambiguous-390x844-dark.png",
+      "surface": "Ambiguous recovery",
+      "width": 390,
+      "height": 844,
+      "theme": "dark"
+    }
+  ],
+  "correctedLegacyExtensions": [
+    "01-entry-390-dark.jpg",
+    "02-review-1440-dark.jpg",
+    "03-recipient-390-light-200.jpg",
+    "04-progress-signed-no-cancel.jpg",
+    "05-activity-needs-attention.jpg",
+    "06-recovery-ambiguous-broadcast.jpg",
+    "07-options-128-stress.jpg",
+    "08-timeline-17-stress.jpg"
+  ]
+}

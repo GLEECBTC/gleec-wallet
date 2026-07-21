@@ -17,7 +17,7 @@ class MakerFormSellHeader extends StatelessWidget {
     return DexFormGroupHeader(
       title: LocaleKeys.sell.tr(),
       actions: const [
-        Flexible(child: _AvailableBalance()),
+        _AvailableBalance(),
         SizedBox(width: 8),
         _HalfMaxButtons(),
       ],
@@ -32,19 +32,21 @@ class _AvailableBalance extends StatelessWidget {
   Widget build(BuildContext context) {
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     return StreamBuilder<Rational?>(
-        initialData: makerFormBloc.maxSellAmount,
-        stream: makerFormBloc.outMaxSellAmount,
-        builder: (context, snapshot) {
-          return StreamBuilder<AvailableBalanceState?>(
-              initialData: makerFormBloc.availableBalanceState,
-              stream: makerFormBloc.outAvailableBalanceState,
-              builder: (context, state) {
-                return AvailableBalance(
-                  snapshot.data,
-                  state.data ?? AvailableBalanceState.initial,
-                );
-              });
-        });
+      initialData: makerFormBloc.maxSellAmount,
+      stream: makerFormBloc.outMaxSellAmount,
+      builder: (context, snapshot) {
+        return StreamBuilder<AvailableBalanceState?>(
+          initialData: makerFormBloc.availableBalanceState,
+          stream: makerFormBloc.outAvailableBalanceState,
+          builder: (context, state) {
+            return AvailableBalance(
+              snapshot.data,
+              state.data ?? AvailableBalanceState.initial,
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -55,32 +57,31 @@ class _HalfMaxButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     return StreamBuilder<Rational?>(
-        initialData: makerFormBloc.maxSellAmount,
-        stream: makerFormBloc.outMaxSellAmount,
-        builder: (context, snapshot) {
-          return Row(
-            children: [
-              _MaxButton(),
-              const SizedBox(width: 3),
-              _HalfButton(),
-            ],
-          );
-        });
+      initialData: makerFormBloc.maxSellAmount,
+      stream: makerFormBloc.outMaxSellAmount,
+      builder: (context, snapshot) {
+        return Row(
+          children: [_MaxButton(), const SizedBox(width: 3), _HalfButton()],
+        );
+      },
+    );
   }
 }
 
 class _MaxButton extends DexSmallButton {
   _MaxButton()
-      : super(
-            LocaleKeys.max.tr(),
-            (context) => RepositoryProvider.of<MakerFormBloc>(context)
-                .setMaxSellAmount());
+    : super(
+        LocaleKeys.max.tr(),
+        (context) =>
+            RepositoryProvider.of<MakerFormBloc>(context).setMaxSellAmount(),
+      );
 }
 
 class _HalfButton extends DexSmallButton {
   _HalfButton()
-      : super(
-            LocaleKeys.half.tr(),
-            (context) => RepositoryProvider.of<MakerFormBloc>(context)
-                .setHalfSellAmount());
+    : super(
+        LocaleKeys.half.tr(),
+        (context) =>
+            RepositoryProvider.of<MakerFormBloc>(context).setHalfSellAmount(),
+      );
 }

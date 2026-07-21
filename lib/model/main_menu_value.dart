@@ -4,12 +4,14 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 enum MainMenuValue {
   wallet,
   dex,
+  card,
   fiat,
   bridge,
   marketMakerBot,
   nft,
   settings,
   support,
+  more,
   none;
 
   static MainMenuValue defaultMenu() => MainMenuValue.wallet;
@@ -27,10 +29,12 @@ enum MainMenuValue {
       case MainMenuValue.marketMakerBot:
         return true;
       case MainMenuValue.wallet:
+      case MainMenuValue.card:
       case MainMenuValue.fiat:
       case MainMenuValue.nft:
       case MainMenuValue.settings:
       case MainMenuValue.support:
+      case MainMenuValue.more:
         return false;
       case MainMenuValue.none:
         return false;
@@ -47,6 +51,8 @@ enum MainMenuValue {
         return LocaleKeys.swap.tr();
       case MainMenuValue.bridge:
         return LocaleKeys.bridge.tr();
+      case MainMenuValue.card:
+        return LocaleKeys.card.tr();
       case MainMenuValue.marketMakerBot:
         return LocaleKeys.tradingBot.tr();
       case MainMenuValue.nft:
@@ -55,6 +61,8 @@ enum MainMenuValue {
         return LocaleKeys.settings.tr();
       case MainMenuValue.support:
         return LocaleKeys.support.tr();
+      case MainMenuValue.more:
+        return LocaleKeys.more.tr();
       case MainMenuValue.none:
         return '';
     }
@@ -68,7 +76,9 @@ enum MainMenuValue {
       case MainMenuValue.support:
       case MainMenuValue.none:
       case MainMenuValue.bridge:
+      case MainMenuValue.more:
         return false;
+      case MainMenuValue.card:
       case MainMenuValue.fiat:
       case MainMenuValue.marketMakerBot:
       case MainMenuValue.nft:
@@ -82,18 +92,22 @@ enum MainMenuValue {
         return 0;
       case MainMenuValue.dex:
         return 1;
-      case MainMenuValue.fiat:
+      case MainMenuValue.card:
         return 2;
-      case MainMenuValue.bridge:
+      case MainMenuValue.fiat:
         return 3;
-      case MainMenuValue.nft:
+      case MainMenuValue.more:
         return 4;
-      case MainMenuValue.settings:
+      case MainMenuValue.bridge:
         return 5;
+      case MainMenuValue.nft:
+        return 6;
+      case MainMenuValue.settings:
+        return 7;
       case MainMenuValue.marketMakerBot:
-        return 6;
+        return 8;
       case MainMenuValue.support:
-        return 6;
+        return 9;
       case MainMenuValue.none:
         return 0;
     }

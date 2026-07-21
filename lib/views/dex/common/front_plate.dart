@@ -9,25 +9,28 @@ class FrontPlate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderRadius = BorderRadius.circular(18);
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
+    final borderRadius = geometry.borderRadius20;
     final shadow = BoxShadow(
-      color: Colors.black.withValues(alpha: 0.25),
+      color: colors.shadow,
       spreadRadius: 0,
-      blurRadius: 4,
-      offset: const Offset(0, 4),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
     );
     return Container(
-      constraints: const BoxConstraints(minHeight: 36, minWidth: 36),
+      constraints: BoxConstraints(
+        minHeight: geometry.minimumTapTarget,
+        minWidth: geometry.minimumTapTarget,
+      ),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: dexPageColors.frontPlateInner,
+        color: colors.surfaceHigh,
+        border: Border.all(color: colors.border),
         borderRadius: borderRadius,
         boxShadow: shadowEnabled ? [shadow] : null,
       ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: child,
-      ),
+      child: ClipRRect(borderRadius: borderRadius, child: child),
     );
   }
 }

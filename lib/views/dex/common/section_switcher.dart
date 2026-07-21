@@ -9,14 +9,17 @@ import 'package:web_dex/views/dex/common/dex_text_button.dart';
 class SectionSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final geometry = GleecGeometry.of(context);
     return Container(
-      constraints: BoxConstraints(maxWidth: theme.custom.dexFormWidth),
-      padding: const EdgeInsets.only(bottom: 4),
+      constraints: BoxConstraints(
+        maxWidth: Theme.of(context).calmCoreCompatibility.dexFormWidth,
+      ),
+      padding: EdgeInsets.only(bottom: geometry.space4),
       child: Row(
         children: [
-          _TakerBtn(),
-          const SizedBox(width: 12),
-          _MakerBtn(),
+          Expanded(child: _TakerBtn()),
+          SizedBox(width: geometry.space8),
+          Expanded(child: _MakerBtn()),
         ],
       ),
     );

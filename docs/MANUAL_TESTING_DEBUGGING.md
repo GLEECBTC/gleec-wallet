@@ -27,6 +27,44 @@ File structure example bellow:
 
 [Manual testing plan](https://docs.google.com/spreadsheets/d/1EiFwI00VJFj5lRm-x-ybRoV8r17EW3GnhzTBR628XjM/edit#gid=0)
 
+### Gnosis Pay mocked onboarding
+
+The Gnosis Pay mock still uses genuine KDF signing. Before testing on
+macOS/Linux, run `test_harness/gnosis_card/link_local_kdf.sh`, start a wallet
+with GNO/KDF ready, and launch the app with:
+
+```sh
+flutter run \
+  --dart-define=GNOSIS_CARD_MODE=mock \
+  --dart-define=GNOSIS_CARD_SCENARIO=happyPath \
+  --dart-define=GNOSIS_CARD_COIN=GNO
+```
+
+Perform these focused checks at both a narrow phone width and a desktop width:
+
+1. Complete SIWE, email/terms, external KYC return, source of funds, phone OTP
+   (`123456`), and Safe setup. Confirm the four milestones update and `/card`
+   resumes at the first incomplete action after navigating away and back.
+2. Choose a virtual card and confirm it becomes active without address,
+   payment, or PIN screens.
+3. Restart and choose a physical card. Confirm same-country address validation,
+   order review, the explicit **simulated payment** warning, PSE handoff, and
+   completion. Confirm no wallet balance changes and no transaction is signed
+   or broadcast.
+4. Cancel the PSE handoff and revisit `/card`; PIN setup must resume without
+   exposing or retaining a PIN in Flutter.
+5. Run each value in the scenario table in
+   `docs/GNOSIS_PAY_CARD_ARCHITECTURE.md`. Confirm retryable scenarios fail
+   once and resume without losing completed work, while `kycRejected` and
+   `kycRequiresAction` expose the external support path.
+6. Check keyboard traversal, screen-reader labels/status announcements, large
+   text, and that legal, Sumsub, support, and PSE content remains external.
+
+Mock mode must be rejected in release builds, and unconfigured live mode must
+remain disabled. Per repository guidance, do not run the currently failing
+unit or integration suites; use `flutter analyze`, preview inspection, and
+static review for this milestone.
+
 ## Debugging web version on desktop
 
 ## HTTP

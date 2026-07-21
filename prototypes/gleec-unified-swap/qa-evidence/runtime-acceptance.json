@@ -1,0 +1,175 @@
+{
+  "artifact": {
+    "file": "gleec-unified-swap.html",
+    "sha256": "cefd8117e0b36ab22216b013319e9812c01561b1e83792a841382ad60d0d1537",
+    "bytes": 299524,
+    "date": "2026-07-19"
+  },
+  "result": "passed",
+  "staticVerification": {
+    "passed": 134,
+    "warnings": 0,
+    "failed": 0
+  },
+  "fixtureAssertions": {
+    "passed": 63,
+    "total": 63
+  },
+  "prototypeJourneys": {
+    "passed": 10,
+    "total": 10,
+    "customerActions": 35,
+    "systemTransitions": 5,
+    "journeys": [
+      "same-chain swap",
+      "cross-chain swap",
+      "external recipient",
+      "comparison and material quote update",
+      "exact approval and allowance reset",
+      "mixed route",
+      "leave and resume through Activity",
+      "different-token recovery",
+      "refund tracking and completion",
+      "manual recovery with gated revoke"
+    ]
+  },
+  "browserAcceptance": {
+    "result": "passed",
+    "artifactSha256": "9a19d232c2fdb0f71ab044cf772a6fbfbb57741d71b3a86b0dea6abe385fd59b",
+    "date": "2026-07-18",
+    "consoleWarnings": 0,
+    "consoleErrors": 0,
+    "scenarios": [
+      "Checking resolves to ready route options",
+      "timeout, offline, and expired quotes expose working retry paths",
+      "the latest amount edit wins over stale quote results",
+      "picker and navigation preserve still-valid quote work, which completes while hidden and is ready on return",
+      "Max and validation use the selected lower-balance source address",
+      "recipient and asset changes request fresh quotes",
+      "recovery requests a fresh quote",
+      "picker and Activity loaders enter and clear busy state",
+      "Review preflight succeeds and failed revalidation recovers without stale submission",
+      "200% text remains usable",
+      "responsive light, dark, and reduced-motion modes remain usable",
+      "accessibility controls expose active state, reset, preserve focus, and synchronize with the toolbar"
+    ]
+  },
+  "closureVerification": {
+    "date": "2026-07-19",
+    "artifactSha256": "cefd8117e0b36ab22216b013319e9812c01561b1e83792a841382ad60d0d1537",
+    "fullBrowserMatrixRerun": false,
+    "executableChecks": [
+      "KDF-authoritative Activity list/get fixture contract",
+      "full execution IDs and consent binding",
+      "canonical recovery holdings",
+      "privacy-safe analytics whitelist",
+      "clipboard success and failure announcements",
+      "raw viewport dimensions and evidence formats"
+    ]
+  },
+  "prototypeActivity": {
+    "authority": "KDF",
+    "listMethod": "experimental::trade_route::list_executions",
+    "getMethod": "experimental::trade_route::get_execution",
+    "fixtureStorage": "in-memory",
+    "durable": false
+  },
+  "quoteController": {
+    "intentVersioning": true,
+    "checkingResolvesToReady": true,
+    "latestIntentWins": true,
+    "navigationAndPickerPreserveValidWork": true,
+    "busyClearsOnTerminalStates": true,
+    "retryStatesVerified": ["timeout", "offline", "expired"],
+    "selectedSourceBalanceValidation": true,
+    "freshQuoteAfterRecovery": true
+  },
+  "review": {
+    "compactTransferSummary": true,
+    "decisionCriticalFactsRemainVisible": true,
+    "progressiveDisclosureSections": ["Costs & protection", "Route & identities"],
+    "stickyActionFooter": true,
+    "preflightRevalidation": true,
+    "failedRevalidationRecovery": true
+  },
+  "brand": {
+    "combinedIconAndWordmark": true,
+    "themeAwareWordmark": true
+  },
+  "responsive": {
+    "trueWidthCanvases": [375, 390, 768, 1024, 1440],
+    "horizontalOverflowFailures": 0,
+    "mobileNavigationPersistent": true,
+    "mobileCtaNavigationOverlapPixels": 0,
+    "largeTextNavigationLabelsVisible": true
+  },
+  "accessibility": {
+    "minimumTargetPixels": 48,
+    "targetFailures": 0,
+    "rovingCompositeFocus": true,
+    "fieldSpecificValidation": true,
+    "focusEntryAndReturn": true,
+    "modalFocusTrap": true,
+    "reducedMotionVerified": true,
+    "terminalBusySemantics": true,
+    "controlledTestGroups": true,
+    "activeStateExposed": true,
+    "resetVerified": true,
+    "focusPreservedAcrossControlRerenders": true,
+    "toolbarSynchronization": true,
+    "largeText200PercentVerified": true,
+    "contrast": {
+      "dark": {
+        "body": 17.21,
+        "tertiary": 8.45,
+        "quote": 9.13,
+        "primaryAction": 4.87,
+        "link": 4.68,
+        "controlBoundary": 3.68
+      },
+      "light": {
+        "body": 19.51,
+        "tertiary": 6.3,
+        "quote": 6.3,
+        "primaryAction": 4.87,
+        "link": 7.15,
+        "controlBoundary": 3.79
+      }
+    }
+  },
+  "stress": {
+    "retainedCandidates": 128,
+    "initiallyVisibleCandidates": 4,
+    "expandedTabStops": 1,
+    "mixedRouteStages": 17,
+    "collapsedCompletedStages": 12
+  },
+  "screenshots": [
+    "01-entry-crosschain-390-dark.png",
+    "02-review-crosschain-1440-dark.png",
+    "03-recipient-confirm-390-light-200.png",
+    "04-signed-reconciliation-390-dark.png",
+    "05-activity-needs-attention-390-dark.png",
+    "06-ambiguous-location-390-dark.png",
+    "07-options-stress-128-1440-dark.png",
+    "08-timeline-stress-17-390-dark.png",
+    "09-entry-375-light.png",
+    "10-entry-768-dark.png",
+    "11-review-1024-light.png",
+    "12-progress-390-dark-reduced-motion.png",
+    "13-entry-checking-390-dark.png",
+    "14-entry-route-options-after-check-390-dark.png",
+    "15-entry-timeout-retry-390-light.png",
+    "16-review-390-dark.png",
+    "17-review-390-light-200.png",
+    "18-accessibility-controls-active-1440-light-200-reduced.png",
+    "19-raw-viewport-entry-390x844-dark.png",
+    "20-raw-viewport-activity-attention-390x844-dark.png",
+    "21-raw-viewport-recovery-ambiguous-390x844-dark.png"
+  ],
+  "evidenceManifest": "manifest.json",
+  "productionGates": {
+    "kdfTypedExecutionContractsComplete": false,
+    "moderatedFiveUserStudyComplete": false
+  }
+}

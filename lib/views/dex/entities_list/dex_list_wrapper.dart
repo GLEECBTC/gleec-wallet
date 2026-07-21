@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/trading_kind/trading_kind_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/dex_list_type.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/model/trading_entities_filter.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/dex_list_filter/desktop/dex_list_filter_desktop.dart';
 import 'package:web_dex/views/dex/dex_list_filter/mobile/dex_list_filter_mobile.dart';
 import 'package:web_dex/views/dex/dex_list_filter/mobile/dex_list_header_mobile.dart';
@@ -33,8 +33,9 @@ class _DexListWrapperState extends State<DexListWrapper> {
   bool _isFilterShown = false;
   DexListType? previouseType;
 
-  final TradingKindBloc tradingKindBloc =
-      TradingKindBloc(TradingKindState.initial());
+  final TradingKindBloc tradingKindBloc = TradingKindBloc(
+    TradingKindState.initial(),
+  );
 
   @override
   void initState() {
@@ -55,8 +56,9 @@ class _DexListWrapperState extends State<DexListWrapper> {
       if (type.isNotEmpty ||
           (routingState.dexState.fromCurrency.isNotEmpty ||
               routingState.dexState.toCurrency.isNotEmpty)) {
-        tradingKindBloc
-            .setKind(type == 'taker' ? TradingKind.taker : TradingKind.maker);
+        tradingKindBloc.setKind(
+          type == 'taker' ? TradingKind.taker : TradingKind.maker,
+        );
       }
     }
   }
@@ -81,25 +83,30 @@ class _DexListWrapperState extends State<DexListWrapper> {
             onSwapItemClick: _onSwapItemClick,
             isTaker: isTaker,
           );
-          return isMobile
-              ? _MobileWidget(
-                  key: const Key('dex-list-wrapper-mobile'),
-                  type: widget.listType,
-                  filterData: filter,
-                  onApplyFilter: _setFilter,
-                  isFilterShown: _isFilterShown,
-                  onFilterTap: () => setState(() {
-                    _isFilterShown = !_isFilterShown;
-                  }),
-                  child: child,
-                )
-              : _DesktopWidget(
-                  key: const Key('dex-list-wrapper-desktop'),
-                  type: widget.listType,
-                  filterData: filter,
-                  onApplyFilter: _setFilter,
-                  child: child,
-                );
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final spec = DexResponsiveSpec.fromWidth(constraints.maxWidth);
+              return spec.usesMobileLists
+                  ? _MobileWidget(
+                      key: const Key('dex-list-wrapper-mobile'),
+                      type: widget.listType,
+                      filterData: filter,
+                      onApplyFilter: _setFilter,
+                      isFilterShown: _isFilterShown,
+                      onFilterTap: () => setState(() {
+                        _isFilterShown = !_isFilterShown;
+                      }),
+                      child: child,
+                    )
+                  : _DesktopWidget(
+                      key: const Key('dex-list-wrapper-desktop'),
+                      type: widget.listType,
+                      filterData: filter,
+                      onApplyFilter: _setFilter,
+                      child: child,
+                    );
+            },
+          );
         },
       ),
     );
@@ -133,9 +140,7 @@ class _DexListWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (type) {
       case DexListType.orders:
-        return OrdersList(
-          entitiesFilterData: filter,
-        );
+        return OrdersList(entitiesFilterData: filter);
       case DexListType.inProgress:
         return InProgressList(
           entitiesFilterData: filter,
@@ -178,9 +183,7 @@ class _MobileWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 16),
-          Flexible(
-            child: child,
-          ),
+          Flexible(child: child),
         ],
       );
     } else {

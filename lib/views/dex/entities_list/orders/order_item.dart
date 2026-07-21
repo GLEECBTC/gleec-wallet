@@ -1,16 +1,17 @@
+import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:rational/rational.dart';
 import 'package:vector_math/vector_math_64.dart' as vector_math;
 import 'package:web_dex/blocs/trading_entities_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/focusable_widget.dart';
+import 'package:web_dex/views/dex/common/dex_responsive.dart';
 import 'package:web_dex/views/dex/entities_list/common/buy_price_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/coin_amount_mobile.dart';
 import 'package:web_dex/views/dex/entities_list/common/count_down_timer.dart';
@@ -29,6 +30,8 @@ class OrderItem extends StatefulWidget {
 class _OrderItemState extends State<OrderItem> {
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     final order = widget.order;
     final String sellCoin = order.base;
     final Rational sellAmount = order.baseAmount;
@@ -42,63 +45,67 @@ class _OrderItemState extends State<OrderItem> {
     );
     final double fillProgress = tradingEntitiesBloc.getProgressFillSwap(order);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (isMobile)
-          Text(
-            tradingEntitiesBloc.getTypeString(isTaker),
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _protocolColor,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = DexResponsiveSpec.fromWidth(
+          constraints.maxWidth,
+        ).usesMobileLists;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isCompact)
+              Text(
+                tradingEntitiesBloc.getTypeString(isTaker),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isTaker ? colors.info : colors.brand,
+                ),
+              ),
+            FocusableWidget(
+              onTap: () {
+                routingState.dexState.setDetailsAction(order.uuid);
+              },
+              borderRadius: geometry.borderRadius16,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  borderRadius: geometry.borderRadius16,
+                  color: colors.surfaceRaised,
+                  border: Border.all(color: colors.border),
+                ),
+                child: isCompact
+                    ? _OrderItemMobile(
+                        uuid: order.uuid,
+                        buyAmount: buyAmount,
+                        buyCoin: buyCoin,
+                        sellCoin: sellCoin,
+                        sellAmount: sellAmount,
+                        date: date,
+                        isTaker: isTaker,
+                        fillProgress: fillProgress,
+                        orderMatchingTime: orderMatchingTime,
+                        actions: widget.actions,
+                      )
+                    : _OrderItemDesktop(
+                        buyAmount: buyAmount,
+                        buyCoin: buyCoin,
+                        sellCoin: sellCoin,
+                        sellAmount: sellAmount,
+                        date: date,
+                        isTaker: isTaker,
+                        fillProgress: fillProgress,
+                        orderMatchingTime: orderMatchingTime,
+                        actions: widget.actions,
+                      ),
+              ),
             ),
-          ),
-        FocusableWidget(
-          onTap: () {
-            routingState.dexState.setDetailsAction(order.uuid);
-          },
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            child: isMobile
-                ? _OrderItemMobile(
-                    uuid: order.uuid,
-                    buyAmount: buyAmount,
-                    buyCoin: buyCoin,
-                    sellCoin: sellCoin,
-                    sellAmount: sellAmount,
-                    date: date,
-                    isTaker: isTaker,
-                    fillProgress: fillProgress,
-                    orderMatchingTime: orderMatchingTime,
-                    actions: widget.actions,
-                  )
-                : _OrderItemDesktop(
-                    buyAmount: buyAmount,
-                    buyCoin: buyCoin,
-                    sellCoin: sellCoin,
-                    sellAmount: sellAmount,
-                    date: date,
-                    isTaker: isTaker,
-                    fillProgress: fillProgress,
-                    orderMatchingTime: orderMatchingTime,
-                    actions: widget.actions,
-                  ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
-
-  Color get _protocolColor => widget.order.orderType == TradeSide.taker
-      ? const Color.fromRGBO(47, 179, 239, 1)
-      : const Color.fromRGBO(106, 77, 227, 1);
 }
 
 class _OrderItemDesktop extends StatelessWidget {
@@ -125,6 +132,7 @@ class _OrderItemDesktop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
@@ -161,9 +169,7 @@ class _OrderItemDesktop extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: isTaker
-                      ? const Color.fromRGBO(47, 179, 239, 1)
-                      : const Color.fromRGBO(106, 77, 227, 1),
+                  color: isTaker ? colors.info : colors.brand,
                 ),
               ),
               if (isTaker)
@@ -269,6 +275,8 @@ class _OrderItemMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = GleecColorTokens.of(context);
+    final geometry = GleecGeometry.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -301,8 +309,8 @@ class _OrderItemMobile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: const Color.fromRGBO(255, 255, 255, 1),
+                  borderRadius: geometry.borderRadius12,
+                  color: colors.surfaceHighest,
                 ),
                 child: CountDownTimer(orderMatchingTime: orderMatchingTime),
               )
@@ -354,8 +362,9 @@ class _OrderItemMobile extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(6, 12, 6, 12),
             width: double.infinity,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(9),
-              color: Theme.of(context).colorScheme.surface,
+              borderRadius: geometry.borderRadius12,
+              color: colors.surfaceHigh,
+              border: Border.all(color: colors.border),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

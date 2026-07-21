@@ -1,10 +1,10 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/blocs/maker_form_bloc.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/views/dex/common/trading_amount_field.dart';
 import 'package:web_dex/views/dex/dex_helpers.dart';
 
 class MakerFormSellAmount extends StatelessWidget {
@@ -51,27 +51,25 @@ class _SellAmountFiat extends StatelessWidget {
         final amount = snapshot.data ?? Rational.zero;
 
         return StreamBuilder<Coin?>(
-            initialData: makerFormBloc.sellCoin,
-            stream: makerFormBloc.outSellCoin,
-            builder: (context, snapshot) {
-              final Coin? coin = snapshot.data;
-              if (coin == null) return const SizedBox();
+          initialData: makerFormBloc.sellCoin,
+          stream: makerFormBloc.outSellCoin,
+          builder: (context, snapshot) {
+            final Coin? coin = snapshot.data;
+            if (coin == null) return const SizedBox();
 
-              return Text(
-                getFormattedFiatAmount(context, coin.abbr, amount),
-                style: textStyle,
-              );
-            });
+            return Text(
+              getFormattedFiatAmount(context, coin.abbr, amount),
+              style: textStyle,
+            );
+          },
+        );
       },
     );
   }
 }
 
 class _SellAmountInput extends StatelessWidget {
-  _SellAmountInput({
-    Key? key,
-    required this.isEnabled,
-  }) : super(key: key);
+  _SellAmountInput({Key? key, required this.isEnabled}) : super(key: key);
 
   final bool isEnabled;
 
@@ -86,33 +84,11 @@ class _SellAmountInput extends StatelessWidget {
       builder: (context, snapshot) {
         formatAmountInput(_textController, makerFormBloc.sellAmount);
 
-        return SizedBox(
-          height: 20,
-          child: TextFormField(
-            key: const Key('maker-sell-amount-input'),
-            controller: _textController,
-            enabled: isEnabled,
-            textInputAction: TextInputAction.done,
-            textAlign: TextAlign.end,
-            inputFormatters: currencyInputFormatters,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: dexPageColors.activeText,
-                  decoration: TextDecoration.none,
-                ),
-            onChanged: (String value) {
-              makerFormBloc.setSellAmount(value);
-            },
-            decoration: const InputDecoration(
-              hintText: '0.00',
-              contentPadding: EdgeInsets.all(0),
-              fillColor: Colors.transparent,
-              focusColor: Colors.transparent,
-              hoverColor: Colors.transparent,
-            ),
-          ),
+        return TradingAmountField(
+          inputKey: const Key('maker-sell-amount-input'),
+          controller: _textController,
+          enabled: isEnabled,
+          onChanged: makerFormBloc.setSellAmount,
         );
       },
     );

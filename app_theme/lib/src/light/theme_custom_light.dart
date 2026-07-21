@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
+
+import '../calm_core/gleec_color_tokens.dart';
 import '../common/theme_custom_base.dart';
 
 class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
     implements ThemeCustomBase {
-  ThemeCustomLight();
+  ThemeCustomLight({GleecColorTokens colors = GleecColorTokens.light})
+    : _colors = colors;
+
+  final GleecColorTokens _colors;
 
   @override
-  late final Color suspendedBannerBackgroundColor;
+  Color get suspendedBannerBackgroundColor => _colors.canvas;
 
-  void initializeThemeDependentColors(ThemeData theme) {
-    suspendedBannerBackgroundColor = theme.colorScheme.onSurface;
-  }
+  void initializeThemeDependentColors(ThemeData theme) {}
 
   @override
   ThemeExtension<ThemeCustomLight> copyWith() {
-    return this;
+    return ThemeCustomLight(colors: _colors);
   }
 
   @override
@@ -23,13 +26,13 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
     double t,
   ) {
     if (other is! ThemeCustomLight) return this;
-    return this;
+    return ThemeCustomLight(colors: _colors.lerp(other._colors, t));
   }
 
   @override
-  final Color mainMenuItemColor = const Color.fromRGBO(69, 96, 120, 1);
+  Color get mainMenuItemColor => _colors.textSecondary;
   @override
-  final Color mainMenuSelectedItemColor = const Color(0xFF8C41FF);
+  Color get mainMenuSelectedItemColor => _colors.brand;
   @override
   final Color checkCheckboxColor = Colors.white;
   @override
@@ -48,13 +51,13 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
   @override
   final Color fiatAmountColor = const Color.fromRGBO(168, 177, 185, 1);
   @override
-  final Color headerFloatBoxColor = const Color(0xFF8C41FF);
+  Color get headerFloatBoxColor => _colors.brand;
   @override
-  final Color headerIconColor = const Color(0xFF8C41FF);
+  Color get headerIconColor => _colors.brand;
   @override
-  final Color buttonColorDefault = const Color.fromRGBO(245, 249, 255, 1);
+  Color get buttonColorDefault => _colors.surfaceHigh;
   @override
-  final Color buttonColorDefaultHover = const Color(0xFF8C41FF);
+  Color get buttonColorDefaultHover => _colors.brandHover;
   @override
   final Color buttonTextColorDefaultHover = const Color.fromRGBO(
     245,
@@ -65,9 +68,9 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
   @override
   final Color noColor = Colors.transparent;
   @override
-  final Color increaseColor = const Color(0xFF00C3AA);
+  Color get increaseColor => _colors.success;
   @override
-  final Color decreaseColor = const Color.fromRGBO(229, 33, 103, 1);
+  Color get decreaseColor => _colors.danger;
   @override
   final Color zebraDarkColor = const Color.fromRGBO(251, 251, 251, 1);
   @override
@@ -82,19 +85,9 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
     1,
   );
   @override
-  final Color simpleButtonBackgroundColor = const Color.fromRGBO(
-    0,
-    212,
-    170,
-    0.2,
-  );
+  Color get simpleButtonBackgroundColor => _colors.selected;
   @override
-  final Color disabledButtonBackgroundColor = const Color.fromRGBO(
-    0,
-    212,
-    170,
-    0.3,
-  );
+  Color get disabledButtonBackgroundColor => _colors.surfaceHighest;
   @override
   final Gradient authorizePageBackgroundColor = const RadialGradient(
     center: Alignment.bottomCenter,
@@ -108,19 +101,14 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
   @override
   final Color defaultGradientButtonTextColor = Colors.white;
   @override
-  final Color defaultCheckboxColor = const Color(0xFF8C41FF);
+  Color get defaultCheckboxColor => _colors.brand;
   @override
   final Gradient defaultSwitchColor = const LinearGradient(
     stops: [0, 93],
     colors: [Color(0xFF6B1FE0), Color(0xFF8C41FF)], // GLEEC purple gradient
   );
   @override
-  final Color settingsMenuItemBackgroundColor = const Color.fromRGBO(
-    245,
-    249,
-    255,
-    1,
-  );
+  Color get settingsMenuItemBackgroundColor => _colors.surfaceHigh;
   @override
   final Gradient userRewardBoxColor = const LinearGradient(
     begin: Alignment.topLeft,
@@ -129,18 +117,13 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
     stops: [0.05, 0.33],
   );
   @override
-  final Color rewardBoxShadowColor = const Color.fromRGBO(0, 0, 0, 0.1);
+  Color get rewardBoxShadowColor => _colors.shadow;
   @override
-  final Color defaultBorderButtonBorder = const Color(0xFF8C41FF);
+  Color get defaultBorderButtonBorder => _colors.controlBorder;
   @override
-  final Color successColor = const Color.fromRGBO(0, 192, 88, 1);
+  Color get successColor => _colors.success;
   @override
-  final Color defaultBorderButtonBackground = const Color.fromRGBO(
-    226,
-    234,
-    253,
-    1,
-  );
+  Color get defaultBorderButtonBackground => _colors.surfaceHigh;
   @override
   final Color defaultCircleButtonBackground = const Color.fromRGBO(
     222,
@@ -153,76 +136,80 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
   @override
   final Color protocolTypeColor = const Color(0xfffcbb80);
   @override
-  final CoinsManagerTheme coinsManagerTheme = const CoinsManagerTheme();
+  CoinsManagerTheme get coinsManagerTheme => CoinsManagerTheme(
+    searchFieldMobileBackgroundColor: _colors.surfaceHigh,
+    filtersPopupShadow: BoxShadow(blurRadius: 13, color: _colors.shadow),
+    filterPopupItemBorderColor: _colors.controlBorder,
+    listHeaderBorderColor: _colors.border,
+    listItemProtocolTextColor: _colors.textPrimary,
+    listItemZeroBalanceColor: _colors.textTertiary,
+  );
   @override
-  final DexPageTheme dexPageTheme = const DexPageTheme(
-    activeOrderFormTabColor: Color(0xFF8C41FF),
-    inactiveOrderFormTabColor: Color.fromRGBO(69, 96, 120, 1),
-    activeOrderFormTab: Color(0xFF8C41FF),
-    inactiveOrderFormTab: Color.fromRGBO(69, 96, 120, 1),
+  DexPageTheme get dexPageTheme => DexPageTheme(
+    takerLabelColor: _colors.info,
+    makerLabelColor: _colors.brandHover,
+    successfulSwapStatusColor: _colors.success,
+    failedSwapStatusColor: _colors.danger,
+    successfulSwapStatusBackgroundColor: _colors.successContainer,
+    activeOrderFormTabColor: _colors.brand,
+    inactiveOrderFormTabColor: _colors.textTertiary,
+    takerLabel: _colors.info,
+    makerLabel: _colors.brandHover,
+    successfulSwapStatus: _colors.success,
+    failedSwapStatus: _colors.danger,
+    successfulSwapStatusBackground: _colors.successContainer,
+    activeOrderFormTab: _colors.brand,
+    inactiveOrderFormTab: _colors.textTertiary,
     formPlateGradient: LinearGradient(
-      colors: [
-        Color.fromRGBO(134, 213, 255, 1),
-        Color.fromRGBO(178, 107, 255, 1),
-      ],
+      colors: [_colors.brandHover, _colors.brand],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
-    frontPlate: Color.fromRGBO(255, 255, 255, 1),
-    frontPlateInner: Color.fromRGBO(245, 245, 245, 1),
-    frontPlateBorder: Color.fromRGBO(208, 214, 237, 1),
-    activeText: Color(0xFF8C41FF),
-    inactiveText: Color.fromRGBO(69, 96, 120, 1),
-    blueText: Color(0xFF8C41FF),
-    smallButton: Color.fromRGBO(243, 245, 246, 1),
-    smallButtonText: Color.fromRGBO(69, 96, 120, 1),
-    pagePlateDivider: Color.fromRGBO(208, 214, 237, 1),
-    coinPlateDivider: Color.fromRGBO(208, 214, 237, 1),
-    formPlateDivider: Color.fromRGBO(208, 214, 237, 1),
-    emptyPlace: Color.fromRGBO(245, 249, 255, 1),
-    tokenName: Color.fromRGBO(69, 96, 120, 1),
-    expandMore: Color.fromRGBO(69, 96, 120, 1),
+    frontPlate: _colors.surfaceRaised,
+    frontPlateInner: _colors.surfaceHigh,
+    frontPlateBorder: _colors.border,
+    activeText: _colors.brand,
+    inactiveText: _colors.textTertiary,
+    blueText: _colors.brandHover,
+    smallButton: _colors.surfaceHigh,
+    smallButtonText: _colors.textSecondary,
+    pagePlateDivider: _colors.border,
+    coinPlateDivider: _colors.border,
+    formPlateDivider: _colors.border,
+    emptyPlace: _colors.surfaceHigh,
+    tokenName: _colors.textPrimary,
+    expandMore: _colors.textTertiary,
   );
   @override
-  final Color asksColor = const Color(0xffe52167);
+  Color get asksColor => _colors.danger;
   @override
-  final Color bidsColor = const Color(0xFF00C3AA);
+  Color get bidsColor => _colors.success;
   @override
-  final Color targetColor = Colors.orange;
+  Color get targetColor => _colors.pending;
   @override
   final double dexFormWidth = 480;
   @override
   final double dexInputWidth = 320;
   @override
-  final Color specificButtonBorderColor = const Color.fromRGBO(
-    237,
-    237,
-    237,
-    1,
-  );
+  Color get specificButtonBorderColor => _colors.controlBorder;
   @override
-  final Color specificButtonBackgroundColor = const Color.fromRGBO(
-    251,
-    251,
-    251,
-    1,
-  );
+  Color get specificButtonBackgroundColor => _colors.surfaceHigh;
   @override
-  final Color balanceColor = const Color(0xFF8C41FF);
+  Color get balanceColor => _colors.brand;
   @override
   final Color subBalanceColor = const Color.fromRGBO(124, 136, 171, 1);
   @override
-  final Color subCardBackgroundColor = const Color.fromRGBO(245, 249, 255, 1);
+  Color get subCardBackgroundColor => _colors.surfaceHigh;
   @override
   final Color lightButtonColor = const Color.fromRGBO(0, 212, 170, 0.12);
   @override
-  final Color filterItemBorderColor = const Color.fromRGBO(239, 239, 239, 1);
+  Color get filterItemBorderColor => _colors.border;
   @override
-  final Color warningColor = const Color.fromRGBO(229, 33, 103, 1);
+  Color get warningColor => _colors.danger;
   @override
   final Color progressBarColor = const Color.fromRGBO(69, 96, 120, 0.33);
   @override
-  final Color progressBarPassedColor = const Color(0xFF8C41FF);
+  Color get progressBarPassedColor => _colors.brand;
   @override
   final Color progressBarNotPassedColor = const Color.fromRGBO(
     194,
@@ -233,24 +220,19 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
   @override
   final Color dexSubTitleColor = const Color.fromRGBO(134, 148, 161, 1);
   @override
-  final Color tabBarShadowColor = const Color.fromRGBO(0, 0, 0, 0.08);
+  Color get tabBarShadowColor => _colors.shadow;
   @override
   final Color smartchainLabelBorderColor = const Color.fromRGBO(32, 22, 49, 1);
   @override
-  final Color mainMenuSelectedItemBackgroundColor = const Color(0xFFF0E6FF);
+  Color get mainMenuSelectedItemBackgroundColor => _colors.selected;
   @override
-  final Color selectedMenuBackgroundColor = const Color(0xFFF0E6FF);
+  Color get selectedMenuBackgroundColor => _colors.selected;
   @override
-  final Color searchFieldMobile = const Color.fromRGBO(239, 240, 242, 1);
+  Color get searchFieldMobile => _colors.surfaceHigh;
   @override
-  final Color walletEditButtonsBackgroundColor = const Color.fromRGBO(
-    248,
-    248,
-    248,
-    1,
-  );
+  Color get walletEditButtonsBackgroundColor => _colors.surfaceHigh;
   @override
-  final Color swapButtonColor = const Color(0xFF8C41FF);
+  Color get swapButtonColor => _colors.brand;
   @override
   final bridgeFormHeader = const TextStyle(
     fontSize: 11,
@@ -262,7 +244,7 @@ class ThemeCustomLight extends ThemeExtension<ThemeCustomLight>
   @override
   final Color keyPadTextColor = const Color.fromRGBO(129, 151, 182, 1);
   @override
-  final Color dialogBarrierColor = const Color.fromRGBO(3, 26, 43, 0.36);
+  Color get dialogBarrierColor => _colors.shadow;
   @override
   final Color dexCoinProtocolColor = const Color.fromRGBO(168, 177, 185, 1);
   @override
