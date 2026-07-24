@@ -120,8 +120,15 @@ abstract class LocaleKeys {
   static const gaslessRecoveryAction = 'gaslessRecoveryAction';
   static const gaslessSingleAddressTooltip = 'gaslessSingleAddressTooltip';
   static const addressRowGasfreeTag = 'addressRowGasfreeTag';
+  static const addressRowGasfreeCheckingTag = 'addressRowGasfreeCheckingTag';
   static const addressRowGasfreePausedTag = 'addressRowGasfreePausedTag';
   static const receiveGaslessPausedNotice = 'receiveGaslessPausedNotice';
+  static const receiveGaslessRemoteDisabledNotice =
+      'receiveGaslessRemoteDisabledNotice';
+  static const receiveGaslessSecurityBlockedNotice =
+      'receiveGaslessSecurityBlockedNotice';
+  static const receiveGaslessZeroFeeUnsupportedNotice =
+      'receiveGaslessZeroFeeUnsupportedNotice';
   static const receiveGaslessProviderUnavailableNotice =
       'receiveGaslessProviderUnavailableNotice';
   static const receiveGaslessPendingTransferNotice =
@@ -134,8 +141,8 @@ abstract class LocaleKeys {
       'receiveGaslessCustodyMismatchNotice';
   static const receiveGaslessProviderMismatchNotice =
       'receiveGaslessProviderMismatchNotice';
-  static const receiveGaslessRestartRequiredNotice =
-      'receiveGaslessRestartRequiredNotice';
+  static const receiveGaslessReactivationRequiredNotice =
+      'receiveGaslessReactivationRequiredNotice';
   static const receiveGaslessAttestationMissingNotice =
       'receiveGaslessAttestationMissingNotice';
   static const addressRowStandardTag = 'addressRowStandardTag';
@@ -609,7 +616,6 @@ abstract class LocaleKeys {
   static const withdrawGaslessConfirmationBlock =
       'withdrawGaslessConfirmationBlock';
   static const withdrawGaslessFeeSummary = 'withdrawGaslessFeeSummary';
-  static const withdrawGaslessFallbackNotice = 'withdrawGaslessFallbackNotice';
   static const withdrawGaslessUnavailableBlocked =
       'withdrawGaslessUnavailableBlocked';
   static const withdrawGaslessSourceAddress = 'withdrawGaslessSourceAddress';
@@ -652,6 +658,8 @@ abstract class LocaleKeys {
   static const withdrawGaslessProviderUnavailable =
       'withdrawGaslessProviderUnavailable';
   static const withdrawGaslessUnsupported = 'withdrawGaslessUnsupported';
+  static const withdrawGaslessReactivationRequired =
+      'withdrawGaslessReactivationRequired';
   static const withdrawGaslessSecurityMismatch =
       'withdrawGaslessSecurityMismatch';
   static const withdrawNoFundedAddresses = 'withdrawNoFundedAddresses';
@@ -668,11 +676,18 @@ abstract class LocaleKeys {
   static const withdrawGaslessStatusConfirmingOnChain =
       'withdrawGaslessStatusConfirmingOnChain';
   static const withdrawGaslessStatusUnknown = 'withdrawGaslessStatusUnknown';
+  static const withdrawGaslessStatusAcceptanceUnknown =
+      'withdrawGaslessStatusAcceptanceUnknown';
   static const withdrawGaslessPendingTitle = 'withdrawGaslessPendingTitle';
   static const withdrawGaslessPendingDescription =
       'withdrawGaslessPendingDescription';
+  static const withdrawGaslessAcceptanceUnknownTitle =
+      'withdrawGaslessAcceptanceUnknownTitle';
+  static const withdrawGaslessAcceptanceUnknownDescription =
+      'withdrawGaslessAcceptanceUnknownDescription';
   static const withdrawGaslessContinueChecking =
       'withdrawGaslessContinueChecking';
+  static const withdrawGaslessUseStandard = 'withdrawGaslessUseStandard';
   static const withdrawGaslessViewActivity = 'withdrawGaslessViewActivity';
   static const withdrawGaslessTraceId = 'withdrawGaslessTraceId';
   static const withdrawGaslessSupportDiagnosticsTitle =
@@ -1232,6 +1247,8 @@ abstract class LocaleKeys {
       'sdk_errors.gasless_status_unavailable';
   static const sdk_errors_gasless_response_invalid =
       'sdk_errors.gasless_response_invalid';
+  static const sdk_errors_gasless_max_fee_exceeded =
+      'sdk_errors.gasless_max_fee_exceeded';
   static const sdk_errors_gasless_final_failure =
       'sdk_errors.gasless_final_failure';
   static const sdk_errors_gasless_submission_unknown =

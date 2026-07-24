@@ -8,7 +8,7 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 
-/// True only for the software-wallet key GasFree v1 binds to.
+/// True only for the software-wallet key allowed by the GasFree custody policy.
 ///
 /// Non-HD wallets expose no derivation path. HD wallets must use the external
 /// account-zero/address-zero key. Secondary and change keys remain standard
@@ -27,9 +27,9 @@ bool isCanonicalTronGaslessPubkey(
         (chain == null || chain.isEmpty || chain == 'external');
   }
 
-  // GasFree v1 is bound to TRON BIP44 account 0, external chain, address 0.
-  // A suffix check is not sufficient: account 1 and other coin types can end
-  // in `/0/0` as well. Missing metadata fails closed for HD wallets.
+  // Gleec exposes GasFree custody only for TRON BIP44 account 0, external
+  // chain, address 0. A suffix check is not sufficient: account 1 and other
+  // coin types can end in `/0/0` as well. Missing metadata fails closed.
   return chain == 'external' && derivationPath == "m/44'/195'/0'/0/0";
 }
 
@@ -98,12 +98,13 @@ extension LegacyCoinMigrationExtensions on Coin {
   /// Whether this asset is a TRON TRC-20 token eligible for gas-free (GasFree)
   /// transfers.
   ///
-  /// For these assets the spendable balance lives at the deterministic CREATE2
-  /// **GasFree custody address**, not the EOA — a gasless withdrawal settles
-  /// from custody and ordinarily pays its fee in the token. Exceptional
-  /// recovery may still require TRX in the Standard wallet.
-  /// The coin's `my_balance` still reports the EOA balance, so custody-aware
-  /// surfaces must use [gasfreeCustodyBalance] instead.
+  /// For these assets the spendable balance lives at the opaque
+  /// **KDF-reported GasFree custody address**, not the EOA — a gasless
+  /// withdrawal settles from custody and ordinarily pays its fee in the token.
+  /// Exceptional recovery may still require TRX in the Standard wallet.
+  /// The coin's `my_balance` still reports the EOA balance. Custody-aware
+  /// surfaces consume the typed KDF account-status snapshot held by their
+  /// feature state and never substitute this standard balance.
   bool isGaslessAsset(KomodoDefiSdk sdk) =>
       isTronGaslessConfigured && _matchesGaslessAssetPolicy;
 
@@ -136,9 +137,9 @@ extension LegacyCoinMigrationExtensions on Coin {
       isTronGaslessConfigured &&
       (_matchesGaslessAssetPolicy || _matchesGaslessParentPolicy);
 
-  /// GasFree v1 supports only the pinned Tether contracts on their matching
-  /// provider network. Custom tokens and network/contract lookalikes fail
-  /// closed even when KDF happens to return a `gasfreeAddress` field.
+  /// The app rollout supports only the pinned Tether contracts on their
+  /// matching provider network. Custom tokens and network/contract lookalikes
+  /// fail closed even when KDF happens to return a `gasfreeAddress` field.
   bool get _matchesGaslessAssetPolicy {
     return isTronGaslessAssetIdEligible(
       id,
@@ -156,21 +157,5 @@ extension LegacyCoinMigrationExtensions on Coin {
       'nile' => isTestCoin && id.id == 'TRXT',
       _ => false,
     };
-  }
-
-  /// The GasFree custody balance for a gas-free TRC-20 asset — the balance a
-  /// gasless withdrawal actually settles from. Returns `null` for non-gasless
-  /// assets or when the status could not be fetched.
-  ///
-  /// This is an on-demand fetch (`gasless::account_status`); callers that need a
-  /// synchronous value should cache the result.
-  Future<BalanceInfo?> gasfreeCustodyBalance(KomodoDefiSdk sdk) async {
-    if (!isGaslessRecoveryAsset) return null;
-    try {
-      final status = await sdk.withdrawals.gaslessAccountStatus(id);
-      return status.custodyBalance;
-    } catch (_) {
-      return null;
-    }
   }
 }

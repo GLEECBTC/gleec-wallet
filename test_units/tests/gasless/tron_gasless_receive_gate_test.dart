@@ -217,44 +217,44 @@ void testTronGaslessReceiveGate() {
       expect(timeoutDecision.receiveEnabled, isFalse);
     });
 
-    test(
-      'empty or unsafe local settings can never issue an HTTP request',
-      () async {
-        var requests = 0;
-        final client = _FakeClient((_) async {
-          requests += 1;
-          return _jsonResponse(_validBody());
-        });
-        final missing = HttpTronGaslessReceiveGate(
-          endpoint: '',
-          expectedNetwork: 'tron',
-          expectedServiceProvider: _provider,
-          httpClient: client,
-        );
-        final unsafe = HttpTronGaslessReceiveGate(
-          endpoint: 'http://config.gleec.com/control',
-          expectedNetwork: 'tron',
-          expectedServiceProvider: _provider,
-          httpClient: client,
-        );
+    test('empty and unsafe control endpoints stay blocked', () async {
+      var requests = 0;
+      final client = _FakeClient((_) async {
+        requests += 1;
+        return _jsonResponse(_validBody());
+      });
+      final missing = HttpTronGaslessReceiveGate(
+        endpoint: '',
+        expectedNetwork: 'tron',
+        expectedServiceProvider: _provider,
+        httpClient: client,
+        now: () => _now,
+      );
+      final unsafe = HttpTronGaslessReceiveGate(
+        endpoint: 'http://config.gleec.com/control',
+        expectedNetwork: 'tron',
+        expectedServiceProvider: _provider,
+        httpClient: client,
+      );
 
-        expect(
-          (await missing.evaluate()).reason,
-          GaslessReceiveReasonCode.controlEndpointMissing,
-        );
-        expect(
-          (await unsafe.evaluate()).reason,
-          GaslessReceiveReasonCode.controlEndpointInvalid,
-        );
-        expect(requests, 0);
-      },
-    );
+      final missingDecision = await missing.evaluate();
+      expect(missingDecision.outcome, TronGaslessReceiveGateOutcome.invalid);
+      expect(
+        missingDecision.reason,
+        GaslessReceiveReasonCode.controlEndpointMissing,
+      );
+      expect(
+        (await unsafe.evaluate()).reason,
+        GaslessReceiveReasonCode.controlEndpointInvalid,
+      );
+      expect(requests, 0);
+    });
 
     test('reason identifiers are stable and contain no configuration data', () {
       expect(GaslessReceiveReasonCode.ready.code, 'ready');
       expect(
-        GaslessReceiveReasonCode.boundRelayRequired.code,
-        'bound_relay_required',
+        GaslessReceiveReasonCode.reactivationRequired.code,
+        'reactivation_required',
       );
       expect(
         GaslessReceiveReasonCode.remoteBindingMismatch.code,

@@ -6,6 +6,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
+import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -19,6 +20,15 @@ enum _ConsolidationSourceAvailability {
   needsTrx,
   preflightUnavailable,
 }
+
+typedef GaslessConsolidationAddressVerifier =
+    String? Function(
+      KomodoDefiSdk sdk,
+      Asset asset,
+      CoinAddressesState state, {
+      required WalletType? walletType,
+      required String? currentWalletPubkeyHash,
+    });
 
 class _ConsolidationSource {
   const _ConsolidationSource({
@@ -47,6 +57,7 @@ class GaslessConsolidationWizard extends StatefulWidget {
     required this.asset,
     required this.custodyAddress,
     required this.onDone,
+    this.addressVerifier = verifiedTronGaslessConsolidationAddress,
     super.key,
   });
 
@@ -54,37 +65,96 @@ class GaslessConsolidationWizard extends StatefulWidget {
   final String custodyAddress;
   final VoidCallback onDone;
 
+  /// Authorization boundary used before every load, preview, and source form.
+  ///
+  /// Production uses the pinned provider and typed KDF status verifier. The
+  /// injectable boundary keeps lifecycle behavior independently testable even
+  /// in fail-closed builds where the production provider pin is absent.
+  @visibleForTesting
+  final GaslessConsolidationAddressVerifier addressVerifier;
+
   @override
   State<GaslessConsolidationWizard> createState() =>
       _GaslessConsolidationWizardState();
 }
 
-class _GaslessConsolidationWizardState
-    extends State<GaslessConsolidationWizard> {
+class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
+    with WidgetsBindingObserver {
   Future<List<_ConsolidationSource>>? _loadFuture;
   List<_ConsolidationSource> _sources = const [];
   final Set<String> _completed = <String>{};
   _ConsolidationSource? _active;
   int _loadGeneration = 0;
   bool _gateResetScheduled = false;
+  bool _isAppForeground = true;
+  DateTime? _resumeRefreshRequestedAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    _isAppForeground =
+        lifecycleState == null || lifecycleState == AppLifecycleState.resumed;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (!mounted) return;
+
+    final resumed = state == AppLifecycleState.resumed;
+    setState(() {
+      _isAppForeground = resumed;
+      _resumeRefreshRequestedAt = resumed ? DateTime.now().toUtc() : null;
+      _loadGeneration += 1;
+      _active = null;
+      _sources = const [];
+      _loadFuture = null;
+    });
+    context.read<CoinAddressesBloc>().add(
+      CoinAddressesGaslessReceiveVisibilityChanged(resumed),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  bool _hasFreshForegroundStatus(CoinAddressesState state) {
+    if (!_isAppForeground) return false;
+    final refreshRequestedAt = _resumeRefreshRequestedAt;
+    if (refreshRequestedAt == null) return true;
+    final observedAt = state.gaslessAccountStatusObservedAt?.toUtc();
+    return observedAt != null && !observedAt.isBefore(refreshRequestedAt);
+  }
 
   String? _verifiedCustodyAddress({
     CoinAddressesState? addressesState,
     WalletType? walletType,
+    String? walletPubkeyHash,
   }) {
     final sdk = context.read<KomodoDefiSdk>();
-    return verifiedTronGaslessConsolidationAddress(
+    return widget.addressVerifier(
       sdk,
       widget.asset,
       addressesState ?? context.read<CoinAddressesBloc>().state,
       walletType:
           walletType ??
           context.read<AuthBloc>().state.currentUser?.wallet.config.type,
+      currentWalletPubkeyHash:
+          walletPubkeyHash ??
+          context.read<AuthBloc>().state.currentUser?.walletId.pubkeyHash,
     );
   }
 
-  bool _isConsolidationReady() =>
-      _verifiedCustodyAddress() == widget.custodyAddress;
+  bool _isConsolidationReady() {
+    final state = context.read<CoinAddressesBloc>().state;
+    return _hasFreshForegroundStatus(state) &&
+        _verifiedCustodyAddress(addressesState: state) == widget.custodyAddress;
+  }
 
   Future<List<_ConsolidationSource>> _beginLoad() {
     final generation = ++_loadGeneration;
@@ -255,19 +325,18 @@ class _GaslessConsolidationWizardState
   @override
   Widget build(BuildContext context) {
     final addressesState = context.watch<CoinAddressesBloc>().state;
-    final walletType = context
-        .watch<AuthBloc>()
-        .state
-        .currentUser
-        ?.wallet
-        .config
-        .type;
+    final currentUser = context.watch<AuthBloc>().state.currentUser;
+    final walletType = currentUser?.wallet.config.type;
+    final walletPubkeyHash = currentUser?.walletId.pubkeyHash;
     final verifiedAddress = _verifiedCustodyAddress(
       addressesState: addressesState,
       walletType: walletType,
+      walletPubkeyHash: walletPubkeyHash,
     );
     final gateReady =
-        verifiedAddress != null && verifiedAddress == widget.custodyAddress;
+        _hasFreshForegroundStatus(addressesState) &&
+        verifiedAddress != null &&
+        verifiedAddress == widget.custodyAddress;
     final hasOpenSession =
         _active != null || _sources.isNotEmpty || _loadFuture != null;
     if (!gateReady || _gateResetScheduled) {
@@ -352,6 +421,7 @@ class _ConsolidationGateStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
+      key: const Key('gasless-consolidation-gate'),
       padding: const EdgeInsets.all(16),
       child: Center(
         child: ConstrainedBox(
@@ -644,6 +714,7 @@ class _ConsolidationSourceCard extends StatelessWidget {
               )
             else
               FilledButton(
+                key: Key('gasless-consolidation-move-${source.pubkey.address}'),
                 onPressed:
                     source.availability ==
                         _ConsolidationSourceAvailability.movable

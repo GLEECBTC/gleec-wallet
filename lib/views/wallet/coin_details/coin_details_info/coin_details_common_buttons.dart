@@ -20,6 +20,7 @@ import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -29,56 +30,12 @@ import 'package:web_dex/views/wallet/coin_details/coin_details_info/contract_add
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/wallet_page/common/zhtlc/zhtlc_configuration_dialog.dart';
 
-bool _usesGasfreeReceiveAddress(
-  Coin coin,
-  PubkeyInfo address, {
-  required bool gaslessReceiveEnabled,
-  required bool isHdWallet,
-}) =>
-    gaslessReceiveEnabled &&
-    coin.id.subClass == CoinSubClass.trc20 &&
-    isCanonicalTronGaslessPubkey(address, isHdWallet: isHdWallet) &&
-    (address.gasfreeAddress?.isNotEmpty ?? false);
+@immutable
+class _ReceiveRailSelection {
+  const _ReceiveRailSelection({required this.address, required this.variant});
 
-String _receiveAddressFor(
-  Coin coin,
-  PubkeyInfo address, {
-  required bool gaslessReceiveEnabled,
-  required bool isHdWallet,
-}) {
-  final gasfreeAddress = address.gasfreeAddress;
-  if (_usesGasfreeReceiveAddress(
-    coin,
-    address,
-    gaslessReceiveEnabled: gaslessReceiveEnabled,
-    isHdWallet: isHdWallet,
-  )) {
-    return gasfreeAddress!;
-  }
-
-  return address.address;
-}
-
-String _receiveAddressStatus(
-  Coin coin,
-  PubkeyInfo address, {
-  required bool gaslessReceiveEnabled,
-  required bool isHdWallet,
-}) {
-  final args = [
-    formatDexAmt(address.balance.spendable),
-    abbr2Ticker(coin.abbr),
-  ];
-  if (_usesGasfreeReceiveAddress(
-    coin,
-    address,
-    gaslessReceiveEnabled: gaslessReceiveEnabled,
-    isHdWallet: isHdWallet,
-  )) {
-    return LocaleKeys.receiveGasfreeAddressStatus.tr(args: args);
-  }
-
-  return LocaleKeys.addressBalanceAvailable.tr(args: args);
+  final PubkeyInfo address;
+  final AddressDisplayVariant variant;
 }
 
 bool _isVerifiedGaslessReceiveSelection(
@@ -109,17 +66,171 @@ bool _isVerifiedGaslessReceiveSelection(
       return false;
     }
 
-    return isVerifiedWalletTronGaslessReceive(
+    return isVerifiedTronGaslessReceive(
       sdk,
       coin.toSdkAsset(sdk),
       capabilityReady: state.gaslessReceiveStatus == GaslessReceiveStatus.ready,
+      accountStatus: state.gaslessAccountStatus,
+      accountStatusObservedAt: state.gaslessAccountStatusObservedAt,
       verifiedAddress: state.verifiedGasfreeAddress,
       custodyAddress: address.gasfreeAddress,
       expiresAt: state.gaslessReceiveConfigExpiresAt,
+      expectedServiceProvider: tronGaslessServiceProvider,
     );
   } catch (_) {
     return false;
   }
+}
+
+Future<_ReceiveRailSelection?> _showGaslessReceiveRailSelector(
+  BuildContext context, {
+  required KomodoDefiSdk sdk,
+  required Coin coin,
+  required WalletId initialWalletId,
+}) {
+  return showDialog<_ReceiveRailSelection>(
+    context: context,
+    builder: (dialogContext) {
+      return BlocListener<AuthBloc, AuthBlocState>(
+        listenWhen: (previous, current) =>
+            previous.currentUser?.walletId != current.currentUser?.walletId,
+        listener: (context, state) {
+          if (Navigator.of(dialogContext).canPop()) {
+            Navigator.of(dialogContext).pop();
+          }
+        },
+        child: BlocBuilder<AuthBloc, AuthBlocState>(
+          builder: (context, authState) {
+            final currentUser = authState.currentUser;
+            if (currentUser?.walletId != initialWalletId) {
+              return const SizedBox.shrink();
+            }
+            final walletType = currentUser?.wallet.config.type;
+            final isHdWallet = walletType == WalletType.hdwallet;
+            return BlocBuilder<CoinAddressesBloc, CoinAddressesState>(
+              builder: (context, addressesState) {
+                final options = <_ReceiveRailSelection>[
+                  for (final address in addressesState.addresses) ...[
+                    if (_isVerifiedGaslessReceiveSelection(
+                      sdk,
+                      coin,
+                      addressesState,
+                      address,
+                      isHdWallet: isHdWallet,
+                      currentWalletPubkeyHash: currentUser?.walletId.pubkeyHash,
+                    ))
+                      _ReceiveRailSelection(
+                        address: address,
+                        variant: AddressDisplayVariant.gasfree,
+                      ),
+                    _ReceiveRailSelection(
+                      address: address,
+                      variant: AddressDisplayVariant.standard,
+                    ),
+                  ],
+                ];
+                final hasGasfree = options.any(
+                  (option) => option.variant == AddressDisplayVariant.gasfree,
+                );
+
+                return SimpleDialog(
+                  title: Text(LocaleKeys.addresses.tr()),
+                  children: [
+                    if (!hasGasfree)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                        child: Text(
+                          LocaleKeys.receiveGaslessPausedNotice.tr(),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    for (final option in options)
+                      SimpleDialogOption(
+                        key: ValueKey(
+                          'receive-rail-${option.variant.name}-'
+                          '${option.address.address}',
+                        ),
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop(option),
+                        child: Row(
+                          children: [
+                            Icon(
+                              option.variant == AddressDisplayVariant.gasfree
+                                  ? Icons.bolt_rounded
+                                  : Icons.account_balance_wallet_outlined,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    option.variant ==
+                                            AddressDisplayVariant.gasfree
+                                        ? LocaleKeys.addressRowGasfreeTag.tr()
+                                        : LocaleKeys.addressRowStandardTag.tr(),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleSmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    option.variant ==
+                                            AddressDisplayVariant.gasfree
+                                        ? option.address.gasfreeAddress!
+                                        : option.address.address,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    option.variant ==
+                                            AddressDisplayVariant.gasfree
+                                        ? LocaleKeys.receiveGasfreeAddressStatus
+                                              .tr(
+                                                args: [
+                                                  formatDexAmt(
+                                                    addressesState
+                                                            .gaslessAccountStatus
+                                                            ?.spendableBalance ??
+                                                        Decimal.zero,
+                                                  ),
+                                                  abbr2Ticker(coin.abbr),
+                                                ],
+                                              )
+                                        : LocaleKeys.addressBalanceAvailable.tr(
+                                            args: [
+                                              formatDexAmt(
+                                                option
+                                                    .address
+                                                    .balance
+                                                    .spendable,
+                                              ),
+                                              abbr2Ticker(coin.abbr),
+                                            ],
+                                          ),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      );
+    },
+  );
 }
 
 class CoinDetailsCommonButtons extends StatelessWidget {
@@ -374,6 +485,7 @@ class CoinDetailsReceiveButton extends StatelessWidget {
     final currentUser = context.read<AuthBloc>().state.currentUser;
     final walletType = currentUser?.wallet.config.type;
     final walletPubkeyHash = currentUser?.walletId.pubkeyHash;
+    final initialWalletId = currentUser?.walletId;
     final sdk = context.sdk;
     final gaslessReceiveEnabled =
         (walletType == WalletType.iguana ||
@@ -390,43 +502,36 @@ class CoinDetailsReceiveButton extends StatelessWidget {
           ),
         );
 
-    final selectedAddress = await showAddressSearch(
-      context,
-      addresses: addresses,
-      assetNameLabel: coin.abbr,
-      verified: (address) => _usesGasfreeReceiveAddress(
-        coin,
-        address,
-        gaslessReceiveEnabled: gaslessReceiveEnabled,
-        isHdWallet: walletType == WalletType.hdwallet,
-      ),
-      displayAddress: (address) => _receiveAddressFor(
-        coin,
-        address,
-        gaslessReceiveEnabled: gaslessReceiveEnabled,
-        isHdWallet: walletType == WalletType.hdwallet,
-      ),
-      copyAddress: (address) => _receiveAddressFor(
-        coin,
-        address,
-        gaslessReceiveEnabled: gaslessReceiveEnabled,
-        isHdWallet: walletType == WalletType.hdwallet,
-      ),
-      balanceLabel: (address) => _receiveAddressStatus(
-        coin,
-        address,
-        gaslessReceiveEnabled: gaslessReceiveEnabled,
-        isHdWallet: walletType == WalletType.hdwallet,
-      ),
-    );
-
-    if (selectedAddress != null && context.mounted) {
-      final selectedWasGasfree = _usesGasfreeReceiveAddress(
-        coin,
-        selectedAddress,
-        gaslessReceiveEnabled: gaslessReceiveEnabled,
-        isHdWallet: walletType == WalletType.hdwallet,
+    final _ReceiveRailSelection? selected;
+    if (gaslessReceiveEnabled && initialWalletId != null) {
+      selected = await _showGaslessReceiveRailSelector(
+        context,
+        sdk: sdk,
+        coin: coin,
+        initialWalletId: initialWalletId,
       );
+    } else {
+      final selectedAddress = await showAddressSearch(
+        context,
+        addresses: addresses,
+        assetNameLabel: coin.abbr,
+      );
+      selected = selectedAddress == null
+          ? null
+          : _ReceiveRailSelection(
+              address: selectedAddress,
+              variant: AddressDisplayVariant.standard,
+            );
+    }
+
+    if (selected != null && context.mounted) {
+      if (context.read<AuthBloc>().state.currentUser?.walletId !=
+          initialWalletId) {
+        return;
+      }
+      final selectedAddress = selected.address;
+      final selectedWasGasfree =
+          selected.variant == AddressDisplayVariant.gasfree;
       var currentGaslessReceiveEnabled = false;
       if (selectedWasGasfree) {
         final currentWalletType = context
@@ -460,6 +565,10 @@ class CoinDetailsReceiveButton extends StatelessWidget {
           );
           return;
         }
+      } else if (!addressesBloc.state.addresses.any(
+        (address) => address.address == selectedAddress.address,
+      )) {
+        return;
       }
 
       showPubkeyReceiveDialog(

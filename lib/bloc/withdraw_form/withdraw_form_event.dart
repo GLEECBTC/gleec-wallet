@@ -1,4 +1,3 @@
-import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
 sealed class WithdrawFormEvent {
@@ -41,12 +40,6 @@ class WithdrawFormGaslessToggled extends WithdrawFormEvent {
   const WithdrawFormGaslessToggled(this.isEnabled);
 }
 
-/// Sets an optional max-fee cap (in token units) for a gasless withdrawal.
-class WithdrawFormGaslessMaxFeeChanged extends WithdrawFormEvent {
-  final Decimal? maxFee;
-  const WithdrawFormGaslessMaxFeeChanged(this.maxFee);
-}
-
 /// Requests a (cached) `gasless::account_status` snapshot for the asset.
 /// [force] bypasses the TTL cache, e.g. for a user-initiated retry.
 class WithdrawFormGaslessStatusRequested extends WithdrawFormEvent {
@@ -84,6 +77,15 @@ class WithdrawFormGaslessTraceCheckRequested extends WithdrawFormEvent {
 /// a transfer that the relay has already accepted.
 class WithdrawFormPendingGaslessLoadRequested extends WithdrawFormEvent {
   const WithdrawFormPendingGaslessLoadRequested();
+}
+
+/// Leaves an unresolved GasFree transfer visible in the encrypted journal
+/// while returning the form to an explicit Standard TRON withdrawal.
+///
+/// This never marks the unresolved relay retryable and never removes its
+/// wallet-local journal or provider trace identity.
+class WithdrawFormPendingUseStandardRequested extends WithdrawFormEvent {
+  const WithdrawFormPendingUseStandardRequested();
 }
 
 class WithdrawFormTronPreviewTicked extends WithdrawFormEvent {

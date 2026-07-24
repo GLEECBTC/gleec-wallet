@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
 
@@ -28,6 +29,8 @@ class CoinAddressesState extends Equatable {
   final DateTime? gaslessReceiveConfigExpiresAt;
   final String? verifiedGasfreeAddress;
   final String? gaslessReceiveWalletPubkeyHash;
+  final GaslessAccountStatusResponse? gaslessAccountStatus;
+  final DateTime? gaslessAccountStatusObservedAt;
 
   const CoinAddressesState({
     this.status = FormStatus.initial,
@@ -42,6 +45,8 @@ class CoinAddressesState extends Equatable {
     this.gaslessReceiveConfigExpiresAt,
     this.verifiedGasfreeAddress,
     this.gaslessReceiveWalletPubkeyHash,
+    this.gaslessAccountStatus,
+    this.gaslessAccountStatusObservedAt,
   });
 
   CoinAddressesState copyWith({
@@ -57,6 +62,8 @@ class CoinAddressesState extends Equatable {
     DateTime? Function()? gaslessReceiveConfigExpiresAt,
     String? Function()? verifiedGasfreeAddress,
     String? Function()? gaslessReceiveWalletPubkeyHash,
+    GaslessAccountStatusResponse? Function()? gaslessAccountStatus,
+    DateTime? Function()? gaslessAccountStatusObservedAt,
   }) {
     return CoinAddressesState(
       status: status == null ? this.status : status(),
@@ -89,6 +96,12 @@ class CoinAddressesState extends Equatable {
       gaslessReceiveWalletPubkeyHash: gaslessReceiveWalletPubkeyHash == null
           ? this.gaslessReceiveWalletPubkeyHash
           : gaslessReceiveWalletPubkeyHash(),
+      gaslessAccountStatus: gaslessAccountStatus == null
+          ? this.gaslessAccountStatus
+          : gaslessAccountStatus(),
+      gaslessAccountStatusObservedAt: gaslessAccountStatusObservedAt == null
+          ? this.gaslessAccountStatusObservedAt
+          : gaslessAccountStatusObservedAt(),
     );
   }
 
@@ -105,6 +118,8 @@ class CoinAddressesState extends Equatable {
     DateTime? Function()? gaslessReceiveConfigExpiresAt,
     String? Function()? verifiedGasfreeAddress,
     String? Function()? gaslessReceiveWalletPubkeyHash,
+    GaslessAccountStatusResponse? Function()? gaslessAccountStatus,
+    DateTime? Function()? gaslessAccountStatusObservedAt,
   }) {
     return CoinAddressesState(
       status: status == null ? FormStatus.initial : status(),
@@ -133,6 +148,12 @@ class CoinAddressesState extends Equatable {
       gaslessReceiveWalletPubkeyHash: gaslessReceiveWalletPubkeyHash == null
           ? null
           : gaslessReceiveWalletPubkeyHash(),
+      gaslessAccountStatus: gaslessAccountStatus == null
+          ? null
+          : gaslessAccountStatus(),
+      gaslessAccountStatusObservedAt: gaslessAccountStatusObservedAt == null
+          ? null
+          : gaslessAccountStatusObservedAt(),
     );
   }
 
@@ -150,5 +171,7 @@ class CoinAddressesState extends Equatable {
     gaslessReceiveConfigExpiresAt,
     verifiedGasfreeAddress,
     gaslessReceiveWalletPubkeyHash,
+    gaslessAccountStatus,
+    gaslessAccountStatusObservedAt,
   ];
 }

@@ -6,6 +6,8 @@ import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/analytics/events.dart';
+import 'package:web_dex/analytics/events/transaction_events.dart'
+    show GaslessReceiveAnalyticsEventData, GaslessReceiveAnalyticsStatus;
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
@@ -26,6 +28,9 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   StreamSubscription<AssetPubkeys>? _pubkeysSub;
   Timer? _gaslessReceiveRefreshTimer;
   int _gaslessReceiveEvaluationGeneration = 0;
+  String? _lastGaslessReceiveAnalyticsKey;
+  bool _lastLoggedGaslessReceiveWasReady = false;
+  bool _isForeground = true;
 
   CoinAddressesBloc(
     this.sdk,
@@ -45,6 +50,9 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     on<CoinAddressesSubscriptionRequested>(_onAddressesSubscriptionRequested);
     on<CoinAddressesGaslessReceiveRefreshRequested>(
       _onGaslessReceiveRefreshRequested,
+    );
+    on<CoinAddressesGaslessReceiveVisibilityChanged>(
+      _onGaslessReceiveVisibilityChanged,
     );
     on<CoinAddressesZeroBalanceVisibilityChanged>(_onHideZeroBalanceChanged);
     on<CoinAddressesPubkeysUpdated>(_onPubkeysUpdated);
@@ -154,6 +162,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
         verifiedGasfreeAddress: failClosed ? () => null : null,
         gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
+        gaslessAccountStatus: () => null,
+        gaslessAccountStatusObservedAt: () => null,
       ),
     );
 
@@ -190,12 +200,12 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         asset,
         addresses,
         isHdWallet: isHdWallet,
+        isPrimarySoftwareWallet: _isPrimarySoftwareWallet(currentUser),
       );
       if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
           emit.isDone) {
         return;
       }
-
       emit(
         state.copyWith(
           status: () => FormStatus.success,
@@ -208,8 +218,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           verifiedGasfreeAddress: () => gaslessReceive.address,
           gaslessReceiveWalletPubkeyHash: () =>
               _readyWalletPubkeyHash(gaslessReceive, walletPubkeyHash),
+          gaslessAccountStatus: () => gaslessReceive.accountStatus,
+          gaslessAccountStatusObservedAt: () => gaslessReceive.observedAt,
         ),
       );
+      _logGaslessReceiveDecision(gaslessReceive);
       _scheduleGaslessReceiveRefresh(gaslessReceive);
 
       await _startWatchingPubkeys(asset);
@@ -219,6 +232,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         return;
       }
       final failClosed = _shouldFailClosedGaslessReceive;
+      const unavailable = _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.temporarilyUnavailable,
+        reason: GaslessReceiveReasonCode.accountStatusUnavailable,
+        shouldRefresh: true,
+      );
       emit(
         state.copyWith(
           status: () => FormStatus.failure,
@@ -232,8 +250,14 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
           verifiedGasfreeAddress: failClosed ? () => null : null,
           gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
+          gaslessAccountStatus: () => null,
+          gaslessAccountStatusObservedAt: () => null,
         ),
       );
+      if (failClosed) {
+        _logGaslessReceiveDecision(unavailable);
+        _scheduleGaslessReceiveRefresh(unavailable);
+      }
     }
   }
 
@@ -256,6 +280,9 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         // A pubkey replacement or duplicate candidate invalidates the prior
         // custody attestation immediately. Clear QR/copy authorization before
         // the first asynchronous provider or wallet lookup can yield.
+        _logGaslessReceiveRevocation(
+          GaslessReceiveReasonCode.custodyAddressMismatch,
+        );
         emit(
           state.copyWith(
             addresses: () => event.addresses,
@@ -263,6 +290,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
             gaslessReceiveReason: () => null,
             verifiedGasfreeAddress: () => null,
             gaslessReceiveWalletPubkeyHash: () => null,
+            gaslessAccountStatus: () => null,
+            gaslessAccountStatusObservedAt: () => null,
           ),
         );
       }
@@ -278,6 +307,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         asset,
         event.addresses,
         isHdWallet: isHdWallet,
+        isPrimarySoftwareWallet: _isPrimarySoftwareWallet(currentUser),
       );
       if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
           emit.isDone) {
@@ -295,8 +325,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           verifiedGasfreeAddress: () => gaslessReceive.address,
           gaslessReceiveWalletPubkeyHash: () =>
               _readyWalletPubkeyHash(gaslessReceive, walletPubkeyHash),
+          gaslessAccountStatus: () => gaslessReceive.accountStatus,
+          gaslessAccountStatusObservedAt: () => gaslessReceive.observedAt,
         ),
       );
+      _logGaslessReceiveDecision(gaslessReceive);
       _scheduleGaslessReceiveRefresh(gaslessReceive);
     } catch (e) {
       if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
@@ -304,6 +337,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         return;
       }
       final failClosed = _shouldFailClosedGaslessReceive;
+      const unavailable = _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.temporarilyUnavailable,
+        reason: GaslessReceiveReasonCode.accountStatusUnavailable,
+        shouldRefresh: true,
+      );
       emit(
         state.copyWith(
           errorMessage: () => _buildDisplayError(e),
@@ -316,8 +354,14 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
           verifiedGasfreeAddress: failClosed ? () => null : null,
           gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
+          gaslessAccountStatus: () => null,
+          gaslessAccountStatusObservedAt: () => null,
         ),
       );
+      if (failClosed) {
+        _logGaslessReceiveDecision(unavailable);
+        _scheduleGaslessReceiveRefresh(unavailable);
+      }
     }
   }
 
@@ -327,17 +371,20 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   ) async {
     final evaluationGeneration = ++_gaslessReceiveEvaluationGeneration;
     final expiry = state.gaslessReceiveConfigExpiresAt;
-    if (state.gaslessReceiveStatus == GaslessReceiveStatus.ready) {
-      // A sensitive recheck revokes the rendered QR before the first await;
-      // the SDK likewise revokes the older per-wallet evidence/request epoch.
-      final remoteExpired =
-          expiry == null || !expiry.isAfter(DateTime.now().toUtc());
+    final remoteExpired =
+        expiry == null || !expiry.isAfter(DateTime.now().toUtc());
+    // A scheduled refresh starts halfway through the 60-second status TTL.
+    // Keep a still-valid Ready presentation stable while it runs; every
+    // sensitive action independently revalidates the cached domain state.
+    // Once the remote permission has expired, revoke before the first await.
+    if (state.gaslessReceiveStatus == GaslessReceiveStatus.ready &&
+        remoteExpired) {
+      _logGaslessReceiveRevocation(GaslessReceiveReasonCode.remoteExpired);
       emit(
         state.copyWith(
           gaslessReceiveStatus: () => GaslessReceiveStatus.checking,
-          gaslessReceiveReason: () =>
-              remoteExpired ? GaslessReceiveReasonCode.remoteExpired : null,
-          gaslessReceiveConfigExpiresAt: () => remoteExpired ? null : expiry,
+          gaslessReceiveReason: () => GaslessReceiveReasonCode.remoteExpired,
+          gaslessReceiveConfigExpiresAt: () => null,
           verifiedGasfreeAddress: () => null,
           gaslessReceiveWalletPubkeyHash: () => null,
         ),
@@ -353,6 +400,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         asset,
         state.addresses,
         isHdWallet: isHdWallet,
+        isPrimarySoftwareWallet: _isPrimarySoftwareWallet(currentUser),
       );
       if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
           emit.isDone) {
@@ -366,8 +414,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           verifiedGasfreeAddress: () => gaslessReceive.address,
           gaslessReceiveWalletPubkeyHash: () =>
               _readyWalletPubkeyHash(gaslessReceive, walletPubkeyHash),
+          gaslessAccountStatus: () => gaslessReceive.accountStatus,
+          gaslessAccountStatusObservedAt: () => gaslessReceive.observedAt,
         ),
       );
+      _logGaslessReceiveDecision(gaslessReceive);
       _scheduleGaslessReceiveRefresh(gaslessReceive);
     } catch (_) {
       if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
@@ -386,16 +437,100 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           gaslessReceiveConfigExpiresAt: () => null,
           verifiedGasfreeAddress: () => null,
           gaslessReceiveWalletPubkeyHash: () => null,
+          gaslessAccountStatus: () => null,
+          gaslessAccountStatusObservedAt: () => null,
         ),
       );
+      _logGaslessReceiveDecision(unavailable);
       _scheduleGaslessReceiveRefresh(unavailable);
     }
+  }
+
+  void _onGaslessReceiveVisibilityChanged(
+    CoinAddressesGaslessReceiveVisibilityChanged event,
+    Emitter<CoinAddressesState> emit,
+  ) {
+    _isForeground = event.isForeground;
+    if (event.isForeground) {
+      add(const CoinAddressesGaslessReceiveRefreshRequested());
+      return;
+    }
+
+    _gaslessReceiveEvaluationGeneration += 1;
+    _gaslessReceiveRefreshTimer?.cancel();
+    _gaslessReceiveRefreshTimer = null;
+    if (state.gaslessReceiveStatus == GaslessReceiveStatus.ready ||
+        state.gaslessReceiveStatus == GaslessReceiveStatus.checking) {
+      _logGaslessReceiveRevocation(GaslessReceiveReasonCode.appBackgrounded);
+      emit(
+        state.copyWith(
+          gaslessReceiveStatus: () => GaslessReceiveStatus.stale,
+          gaslessReceiveReason: () => GaslessReceiveReasonCode.appBackgrounded,
+          gaslessReceiveConfigExpiresAt: () => null,
+          verifiedGasfreeAddress: () => null,
+          gaslessReceiveWalletPubkeyHash: () => null,
+          gaslessAccountStatusObservedAt: () => null,
+        ),
+      );
+    }
+  }
+
+  /// Synchronous action-time gate used immediately before a GasFree QR or
+  /// clipboard write. A failed check queues a fresh observation but never
+  /// allows the stale action to continue.
+  bool revalidateGaslessReceiveForAction({
+    required String custodyAddress,
+    required String walletEpoch,
+  }) {
+    final expiry = state.gaslessReceiveConfigExpiresAt;
+    final observedAt = state.gaslessAccountStatusObservedAt;
+    final status = state.gaslessAccountStatus;
+    final now = DateTime.now().toUtc();
+    final observedRecently =
+        observedAt != null &&
+        !observedAt.toUtc().isAfter(now) &&
+        now.difference(observedAt.toUtc()) <= const Duration(minutes: 1);
+    var allowed =
+        _isForeground &&
+        state.gaslessReceiveStatus == GaslessReceiveStatus.ready &&
+        expiry != null &&
+        expiry.toUtc().isAfter(now) &&
+        observedRecently &&
+        state.verifiedGasfreeAddress?.trim() == custodyAddress.trim() &&
+        state.gaslessReceiveWalletPubkeyHash?.trim() == walletEpoch.trim() &&
+        status != null &&
+        isVerifiedTronGaslessReceiveStatus(
+          status,
+          custodyAddress: custodyAddress,
+          expectedServiceProvider: tronGaslessServiceProvider,
+        );
+    if (allowed) {
+      try {
+        final asset = getSdkAsset(sdk, assetId);
+        allowed =
+            asset.isTronGaslessReceiveConfiguredAsset &&
+            hasTronGaslessReceiveCapability(sdk, asset);
+      } catch (_) {
+        allowed = false;
+      }
+    }
+    if (!allowed && !isClosed) {
+      final reason = !_isForeground
+          ? GaslessReceiveReasonCode.appBackgrounded
+          : state.gaslessReceiveWalletPubkeyHash?.trim() != walletEpoch.trim()
+          ? GaslessReceiveReasonCode.custodyAddressMismatch
+          : GaslessReceiveReasonCode.accountStatusExpired;
+      _logGaslessReceiveRevocation(reason);
+      add(const CoinAddressesGaslessReceiveRefreshRequested());
+    }
+    return allowed;
   }
 
   Future<_ResolvedGaslessReceive> _resolveGaslessReceive(
     Asset asset,
     List<PubkeyInfo> addresses, {
     required bool isHdWallet,
+    required bool isPrimarySoftwareWallet,
   }) async {
     if (!asset.isTronGaslessRecoveryEligibleAsset) {
       return const _ResolvedGaslessReceive(
@@ -403,31 +538,125 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         reason: GaslessReceiveReasonCode.assetUnsupported,
       );
     }
-    if (!tronGaslessEnabled) {
-      return const _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.disabled,
-        reason: GaslessReceiveReasonCode.buildFeatureDisabled,
-      );
-    }
     if (!hasValidTronGaslessProviderConfig ||
-        !asset.isTronGaslessConfiguredAsset) {
+        !isTronGaslessAssetEligible(asset)) {
       return const _ResolvedGaslessReceive(
         status: GaslessReceiveStatus.securityMismatch,
         reason: GaslessReceiveReasonCode.providerConfigurationInvalid,
       );
     }
-    if (!tronGaslessReceiveEnabled) {
+    if (!isPrimarySoftwareWallet) {
       return const _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.disabled,
-        reason: GaslessReceiveReasonCode.receiveBuildDisabled,
+        status: GaslessReceiveStatus.unsupported,
+        reason: GaslessReceiveReasonCode.walletUnsupported,
       );
     }
-    final hasBoundReceive = hasBoundTronGaslessReceiveCapability(sdk, asset);
-    if (!hasBoundReceive && !tronGaslessStatusAttestedReceiveEnabled) {
-      return const _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.disabled,
-        reason: GaslessReceiveReasonCode.boundRelayRequired,
+
+    final canonical = addresses
+        .where(
+          (address) =>
+              isCanonicalTronGaslessPubkey(address, isHdWallet: isHdWallet),
+        )
+        .toList(growable: false);
+    if (canonical.length > 1) {
+      return _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.securityMismatch,
+        reason: GaslessReceiveReasonCode.canonicalAddressAmbiguous,
+      );
+    }
+    final candidate = canonical.singleOrNull?.gasfreeAddress;
+    if (candidate == null || candidate.isEmpty) {
+      return _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.temporarilyUnavailable,
+        reason: GaslessReceiveReasonCode.custodyAddressMissing,
         shouldRefresh: true,
+      );
+    }
+    if (candidate != candidate.trim()) {
+      return const _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.securityMismatch,
+        reason: GaslessReceiveReasonCode.custodyAddressMismatch,
+      );
+    }
+
+    late final GaslessAccountStatusResponse accountStatus;
+    late final DateTime observedAt;
+    try {
+      accountStatus = await sdk.withdrawals.gaslessAccountStatus(asset.id);
+      observedAt = DateTime.now().toUtc();
+      final serviceProvider = accountStatus.serviceProvider;
+      if (serviceProvider != null &&
+          serviceProvider != tronGaslessServiceProvider.trim()) {
+        return _ResolvedGaslessReceive(
+          status: GaslessReceiveStatus.securityMismatch,
+          reason: GaslessReceiveReasonCode.providerIdentityMismatch,
+        );
+      }
+      final authoritativeAddress = accountStatus.gasfreeAddress;
+      if (authoritativeAddress != candidate) {
+        return _ResolvedGaslessReceive(
+          status: GaslessReceiveStatus.securityMismatch,
+          reason: GaslessReceiveReasonCode.custodyAddressMismatch,
+        );
+      }
+      switch (accountStatus.availability) {
+        case GaslessAccountAvailability.available:
+          if (!isVerifiedTronGaslessReceiveStatus(
+            accountStatus,
+            custodyAddress: candidate,
+            expectedServiceProvider: tronGaslessServiceProvider,
+          )) {
+            return _ResolvedGaslessReceive(
+              status: GaslessReceiveStatus.securityMismatch,
+              reason: GaslessReceiveReasonCode.providerIdentityMismatch,
+            );
+          }
+        case GaslessAccountAvailability.pendingTransfer:
+          return _ResolvedGaslessReceive(
+            status: GaslessReceiveStatus.temporarilyUnavailable,
+            reason: GaslessReceiveReasonCode.pendingTransfer,
+            shouldRefresh: true,
+            accountStatus: accountStatus,
+            observedAt: observedAt,
+          );
+        case GaslessAccountAvailability.tokenUnsupported:
+          return _ResolvedGaslessReceive(
+            status: GaslessReceiveStatus.unsupported,
+            reason: GaslessReceiveReasonCode.tokenUnsupported,
+            shouldRefresh: true,
+            accountStatus: accountStatus,
+            observedAt: observedAt,
+          );
+        case GaslessAccountAvailability.providerUnreachable:
+          return _ResolvedGaslessReceive(
+            status: GaslessReceiveStatus.temporarilyUnavailable,
+            reason: GaslessReceiveReasonCode.providerTemporarilyUnavailable,
+            shouldRefresh: true,
+            accountStatus: accountStatus,
+            observedAt: observedAt,
+          );
+      }
+    } catch (error) {
+      final mapped = _mapGaslessAccountStatusError(error);
+      if (mapped != null) return mapped;
+      return _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.temporarilyUnavailable,
+        reason: GaslessReceiveReasonCode.accountStatusUnavailable,
+        shouldRefresh: true,
+      );
+    }
+
+    // Build and remote-control switches authorize new receives only. The
+    // account-status probe above remains active so existing custody balances,
+    // pending transfers, and recovery state never disappear when a receive
+    // rail is paused.
+    if (!tronGaslessReceiveEnabled) {
+      return _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.disabled,
+        reason: GaslessReceiveReasonCode.receiveBuildDisabled,
+        shouldRefresh: true,
+        accountStatus: accountStatus,
+        observedAt: observedAt,
       );
     }
 
@@ -445,10 +674,12 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       final expiresAt = remoteGate.expiresAt;
       if (remoteGate.reason != GaslessReceiveReasonCode.remoteEnabled ||
           expiresAt == null) {
-        return const _ResolvedGaslessReceive(
+        return _ResolvedGaslessReceive(
           status: GaslessReceiveStatus.securityMismatch,
           reason: GaslessReceiveReasonCode.remoteSchemaMismatch,
           shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
       }
       if (!expiresAt.isAfter(DateTime.now().toUtc())) {
@@ -457,6 +688,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           reason: GaslessReceiveReasonCode.remoteExpired,
           expiresAt: expiresAt,
           shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
       }
     }
@@ -468,6 +701,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           reason: remoteGate.reason,
           expiresAt: remoteGate.expiresAt,
           shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
       case TronGaslessReceiveGateOutcome.unavailable:
         return _ResolvedGaslessReceive(
@@ -475,6 +710,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           reason: remoteGate.reason,
           expiresAt: remoteGate.expiresAt,
           shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
       case TronGaslessReceiveGateOutcome.expired:
         return _ResolvedGaslessReceive(
@@ -482,6 +719,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           reason: remoteGate.reason,
           expiresAt: remoteGate.expiresAt,
           shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
       case TronGaslessReceiveGateOutcome.invalid:
         final missingEndpoint =
@@ -493,262 +732,141 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
               : GaslessReceiveStatus.securityMismatch,
           reason: remoteGate.reason,
           expiresAt: remoteGate.expiresAt,
-          shouldRefresh: !missingEndpoint,
+          shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
       case TronGaslessReceiveGateOutcome.enabled:
-        break;
-    }
-
-    final canonical = addresses
-        .where(
-          (address) =>
-              isCanonicalTronGaslessPubkey(address, isHdWallet: isHdWallet),
-        )
-        .toList(growable: false);
-    if (canonical.length > 1) {
-      return _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.securityMismatch,
-        reason: GaslessReceiveReasonCode.canonicalAddressAmbiguous,
-        expiresAt: remoteGate.expiresAt,
-      );
-    }
-    final candidate = canonical.singleOrNull?.gasfreeAddress?.trim();
-    if (candidate == null || candidate.isEmpty) {
-      return _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.temporarilyUnavailable,
-        reason: GaslessReceiveReasonCode.custodyAddressMissing,
-        expiresAt: remoteGate.expiresAt,
-        shouldRefresh: true,
-      );
-    }
-
-    try {
-      final status = hasBoundReceive
-          ? await sdk.withdrawals.gaslessAccountStatus(asset.id)
-          : await sdk.withdrawals.gaslessAccountStatusForReceive(
-              asset.id,
-              expectedGasfreeAddress: candidate,
-            );
-      if (!status.hasExplicitAvailability) {
-        return _legacyStatusUnavailable(status.reasonCode, remoteGate);
-      }
-      if (status.reasonCode != null) {
         return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.statusAttestationMissing,
-          expiresAt: remoteGate.expiresAt,
-        );
-      }
-      final degradedShapeFailure = _degradedStatusShapeFailure(status);
-      if (degradedShapeFailure != null) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: degradedShapeFailure,
-          expiresAt: remoteGate.expiresAt,
-        );
-      }
-      switch (status.availability) {
-        case GaslessAccountAvailability.available:
-          break;
-        case GaslessAccountAvailability.pendingTransfer:
-          return _ResolvedGaslessReceive(
-            status: GaslessReceiveStatus.temporarilyUnavailable,
-            reason: GaslessReceiveReasonCode.pendingTransfer,
-            expiresAt: remoteGate.expiresAt,
-            shouldRefresh: true,
-          );
-        case GaslessAccountAvailability.tokenUnsupported:
-          return _ResolvedGaslessReceive(
-            status: GaslessReceiveStatus.unsupported,
-            reason: GaslessReceiveReasonCode.tokenUnsupported,
-            expiresAt: remoteGate.expiresAt,
-          );
-        case GaslessAccountAvailability.providerUnreachable:
-          return _ResolvedGaslessReceive(
-            status: GaslessReceiveStatus.temporarilyUnavailable,
-            reason: GaslessReceiveReasonCode.providerTemporarilyUnavailable,
-            expiresAt: remoteGate.expiresAt,
-            shouldRefresh: true,
-          );
-      }
-      final serviceProvider = status.serviceProvider?.trim();
-      if (serviceProvider == null || serviceProvider.isEmpty) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.statusAttestationMissing,
-          expiresAt: remoteGate.expiresAt,
-        );
-      }
-      if (serviceProvider != tronGaslessServiceProvider.trim()) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.providerIdentityMismatch,
-          expiresAt: remoteGate.expiresAt,
-        );
-      }
-      final authoritativeAddress = status.gasfreeAddress.trim();
-      if (authoritativeAddress != candidate) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.custodyAddressMismatch,
+          status: GaslessReceiveStatus.ready,
+          reason: GaslessReceiveReasonCode.ready,
+          address: accountStatus.gasfreeAddress,
           expiresAt: remoteGate.expiresAt,
           shouldRefresh: true,
+          accountStatus: accountStatus,
+          observedAt: observedAt,
         );
-      }
-      if (status.active == null ||
-          status.frozenBalance == null ||
-          status.spendableBalance == null ||
-          status.transferFee == null) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.statusAttestationMissing,
-          expiresAt: remoteGate.expiresAt,
-        );
-      }
-      if (!hasWalletTronGaslessReceiveCapability(sdk, asset)) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.statusAttestationMissing,
-          expiresAt: remoteGate.expiresAt,
-        );
-      }
-      return _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.ready,
-        reason: GaslessReceiveReasonCode.ready,
-        address: authoritativeAddress,
-        expiresAt: remoteGate.expiresAt,
-        shouldRefresh: true,
-      );
-    } catch (_) {
-      try {
-        final capabilityFailure = _capabilityFailure(
-          sdk.gaslessCapability(asset).reasonCode,
-          remoteGate,
-        );
-        if (capabilityFailure != null) return capabilityFailure;
-      } catch (_) {
-        // Fall through to the privacy-safe unavailable state.
-      }
-      return _ResolvedGaslessReceive(
-        status: GaslessReceiveStatus.temporarilyUnavailable,
-        reason: GaslessReceiveReasonCode.accountStatusUnavailable,
-        expiresAt: remoteGate.expiresAt,
-        shouldRefresh: true,
+    }
+  }
+
+  bool _isPrimarySoftwareWallet(KdfUser? user) =>
+      user != null &&
+      user.walletId.authOptions.privKeyPolicy ==
+          const PrivateKeyPolicy.contextPrivKey();
+
+  _ResolvedGaslessReceive? _mapGaslessAccountStatusError(Object error) {
+    if (error is FormatException || error is ArgumentError) {
+      return const _ResolvedGaslessReceive(
+        status: GaslessReceiveStatus.securityMismatch,
+        reason: GaslessReceiveReasonCode.malformedAccountStatus,
       );
     }
-  }
-
-  _ResolvedGaslessReceive _legacyStatusUnavailable(
-    String? reasonCode,
-    TronGaslessReceiveGateDecision remoteGate,
-  ) {
-    final reason = switch (reasonCode) {
-      'runtime_restart_required' =>
-        GaslessReceiveReasonCode.runtimeRestartRequired,
-      'provider_temporarily_unavailable' =>
-        GaslessReceiveReasonCode.providerTemporarilyUnavailable,
-      'provider_identity_mismatch' =>
-        GaslessReceiveReasonCode.providerIdentityMismatch,
-      'token_unsupported' => GaslessReceiveReasonCode.tokenUnsupported,
-      'token_decimals_mismatch' =>
-        GaslessReceiveReasonCode.tokenDecimalsMismatch,
-      'custody_address_mismatch' =>
-        GaslessReceiveReasonCode.custodyAddressMismatch,
-      _ => GaslessReceiveReasonCode.statusAttestationMissing,
+    if (error is GaslessTransferException) {
+      final (status, reason, shouldRefresh) = switch (error.code) {
+        GaslessTransferErrorCode.serviceProviderMismatch => (
+          GaslessReceiveStatus.securityMismatch,
+          GaslessReceiveReasonCode.providerIdentityMismatch,
+          false,
+        ),
+        GaslessTransferErrorCode.custodyAddressMismatch => (
+          GaslessReceiveStatus.securityMismatch,
+          GaslessReceiveReasonCode.custodyAddressMismatch,
+          false,
+        ),
+        GaslessTransferErrorCode.tokenMismatch => (
+          GaslessReceiveStatus.securityMismatch,
+          GaslessReceiveReasonCode.tokenDecimalsMismatch,
+          false,
+        ),
+        GaslessTransferErrorCode.responseMismatch => (
+          GaslessReceiveStatus.securityMismatch,
+          GaslessReceiveReasonCode.malformedAccountStatus,
+          false,
+        ),
+        GaslessTransferErrorCode.unsupportedToken ||
+        GaslessTransferErrorCode.wrongCoinType => (
+          GaslessReceiveStatus.unsupported,
+          GaslessReceiveReasonCode.assetUnsupported,
+          false,
+        ),
+        GaslessTransferErrorCode.configurationInvalid ||
+        GaslessTransferErrorCode.capabilityNotReady => (
+          GaslessReceiveStatus.disabled,
+          GaslessReceiveReasonCode.reactivationRequired,
+          false,
+        ),
+        GaslessTransferErrorCode.providerUnavailable ||
+        GaslessTransferErrorCode.providerTimeout ||
+        GaslessTransferErrorCode.traceUnavailable => (
+          GaslessReceiveStatus.temporarilyUnavailable,
+          GaslessReceiveReasonCode.providerTemporarilyUnavailable,
+          true,
+        ),
+        _ when error.kind == GaslessTransferErrorKind.providerResponse => (
+          GaslessReceiveStatus.securityMismatch,
+          GaslessReceiveReasonCode.malformedAccountStatus,
+          false,
+        ),
+        _
+            when error.kind == GaslessTransferErrorKind.configuration ||
+                error.kind == GaslessTransferErrorKind.capabilityNotReady =>
+          (
+            GaslessReceiveStatus.disabled,
+            GaslessReceiveReasonCode.reactivationRequired,
+            false,
+          ),
+        _ => (
+          GaslessReceiveStatus.temporarilyUnavailable,
+          GaslessReceiveReasonCode.accountStatusUnavailable,
+          error.retryable,
+        ),
+      };
+      return _ResolvedGaslessReceive(
+        status: status,
+        reason: reason,
+        shouldRefresh: shouldRefresh,
+      );
+    }
+    final errorType = switch (error) {
+      GaslessAccountStatusException() => error.errorType,
+      MmRpcException() => error.errorType,
+      GeneralErrorResponse() => error.errorType,
+      _ => null,
     };
-    final status = switch (reason) {
-      GaslessReceiveReasonCode.runtimeRestartRequired =>
-        GaslessReceiveStatus.disabled,
-      GaslessReceiveReasonCode.tokenUnsupported =>
-        GaslessReceiveStatus.unsupported,
-      GaslessReceiveReasonCode.providerIdentityMismatch ||
-      GaslessReceiveReasonCode.custodyAddressMismatch ||
-      GaslessReceiveReasonCode.tokenDecimalsMismatch ||
-      GaslessReceiveReasonCode.statusAttestationMissing =>
-        GaslessReceiveStatus.securityMismatch,
-      _ => GaslessReceiveStatus.temporarilyUnavailable,
-    };
-    return _ResolvedGaslessReceive(
-      status: status,
-      reason: reason,
-      expiresAt: remoteGate.expiresAt,
-      shouldRefresh: status == GaslessReceiveStatus.temporarilyUnavailable,
-    );
-  }
-
-  GaslessReceiveReasonCode? _degradedStatusShapeFailure(
-    GaslessAccountStatusResponse status,
-  ) {
-    if (status.availability == GaslessAccountAvailability.available) {
-      return null;
-    }
-    // The V1 wire uses null—not an empty placeholder—to prove that no provider
-    // identity was accepted for a balance/recovery-only response.
-    if (status.serviceProvider != null) {
-      return GaslessReceiveReasonCode.providerIdentityMismatch;
-    }
-    if (status.spendableBalance != null ||
-        status.transferFee != null ||
-        status.activationFee != null ||
-        status.maxWithdrawable != null) {
-      return GaslessReceiveReasonCode.statusAttestationMissing;
-    }
-    // Pending may retain trusted provider state for presentation. Unsupported
-    // and unreachable responses are local-custody snapshots and must not carry
-    // any provider-derived account state.
-    if (status.availability != GaslessAccountAvailability.pendingTransfer &&
-        (status.active != null || status.frozenBalance != null)) {
-      return GaslessReceiveReasonCode.statusAttestationMissing;
-    }
-    return null;
-  }
-
-  _ResolvedGaslessReceive? _capabilityFailure(
-    String? reasonCode,
-    TronGaslessReceiveGateDecision remoteGate,
-  ) {
-    final (status, reason, shouldRefresh) = switch (reasonCode) {
-      'runtime_restart_required' => (
-        GaslessReceiveStatus.disabled,
-        GaslessReceiveReasonCode.runtimeRestartRequired,
-        false,
-      ),
-      'token_decimals_mismatch' => (
-        GaslessReceiveStatus.securityMismatch,
-        GaslessReceiveReasonCode.tokenDecimalsMismatch,
-        false,
-      ),
-      'custody_address_mismatch' => (
-        GaslessReceiveStatus.securityMismatch,
-        GaslessReceiveReasonCode.custodyAddressMismatch,
-        false,
-      ),
-      'provider_identity_mismatch' || 'degraded_provider_identity_present' => (
+    final (status, reason, shouldRefresh) = switch (errorType) {
+      'ProviderIdentityMismatch' => (
         GaslessReceiveStatus.securityMismatch,
         GaslessReceiveReasonCode.providerIdentityMismatch,
         false,
       ),
-      'invalid_account_status' ||
-      'availability_unattested' ||
-      'account_status_unconfirmed' ||
-      'unexpected_ready_reason' => (
+      'GasfreeAddressMismatch' => (
         GaslessReceiveStatus.securityMismatch,
-        GaslessReceiveReasonCode.statusAttestationMissing,
+        GaslessReceiveReasonCode.custodyAddressMismatch,
         false,
       ),
-      'token_unsupported' => (
+      'TokenDecimalMismatch' => (
+        GaslessReceiveStatus.securityMismatch,
+        GaslessReceiveReasonCode.tokenDecimalsMismatch,
+        false,
+      ),
+      'GaslessNotConfigured' => (
+        GaslessReceiveStatus.disabled,
+        GaslessReceiveReasonCode.reactivationRequired,
+        false,
+      ),
+      'CoinNotFound' || 'NotEthCoin' || 'CoinNotSupported' => (
         GaslessReceiveStatus.unsupported,
-        GaslessReceiveReasonCode.tokenUnsupported,
+        GaslessReceiveReasonCode.assetUnsupported,
         false,
       ),
-      'pending_transfer' => (
+      'TronRpcUnavailable' || 'ProviderError' => (
         GaslessReceiveStatus.temporarilyUnavailable,
-        GaslessReceiveReasonCode.pendingTransfer,
+        GaslessReceiveReasonCode.providerTemporarilyUnavailable,
         true,
       ),
-      'provider_unreachable' => (
+      'InternalError' => (
         GaslessReceiveStatus.temporarilyUnavailable,
-        GaslessReceiveReasonCode.providerTemporarilyUnavailable,
+        GaslessReceiveReasonCode.accountStatusUnavailable,
         true,
       ),
       _ => (null, null, false),
@@ -757,7 +875,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     return _ResolvedGaslessReceive(
       status: status,
       reason: reason,
-      expiresAt: remoteGate.expiresAt,
       shouldRefresh: shouldRefresh,
     );
   }
@@ -774,12 +891,65 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         : null;
   }
 
+  void _logGaslessReceiveDecision(_ResolvedGaslessReceive resolved) {
+    if (_lastLoggedGaslessReceiveWasReady &&
+        resolved.status != GaslessReceiveStatus.ready) {
+      _logGaslessReceiveRevocation(resolved.reason);
+    }
+    _lastLoggedGaslessReceiveWasReady =
+        resolved.status == GaslessReceiveStatus.ready;
+    final key = '${resolved.status.name}:${resolved.reason.code}';
+    if (_lastGaslessReceiveAnalyticsKey == key) return;
+    _lastGaslessReceiveAnalyticsKey = key;
+    analyticsBloc.logEvent(
+      GaslessReceiveAnalyticsEventData(
+        status: _gaslessReceiveAnalyticsStatus(resolved.status),
+        reason: resolved.reason,
+      ),
+    );
+  }
+
+  void _logGaslessReceiveRevocation(GaslessReceiveReasonCode reason) {
+    if (!_lastLoggedGaslessReceiveWasReady &&
+        state.gaslessReceiveStatus != GaslessReceiveStatus.ready) {
+      return;
+    }
+    _lastLoggedGaslessReceiveWasReady = false;
+    final key = 'revoked:${reason.code}';
+    if (_lastGaslessReceiveAnalyticsKey == key) return;
+    _lastGaslessReceiveAnalyticsKey = key;
+    analyticsBloc.logEvent(
+      GaslessReceiveAnalyticsEventData(
+        status: GaslessReceiveAnalyticsStatus.revoked,
+        reason: reason,
+      ),
+    );
+  }
+
+  GaslessReceiveAnalyticsStatus _gaslessReceiveAnalyticsStatus(
+    GaslessReceiveStatus status,
+  ) => switch (status) {
+    GaslessReceiveStatus.initial => GaslessReceiveAnalyticsStatus.initial,
+    GaslessReceiveStatus.checking => GaslessReceiveAnalyticsStatus.checking,
+    GaslessReceiveStatus.ready => GaslessReceiveAnalyticsStatus.ready,
+    GaslessReceiveStatus.stale => GaslessReceiveAnalyticsStatus.stale,
+    GaslessReceiveStatus.temporarilyUnavailable =>
+      GaslessReceiveAnalyticsStatus.temporarilyUnavailable,
+    GaslessReceiveStatus.disabled => GaslessReceiveAnalyticsStatus.disabled,
+    GaslessReceiveStatus.unsupported =>
+      GaslessReceiveAnalyticsStatus.unsupported,
+    GaslessReceiveStatus.securityMismatch =>
+      GaslessReceiveAnalyticsStatus.securityMismatch,
+  };
+
   void _scheduleGaslessReceiveRefresh(_ResolvedGaslessReceive resolved) {
     _gaslessReceiveRefreshTimer?.cancel();
     _gaslessReceiveRefreshTimer = null;
     if (!resolved.shouldRefresh || isClosed) return;
 
-    var delay = const Duration(minutes: 1);
+    // Refresh the typed status before the action-time one-minute freshness
+    // boundary. QR and copy still recheck it synchronously.
+    var delay = const Duration(seconds: 30);
     final expiresAt = resolved.expiresAt;
     if (expiresAt != null) {
       final untilExpiry = expiresAt.difference(DateTime.now().toUtc());
@@ -803,6 +973,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   ) {
     _gaslessReceiveEvaluationGeneration += 1;
     final failClosed = _shouldFailClosedGaslessReceive;
+    const unavailable = _ResolvedGaslessReceive(
+      status: GaslessReceiveStatus.temporarilyUnavailable,
+      reason: GaslessReceiveReasonCode.accountStatusUnavailable,
+      shouldRefresh: true,
+    );
     emit(
       state.copyWith(
         status: () => FormStatus.failure,
@@ -816,8 +991,14 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
         verifiedGasfreeAddress: failClosed ? () => null : null,
         gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
+        gaslessAccountStatus: failClosed ? () => null : null,
+        gaslessAccountStatusObservedAt: failClosed ? () => null : null,
       ),
     );
+    if (failClosed) {
+      _logGaslessReceiveDecision(unavailable);
+      _scheduleGaslessReceiveRefresh(unavailable);
+    }
   }
 
   bool get _shouldFailClosedGaslessReceive =>
@@ -935,6 +1116,8 @@ class _ResolvedGaslessReceive {
     this.address,
     this.expiresAt,
     this.shouldRefresh = false,
+    this.accountStatus,
+    this.observedAt,
   });
 
   final GaslessReceiveStatus status;
@@ -942,4 +1125,6 @@ class _ResolvedGaslessReceive {
   final String? address;
   final DateTime? expiresAt;
   final bool shouldRefresh;
+  final GaslessAccountStatusResponse? accountStatus;
+  final DateTime? observedAt;
 }

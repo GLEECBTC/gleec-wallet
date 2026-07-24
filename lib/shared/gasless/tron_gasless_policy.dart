@@ -1,5 +1,5 @@
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
-    show GaslessReceiveEvidence, KomodoDefiSdk;
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/constants.dart';
@@ -12,13 +12,9 @@ String tronGaslessRecoveryUrl({required bool isTestnet}) => isTestnet
     ? 'https://test.gasfree.io/withdraw'
     : 'https://gasfree.io/withdraw';
 
-/// Whether KDF proved the bound-relay contract required for exposing a new
-/// GasFree custody receive address.
-///
-/// Legacy PR #9 remains available for existing-custody send and recovery, but
-/// its relay responses cannot bind a new deposit address strongly enough for
-/// the receive surface. SDK lifecycle failures also fail closed here.
-bool hasBoundTronGaslessReceiveCapability(KomodoDefiSdk sdk, Asset asset) {
+/// Whether the SDK currently considers the canonical GasFree receive rail
+/// usable for [asset].
+bool hasTronGaslessReceiveCapability(KomodoDefiSdk sdk, Asset asset) {
   try {
     return sdk.canReceiveGasless(asset);
   } catch (_) {
@@ -26,94 +22,93 @@ bool hasBoundTronGaslessReceiveCapability(KomodoDefiSdk sdk, Asset asset) {
   }
 }
 
-/// Whether the wallet's core receive surface has sufficient V1 or V2 proof.
+/// Validates the product's pinned provider and custody address against the
+/// typed KDF account-status response.
 ///
-/// The status-attested V1 path is guarded by a dedicated, false-by-default
-/// build flag. This helper must not be used by external integrations or
-/// consolidation; those deliberately continue to call
-/// [hasBoundTronGaslessReceiveCapability].
-bool hasWalletTronGaslessReceiveCapability(
-  KomodoDefiSdk sdk,
-  Asset asset, {
-  bool allowStatusAttestedV1 = tronGaslessStatusAttestedReceiveEnabled,
+/// KDF deliberately omits `service_provider` for `provider_unreachable`; every
+/// response that does carry a provider must match the production pin exactly.
+bool isPinnedTronGaslessAccountStatus(
+  GaslessAccountStatusResponse status, {
+  required String custodyAddress,
+  required String expectedServiceProvider,
 }) {
-  if (hasBoundTronGaslessReceiveCapability(sdk, asset)) return true;
-  if (!allowStatusAttestedV1) return false;
-
-  try {
-    return sdk.canReceiveGaslessFromStatus(asset) &&
-        sdk.gaslessReceiveEvidence(asset) ==
-            GaslessReceiveEvidence.statusAttestedV1;
-  } catch (_) {
+  final provider = status.serviceProvider;
+  final expectedProvider = expectedServiceProvider.trim();
+  if (expectedProvider.isEmpty ||
+      (provider != null &&
+          (provider.isEmpty || provider != expectedProvider))) {
     return false;
   }
+
+  return custodyAddress.isNotEmpty &&
+      custodyAddress == custodyAddress.trim() &&
+      status.gasfreeAddress == custodyAddress;
 }
 
-/// Final UI boundary for exposing or using a GasFree receive address.
+/// Whether [status] authorizes a new GasFree deposit at [custodyAddress].
+bool isVerifiedTronGaslessReceiveStatus(
+  GaslessAccountStatusResponse status, {
+  required String custodyAddress,
+  required String expectedServiceProvider,
+}) {
+  if (status.availability != GaslessAccountAvailability.available) {
+    return false;
+  }
+  final provider = status.serviceProvider;
+  return provider != null &&
+      provider.isNotEmpty &&
+      isPinnedTronGaslessAccountStatus(
+        status,
+        custodyAddress: custodyAddress,
+        expectedServiceProvider: expectedServiceProvider,
+      );
+}
+
+/// Final app boundary for exposing or using a GasFree receive address.
 ///
 /// A previous `ready` result is insufficient once its remote-control document
-/// has expired or the canonical custody address has changed. Every receive
-/// surface calls this immediately before revealing, copying, or passing the
-/// address to an integration.
-bool isVerifiedBoundTronGaslessReceive(
+/// has expired, the typed status has changed, or the canonical custody address
+/// no longer matches. Every receive surface calls this immediately before
+/// revealing, copying, or passing the address to an integration.
+bool isVerifiedTronGaslessReceive(
   KomodoDefiSdk sdk,
   Asset asset, {
   required bool capabilityReady,
+  required GaslessAccountStatusResponse? accountStatus,
+  required DateTime? accountStatusObservedAt,
   required String? verifiedAddress,
   required String? custodyAddress,
   required DateTime? expiresAt,
+  required String expectedServiceProvider,
   DateTime? now,
 }) {
-  final verified = verifiedAddress?.trim();
-  final custody = custodyAddress?.trim();
+  final verified = verifiedAddress;
+  final custody = custodyAddress;
   final currentTime = (now ?? DateTime.now()).toUtc();
+  final statusObservedAt = accountStatusObservedAt?.toUtc();
   if (!capabilityReady ||
       verified == null ||
       verified.isEmpty ||
       custody == null ||
       custody.isEmpty ||
+      verified != verified.trim() ||
+      custody != custody.trim() ||
       verified != custody ||
       expiresAt == null ||
-      !expiresAt.toUtc().isAfter(currentTime)) {
+      !expiresAt.toUtc().isAfter(currentTime) ||
+      statusObservedAt == null ||
+      statusObservedAt.isAfter(currentTime) ||
+      currentTime.difference(statusObservedAt) > const Duration(minutes: 1) ||
+      accountStatus == null ||
+      !isVerifiedTronGaslessReceiveStatus(
+        accountStatus,
+        custodyAddress: custody,
+        expectedServiceProvider: expectedServiceProvider,
+      )) {
     return false;
   }
 
-  return hasBoundTronGaslessReceiveCapability(sdk, asset);
-}
-
-/// Final wallet-only boundary for showing, copying, or rendering a GasFree QR.
-///
-/// Address equality and remote expiry are rechecked at the user action, not
-/// only when the BLoC first evaluated availability.
-bool isVerifiedWalletTronGaslessReceive(
-  KomodoDefiSdk sdk,
-  Asset asset, {
-  required bool capabilityReady,
-  required String? verifiedAddress,
-  required String? custodyAddress,
-  required DateTime? expiresAt,
-  DateTime? now,
-  bool allowStatusAttestedV1 = tronGaslessStatusAttestedReceiveEnabled,
-}) {
-  final verified = verifiedAddress?.trim();
-  final custody = custodyAddress?.trim();
-  final currentTime = (now ?? DateTime.now()).toUtc();
-  if (!capabilityReady ||
-      verified == null ||
-      verified.isEmpty ||
-      custody == null ||
-      custody.isEmpty ||
-      verified != custody ||
-      expiresAt == null ||
-      !expiresAt.toUtc().isAfter(currentTime)) {
-    return false;
-  }
-
-  return hasWalletTronGaslessReceiveCapability(
-    sdk,
-    asset,
-    allowStatusAttestedV1: allowStatusAttestedV1,
-  );
+  return hasTronGaslessReceiveCapability(sdk, asset);
 }
 
 /// Validates a TRC-20 identity against the provider network selected by the
@@ -145,9 +140,9 @@ bool isTronGaslessAssetIdEligible(
   };
 }
 
-/// Identity-only check for SDK assets. This does not imply the build enabled
-/// GasFree; use [TronGaslessAssetPolicy.isTronGaslessConfiguredAsset] for the
-/// actual capability gate.
+/// Identity-only check for SDK assets. This does not imply either rail is
+/// enabled; use the send- or receive-specific configured-asset getter below
+/// for the actual capability gate.
 bool isTronGaslessAssetEligible(Asset asset, {String? providerNetworkPath}) {
   final config = asset.protocol.config;
   return isTronGaslessAssetIdEligible(

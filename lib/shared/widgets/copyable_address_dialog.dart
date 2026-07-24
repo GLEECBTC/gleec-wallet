@@ -44,7 +44,7 @@ class CopyableAddressDialog extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final addressText = _receiveAddressText(address!);
+    final addressText = address!.address;
     final Color? background =
         backgroundColor ?? Theme.of(context).inputDecorationTheme.fillColor;
 
@@ -122,28 +122,11 @@ class CopyableAddressDialog extends StatelessWidget {
     );
   }
 
-  String _receiveAddressText(PubkeyInfo address) {
-    final gasfreeAddress = address.gasfreeAddress;
-    if (_usesGasfreeAddress(address)) {
-      return gasfreeAddress!;
-    }
-
-    return address.address;
-  }
-
-  bool _usesGasfreeAddress(PubkeyInfo address) =>
-      asset.protocol is Trc20Protocol &&
-      (address.gasfreeAddress?.isNotEmpty ?? false);
-
   String _receiveAddressStatus(PubkeyInfo address) {
     final args = [
       formatDexAmt(address.balance.spendable),
       asset.id.symbol.configSymbol,
     ];
-    if (_usesGasfreeAddress(address)) {
-      return LocaleKeys.receiveGasfreeAddressStatus.tr(args: args);
-    }
-
     return LocaleKeys.addressBalanceAvailable.tr(args: args);
   }
 
@@ -154,9 +137,6 @@ class CopyableAddressDialog extends StatelessWidget {
       context,
       addresses: pubkeys.keys,
       assetNameLabel: asset.id.id,
-      verified: _usesGasfreeAddress,
-      displayAddress: _receiveAddressText,
-      copyAddress: _receiveAddressText,
       balanceLabel: _receiveAddressStatus,
     );
 

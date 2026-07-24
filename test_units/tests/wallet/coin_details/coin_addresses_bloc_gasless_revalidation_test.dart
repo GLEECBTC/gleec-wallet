@@ -7,7 +7,9 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/analytics/events/transaction_events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
+import 'package:web_dex/bloc/analytics/analytics_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
@@ -162,7 +164,18 @@ class _FakeSdk implements KomodoDefiSdk {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _NoopAnalyticsBloc implements AnalyticsBloc {
+class _RecordingAnalyticsBloc implements AnalyticsBloc {
+  final List<GaslessReceiveAnalyticsEventData> receiveEvents = [];
+
+  @override
+  void add(AnalyticsEvent event) {
+    if (event case AnalyticsSendDataEvent(
+      data: final GaslessReceiveAnalyticsEventData data,
+    )) {
+      receiveEvents.add(data);
+    }
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -207,6 +220,7 @@ void testCoinAddressesBlocGaslessRevalidation() {
         final original = _pubkey('Original');
         final auth = _ControlledAuth(_user());
         final pubkeys = _FakePubkeyManager(asset, testCase.$2);
+        final analytics = _RecordingAnalyticsBloc();
         final bloc = _TestCoinAddressesBloc(
           _FakeSdk(
             assets: _FakeAssetManager(asset),
@@ -214,7 +228,7 @@ void testCoinAddressesBlocGaslessRevalidation() {
             pubkeys: pubkeys,
           ),
           asset.id.id,
-          _NoopAnalyticsBloc(),
+          analytics,
           gaslessReceiveGate: _DisabledReceiveGate(),
         );
         addTearDown(bloc.close);
@@ -242,6 +256,15 @@ void testCoinAddressesBlocGaslessRevalidation() {
         expect(checking.gaslessReceiveStatus, GaslessReceiveStatus.checking);
         expect(checking.verifiedGasfreeAddress, isNull);
         expect(checking.gaslessReceiveWalletPubkeyHash, isNull);
+        expect(analytics.receiveEvents, hasLength(1));
+        expect(
+          analytics.receiveEvents.single.parameters,
+          containsPair('status', 'revoked'),
+        );
+        expect(
+          analytics.receiveEvents.single.parameters,
+          containsPair('code', 'custody_address_mismatch'),
+        );
 
         final settledFuture = bloc.stream
             .firstWhere(

@@ -12,7 +12,24 @@ import 'package:web_dex/bloc/withdraw_form/withdraw_form_step.dart';
 import 'package:web_dex/bloc/withdraw_form/gasless_transfer_state.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+
+/// Returns every source that qualifies as the canonical TRON GasFree signer.
+///
+/// Callers must require exactly one result before enabling GasFree. Returning
+/// the full set makes duplicate canonical metadata an explicit security state
+/// instead of silently selecting whichever key happened to be listed first.
+List<PubkeyInfo> canonicalTronGaslessSourceCandidates(
+  Iterable<PubkeyInfo> sources, {
+  required bool isHdWallet,
+}) => sources
+    .where(
+      (source) =>
+          isCanonicalTronGaslessPubkey(source, isHdWallet: isHdWallet) &&
+          (source.gasfreeAddress?.trim().isNotEmpty ?? false),
+    )
+    .toList(growable: false);
 
 class WithdrawFormState extends Equatable {
   static const int tronPreviewExpirationSeconds = 60;
@@ -50,12 +67,10 @@ class WithdrawFormState extends Equatable {
   final FeeInfo? customFee;
   // Gas-free (gasless) TRC20 withdrawal options
   final bool isGaslessEnabled;
-  final Decimal? gaslessMaxFee;
 
-  /// Latest `gasless::account_status` snapshot for [asset] (custody balance,
-  /// fees, activation state, provider availability). Null until the first
-  /// successful fetch; kept stale-but-present when a refresh fails so the UI
-  /// degrades gracefully. Only populated when [isGaslessSupported].
+  /// Strict KDF account snapshot returned through the SDK. It controls rail
+  /// availability, but the fresh withdrawal preview remains monetary
+  /// authority for amount and fees.
   final GaslessAccountStatusResponse? gaslessAccountStatus;
 
   /// When [gaslessAccountStatus] was fetched — drives the bloc's TTL cache.
@@ -85,11 +100,11 @@ class WithdrawFormState extends Equatable {
 
   /// Typed relay lifecycle state matching [gaslessStatusMessage]; preferred
   /// by the UI so the status copy can be localized. Null before the relay
-  /// poll starts and for non-gasless flows.
+  /// stream starts and for non-gasless flows.
   final GaslessTraceState? gaslessTraceState;
 
   /// Wallet-facing transfer finality. Unlike [gaslessTraceState], this also
-  /// represents pre-relay rejection and an accepted transfer whose status is
+  /// represents pre-relay rejection and a transfer whose acceptance itself is
   /// temporarily unknown.
   final GaslessTransferState? gaslessTransferState;
 
@@ -97,11 +112,9 @@ class WithdrawFormState extends Equatable {
   /// a blind retry must be prohibited until an authoritative terminal state.
   final String? gaslessTraceId;
 
-  /// Wallet-generated identity persisted before relay submission. This is
-  /// intentionally distinct from [gaslessTraceId]: a request-only journal
-  /// record has an unknown submission outcome and must never be polled as if
-  /// the request ID were a provider trace handle.
-  final String? gaslessRequestId;
+  /// Wallet-local journal identity reserved before relay submission. It is
+  /// never sent to KDF and must never be treated as a provider trace handle.
+  final String? gaslessJournalId;
 
   final DateTime? gaslessSubmittedAt;
 
@@ -117,6 +130,7 @@ class WithdrawFormState extends Equatable {
 
   // Network/Transaction errors
   final TextError? previewError; // Errors during preview generation
+  final GaslessQuoteFailure? gaslessQuoteFailure;
   final TextError? transactionError; // Errors during transaction submission
   final TextError?
   confirmStepError; // Errors while refreshing an expired TRON preview
@@ -156,8 +170,36 @@ class WithdrawFormState extends Equatable {
       gaslessPendingStoreHealthy &&
       walletType != WalletType.trezor;
 
+  List<PubkeyInfo> get canonicalGaslessSourceCandidates =>
+      canonicalTronGaslessSourceCandidates(
+        pubkeys?.keys ?? const <PubkeyInfo>[],
+        isHdWallet: walletType == WalletType.hdwallet,
+      );
+
+  /// The only source that may authorize a GasFree send.
+  ///
+  /// Zero candidates means the rail is unsupported for the active source
+  /// snapshot. More than one is a hard security mismatch.
+  PubkeyInfo? get canonicalGaslessSource {
+    final candidates = canonicalGaslessSourceCandidates;
+    return candidates.length == 1 ? candidates.single : null;
+  }
+
+  bool get hasAmbiguousGaslessSources =>
+      canonicalGaslessSourceCandidates.length > 1;
+
+  bool get hasCanonicalGaslessSourceSelected {
+    final canonicalSource = canonicalGaslessSource;
+    return canonicalSource != null &&
+        selectedSourceAddress?.address == canonicalSource.address;
+  }
+
   /// Whether the gas-free rail should be requested for this withdrawal.
-  bool get useGasless => isGaslessSupported && isGaslessEnabled;
+  bool get useGasless =>
+      isGaslessSupported &&
+      isGaslessEnabled &&
+      hasCanonicalGaslessSourceSelected &&
+      !hasAmbiguousGaslessSources;
 
   /// True when this asset would be gas-free but the active wallet is a
   /// hardware wallet, which cannot use the gasless rail — used to show an
@@ -177,9 +219,8 @@ class WithdrawFormState extends Equatable {
 
   /// True when the GasFree provider reported itself unreachable: the custody
   /// balance is still known (on-chain fallback) but a gasless send cannot be
-  /// built right now. Only a *successful* status fetch with an explicit
-  /// non-available result blocks — a failed fetch leaves the KDF preview as
-  /// the authority.
+  /// built right now. Failed or stale status refreshes also pause new sends
+  /// until a fresh `available` snapshot is observed.
   bool get isGaslessProviderUnavailable =>
       useGasless &&
       (gaslessAvailability == GaslessAvailability.providerUnavailable ||
@@ -192,11 +233,7 @@ class WithdrawFormState extends Equatable {
   /// previewable so Preview can perform the authoritative check; a returned
   /// provider rejection, unsupported token, or security mismatch fails closed.
   bool get isGaslessSendBlocked =>
-      useGasless &&
-      (gaslessAvailability.isBlocked ||
-          (gaslessAccountStatus != null &&
-              gaslessAccountStatus!.availability !=
-                  GaslessAccountAvailability.available));
+      useGasless && !gaslessAvailability.isVerifiedReady;
 
   /// Advisory largest amount reported by account status, or null when KDF
   /// omitted the estimate or the native rail is selected.
@@ -233,35 +270,6 @@ class WithdrawFormState extends Equatable {
   Decimal? get gaslessTransferFee => gaslessAvailability.isVerifiedReady
       ? gaslessAccountStatus?.transferFee
       : null;
-
-  /// True when the gas-free rail is usable (provider available, status known)
-  /// but the custody balance is entirely consumed by the transfer (and, on a
-  /// first send, activation) fee — so the maximum sendable amount is zero even
-  /// though the account holds funds. Distinct from a genuinely empty custody
-  /// (`on_chain == 0`), which is an honest "deposit funds" case KDF already
-  /// reports well.
-  bool get isGaslessBalanceBelowFees {
-    final status = gaslessAccountStatus;
-    if (!useGasless ||
-        status == null ||
-        status.availability != GaslessAccountAvailability.available) {
-      return false;
-    }
-    final spendable = status.spendableBalance;
-    final feeFloor =
-        (status.transferFee ?? Decimal.zero) +
-        (status.activationFee ?? Decimal.zero);
-    return spendable != null &&
-        spendable > Decimal.zero &&
-        feeFloor >= spendable;
-  }
-
-  /// True when gas-free was requested but the generated [preview] came back as
-  /// a native (TRX-funded) transfer — i.e. KDF could not build the gas-free
-  /// rail and fell back. The wallet treats this as a blocking condition rather
-  /// than silently broadcasting a native transfer the user did not choose.
-  bool get didGaslessDowngrade =>
-      useGasless && preview != null && preview!.fee is FeeInfoTron;
 
   bool get hasPreviewError => previewError != null;
   bool get hasTransactionError => transactionError != null;
@@ -328,7 +336,6 @@ class WithdrawFormState extends Equatable {
     this.isCustomFee = false,
     this.customFee,
     this.isGaslessEnabled = true,
-    this.gaslessMaxFee,
     this.gaslessAccountStatus,
     this.gaslessStatusFetchedAt,
     this.isGaslessStatusLoading = false,
@@ -346,7 +353,7 @@ class WithdrawFormState extends Equatable {
     this.gaslessTraceState,
     this.gaslessTransferState,
     this.gaslessTraceId,
-    this.gaslessRequestId,
+    this.gaslessJournalId,
     this.gaslessSubmittedAt,
     // Hardware wallet state
     this.isAwaitingTrezorConfirmation = false,
@@ -357,6 +364,7 @@ class WithdrawFormState extends Equatable {
     this.customFeeError,
     this.ibcChannelError,
     this.previewError,
+    this.gaslessQuoteFailure,
     this.transactionError,
     this.confirmStepError,
     this.networkError,
@@ -381,7 +389,6 @@ class WithdrawFormState extends Equatable {
     bool? isCustomFee,
     ValueGetter<FeeInfo?>? customFee,
     bool? isGaslessEnabled,
-    ValueGetter<Decimal?>? gaslessMaxFee,
     ValueGetter<GaslessAccountStatusResponse?>? gaslessAccountStatus,
     ValueGetter<DateTime?>? gaslessStatusFetchedAt,
     bool? isGaslessStatusLoading,
@@ -399,7 +406,7 @@ class WithdrawFormState extends Equatable {
     ValueGetter<GaslessTraceState?>? gaslessTraceState,
     ValueGetter<GaslessTransferState?>? gaslessTransferState,
     ValueGetter<String?>? gaslessTraceId,
-    ValueGetter<String?>? gaslessRequestId,
+    ValueGetter<String?>? gaslessJournalId,
     ValueGetter<DateTime?>? gaslessSubmittedAt,
     // Hardware wallet state
     bool? isAwaitingTrezorConfirmation,
@@ -410,6 +417,7 @@ class WithdrawFormState extends Equatable {
     ValueGetter<TextError?>? customFeeError,
     ValueGetter<TextError?>? ibcChannelError,
     ValueGetter<TextError?>? previewError,
+    ValueGetter<GaslessQuoteFailure?>? gaslessQuoteFailure,
     ValueGetter<TextError?>? transactionError,
     ValueGetter<TextError?>? confirmStepError,
     ValueGetter<TextError?>? networkError,
@@ -438,9 +446,6 @@ class WithdrawFormState extends Equatable {
       isCustomFee: isCustomFee ?? this.isCustomFee,
       customFee: customFee != null ? customFee() : this.customFee,
       isGaslessEnabled: isGaslessEnabled ?? this.isGaslessEnabled,
-      gaslessMaxFee: gaslessMaxFee != null
-          ? gaslessMaxFee()
-          : this.gaslessMaxFee,
       gaslessAccountStatus: gaslessAccountStatus != null
           ? gaslessAccountStatus()
           : this.gaslessAccountStatus,
@@ -475,9 +480,9 @@ class WithdrawFormState extends Equatable {
       gaslessTraceId: gaslessTraceId != null
           ? gaslessTraceId()
           : this.gaslessTraceId,
-      gaslessRequestId: gaslessRequestId != null
-          ? gaslessRequestId()
-          : this.gaslessRequestId,
+      gaslessJournalId: gaslessJournalId != null
+          ? gaslessJournalId()
+          : this.gaslessJournalId,
       gaslessSubmittedAt: gaslessSubmittedAt != null
           ? gaslessSubmittedAt()
           : this.gaslessSubmittedAt,
@@ -497,6 +502,11 @@ class WithdrawFormState extends Equatable {
           ? ibcChannelError()
           : this.ibcChannelError,
       previewError: previewError != null ? previewError() : this.previewError,
+      gaslessQuoteFailure: gaslessQuoteFailure != null
+          ? gaslessQuoteFailure()
+          : previewError != null || confirmStepError != null
+          ? null
+          : this.gaslessQuoteFailure,
       transactionError: transactionError != null
           ? transactionError()
           : this.transactionError,
@@ -542,11 +552,9 @@ class WithdrawFormState extends Equatable {
       feeMethod: useGasless ? WithdrawalFeeMethod.gasless : null,
       gaslessOptions: useGasless
           ? GaslessWithdrawalOptions(
-              maxFee: gaslessMaxFee,
               deadlineSeconds: gaslessPermitDeadlineSeconds,
-              // A checked gas-free option must never ask KDF to build a native
-              // fallback. [didGaslessDowngrade] remains as a defensive guard for
-              // older KDF responses or unexpected preview shapes.
+              // A checked GasFree option must never ask KDF to build a native
+              // fallback. The BLoC rejects any unexpected native preview.
               fallbackToNative: false,
             )
           : null,
@@ -577,7 +585,6 @@ class WithdrawFormState extends Equatable {
     isCustomFee,
     customFee,
     isGaslessEnabled,
-    gaslessMaxFee,
     gaslessAccountStatus,
     gaslessStatusFetchedAt,
     isGaslessStatusLoading,
@@ -595,7 +602,7 @@ class WithdrawFormState extends Equatable {
     gaslessTraceState,
     gaslessTransferState,
     gaslessTraceId,
-    gaslessRequestId,
+    gaslessJournalId,
     gaslessSubmittedAt,
     isAwaitingTrezorConfirmation,
     recipientAddressError,
@@ -604,6 +611,7 @@ class WithdrawFormState extends Equatable {
     customFeeError,
     ibcChannelError,
     previewError,
+    gaslessQuoteFailure,
     transactionError,
     confirmStepError,
     networkError,

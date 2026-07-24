@@ -26,6 +26,17 @@ class CoinAddressesGaslessReceiveRefreshRequested extends CoinAddressesEvent {
   const CoinAddressesGaslessReceiveRefreshRequested();
 }
 
+/// Revokes sensitive GasFree receive actions while the app is not foregrounded
+/// and requests a fresh status when it becomes active again.
+class CoinAddressesGaslessReceiveVisibilityChanged extends CoinAddressesEvent {
+  const CoinAddressesGaslessReceiveVisibilityChanged(this.isForeground);
+
+  final bool isForeground;
+
+  @override
+  List<Object?> get props => [isForeground];
+}
+
 class CoinAddressesZeroBalanceVisibilityChanged extends CoinAddressesEvent {
   final bool hideZeroBalance;
 

@@ -3,7 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
-    show BalanceManager, GaslessAccountStatusResponse, KomodoDefiSdk;
+    show
+        BalanceManager,
+        GaslessAccountAvailability,
+        GaslessAccountStatusResponse,
+        KomodoDefiSdk;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart' show AddressSelectInput;
 import 'package:komodo_ui_kit/komodo_ui_kit.dart' show UiPrimaryButton;
@@ -71,20 +75,35 @@ BalanceInfo _balance(String amount) {
 }
 
 GaslessAccountStatusResponse _gaslessStatus({
-  bool providerAvailable = true,
-  bool? active = true,
+  GaslessAccountAvailability availability =
+      GaslessAccountAvailability.available,
+  bool active = true,
   String? activationFee,
-  String? transferFee = '1',
 }) {
   return GaslessAccountStatusResponse.parse({
     'mmrpc': '2.0',
     'result': {
       'gasfree_address': 'TGasFreeSourceAddress',
       'on_chain_balance': '100',
-      'provider_available': providerAvailable,
-      if (active != null) 'active': active,
-      if (transferFee != null) 'transfer_fee': transferFee,
-      if (activationFee != null) 'activation_fee': activationFee,
+      'availability': availability.wireValue,
+      if (availability != GaslessAccountAvailability.providerUnreachable)
+        'service_provider': 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+      if (availability == GaslessAccountAvailability.available ||
+          availability == GaslessAccountAvailability.pendingTransfer) ...{
+        'active': active,
+        'frozen_balance':
+            availability == GaslessAccountAvailability.pendingTransfer
+            ? '1'
+            : '0',
+        'spendable_balance':
+            availability == GaslessAccountAvailability.pendingTransfer
+            ? '99'
+            : '100',
+        'transfer_fee': '1',
+        if (activationFee != null) 'activation_fee': activationFee,
+      },
+      if (availability == GaslessAccountAvailability.available)
+        'max_withdrawable': '99',
     },
   });
 }
@@ -92,8 +111,10 @@ GaslessAccountStatusResponse _gaslessStatus({
 WithdrawFormState _trc20FillState({
   bool isGaslessEnabled = true,
   GaslessAccountStatusResponse? gaslessAccountStatus,
+  GaslessAvailability? gaslessAvailability,
   WalletType? walletType = WalletType.hdwallet,
   bool isGaslessStatusLoading = false,
+  bool isSending = false,
   String sourceBalance = '100',
 }) {
   final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
@@ -106,6 +127,19 @@ WithdrawFormState _trc20FillState({
     coinTicker: asset.id.id,
     gasfreeAddress: 'TGasFreeSourceAddress',
   );
+  final resolvedGaslessAvailability = isGaslessStatusLoading
+      ? GaslessAvailability.checking
+      : gaslessAvailability ??
+            switch (gaslessAccountStatus?.availability) {
+              null => GaslessAvailability.initial,
+              GaslessAccountAvailability.available => GaslessAvailability.ready,
+              GaslessAccountAvailability.pendingTransfer =>
+                GaslessAvailability.pendingTransfer,
+              GaslessAccountAvailability.tokenUnsupported =>
+                GaslessAvailability.unsupported,
+              GaslessAccountAvailability.providerUnreachable =>
+                GaslessAvailability.providerUnavailable,
+            };
   return WithdrawFormState(
     isGaslessFeatureConfigured: true,
     asset: asset,
@@ -121,8 +155,10 @@ WithdrawFormState _trc20FillState({
     amount: '1',
     isGaslessEnabled: isGaslessEnabled,
     gaslessAccountStatus: gaslessAccountStatus,
+    gaslessAvailability: resolvedGaslessAvailability,
     walletType: walletType,
     isGaslessStatusLoading: isGaslessStatusLoading,
+    isSending: isSending,
   );
 }
 
@@ -157,10 +193,16 @@ class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _buildTestWidget(WithdrawFormBloc bloc) {
+Widget _buildTestWidget(
+  WithdrawFormBloc bloc, {
+  bool disableAnimations = false,
+}) {
   return MaterialApp(
     home: MediaQuery(
-      data: const MediaQueryData(size: Size(1280, 1200)),
+      data: MediaQueryData(
+        size: const Size(1280, 1200),
+        disableAnimations: disableAnimations,
+      ),
       child: Builder(
         builder: (context) {
           updateScreenType(context);
@@ -348,6 +390,29 @@ void testWithdrawFormFillSection() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
 
+    testWidgets('checking and quote progress honor reduced motion', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(isGaslessStatusLoading: true, isSending: true),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc, disableAnimations: true));
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        find.byKey(const Key('withdraw-gasless-checking-static-progress')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('withdraw-preview-static-progress')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
     testWidgets(
       'source selector still offers both pots when the standard address is '
       'empty',
@@ -453,9 +518,7 @@ void testWithdrawFormFillSection() {
       final bloc = _FakeWithdrawFormBloc(
         _trc20FillState(
           gaslessAccountStatus: _gaslessStatus(
-            providerAvailable: false,
-            active: null,
-            transferFee: null,
+            availability: GaslessAccountAvailability.providerUnreachable,
           ),
         ),
       );
@@ -485,6 +548,34 @@ void testWithdrawFormFillSection() {
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
+
+    testWidgets(
+      'disabled rail uses controlled-reactivation copy without retry action',
+      (tester) async {
+        final bloc = _FakeWithdrawFormBloc(
+          _trc20FillState(gaslessAvailability: GaslessAvailability.disabled),
+        );
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(_buildTestWidget(bloc));
+
+        expect(find.byKey(const Key('withdraw-gasless-chip')), findsOneWidget);
+        expect(
+          find.text('withdrawGaslessReactivationRequired'),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('gasless-provider-unavailable-retry')),
+          findsNothing,
+        );
+        final previewButton = tester.widget<PreviewWithdrawButton>(
+          find.byType(PreviewWithdrawButton),
+        );
+        expect(previewButton.onPressed, isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
 
     testWidgets('Trezor sees the honest hardware notice instead of gasless', (
       tester,

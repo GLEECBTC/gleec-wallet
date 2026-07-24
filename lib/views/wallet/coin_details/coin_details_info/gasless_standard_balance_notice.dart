@@ -20,8 +20,8 @@ import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 /// For a gasless asset the app receives into — and spends from — the GasFree
 /// custody address, so any standard-address balance is stranded: it cannot be
 /// sent gaslessly and would otherwise be invisible (the headline balance shows
-/// custody only). `PubkeyInfo.balance` is the raw EOA balance — the custody
-/// substitution in the SDK's BalanceManager does not touch pubkeys.
+/// custody only). `PubkeyInfo.balance` remains the authoritative EOA balance;
+/// custody totals come from the typed GasFree account-status snapshot.
 Decimal strandedStandardBalance(CoinAddressesState state) {
   return state.addresses.fold(
     Decimal.zero,
@@ -60,6 +60,9 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
     final walletType = context.select<AuthBloc, WalletType?>(
       (bloc) => bloc.state.currentUser?.wallet.config.type,
     );
+    final walletPubkeyHash = context.select<AuthBloc, String?>(
+      (bloc) => bloc.state.currentUser?.walletId.pubkeyHash,
+    );
 
     return BlocBuilder<CoinAddressesBloc, CoinAddressesState>(
       builder: (context, state) {
@@ -76,6 +79,7 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
                 asset,
                 state,
                 walletType: walletType,
+                currentWalletPubkeyHash: walletPubkeyHash,
               );
         final canMoveToGasfree = consolidationAddress != null;
 
@@ -111,6 +115,12 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
                                   ?.wallet
                                   .config
                                   .type,
+                              currentWalletPubkeyHash: context
+                                  .read<AuthBloc>()
+                                  .state
+                                  .currentUser
+                                  ?.walletId
+                                  .pubkeyHash,
                             ) ==
                             null) {
                           return;

@@ -34,8 +34,10 @@ import 'tests/balance_utils/compute_wallet_total_usd_tests.dart';
 import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
 import 'tests/analytics/transaction_event_privacy_test.dart';
 import 'tests/bitrefill/bitrefill_refund_url_test.dart';
+import 'tests/bitrefill/bitrefill_wallet_binding_test.dart';
 import 'tests/wallet/coin_details/coin_details_balance_confirmation_controller_test.dart';
 import 'tests/wallet/coin_details/coin_details_balance_content_test.dart';
+import 'tests/wallet/coin_details/gasless_consolidation_wizard_lifecycle_test.dart';
 import 'tests/wallet/coin_details/kmd_rewards_logic_test.dart';
 import 'tests/wallet/coin_details/receive_address_faucet_widget_test.dart';
 import 'tests/wallet/coin_details/rewards_widget_test.dart';
@@ -130,6 +132,7 @@ void main() {
     testWithdrawFormBloc();
     testCoinDetailsBalanceConfirmationController();
     testCoinDetailsBalanceContent();
+    testGaslessConsolidationWizardLifecycle();
     testWithdrawFormFillSection();
     testWithdrawFormConfirmReceipt();
     testTransactionDetailsLogic();
@@ -142,4 +145,5 @@ void main() {
 
   testTransactionEventPrivacy();
   testBitrefillRefundUrl();
+  testBitrefillWalletBinding();
 }

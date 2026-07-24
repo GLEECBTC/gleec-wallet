@@ -13,8 +13,8 @@ enum GaslessReceiveReasonCode {
   assetUnsupported('asset_unsupported'),
   buildFeatureDisabled('build_feature_disabled'),
   receiveBuildDisabled('receive_build_disabled'),
-  boundRelayRequired('bound_relay_required'),
   providerConfigurationInvalid('provider_configuration_invalid'),
+  reactivationRequired('reactivation_required'),
   controlEndpointMissing('control_endpoint_missing'),
   controlEndpointInvalid('control_endpoint_invalid'),
   localBindingInvalid('local_binding_invalid'),
@@ -32,10 +32,11 @@ enum GaslessReceiveReasonCode {
   remoteExpiryTooFar('remote_expiry_too_far'),
   custodyAddressMissing('custody_address_missing'),
   canonicalAddressAmbiguous('canonical_address_ambiguous'),
+  walletUnsupported('wallet_unsupported'),
+  appBackgrounded('app_backgrounded'),
   accountStatusUnavailable('account_status_unavailable'),
-  statusAttestationMissing('status_attestation_missing'),
-  runtimeRestartRequired('runtime_restart_required'),
-  providerUnavailable('provider_unavailable'),
+  accountStatusExpired('account_status_expired'),
+  malformedAccountStatus('malformed_account_status'),
   providerTemporarilyUnavailable('provider_temporarily_unavailable'),
   pendingTransfer('pending_transfer'),
   providerIdentityMismatch('provider_identity_mismatch'),
@@ -80,9 +81,9 @@ abstract interface class TronGaslessReceiveGate {
 /// receives.
 ///
 /// The service is deliberately fail-closed. It never returns `enabled` for a
-/// redirect, transport error, non-JSON body, unknown field, stale document, or
-/// document bound to a different network/provider. Existing custody access is
-/// outside this service and must remain visible to callers.
+/// missing endpoint, redirect, transport error, non-JSON body, unknown field,
+/// stale document, or document bound to a different network/provider. Existing
+/// custody access is outside this service and must remain visible to callers.
 class HttpTronGaslessReceiveGate implements TronGaslessReceiveGate {
   HttpTronGaslessReceiveGate({
     required String endpoint,
@@ -125,16 +126,6 @@ class HttpTronGaslessReceiveGate implements TronGaslessReceiveGate {
 
   @override
   Future<TronGaslessReceiveGateDecision> evaluate() async {
-    final endpoint = parseTronGaslessControlEndpoint(_endpoint);
-    if (endpoint == null) {
-      return TronGaslessReceiveGateDecision(
-        outcome: TronGaslessReceiveGateOutcome.invalid,
-        reason: _endpoint.trim().isEmpty
-            ? GaslessReceiveReasonCode.controlEndpointMissing
-            : GaslessReceiveReasonCode.controlEndpointInvalid,
-      );
-    }
-
     if ((_expectedNetwork != 'tron' && _expectedNetwork != 'nile') ||
         !isValidTronServiceProvider(_expectedServiceProvider) ||
         _timeout <= Duration.zero ||
@@ -146,6 +137,21 @@ class HttpTronGaslessReceiveGate implements TronGaslessReceiveGate {
       return const TronGaslessReceiveGateDecision(
         outcome: TronGaslessReceiveGateOutcome.invalid,
         reason: GaslessReceiveReasonCode.localBindingInvalid,
+      );
+    }
+
+    if (_endpoint.trim().isEmpty) {
+      return const TronGaslessReceiveGateDecision(
+        outcome: TronGaslessReceiveGateOutcome.invalid,
+        reason: GaslessReceiveReasonCode.controlEndpointMissing,
+      );
+    }
+
+    final endpoint = parseTronGaslessControlEndpoint(_endpoint);
+    if (endpoint == null) {
+      return const TronGaslessReceiveGateDecision(
+        outcome: TronGaslessReceiveGateOutcome.invalid,
+        reason: GaslessReceiveReasonCode.controlEndpointInvalid,
       );
     }
 

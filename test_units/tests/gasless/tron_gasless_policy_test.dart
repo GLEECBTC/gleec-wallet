@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
-    show GaslessReceiveEvidence, KomodoDefiSdk;
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
@@ -71,24 +71,12 @@ Asset _asset({bool testnet = false, bool custom = false, String? contract}) {
 }
 
 class _ReceiveCapabilitySdk implements KomodoDefiSdk {
-  const _ReceiveCapabilitySdk(
-    this.canReceive, {
-    this.statusAttested = false,
-    this.evidence = GaslessReceiveEvidence.none,
-  });
+  const _ReceiveCapabilitySdk(this.canReceive);
 
   final bool canReceive;
-  final bool statusAttested;
-  final GaslessReceiveEvidence evidence;
 
   @override
   bool canReceiveGasless(Asset asset) => canReceive;
-
-  @override
-  bool canReceiveGaslessFromStatus(Asset asset) => statusAttested;
-
-  @override
-  GaslessReceiveEvidence gaslessReceiveEvidence(Asset asset) => evidence;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -160,13 +148,45 @@ AssetPubkeys _cachedPubkeys(Asset asset, List<PubkeyInfo> keys) {
   );
 }
 
+GaslessAccountStatusResponse _accountStatus({
+  String availability = 'available',
+  String gasfreeAddress = 'TCanonicalGasFreeAddress00000000001',
+  String? serviceProvider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+}) {
+  return GaslessAccountStatusResponse.parse({
+    'mmrpc': '2.0',
+    'result': {
+      'gasfree_address': gasfreeAddress,
+      'on_chain_balance': '25',
+      'availability': availability,
+      if (serviceProvider != null) 'service_provider': serviceProvider,
+      if (availability == 'available' ||
+          availability == 'pending_transfer') ...{
+        'active': true,
+        'frozen_balance': '0',
+        'spendable_balance': '25',
+        'transfer_fee': '1',
+      },
+      if (availability == 'available') ...{'max_withdrawable': '24'},
+    },
+  });
+}
+
 void testTronGaslessPolicy() {
   group('TRON GasFree policy', () {
-    test('build feature is fail-closed by default', () {
+    test('rollout switches and missing config stay closed by default', () {
       expect(tronGaslessEnabled, isFalse);
       expect(tronGaslessReceiveEnabled, isFalse);
-      expect(tronGaslessStatusAttestedReceiveEnabled, isFalse);
       expect(isTronGaslessConfigured, isFalse);
+      expect(isTronGaslessReceiveConfigured, isFalse);
+      expect(
+        tronGaslessReceiveConfiguredAssetIds,
+        tronGaslessAssetIdsFor(
+          enabled: tronGaslessReceiveEnabled,
+          baseUrl: tronGaslessBaseUrl,
+          serviceProvider: tronGaslessServiceProvider,
+        ),
+      );
     });
 
     test('recovery route follows the custody network', () {
@@ -201,7 +221,7 @@ void testTronGaslessPolicy() {
       expect(isValidTronServiceProvider('not-a-tron-address'), isFalse);
     });
 
-    test('SDK allowlist is exact and configuration-dependent', () {
+    test('app rollout allowlist is exact and configuration-dependent', () {
       const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
       expect(
         tronGaslessAssetIdsFor(
@@ -298,25 +318,25 @@ void testTronGaslessPolicy() {
       );
     });
 
-    test('new receives require the SDK bound-relay capability', () {
+    test('new receives require the canonical SDK capability', () {
       final asset = _asset();
 
       expect(
-        hasBoundTronGaslessReceiveCapability(
+        hasTronGaslessReceiveCapability(
           const _ReceiveCapabilitySdk(true),
           asset,
         ),
         isTrue,
       );
       expect(
-        hasBoundTronGaslessReceiveCapability(
+        hasTronGaslessReceiveCapability(
           const _ReceiveCapabilitySdk(false),
           asset,
         ),
         isFalse,
       );
       expect(
-        hasBoundTronGaslessReceiveCapability(
+        hasTronGaslessReceiveCapability(
           const _UnavailableReceiveCapabilitySdk(),
           asset,
         ),
@@ -324,44 +344,106 @@ void testTronGaslessPolicy() {
       );
     });
 
-    test('wallet-only V1 evidence never satisfies the bound receive gate', () {
+    test('wallet receive capability follows the canonical SDK predicate', () {
       final asset = _asset();
-      const sdk = _ReceiveCapabilitySdk(
-        false,
-        statusAttested: true,
-        evidence: GaslessReceiveEvidence.statusAttestedV1,
-      );
       final now = DateTime.utc(2026, 7, 12, 12);
 
-      expect(hasBoundTronGaslessReceiveCapability(sdk, asset), isFalse);
       expect(
-        hasWalletTronGaslessReceiveCapability(
-          sdk,
+        hasTronGaslessReceiveCapability(
+          const _ReceiveCapabilitySdk(false),
           asset,
-          allowStatusAttestedV1: false,
         ),
         isFalse,
       );
       expect(
-        hasWalletTronGaslessReceiveCapability(
-          sdk,
+        hasTronGaslessReceiveCapability(
+          const _ReceiveCapabilitySdk(true),
           asset,
-          allowStatusAttestedV1: true,
         ),
         isTrue,
       );
       expect(
-        isVerifiedWalletTronGaslessReceive(
-          sdk,
+        isVerifiedTronGaslessReceive(
+          const _ReceiveCapabilitySdk(true),
           asset,
           capabilityReady: true,
+          accountStatus: _accountStatus(),
+          accountStatusObservedAt: now,
           verifiedAddress: 'TCanonicalGasFreeAddress00000000001',
           custodyAddress: 'TCanonicalGasFreeAddress00000000001',
           expiresAt: now.add(const Duration(minutes: 1)),
+          expectedServiceProvider: tronGaslessServiceProvider.isEmpty
+              ? 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'
+              : tronGaslessServiceProvider,
           now: now,
-          allowStatusAttestedV1: true,
         ),
         isTrue,
+      );
+    });
+
+    test('typed receive status requires the exact provider and address', () {
+      const custody = 'TCanonicalGasFreeAddress00000000001';
+      const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
+      final available = _accountStatus();
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          available,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isTrue,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(serviceProvider: 'TDifferentProvider1111111111111111'),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(serviceProvider: ' $provider'),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(gasfreeAddress: 'TDifferentCustodyAddress'),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(gasfreeAddress: '$custody '),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      final unreachable = _accountStatus(
+        availability: 'provider_unreachable',
+        serviceProvider: null,
+      );
+      expect(
+        isPinnedTronGaslessAccountStatus(
+          unreachable,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isTrue,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          unreachable,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
       );
     });
 
@@ -419,15 +501,16 @@ void testTronGaslessPolicy() {
       );
     });
 
-    test('receive verifier requires bound, exact, and fresh context', () {
+    test('receive verifier requires typed, exact, and fresh context', () {
       final asset = _asset();
       const custody = 'TCanonicalGasFreeAddress00000000001';
+      const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
       final now = DateTime.utc(2026, 7, 12, 12);
-      final boundSdk = _CachedReceiveCapabilitySdk(
+      final capableSdk = _CachedReceiveCapabilitySdk(
         pubkeys: const _CachedPubkeyManager(null),
         canReceive: true,
       );
-      final unboundSdk = _CachedReceiveCapabilitySdk(
+      final incapableSdk = _CachedReceiveCapabilitySdk(
         pubkeys: const _CachedPubkeyManager(null),
         canReceive: false,
       );
@@ -435,32 +518,54 @@ void testTronGaslessPolicy() {
       bool verify({
         KomodoDefiSdk? sdk,
         bool ready = true,
+        GaslessAccountStatusResponse? accountStatus,
+        DateTime? observedAt,
         String? verified = custody,
         String? candidate = custody,
         DateTime? expiresAt,
-      }) => isVerifiedBoundTronGaslessReceive(
-        sdk ?? boundSdk,
+      }) => isVerifiedTronGaslessReceive(
+        sdk ?? capableSdk,
         asset,
         capabilityReady: ready,
+        accountStatus: accountStatus ?? _accountStatus(),
+        accountStatusObservedAt: observedAt ?? now,
         verifiedAddress: verified,
         custodyAddress: candidate,
         expiresAt: expiresAt ?? now.add(const Duration(minutes: 1)),
+        expectedServiceProvider: provider,
         now: now,
       );
 
       expect(verify(), isTrue);
-      expect(verify(sdk: unboundSdk), isFalse);
+      expect(verify(sdk: incapableSdk), isFalse);
       expect(verify(ready: false), isFalse);
+      expect(
+        verify(observedAt: now.subtract(const Duration(minutes: 2))),
+        isFalse,
+      );
+      expect(verify(observedAt: now.add(const Duration(seconds: 1))), isFalse);
+      expect(
+        verify(
+          accountStatus: _accountStatus(
+            availability: 'provider_unreachable',
+            serviceProvider: null,
+          ),
+        ),
+        isFalse,
+      );
       expect(verify(candidate: 'TDifferentCustodyAddress'), isFalse);
       expect(verify(expiresAt: now), isFalse);
       expect(
-        isVerifiedBoundTronGaslessReceive(
-          boundSdk,
+        isVerifiedTronGaslessReceive(
+          capableSdk,
           asset,
           capabilityReady: true,
+          accountStatus: _accountStatus(),
+          accountStatusObservedAt: now,
           verifiedAddress: custody,
           custodyAddress: custody,
           expiresAt: null,
+          expectedServiceProvider: provider,
           now: now,
         ),
         isFalse,

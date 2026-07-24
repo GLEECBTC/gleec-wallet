@@ -72,6 +72,12 @@ String? _effectiveWithdrawSourceAddress(WithdrawFormState state) {
   return state.selectedSourceAddress?.address;
 }
 
+Duration? _gaslessPendingDuration(WithdrawFormState state) {
+  final submittedAt = state.gaslessSubmittedAt;
+  if (submittedAt == null) return null;
+  return DateTime.now().toUtc().difference(submittedAt.toUtc());
+}
+
 Future<void> _openGaslessSupportContact(
   BuildContext context,
   WithdrawFormState state,
@@ -276,10 +282,8 @@ class _WithdrawFormState extends State<WithdrawForm> {
               if (state.gaslessTransferState ==
                   GaslessTransferState.confirmed) {
                 context.read<AnalyticsBloc>().logEvent(
-                  const GaslessTransferAnalyticsEventData(
-                    stage: 'finality',
-                    code: 'confirmed',
-                    retryable: false,
+                  GaslessTransferAnalyticsEventData.confirmed(
+                    pendingDuration: _gaslessPendingDuration(state),
                   ),
                 );
               } else {
@@ -317,16 +321,16 @@ class _WithdrawFormState extends State<WithdrawForm> {
             listenWhen: (prev, curr) =>
                 prev.step != curr.step && curr.step == WithdrawFormStep.failed,
             listener: (context, state) {
-              final reason = state.transactionError?.message ?? 'unknown';
               if (state.gaslessTransferState != null || state.useGasless) {
                 context.read<AnalyticsBloc>().logEvent(
-                  GaslessTransferAnalyticsEventData(
-                    stage: state.gaslessTransferState?.name ?? 'submission',
-                    code: reason,
+                  GaslessTransferAnalyticsEventData.failed(
+                    transferState: state.gaslessTransferState,
                     retryable: state.canRetryGaslessTransfer,
+                    pendingDuration: _gaslessPendingDuration(state),
                   ),
                 );
               } else {
+                final reason = state.transactionError?.message ?? 'unknown';
                 final authBloc = context.read<AuthBloc>();
                 final walletType = authBloc.state.currentUser?.type ?? '';
                 context.read<AnalyticsBloc>().logEvent(
@@ -338,6 +342,32 @@ class _WithdrawFormState extends State<WithdrawForm> {
                   ),
                 );
               }
+            },
+          ),
+          BlocListener<WithdrawFormBloc, WithdrawFormState>(
+            listenWhen: (previous, current) =>
+                current.useGasless &&
+                current.gaslessQuoteFailure != null &&
+                previous.gaslessQuoteFailure != current.gaslessQuoteFailure,
+            listener: (context, state) {
+              context.read<AnalyticsBloc>().logEvent(
+                GaslessTransferAnalyticsEventData.quoteFailure(
+                  state.gaslessQuoteFailure!,
+                ),
+              );
+            },
+          ),
+          BlocListener<WithdrawFormBloc, WithdrawFormState>(
+            listenWhen: (previous, current) =>
+                previous.gaslessTransferState != current.gaslessTransferState &&
+                current.gaslessTransferState?.isUnresolved == true,
+            listener: (context, state) {
+              context.read<AnalyticsBloc>().logEvent(
+                GaslessTransferAnalyticsEventData.pending(
+                  transferState: state.gaslessTransferState!,
+                  pendingDuration: _gaslessPendingDuration(state),
+                ),
+              );
             },
           ),
           BlocListener<WithdrawFormBloc, WithdrawFormState>(
@@ -503,6 +533,7 @@ class PreviewWithdrawButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     return SizedBox(
       width: double.infinity,
       height: 48,
@@ -512,10 +543,17 @@ class PreviewWithdrawButton extends StatelessWidget {
             ? SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                ),
+                child: disableAnimations
+                    ? Icon(
+                        Icons.hourglass_top_rounded,
+                        key: const Key('withdraw-preview-static-progress'),
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      )
+                    : CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
               )
             : Text(LocaleKeys.withdrawPreview.tr()),
       ),
@@ -594,16 +632,6 @@ class WithdrawPreviewDetails extends StatelessWidget {
                 fee: preview.fee as FeeInfoTronGasless,
               ),
             ] else if (preview.fee is FeeInfoTron) ...[
-              if (state.useGasless) ...[
-                const SizedBox(height: 16),
-                // Gas-free was requested but KDF returned a native preview: the
-                // rail is unavailable. Surface a blocking notice; the Send
-                // button is disabled (see isSubmitDisabled) so a native transfer
-                // is never sent under a ticked gas-free checkbox.
-                _GaslessUnavailableNotice(
-                  gasCoin: (preview.fee as FeeInfoTron).coin,
-                ),
-              ],
               const SizedBox(height: 16),
               _WithdrawTronDetailsCard(fee: preview.fee as FeeInfoTron),
             ],
@@ -647,13 +675,6 @@ class _WithdrawPreviewSummary extends StatelessWidget {
     final totalDeducted = gaslessFee == null
         ? null
         : recipientAmount + gaslessFee.totalTokenFee;
-    // The GasFree tariff is flat, so small sends can be fee-dominated; the
-    // SDK's isHighFee never fires for the gasless variant, so warn here when
-    // the fee is >= 20% of what the recipient gets.
-    final isFeeDominant =
-        gaslessFee != null &&
-        recipientAmount > Decimal.zero &&
-        gaslessFee.totalTokenFee * Decimal.fromInt(5) >= recipientAmount;
     final labelStyle = theme.textTheme.labelLarge?.copyWith(
       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.72),
       fontWeight: FontWeight.w600,
@@ -731,7 +752,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
           Row(
             children: [
               Expanded(child: Text(LocaleKeys.fee.tr(), style: labelStyle)),
-              if (state.isFeePriceExpensive || isFeeDominant)
+              if (state.isFeePriceExpensive)
                 Chip(
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -1255,81 +1276,6 @@ class _WithdrawGaslessDetailsCard extends StatelessWidget {
   }
 }
 
-/// Amber notice shown when a gas-free withdrawal silently fell back to the
-/// native rail (relay unavailable), so the user learns the network fee is
-/// actually paid in [gasCoin] (TRX) rather than in the token they expected.
-/// Amber receipt banner shown when a gas-free request fell back to a native
-/// (TRX-funded) transfer.
-///
-/// Intentionally unreachable under the current design (gas-free downgrades are
-/// blocked before submit and `fallbackToNative` is false) — kept as a
-/// defense-in-depth backstop should native fallback ever be re-enabled.
-class _GaslessFallbackNotice extends StatelessWidget {
-  const _GaslessFallbackNotice({required this.gasCoin});
-
-  final String gasCoin;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.warning);
-
-    return NoticeBanner(
-      icon: Icons.info_outline_rounded,
-      child: Text(
-        LocaleKeys.withdrawGaslessFallbackNotice.tr(args: [gasCoin]),
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: style.foreground,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-/// Blocking notice shown on the confirm step when gas-free was requested but
-/// the generated preview came back as a native (TRX-funded) transfer — the
-/// gas-free rail could not be built (e.g. the GasFree custody address is
-/// unfunded, or the token is not enrolled with the provider). The Send button
-/// is disabled for this state, so the user must untick gas-free to send a
-/// standard transfer paid in [gasCoin] (TRX).
-class _GaslessUnavailableNotice extends StatelessWidget {
-  const _GaslessUnavailableNotice({required this.gasCoin});
-
-  final String gasCoin;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final background = theme.colorScheme.errorContainer;
-    final foreground = theme.colorScheme.onErrorContainer;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.block_rounded, size: 20, color: foreground),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              LocaleKeys.withdrawGaslessUnavailableBlocked.tr(args: [gasCoin]),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _WithdrawSectionCard extends StatelessWidget {
   const _WithdrawSectionCard({required this.child});
 
@@ -1344,16 +1290,27 @@ class _WithdrawSectionCard extends StatelessWidget {
   }
 }
 
-/// Source selector for gas-free-capable sends.
+enum _WithdrawRailKind { gasfree, standard }
+
+class _WithdrawRailSource {
+  const _WithdrawRailSource({
+    required this.kind,
+    required this.address,
+    required this.balanceLabel,
+    this.standardSource,
+  });
+
+  final _WithdrawRailKind kind;
+  final String address;
+  final String balanceLabel;
+  final PubkeyInfo? standardSource;
+}
+
+/// Source selector for GasFree-capable sends.
 ///
-/// The user's single TRON key funds two spendable pots: the derived GasFree
-/// custody address (token balance, fees paid in the token) and the standard
-/// address (fees paid in TRX). The stock selector could only show the
-/// standard address — locked — while a gas-free send actually settles from
-/// the custody address, which read as "sending from an address I never
-/// chose". Here both pots are selectable entries and the choice drives the
-/// fee rail; the Advanced native toggle dispatches the same event, so the
-/// two controls stay in sync by construction.
+/// Custody is a transfer rail, not a derived signing key. This dedicated view
+/// model prevents a fabricated [PubkeyInfo] from escaping into source
+/// selection or withdrawal parameters.
 class _GaslessRailSourceSelector extends StatelessWidget {
   const _GaslessRailSourceSelector({required this.state});
 
@@ -1363,40 +1320,24 @@ class _GaslessRailSourceSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sources = state.pubkeys?.keys ?? const <PubkeyInfo>[];
-    final canonicalSource = sources.firstWhereOrNull(
-      (key) =>
-          isCanonicalTronGaslessPubkey(
-            key,
-            isHdWallet: state.walletType == WalletType.hdwallet,
-          ) &&
-          (key.gasfreeAddress?.isNotEmpty ?? false),
-    );
+    final canonicalSource = state.canonicalGaslessSource;
     if (canonicalSource == null) return const SizedBox.shrink();
     final custodyAddress =
         state.gaslessAccountStatus?.gasfreeAddress ??
         canonicalSource.gasfreeAddress!;
     final symbol = state.asset.id.symbol.configSymbol;
-    // Never substitute the aggregate/EOA cache into custody. Unknown custody
-    // balance remains explicitly zero until account_status supplies its
-    // provenance-aware snapshot.
-    final custodyBalance =
-        state.gaslessAccountStatus?.custodyBalance ??
-        BalanceInfo(
-          total: Decimal.zero,
-          spendable: Decimal.zero,
-          unspendable: Decimal.zero,
-        );
-
-    // View-model entry only: selection dispatches the rail toggle, never a
-    // source change, so this synthetic pubkey can never leak into the bloc.
-    final custodyEntry = PubkeyInfo(
+    final account = state.gaslessAccountStatus;
+    final custodyEntry = _WithdrawRailSource(
+      kind: _WithdrawRailKind.gasfree,
       address: custodyAddress,
-      derivationPath: canonicalSource.derivationPath,
-      chain: canonicalSource.chain,
-      balance: custodyBalance,
-      coinTicker: state.asset.id.id,
-      gasfreeAddress: custodyAddress,
+      balanceLabel: LocaleKeys.withdrawSourceGasfreeEntry.tr(
+        args: [_formatOptionalDecimal(account?.spendableBalance), symbol],
+      ),
     );
+    final canSelectGasfree =
+        !state.hasUnresolvedGaslessTransfer &&
+        !state.hasAmbiguousGaslessSources;
+
     final standardSources = sources
         .where(
           (key) =>
@@ -1404,20 +1345,31 @@ class _GaslessRailSourceSelector extends StatelessWidget {
               key.address == canonicalSource.address,
         )
         .toList();
-    final selectedStandard = standardSources.firstWhereOrNull(
-      (entry) => entry.address == state.selectedSourceAddress?.address,
-    );
-    final selected = state.isGaslessEnabled
+    final entries = [
+      if (canSelectGasfree) custodyEntry,
+      ...standardSources.map(
+        (source) => _WithdrawRailSource(
+          kind: _WithdrawRailKind.standard,
+          address: source.address,
+          balanceLabel: LocaleKeys.withdrawSourceStandardEntry.tr(
+            args: [_formatTrimmedDecimal(source.balance.spendable), symbol],
+          ),
+          standardSource: source,
+        ),
+      ),
+    ];
+    final selected = state.isGaslessEnabled && canSelectGasfree
         ? custodyEntry
-        : selectedStandard ?? canonicalSource;
-
-    String entryLabel(PubkeyInfo entry) => entry.address == custodyAddress
-        ? LocaleKeys.withdrawSourceGasfreeEntry.tr(
-            args: [_formatTrimmedDecimal(entry.balance.spendable), symbol],
-          )
-        : LocaleKeys.withdrawSourceStandardEntry.tr(
-            args: [_formatTrimmedDecimal(entry.balance.spendable), symbol],
-          );
+        : entries.firstWhereOrNull(
+                (entry) =>
+                    entry.kind == _WithdrawRailKind.standard &&
+                    entry.address == state.selectedSourceAddress?.address,
+              ) ??
+              entries.firstWhere(
+                (entry) =>
+                    entry.kind == _WithdrawRailKind.standard &&
+                    entry.address == canonicalSource.address,
+              );
 
     return Column(
       key: const Key('withdraw-gasless-source-selector'),
@@ -1430,18 +1382,42 @@ class _GaslessRailSourceSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        AddressSelectInput(
-          addresses: [custodyEntry, ...standardSources],
-          selectedAddress: selected,
-          assetName: symbol,
-          balanceLabel: entryLabel,
-          verified: (entry) => entry.address == custodyAddress,
-          onAddressSelected: state.isSourceSelectionLocked
+        DropdownButtonFormField<_WithdrawRailSource>(
+          key: const Key('withdraw-gasless-rail-source-dropdown'),
+          initialValue: selected,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+          ),
+          items: entries
+              .map(
+                (entry) => DropdownMenuItem(
+                  value: entry,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${formatCompactAddress(entry.address)} '
+                          '${entry.balanceLabel}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (entry.kind == _WithdrawRailKind.gasfree)
+                        Icon(
+                          Icons.verified,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: state.isSourceSelectionLocked
               ? null
-              : (picked) {
-                  if (picked == null) return;
-                  final wantGasless = picked.address == custodyAddress;
-                  if (wantGasless) {
+              : (entry) {
+                  if (entry == null) return;
+                  if (entry.kind == _WithdrawRailKind.gasfree) {
                     if (!state.isGaslessEnabled) {
                       context.read<WithdrawFormBloc>().add(
                         const WithdrawFormGaslessToggled(true),
@@ -1449,14 +1425,18 @@ class _GaslessRailSourceSelector extends StatelessWidget {
                     }
                     return;
                   }
+
                   if (state.isGaslessEnabled) {
                     context.read<WithdrawFormBloc>().add(
                       const WithdrawFormGaslessToggled(false),
                     );
                   }
-                  context.read<WithdrawFormBloc>().add(
-                    WithdrawFormSourceChanged(picked),
-                  );
+                  final source = entry.standardSource;
+                  if (source != null) {
+                    context.read<WithdrawFormBloc>().add(
+                      WithdrawFormSourceChanged(source),
+                    );
+                  }
                 },
         ),
       ],
@@ -1467,6 +1447,9 @@ class _GaslessRailSourceSelector extends StatelessWidget {
 String _formatTrimmedDecimal(Decimal value, {int precision = 8}) {
   return value.toStringAsFixed(precision).replaceAll(RegExp(r'\.?0+$'), '');
 }
+
+String _formatOptionalDecimal(Decimal? value, {int precision = 8}) =>
+    value == null ? '—' : _formatTrimmedDecimal(value, precision: precision);
 
 /// The amount sent on a standard rail.
 ///
@@ -1489,11 +1472,14 @@ class _GaslessRailStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     final isReady = state.gaslessAvailability.isVerifiedReady;
     final isCheckingAvailability = state.isGaslessAvailabilityUnknown;
     final isNeutralAvailability = state.isGaslessAvailabilityNeutral;
     final isUnsupported =
         state.gaslessAvailability == GaslessAvailability.unsupported;
+    final isDisabled =
+        state.gaslessAvailability == GaslessAvailability.disabled;
     final isPendingTransfer =
         state.gaslessAvailability == GaslessAvailability.pendingTransfer;
     final isSecurityMismatch =
@@ -1518,6 +1504,8 @@ class _GaslessRailStatusChip extends StatelessWidget {
         ? LocaleKeys.withdrawGaslessPendingTransfer.tr()
         : isUnsupported
         ? LocaleKeys.withdrawGaslessUnsupported.tr()
+        : isDisabled
+        ? LocaleKeys.withdrawGaslessReactivationRequired.tr()
         : isSecurityMismatch
         ? LocaleKeys.withdrawGaslessSecurityMismatch.tr()
         : isNeutralAvailability
@@ -1542,10 +1530,19 @@ class _GaslessRailStatusChip extends StatelessWidget {
             SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: foreground,
-              ),
+              child: disableAnimations
+                  ? Icon(
+                      Icons.refresh_rounded,
+                      key: const Key(
+                        'withdraw-gasless-checking-static-progress',
+                      ),
+                      size: 16,
+                      color: foreground,
+                    )
+                  : CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: foreground,
+                    ),
             )
           else
             Icon(
@@ -1573,7 +1570,7 @@ class _GaslessRailStatusChip extends StatelessWidget {
           ),
           IconButton(
             key: const Key('withdraw-gasless-info-button'),
-            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             icon: Icon(Icons.info_outline_rounded, size: 18, color: foreground),
             tooltip: LocaleKeys.gaslessInfoTitle.tr(),
             onPressed: () => GaslessInfoDialog.show(
@@ -1728,9 +1725,13 @@ class _AdvancedNativeSendSection extends StatelessWidget {
               key: const Key('withdraw-native-send-switch'),
               value: isNativeSelected,
               contentPadding: EdgeInsets.zero,
-              onChanged: (nativeOn) => context.read<WithdrawFormBloc>().add(
-                WithdrawFormGaslessToggled(!nativeOn),
-              ),
+              onChanged:
+                  state.hasUnresolvedGaslessTransfer ||
+                      state.hasAmbiguousGaslessSources
+                  ? null
+                  : (nativeOn) => context.read<WithdrawFormBloc>().add(
+                      WithdrawFormGaslessToggled(!nativeOn),
+                    ),
               title: Text(LocaleKeys.withdrawNativeSendToggle.tr()),
               subtitle: Text(
                 LocaleKeys.withdrawNativeSendToggleSubtitle.tr(
@@ -1839,11 +1840,7 @@ class WithdrawFormFillSection extends StatelessWidget {
                   // both as selectable source entries — the choice drives the
                   // fee rail. Other assets keep the stock selector.
                   if (state.isGaslessSupported &&
-                      (state
-                              .selectedSourceAddress
-                              ?.gasfreeAddress
-                              ?.isNotEmpty ??
-                          false))
+                      state.canonicalGaslessSource != null)
                     _GaslessRailSourceSelector(state: state)
                   else
                     SourceAddressField(
@@ -1915,13 +1912,11 @@ class WithdrawFormFillSection extends StatelessWidget {
                       total: _formatTrimmedDecimal(
                         state.gaslessAccountStatus!.onChainBalance,
                       ),
-                      spendable: _formatTrimmedDecimal(
-                        state.gaslessAccountStatus!.spendableBalance ??
-                            Decimal.zero,
+                      spendable: _formatOptionalDecimal(
+                        state.gaslessAccountStatus!.spendableBalance,
                       ),
-                      pending: _formatTrimmedDecimal(
-                        state.gaslessAccountStatus!.frozenBalance ??
-                            Decimal.zero,
+                      pending: _formatOptionalDecimal(
+                        state.gaslessAccountStatus!.frozenBalance,
                       ),
                       symbol: state.asset.id.symbol.configSymbol,
                       totalLabel: LocaleKeys.withdrawGaslessTotalBalance.tr(),
@@ -2045,11 +2040,7 @@ class WithdrawFormFillSection extends StatelessWidget {
                   : () {
                       if (state.useGasless) {
                         context.read<AnalyticsBloc>().logEvent(
-                          const GaslessTransferAnalyticsEventData(
-                            stage: 'preview',
-                            code: 'started',
-                            retryable: false,
-                          ),
+                          const GaslessTransferAnalyticsEventData.previewStarted(),
                         );
                       } else {
                         final authBloc = context.read<AuthBloc>();
@@ -2106,6 +2097,7 @@ class WithdrawFormConfirmSection extends StatelessWidget {
     }
 
     final theme = Theme.of(context);
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     late final Color backgroundColor;
     late final Color foregroundColor;
     late final IconData icon;
@@ -2157,7 +2149,7 @@ class WithdrawFormConfirmSection extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (showSpinner)
+          if (showSpinner && !disableAnimations)
             SizedBox(
               width: 18,
               height: 18,
@@ -2227,6 +2219,7 @@ class WithdrawFormConfirmSection extends StatelessWidget {
     required bool hasExpiredPreviewAction,
     required bool isSubmitDisabled,
   }) {
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     final backButton = OutlinedButton(
       onPressed: state.isSending || state.isPreviewRefreshing
           ? null
@@ -2250,10 +2243,17 @@ class WithdrawFormConfirmSection extends StatelessWidget {
               );
             },
       child: state.isSending || state.isPreviewRefreshing
-          ? const SizedBox(
+          ? SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: disableAnimations
+                  ? Icon(
+                      state.isSending
+                          ? Icons.hourglass_top_rounded
+                          : Icons.refresh_rounded,
+                      size: 20,
+                    )
+                  : const CircularProgressIndicator(strokeWidth: 2),
             )
           : Text(
               hasExpiredPreviewAction
@@ -2297,11 +2297,6 @@ class WithdrawFormConfirmSection extends StatelessWidget {
         final isSubmitDisabled =
             state.isSending ||
             state.isPreviewRefreshing ||
-            // Gas-free requested but the preview came back native: block the
-            // send so a native (TRX-funded) transfer is never broadcast under a
-            // ticked gas-free checkbox. The user must untick gas-free to send a
-            // standard transfer.
-            state.didGaslessDowngrade ||
             state.isGaslessSendBlocked ||
             (state.isTronAsset &&
                 (state.previewSecondsRemaining == null ||
@@ -2340,19 +2335,6 @@ class WithdrawFormSuccessSection extends StatelessWidget {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
         final result = state.result!;
-        // Gas-free was requested but the executed fee is native TRX -> the
-        // relay was unavailable and the transfer fell back to the native rail.
-        //
-        // Defense-in-depth: this is currently UNREACHABLE. With
-        // `fallbackToNative: false`, a gas-free request never produces a native
-        // result, and a native downgrade is blocked before submit
-        // (`didGaslessDowngrade` -> `isSubmitDisabled`). A successful gas-free
-        // result therefore always carries a `FeeInfoTronGasless` fee, so this
-        // stays false. It is retained intentionally so the user is still warned
-        // if native fallback is ever re-enabled; do not remove without also
-        // revisiting that block.
-        final didGaslessFallBack =
-            state.useGasless && result.fee is FeeInfoTron;
 
         return WithdrawSuccessReceipt(
           asset: state.asset,
@@ -2360,7 +2342,6 @@ class WithdrawFormSuccessSection extends StatelessWidget {
           recipientAmount: state.authorizedRecipientAmount,
           sourceAddress: _effectiveWithdrawSourceAddress(state),
           memo: state.memo,
-          didGaslessFallBack: didGaslessFallBack,
           onClose: onDone,
         );
       },
@@ -2376,7 +2357,6 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     this.sourceAddress,
     this.memo,
     this.recipientAmount,
-    this.didGaslessFallBack = false,
     super.key,
   });
 
@@ -2385,7 +2365,6 @@ class WithdrawSuccessReceipt extends StatelessWidget {
   final String? sourceAddress;
   final String? memo;
   final Decimal? recipientAmount;
-  final bool didGaslessFallBack;
   final VoidCallback onClose;
 
   Widget _buildActions(BuildContext context, Uri? explorerUrl) {
@@ -2461,15 +2440,15 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     final gaslessFee = result.fee is FeeInfoTronGasless
         ? result.fee as FeeInfoTronGasless
         : null;
+    final gaslessFinalFee = gaslessFee == null ? null : result.gaslessFinalFee;
     final displayedRecipientAmount =
         recipientAmount ??
         (gaslessFee == null
             ? _recipientAmount(result.balanceChanges)
             : result.balanceChanges.totalAmount);
-    final totalDeducted = gaslessFee == null
+    final totalDeducted = gaslessFinalFee == null
         ? null
-        : displayedRecipientAmount +
-              (gaslessFee.finalFee ?? gaslessFee.totalTokenFee);
+        : displayedRecipientAmount + gaslessFinalFee;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2590,12 +2569,6 @@ class WithdrawSuccessReceipt extends StatelessWidget {
             ],
           ),
         ),
-        // Retained defense-in-depth: `didGaslessFallBack` is unreachable under
-        // the current strict-block design (see WithdrawFormSuccessSection).
-        if (didGaslessFallBack && result.fee is FeeInfoTron) ...[
-          const SizedBox(height: 16),
-          _GaslessFallbackNotice(gasCoin: (result.fee as FeeInfoTron).coin),
-        ],
         const SizedBox(height: 16),
         Card(
           margin: EdgeInsets.zero,
@@ -2627,12 +2600,12 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (gaslessFee?.traceId?.isNotEmpty ?? false)
+                if (result.gaslessTraceId?.isNotEmpty ?? false)
                   _buildDetailItem(
                     context,
                     label: LocaleKeys.withdrawGaslessTraceId.tr(),
                     child: CopiedText(
-                      copiedValue: gaslessFee!.traceId!,
+                      copiedValue: result.gaslessTraceId!,
                       isTruncated: true,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -2681,7 +2654,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                       : LocaleKeys.withdrawGaslessFinalFee.tr(),
                   child: AssetAmountWithFiat(
                     assetId: feeAssetId,
-                    amount: gaslessFee?.finalFee ?? result.fee.totalFee,
+                    amount: gaslessFinalFee ?? result.fee.totalFee,
                     symbol: feeAssetId.symbol.configSymbol,
                     isAutoScrollEnabled: false,
                     style: theme.textTheme.bodyLarge?.copyWith(
@@ -2833,18 +2806,33 @@ class WithdrawFormPendingSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
+        final hasAcceptedTrace =
+            state.gaslessTraceId?.trim().isNotEmpty == true;
+        final acceptanceUnknown =
+            state.gaslessTransferState ==
+                GaslessTransferState.submittedUnknown &&
+            !hasAcceptedTrace;
         return GaslessPendingTransferPanel(
-          title: LocaleKeys.withdrawGaslessPendingTitle.tr(),
-          description: LocaleKeys.withdrawGaslessPendingDescription.tr(),
+          title: acceptanceUnknown
+              ? LocaleKeys.withdrawGaslessAcceptanceUnknownTitle.tr()
+              : LocaleKeys.withdrawGaslessPendingTitle.tr(),
+          description: acceptanceUnknown
+              ? LocaleKeys.withdrawGaslessAcceptanceUnknownDescription.tr()
+              : LocaleKeys.withdrawGaslessPendingDescription.tr(),
           continueLabel: LocaleKeys.withdrawGaslessContinueChecking.tr(),
+          standardLabel: LocaleKeys.withdrawGaslessUseStandard.tr(),
           activityLabel: LocaleKeys.withdrawGaslessViewActivity.tr(),
           supportLabel: LocaleKeys.support.tr(),
           traceLabel: LocaleKeys.withdrawGaslessTraceId.tr(),
           traceId: state.gaslessTraceId,
-          requestId: state.gaslessRequestId,
           isChecking: state.isSending,
-          onContinueChecking: () => context.read<WithdrawFormBloc>().add(
-            const WithdrawFormGaslessTraceCheckRequested(),
+          onContinueChecking: hasAcceptedTrace
+              ? () => context.read<WithdrawFormBloc>().add(
+                  const WithdrawFormGaslessTraceCheckRequested(),
+                )
+              : null,
+          onUseStandard: () => context.read<WithdrawFormBloc>().add(
+            const WithdrawFormPendingUseStandardRequested(),
           ),
           onViewActivity: onViewActivity,
           onSupport: () => _openGaslessSupportContact(context, state),

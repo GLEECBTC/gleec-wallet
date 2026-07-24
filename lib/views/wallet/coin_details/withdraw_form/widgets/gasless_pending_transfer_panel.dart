@@ -2,8 +2,8 @@ import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 
-/// Non-terminal GasFree relay state shown after the provider accepted a
-/// transfer but final status is temporarily unavailable.
+/// Non-terminal GasFree relay state shown when a transfer was accepted, or may
+/// have been accepted, but final status is temporarily unavailable.
 class GaslessPendingTransferPanel extends StatelessWidget {
   const GaslessPendingTransferPanel({
     required this.title,
@@ -16,8 +16,9 @@ class GaslessPendingTransferPanel extends StatelessWidget {
     required this.onContinueChecking,
     required this.onViewActivity,
     required this.onSupport,
+    this.standardLabel,
+    this.onUseStandard,
     this.traceId,
-    this.requestId,
     super.key,
   });
 
@@ -27,19 +28,19 @@ class GaslessPendingTransferPanel extends StatelessWidget {
   final String activityLabel;
   final String supportLabel;
   final String traceLabel;
+  final String? standardLabel;
   final String? traceId;
-  final String? requestId;
   final bool isChecking;
   final VoidCallback? onContinueChecking;
+  final VoidCallback? onUseStandard;
   final VoidCallback? onViewActivity;
   final VoidCallback? onSupport;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     final hasTrace = traceId?.trim().isNotEmpty == true;
-    final hasRecoveryIdentity =
-        hasTrace || requestId?.trim().isNotEmpty == true;
     return Semantics(
       container: true,
       liveRegion: true,
@@ -50,10 +51,17 @@ class GaslessPendingTransferPanel extends StatelessWidget {
             child: SizedBox(
               width: 56,
               height: 56,
-              child: CircularProgressIndicator(
-                strokeWidth: 4,
-                color: theme.colorScheme.primary,
-              ),
+              child: disableAnimations
+                  ? Icon(
+                      Icons.hourglass_top_rounded,
+                      key: const Key('gasless-pending-static-progress'),
+                      size: 48,
+                      color: theme.colorScheme.primary,
+                    )
+                  : CircularProgressIndicator(
+                      strokeWidth: 4,
+                      color: theme.colorScheme.primary,
+                    ),
             ),
           ),
           const SizedBox(height: 24),
@@ -90,20 +98,30 @@ class GaslessPendingTransferPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 28),
-          // The SDK can safely resume by either persisted identity. A request
-          // ID remains distinct from a trace ID and is never rendered or
-          // promoted as one while reconciliation is still ambiguous.
-          if (hasRecoveryIdentity) ...[
+          // Only a provider trace can be reconciled. A wallet-local journal
+          // entry without a trace remains outcome-unknown and non-retryable.
+          if (hasTrace) ...[
             FilledButton.icon(
               onPressed: isChecking ? null : onContinueChecking,
               icon: isChecking
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: disableAnimations
+                          ? const Icon(Icons.refresh_rounded, size: 18)
+                          : const CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.refresh_rounded),
               label: Text(continueLabel, textAlign: TextAlign.center),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (standardLabel != null && onUseStandard != null) ...[
+            OutlinedButton.icon(
+              key: const Key('withdraw-gasless-use-standard'),
+              onPressed: onUseStandard,
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: Text(standardLabel!, textAlign: TextAlign.center),
             ),
             const SizedBox(height: 12),
           ],
@@ -139,12 +157,14 @@ Widget gaslessPendingTransferLightPreview() => MaterialApp(
             'Your transfer was accepted and may still confirm. Sending again '
             'is disabled until the provider reports a final result.',
         continueLabel: 'Continue checking',
+        standardLabel: 'Use Standard transfer',
         activityLabel: 'View activity',
         supportLabel: 'Support',
         traceLabel: 'Trace ID',
         traceId: '4f8f4bea-f0d6-49ad-a02f-e871408b6b22',
         isChecking: false,
         onContinueChecking: null,
+        onUseStandard: null,
         onViewActivity: null,
         onSupport: null,
       ),
@@ -169,12 +189,14 @@ Widget gaslessPendingTransferDarkPreview() => MaterialApp(
             'Your transfer was accepted and may still confirm. Sending again '
             'is disabled until the provider reports a final result.',
         continueLabel: 'Continue checking',
+        standardLabel: 'Use Standard transfer',
         activityLabel: 'View activity',
         supportLabel: 'Support',
         traceLabel: 'Trace ID',
         traceId: '4f8f4bea-f0d6-49ad-a02f-e871408b6b22',
         isChecking: true,
         onContinueChecking: null,
+        onUseStandard: null,
         onViewActivity: null,
         onSupport: null,
       ),

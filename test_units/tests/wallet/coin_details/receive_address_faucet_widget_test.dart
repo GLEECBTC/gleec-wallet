@@ -4,16 +4,20 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
     show QuoteCurrency, Stablecoin;
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
     show
         AssetIdFaucetExtension,
         BalanceManager,
         KomodoDefiSdk,
         MarketDataManager;
+import 'package:komodo_defi_sdk/src/assets/asset_manager.dart'
+    show AssetManager;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
+import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/faucet_button/faucet_button_bloc.dart';
 import 'package:web_dex/bloc/faucet_button/faucet_button_event.dart';
@@ -23,6 +27,9 @@ import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/stored_settings.dart';
+import 'package:web_dex/shared/constants.dart'
+    show isTronGaslessReceiveConfigured, tronGaslessServiceProvider;
+import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/widgets/copyable_address_dialog.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
@@ -34,9 +41,30 @@ import 'coin_addresses_bloc_gasless_revalidation_test.dart';
 
 class _FakeCoinAddressesBloc extends Cubit<CoinAddressesState>
     implements CoinAddressesBloc {
-  _FakeCoinAddressesBloc(super.initialState);
+  _FakeCoinAddressesBloc(
+    super.initialState, {
+    this.actionRevalidationAllowed = true,
+  });
+
+  bool actionRevalidationAllowed;
+  int actionRevalidationCalls = 0;
+  CoinAddressesEvent? lastEvent;
 
   void update(CoinAddressesState state) => emit(state);
+
+  @override
+  void add(CoinAddressesEvent event) {
+    lastEvent = event;
+  }
+
+  @override
+  bool revalidateGaslessReceiveForAction({
+    required String custodyAddress,
+    required String walletEpoch,
+  }) {
+    actionRevalidationCalls++;
+    return actionRevalidationAllowed;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -52,20 +80,12 @@ class _FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
 }
 
 class _FakeBalanceManager implements BalanceManager {
-  _FakeBalanceManager(
-    this._balances, {
-    this.gaslessSnapshots = const <AssetId, GaslessBalanceSnapshot>{},
-  });
+  _FakeBalanceManager(this._balances);
 
   final Map<AssetId, BalanceInfo> _balances;
-  final Map<AssetId, GaslessBalanceSnapshot> gaslessSnapshots;
 
   @override
   BalanceInfo? lastKnown(AssetId assetId) => _balances[assetId];
-
-  @override
-  GaslessBalanceSnapshot? lastKnownGaslessBalanceSnapshot(AssetId assetId) =>
-      gaslessSnapshots[assetId];
 
   @override
   Stream<BalanceInfo> watchBalance(
@@ -98,8 +118,10 @@ class _FakeSdk implements KomodoDefiSdk {
   _FakeSdk({
     required this.balances,
     MarketDataManager? marketData,
+    Iterable<Asset> assetValues = const <Asset>[],
     this.boundGaslessReceive = false,
-  }) : marketData = marketData ?? _FakeMarketDataManager();
+  }) : marketData = marketData ?? _FakeMarketDataManager(),
+       assets = _FakeAssetManager(assetValues);
 
   @override
   final BalanceManager balances;
@@ -107,10 +129,34 @@ class _FakeSdk implements KomodoDefiSdk {
   @override
   final MarketDataManager marketData;
 
+  @override
+  final AssetManager assets;
+
   final bool boundGaslessReceive;
 
   @override
   bool canReceiveGasless(Asset asset) => boundGaslessReceive;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeAssetManager implements AssetManager {
+  _FakeAssetManager(Iterable<Asset> assets) : _assets = assets.toList();
+
+  final List<Asset> _assets;
+
+  @override
+  Set<Asset> findAssetsByConfigId(String ticker) =>
+      _assets.where((asset) => asset.id.id == ticker).toSet();
+
+  @override
+  Asset? fromId(AssetId id) {
+    for (final asset in _assets) {
+      if (asset.id == id) return asset;
+    }
+    return null;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -251,21 +297,31 @@ KdfUser _softwareUser(String walletName, String pubkeyHash) => KdfUser(
   isBip39Seed: true,
 );
 
-GaslessBalanceSnapshot _gaslessSnapshot({
-  required String custodyAddress,
-  required String custodyTotal,
-  String totalWalletOwned = '127.75',
-}) => GaslessBalanceSnapshot(
-  custodyAddress: custodyAddress,
-  custodyTotal: Decimal.parse(custodyTotal),
-  custodySpendable: Decimal.parse(custodyTotal),
-  frozenAmount: Decimal.zero,
-  standardBalances: const [],
-  totalWalletOwned: Decimal.parse(totalWalletOwned),
-  capturedAt: DateTime.utc(2026, 7, 10),
-  provenance: GaslessBalanceProvenance.authoritativeProvider,
-  isFresh: true,
-);
+GaslessAccountStatusResponse _gaslessAccountStatus(
+  String custodyAddress, {
+  String availability = 'available',
+  String onChainBalance = '120.5',
+}) => GaslessAccountStatusResponse.parse({
+  'mmrpc': '2.0',
+  'result': {
+    'gasfree_address': custodyAddress,
+    'on_chain_balance': onChainBalance,
+    'availability': availability,
+    if (availability != 'provider_unreachable')
+      'service_provider': tronGaslessServiceProvider.isEmpty
+          ? 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'
+          : tronGaslessServiceProvider,
+    if (availability == 'available' || availability == 'pending_transfer') ...{
+      'active': true,
+      'frozen_balance': '0',
+      'spendable_balance': onChainBalance,
+      'transfer_fee': '1',
+    },
+    if (availability == 'available')
+      'max_withdrawable': (Decimal.parse(onChainBalance) - Decimal.one)
+          .toString(),
+  },
+});
 
 Widget _liveGaslessReceiveDialog({
   required Asset asset,
@@ -292,11 +348,14 @@ Widget _liveGaslessReceiveDialog({
           ),
           verifiedGasfreeAddress: address.gasfreeAddress,
           gaslessReceiveWalletPubkeyHash: _walletAHash,
+          gaslessAccountStatus: _gaslessAccountStatus(address.gasfreeAddress!),
+          gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
         ),
       );
   if (addressesBloc == null) addTearDown(bloc.close);
   final sdk = _FakeSdk(
     balances: _FakeBalanceManager(const {}),
+    assetValues: [asset],
     boundGaslessReceive: true,
   );
 
@@ -380,7 +439,7 @@ void testReceiveAddressFaucetWidgets() {
       expect(button.onPressed, isNull);
     });
 
-    testWidgets('TRC20 receive selector shows GasFree address', (tester) async {
+    testWidgets('legacy TRC20 selector remains Standard-only', (tester) async {
       final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
       final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
       final address = _trc20Address(
@@ -413,8 +472,8 @@ void testReceiveAddressFaucetWidgets() {
       await tester.tap(find.byKey(const Key('coin-details-address-field')));
       await tester.pumpAndSettle();
 
-      expect(find.text('TGasFr...000001'), findsOneWidget);
-      expect(find.text('TRegul...000001'), findsNothing);
+      expect(find.text('TRegul...000001'), findsOneWidget);
+      expect(find.text('TGasFr...000001'), findsNothing);
     });
 
     testWidgets(
@@ -493,6 +552,10 @@ void testReceiveAddressFaucetWidgets() {
             ),
             verifiedGasfreeAddress: address.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletAHash,
+            gaslessAccountStatus: _gaslessAccountStatus(
+              address.gasfreeAddress!,
+            ),
+            gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
           ),
         );
         addTearDown(addressesBloc.close);
@@ -554,6 +617,47 @@ void testReceiveAddressFaucetWidgets() {
 
         addressesBloc.update(
           CoinAddressesState(
+            addresses: [replacement, duplicateCandidate],
+            gaslessReceiveStatus: GaslessReceiveStatus.unsupported,
+            gaslessReceiveReason: GaslessReceiveReasonCode.tokenUnsupported,
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const Key('gasless-official-recovery-action')),
+          findsOneWidget,
+        );
+
+        addressesBloc.update(
+          CoinAddressesState(
+            addresses: [replacement, duplicateCandidate],
+            gaslessReceiveStatus: GaslessReceiveStatus.temporarilyUnavailable,
+            gaslessReceiveReason:
+                GaslessReceiveReasonCode.providerTemporarilyUnavailable,
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const Key('gasless-official-recovery-action')),
+          findsOneWidget,
+        );
+
+        addressesBloc.update(
+          CoinAddressesState(
+            addresses: [replacement, duplicateCandidate],
+            gaslessReceiveStatus: GaslessReceiveStatus.securityMismatch,
+            gaslessReceiveReason:
+                GaslessReceiveReasonCode.providerIdentityMismatch,
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const Key('gasless-official-recovery-action')),
+          findsOneWidget,
+        );
+
+        addressesBloc.update(
+          CoinAddressesState(
             addresses: [address],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
             gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
@@ -561,6 +665,10 @@ void testReceiveAddressFaucetWidgets() {
             ),
             verifiedGasfreeAddress: 'TDifferentCustodyAddress',
             gaslessReceiveWalletPubkeyHash: _walletAHash,
+            gaslessAccountStatus: _gaslessAccountStatus(
+              address.gasfreeAddress!,
+            ),
+            gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
           ),
         );
         await tester.pump();
@@ -589,6 +697,10 @@ void testReceiveAddressFaucetWidgets() {
             ),
             verifiedGasfreeAddress: address.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletAHash,
+            gaslessAccountStatus: _gaslessAccountStatus(
+              address.gasfreeAddress!,
+            ),
+            gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
           ),
         );
         addTearDown(authBloc.close);
@@ -615,6 +727,56 @@ void testReceiveAddressFaucetWidgets() {
         );
         expect(find.byType(QrCode), findsNothing);
         expect(find.byIcon(Icons.copy_rounded), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'GasFree dialog copy revalidates at action time and fails closed',
+      (tester) async {
+        final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+        final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+        final address = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+        final addressesBloc = _FakeCoinAddressesBloc(
+          CoinAddressesState(
+            addresses: [address],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+              const Duration(hours: 1),
+            ),
+            verifiedGasfreeAddress: address.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletAHash,
+            gaslessAccountStatus: _gaslessAccountStatus(
+              address.gasfreeAddress!,
+            ),
+            gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
+          ),
+          actionRevalidationAllowed: false,
+        );
+        addTearDown(addressesBloc.close);
+
+        await tester.pumpWidget(
+          _liveGaslessReceiveDialog(
+            asset: asset,
+            address: address,
+            addressesBloc: addressesBloc,
+          ),
+        );
+
+        expect(find.byType(QrCode), findsOneWidget);
+        expect(addressesBloc.actionRevalidationCalls, isZero);
+
+        await tester.tap(find.byIcon(Icons.copy_rounded));
+        await tester.pump();
+
+        expect(addressesBloc.actionRevalidationCalls, 1);
+        expect(
+          addressesBloc.lastEvent,
+          isA<CoinAddressesGaslessReceiveRefreshRequested>(),
+        );
+        expect(find.text('receiveGaslessPausedNotice'), findsOneWidget);
       },
     );
 
@@ -719,16 +881,25 @@ void testReceiveAddressFaucetWidgets() {
           balances: _FakeBalanceManager({
             if (parentTrxBalance != null) parent.id: parentTrxBalance,
           }),
+          assetValues: [parent, asset],
         );
         final addressesBloc = _FakeCoinAddressesBloc(
           CoinAddressesState(addresses: [strandedAddress]),
         );
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+        );
+        addTearDown(addressesBloc.close);
+        addTearDown(authBloc.close);
 
         return MaterialApp(
           home: RepositoryProvider<KomodoDefiSdk>.value(
             value: sdk,
-            child: BlocProvider<CoinAddressesBloc>.value(
-              value: addressesBloc,
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+                BlocProvider<AuthBloc>.value(value: authBloc),
+              ],
               child: Scaffold(
                 body: GaslessStandardBalanceNotice(
                   coin: asset.toCoin(),
@@ -792,9 +963,9 @@ void testReceiveAddressFaucetWidgets() {
         final trx = Asset.fromJson(_trxConfig(), knownIds: const {});
         final usdt = Asset.fromJson(_trc20Config(), knownIds: {trx.id});
 
-        // Tests run without TRON_GASLESS_ENABLED. Runtime recovery identity
-        // remains available, but new-address restrictions do not advertise an
-        // inactive rail.
+        // Tests run without a valid provider configuration. Runtime recovery
+        // identity remains available, but new-address restrictions do not
+        // advertise an inactive rail.
         expect(trx.toCoin().isGaslessSingleAddressScope(sdk), isFalse);
         expect(usdt.toCoin().isGaslessSingleAddressScope(sdk), isFalse);
         expect(usdt.toCoin().isGaslessRecoveryAsset, isTrue);
@@ -1061,17 +1232,19 @@ void testReceiveAddressFaucetWidgets() {
         required PubkeyInfo address,
         required AddressDisplayVariant variant,
         Map<AssetId, BalanceInfo> balances = const {},
-        Map<AssetId, GaslessBalanceSnapshot> gaslessSnapshots = const {},
+        GaslessAccountStatusResponse? gaslessAccountStatus,
         bool gaslessReceiveEnabled = true,
+        GaslessReceiveStatus gaslessReceiveStatus =
+            GaslessReceiveStatus.initial,
+        GaslessReceiveReasonCode? gaslessReceiveReason,
         TextScaler textScaler = const TextScaler.linear(1),
+        ThemeMode themeMode = ThemeMode.light,
       }) {
-        final sdk = _FakeSdk(
-          balances: _FakeBalanceManager(
-            balances,
-            gaslessSnapshots: gaslessSnapshots,
-          ),
-        );
+        final sdk = _FakeSdk(balances: _FakeBalanceManager(balances));
         return MaterialApp(
+          theme: ThemeData.light(),
+          darkTheme: ThemeData.dark(),
+          themeMode: themeMode,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(textScaler: textScaler),
             child: child!,
@@ -1088,6 +1261,56 @@ void testReceiveAddressFaucetWidgets() {
                   setPageType: (_) {},
                   isSoleGaslessRow: true,
                   gaslessReceiveEnabled: gaslessReceiveEnabled,
+                  gaslessReceiveStatus: gaslessReceiveStatus,
+                  gaslessReceiveReason: gaslessReceiveReason,
+                  gaslessAccountStatus: gaslessAccountStatus,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      Widget buildCoinAddressesComposition({
+        required Asset asset,
+        required PubkeyInfo address,
+        required CoinAddressesState state,
+        bool disableAnimations = false,
+      }) {
+        final addressesBloc = _FakeCoinAddressesBloc(state);
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+        );
+        final settingsBloc = _FakeSettingsBloc();
+        addTearDown(addressesBloc.close);
+        addTearDown(authBloc.close);
+        addTearDown(settingsBloc.close);
+
+        final sdk = _FakeSdk(
+          balances: _FakeBalanceManager(const {}),
+          assetValues: [asset],
+        );
+
+        return MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: disableAnimations),
+            child: child!,
+          ),
+          home: RepositoryProvider<KomodoDefiSdk>.value(
+            value: sdk,
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<AuthBloc>.value(value: authBloc),
+                BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+                BlocProvider<SettingsBloc>.value(value: settingsBloc),
+              ],
+              child: Scaffold(
+                body: CustomScrollView(
+                  slivers: [
+                    CoinAddresses(coin: asset.toCoin(), setPageType: (_) {}),
+                  ],
                 ),
               ),
             ),
@@ -1114,23 +1337,18 @@ void testReceiveAddressFaucetWidgets() {
               // The normal balance is aggregate wallet ownership and must not
               // be rendered beside the custody address.
               balances: {usdt.id: _balanceOf('127.75')},
-              gaslessSnapshots: {
-                usdt.id: _gaslessSnapshot(
-                  custodyAddress: pubkey.gasfreeAddress!,
-                  custodyTotal: '120.5',
-                ),
-              },
+              gaslessAccountStatus: _gaslessAccountStatus(
+                pubkey.gasfreeAddress!,
+              ),
             ),
           );
+          await tester.pumpAndSettle();
 
           expect(
             find.byKey(const Key('address-row-gasfree-tag')),
             findsOneWidget,
           );
-          final copy = tester.widget<AddressCopyButton>(
-            find.byType(AddressCopyButton),
-          );
-          expect(copy.address, 'TGasFreeReceiveAddress000000000001');
+          expect(find.byIcon(Icons.copy), findsOneWidget);
           expect(find.byType(FaucetButton), findsNothing);
           expect(find.byType(SwapAddressTag), findsNothing);
           expect(find.textContaining('120.5'), findsOneWidget);
@@ -1156,6 +1374,7 @@ void testReceiveAddressFaucetWidgets() {
               balances: {usdt.id: _balanceOf('127.75')},
             ),
           );
+          await tester.pumpAndSettle();
 
           expect(find.textContaining('127.75'), findsNothing);
           expect(find.textContaining('7.25'), findsNothing);
@@ -1178,15 +1397,17 @@ void testReceiveAddressFaucetWidgets() {
               address: pubkey,
               variant: AddressDisplayVariant.gasfree,
               balances: {usdt.id: _balanceOf('127.75')},
-              gaslessSnapshots: {
-                usdt.id: _gaslessSnapshot(
-                  custodyAddress: pubkey.gasfreeAddress!,
-                  custodyTotal: '120.5',
-                ),
-              },
+              gaslessAccountStatus: _gaslessAccountStatus(
+                pubkey.gasfreeAddress!,
+                availability: 'provider_unreachable',
+              ),
               gaslessReceiveEnabled: false,
+              gaslessReceiveStatus: GaslessReceiveStatus.temporarilyUnavailable,
+              gaslessReceiveReason:
+                  GaslessReceiveReasonCode.providerTemporarilyUnavailable,
             ),
           );
+          await tester.pumpAndSettle();
 
           expect(find.text('addressRowGasfreePausedTag'), findsOneWidget);
           expect(find.textContaining('120.5'), findsOneWidget);
@@ -1199,6 +1420,194 @@ void testReceiveAddressFaucetWidgets() {
           );
         },
       );
+
+      testWidgets('remote Receive disable retains the typed custody snapshot', (
+        tester,
+      ) async {
+        final usdt = trc20Asset();
+        final pubkey = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+
+        await tester.pumpWidget(
+          buildAddressCard(
+            asset: usdt,
+            address: pubkey,
+            variant: AddressDisplayVariant.gasfree,
+            gaslessAccountStatus: _gaslessAccountStatus(pubkey.gasfreeAddress!),
+            gaslessReceiveEnabled: false,
+            gaslessReceiveStatus: GaslessReceiveStatus.disabled,
+            gaslessReceiveReason: GaslessReceiveReasonCode.remoteDisabled,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('120.5'), findsOneWidget);
+        expect(find.byType(AddressCopyButton), findsNothing);
+        expect(find.byType(QrButton), findsNothing);
+        expect(
+          find.byKey(const Key('gasless-custody-recovery-action')),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets(
+        'checking custody row is stable and never shows paused recovery copy',
+        (tester) async {
+          final usdt = trc20Asset();
+          final pubkey = _trc20Address(
+            address: 'TRegularReceiveAddress000000000001',
+            gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+          );
+
+          await tester.pumpWidget(
+            buildAddressCard(
+              asset: usdt,
+              address: pubkey,
+              variant: AddressDisplayVariant.gasfree,
+              gaslessReceiveEnabled: false,
+              gaslessReceiveStatus: GaslessReceiveStatus.checking,
+            ),
+          );
+
+          expect(
+            find.byKey(const Key('address-row-gasfree-checking-tag')),
+            findsOneWidget,
+          );
+          expect(find.text('gaslessRecoveryBody'), findsNothing);
+          expect(
+            find.byKey(const Key('address-row-gasfree-tag')),
+            findsNothing,
+          );
+        },
+      );
+
+      testWidgets(
+        'checking composition keeps Standard actions usable with reduced '
+        'motion',
+        (tester) async {
+          final usdt = trc20Asset();
+          final pubkey = _trc20Address(
+            address: 'TRegularReceiveAddress000000000001',
+            gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+            balance: _balanceOf('7.25'),
+          );
+
+          await tester.pumpWidget(
+            buildCoinAddressesComposition(
+              asset: usdt,
+              address: pubkey,
+              state: CoinAddressesState(
+                status: FormStatus.success,
+                addresses: [pubkey],
+                gaslessReceiveStatus: GaslessReceiveStatus.checking,
+              ),
+              disableAnimations: true,
+            ),
+          );
+          await tester.pump();
+
+          expect(
+            MediaQuery.disableAnimationsOf(
+              tester.element(find.byType(CoinAddresses)),
+            ),
+            isTrue,
+          );
+          expect(
+            find.byKey(const Key('address-row-gasfree-checking-tag')),
+            findsOneWidget,
+          );
+          expect(find.text('gaslessRecoveryBody'), findsNothing);
+
+          final standardRow = find.byKey(
+            ValueKey('address-card-standard-${pubkey.address}'),
+          );
+          expect(standardRow, findsOneWidget);
+          expect(
+            find.descendant(
+              of: standardRow,
+              matching: find.byType(AddressCopyButton),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: standardRow, matching: find.byType(QrButton)),
+            findsOneWidget,
+          );
+          final standardReceiveAction = find.descendant(
+            of: standardRow,
+            matching: find.byKey(const Key('address-row-receive-action')),
+          );
+          expect(
+            tester.widget<Semantics>(standardReceiveAction).properties.enabled,
+            isTrue,
+          );
+
+          // The checking banner exists only in builds where the receive rail
+          // is compiled in. The named feature-enabled run below exercises its
+          // reduced-motion fallback; the unconfigured suite still verifies
+          // the complete row composition and Standard escape hatch.
+          expect(
+            find.byKey(const Key('gasless-receive-checking-banner')),
+            isTronGaslessReceiveConfigured ? findsOneWidget : findsNothing,
+          );
+          expect(find.byType(LinearProgressIndicator), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+
+      testWidgets('paused reasons render distinct closed-state guidance', (
+        tester,
+      ) async {
+        final usdt = trc20Asset();
+        final pubkey = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+
+        Future<void> expectReason(
+          GaslessReceiveReasonCode reason,
+          String expectedKey,
+        ) async {
+          await tester.pumpWidget(
+            buildAddressCard(
+              asset: usdt,
+              address: pubkey,
+              variant: AddressDisplayVariant.gasfree,
+              gaslessReceiveEnabled: false,
+              gaslessReceiveStatus: GaslessReceiveStatus.disabled,
+              gaslessReceiveReason: reason,
+            ),
+          );
+          expect(find.text(expectedKey), findsOneWidget);
+        }
+
+        await expectReason(
+          GaslessReceiveReasonCode.remoteDisabled,
+          'receiveGaslessRemoteDisabledNotice',
+        );
+        await expectReason(
+          GaslessReceiveReasonCode.malformedAccountStatus,
+          'receiveGaslessSecurityBlockedNotice',
+        );
+        await expectReason(
+          GaslessReceiveReasonCode.providerIdentityMismatch,
+          'receiveGaslessProviderMismatchNotice',
+        );
+        await expectReason(
+          GaslessReceiveReasonCode.reactivationRequired,
+          'receiveGaslessReactivationRequiredNotice',
+        );
+        await expectReason(
+          GaslessReceiveReasonCode.pendingTransfer,
+          'receiveGaslessPendingTransferNotice',
+        );
+        await expectReason(
+          GaslessReceiveReasonCode.tokenUnsupported,
+          'receiveGaslessTokenUnsupportedNotice',
+        );
+      });
 
       testWidgets('standard sibling row shows the EOA with its own balance', (
         tester,
@@ -1359,12 +1768,10 @@ void testReceiveAddressFaucetWidgets() {
               variant: AddressDisplayVariant.gasfree,
               gaslessReceiveEnabled: false,
               textScaler: const TextScaler.linear(2),
-              gaslessSnapshots: {
-                usdt.id: _gaslessSnapshot(
-                  custodyAddress: pubkey.gasfreeAddress!,
-                  custodyTotal: '120.5',
-                ),
-              },
+              gaslessAccountStatus: _gaslessAccountStatus(
+                pubkey.gasfreeAddress!,
+                availability: 'provider_unreachable',
+              ),
             ),
           );
 
@@ -1400,6 +1807,108 @@ void testReceiveAddressFaucetWidgets() {
         );
       }
 
+      Future<void> expectReadyAndPausedAtViewport(
+        WidgetTester tester, {
+        required Size size,
+        required ThemeMode themeMode,
+        required Brightness brightness,
+      }) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await syncScreenTypeToView(tester);
+        addTearDown(() async {
+          tester.view.physicalSize = const Size(400, 800);
+          tester.view.devicePixelRatio = 1;
+          await syncScreenTypeToView(tester);
+        });
+
+        final usdt = trc20Asset();
+        final pubkey = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+        final availableStatus = _gaslessAccountStatus(pubkey.gasfreeAddress!);
+        final unreachableStatus = _gaslessAccountStatus(
+          pubkey.gasfreeAddress!,
+          availability: 'provider_unreachable',
+        );
+
+        await tester.pumpWidget(
+          buildAddressCard(
+            asset: usdt,
+            address: pubkey,
+            variant: AddressDisplayVariant.gasfree,
+            gaslessAccountStatus: availableStatus,
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            themeMode: themeMode,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          Theme.of(tester.element(find.byType(AddressCard))).brightness,
+          brightness,
+        );
+        expect(
+          find.byKey(const Key('address-row-gasfree-tag')),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.copy), findsOneWidget);
+        expect(find.byType(QrButton), findsOneWidget);
+        expect(find.textContaining('120.5'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(
+          buildAddressCard(
+            asset: usdt,
+            address: pubkey,
+            variant: AddressDisplayVariant.gasfree,
+            gaslessAccountStatus: unreachableStatus,
+            gaslessReceiveEnabled: false,
+            gaslessReceiveStatus: GaslessReceiveStatus.temporarilyUnavailable,
+            gaslessReceiveReason:
+                GaslessReceiveReasonCode.providerTemporarilyUnavailable,
+            themeMode: themeMode,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          Theme.of(tester.element(find.byType(AddressCard))).brightness,
+          brightness,
+        );
+        expect(find.text('addressRowGasfreePausedTag'), findsOneWidget);
+        expect(find.textContaining('120.5'), findsOneWidget);
+        expect(find.byIcon(Icons.copy), findsNothing);
+        expect(find.byType(QrButton), findsNothing);
+        expect(
+          find.text('receiveGaslessProviderUnavailableNotice'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      }
+
+      testWidgets(
+        'ready and paused custody rows render at 375px in light theme',
+        (tester) => expectReadyAndPausedAtViewport(
+          tester,
+          size: const Size(375, 812),
+          themeMode: ThemeMode.light,
+          brightness: Brightness.light,
+        ),
+      );
+
+      testWidgets(
+        'ready and paused custody rows render at 768px in dark theme',
+        (tester) => expectReadyAndPausedAtViewport(
+          tester,
+          size: const Size(768, 1024),
+          themeMode: ThemeMode.dark,
+          brightness: Brightness.dark,
+        ),
+      );
+
       testWidgets('desktop rows lay out the variant tag without overflow', (
         tester,
       ) async {
@@ -1429,17 +1938,23 @@ void testReceiveAddressFaucetWidgets() {
             address: pubkey,
             variant: AddressDisplayVariant.gasfree,
             balances: {usdt.id: _balanceOf('127.75')},
-            gaslessSnapshots: {
-              usdt.id: _gaslessSnapshot(
-                custodyAddress: pubkey.gasfreeAddress!,
-                custodyTotal: '120.5',
-              ),
-            },
+            gaslessAccountStatus: _gaslessAccountStatus(pubkey.gasfreeAddress!),
           ),
         );
         expect(
           find.byKey(const Key('address-row-gasfree-tag')),
           findsOneWidget,
+        );
+        final desktopReceiveAction = find.byKey(
+          const Key('address-row-desktop-receive-action'),
+        );
+        expect(
+          tester.getRect(desktopReceiveAction).height,
+          greaterThanOrEqualTo(48),
+        );
+        expect(
+          tester.widget<Semantics>(desktopReceiveAction).properties.button,
+          isTrue,
         );
         expect(find.textContaining('120.5'), findsOneWidget);
 
@@ -1488,6 +2003,81 @@ void testReceiveAddressFaucetWidgets() {
         final qr = tester.widget<QrCode>(find.byType(QrCode));
         expect(qr.address, 'TRegularReceiveAddress000000000001');
         expect(find.text('receiveGaslessBadgeTitle'), findsNothing);
+      });
+
+      testWidgets('GasFree QrButton revalidates at tap time and fails closed', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+        final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+        final pubkey = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+        );
+        final addressesBloc = _FakeCoinAddressesBloc(
+          CoinAddressesState(
+            addresses: [pubkey],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+              const Duration(hours: 1),
+            ),
+            verifiedGasfreeAddress: pubkey.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletAHash,
+            gaslessAccountStatus: _gaslessAccountStatus(pubkey.gasfreeAddress!),
+            gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
+          ),
+        );
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+        );
+        final sdk = _FakeSdk(
+          balances: _FakeBalanceManager(const {}),
+          assetValues: [asset],
+          boundGaslessReceive: true,
+        );
+        addTearDown(addressesBloc.close);
+        addTearDown(authBloc.close);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RepositoryProvider<KomodoDefiSdk>.value(
+              value: sdk,
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider<AuthBloc>.value(value: authBloc),
+                  BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+                ],
+                child: Scaffold(
+                  body: QrButton(
+                    coin: asset.toCoin(),
+                    address: pubkey,
+                    variant: AddressDisplayVariant.gasfree,
+                    gaslessReceiveEnabled: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Simulate authority being revoked after the button was rendered but
+        // before the user acts.
+        addressesBloc.actionRevalidationAllowed = false;
+        await tester.tap(find.byType(IconButton));
+        await tester.pump();
+
+        expect(addressesBloc.actionRevalidationCalls, 1);
+        expect(
+          addressesBloc.lastEvent,
+          isA<CoinAddressesGaslessReceiveRefreshRequested>(),
+        );
+        expect(find.byType(QrCode), findsNothing);
+        expect(find.byType(PubkeyReceiveDialog), findsNothing);
+        expect(find.text('receiveGaslessPausedNotice'), findsOneWidget);
       });
     });
   });
