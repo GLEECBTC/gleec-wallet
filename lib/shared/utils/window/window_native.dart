@@ -62,7 +62,3 @@ void showMessageBeforeUnload(String message) {
   _observer ??= _BeforeUnloadObserver(message);
   WidgetsBinding.instance.addObserver(_observer!);
 }
-
-/// No-op on native platforms; app updates open the release download URL
-/// instead of reloading (see UpdateBloc.update).
-Future<void> hardReloadPage() async {}
