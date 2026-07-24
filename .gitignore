@@ -77,6 +77,7 @@ android/app/.cxx/
 
 # Python
 venv/
+**/__pycache__/
 
 # FVM Version Cache
 .fvm/
@@ -85,8 +86,17 @@ AGENTS_1.md
 # .dmg Release
 dist/
  
-# KDF generated binaries
-web/kdf/kdf/bin/
+# Local environment secrets
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# Generated integration and export artifacts
+/ios/Flutter/ephemeral/Packages/
+/ios/Flutter/ephemeral/flutter_native_integration.env
+/output/
+/web/kdf/kdf/
 
 # AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
 /.claude/skills/
