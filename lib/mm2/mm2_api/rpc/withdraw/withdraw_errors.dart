@@ -222,66 +222,6 @@ class WithdrawInternalError with ErrorWithDetails implements BaseError {
   }
 }
 
-/// Legacy-path compatibility for KDF's structured GasFree custody shortfall
-/// errors (`WithdrawError::Gasless(InsufficientGasFreeBalance[ForActivation])`,
-/// adjacently tagged on both levels). The active SDK path parses these through
-/// `KdfErrorRegistry`; this exists only for any remaining legacy withdraw
-/// consumers. The activation fee is already included in `required`, so both
-/// variants share the token-denominated shortfall message.
-class WithdrawGaslessInsufficientGasFreeBalanceError implements BaseError {
-  WithdrawGaslessInsufficientGasFreeBalanceError({
-    required String coin,
-    required String availableAmount,
-    required String requiredAmount,
-  }) : _coin = coin,
-       _availableAmount = availableAmount,
-       _requiredAmount = requiredAmount;
-
-  factory WithdrawGaslessInsufficientGasFreeBalanceError.fromJson(
-    Map<String, dynamic> json,
-  ) {
-    final Map<String, dynamic> data =
-        (json['error_data'] as Map<String, dynamic>?) ?? const {};
-    return WithdrawGaslessInsufficientGasFreeBalanceError(
-      coin: '${data['coin'] ?? ''}',
-      availableAmount: '${data['available'] ?? ''}',
-      requiredAmount: '${data['required'] ?? ''}',
-    );
-  }
-
-  final String _coin;
-  final String _availableAmount;
-  final String _requiredAmount;
-
-  static const String type = 'Gasless';
-  static const Set<String> _shortfallInnerTypes = {
-    'InsufficientGasFreeBalance',
-    'InsufficientGasFreeBalanceForActivation',
-  };
-
-  /// Whether the nested gasless error is one of the custody shortfall
-  /// variants this class can render.
-  static bool matchesInner(Map<String, dynamic> json) {
-    final dynamic inner = json['error_data'];
-    return inner is Map<String, dynamic> &&
-        _shortfallInnerTypes.contains(inner['error_type']);
-  }
-
-  /// Unwraps the nested gasless payload (`error_data.error_data`).
-  static Map<String, dynamic> innerJson(Map<String, dynamic> json) {
-    final dynamic inner = json['error_data'];
-    if (inner is Map<String, dynamic>) return inner;
-    return const {};
-  }
-
-  @override
-  String get message {
-    return LocaleKeys.withdrawGaslessInsufficientBalance.tr(
-      args: [_availableAmount, _coin, _requiredAmount, _coin, _coin],
-    );
-  }
-}
-
 class WithdrawErrorFactory implements ErrorFactory<String> {
   @override
   BaseError getError(Map<String, dynamic> json, String coinAbbr) {
@@ -310,12 +250,6 @@ class WithdrawErrorFactory implements ErrorFactory<String> {
         return WithdrawTransportError.fromJson(json);
       case WithdrawInternalError.type:
         return WithdrawInternalError.fromJson(json);
-      case WithdrawGaslessInsufficientGasFreeBalanceError.type:
-        if (WithdrawGaslessInsufficientGasFreeBalanceError.matchesInner(json)) {
-          return WithdrawGaslessInsufficientGasFreeBalanceError.fromJson(
-            WithdrawGaslessInsufficientGasFreeBalanceError.innerJson(json),
-          );
-        }
     }
     return TextError(error: LocaleKeys.somethingWrong.tr());
   }

@@ -107,6 +107,18 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     return settings.weakPasswordsAllowed;
   }
 
+  Future<void> _disconnectStreamingForAuthLifecycle(String context) async {
+    try {
+      await _kdfSdk.disconnectStreaming();
+    } catch (error, stackTrace) {
+      _log.shout(
+        'Failed to clean up KDF streams during $context',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
   Future<void> _onLogout(
     AuthSignOutRequested event,
     Emitter<AuthBlocState> emit,
@@ -115,6 +127,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     await _pauseAuthUserWatcher();
     emit(AuthBlocState.loading());
     try {
+      // Disable KDF streams while the authenticated KDF client is still alive.
+      await _disconnectStreamingForAuthLifecycle('sign-out');
       await _kdfSdk.auth.signOut();
     } catch (e, s) {
       // Do not crash the app on sign-out errors (e.g., KDF not stopping in time).
@@ -123,7 +137,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     } finally {
       // Explicitly disconnect SSE on sign-out
       _log.info('User signed out, disconnecting SSE...');
-      _kdfSdk.streaming.disconnect();
+      await _disconnectStreamingForAuthLifecycle('sign-out finalization');
 
       await _authChangesSubscription?.cancel();
       emit(AuthBlocState.initial());
@@ -179,7 +193,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
 
       // Explicitly connect SSE after successful login
       _log.info('User authenticated, connecting SSE for streaming...');
-      _kdfSdk.streaming.connectIfNeeded();
+      _kdfSdk.connectStreaming();
 
       _listenToAuthStateChanges();
     } catch (e, s) {
@@ -517,8 +531,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           allowWeakPassword: weakPasswordsAllowed,
         ),
       );
-      final LegacyWalletSource? linkageSource =
-          event.sourceWallet.legacySource;
+      final LegacyWalletSource? linkageSource = event.sourceWallet.legacySource;
       if (linkageSource != null) {
         await _kdfSdk.setMigratedLegacySource(
           source: linkageSource,
@@ -757,7 +770,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     String? message,
   }) {
     emit(AuthBlocState.loggedIn(user, message: message));
-    _kdfSdk.streaming.connectIfNeeded();
+    _kdfSdk.connectStreaming();
   }
 
   Future<void> _runPostLoginFinalizer({
@@ -932,7 +945,9 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   @override
   void _listenToAuthStateChanges() {
     _authChangesSubscription?.cancel();
-    _authChangesSubscription = _kdfSdk.auth.watchCurrentUser().listen((user) {
+    _authChangesSubscription = _kdfSdk.auth.watchCurrentUser().listen((
+      user,
+    ) async {
       final AuthorizeMode event = user != null
           ? AuthorizeMode.logIn
           : AuthorizeMode.noLogin;
@@ -942,11 +957,11 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       if (user != null) {
         // User authenticated - connect SSE for balance/tx history streaming
         _log.info('User authenticated, connecting SSE for streaming...');
-        _kdfSdk.streaming.connectIfNeeded();
+        _kdfSdk.connectStreaming();
       } else {
         // User signed out - disconnect SSE to clean up resources
         _log.info('User signed out, disconnecting SSE...');
-        _kdfSdk.streaming.disconnect();
+        await _disconnectStreamingForAuthLifecycle('auth-state change');
       }
     });
   }
@@ -996,7 +1011,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     Map<String, dynamic> current,
   ) {
     for (final entry in incoming.entries) {
-      if (!current.containsKey(entry.key) || current[entry.key] != entry.value) {
+      if (!current.containsKey(entry.key) ||
+          current[entry.key] != entry.value) {
         return true;
       }
     }

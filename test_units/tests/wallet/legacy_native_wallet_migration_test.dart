@@ -1430,7 +1430,7 @@ class _FakeStreamingManager implements KdfEventStreamingService {
   void connectIfNeeded() {}
 
   @override
-  void disconnect() {}
+  Future<void> disconnect() async {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
