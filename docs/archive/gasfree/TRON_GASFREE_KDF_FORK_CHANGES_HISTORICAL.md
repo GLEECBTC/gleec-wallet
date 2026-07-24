@@ -1,9 +1,14 @@
-# TRON GasFree support — what our fork adds over upstream KDF
+# Historical: TRON GasFree fork changes
+
+> Archived on 2026-07-24. This document describes an earlier staged KDF
+> contract and must not be used as implementation guidance. The active
+> integration contract is
+> [`TRON_GASFREE_KDF_PRODUCTION_SPEC.md`](../../TRON_GASFREE_KDF_PRODUCTION_SPEC.md).
 
 **Audience:** komodo-defi-framework (KDF) core team.
 **Fork:** `komodo-defi-framework`, branch `feat/tron-gasfree`, tip `d4fc1bd04` (2026-06-30), diffed against `origin/main` (`d56a7bc5`) — plus a further batch of uncommitted working-tree changes described inline below and dated 2026-07-02.
 **Consumer:** `gleec-wallet-kdf-integrations` (Gleec Wallet), branch `add/gas-free-tron`.
-**Companion docs (same `docs/` folder):** [`TRON_GASFREE_KDF_FOLLOWUPS.md`](./TRON_GASFREE_KDF_FOLLOWUPS.md) — behavioral/observability follow-ups on top of this feature (silent native-fallback class, multi-address proposal, HD-storage cleanup); [`TRON_GASFREE_PROXY_401.md`](./TRON_GASFREE_PROXY_401.md) — a separate, adjacent service (`komodo-defi-proxy`) that is out of scope here.
+**Historical companion docs:** [`TRON_GASFREE_KDF_FOLLOWUPS_HISTORICAL.md`](./TRON_GASFREE_KDF_FOLLOWUPS_HISTORICAL.md) — behavioral/observability follow-ups on top of the staged feature; [`TRON_GASFREE_PROXY_401.md`](../../TRON_GASFREE_PROXY_401.md) — a separate, adjacent service (`komodo-defi-proxy`) that is out of scope here.
 
 ## Why this document exists
 
@@ -282,8 +287,8 @@ Coverage is dense and, notably, includes **live-network verification**, not just
 
 Two categories of further work are already documented elsewhere in this repo and intentionally **not** repeated in full here:
 
-- **[`TRON_GASFREE_KDF_FOLLOWUPS.md`](./TRON_GASFREE_KDF_FOLLOWUPS.md)** — 10 prioritized items on top of this feature: a structured "did this gasless request silently fall back to native, and why" signal in the withdraw response (High); custody-balance shortfall reporting (High, partially addressed by §6's dedicated error variants); several already fixed in this session (`warn!` logging for enrollment gaps and passive re-enable, the `service_provider` auto-fetch); and two concrete proposals — multi-address (HD) custody support, and clamping never-used TRON HD addresses in storage.
-- **[`TRON_GASFREE_PROXY_401.md`](./TRON_GASFREE_PROXY_401.md)** — covers the separate `komodo-defi-proxy` service (not this repo) that backs the `KomodoProxy` transport in §1/§3; out of scope for a KDF-core review but relevant if evaluating the proxy transport end-to-end.
+- **[`TRON_GASFREE_KDF_FOLLOWUPS_HISTORICAL.md`](./TRON_GASFREE_KDF_FOLLOWUPS_HISTORICAL.md)** — 10 prioritized items on top of this feature: a structured "did this gasless request silently fall back to native, and why" signal in the withdraw response (High); custody-balance shortfall reporting (High, partially addressed by §6's dedicated error variants); several already fixed in this session (`warn!` logging for enrollment gaps and passive re-enable, the `service_provider` auto-fetch); and two concrete proposals — multi-address (HD) custody support, and clamping never-used TRON HD addresses in storage.
+- **[`TRON_GASFREE_PROXY_401.md`](../../TRON_GASFREE_PROXY_401.md)** — covers the separate `komodo-defi-proxy` service (not this repo) that backs the `KomodoProxy` transport in §1/§3; out of scope for a KDF-core review but relevant if evaluating the proxy transport end-to-end.
 
 ---
 

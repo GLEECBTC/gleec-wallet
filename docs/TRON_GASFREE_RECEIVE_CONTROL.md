@@ -3,48 +3,62 @@
 New GasFree custody receive addresses are exposed only when all of the
 following checks pass:
 
-1. `TRON_GASLESS_ENABLED=true` was set at build time.
-2. `TRON_GASLESS_RECEIVE_ENABLED=true` was set at build time.
+1. The fail-closed `TRON_GASLESS_ENABLED` kill switch was explicitly enabled.
+2. The fail-closed `TRON_GASLESS_RECEIVE_ENABLED` kill switch was explicitly
+   enabled.
 3. The provider URL, network, token identity, and pinned service-provider
    address pass the local allowlist.
-4. `TRON_GASLESS_CONTROL_URL` returns a fresh `receiveEnabled: true` document.
-5. The SDK's authoritative GasFree account-status call confirms the provider
-   is available and returns the canonical custody address.
+4. `TRON_GASLESS_CONTROL_URL` is configured and its fresh `receiveEnabled`
+   document explicitly enables Receive. An empty URL or unavailable/stale
+   control document fails closed.
+5. KDF's `gasless::account_status` returns a fresh `availability: available`
+   status for the canonical token, with the exact configured
+   `service_provider`, the expected KDF custody address, and the complete
+   available-state balance and fee shape.
+6. The wallet/configuration epoch and canonical primary software-wallet
+   derivation still match when the asynchronous status call completes and when
+   the user invokes QR or copy.
 
 Any failed or unknown check disables **new GasFree receives**. It does not hide
 an existing custody balance, a pending transfer, retained Standard addresses,
 or recovery actions.
 
-## KDF contract requirement
+## KDF contract
 
-The current PR #9 compatibility RPC does not return a provider identity from
-`gasless::account_status`. The SDK can therefore use it only for provisional,
-read-only custody recovery and for a user-initiated signed preview that proves
-the provider pin before sending existing funds. It cannot safely authorize a
-new receive address.
+The GUI performs no CREATE2 derivation, TIP-712 operation, or direct provider
+request. `gasfree_address` is opaque KDF output: KDF derives it and hard-fails a
+reachable provider/custody mismatch. Flutter binds the completed request to the
+current wallet/configuration epoch and only performs ordinary field, amount,
+and freshness checks.
 
-`receiveEnabled: true` takes effect only when the SDK has detected the bound
-KDF contract and has authoritatively verified the exact provider, token,
-network, wallet, primary derivation, and custody address. Against legacy PR #9,
-the application ignores an enabled remote document and keeps new GasFree
-receives hidden.
+Only `availability: available` authorizes new QR/copy. A
+`pending_transfer` response keeps its provider, balances, and fee information
+visible but blocks new receives. `token_unsupported` keeps the provider
+identity and enables Standard/recovery guidance. `provider_unreachable` keeps
+the fresh on-chain custody total visible while provider-derived spendability
+and fees remain unknown.
+
+`ProviderIdentityMismatch`, `GasfreeAddressMismatch`, and
+`TokenDecimalMismatch` are hard security failures. They must never be rendered
+as an empty or temporarily unavailable account. The superseded
+`provider_available` and `reason_code` response fields are rejected.
+
+Every send still requires a fresh KDF withdrawal preview with
+`fallback_to_native: false`; the status fee and maximum are display estimates
+only.
 
 ## Release workflow gate
 
-The reusable build action defaults both feature switches to `false`. Current
-mobile, desktop, and web workflows intentionally inherit those defaults; this
-keeps ordinary PR and release artifacts disabled while the bound KDF, Android
-artifacts, and Operations evidence are unavailable.
+The reusable build action exposes a primary GasFree kill switch and an
+additional receive kill switch. Builds may explicitly set either switch to
+`false`, but Receive cannot be enabled unless the primary GasFree switch is
+also enabled. Enabled builds require complete, valid provider configuration.
 
-An approved production rollout must explicitly pass environment-scoped values
-for `TRON_GASLESS_ENABLED`, `TRON_GASLESS_RECEIVE_ENABLED`,
-`TRON_GASLESS_BASE_URL`, `TRON_GASLESS_SERVICE_PROVIDER`, and
-`TRON_GASLESS_CONTROL_URL` into the build action, and pass the expected
-endpoint/provider values into the validation action. Do not use
-repository-wide values that would silently enable untrusted pull-request
-builds. The workflow wiring and its environment protection rules require
-release-owner review and remain a release gate, not a safe default to commit
-before rollout approval.
+An approved production rollout must pass environment-scoped
+`TRON_GASLESS_BASE_URL` and `TRON_GASLESS_SERVICE_PROVIDER` values into the
+build action. Receive-enabled builds must also pass
+`TRON_GASLESS_CONTROL_URL`. Feature-switch defaults do not waive artifact
+provenance, provider binding, canary, or Product/Design approval requirements.
 
 ## Endpoint contract
 
@@ -73,8 +87,9 @@ closed:
 - `network` must exactly match the configured provider path: `tron` or `nile`.
 - `serviceProvider` must exactly match the production-pinned TRON address.
 
-Serve the response with `Cache-Control: no-store`. The client revalidates at
-least once per minute and again immediately after the current document expires.
+Serve the response with `Cache-Control: no-store`. The client revalidates every
+30 seconds while the receive surface is foregrounded and again immediately
+after the current document or 60-second KDF status window expires.
 Transport failure, timeout, non-200 status, malformed JSON, expiry, or binding
 mismatch removes the custody address from copy/QR/refund selection while the
 recovery row remains visible.
@@ -83,5 +98,8 @@ recovery row remains visible.
 
 Set `receiveEnabled` to `false` with a fresh expiry. Clients currently viewing
 the receive screen will disable new custody receives on their next revalidation
-(within one minute). Leave the build-level send/recovery configuration in place
-so existing custody balances and unresolved transfers remain accessible.
+(within 30 seconds). Leave the build-level send/recovery configuration in place
+so existing custody balances and unresolved transfers remain visible. Keep the
+official recovery/consolidation action available whenever the GasFree rail is
+unavailable, including provider and hard-security states; it never authorizes a
+new GasFree submission.

@@ -1,4 +1,10 @@
-# TRON gas-free — KDF follow-ups for the silent native-fallback class
+# Historical: TRON GasFree KDF follow-ups
+
+> Archived on 2026-07-24. These follow-ups target a superseded staged
+> integration that requested native fallback and inferred relay state locally.
+> The active wallet always sends `fallback_to_native: false` and follows the
+> typed KDF status, trace, and streaming contract documented in
+> [`TRON_GASFREE_KDF_PRODUCTION_SPEC.md`](../../TRON_GASFREE_KDF_PRODUCTION_SPEC.md).
 
 **Audience:** komodo-defi-framework team.
 **KDF branch / commit verified against:** `feat/tron-gasfree` @ `947c6fad6`.
