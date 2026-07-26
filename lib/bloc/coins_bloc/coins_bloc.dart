@@ -51,6 +51,10 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   Timer? _updatePricesTimer;
   bool _isInitialActivationInProgress = false;
 
+  /// Coins with an in-flight [CoinsPubkeysRequested], so repeated broadcasts
+  /// for the same coin collapse into a single SDK fetch.
+  final Set<String> _pubkeyRequestsInFlight = <String>{};
+
   @override
   Future<void> close() async {
     await _enabledCoinsSubscription?.cancel();
@@ -65,26 +69,27 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsPubkeysRequested event,
     Emitter<CoinsState> emit,
   ) async {
+    // Per-coin gate. This replaces a global `_isInitialActivationInProgress`
+    // early-return, which blanked *every* coin's addresses until the slowest
+    // activation in the batch finished (up to ~105s of retry backoff for a
+    // single flapping coin). That gate existed only to damp the itemBuilder
+    // dispatch storm; the dispatch now comes from activation completion
+    // instead, so per-coin readiness is the correct condition.
+    //
+    // Coins are added to walletCoins before activation even starts to show
+    // them in the UI regardless of activation state. A coin that is missing or
+    // not yet active is an expected case, not a fault.
+    final coin = state.walletCoins[event.coinId];
+    if (coin == null || !coin.isActive) {
+      _log.finer(
+        'Skipping pubkeys request for ${event.coinId}: not an active wallet coin',
+      );
+      return;
+    }
+
+    if (!_pubkeyRequestsInFlight.add(event.coinId)) return;
+
     try {
-      if (_isInitialActivationInProgress) {
-        _log.info(
-          'Skipping pubkeys request for ${event.coinId} while initial activation is in progress.',
-        );
-        return;
-      }
-
-      // Coins are added to walletCoins before activation even starts
-      // to show them in the UI regardless of activation state.
-      // If the coin is not found here, it means the auth state handler
-      // has not pre-populated the list with activating coins yet.
-      final coin = state.walletCoins[event.coinId];
-      if (coin == null) {
-        _log.warning(
-          'Coin ${event.coinId} not found in wallet coins, cannot fetch pubkeys',
-        );
-        return;
-      }
-
       // Get pubkeys from the SDK through the repo
       final asset = _kdfSdk.assets.available[coin.id]!;
       final pubkeys = await _kdfSdk.pubkeys.getPubkeys(asset);
@@ -93,6 +98,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       emit(state.copyWith(pubkeys: {...state.pubkeys, event.coinId: pubkeys}));
     } catch (e, s) {
       _log.shout('Failed to get pubkeys for ${event.coinId}', e, s);
+    } finally {
+      _pubkeyRequestsInFlight.remove(event.coinId);
     }
   }
 
@@ -191,6 +198,20 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // concern the coins list.
     if (hasCoinStateChanged) {
       emit(state.copyWith(walletCoins: {...walletCoins, coin.id.id: coin}));
+    }
+
+    // Request addresses once the coin is actually active. This used to be
+    // dispatched from the wallet list's itemBuilder, which re-fired for every
+    // row on every emission (SliverChildBuilderDelegate.shouldRebuild is
+    // always true) into a concurrent() handler that emits - each emission
+    // rebuilding the list again. Driving it from activation completion makes
+    // it exactly one request per coin.
+    //
+    // Deliberately outside the hasCoinStateChanged branch: a duplicate
+    // "active" broadcast must still trigger the fetch. state.pubkeys and
+    // _pubkeyRequestsInFlight are the dedupe.
+    if (coin.isActive && !state.pubkeys.containsKey(coin.id.id)) {
+      add(CoinsPubkeysRequested(coin.id.id));
     }
   }
 
@@ -518,6 +539,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
   void _resetInitialActivationState() {
     _isInitialActivationInProgress = false;
+    _pubkeyRequestsInFlight.clear();
   }
 
   Future<void> _activateCoins(
