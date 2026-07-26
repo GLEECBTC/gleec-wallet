@@ -25,8 +25,9 @@ Komodo DeFi Flutter SDK. Historical V0/V1/V2 rollout proposals are retained in
 - New GasFree Receive QR/copy is exposed only for a fresh `available` status,
   the canonical wallet address, the exact network/token/contract allowlist, and
   a valid local and remote policy decision.
-- Existing custody balances, recovery, Standard addresses, and unresolved
-  transfers remain visible when new GasFree actions are disabled.
+- Existing custody balances, Standard addresses, unresolved transfers, and
+  recovery/consolidation routes authorized by their own current checks remain
+  visible when new GasFree actions are disabled.
 - A submission that may have reached the provider is never blindly retried.
 - Signed authorization and signatures are never persisted or logged.
 
@@ -127,8 +128,8 @@ generic submission failure unless local typed validation can prove a more
 specific category.
 
 Preview fee details contain the provider name, custody address, transfer and
-activation fees, total token fee, signed maximum fee, and optional trace ID.
-Final fee and finality come from trace status.
+activation fees, total token fee, signed maximum fee, and the documented null
+`trace_id` placeholder. Final fee and finality come from trace status.
 
 ## Trace and recovery
 
@@ -168,8 +169,9 @@ The production allowlist remains exact:
   `TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf`;
 - canonical primary software-wallet derivation only.
 
-Trezor remains excluded until its activation and permit-signing path supports
-the same provider-bound contract.
+The Gleec product keeps Trezor GasFree actions excluded because the current
+permit-signing path cannot extract the required device key. Generic KDF
+activation and read-only account status are not suppressed by the SDK.
 
 ## Release gate
 

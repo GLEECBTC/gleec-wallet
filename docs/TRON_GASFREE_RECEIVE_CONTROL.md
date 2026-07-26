@@ -21,7 +21,7 @@ following checks pass:
 
 Any failed or unknown check disables **new GasFree receives**. It does not hide
 an existing custody balance, a pending transfer, retained Standard addresses,
-or recovery actions.
+or recovery actions authorized by their own current checks.
 
 ## KDF contract
 
@@ -92,14 +92,15 @@ Serve the response with `Cache-Control: no-store`. The client revalidates every
 after the current document or 60-second KDF status window expires.
 Transport failure, timeout, non-200 status, malformed JSON, expiry, or binding
 mismatch removes the custody address from copy/QR/refund selection while the
-recovery row remains visible.
+existing custody row remains visible.
 
 ## Rollback
 
 Set `receiveEnabled` to `false` with a fresh expiry. Clients currently viewing
 the receive screen will disable new custody receives on their next revalidation
 (within 30 seconds). Leave the build-level send/recovery configuration in place
-so existing custody balances and unresolved transfers remain visible. Keep the
-official recovery/consolidation action available whenever the GasFree rail is
-unavailable, including provider and hard-security states; it never authorizes a
-new GasFree submission.
+so existing custody balances and unresolved transfers remain visible. Recovery
+or consolidation remains available only when its own typed KDF state and fresh
+action-time checks authorize it; provider outage or a hard-security state does
+not itself prove that either action is safe. Neither action authorizes a new
+GasFree submission.

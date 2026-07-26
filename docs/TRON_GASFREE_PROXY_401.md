@@ -178,8 +178,9 @@ Reproduce both outcomes locally first with the stack in
 
 - **Widen the proxy's `MAX_SIGNATURE_EXP_SECS`** (e.g. 15 → 30–60) so normal browser
   clock drift cannot deterministically `401`.
-- **Surface the proxy `401`** distinctly in the wallet/SDK instead of silently falling
-  back to a native TRX-paid transfer, so this failure mode is obvious next time.
+- **Preserve the proxy `401` as a GasFree submission failure**. The app requests
+  `fallback_to_native: false`, never silently downgrades an accepted GasFree
+  preview, and leaves Standard TRON as a separate user-selected rail.
 - **Document the prerequisite**: `komodo_proxy` mode requires the node to be connected
   to the proxy's KDF p2p network on the matching netid. Currently undocumented — the
   tron-gasfree tutorial only says the node "authenticates with its libp2p key."
@@ -204,8 +205,10 @@ CORS-blocked when reading forwarded gas-free responses, even once the 401 is res
   `Access-Control-Allow-*` headers to successful forwarded `/gasfree/*` responses.
   See [`contrib/tron-gasfree-proxy-debug/production/nginx-gasfree-location.conf`](../contrib/tron-gasfree-proxy-debug/production/nginx-gasfree-location.conf).
 
-## Unrelated note (not the 401)
+## Unrelated provider-identity check (not the 401)
 
-`tronGaslessServiceProvider` (`lib/shared/constants.dart`) must match the GasFree account
-behind the proxy. Confirm it against `<base_url>/api/v1/config/provider/all`. A mismatch
-surfaces as a `500`/`503` at **submit** time — it is not the address-lookup `401`.
+`tronGaslessServiceProvider` (`lib/shared/constants.dart`) must match the
+provider configured behind the proxy. KDF verifies this pin during
+`gasless::account_status`; a mismatch is the exact
+`ProviderIdentityMismatch` endpoint error with HTTP status `502`. It is
+separate from the address-lookup `401`.
