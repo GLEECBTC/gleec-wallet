@@ -91,21 +91,29 @@ runs:
           echo "TRON GasFree endpoint is not embedded in this disabled-by-default build."
         fi
 
-        # Decode the AssetManifest.bin and check for the coin icon presence
-        if [ ! -f build/web/assets/AssetManifest.bin ]; then
+        # Check that the generated KMD icon exists and was registered in the
+        # binary asset manifest. Redirect grep output instead of using `-q` so
+        # `pipefail` cannot turn a successful early match into a SIGPIPE error.
+        KMD_ICON="$SDK_KDF_ASSETS_DIR/assets/coin_icons/png/kmd.png"
+        ASSET_MANIFEST=build/web/assets/AssetManifest.bin
+
+        if [ ! -s "$KMD_ICON" ]; then
+          echo "Error: Generated KMD coin icon not found at $KMD_ICON"
+          echo "Available KMD icon paths:"
+          find build/web/assets -iname 'kmd.png' -print || true
+          exit 1
+        fi
+
+        if [ ! -f "$ASSET_MANIFEST" ]; then
           echo "Error: AssetManifest.bin file not found."
           exit 1
         fi
-        if ! strings build/web/assets/AssetManifest.bin | grep -qi "assets/coin_icons/png/kmd.png"; then
+
+        if ! strings "$ASSET_MANIFEST" | grep -Fi "assets/coin_icons/png/kmd.png" > /dev/null; then
           echo "Error: KMD coin icon not found in AssetManifest.bin"
-          echo "Output of case-invariant grep on build/web/assets/AssetManifest.bin"
-          strings build/web/assets/AssetManifest.bin | grep -i "assets/coin_icons/png/kmd.png"
-          echo "Listing kmd png files in assets/coin_icons/png"
-          ls -R build/web/assets | grep kmd.png
-          if ! strings build/web/assets/AssetManifest.bin | grep -qi "assets/coin_icons/png/kmd.png"; then
-            echo "Error: KMD coin icon not found in AssetManifest.bin"
-            exit 1
-          fi
+          echo "Coin-icon entries found in the manifest:"
+          strings "$ASSET_MANIFEST" | grep -Fi "assets/coin_icons/png/" | head -n 20 || true
+          exit 1
         fi
 
         # Check that $SDK_KDF_ASSETS_DIR/app_build/build_config.json is present, and is valid json
