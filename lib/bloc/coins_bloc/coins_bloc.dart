@@ -17,6 +17,13 @@ import 'package:web_dex/model/wallet.dart';
 part 'coins_event.dart';
 part 'coins_state.dart';
 
+/// Retry budget for the initial login activation fan-out. Deliberately much
+/// tighter than [CoinsRepo.activateAssetsSync]'s defaults: on login a coin that
+/// keeps failing should surface as suspended quickly rather than hold its row
+/// in `activating` for minutes.
+const int _loginActivationRetryAttempts = 4;
+const Duration _loginActivationMaxRetryDelay = Duration(seconds: 2);
+
 /// Responsible for coin activation, deactivation, syncing, and fiat price
 class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   CoinsBloc(this._kdfSdk, this._coinsRepo, this._tradingStatusService)
@@ -580,17 +587,52 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       coinsToActivate.map((asset) => asset.id),
     );
 
+    // One forced activated-assets read for the whole fan-out instead of one
+    // per asset. Placed immediately before the fan-out so the staleness window
+    // is sub-millisecond, preserving the freshness guarantee that the
+    // per-asset force-refresh was added for (#3463, NoSuchCoin race).
+    try {
+      await _coinsRepo.getActivatedAssetIds(forceRefresh: true);
+    } catch (e, s) {
+      _log.warning(
+        'Failed to pre-fetch activated assets before login fan-out',
+        e,
+        s,
+      );
+    }
+
+    // Bound the retry budget for the *login* fan-out only. The repo defaults
+    // (15 attempts, 500ms -> 10s exponential) are ~105s of pure sleep per
+    // asset, during which the coin holds CoinState.activating with no balance
+    // watcher. On login that presents as "the wallet never loads" rather than
+    // as an error. User-initiated activation (coins manager, DEX) keeps the
+    // patient defaults.
+    //
+    // A coin that exhausts this budget flips to suspended sooner and is
+    // recovered by the 3-minute CoinsBalanceMonitoringStarted sweep and by the
+    // SDK balance watcher's own _ensureAssetActivated.
     final enableFutures = coinsToActivate
         .map(
-          (asset) => _coinsRepo.activateAssetsSync([
-            asset,
-          ], addToWalletMetadata: false),
+          (asset) => _coinsRepo.activateAssetsSync(
+            [asset],
+            addToWalletMetadata: false,
+            useSharedActivationCache: true,
+            maxRetryAttempts: _loginActivationRetryAttempts,
+            maxRetryDelay: _loginActivationMaxRetryDelay,
+          ),
         )
         .toList();
 
     // Ignore the return type here and let the broadcast handle the state updates as
     // coins are activated.
-    await Future.wait(enableFutures);
+    try {
+      await Future.wait(enableFutures);
+    } finally {
+      // Leave the shared cache fresh for the consumers that follow (balance
+      // refresh, portfolio blocs), since the fan-out skipped its per-asset
+      // invalidations. Runs even if an asset failed.
+      _coinsRepo.invalidateActivatedAssetsCache();
+    }
   }
 
   /// Filters assets for initial auto-activation on login.

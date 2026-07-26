@@ -237,6 +237,13 @@ class CoinsRepo {
     _kdfSdk.activatedAssetsCache.invalidate();
   }
 
+  /// Invalidates the SDK's activated-assets cache.
+  ///
+  /// For callers that pass `useSharedActivationCache: true` to
+  /// [activateAssetsSync] and therefore own the cache lifecycle across a whole
+  /// batch of activations.
+  void invalidateActivatedAssetsCache() => _invalidateActivatedAssetsCache();
+
   /// Returns all known coins, optionally filtering out excluded assets.
   /// If [excludeExcludedAssets] is true, coins whose id is in
   /// [excludedAssetList] are filtered out.
@@ -371,10 +378,20 @@ class CoinsRepo {
   /// - `Exception`: If activation fails after all retry attempts
   ///
   /// **Note:** Assets are added to wallet metadata even if activation fails.
+  /// [useSharedActivationCache] is for callers that activate many assets
+  /// concurrently and have already forced one activated-assets refresh
+  /// themselves (see [CoinsBloc] login fan-out). It skips this call's own
+  /// forced refresh and trailing cache invalidation, which would otherwise run
+  /// once per asset: [ActivatedAssetsCache.invalidate] nulls the in-flight
+  /// completer, so N concurrent forced refreshes do *not* coalesce - they
+  /// become N real `get_enabled_coins` round trips, each rebuilding the
+  /// ~800-entry asset map, and the per-call invalidation disables the cache
+  /// TTL for every other consumer for the whole window.
   Future<void> activateAssetsSync(
     List<Asset> assets, {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
+    bool useSharedActivationCache = false,
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
@@ -472,10 +489,14 @@ class CoinsRepo {
       final coin = _assetToCoinWithoutAddress(asset);
       try {
         // Force-refresh activation state here to avoid racing on stale cache
-        // reads before attempting a coordinated activation.
+        // reads before attempting a coordinated activation. When the caller
+        // owns the refresh (useSharedActivationCache) it has just forced one
+        // immediately before this call, so the read is already fresh and
+        // SharedActivationCoordinator re-checks isAssetActive before
+        // activating anyway.
         final isAlreadyActivated = await isAssetActivated(
           asset.id,
-          forceRefresh: true,
+          forceRefresh: !useSharedActivationCache,
         );
 
         if (isAlreadyActivated) {
@@ -587,8 +608,12 @@ class CoinsRepo {
       }
     }
 
-    // Invalidate the activated assets cache once after processing all assets
-    _invalidateActivatedAssetsCache();
+    // Invalidate the activated assets cache once after processing all assets.
+    // Skipped when the caller owns the cache lifecycle - it invalidates once
+    // after its whole fan-out completes rather than once per asset.
+    if (!useSharedActivationCache) {
+      _invalidateActivatedAssetsCache();
+    }
 
     // Rethrow the last activation exception if there was one
     if (lastActivationException != null) {
