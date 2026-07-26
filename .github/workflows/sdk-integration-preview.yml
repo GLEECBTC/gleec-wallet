@@ -294,7 +294,7 @@ jobs:
           TRON_GASLESS_BASE_URL: ${{ vars.TRON_GASLESS_BASE_URL }}
           TRON_GASLESS_SERVICE_PROVIDER: ${{ vars.TRON_GASLESS_SERVICE_PROVIDER }}
           TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
-          TRON_GASLESS_REQUIRED_NETWORK: "nile"
+          TRON_GASLESS_REQUIRED_NETWORK: "tron"
 
       - name: Validate build
         id: validate_build
@@ -305,7 +305,7 @@ jobs:
           EXPECTED_TRON_GASLESS_BASE_URL: ${{ vars.TRON_GASLESS_BASE_URL }}
           EXPECTED_TRON_GASLESS_SERVICE_PROVIDER: ${{ vars.TRON_GASLESS_SERVICE_PROVIDER }}
           EXPECTED_TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
-          EXPECTED_TRON_GASLESS_NETWORK: "nile"
+          EXPECTED_TRON_GASLESS_NETWORK: "tron"
 
       - name: Deploy SDK Integration Preview (Expires in 7 days)
         id: firebase_deploy
