@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
@@ -74,21 +75,26 @@ PubkeyInfo _pubkey(String suffix) => PubkeyInfo(
   gasfreeAddress: 'TGasFreeAddress$suffix',
 );
 
-KdfUser _user() => KdfUser(
-  walletId: WalletId.withPubkeyHash(
-    'wallet-a',
-    const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
-    _walletHash,
-  ),
-  isBip39Seed: true,
-);
+KdfUser _user({String name = 'wallet-a', String pubkeyHash = _walletHash}) =>
+    KdfUser(
+      walletId: WalletId.withPubkeyHash(
+        name,
+        const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+        pubkeyHash,
+      ),
+      isBip39Seed: true,
+    );
 
 class _ControlledAuth implements KomodoDefiLocalAuth {
   _ControlledAuth(this.user);
 
-  final KdfUser user;
+  KdfUser user;
   Completer<KdfUser?>? _nextUser;
   int currentUserCalls = 0;
+
+  void setUser(KdfUser value) {
+    user = value;
+  }
 
   void pauseNextCurrentUser() {
     _nextUser = Completer<KdfUser?>();
@@ -209,6 +215,131 @@ class _TestCoinAddressesBloc extends CoinAddressesBloc {
 }
 
 void testCoinAddressesBlocGaslessRevalidation() {
+  group('GasFree account-status error boundary', () {
+    for (final testCase in <(String, Object)>[
+      (
+        'MmRpcException lifecycle string',
+        const GetFeeEstimationRequestErrorCoinNotFoundException(),
+      ),
+      (
+        'GeneralErrorResponse security string',
+        GeneralErrorResponse(
+          mmrpc: '2.0',
+          error: 'token decimals mismatch',
+          errorPath: 'gasless.account_status',
+          errorTrace: null,
+          errorType: 'TokenDecimalMismatch',
+          errorData: null,
+          object: const <String, dynamic>{},
+        ),
+      ),
+    ]) {
+      test('${testCase.$1} is not interpreted by the app', () {
+        expect(
+          // ignore: invalid_use_of_visible_for_testing_member
+          CoinAddressesBloc.mapGaslessAccountStatusErrorForTesting(testCase.$2),
+          isNull,
+        );
+      });
+    }
+
+    test('typed SDK error code retains its exact security mapping', () {
+      // ignore: invalid_use_of_visible_for_testing_member
+      final mapped = CoinAddressesBloc.mapGaslessAccountStatusErrorForTesting(
+        GaslessTransferException(
+          kind: GaslessTransferErrorKind.providerResponse,
+          code: GaslessTransferErrorCode.tokenDecimalMismatch,
+          stage: GaslessTransferStage.status,
+          message: 'token decimals mismatch',
+          retryable: false,
+          terminal: true,
+        ),
+      );
+
+      expect(mapped, (
+        status: GaslessReceiveStatus.securityMismatch,
+        reason: GaslessReceiveReasonCode.tokenDecimalsMismatch,
+        shouldRefresh: false,
+      ));
+    });
+
+    test('retryable capabilityNotReady remains temporary after a superseded '
+        'status probe', () {
+      // ignore: invalid_use_of_visible_for_testing_member
+      final mapped = CoinAddressesBloc.mapGaslessAccountStatusErrorForTesting(
+        GaslessTransferException(
+          kind: GaslessTransferErrorKind.capabilityNotReady,
+          code: GaslessTransferErrorCode.capabilityNotReady,
+          stage: GaslessTransferStage.status,
+          message: 'A newer account-status probe superseded this one',
+          retryable: true,
+          terminal: false,
+        ),
+      );
+
+      expect(mapped, (
+        status: GaslessReceiveStatus.temporarilyUnavailable,
+        reason: GaslessReceiveReasonCode.accountStatusUnavailable,
+        shouldRefresh: true,
+      ));
+    });
+
+    for (final testCase
+        in <
+          (
+            String,
+            GaslessTransferErrorCode,
+            GaslessReceiveStatus,
+            GaslessReceiveReasonCode,
+          )
+        >[
+          (
+            'CoinNotSupported',
+            GaslessTransferErrorCode.coinNotSupported,
+            GaslessReceiveStatus.unsupported,
+            GaslessReceiveReasonCode.assetUnsupported,
+          ),
+          (
+            'NotEthCoin',
+            GaslessTransferErrorCode.notEthCoin,
+            GaslessReceiveStatus.unsupported,
+            GaslessReceiveReasonCode.assetUnsupported,
+          ),
+          (
+            'GaslessNotConfigured',
+            GaslessTransferErrorCode.gaslessNotConfigured,
+            GaslessReceiveStatus.disabled,
+            GaslessReceiveReasonCode.reactivationRequired,
+          ),
+          (
+            'CoinNotFound',
+            GaslessTransferErrorCode.coinNotFound,
+            GaslessReceiveStatus.disabled,
+            GaslessReceiveReasonCode.reactivationRequired,
+          ),
+        ]) {
+      test('${testCase.$1} retains its exact KDF receive classification', () {
+        // ignore: invalid_use_of_visible_for_testing_member
+        final mapped = CoinAddressesBloc.mapGaslessAccountStatusErrorForTesting(
+          GaslessTransferException(
+            kind: GaslessTransferErrorKind.configuration,
+            code: testCase.$2,
+            stage: GaslessTransferStage.status,
+            message: testCase.$1,
+            retryable: false,
+            terminal: true,
+          ),
+        );
+
+        expect(mapped, (
+          status: testCase.$3,
+          reason: testCase.$4,
+          shouldRefresh: false,
+        ));
+      });
+    }
+  });
+
   for (final testCase in <(String, List<PubkeyInfo>)>[
     ('replacement', [_pubkey('Replacement')]),
     ('duplicate candidates', [_pubkey('DuplicateA'), _pubkey('DuplicateB')]),
@@ -252,7 +383,7 @@ void testCoinAddressesBlocGaslessRevalidation() {
         );
 
         expect(auth.currentUserCalls, 1);
-        expect(checking.addresses, testCase.$2);
+        expect(checking.addresses, isEmpty);
         expect(checking.gaslessReceiveStatus, GaslessReceiveStatus.checking);
         expect(checking.verifiedGasfreeAddress, isNull);
         expect(checking.gaslessReceiveWalletPubkeyHash, isNull);
@@ -282,6 +413,65 @@ void testCoinAddressesBlocGaslessRevalidation() {
       },
     );
   }
+
+  test(
+    'queued previous-wallet pubkeys are never rendered after a wallet switch',
+    () async {
+      final asset = _asset();
+      final walletAAddress = _pubkey('WalletA');
+      final walletBAddress = _pubkey('WalletB');
+      final auth = _ControlledAuth(_user());
+      final pubkeys = _FakePubkeyManager(asset, [walletBAddress]);
+      final analytics = _RecordingAnalyticsBloc();
+      final bloc = _TestCoinAddressesBloc(
+        _FakeSdk(
+          assets: _FakeAssetManager(asset),
+          auth: auth,
+          pubkeys: pubkeys,
+        ),
+        asset.id.id,
+        analytics,
+        gaslessReceiveGate: _DisabledReceiveGate(),
+      );
+      addTearDown(bloc.close);
+      bloc.seedReady(
+        CoinAddressesState(
+          addresses: [walletAAddress],
+          gaslessReceiveStatus: GaslessReceiveStatus.ready,
+          gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
+            const Duration(minutes: 1),
+          ),
+          verifiedGasfreeAddress: walletAAddress.gasfreeAddress,
+          gaslessReceiveWalletPubkeyHash: _walletHash,
+        ),
+      );
+      auth.setUser(_user(name: 'wallet-b', pubkeyHash: 'wallet-b-pubkey-hash'));
+
+      final emissions = <CoinAddressesState>[];
+      final subscription = bloc.stream.listen(emissions.add);
+      addTearDown(subscription.cancel);
+      final settledFuture = bloc.stream
+          .firstWhere(
+            (state) =>
+                state.gaslessReceiveStatus != GaslessReceiveStatus.checking,
+          )
+          .timeout(const Duration(seconds: 1));
+
+      // This payload was queued by wallet A's old watcher after wallet B
+      // became active.
+      bloc.add(CoinAddressesPubkeysUpdated([walletAAddress]));
+      final settled = await settledFuture;
+
+      expect(emissions, isNotEmpty);
+      expect(emissions.first.addresses, isEmpty);
+      expect(
+        emissions.expand((state) => state.addresses),
+        isNot(contains(walletAAddress)),
+      );
+      expect(settled.addresses, [walletBAddress]);
+      expect(settled.gaslessReceiveStatus, isNot(GaslessReceiveStatus.ready));
+    },
+  );
 }
 
 void main() {

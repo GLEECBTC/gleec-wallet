@@ -12,7 +12,8 @@ import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 ///
 /// Non-HD wallets expose no derivation path. HD wallets must use the external
 /// account-zero/address-zero key. Secondary and change keys remain standard
-/// TRON addresses even if stale cached metadata carries a GasFree address.
+/// TRON addresses in Gleec even when KDF reports a valid GasFree address for
+/// them. This is an application rollout restriction, not an SDK/KDF limit.
 bool isCanonicalTronGaslessPubkey(
   PubkeyInfo pubkey, {
   required bool isHdWallet,
@@ -126,13 +127,13 @@ extension LegacyCoinMigrationExtensions on Coin {
     providerNetworkPath: isTestCoin ? 'nile' : 'tron',
   );
 
-  /// Whether this coin falls under the TRON gasless single-address model.
+  /// Whether this coin falls under Gleec's single-custody-address rollout.
   ///
-  /// TRX and its TRC-20 tokens share one HD address list, and the custody
-  /// model binds to the primary address only — so address creation must be
-  /// gated on the TRX platform page too, or a TRX-created address would be
-  /// invisible (the SDK's phantom-address filter hides unfunded secondary
-  /// TRON addresses).
+  /// KDF supports GasFree withdrawals from other valid HD selectors, but this
+  /// app exposes custody receive/send only for the primary address. TRX and
+  /// its TRC-20 tokens share one HD address list, so address creation is gated
+  /// on the TRX platform page as well. Existing secondary addresses remain
+  /// visible for Standard transfers and recovery.
   bool isGaslessSingleAddressScope(KomodoDefiSdk sdk) =>
       isTronGaslessConfigured &&
       (_matchesGaslessAssetPolicy || _matchesGaslessParentPolicy);

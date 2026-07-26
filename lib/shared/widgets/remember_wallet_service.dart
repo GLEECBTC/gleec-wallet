@@ -72,10 +72,15 @@ class RememberWalletService {
         // If we have a pubkey hash in the stored WalletId, ensure it matches
         if (walletId.hasFullIdentity && w.config.pubKey != null) {
           // Verify if wallet.config.pubKey corresponds to walletId.pubkeyHash
-          final pubKeyHash = md5
+          final configuredIdentity = w.config.pubKey!.trim().toLowerCase();
+          final storedIdentity = walletId.pubkeyHash!.trim().toLowerCase();
+          final legacyIdentity = md5
               .convert(utf8.encode(w.config.pubKey!))
               .toString();
-          if (pubKeyHash != walletId.pubkeyHash) return false;
+          if (configuredIdentity != storedIdentity &&
+              legacyIdentity != storedIdentity) {
+            return false;
+          }
         }
         return true;
       }).firstOrNull;

@@ -46,6 +46,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   final PubkeyInfo? _initialSourceAddress;
   final bool _initialGaslessEnabled;
   final bool _initialIsMax;
+
+  /// Locks the complete prefilled withdrawal contract used by controlled
+  /// flows: source, rail, recipient, and Max selection. Source-only locking is
+  /// insufficient because changing any of the other fields would let the
+  /// caller mark a different transfer as complete.
   final bool _lockSourceSelection;
   final WithdrawalAuthorizationGuard? _authorizationGuard;
   final String? _authorizationFailureMessage;
@@ -84,6 +89,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
            walletType: walletType,
            isGaslessFeatureConfigured:
                gaslessFeatureConfigured ?? asset.isTronGaslessConfiguredAsset,
+           gaslessPendingStoreReady:
+               walletType == WalletType.trezor ||
+               !asset.isTronGaslessRecoveryEligibleAsset,
            selectedSourceAddress: initialSourceAddress,
            isSourceSelectionLocked: lockSourceSelection,
            isGaslessEnabled: initialGaslessEnabled,
@@ -147,6 +155,30 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   Future<bool> _authorizeWithdrawal(Emitter<WithdrawFormState> emit) async {
+    if (!_lockedPrefillIsIntact(state)) {
+      _cancelTronPreviewTimer();
+      emit(
+        state.copyWith(
+          step: WithdrawFormStep.fill,
+          preview: () => null,
+          authorizedRecipientAmount: () => null,
+          isSending: false,
+          isAwaitingTrezorConfirmation: false,
+          previewError: () => TextError(
+            error:
+                _authorizationFailureMessage ?? LocaleKeys.somethingWrong.tr(),
+          ),
+          transactionError: () => null,
+          confirmStepError: () => null,
+          previewExpiresAt: () => null,
+          previewSecondsRemaining: () => null,
+          isPreviewExpired: false,
+          isPreviewRefreshing: false,
+        ),
+      );
+      return false;
+    }
+
     final guard = _authorizationGuard;
     if (guard == null) return true;
 
@@ -189,8 +221,37 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     return false;
   }
 
+  bool _lockedPrefillIsIntact(WithdrawFormState candidate) {
+    if (!_lockSourceSelection) return true;
+
+    final initialSourceAddress = _initialSourceAddress?.address;
+    final initialRecipient = _initialRecipient?.trim();
+    return initialSourceAddress != null &&
+        candidate.selectedSourceAddress?.address == initialSourceAddress &&
+        initialRecipient != null &&
+        initialRecipient.isNotEmpty &&
+        candidate.recipientAddress.trim() == initialRecipient &&
+        candidate.isGaslessEnabled == _initialGaslessEnabled &&
+        candidate.useGasless == _initialGaslessEnabled &&
+        candidate.isMaxAmount == _initialIsMax;
+  }
+
   bool _isTronAsset(Asset asset) =>
       asset.protocol is TrxProtocol || asset.protocol is Trc20Protocol;
+
+  ({bool usesGasless, bool isConsistent}) _previewRail(
+    WithdrawalPreview preview,
+  ) {
+    final hasGaslessFee = preview.fee is FeeInfoTronGasless;
+    final hasGaslessRelay = preview.gaslessRelayPayload != null;
+    return (
+      usesGasless: hasGaslessFee && hasGaslessRelay,
+      isConsistent: hasGaslessFee == hasGaslessRelay,
+    );
+  }
+
+  bool _previewUsesGaslessRail(WithdrawalPreview preview) =>
+      _previewRail(preview).usesGasless;
 
   bool _canRecoverGaslessAsset(Asset asset) =>
       _walletType != WalletType.trezor &&
@@ -209,14 +270,18 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return null;
     }
 
-    final isGaslessPreview = preview.fee is FeeInfoTronGasless;
+    final isGaslessPreview = _previewUsesGaslessRail(preview);
     if (isGaslessPreview) {
       final signedAuthorization =
           preview.gaslessRelayPayload?.signedAuthorization;
       if (signedAuthorization == null) {
         return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
       }
-      return signedAuthorization.expiresAt;
+      // KDF represents this value as U256. A value outside Dart's DateTime
+      // range cannot drive the preview countdown safely, so treat it as an
+      // unusable preview instead of silently disabling expiry checks.
+      return signedAuthorization.expiresAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
 
     return DateTime.fromMillisecondsSinceEpoch(
@@ -411,7 +476,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return;
     }
 
-    if (currentState.useGasless && preview.fee is! FeeInfoTronGasless) {
+    final previewRail = _previewRail(preview);
+    if (!previewRail.isConsistent ||
+        currentState.useGasless != previewRail.usesGasless) {
       _cancelTronPreviewTimer();
       emit(
         currentState.copyWith(
@@ -628,7 +695,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       GaslessQuoteFailureClass.invalidPreview,
     GaslessTransferErrorCode.configurationInvalid ||
     GaslessTransferErrorCode.wrongCoinType ||
-    GaslessTransferErrorCode.runtimeMissing =>
+    GaslessTransferErrorCode.runtimeMissing ||
+    GaslessTransferErrorCode.coinNotFound ||
+    GaslessTransferErrorCode.notEthCoin ||
+    GaslessTransferErrorCode.gaslessNotConfigured =>
       GaslessQuoteFailureClass.configurationInvalid,
     GaslessTransferErrorCode.invalidPayload =>
       GaslessQuoteFailureClass.invalidPayload,
@@ -636,20 +706,22 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       GaslessQuoteFailureClass.invalidAddress,
     GaslessTransferErrorCode.maxFeeExceeded =>
       GaslessQuoteFailureClass.maxFeeExceeded,
-    GaslessTransferErrorCode.chainIdMismatch ||
-    GaslessTransferErrorCode.verifyingContractMismatch ||
     GaslessTransferErrorCode.serviceProviderMismatch ||
     GaslessTransferErrorCode.tokenMismatch ||
+    GaslessTransferErrorCode.tokenDecimalMismatch ||
     GaslessTransferErrorCode.custodyAddressMismatch ||
     GaslessTransferErrorCode.signatureMismatch ||
     GaslessTransferErrorCode.walletOwnershipMismatch ||
     GaslessTransferErrorCode.responseMismatch ||
     GaslessTransferErrorCode.finalFeeExceeded ||
-    GaslessTransferErrorCode.traceInvalid =>
+    GaslessTransferErrorCode.traceInvalid ||
+    GaslessTransferErrorCode.traceNotFound ||
+    GaslessTransferErrorCode.invalidTraceId =>
       GaslessQuoteFailureClass.securityMismatch,
     GaslessTransferErrorCode.authenticationRejected =>
       GaslessQuoteFailureClass.authenticationFailed,
-    GaslessTransferErrorCode.unsupportedToken =>
+    GaslessTransferErrorCode.unsupportedToken ||
+    GaslessTransferErrorCode.coinNotSupported =>
       GaslessQuoteFailureClass.unsupported,
     GaslessTransferErrorCode.authorizationExpired =>
       GaslessQuoteFailureClass.authorizationExpired,
@@ -660,6 +732,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     GaslessTransferErrorCode.rateLimited =>
       GaslessQuoteFailureClass.rateLimited,
     GaslessTransferErrorCode.providerUnavailable ||
+    GaslessTransferErrorCode.providerError ||
+    GaslessTransferErrorCode.tronRpcUnavailable ||
+    GaslessTransferErrorCode.internalError ||
+    GaslessTransferErrorCode.traceStreamEnableError ||
+    GaslessTransferErrorCode.traceStreamInternal ||
     GaslessTransferErrorCode.traceUnavailable =>
       GaslessQuoteFailureClass.serviceUnavailable,
     GaslessTransferErrorCode.providerTimeout =>
@@ -752,8 +829,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     try {
-      final cached = _sdk.pubkeys.lastKnown(state.asset.id);
-      final pubkeys = cached ?? await state.asset.getPubkeys(_sdk);
+      // PubkeyManager captures and revalidates the authenticated wallet around
+      // cache access and refresh. Do not consume the asset-only synchronous
+      // cache here because it can briefly still belong to the previous wallet
+      // while an asynchronous auth-change event is in flight.
+      final pubkeys = await state.asset.getPubkeys(_sdk);
       final gaslessCandidates = canonicalTronGaslessSourceCandidates(
         pubkeys.keys,
         isHdWallet: state.walletType == WalletType.hdwallet,
@@ -793,7 +873,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           canonicalGaslessKey != null &&
           !hasAmbiguousGaslessSources;
       final current = state.selectedSourceAddress;
-      final newSelection = canUseGasless
+      final lockedSourceAddress = _initialSourceAddress?.address;
+      final lockedSource = _lockSourceSelection
+          ? pubkeys.keys.firstWhereOrNull(
+              (key) =>
+                  key.address == lockedSourceAddress &&
+                  (_initialGaslessEnabled || key.balance.total > Decimal.zero),
+            )
+          : null;
+      final newSelection = _lockSourceSelection
+          ? lockedSource
+          : canUseGasless
           ? canonicalGaslessKey
           : current != null
           ? fundedStandardKeys.firstWhereOrNull(
@@ -829,7 +919,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           pubkeys: () => filteredPubkeys,
           networkError: () => sourceError,
           selectedSourceAddress: () => newSelection,
-          isGaslessEnabled: canUseGasless,
+          isGaslessEnabled: _lockSourceSelection
+              ? _initialGaslessEnabled && canUseGasless
+              : canUseGasless,
           gaslessAccountStatus: hasAmbiguousGaslessSources ? () => null : null,
           gaslessStatusFetchedAt: hasAmbiguousGaslessSources
               ? () => null
@@ -901,6 +993,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.isSending || state.step != WithdrawFormStep.fill) return;
+    if (_lockSourceSelection &&
+        event.address.trim() != _initialRecipient?.trim()) {
+      return;
+    }
 
     try {
       final trimmedAddress = event.address.trim();
@@ -1008,6 +1104,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) {
     if (state.isSending || state.step != WithdrawFormStep.fill) return;
+    if (_lockSourceSelection) return;
     if (state.isMaxAmount) return;
 
     try {
@@ -1126,6 +1223,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.isSending || state.step != WithdrawFormStep.fill) return;
+    if (_lockSourceSelection && event.isEnabled != _initialIsMax) return;
     // Gas-free transfers pay the network fee in the token itself, so the
     // source address legitimately holds zero TRX. Only enforce the parent
     // (TRX) gas balance guard on the native rail.
@@ -1135,9 +1233,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       final parentId = state.asset.id.parentId!;
       final parentSpendable = state.isTronAsset
           ? await _selectedSourceParentSpendable(parentId)
-          : (_sdk.balances.lastKnown(parentId) ??
-                    await _sdk.balances.getBalance(parentId))
-                .spendable;
+          : (await _sdk.balances.getBalance(parentId)).spendable;
 
       if (parentSpendable == null || parentSpendable <= Decimal.zero) {
         emit(
@@ -1204,9 +1300,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
     final parentAsset = _sdk.assets.fromId(parentId);
     if (parentAsset == null) return null;
-    final parentPubkeys =
-        _sdk.pubkeys.lastKnown(parentId) ??
-        await _sdk.pubkeys.getPubkeys(parentAsset);
+    final parentPubkeys = await _sdk.pubkeys.getPubkeys(parentAsset);
     final selectedPath = selected.derivationPath;
     final matching = parentPubkeys.keys.firstWhereOrNull((candidate) {
       if (selectedPath != null && selectedPath.isNotEmpty) {
@@ -1242,6 +1336,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) {
     if (state.isSending || state.step != WithdrawFormStep.fill) return;
+    if (_lockSourceSelection) return;
     if (!state.isGaslessSupported) return;
     _gaslessStatusRequestGeneration += 1;
     if (event.isEnabled && state.hasAmbiguousGaslessSources) {
@@ -1525,14 +1620,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     final source = error is SdkError ? error.source : error;
     if (source is! GaslessTransferException) return null;
     return switch (source.code) {
-      GaslessTransferErrorCode.configurationInvalid =>
+      GaslessTransferErrorCode.configurationInvalid ||
+      GaslessTransferErrorCode.capabilityNotReady ||
+      GaslessTransferErrorCode.gaslessNotConfigured ||
+      GaslessTransferErrorCode.coinNotFound when !source.retryable =>
         GaslessAvailability.disabled,
-      GaslessTransferErrorCode.unsupportedToken =>
-        GaslessAvailability.unsupported,
-      GaslessTransferErrorCode.chainIdMismatch ||
-      GaslessTransferErrorCode.verifyingContractMismatch ||
+      GaslessTransferErrorCode.unsupportedToken ||
+      GaslessTransferErrorCode.coinNotSupported ||
+      GaslessTransferErrorCode.notEthCoin => GaslessAvailability.unsupported,
       GaslessTransferErrorCode.serviceProviderMismatch ||
       GaslessTransferErrorCode.tokenMismatch ||
+      GaslessTransferErrorCode.tokenDecimalMismatch ||
       GaslessTransferErrorCode.custodyAddressMismatch ||
       GaslessTransferErrorCode.signatureMismatch ||
       GaslessTransferErrorCode.walletOwnershipMismatch ||
@@ -1719,6 +1817,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (!await _authorizeWithdrawal(emit)) return;
+    if (state.isGaslessPendingStoreChecking) return;
     if (state.useGasless) {
       await _refreshGaslessStatus(emit, force: true);
       if (emit.isDone) return;
@@ -1923,8 +2022,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   ) async {
     if (!_canRecoverGaslessAsset(state.asset)) return;
 
+    emit(state.copyWith(gaslessPendingStoreReady: false));
     try {
       final transfers = await _sdk.withdrawals.listPendingGaslessTransfers();
+      if (emit.isDone) return;
       final matching = transfers
           .where(
             (transfer) =>
@@ -1933,11 +2034,54 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           )
           .sortedBy((transfer) => transfer.updatedAt);
       final pending = matching.lastOrNull;
-      if (pending == null) return;
+      if (pending == null) {
+        final recoveredFromFailure = !state.gaslessPendingStoreHealthy;
+        final readyState = state.copyWith(
+          gaslessPendingStoreHealthy: true,
+          gaslessPendingStoreReady: true,
+          gaslessAvailability:
+              recoveredFromFailure &&
+                  state.gaslessAvailability ==
+                      GaslessAvailability.securityMismatch
+              ? GaslessAvailability.initial
+              : state.gaslessAvailability,
+        );
+        emit(readyState);
+        if (readyState.useGasless) {
+          add(const WithdrawFormGaslessStatusRequested());
+        }
+        return;
+      }
+
+      final canRestoreForm =
+          state.step == WithdrawFormStep.fill &&
+          !state.isSending &&
+          state.preview == null &&
+          state.result == null;
+      final recoveredState = state.copyWith(
+        gaslessPendingStoreHealthy: true,
+        gaslessPendingStoreReady: true,
+        gaslessAvailability: GaslessAvailability.pendingTransfer,
+        gaslessStatusMessage: () => pending.traceId?.trim().isNotEmpty == true
+            ? LocaleKeys.withdrawGaslessStatusUnknown.tr()
+            : LocaleKeys.withdrawGaslessStatusAcceptanceUnknown.tr(),
+        gaslessTraceState: () => null,
+        gaslessTransferState: () => pending.state,
+        gaslessTraceId: () => pending.traceId,
+        gaslessJournalId: () => pending.journalId,
+        gaslessSubmittedAt: () => pending.acceptedAt,
+      );
+      if (!canRestoreForm) {
+        // Standard preview/submission is intentionally allowed while the
+        // journal loads. Preserve that operation, but retain the discovered
+        // unresolved relay so GasFree remains blocked on the next reset.
+        emit(recoveredState);
+        return;
+      }
 
       _cancelTronPreviewTimer();
       emit(
-        state.copyWith(
+        recoveredState.copyWith(
           step: WithdrawFormStep.pending,
           recipientAddress: pending.destinationAddress,
           amount: pending.requestedAmount.toString(),
@@ -1947,14 +2091,6 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           authorizedRecipientAmount: () => pending.requestedAmount,
           result: () => null,
           isSending: false,
-          gaslessStatusMessage: () => pending.traceId?.trim().isNotEmpty == true
-              ? LocaleKeys.withdrawGaslessStatusUnknown.tr()
-              : LocaleKeys.withdrawGaslessStatusAcceptanceUnknown.tr(),
-          gaslessTraceState: () => null,
-          gaslessTransferState: () => pending.state,
-          gaslessTraceId: () => pending.traceId,
-          gaslessJournalId: () => pending.journalId,
-          gaslessSubmittedAt: () => pending.acceptedAt,
           previewError: () => null,
           transactionError: () => null,
           confirmStepError: () => null,
@@ -1972,32 +2108,82 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         add(const WithdrawFormGaslessTraceCheckRequested());
       }
     } catch (error, stackTrace) {
-      // A local-store read failure may be hiding an accepted transfer. Keep
-      // the Standard rail available, but fail closed for every new GasFree
-      // preview/submission until the encrypted journal is readable again.
-      _logger.warning(
-        'Unable to restore pending GasFree transfers',
-        error,
-        stackTrace,
-      );
-      _cancelTronPreviewTimer();
+      if (emit.isDone) return;
+      final failure = _pendingGaslessLoadFailure(error);
+      final storageUnavailable = failure.isStorageUnavailable;
+      final walletChanged = failure.source is WalletChangedDisconnectException;
+      final standardSource = walletChanged ? null : _fundedStandardSource();
+
+      // Only a typed journal read/format/legacy-resolution failure means the
+      // encrypted store itself is unavailable. Authentication readiness and
+      // wallet-switch races still fail closed, but must not be presented as
+      // corruption.
+      final logMessage =
+          'Unable to restore pending GasFree transfers '
+          '(${failure.source.runtimeType})';
+      if (storageUnavailable) {
+        _logger.warning(logMessage, null, stackTrace);
+      } else {
+        _logger.info(logMessage);
+      }
+      if (state.useGasless) {
+        _cancelTronPreviewTimer();
+      }
       emit(
         state.copyWith(
-          step: WithdrawFormStep.fill,
-          gaslessPendingStoreHealthy: false,
+          pubkeys: walletChanged ? () => null : null,
+          selectedSourceAddress: () => standardSource,
+          gaslessPendingStoreHealthy: storageUnavailable
+              ? false
+              : state.gaslessPendingStoreHealthy,
+          gaslessPendingStoreReady: storageUnavailable,
           isGaslessEnabled: false,
-          gaslessAvailability: GaslessAvailability.securityMismatch,
-          preview: () => null,
-          authorizedRecipientAmount: () => null,
-          previewError: () => TextError(
-            error: LocaleKeys.withdrawGaslessStorageUnavailable.tr(),
-          ),
-          previewExpiresAt: () => null,
-          previewSecondsRemaining: () => null,
-          isPreviewExpired: false,
+          gaslessAvailability: storageUnavailable
+              ? GaslessAvailability.securityMismatch
+              : GaslessAvailability.initial,
         ),
       );
     }
+  }
+
+  ({Object source, bool isStorageUnavailable}) _pendingGaslessLoadFailure(
+    Object error,
+  ) {
+    final source = error is SdkError ? error.source ?? error : error;
+    final isTypedPersistenceFailure =
+        source is GaslessTransferException &&
+        (source.kind == GaslessTransferErrorKind.persistenceUnavailable ||
+            source.code ==
+                GaslessTransferErrorCode.securePersistenceUnavailable ||
+            source.code == GaslessTransferErrorCode.storageMigrationRequired);
+    return (
+      source: source,
+      isStorageUnavailable:
+          source is GaslessTransferStorageReadException ||
+          source is GaslessTransferStorageFormatException ||
+          source is GaslessTransferLegacyResolutionException ||
+          source is FormatException ||
+          isTypedPersistenceFailure,
+    );
+  }
+
+  PubkeyInfo? _fundedStandardSource() {
+    final fundedStandardSources =
+        state.pubkeys?.keys
+            .where((source) => source.balance.total > Decimal.zero)
+            .toList(growable: false) ??
+        const <PubkeyInfo>[];
+    final currentAddress = state.selectedSourceAddress?.address;
+    final initialAddress = _initialSourceAddress?.address;
+    return fundedStandardSources.firstWhereOrNull(
+          (source) => source.address == currentAddress,
+        ) ??
+        fundedStandardSources.firstWhereOrNull(
+          (source) => source.address == initialAddress,
+        ) ??
+        (fundedStandardSources.length == 1
+            ? fundedStandardSources.single
+            : null);
   }
 
   Future<void> _onGaslessTraceCheckRequested(
@@ -2138,23 +2324,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     _gaslessTraceCheckGeneration += 1;
     _cancelTronPreviewTimer();
 
-    final fundedStandardSources =
-        state.pubkeys?.keys
-            .where((source) => source.balance.total > Decimal.zero)
-            .toList(growable: false) ??
-        const <PubkeyInfo>[];
-    final currentAddress = state.selectedSourceAddress?.address;
-    final initialAddress = _initialSourceAddress?.address;
-    final standardSource =
-        fundedStandardSources.firstWhereOrNull(
-          (source) => source.address == currentAddress,
-        ) ??
-        fundedStandardSources.firstWhereOrNull(
-          (source) => source.address == initialAddress,
-        ) ??
-        (fundedStandardSources.length == 1
-            ? fundedStandardSources.single
-            : null);
+    final standardSource = _fundedStandardSource();
 
     emit(
       state.copyWith(
@@ -2196,7 +2366,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (!await _authorizeWithdrawal(emit)) return;
+    if (state.isGaslessPendingStoreChecking) return;
     if (state.hasValidationErrors) return;
+    final isGaslessSubmission = state.useGasless;
     if (_isUnsupportedSiaHardwareWalletFlow) {
       emit(
         state.copyWith(
@@ -2225,12 +2397,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return;
     }
 
-    // Backstop: the Gleec app never authorizes a rail downgrade. A native
-    // preview for a GasFree request is a contract/security failure; Standard
-    // remains a separate, explicit rail chosen from the fill step.
-    if (state.useGasless &&
-        state.preview != null &&
-        state.preview!.fee is! FeeInfoTronGasless) {
+    // Backstop: the Gleec app requires the confirmed rail to match the rail
+    // explicitly selected on the fill step in both directions.
+    if (state.preview != null &&
+        isGaslessSubmission != _previewUsesGaslessRail(state.preview!)) {
       emit(
         state.copyWith(
           confirmStepError: () =>
@@ -2251,14 +2421,15 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           confirmStepError: () => null,
           // No second device interaction is needed on confirm
           isAwaitingTrezorConfirmation: false,
-          gaslessTransferState: () => state.useGasless
+          gaslessTransferState: () => isGaslessSubmission
               ? GaslessTransferState.preparing
               : state.gaslessTransferState,
-          gaslessTraceId: () => state.useGasless ? null : state.gaslessTraceId,
+          gaslessTraceId: () =>
+              isGaslessSubmission ? null : state.gaslessTraceId,
           gaslessJournalId: () =>
-              state.useGasless ? null : state.gaslessJournalId,
+              isGaslessSubmission ? null : state.gaslessJournalId,
           gaslessSubmittedAt: () =>
-              state.useGasless ? null : state.gaslessSubmittedAt,
+              isGaslessSubmission ? null : state.gaslessSubmittedAt,
         ),
       );
       final preview = state.preview;
@@ -2278,7 +2449,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         // error status. In particular, a response can be financially ambiguous
         // with only a wallet journal ID and no provider trace; the catch path
         // must still see that post-submission state and block resubmission.
-        if (state.useGasless && progress.status != WithdrawalStatus.complete) {
+        if (isGaslessSubmission &&
+            progress.status != WithdrawalStatus.complete) {
           final submission = progress.submission;
           final traceId = submission?.traceId ?? state.gaslessTraceId;
           final journalId = submission?.journalId ?? state.gaslessJournalId;
@@ -2301,7 +2473,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
         if (progress.status == WithdrawalStatus.complete) {
           result = progress.withdrawalResult;
-          if (state.useGasless) {
+          if (isGaslessSubmission) {
             final submission = progress.submission;
             emit(
               state.copyWith(
@@ -2326,7 +2498,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       }
 
       if (result == null) {
-        if (state.useGasless && _hasPossiblySubmittedGaslessTransfer) {
+        if (isGaslessSubmission && _hasPossiblySubmittedGaslessTransfer) {
           _emitGaslessSubmittedUnknown(emit, _gaslessUnknownStatusMessage());
           return;
         }
@@ -2336,7 +2508,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
             transactionError: () =>
                 TextError(error: LocaleKeys.withdrawNoResultError.tr()),
             isAwaitingTrezorConfirmation: false,
-            gaslessTransferState: () => state.useGasless
+            gaslessTransferState: () => isGaslessSubmission
                 ? GaslessTransferState.rejectedBeforeRelay
                 : state.gaslessTransferState,
           ),
@@ -2357,11 +2529,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isPreviewRefreshing: false,
           isAwaitingTrezorConfirmation: false,
           gaslessStatusMessage: () =>
-              state.useGasless ? null : state.gaslessStatusMessage,
-          gaslessTraceState: () => state.useGasless
+              isGaslessSubmission ? null : state.gaslessStatusMessage,
+          gaslessTraceState: () => isGaslessSubmission
               ? GaslessTraceState.confirmed
               : state.gaslessTraceState,
-          gaslessTransferState: () => state.useGasless
+          gaslessTransferState: () => isGaslessSubmission
               ? GaslessTransferState.confirmed
               : state.gaslessTransferState,
         ),
@@ -2383,7 +2555,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         }
       }
 
-      if (state.useGasless && _hasPossiblySubmittedGaslessTransfer) {
+      if (isGaslessSubmission && _hasPossiblySubmittedGaslessTransfer) {
         if (_isAuthoritativeGaslessFinalFailure(e)) {
           _emitGaslessFinalFailure(emit, _buildTextError(e));
         } else {
@@ -2398,10 +2570,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
             isPreviewRefreshing: false,
             isAwaitingTrezorConfirmation: false,
             gaslessStatusMessage: () =>
-                state.useGasless ? null : state.gaslessStatusMessage,
+                isGaslessSubmission ? null : state.gaslessStatusMessage,
             gaslessTraceState: () =>
-                state.useGasless ? null : state.gaslessTraceState,
-            gaslessTransferState: () => state.useGasless
+                isGaslessSubmission ? null : state.gaslessTraceState,
+            gaslessTransferState: () => isGaslessSubmission
                 ? GaslessTransferState.rejectedBeforeRelay
                 : state.gaslessTransferState,
           ),
@@ -2535,7 +2707,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         const <PubkeyInfo>[];
     final currentStandardAddress = state.selectedSourceAddress?.address;
     final initialStandardAddress = _initialSourceAddress?.address;
-    final resetSource = resetToGasless
+    final resetSource = _lockSourceSelection
+        ? fundedStandardSources.firstWhereOrNull(
+            (source) => source.address == initialStandardAddress,
+          )
+        : resetToGasless
         ? state.canonicalGaslessSource
         : fundedStandardSources.firstWhereOrNull(
                 (source) => source.address == initialStandardAddress,
@@ -2560,6 +2736,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         walletType: state.walletType,
         isGaslessFeatureConfigured: state.isGaslessFeatureConfigured,
         gaslessPendingStoreHealthy: state.gaslessPendingStoreHealthy,
+        gaslessPendingStoreReady: state.gaslessPendingStoreReady,
         pubkeys: state.pubkeys,
         selectedSourceAddress: resetSource,
         isSourceSelectionLocked: _lockSourceSelection,

@@ -12,6 +12,75 @@ String tronGaslessRecoveryUrl({required bool isTestnet}) => isTestnet
     ? 'https://test.gasfree.io/withdraw'
     : 'https://gasfree.io/withdraw';
 
+/// Applies Gleec's canonical token opt-in to the normalized SDK asset config.
+///
+/// Provider configuration, rather than the UI send/receive switches, controls
+/// activation-time enrollment. This keeps KDF account status and recovery
+/// available while either user-facing rail is paused.
+JsonMap applyGleecTronGaslessActivationConfig(JsonMap config) =>
+    configureGleecTronGaslessActivation(
+      config,
+      baseUrl: tronGaslessBaseUrl,
+      serviceProvider: tronGaslessServiceProvider,
+    );
+
+/// Returns a fresh asset config with the documented KDF token opt-in when the
+/// exact Gleec network/token identity is eligible.
+///
+/// An existing `gasless` key is authoritative and is never rewritten. That
+/// preserves an explicit disable, an optional `transfer_max_fee`, and
+/// fail-closed handling of malformed upstream configuration.
+JsonMap configureGleecTronGaslessActivation(
+  JsonMap config, {
+  required String baseUrl,
+  required String serviceProvider,
+}) {
+  final result = JsonMap.of(config);
+  final networkPath = tronGaslessNetworkPath(baseUrl);
+  final configuredAssetIds = tronGaslessRecoveryAssetIdsFor(
+    baseUrl: baseUrl,
+    serviceProvider: serviceProvider,
+  );
+  if (networkPath == null ||
+      !configuredAssetIds.contains(config['coin']) ||
+      config.containsKey('gasless') ||
+      !isTronGaslessRawAssetConfigEligible(
+        config,
+        providerNetworkPath: networkPath,
+      )) {
+    return result;
+  }
+
+  result['gasless'] = <String, dynamic>{'enabled': true};
+  return result;
+}
+
+/// Raw-config counterpart of [isTronGaslessAssetEligible].
+///
+/// This runs before [Asset] parsing, so it validates every identity field that
+/// must not be inferred from a ticker: protocol, parent platform, testnet
+/// marker, contract, custom-token marker, and canonical TRON derivation root.
+bool isTronGaslessRawAssetConfigEligible(
+  JsonMap config, {
+  required String providerNetworkPath,
+}) {
+  final policy = _tronGaslessPolicyFor(providerNetworkPath);
+  if (policy == null) return false;
+  final protocol = config.valueOrNull<JsonMap>('protocol');
+  final protocolData = protocol?.valueOrNull<JsonMap>('protocol_data');
+
+  return config['coin'] == policy.ticker &&
+      config['type'] == 'TRC-20' &&
+      config['parent_coin'] == policy.platform &&
+      config['is_custom_token'] != true &&
+      config['is_testnet'] == policy.isTestnet &&
+      config['derivation_path'] == "m/44'/195'" &&
+      config['contract_address'] == policy.contractAddress &&
+      protocol?['type'] == 'TRC20' &&
+      protocolData?['platform'] == policy.platform &&
+      protocolData?['contract_address'] == policy.contractAddress;
+}
+
 /// Whether the SDK currently considers the canonical GasFree receive rail
 /// usable for [asset].
 bool hasTronGaslessReceiveCapability(KomodoDefiSdk sdk, Asset asset) {
@@ -120,24 +189,22 @@ bool isTronGaslessAssetIdEligible(
   required bool isTestnet,
   required String? platform,
   required String? contractAddress,
+  String? derivationPath,
   String? providerNetworkPath,
 }) {
   if (id.subClass != CoinSubClass.trc20 || isCustomToken) return false;
 
-  return switch (providerNetworkPath ??
-      tronGaslessNetworkPath(tronGaslessBaseUrl)) {
-    'tron' =>
-      !isTestnet &&
-          id.id == 'USDT-TRC20' &&
-          platform == 'TRX' &&
-          contractAddress == 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-    'nile' =>
-      isTestnet &&
-          id.id == 'TESTUSDT-TRC20' &&
-          platform == 'TRXT' &&
-          contractAddress == 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
-    _ => false,
-  };
+  final policy = _tronGaslessPolicyFor(
+    providerNetworkPath ?? tronGaslessNetworkPath(tronGaslessBaseUrl),
+  );
+  if (policy == null) return false;
+  final configuredDerivationPath = derivationPath?.trim();
+  return isTestnet == policy.isTestnet &&
+      id.id == policy.ticker &&
+      platform == policy.platform &&
+      contractAddress == policy.contractAddress &&
+      (configuredDerivationPath == null ||
+          configuredDerivationPath == "m/44'/195'");
 }
 
 /// Identity-only check for SDK assets. This does not imply either rail is
@@ -155,9 +222,28 @@ bool isTronGaslessAssetEligible(Asset asset, {String? providerNetworkPath}) {
       'platform',
     ),
     contractAddress: asset.protocol.contractAddress,
+    derivationPath: asset.id.derivationPath,
     providerNetworkPath: providerNetworkPath,
   );
 }
+
+({String ticker, String platform, String contractAddress, bool isTestnet})?
+_tronGaslessPolicyFor(String? providerNetworkPath) =>
+    switch (providerNetworkPath) {
+      'tron' => (
+        ticker: 'USDT-TRC20',
+        platform: 'TRX',
+        contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+        isTestnet: false,
+      ),
+      'nile' => (
+        ticker: 'TESTUSDT-TRC20',
+        platform: 'TRXT',
+        contractAddress: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
+        isTestnet: true,
+      ),
+      _ => null,
+    };
 
 extension TronGaslessAssetPolicy on Asset {
   /// Authoritative app-side preflight before any GasFree status/preview RPC.

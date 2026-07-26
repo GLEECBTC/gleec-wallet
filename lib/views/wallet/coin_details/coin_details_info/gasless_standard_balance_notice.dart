@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -60,8 +61,8 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
     final walletType = context.select<AuthBloc, WalletType?>(
       (bloc) => bloc.state.currentUser?.wallet.config.type,
     );
-    final walletPubkeyHash = context.select<AuthBloc, String?>(
-      (bloc) => bloc.state.currentUser?.walletId.pubkeyHash,
+    final currentWalletId = context.select<AuthBloc, WalletId?>(
+      (bloc) => bloc.state.currentUser?.walletId,
     );
 
     return BlocBuilder<CoinAddressesBloc, CoinAddressesState>(
@@ -79,7 +80,7 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
                 asset,
                 state,
                 walletType: walletType,
-                currentWalletPubkeyHash: walletPubkeyHash,
+                currentWalletId: currentWalletId,
               );
         final canMoveToGasfree = consolidationAddress != null;
 
@@ -115,12 +116,11 @@ class GaslessStandardBalanceNotice extends StatelessWidget {
                                   ?.wallet
                                   .config
                                   .type,
-                              currentWalletPubkeyHash: context
+                              currentWalletId: context
                                   .read<AuthBloc>()
                                   .state
                                   .currentUser
-                                  ?.walletId
-                                  .pubkeyHash,
+                                  ?.walletId,
                             ) ==
                             null) {
                           return;

@@ -78,6 +78,20 @@ Duration? _gaslessPendingDuration(WithdrawFormState state) {
   return DateTime.now().toUtc().difference(submittedAt.toUtc());
 }
 
+@visibleForTesting
+Future<bool> copyGaslessSupportDiagnosticsForLaunch(
+  BuildContext context,
+  String diagnostics, {
+  Future<bool> Function(BuildContext, String)? copyDiagnostics,
+}) async {
+  if (!context.mounted) return false;
+  final copied = await (copyDiagnostics ?? copyToClipBoard)(
+    context,
+    diagnostics,
+  );
+  return copied && context.mounted;
+}
+
 Future<void> _openGaslessSupportContact(
   BuildContext context,
   WithdrawFormState state,
@@ -121,7 +135,11 @@ Future<void> _openGaslessSupportContact(
     'retryable': state.canRetryGaslessTransfer,
     if (state.gaslessTraceId != null) 'trace_id': state.gaslessTraceId,
   });
-  copyToClipBoard(context, diagnostics);
+  final canOpenSupport = await copyGaslessSupportDiagnosticsForLaunch(
+    context,
+    diagnostics,
+  );
+  if (!canOpenSupport) return;
 
   try {
     await openUrl(discordInviteUrl);
@@ -1233,14 +1251,12 @@ class _WithdrawGaslessDetailsCard extends StatelessWidget {
               label: LocaleKeys.withdrawGaslessTotalFee.tr(),
               value: '${_formatTrimmedDecimal(fee.totalTokenFee)} ${fee.coin}',
             ),
-            if (fee.signedMaxFee != null)
-              _buildDetailRow(
-                context,
-                label: LocaleKeys.withdrawGaslessMaxFee.tr(),
-                value:
-                    '${_formatTrimmedDecimal(fee.signedMaxFee!)} ${fee.coin}',
-                valueStyle: theme.textTheme.bodySmall,
-              ),
+            _buildDetailRow(
+              context,
+              label: LocaleKeys.withdrawGaslessMaxFee.tr(),
+              value: '${_formatTrimmedDecimal(fee.signedMaxFee)} ${fee.coin}',
+              valueStyle: theme.textTheme.bodySmall,
+            ),
             const SizedBox(height: 4),
             NoticeBanner(
               variant: NoticeBannerVariant.info,
@@ -1694,6 +1710,41 @@ class _GaslessProviderUnavailableNotice extends StatelessWidget {
   }
 }
 
+class _GaslessStorageUnavailableNotice extends StatelessWidget {
+  const _GaslessStorageUnavailableNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = NoticeBanner.styleOf(context, NoticeBannerVariant.warning);
+
+    return NoticeBanner(
+      key: const Key('gasless-storage-unavailable-notice'),
+      icon: Icons.lock_clock_outlined,
+      footer: Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          key: const Key('gasless-storage-unavailable-retry'),
+          onPressed: () => context.read<WithdrawFormBloc>().add(
+            const WithdrawFormPendingGaslessLoadRequested(),
+          ),
+          child: Text(
+            LocaleKeys.retryButtonText.tr(),
+            style: TextStyle(color: style.foreground),
+          ),
+        ),
+      ),
+      child: Text(
+        LocaleKeys.withdrawGaslessStorageUnavailable.tr(),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: style.foreground,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 /// Collapsed "Advanced" section housing the native (TRX-paid) interop rail.
 /// Kept out of the way: gasless is the default, and a standard transfer is
 /// only for interoperability (or moving legacy standard-address funds).
@@ -1726,7 +1777,8 @@ class _AdvancedNativeSendSection extends StatelessWidget {
               value: isNativeSelected,
               contentPadding: EdgeInsets.zero,
               onChanged:
-                  state.hasUnresolvedGaslessTransfer ||
+                  state.isSourceSelectionLocked ||
+                      state.hasUnresolvedGaslessTransfer ||
                       state.hasAmbiguousGaslessSources
                   ? null
                   : (nativeOn) => context.read<WithdrawFormBloc>().add(
@@ -1828,6 +1880,10 @@ class WithdrawFormFillSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (!state.gaslessPendingStoreHealthy) ...[
+              const _GaslessStorageUnavailableNotice(),
+              const SizedBox(height: 16),
+            ],
             IgnorePointer(
               key: const Key('withdraw-form-fill-input-lock'),
               ignoring: isEditingLocked,
@@ -1861,6 +1917,7 @@ class WithdrawFormFillSection extends StatelessWidget {
                   RecipientAddressWithNotification(
                     address: state.recipientAddress,
                     isMixedAddress: state.isMixedCaseAddress,
+                    enabled: !state.isSourceSelectionLocked,
                     onChanged: (value) => context.read<WithdrawFormBloc>().add(
                       WithdrawFormRecipientChanged(value),
                     ),
@@ -1884,6 +1941,7 @@ class WithdrawFormFillSection extends StatelessWidget {
                     asset: state.asset,
                     amount: state.amount,
                     isMaxAmount: state.isMaxAmount,
+                    enabled: !state.isSourceSelectionLocked,
                     onChanged: (value) => context.read<WithdrawFormBloc>().add(
                       WithdrawFormAmountChanged(value),
                     ),
@@ -2035,7 +2093,8 @@ class WithdrawFormFillSection extends StatelessWidget {
                   state.isSending ||
                       state.hasValidationErrors ||
                       state.isGaslessSendBlocked ||
-                      state.isGaslessAvailabilityUnknown
+                      state.isGaslessAvailabilityUnknown ||
+                      state.isGaslessPendingStoreChecking
                   ? null
                   : () {
                       if (state.useGasless) {
@@ -2647,21 +2706,24 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                     ),
                   ),
                 ),
-                _buildDetailItem(
-                  context,
-                  label: gaslessFee == null
-                      ? LocaleKeys.fee.tr()
-                      : LocaleKeys.withdrawGaslessFinalFee.tr(),
-                  child: AssetAmountWithFiat(
-                    assetId: feeAssetId,
-                    amount: gaslessFinalFee ?? result.fee.totalFee,
-                    symbol: feeAssetId.symbol.configSymbol,
-                    isAutoScrollEnabled: false,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
+                if (gaslessFee == null || gaslessFinalFee != null)
+                  _buildDetailItem(
+                    context,
+                    label: gaslessFee == null
+                        ? LocaleKeys.fee.tr()
+                        : LocaleKeys.withdrawGaslessFinalFee.tr(),
+                    child: AssetAmountWithFiat(
+                      assetId: feeAssetId,
+                      amount: gaslessFee == null
+                          ? result.fee.totalFee
+                          : gaslessFinalFee!,
+                      symbol: feeAssetId.symbol.configSymbol,
+                      isAutoScrollEnabled: false,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
                 if (gaslessFee != null) ...[
                   _buildDetailItem(
                     context,
@@ -2684,17 +2746,16 @@ class WithdrawSuccessReceipt extends StatelessWidget {
                         isAutoScrollEnabled: false,
                       ),
                     ),
-                  if (gaslessFee.signedMaxFee != null)
-                    _buildDetailItem(
-                      context,
-                      label: LocaleKeys.withdrawGaslessMaxFee.tr(),
-                      child: AssetAmountWithFiat(
-                        assetId: asset.id,
-                        amount: gaslessFee.signedMaxFee!,
-                        symbol: symbol,
-                        isAutoScrollEnabled: false,
-                      ),
+                  _buildDetailItem(
+                    context,
+                    label: LocaleKeys.withdrawGaslessMaxFee.tr(),
+                    child: AssetAmountWithFiat(
+                      assetId: asset.id,
+                      amount: gaslessFee.signedMaxFee,
+                      symbol: symbol,
+                      isAutoScrollEnabled: false,
                     ),
+                  ),
                   if (result.confirmedAt != null)
                     _buildDetailItem(
                       context,
@@ -2999,6 +3060,7 @@ class WithdrawErrorCard extends StatelessWidget {
 class RecipientAddressWithNotification extends StatefulWidget {
   final String address;
   final bool isMixedAddress;
+  final bool enabled;
   final Duration notificationDuration;
   final ValueChanged<String> onChanged;
   final ValueChanged<String> onQrScanned;
@@ -3009,6 +3071,7 @@ class RecipientAddressWithNotification extends StatefulWidget {
     required this.onChanged,
     required this.onQrScanned,
     required this.isMixedAddress,
+    this.enabled = true,
     this.notificationDuration = const Duration(seconds: 10),
     this.errorText,
     super.key,
@@ -3067,6 +3130,7 @@ class _RecipientAddressWithNotificationState
       children: [
         RecipientAddressField(
           address: widget.address,
+          enabled: widget.enabled,
           onChanged: widget.onChanged,
           onQrScanned: widget.onQrScanned,
           errorText: widget.errorText,

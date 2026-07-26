@@ -7,9 +7,22 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 final MM2 mm2 = MM2();
+
+TronGaslessProviderConfig buildGleecTronGaslessProviderConfig({
+  required String baseUrl,
+  required String serviceProvider,
+}) {
+  return TronGaslessProviderConfig(
+    baseUrl: baseUrl.trim(),
+    service: const GaslessServiceKomodoProxy(),
+    serviceProvider: serviceProvider.trim(),
+    requestTimeoutMs: 10000,
+  );
+}
 
 final class MM2 {
   MM2() {
@@ -21,9 +34,7 @@ final class MM2 {
         preActivateHistoricalAssets: false,
         preActivateDefaultAssets: false,
         tronGaslessProvider: _tronGaslessProviderConfig(),
-        // Keep recovery/status capability after a user-facing send/receive
-        // kill switch. UI send eligibility remains separately gated.
-        tronGaslessAssetIds: tronGaslessRecoveryAssetIds,
+        assetConfigTransform: applyGleecTronGaslessActivationConfig,
       ),
       onLog: _handleSdkLog,
     );
@@ -38,9 +49,8 @@ final class MM2 {
     // komodo_proxy rail (libp2p-key auth, no secrets on the client). The base
     // URL is the GasFree endpoint itself (the proxy's /gasfree mount); KDF
     // preserves it as-is and appends api/v1/...; see [tronGaslessBaseUrl].
-    return TronGaslessProviderConfig(
+    return buildGleecTronGaslessProviderConfig(
       baseUrl: baseUrl,
-      service: const GaslessServiceKomodoProxy(),
       serviceProvider: tronGaslessServiceProvider.trim(),
     );
   }

@@ -49,17 +49,27 @@ class CoinAddressesZeroBalanceVisibilityChanged extends CoinAddressesEvent {
 /// Emitted when the pubkeys watcher emits an updated set of keys (and balances)
 class CoinAddressesPubkeysUpdated extends CoinAddressesEvent {
   final List<PubkeyInfo> addresses;
-  const CoinAddressesPubkeysUpdated(this.addresses);
+  final int? subscriptionGeneration;
+
+  const CoinAddressesPubkeysUpdated(
+    this.addresses, {
+    this.subscriptionGeneration,
+  });
 
   @override
-  List<Object?> get props => [addresses];
+  List<Object?> get props => [addresses, subscriptionGeneration];
 }
 
 /// Emitted when the pubkeys watcher reports an error
 class CoinAddressesPubkeysSubscriptionFailed extends CoinAddressesEvent {
   final String error;
-  const CoinAddressesPubkeysSubscriptionFailed(this.error);
+  final int? subscriptionGeneration;
+
+  const CoinAddressesPubkeysSubscriptionFailed(
+    this.error, {
+    this.subscriptionGeneration,
+  });
 
   @override
-  List<Object?> get props => [error];
+  List<Object?> get props => [error, subscriptionGeneration];
 }

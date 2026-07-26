@@ -105,6 +105,36 @@ const bool tronGaslessReceiveEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
+const String _tronGaslessBuildPolicyDisabled =
+    'gleec-gasfree-build-policy-v1:send=disabled;receive=disabled';
+const String _tronGaslessBuildPolicySendOnly =
+    'gleec-gasfree-build-policy-v1:send=enabled;receive=disabled';
+const String _tronGaslessBuildPolicyReceiveOnly =
+    'gleec-gasfree-build-policy-v1:send=disabled;receive=enabled';
+const String _tronGaslessBuildPolicyEnabled =
+    'gleec-gasfree-build-policy-v1:send=enabled;receive=enabled';
+
+/// Non-secret marker retained in web builds so CI can verify the two compiled
+/// GasFree kill switches instead of trusting the requested build arguments.
+const String tronGaslessBuildPolicyMarker = tronGaslessEnabled
+    ? (tronGaslessReceiveEnabled
+          ? _tronGaslessBuildPolicyEnabled
+          : _tronGaslessBuildPolicySendOnly)
+    : (tronGaslessReceiveEnabled
+          ? _tronGaslessBuildPolicyReceiveOnly
+          : _tronGaslessBuildPolicyDisabled);
+
+String tronGaslessBuildPolicyMarkerFor({
+  required bool sendEnabled,
+  required bool receiveEnabled,
+}) => sendEnabled
+    ? (receiveEnabled
+          ? _tronGaslessBuildPolicyEnabled
+          : _tronGaslessBuildPolicySendOnly)
+    : (receiveEnabled
+          ? _tronGaslessBuildPolicyReceiveOnly
+          : _tronGaslessBuildPolicyDisabled);
+
 /// Runtime control endpoint for exposing new GasFree custody receive
 /// addresses.
 ///
@@ -207,8 +237,13 @@ const String tronGaslessBaseUrl = String.fromEnvironment(
 /// carry client credentials, query parameters, or fragments.
 String? tronGaslessNetworkPath(String rawBaseUrl) {
   final uri = Uri.tryParse(rawBaseUrl.trim());
+  final isSecureEndpoint = uri?.scheme == 'https';
+  final isLoopbackDebugEndpoint =
+      kDebugMode &&
+      uri?.scheme == 'http' &&
+      const {'localhost', '127.0.0.1', '::1'}.contains(uri?.host);
   if (uri == null ||
-      uri.scheme != 'https' ||
+      (!isSecureEndpoint && !isLoopbackDebugEndpoint) ||
       uri.host.isEmpty ||
       uri.userInfo.isNotEmpty ||
       uri.hasQuery ||

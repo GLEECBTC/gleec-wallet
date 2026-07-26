@@ -27,7 +27,7 @@ typedef GaslessConsolidationAddressVerifier =
       Asset asset,
       CoinAddressesState state, {
       required WalletType? walletType,
-      required String? currentWalletPubkeyHash,
+      required WalletId? currentWalletId,
     });
 
 class _ConsolidationSource {
@@ -56,6 +56,7 @@ class GaslessConsolidationWizard extends StatefulWidget {
   const GaslessConsolidationWizard({
     required this.asset,
     required this.custodyAddress,
+    required this.expectedWalletId,
     required this.onDone,
     this.addressVerifier = verifiedTronGaslessConsolidationAddress,
     super.key,
@@ -63,6 +64,7 @@ class GaslessConsolidationWizard extends StatefulWidget {
 
   final Asset asset;
   final String custodyAddress;
+  final WalletId? expectedWalletId;
   final VoidCallback onDone;
 
   /// Authorization boundary used before every load, preview, and source form.
@@ -134,7 +136,7 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
   String? _verifiedCustodyAddress({
     CoinAddressesState? addressesState,
     WalletType? walletType,
-    String? walletPubkeyHash,
+    WalletId? walletId,
   }) {
     final sdk = context.read<KomodoDefiSdk>();
     return widget.addressVerifier(
@@ -144,16 +146,43 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
       walletType:
           walletType ??
           context.read<AuthBloc>().state.currentUser?.wallet.config.type,
-      currentWalletPubkeyHash:
-          walletPubkeyHash ??
-          context.read<AuthBloc>().state.currentUser?.walletId.pubkeyHash,
+      currentWalletId:
+          walletId ?? context.read<AuthBloc>().state.currentUser?.walletId,
     );
   }
 
   bool _isConsolidationReady() {
     final state = context.read<CoinAddressesBloc>().state;
+    final currentWalletId = context
+        .read<AuthBloc>()
+        .state
+        .currentUser
+        ?.walletId;
+    if (widget.expectedWalletId == null ||
+        currentWalletId != widget.expectedWalletId) {
+      return false;
+    }
     return _hasFreshForegroundStatus(state) &&
-        _verifiedCustodyAddress(addressesState: state) == widget.custodyAddress;
+        _verifiedCustodyAddress(
+              addressesState: state,
+              walletId: widget.expectedWalletId,
+            ) ==
+            widget.custodyAddress;
+  }
+
+  Future<bool> _isExpectedWalletCurrent() async {
+    if (!_isConsolidationReady()) return false;
+    final currentUser = await context.read<KomodoDefiSdk>().auth.currentUser;
+    return mounted &&
+        currentUser?.walletId == widget.expectedWalletId &&
+        _isConsolidationReady();
+  }
+
+  Future<void> _requireExpectedWalletCurrent() async {
+    if (await _isExpectedWalletCurrent()) return;
+    throw const WalletChangedDisconnectException(
+      'Wallet changed during GasFree consolidation',
+    );
   }
 
   Future<List<_ConsolidationSource>> _beginLoad() {
@@ -162,9 +191,7 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
   }
 
   Future<List<_ConsolidationSource>> _loadSources(int generation) async {
-    if (!_isConsolidationReady()) {
-      throw StateError('GasFree consolidation is paused');
-    }
+    await _requireExpectedWalletCurrent();
     final sdk = context.read<KomodoDefiSdk>();
     final parentId = widget.asset.id.parentId;
     if (parentId == null) {
@@ -175,11 +202,15 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
       throw StateError('The TRON fee asset is unavailable');
     }
 
+    final walletId = widget.expectedWalletId!;
     final tokenPubkeys =
-        sdk.pubkeys.lastKnown(widget.asset.id) ??
+        sdk.pubkeys.lastKnownForWallet(widget.asset.id, walletId) ??
         await sdk.pubkeys.getPubkeys(widget.asset);
+    await _requireExpectedWalletCurrent();
     final trxPubkeys =
-        sdk.pubkeys.lastKnown(parentId) ?? await sdk.pubkeys.getPubkeys(parent);
+        sdk.pubkeys.lastKnownForWallet(parentId, walletId) ??
+        await sdk.pubkeys.getPubkeys(parent);
+    await _requireExpectedWalletCurrent();
 
     final fundedTokenKeys = tokenPubkeys.keys
         .where((key) => key.balance.total > Decimal.zero)
@@ -212,9 +243,7 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
         // The remote receive authorization and SDK relay binding can expire
         // while sources are being enumerated. Revalidate immediately before
         // every preview; an old successful preview never authorizes a deposit.
-        if (!mounted || !_isConsolidationReady()) {
-          throw StateError('GasFree consolidation is paused');
-        }
+        await _requireExpectedWalletCurrent();
         final derivationPath = tokenKey.derivationPath?.trim();
         if (fundedTokenKeys.length > 1 &&
             (derivationPath == null || derivationPath.isEmpty)) {
@@ -232,6 +261,7 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
             isMax: true,
           ),
         );
+        await _requireExpectedWalletCurrent();
         if (preview.fee case final FeeInfoTron fee) {
           final estimatedFee = fee.totalFee;
           final shortfall = estimatedFee > trxSpendable
@@ -251,6 +281,8 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
         } else {
           throw StateError('The consolidation preview was not a TRON fee');
         }
+      } on WalletChangedDisconnectException {
+        rethrow;
       } catch (_) {
         // A source is movable only after the standard withdrawal preview
         // proves its exact derivation can fund the TRON network fee. Do not
@@ -264,7 +296,9 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
         );
       }
     }
-    if (!mounted || generation != _loadGeneration || !_isConsolidationReady()) {
+    if (!mounted ||
+        generation != _loadGeneration ||
+        !await _isExpectedWalletCurrent()) {
       throw StateError('GasFree consolidation is paused');
     }
     _sources = sources;
@@ -288,14 +322,15 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
     setState(() => _active = source);
   }
 
-  void _completeActive() {
+  void _completeActive(_ConsolidationSource completedSource) {
     final active = _active;
-    if (active == null) return;
-    _completed.add(active.pubkey.address);
-    if (!_isConsolidationReady()) {
+    if (active == null ||
+        active.pubkey.address != completedSource.pubkey.address ||
+        !_isConsolidationReady()) {
       setState(() => _active = null);
       return;
     }
+    _completed.add(active.pubkey.address);
     _ConsolidationSource? next;
     for (final source in _sources) {
       if (source.availability == _ConsolidationSourceAvailability.movable &&
@@ -327,13 +362,13 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
     final addressesState = context.watch<CoinAddressesBloc>().state;
     final currentUser = context.watch<AuthBloc>().state.currentUser;
     final walletType = currentUser?.wallet.config.type;
-    final walletPubkeyHash = currentUser?.walletId.pubkeyHash;
     final verifiedAddress = _verifiedCustodyAddress(
       addressesState: addressesState,
       walletType: walletType,
-      walletPubkeyHash: walletPubkeyHash,
+      walletId: currentUser?.walletId,
     );
     final gateReady =
+        currentUser?.walletId == widget.expectedWalletId &&
         _hasFreshForegroundStatus(addressesState) &&
         verifiedAddress != null &&
         verifiedAddress == widget.custodyAddress;
@@ -365,10 +400,10 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
         initialGaslessEnabled: false,
         initialIsMax: true,
         lockSourceSelection: true,
-        authorizationGuard: _isConsolidationReady,
+        authorizationGuard: _isExpectedWalletCurrent,
         authorizationFailureMessage: LocaleKeys.receiveGaslessPausedNotice.tr(),
         onBackButtonPressed: () => setState(() => _active = null),
-        onSuccess: _completeActive,
+        onSuccess: () => _completeActive(active),
       );
     }
 

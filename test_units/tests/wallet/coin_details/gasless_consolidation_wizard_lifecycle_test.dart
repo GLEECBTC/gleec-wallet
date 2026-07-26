@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
@@ -89,14 +90,15 @@ AssetPubkeys _assetPubkeys(Asset asset, PubkeyInfo key) => AssetPubkeys(
   syncStatus: SyncStatusEnum.success,
 );
 
-KdfUser _user() => KdfUser(
-  walletId: WalletId.withPubkeyHash(
-    'wallet-a',
-    const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
-    _walletHash,
-  ),
-  isBip39Seed: true,
-);
+KdfUser _user({String name = 'wallet-a', String pubkeyHash = _walletHash}) =>
+    KdfUser(
+      walletId: WalletId.withPubkeyHash(
+        name,
+        const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+        pubkeyHash,
+      ),
+      isBip39Seed: true,
+    );
 
 GaslessAccountStatusResponse _accountStatus({
   required GaslessAccountAvailability availability,
@@ -111,17 +113,34 @@ GaslessAccountStatusResponse _accountStatus({
       GaslessAccountAvailability.tokenUnsupported => 'token_unsupported',
       GaslessAccountAvailability.providerUnreachable => 'provider_unreachable',
     },
-    if (availability != GaslessAccountAvailability.providerUnreachable)
-      'service_provider': _providerAddress,
-    if (availability == GaslessAccountAvailability.available ||
-        availability == GaslessAccountAvailability.pendingTransfer) ...{
-      'active': true,
-      'frozen_balance': '0',
-      'spendable_balance': '5',
-      'transfer_fee': '1',
-    },
-    if (availability == GaslessAccountAvailability.available)
-      'max_withdrawable': '4',
+    'service_provider':
+        availability == GaslessAccountAvailability.providerUnreachable
+        ? null
+        : _providerAddress,
+    'active':
+        availability == GaslessAccountAvailability.available ||
+            availability == GaslessAccountAvailability.pendingTransfer
+        ? true
+        : null,
+    'frozen_balance':
+        availability == GaslessAccountAvailability.available ||
+            availability == GaslessAccountAvailability.pendingTransfer
+        ? '0'
+        : null,
+    'spendable_balance':
+        availability == GaslessAccountAvailability.available ||
+            availability == GaslessAccountAvailability.pendingTransfer
+        ? '5'
+        : null,
+    'transfer_fee':
+        availability == GaslessAccountAvailability.available ||
+            availability == GaslessAccountAvailability.pendingTransfer
+        ? '1'
+        : null,
+    'activation_fee': null,
+    'max_withdrawable': availability == GaslessAccountAvailability.available
+        ? '4'
+        : null,
   },
 });
 
@@ -154,8 +173,9 @@ String? _testAddressVerifier(
   Asset asset,
   CoinAddressesState state, {
   required WalletType? walletType,
-  required String? currentWalletPubkeyHash,
+  required WalletId? currentWalletId,
 }) {
+  final currentWalletPubkeyHash = currentWalletId?.pubkeyHash;
   final status = state.gaslessAccountStatus;
   if (walletType != WalletType.hdwallet ||
       currentWalletPubkeyHash != _walletHash ||
@@ -218,6 +238,10 @@ class _FakePubkeyManager implements PubkeyManager {
 
   @override
   AssetPubkeys? lastKnown(AssetId assetId) => _pubkeys[assetId];
+
+  @override
+  AssetPubkeys? lastKnownForWallet(AssetId assetId, WalletId walletId) =>
+      walletId == _user().walletId ? _pubkeys[assetId] : null;
 
   @override
   Future<AssetPubkeys> getPubkeys(Asset asset) async => _pubkeys[asset.id]!;
@@ -283,12 +307,25 @@ class _FakeWithdrawalManager implements WithdrawalManager {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _FakeAuth implements KomodoDefiLocalAuth {
+  _FakeAuth([KdfUser? user]) : user = user ?? _user();
+
+  KdfUser? user;
+
+  @override
+  Future<KdfUser?> get currentUser async => user;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _FakeSdk implements KomodoDefiSdk {
   _FakeSdk({
     required this.assets,
     required this.pubkeys,
     required this.withdrawals,
-  });
+    KomodoDefiLocalAuth? auth,
+  }) : auth = auth ?? _FakeAuth();
 
   @override
   final AssetManager assets;
@@ -298,6 +335,9 @@ class _FakeSdk implements KomodoDefiSdk {
 
   @override
   final WithdrawalManager withdrawals;
+
+  @override
+  final KomodoDefiLocalAuth auth;
 
   @override
   final AddressOperations addresses = _FakeAddressOperations();
@@ -358,6 +398,7 @@ void testGaslessConsolidationWizardLifecycle() {
                 body: GaslessConsolidationWizard(
                   asset: token,
                   custodyAddress: _custodyAddress,
+                  expectedWalletId: _user().walletId,
                   addressVerifier: _testAddressVerifier,
                   onDone: () {},
                 ),
@@ -426,6 +467,77 @@ void testGaslessConsolidationWizardLifecycle() {
       await tester.pumpAndSettle();
       expect(moveSource, findsOneWidget);
       expect(withdrawals.previewCalls, 2);
+    },
+  );
+
+  testWidgets(
+    'SDK wallet switch is rejected before any consolidation preview',
+    (tester) async {
+      final (parent, token) = _assets();
+      final withdrawals = _FakeWithdrawalManager();
+      final sdk = _FakeSdk(
+        assets: _FakeAssetManager([parent, token]),
+        pubkeys: _FakePubkeyManager({
+          token.id: _assetPubkeys(
+            token,
+            _pubkey(
+              coin: token.id.id,
+              balance: Decimal.fromInt(5),
+              gasfreeAddress: _custodyAddress,
+            ),
+          ),
+          parent.id: _assetPubkeys(
+            parent,
+            _pubkey(coin: parent.id.id, balance: Decimal.one),
+          ),
+        }),
+        withdrawals: withdrawals,
+        // Models the delivery gap where SDK auth has switched to B while the
+        // app's AuthBloc and custody attestation still display wallet A.
+        auth: _FakeAuth(
+          _user(name: 'wallet-b', pubkeyHash: 'wallet-b-pubkey-hash'),
+        ),
+      );
+      final addressesBloc = _FakeCoinAddressesBloc(
+        _readyState(observedAt: DateTime.now().toUtc()),
+      );
+      final authBloc = _FakeAuthBloc();
+      addTearDown(addressesBloc.close);
+      addTearDown(authBloc.close);
+
+      await tester.pumpWidget(
+        MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<KomodoDefiSdk>.value(value: sdk),
+            RepositoryProvider<Mm2Api>.value(value: _FakeMm2Api()),
+          ],
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider<AuthBloc>.value(value: authBloc),
+              BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+            ],
+            child: MaterialApp(
+              home: Scaffold(
+                body: GaslessConsolidationWizard(
+                  asset: token,
+                  custodyAddress: _custodyAddress,
+                  expectedWalletId: _user().walletId,
+                  addressVerifier: _testAddressVerifier,
+                  onDone: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(withdrawals.previewCalls, 0);
+      expect(find.byType(WithdrawForm), findsNothing);
+      expect(
+        find.byKey(const Key('gasless-consolidation-move-$_standardAddress')),
+        findsNothing,
+      );
     },
   );
 }

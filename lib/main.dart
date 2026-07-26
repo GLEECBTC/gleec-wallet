@@ -56,6 +56,9 @@ Future<void> main() async {
     WidgetsFlutterBinding.ensureInitialized();
     Bloc.observer = AppBlocObserver();
     PerformanceAnalytics.init();
+    if (kIsWeb) {
+      log(tronGaslessBuildPolicyMarker, path: 'GasFree build policy').ignore();
+    }
 
     FlutterError.onError = (FlutterErrorDetails details) {
       catchUnhandledExceptions(details.exception, details.stack);

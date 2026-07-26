@@ -112,17 +112,13 @@ class _CoinDetailsState extends State<CoinDetails> {
       case CoinPageType.sendConsolidate:
         final sdk = context.read<KomodoDefiSdk>();
         final asset = widget.coin.toSdkAsset(sdk);
-        final walletType = context
-            .read<AuthBloc>()
-            .state
-            .currentUser
-            ?.wallet
-            .config
-            .type;
+        final currentUser = context.read<AuthBloc>().state.currentUser;
+        final walletType = currentUser?.wallet.config.type;
         final gasfreeAddress = cachedCanonicalTronGaslessCustodyAddress(
           sdk,
           asset,
           walletType: walletType,
+          currentWalletId: currentUser?.walletId,
         );
 
         // The info-page receive BLoC is intentionally page-scoped. Start a
@@ -135,6 +131,7 @@ class _CoinDetailsState extends State<CoinDetails> {
           child: GaslessConsolidationWizard(
             asset: asset,
             custodyAddress: gasfreeAddress ?? '',
+            expectedWalletId: currentUser?.walletId,
             onDone: _openInfo,
           ),
         );

@@ -307,19 +307,30 @@ GaslessAccountStatusResponse _gaslessAccountStatus(
     'gasfree_address': custodyAddress,
     'on_chain_balance': onChainBalance,
     'availability': availability,
-    if (availability != 'provider_unreachable')
-      'service_provider': tronGaslessServiceProvider.isEmpty
-          ? 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'
-          : tronGaslessServiceProvider,
-    if (availability == 'available' || availability == 'pending_transfer') ...{
-      'active': true,
-      'frozen_balance': '0',
-      'spendable_balance': onChainBalance,
-      'transfer_fee': '1',
-    },
-    if (availability == 'available')
-      'max_withdrawable': (Decimal.parse(onChainBalance) - Decimal.one)
-          .toString(),
+    'service_provider': availability == 'provider_unreachable'
+        ? null
+        : tronGaslessServiceProvider.isEmpty
+        ? 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'
+        : tronGaslessServiceProvider,
+    'active': availability == 'available' || availability == 'pending_transfer'
+        ? true
+        : null,
+    'frozen_balance':
+        availability == 'available' || availability == 'pending_transfer'
+        ? '0'
+        : null,
+    'spendable_balance':
+        availability == 'available' || availability == 'pending_transfer'
+        ? onChainBalance
+        : null,
+    'transfer_fee':
+        availability == 'available' || availability == 'pending_transfer'
+        ? '1'
+        : null,
+    'activation_fee': null,
+    'max_withdrawable': availability == 'available'
+        ? (Decimal.parse(onChainBalance) - Decimal.one).toString()
+        : null,
   },
 });
 
@@ -612,14 +623,19 @@ void testReceiveAddressFaucetWidgets() {
         await tester.pump();
         expect(
           find.byKey(const Key('gasless-official-recovery-action')),
-          findsOneWidget,
+          findsNothing,
         );
+        expect(find.text('gaslessRecoveryBody'), findsNothing);
 
         addressesBloc.update(
           CoinAddressesState(
             addresses: [replacement, duplicateCandidate],
             gaslessReceiveStatus: GaslessReceiveStatus.unsupported,
             gaslessReceiveReason: GaslessReceiveReasonCode.tokenUnsupported,
+            gaslessAccountStatus: _gaslessAccountStatus(
+              replacement.gasfreeAddress!,
+              availability: 'token_unsupported',
+            ),
           ),
         );
         await tester.pump();
@@ -627,6 +643,7 @@ void testReceiveAddressFaucetWidgets() {
           find.byKey(const Key('gasless-official-recovery-action')),
           findsOneWidget,
         );
+        expect(find.text('gaslessRecoveryBody'), findsOneWidget);
 
         addressesBloc.update(
           CoinAddressesState(
@@ -639,8 +656,9 @@ void testReceiveAddressFaucetWidgets() {
         await tester.pump();
         expect(
           find.byKey(const Key('gasless-official-recovery-action')),
-          findsOneWidget,
+          findsNothing,
         );
+        expect(find.text('gaslessRecoveryBody'), findsNothing);
 
         addressesBloc.update(
           CoinAddressesState(
@@ -653,8 +671,9 @@ void testReceiveAddressFaucetWidgets() {
         await tester.pump();
         expect(
           find.byKey(const Key('gasless-official-recovery-action')),
-          findsOneWidget,
+          findsNothing,
         );
+        expect(find.text('gaslessRecoveryBody'), findsNothing);
 
         addressesBloc.update(
           CoinAddressesState(
@@ -1413,10 +1432,10 @@ void testReceiveAddressFaucetWidgets() {
           expect(find.textContaining('120.5'), findsOneWidget);
           expect(find.byType(AddressCopyButton), findsNothing);
           expect(find.byType(QrButton), findsNothing);
-          expect(find.text('gaslessRecoveryBody'), findsOneWidget);
+          expect(find.text('gaslessRecoveryBody'), findsNothing);
           expect(
             find.byKey(const Key('gasless-custody-recovery-action')),
-            findsOneWidget,
+            findsNothing,
           );
         },
       );
@@ -1446,9 +1465,10 @@ void testReceiveAddressFaucetWidgets() {
         expect(find.textContaining('120.5'), findsOneWidget);
         expect(find.byType(AddressCopyButton), findsNothing);
         expect(find.byType(QrButton), findsNothing);
+        expect(find.text('gaslessRecoveryBody'), findsNothing);
         expect(
           find.byKey(const Key('gasless-custody-recovery-action')),
-          findsOneWidget,
+          findsNothing,
         );
       });
 
@@ -1568,19 +1588,36 @@ void testReceiveAddressFaucetWidgets() {
 
         Future<void> expectReason(
           GaslessReceiveReasonCode reason,
-          String expectedKey,
-        ) async {
+          String expectedKey, {
+          bool offersOfficialRecovery = false,
+        }) async {
           await tester.pumpWidget(
             buildAddressCard(
               asset: usdt,
               address: pubkey,
               variant: AddressDisplayVariant.gasfree,
               gaslessReceiveEnabled: false,
-              gaslessReceiveStatus: GaslessReceiveStatus.disabled,
+              gaslessReceiveStatus: offersOfficialRecovery
+                  ? GaslessReceiveStatus.unsupported
+                  : GaslessReceiveStatus.disabled,
               gaslessReceiveReason: reason,
+              gaslessAccountStatus: offersOfficialRecovery
+                  ? _gaslessAccountStatus(
+                      pubkey.gasfreeAddress!,
+                      availability: 'token_unsupported',
+                    )
+                  : null,
             ),
           );
           expect(find.text(expectedKey), findsOneWidget);
+          expect(
+            find.text('gaslessRecoveryBody'),
+            offersOfficialRecovery ? findsOneWidget : findsNothing,
+          );
+          expect(
+            find.byKey(const Key('gasless-custody-recovery-action')),
+            offersOfficialRecovery ? findsOneWidget : findsNothing,
+          );
         }
 
         await expectReason(
@@ -1606,6 +1643,11 @@ void testReceiveAddressFaucetWidgets() {
         await expectReason(
           GaslessReceiveReasonCode.tokenUnsupported,
           'receiveGaslessTokenUnsupportedNotice',
+        );
+        await expectReason(
+          GaslessReceiveReasonCode.tokenUnsupported,
+          'receiveGaslessTokenUnsupportedNotice',
+          offersOfficialRecovery: true,
         );
       });
 

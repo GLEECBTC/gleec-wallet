@@ -57,6 +57,12 @@ class WithdrawFormState extends Equatable {
   /// may exist even though it cannot currently be displayed.
   final bool gaslessPendingStoreHealthy;
 
+  /// True after the wallet-scoped journal has completed its initial read.
+  ///
+  /// A GasFree request must not be previewed before this check completes,
+  /// otherwise an unresolved relay could be hidden by a late load result.
+  final bool gaslessPendingStoreReady;
+
   // Form fields
   final String recipientAddress;
   final String amount;
@@ -159,11 +165,8 @@ class WithdrawFormState extends Equatable {
   /// Gas-free (gasless) transfers are available for TRC20 tokens, where the
   /// network fee is paid in the token rather than in TRX.
   ///
-  /// Hardware wallets (Trezor) are excluded: their TRX/TRC20 activation path
-  /// (`EthTaskActivationStrategy`) does not thread the `tron_gasless_provider`,
-  /// so KDF has no relay configured and would silently produce a native
-  /// transfer. Hiding the toggle keeps the request honest with what the backend
-  /// can actually fulfil.
+  /// Hardware wallets (Trezor) remain excluded by Gleec's rollout policy.
+  /// Standard TRON withdrawals stay available for those wallets.
   bool get isGaslessSupported =>
       asset.protocol is Trc20Protocol &&
       isGaslessFeatureConfigured &&
@@ -197,9 +200,13 @@ class WithdrawFormState extends Equatable {
   /// Whether the gas-free rail should be requested for this withdrawal.
   bool get useGasless =>
       isGaslessSupported &&
+      gaslessPendingStoreReady &&
       isGaslessEnabled &&
       hasCanonicalGaslessSourceSelected &&
       !hasAmbiguousGaslessSources;
+
+  bool get isGaslessPendingStoreChecking =>
+      isGaslessSupported && isGaslessEnabled && !gaslessPendingStoreReady;
 
   /// True when this asset would be gas-free but the active wallet is a
   /// hardware wallet, which cannot use the gasless rail — used to show an
@@ -228,10 +235,9 @@ class WithdrawFormState extends Equatable {
               gaslessAccountStatus?.availability ==
                   GaslessAccountAvailability.providerUnreachable));
 
-  /// Whether an authoritative capability/status result blocks a new GasFree
-  /// submission. A transient fetch failure without a status snapshot remains
-  /// previewable so Preview can perform the authoritative check; a returned
-  /// provider rejection, unsupported token, or security mismatch fails closed.
+  /// Whether the latest typed KDF status blocks a new GasFree submission.
+  /// Only a fresh `available` snapshot authorizes Preview; every other state
+  /// pauses GasFree while Standard remains a separate rail.
   bool get isGaslessSendBlocked =>
       useGasless && !gaslessAvailability.isVerifiedReady;
 
@@ -330,6 +336,7 @@ class WithdrawFormState extends Equatable {
     this.walletType,
     required this.isGaslessFeatureConfigured,
     this.gaslessPendingStoreHealthy = true,
+    this.gaslessPendingStoreReady = true,
     this.selectedSourceAddress,
     this.isSourceSelectionLocked = false,
     this.isMaxAmount = false,
@@ -383,6 +390,7 @@ class WithdrawFormState extends Equatable {
     WalletType? walletType,
     bool? isGaslessFeatureConfigured,
     bool? gaslessPendingStoreHealthy,
+    bool? gaslessPendingStoreReady,
     ValueGetter<PubkeyInfo?>? selectedSourceAddress,
     bool? isSourceSelectionLocked,
     bool? isMaxAmount,
@@ -437,6 +445,8 @@ class WithdrawFormState extends Equatable {
           isGaslessFeatureConfigured ?? this.isGaslessFeatureConfigured,
       gaslessPendingStoreHealthy:
           gaslessPendingStoreHealthy ?? this.gaslessPendingStoreHealthy,
+      gaslessPendingStoreReady:
+          gaslessPendingStoreReady ?? this.gaslessPendingStoreReady,
       selectedSourceAddress: selectedSourceAddress != null
           ? selectedSourceAddress()
           : this.selectedSourceAddress,
@@ -579,6 +589,7 @@ class WithdrawFormState extends Equatable {
     walletType,
     isGaslessFeatureConfigured,
     gaslessPendingStoreHealthy,
+    gaslessPendingStoreReady,
     selectedSourceAddress,
     isSourceSelectionLocked,
     isMaxAmount,

@@ -44,7 +44,7 @@ void testBitrefillWalletBinding() {
           currentWalletId: equivalentWalletA,
           initialCoinId: _coinId,
           currentCoinId: _coinId,
-          selectionIsCurrent: true,
+          selectionIsCurrent: () => true,
         ),
         isTrue,
       );
@@ -72,7 +72,7 @@ void testBitrefillWalletBinding() {
             currentCoinId: _coinId,
             // Even if an old address snapshot still appears valid, the
             // captured wallet identity must independently fail closed.
-            selectionIsCurrent: true,
+            selectionIsCurrent: () => true,
           );
           return contextIsCurrent ? refreshedUrl : null;
         }
@@ -88,5 +88,24 @@ void testBitrefillWalletBinding() {
         expect(await pendingLaunch, isNull);
       },
     );
+
+    test('disposed selection rejects before context-dependent validation', () {
+      var selectionValidationCalls = 0;
+
+      final isCurrent = isBitrefillRefundSelectionContextCurrent(
+        isMounted: false,
+        initialWalletId: _walletA,
+        currentWalletId: _walletA,
+        initialCoinId: _coinId,
+        currentCoinId: _coinId,
+        selectionIsCurrent: () {
+          selectionValidationCalls++;
+          throw StateError('disposed context must never be read');
+        },
+      );
+
+      expect(isCurrent, isFalse);
+      expect(selectionValidationCalls, isZero);
+    });
   });
 }

@@ -38,6 +38,9 @@ final class _RefundAddressOption {
 
 /// Returns whether an asynchronous Bitrefill refund selection still belongs
 /// to the wallet and coin that initiated it.
+///
+/// [selectionIsCurrent] is deliberately lazy so a disposed widget or stale
+/// wallet/coin binding is rejected before any context-dependent validation.
 @visibleForTesting
 bool isBitrefillRefundSelectionContextCurrent({
   required bool isMounted,
@@ -45,14 +48,18 @@ bool isBitrefillRefundSelectionContextCurrent({
   required WalletId? currentWalletId,
   required AssetId initialCoinId,
   required AssetId currentCoinId,
-  required bool selectionIsCurrent,
-}) =>
-    isMounted &&
-    initialWalletId != null &&
-    currentWalletId != null &&
-    currentWalletId == initialWalletId &&
-    currentCoinId == initialCoinId &&
-    selectionIsCurrent;
+  required bool Function() selectionIsCurrent,
+}) {
+  if (!isMounted ||
+      initialWalletId == null ||
+      currentWalletId == null ||
+      currentWalletId != initialWalletId ||
+      currentCoinId != initialCoinId) {
+    return false;
+  }
+
+  return selectionIsCurrent();
+}
 
 /// A button that opens the Bitrefill widget in a new window or tab.
 /// The Bitrefill widget is a web page that allows the user to purchase gift
@@ -526,20 +533,22 @@ class _BitrefillButtonState extends State<BitrefillButton> {
     final initialWalletId = authBloc.state.currentUser?.walletId;
     final initialCoinId = widget.coin.id;
 
-    bool selectionContextIsCurrent([_RefundAddressOption? selected]) =>
-        isBitrefillRefundSelectionContextCurrent(
-          isMounted: mounted,
-          initialWalletId: initialWalletId,
-          currentWalletId: authBloc.state.currentUser?.walletId,
-          initialCoinId: initialCoinId,
-          currentCoinId: widget.coin.id,
-          selectionIsCurrent:
-              selected == null ||
-              _gasfreeSelectionIsCurrent(context, sdk, addressesBloc, selected),
-        );
+    bool selectionContextIsCurrent([_RefundAddressOption? selected]) {
+      if (!mounted) return false;
+      return isBitrefillRefundSelectionContextCurrent(
+        isMounted: true,
+        initialWalletId: initialWalletId,
+        currentWalletId: authBloc.state.currentUser?.walletId,
+        initialCoinId: initialCoinId,
+        currentCoinId: widget.coin.id,
+        selectionIsCurrent: () =>
+            selected == null ||
+            _gasfreeSelectionIsCurrent(context, sdk, addressesBloc, selected),
+      );
+    }
 
     void showGasfreeSelectionUnavailable(_RefundAddressOption selected) {
-      if (!selected.isGasfree || !context.mounted) return;
+      if (!mounted || !selected.isGasfree) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(LocaleKeys.bitrefillGasfreeRefundUnavailable.tr()),
@@ -554,6 +563,7 @@ class _BitrefillButtonState extends State<BitrefillButton> {
       gaslessAccountStatus: gaslessAccountStatus,
     );
     final selected = await _selectRefundAddress(context, options);
+    if (!mounted) return null;
     if (selected == null) return null;
     if (!selectionContextIsCurrent(selected)) {
       showGasfreeSelectionUnavailable(selected);
@@ -582,6 +592,7 @@ class _BitrefillButtonState extends State<BitrefillButton> {
 
     try {
       final state = await matchingState.timeout(const Duration(seconds: 5));
+      if (!mounted) return null;
       if (!selectionContextIsCurrent(selected)) {
         showGasfreeSelectionUnavailable(selected);
         return null;

@@ -13,13 +13,20 @@ String? cachedCanonicalTronGaslessCustodyAddress(
   KomodoDefiSdk sdk,
   Asset asset, {
   required WalletType? walletType,
+  required WalletId? currentWalletId,
 }) {
   final isSoftwareWallet =
       walletType == WalletType.iguana || walletType == WalletType.hdwallet;
-  if (!isSoftwareWallet) return null;
+  if (!isSoftwareWallet || currentWalletId == null) return null;
+  final expectedDerivation = walletType == WalletType.hdwallet
+      ? DerivationMethod.hdWallet
+      : DerivationMethod.iguana;
+  if (currentWalletId.authOptions.derivationMethod != expectedDerivation) {
+    return null;
+  }
 
   try {
-    final cached = sdk.pubkeys.lastKnown(asset.id);
+    final cached = sdk.pubkeys.lastKnownForWallet(asset.id, currentWalletId);
     if (cached == null) return null;
 
     PubkeyInfo? canonical;
@@ -55,10 +62,10 @@ String? verifiedTronGaslessConsolidationAddress(
   Asset asset,
   CoinAddressesState state, {
   required WalletType? walletType,
-  required String? currentWalletPubkeyHash,
+  required WalletId? currentWalletId,
   DateTime? now,
 }) {
-  final currentWalletHash = currentWalletPubkeyHash?.trim();
+  final currentWalletHash = currentWalletId?.pubkeyHash?.trim();
   final verifiedWalletHash = state.gaslessReceiveWalletPubkeyHash?.trim();
   if (currentWalletHash == null ||
       currentWalletHash.isEmpty ||
@@ -71,6 +78,7 @@ String? verifiedTronGaslessConsolidationAddress(
     sdk,
     asset,
     walletType: walletType,
+    currentWalletId: currentWalletId,
   );
   final verifiedAddress = state.verifiedGasfreeAddress;
   if (cachedAddress == null || cachedAddress != verifiedAddress) return null;

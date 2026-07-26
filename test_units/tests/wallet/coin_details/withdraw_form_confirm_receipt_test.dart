@@ -88,7 +88,7 @@ BalanceChanges _balanceChanges({required String spent, String received = '0'}) {
 
 FeeInfoTronGasless _gaslessFee({
   String totalTokenFee = '1.5',
-  String? signedMaxFee,
+  String signedMaxFee = '2',
   String? activationFee,
 }) {
   final fee = Decimal.parse(totalTokenFee);
@@ -99,7 +99,7 @@ FeeInfoTronGasless _gaslessFee({
     gasfreeAddress: 'TGasFreeSourceAddress',
     transferFee: fee,
     totalTokenFee: fee,
-    signedMaxFee: signedMaxFee == null ? null : Decimal.parse(signedMaxFee),
+    signedMaxFee: Decimal.parse(signedMaxFee),
     activationFee: activationFee == null ? null : Decimal.parse(activationFee),
   );
 }
@@ -269,6 +269,7 @@ WithdrawFormState _gaslessConfirmState() => WithdrawFormState(
 
 WithdrawalResult _confirmedGaslessResult({
   String traceId = 'trace-responsive-1',
+  String? finalFee = '1.25',
 }) {
   final preview = _result(
     balanceChanges: _balanceChanges(spent: '11.5'),
@@ -287,7 +288,7 @@ WithdrawalResult _confirmedGaslessResult({
       preview.timestamp * Duration.millisecondsPerSecond,
       isUtc: true,
     ),
-    gaslessFinalFee: Decimal.parse('1.25'),
+    gaslessFinalFee: finalFee == null ? null : Decimal.parse(finalFee),
     gaslessTraceId: traceId,
   );
 }
@@ -464,6 +465,34 @@ void testWithdrawFormConfirmReceipt() {
         await tester.pump(const Duration(seconds: 3));
       },
     );
+
+    testWidgets('gas-free receipt does not label a preview fee as final', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          WithdrawSuccessReceipt(
+            asset: _trc20Asset(),
+            result: _confirmedGaslessResult(
+              traceId: 'trace-without-final-fee',
+              finalFee: null,
+            ),
+            recipientAmount: Decimal.parse('10'),
+            onClose: () {},
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('technicalDetails'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('withdrawGaslessFinalFee'), findsNothing);
+      expect(find.text('withdrawGaslessMaxFee'), findsOneWidget);
+      expect(find.text('withdrawGaslessTransferFee'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 3));
+    });
 
     testWidgets('standard receipt keeps the awaiting-confirmations chip', (
       tester,

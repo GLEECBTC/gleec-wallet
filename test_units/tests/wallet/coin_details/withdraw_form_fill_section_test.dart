@@ -9,7 +9,6 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
         GaslessAccountStatusResponse,
         KomodoDefiSdk;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:komodo_ui/komodo_ui.dart' show AddressSelectInput;
 import 'package:komodo_ui_kit/komodo_ui_kit.dart' show UiPrimaryButton;
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
@@ -86,24 +85,40 @@ GaslessAccountStatusResponse _gaslessStatus({
       'gasfree_address': 'TGasFreeSourceAddress',
       'on_chain_balance': '100',
       'availability': availability.wireValue,
-      if (availability != GaslessAccountAvailability.providerUnreachable)
-        'service_provider': 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
-      if (availability == GaslessAccountAvailability.available ||
-          availability == GaslessAccountAvailability.pendingTransfer) ...{
-        'active': active,
-        'frozen_balance':
-            availability == GaslessAccountAvailability.pendingTransfer
-            ? '1'
-            : '0',
-        'spendable_balance':
-            availability == GaslessAccountAvailability.pendingTransfer
-            ? '99'
-            : '100',
-        'transfer_fee': '1',
-        if (activationFee != null) 'activation_fee': activationFee,
-      },
-      if (availability == GaslessAccountAvailability.available)
-        'max_withdrawable': '99',
+      'service_provider':
+          availability == GaslessAccountAvailability.providerUnreachable
+          ? null
+          : 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+      'active':
+          availability == GaslessAccountAvailability.available ||
+              availability == GaslessAccountAvailability.pendingTransfer
+          ? active
+          : null,
+      'frozen_balance':
+          availability == GaslessAccountAvailability.pendingTransfer
+          ? '1'
+          : availability == GaslessAccountAvailability.available
+          ? '0'
+          : null,
+      'spendable_balance':
+          availability == GaslessAccountAvailability.pendingTransfer
+          ? '99'
+          : availability == GaslessAccountAvailability.available
+          ? '100'
+          : null,
+      'transfer_fee':
+          availability == GaslessAccountAvailability.available ||
+              availability == GaslessAccountAvailability.pendingTransfer
+          ? '1'
+          : null,
+      'activation_fee':
+          availability == GaslessAccountAvailability.available ||
+              availability == GaslessAccountAvailability.pendingTransfer
+          ? activationFee
+          : null,
+      'max_withdrawable': availability == GaslessAccountAvailability.available
+          ? '99'
+          : null,
     },
   });
 }
@@ -116,6 +131,8 @@ WithdrawFormState _trc20FillState({
   bool isGaslessStatusLoading = false,
   bool isSending = false,
   String sourceBalance = '100',
+  bool gaslessPendingStoreHealthy = true,
+  bool gaslessPendingStoreReady = true,
 }) {
   final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
   final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
@@ -154,6 +171,8 @@ WithdrawFormState _trc20FillState({
     recipientAddress: 'recipient',
     amount: '1',
     isGaslessEnabled: isGaslessEnabled,
+    gaslessPendingStoreHealthy: gaslessPendingStoreHealthy,
+    gaslessPendingStoreReady: gaslessPendingStoreReady,
     gaslessAccountStatus: gaslessAccountStatus,
     gaslessAvailability: resolvedGaslessAvailability,
     walletType: walletType,
@@ -188,6 +207,8 @@ class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
   void add(WithdrawFormEvent event) {
     events.add(event);
   }
+
+  void replaceState(WithdrawFormState state) => emit(state);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -291,8 +312,8 @@ void testWithdrawFormFillSection() {
         findsOneWidget,
       );
       expect(find.text('withdrawSendFrom'), findsOneWidget);
-      expect(find.text('TGasFr...ddress'), findsOneWidget);
-      expect(find.text('TRegul...ddress'), findsNothing);
+      expect(find.textContaining('TGasFr...ddress'), findsOneWidget);
+      expect(find.textContaining('TRegul...ddress'), findsNothing);
       expect(find.textContaining('Maximum sendable amount'), findsNothing);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -311,8 +332,8 @@ void testWithdrawFormFillSection() {
         find.byKey(const Key('withdraw-gasless-source-selector')),
         findsOneWidget,
       );
-      expect(find.text('TRegul...ddress'), findsOneWidget);
-      expect(find.text('TGasFr...ddress'), findsNothing);
+      expect(find.textContaining('TRegul...ddress'), findsOneWidget);
+      expect(find.textContaining('TGasFr...ddress'), findsNothing);
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -325,21 +346,36 @@ void testWithdrawFormFillSection() {
 
       await tester.pumpWidget(_buildTestWidget(bloc));
 
-      final selector = tester.widget<AddressSelectInput>(
-        find.byType(AddressSelectInput),
+      final selectorFinder = find.byKey(
+        const Key('withdraw-gasless-rail-source-dropdown'),
       );
-      expect(selector.addresses, hasLength(2));
-      final standard = selector.addresses.singleWhere(
-        (entry) => entry.address == 'TRegularSourceAddress',
+      expect(selectorFinder, findsOneWidget);
+      expect(
+        tester.widget(selectorFinder),
+        isA<DropdownButtonFormField<dynamic>>(),
       );
+      final dropdownFinder = find.descendant(
+        of: selectorFinder,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<dynamic>,
+        ),
+      );
+      expect(dropdownFinder, findsOneWidget);
+      final dynamic dropdown = tester.widget(dropdownFinder);
+      expect(dropdown.items, hasLength(2));
+      expect(dropdown.onChanged, isNotNull);
 
       // Exercise the production selector callback directly. The generic
-      // dropdown owns a process-wide overlay and is independently tested by
-      // komodo_ui; direct selection keeps this rail-wiring test deterministic.
-      selector.onAddressSelected!(standard);
+      // dropdown owns a process-wide overlay; direct selection keeps this
+      // rail-wiring test deterministic.
+      dropdown.onChanged(dropdown.items.last.value);
 
       final toggle = bloc.events.whereType<WithdrawFormGaslessToggled>().single;
       expect(toggle.isEnabled, isFalse);
+      final sourceChange = bloc.events
+          .whereType<WithdrawFormSourceChanged>()
+          .single;
+      expect(sourceChange.address.address, 'TRegularSourceAddress');
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -548,6 +584,66 @@ void testWithdrawFormFillSection() {
 
       await tester.pumpWidget(const SizedBox.shrink());
     });
+
+    testWidgets(
+      'unreadable journal shows storage retry while Standard remains usable',
+      (tester) async {
+        final blockedState = _trc20FillState(
+          isGaslessEnabled: false,
+          gaslessAvailability: GaslessAvailability.securityMismatch,
+          gaslessPendingStoreHealthy: false,
+        );
+        final bloc = _FakeWithdrawFormBloc(blockedState);
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(_buildTestWidget(bloc));
+
+        expect(
+          find.byKey(const Key('gasless-storage-unavailable-notice')),
+          findsOneWidget,
+        );
+        expect(blockedState.useGasless, isFalse);
+        expect(
+          blockedState.selectedSourceAddress?.balance.total,
+          greaterThan(Decimal.zero),
+        );
+        final previewButton = tester.widget<PreviewWithdrawButton>(
+          find.byType(PreviewWithdrawButton),
+        );
+        expect(previewButton.onPressed, isNotNull);
+
+        await tester.ensureVisible(
+          find.byKey(const Key('gasless-storage-unavailable-retry')),
+        );
+        await tester.tap(
+          find.byKey(const Key('gasless-storage-unavailable-retry')),
+        );
+        expect(
+          bloc.events.whereType<WithdrawFormPendingGaslessLoadRequested>(),
+          hasLength(1),
+        );
+
+        bloc.replaceState(
+          blockedState.copyWith(
+            gaslessPendingStoreHealthy: true,
+            gaslessPendingStoreReady: true,
+            gaslessAvailability: GaslessAvailability.initial,
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const Key('gasless-storage-unavailable-notice')),
+          findsNothing,
+        );
+        final recoveredPreviewButton = tester.widget<PreviewWithdrawButton>(
+          find.byType(PreviewWithdrawButton),
+        );
+        expect(recoveredPreviewButton.onPressed, isNotNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
 
     testWidgets(
       'disabled rail uses controlled-reactivation copy without retry action',

@@ -222,6 +222,15 @@ String _gaslessReceiveUnavailableMessage(GaslessReceiveReasonCode? reason) {
   };
 }
 
+bool _offersOfficialGaslessRecovery(
+  GaslessReceiveStatus status,
+  GaslessReceiveReasonCode? reason,
+  GaslessAccountStatusResponse? accountStatus,
+) =>
+    status == GaslessReceiveStatus.unsupported &&
+    reason == GaslessReceiveReasonCode.tokenUnsupported &&
+    accountStatus?.availability == GaslessAccountAvailability.tokenUnsupported;
+
 /// Expands pubkeys into display rows: a gasless pubkey becomes a gas-free
 /// (custody) row followed by a standard (EOA) row; others stay one row. The
 /// gas-free row is exempt from the zero-balance toggle — it is the account
@@ -457,14 +466,26 @@ class _AddressVariantTag extends StatelessWidget {
 }
 
 class _GaslessRecoveryBanner extends StatelessWidget {
-  const _GaslessRecoveryBanner({required this.isTestnet, this.reason});
+  const _GaslessRecoveryBanner({
+    required this.isTestnet,
+    required this.status,
+    this.reason,
+    this.accountStatus,
+  });
 
   final bool isTestnet;
+  final GaslessReceiveStatus status;
   final GaslessReceiveReasonCode? reason;
+  final GaslessAccountStatusResponse? accountStatus;
 
   @override
   Widget build(BuildContext context) {
     final style = NoticeBanner.styleOf(context, NoticeBannerVariant.warning);
+    final offersOfficialRecovery = _offersOfficialGaslessRecovery(
+      status,
+      reason,
+      accountStatus,
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: NoticeBanner(
@@ -487,21 +508,24 @@ class _GaslessRecoveryBanner extends StatelessWidget {
                 context,
               ).textTheme.bodySmall?.copyWith(color: style.foreground),
             ),
-            const SizedBox(height: 4),
-            Text(
-              LocaleKeys.gaslessRecoveryBody.tr(),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: style.foreground),
-            ),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              key: const Key('gasless-official-recovery-action'),
-              onPressed: () =>
-                  launchURLString(tronGaslessRecoveryUrl(isTestnet: isTestnet)),
-              icon: const Icon(Icons.open_in_new_rounded, size: 18),
-              label: Text(LocaleKeys.gaslessRecoveryAction.tr()),
-            ),
+            if (offersOfficialRecovery) ...[
+              const SizedBox(height: 4),
+              Text(
+                LocaleKeys.gaslessRecoveryBody.tr(),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: style.foreground),
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                key: const Key('gasless-official-recovery-action'),
+                onPressed: () => launchURLString(
+                  tronGaslessRecoveryUrl(isTestnet: isTestnet),
+                ),
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: Text(LocaleKeys.gaslessRecoveryAction.tr()),
+              ),
+            ],
           ],
         ),
       ),
@@ -510,13 +534,25 @@ class _GaslessRecoveryBanner extends StatelessWidget {
 }
 
 class _GaslessRecoveryInline extends StatelessWidget {
-  const _GaslessRecoveryInline({required this.isTestnet, this.reason});
+  const _GaslessRecoveryInline({
+    required this.isTestnet,
+    required this.status,
+    this.reason,
+    this.accountStatus,
+  });
 
   final bool isTestnet;
+  final GaslessReceiveStatus status;
   final GaslessReceiveReasonCode? reason;
+  final GaslessAccountStatusResponse? accountStatus;
 
   @override
   Widget build(BuildContext context) {
+    final offersOfficialRecovery = _offersOfficialGaslessRecovery(
+      status,
+      reason,
+      accountStatus,
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
@@ -526,19 +562,21 @@ class _GaslessRecoveryInline extends StatelessWidget {
             _gaslessReceiveUnavailableMessage(reason),
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: 4),
-          Text(
-            LocaleKeys.gaslessRecoveryBody.tr(),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 4),
-          TextButton.icon(
-            key: const Key('gasless-custody-recovery-action'),
-            onPressed: () =>
-                launchURLString(tronGaslessRecoveryUrl(isTestnet: isTestnet)),
-            icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: Text(LocaleKeys.gaslessRecoveryAction.tr()),
-          ),
+          if (offersOfficialRecovery) ...[
+            const SizedBox(height: 4),
+            Text(
+              LocaleKeys.gaslessRecoveryBody.tr(),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              key: const Key('gasless-custody-recovery-action'),
+              onPressed: () =>
+                  launchURLString(tronGaslessRecoveryUrl(isTestnet: isTestnet)),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: Text(LocaleKeys.gaslessRecoveryAction.tr()),
+            ),
+          ],
         ],
       ),
     );
@@ -659,14 +697,13 @@ class _CoinAddressesState extends State<CoinAddresses>
               isHdWallet: isHdWallet,
               gaslessCustodyVisible: gaslessCustodyVisible,
             );
-            // Gasless assets are single-address by design: the custody model
-            // (headline balance, gasless::account_status) only covers the
-            // primary address, so creating further addresses would strand
-            // deposits invisibly. Scoped to TRX as well as TRC-20 — they
-            // share one address list, and a TRX-created address would be
-            // hidden by the SDK's phantom filter until funded. The gate is
-            // CONFIG-driven (not derived from pubkeys) so a provider outage
-            // that leaves gasfreeAddress empty can't open a creation window.
+            // Gleec's rollout exposes custody only for the primary address,
+            // even though KDF and the generic SDK support other valid HD
+            // selectors. Scoped to TRX as well as TRC-20 because they share
+            // one address list. Existing secondary addresses remain visible
+            // for Standard transfers and recovery. The gate is CONFIG-driven
+            // (not derived from pubkeys) so a provider outage that leaves
+            // gasfreeAddress empty cannot open a creation window.
             // The custody count, used for the custody-balance pairing, stays
             // pubkey-driven (one per key, not per blended row) and is counted
             // on the unfiltered list so a pubkey hidden by the zero-balance
@@ -711,7 +748,9 @@ class _CoinAddressesState extends State<CoinAddresses>
                           if (showRecoveryBanner)
                             _GaslessRecoveryBanner(
                               isTestnet: widget.coin.isTestCoin,
+                              status: state.gaslessReceiveStatus,
                               reason: state.gaslessReceiveReason,
+                              accountStatus: state.gaslessAccountStatus,
                             ),
                           _Header(
                             status: state.status,
@@ -956,7 +995,9 @@ class AddressCard extends StatelessWidget {
                     !gaslessReceiveChecking)
                   _GaslessRecoveryInline(
                     isTestnet: coin.isTestCoin,
+                    status: gaslessReceiveStatus,
                     reason: gaslessReceiveReason,
+                    accountStatus: gaslessAccountStatus,
                   ),
               ],
             );
@@ -1421,7 +1462,9 @@ class PubkeyReceiveDialog extends StatelessWidget {
           content: SingleChildScrollView(
             child: _GaslessRecoveryBanner(
               isTestnet: coin.isTestCoin,
+              status: addressesState.gaslessReceiveStatus,
               reason: addressesState.gaslessReceiveReason,
+              accountStatus: addressesState.gaslessAccountStatus,
             ),
           ),
           actions: [
@@ -1905,9 +1948,8 @@ class CreateButton extends StatelessWidget {
   final FormStatus createAddressStatus;
   final Set<CantCreateNewAddressReason>? cantCreateNewAddressReasons;
 
-  /// Gasless assets are single-address by design: the custody model (headline
-  /// balance, `gasless::account_status`) only covers the primary address, so
-  /// additional addresses would receive custody deposits invisibly.
+  /// Gleec exposes GasFree custody only for the primary address. KDF supports
+  /// other HD selectors, but this app keeps them on the Standard/recovery rail.
   final bool gaslessSingleAddress;
 
   @override
