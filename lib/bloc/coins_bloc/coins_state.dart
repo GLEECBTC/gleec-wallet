@@ -37,19 +37,13 @@ class CoinsState extends Equatable {
     Map<String, AssetPubkeys>? pubkeys,
     Map<String, CexPrice>? prices,
   }) {
-    // Filtering is required to avoid including "NFT_*" assets in the coins
-    // or walletCoins maps. The user should not see these assets, as they are
-    // only needed to support the NFT feature.
-    final walletCoinsWithoutExcludedCoins = _filterExcludedAssets(
-      walletCoins ?? this.walletCoins,
-    );
-    final coinsWithoutExcludedCoins = _filterExcludedAssets(
-      coins ?? this.coins,
-    );
-
+    // Filtering out "NFT_*" assets is done by the constructor. It used to be
+    // repeated here as well, so every copyWith rebuilt both maps twice - four
+    // O(coins) allocations per emission over an ~800-entry catalogue, on a
+    // path that emits dozens of times during login.
     return CoinsState(
-      coins: coinsWithoutExcludedCoins,
-      walletCoins: walletCoinsWithoutExcludedCoins,
+      coins: coins ?? this.coins,
+      walletCoins: walletCoins ?? this.walletCoins,
       pubkeys: pubkeys ?? this.pubkeys,
       prices: prices ?? this.prices,
     );

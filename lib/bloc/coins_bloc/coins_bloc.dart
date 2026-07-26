@@ -481,10 +481,19 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   void _scheduleInitialBalanceRefresh(Iterable<String> coinsToActivate) {
     if (isClosed) return;
 
+    // Start the fallback balance monitor immediately rather than gating it on
+    // the activation-coverage threshold below. It only re-fetches coins whose
+    // SDK balance watcher failed to start, so starting it early is harmless -
+    // whereas gating it meant the first tick could be delayed by up to the
+    // full 60s timeout. That timeout is reachable in practice: targetIds here
+    // is the pre-ZHTLC-filter list, while _activateCoins drops unconfigured
+    // ZHTLC assets, so an ARRR-enabled-but-unconfigured wallet can never reach
+    // 80% coverage.
+    add(CoinsBalanceMonitoringStarted());
+
     final Set<String> targetIds = coinsToActivate.toSet();
     if (targetIds.isEmpty) {
       add(CoinsBalancesRefreshed());
-      add(CoinsBalanceMonitoringStarted());
       return;
     }
 
@@ -492,24 +501,22 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       final stopwatch = Stopwatch()..start();
       var triggeredByThreshold = false;
       var fired = false;
+      final activeIds = <String>{};
 
       void _fire() {
         if (fired || isClosed) return;
         fired = true;
-        if (triggeredByThreshold) {
-          _log.fine(
-            'Initial balance refresh triggered after 80% of coins activated.',
-          );
-        } else {
-          _log.fine(
-            'Initial balance refresh triggered after timeout while waiting for coin activation.',
-          );
-        }
+        stopwatch.stop();
+        // Logged at info so it survives release builds (Logger.root.level is
+        // INFO in release). This is the headline post-login timing: how long
+        // from sign-in until enough coins are active to sweep balances.
+        _log.info(
+          'Initial activation reached ${triggeredByThreshold ? "80% coverage" : "the timeout"} '
+          'after ${stopwatch.elapsedMilliseconds}ms '
+          '(${activeIds.length}/${targetIds.length} coins active)',
+        );
         add(CoinsBalancesRefreshed());
-        add(CoinsBalanceMonitoringStarted());
       }
-
-      final activeIds = <String>{};
 
       // Seed with currently activated assets from the SDK cache
       try {
@@ -564,8 +571,6 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         triggeredByThreshold = false;
         _fire();
       }
-
-      stopwatch.stop();
     }());
   }
 
@@ -698,7 +703,13 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   }
 
   CoinsState _prePopulateListWithActivatingCoins(Iterable<String> coins) {
-    final knownCoins = _coinsRepo.getKnownCoinsMap();
+    // Reuse the catalogue already in state where possible. Rebuilding it means
+    // converting every available asset to a Coin (recursing into the parent for
+    // each child token) synchronously on the frame the user is watching;
+    // _onCoinsStarted has normally populated it already.
+    final knownCoins = state.coins.isNotEmpty
+        ? state.coins
+        : _coinsRepo.getKnownCoinsMap();
     final activatingCoins = Map<String, Coin>.fromIterable(
       coins
           .map((coin) {
