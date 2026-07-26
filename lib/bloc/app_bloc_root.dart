@@ -332,6 +332,7 @@ class _MyAppViewState extends State<_MyAppView> {
     routingState.selectedMenu = MainMenuValue.defaultMenu();
 
     unawaited(_hideAppLoader());
+    _schedulePrecacheCoinIcons();
 
     // Attempt to restore previously authenticated session
     context.read<AuthBloc>().add(const AuthStateRestoreRequested());
@@ -363,12 +364,17 @@ class _MyAppViewState extends State<_MyAppView> {
     );
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    _precacheCoinIcons(sdk).ignore();
+  void _schedulePrecacheCoinIcons() {
+    // Deliberately not driven from didChangeDependencies: that fires again on
+    // theme/locale/MediaQuery changes, and the old guard *completed* the
+    // previous operation rather than cancelling it, so a second full pass ran
+    // concurrently with the first. Kick it off once, after the first frame, so
+    // it never competes with initial layout.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+      _precacheCoinIcons(sdk).ignore();
+    });
   }
 
   /// Hides the native app launch loader. Currently only implemented for web.
@@ -400,55 +406,65 @@ class _MyAppViewState extends State<_MyAppView> {
     }
   }
 
-  Completer<void>? _currentPrecacheOperation;
+  /// Number of icons precached concurrently. Keeps the CDN fetches for
+  /// un-bundled icons overlapping instead of strictly serialized, without
+  /// saturating the connection pool that KDF's own RPCs need.
+  static const int _iconPrecacheBatchSize = 8;
 
-  Future<void> _precacheCoinIcons(KomodoDefiSdk sdk) async {
-    if (_currentPrecacheOperation != null &&
-        !_currentPrecacheOperation!.isCompleted) {
-      // completeError throws an uncaught exception, which causes the UI
-      // tests to fail when switching between light and dark theme
-      log('New request to precache icons started.');
-      _currentPrecacheOperation!.complete();
+  Future<void>? _currentPrecacheOperation;
+
+  Future<void> _precacheCoinIcons(KomodoDefiSdk sdk) {
+    final currentPrecacheOperation = _currentPrecacheOperation;
+    if (currentPrecacheOperation != null) {
+      log('Coin icon precache already started, reusing existing operation.');
+      return currentPrecacheOperation;
     }
 
-    _currentPrecacheOperation = Completer<void>();
+    return _currentPrecacheOperation = _runCoinIconPrecache(sdk);
+  }
 
+  Future<void> _runCoinIconPrecache(KomodoDefiSdk sdk) async {
     try {
       final stopwatch = Stopwatch()..start();
-      final availableAssetIds = sdk.assets.available.keys.where(
-        (assetId) => !excludedAssetList.contains(assetId.symbol.configSymbol),
-      );
 
-      await for (final assetId in Stream.fromIterable(availableAssetIds)) {
-        // TODO: Test if necessary to complete prematurely with error if build
-        // context is stale. Alternatively, we can check if the context is
-        // not mounted and return early with error.
-        // ignore: use_build_context_synchronously
-        // if (context.findRenderObject() == null) {
-        //   _currentPrecacheOperation!.completeError('Build context is stale.');
-        //   return;
-        // }
+      // Deduplicate by the key AssetIcon actually resolves against, so the
+      // ~800 assets collapse to the number of distinct icons. Materialised
+      // because the count is read again below.
+      final seenSymbols = <String>{};
+      final assetIdsToPrecache = sdk.assets.available.keys.where((assetId) {
+        final configSymbol = assetId.symbol.configSymbol;
+        if (excludedAssetList.contains(configSymbol)) return false;
+        return seenSymbols.add(configSymbol.toLowerCase());
+      }).toList();
 
-        // ignore: use_build_context_synchronously
-        await AssetIcon.precacheAssetIcon(
-          context,
-          assetId,
-        ).onError((_, __) => debugPrint('Error precaching coin icon $assetId'));
+      for (
+        var i = 0;
+        i < assetIdsToPrecache.length;
+        i += _iconPrecacheBatchSize
+      ) {
+        if (!mounted) return;
+        final batch = assetIdsToPrecache.skip(i).take(_iconPrecacheBatchSize);
+        await Future.wait(
+          batch.map(
+            // ignore: use_build_context_synchronously
+            (assetId) => AssetIcon.precacheAssetIcon(context, assetId).onError(
+              (_, __) => debugPrint('Error precaching coin icon $assetId'),
+            ),
+          ),
+        );
       }
-
-      _currentPrecacheOperation!.complete();
 
       if (!mounted) return;
       context.read<AnalyticsBloc>().logEvent(
         CoinsDataUpdatedEventData(
           updateSource: 'remote',
           updateDurationMs: stopwatch.elapsedMilliseconds,
-          coinsCount: availableAssetIds.length,
+          coinsCount: assetIdsToPrecache.length,
         ),
       );
     } catch (e) {
       log('Error precaching coin icons: $e');
-      _currentPrecacheOperation!.completeError(e);
+      rethrow;
     }
   }
 }

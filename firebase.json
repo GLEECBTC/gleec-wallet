@@ -18,6 +18,23 @@
     //     ]
     //   }
     // ],
+    "headers": [
+      {
+        // Coin icons are a large, rarely-changing set (hundreds of files).
+        // Without this they inherit Firebase's default max-age=3600, so every
+        // repeat visit more than an hour apart re-validates the whole set while
+        // the user is logging in. Flutter web assets are not content-hashed, so
+        // this is a bounded TTL rather than `immutable`: a stale icon degrades
+        // gracefully through AssetIcon's bundled -> CDN -> fallback chain.
+        "source": "/assets/packages/komodo_defi_framework/assets/coin_icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=2592000"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",
