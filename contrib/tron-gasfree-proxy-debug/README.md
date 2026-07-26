@@ -169,6 +169,7 @@ docker compose up -d --force-recreate proxy
 ```
 It launches the app with:
 ```
+--dart-define=TRON_GASLESS_ENABLED=true
 --dart-define=TRON_GASLESS_BASE_URL=http://localhost:6150/gasfree/tron
 --dart-define=TRON_GASLESS_SERVICE_PROVIDER=<provider>
 ```

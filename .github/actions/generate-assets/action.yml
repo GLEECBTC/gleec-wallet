@@ -72,6 +72,10 @@ inputs:
     description: "HTTPS endpoint for the short-lived GasFree receive control document"
     required: false
     default: ""
+  TRON_GASLESS_REQUIRED_NETWORK:
+    description: "Optional deployment-policy restriction for the GasFree network path (tron/nile)"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -114,6 +118,8 @@ runs:
         TRON_GASLESS_BASE_URL: ${{ inputs.TRON_GASLESS_BASE_URL }}
         TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
         TRON_GASLESS_CONTROL_URL: ${{ inputs.TRON_GASLESS_CONTROL_URL }}
+        TRON_GASLESS_REQUIRED_NETWORK: ${{ inputs.TRON_GASLESS_REQUIRED_NETWORK }}
+        TRON_GASLESS_CONFIG_VALIDATOR: ${{ github.action_path }}/../../scripts/validate_tron_gasless_config.sh
       run: |
         echo "Running \`flutter build\` to generate assets for the deployment build"
 
@@ -133,40 +139,17 @@ runs:
         BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"
         BUILD_CMD="$BUILD_CMD --dart-define=BUILD_DATE=$BUILD_DATE"
 
+        # Validate every supplied public endpoint before it can enter a build,
+        # even when its corresponding kill switch is disabled.
+        bash "$TRON_GASLESS_CONFIG_VALIDATOR"
+
         if [ "$TRON_GASLESS_ENABLED" = "true" ]; then
-          if [ -z "$TRON_GASLESS_BASE_URL" ] || [ -z "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
-            echo "Error: enabled TRON GasFree builds require a base URL and pinned service provider."
-            exit 1
-          fi
-          if [[ ! "$TRON_GASLESS_BASE_URL" =~ ^https://[^/?#]+(/[^?#]*)?/(tron|nile)/?$ ]]; then
-            echo "Error: TRON_GASLESS_BASE_URL must be an HTTPS tron/nile endpoint without credentials, query, or fragment."
-            exit 1
-          fi
-          if [[ ! "$TRON_GASLESS_SERVICE_PROVIDER" =~ ^T[1-9A-HJ-NP-Za-km-z]{33}$ ]]; then
-            echo "Error: TRON_GASLESS_SERVICE_PROVIDER is not a valid pinned TRON address."
-            exit 1
-          fi
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=true"
         else
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=false"
         fi
 
         if [ "$TRON_GASLESS_RECEIVE_ENABLED" = "true" ]; then
-          if [ "$TRON_GASLESS_ENABLED" != "true" ]; then
-            echo "Error: TRON GasFree Receive requires TRON_GASLESS_ENABLED=true."
-            exit 1
-          fi
-          if [ -z "$TRON_GASLESS_CONTROL_URL" ]; then
-            echo "Error: enabled TRON GasFree Receive builds require a runtime control URL."
-            exit 1
-          fi
-          if { [[ ! "$TRON_GASLESS_CONTROL_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$ ]] ||
-             [[ "$TRON_GASLESS_CONTROL_URL" == *"%"* ]] ||
-             [[ "$TRON_GASLESS_CONTROL_URL" == *"/../"* ]] ||
-             [[ "$TRON_GASLESS_CONTROL_URL" == *"/./"* ]]; }; then
-            echo "Error: TRON_GASLESS_CONTROL_URL must be a strict HTTPS path without credentials, query, fragment, encoding, or dot segments."
-            exit 1
-          fi
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true"
         else
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=false"
@@ -177,7 +160,7 @@ runs:
         fi
 
         if [ -n "$TRON_GASLESS_BASE_URL" ]; then
-          echo "Adding TRON GasFree proxy configuration: $TRON_GASLESS_BASE_URL"
+          echo "Adding validated TRON GasFree proxy configuration"
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_BASE_URL=$TRON_GASLESS_BASE_URL"
         else
           echo "Warning: TRON_GASLESS_BASE_URL is empty; gas-free TRON will be disabled for this build."
@@ -295,7 +278,7 @@ runs:
 
         # Run flutter build and capture its output
         flutter pub get --enforce-lockfile
-        echo "Running build command: $BUILD_CMD"
+        echo "Running configured Flutter build"
         set +e  # Don't exit immediately on error
         $BUILD_CMD
         exit_status=$?
@@ -306,4 +289,5 @@ runs:
             echo "Flutter build exited with status $exit_status"
             exit $exit_status
         fi
+
         echo "Done fetching packages and generating assets"

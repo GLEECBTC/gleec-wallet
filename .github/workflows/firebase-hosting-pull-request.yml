@@ -68,10 +68,25 @@ jobs:
           MATOMO_URL: ${{ secrets.MATOMO_URL }}
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
           ANALYTICS_DISABLED: true
+          # Feature previews are the internal GasFree canary. Public endpoint
+          # and provider-pin values are managed as repository variables.
+          TRON_GASLESS_ENABLED: "true"
+          TRON_GASLESS_RECEIVE_ENABLED: ${{ vars.TRON_GASLESS_RECEIVE_ENABLED || 'false' }}
+          TRON_GASLESS_BASE_URL: ${{ vars.TRON_GASLESS_BASE_URL }}
+          TRON_GASLESS_SERVICE_PROVIDER: ${{ vars.TRON_GASLESS_SERVICE_PROVIDER }}
+          TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
+          TRON_GASLESS_REQUIRED_NETWORK: "nile"
 
       - name: Validate build
         id: validate_build
         uses: ./.github/actions/validate-build
+        with:
+          EXPECTED_TRON_GASLESS_ENABLED: "true"
+          EXPECTED_TRON_GASLESS_RECEIVE_ENABLED: ${{ vars.TRON_GASLESS_RECEIVE_ENABLED || 'false' }}
+          EXPECTED_TRON_GASLESS_BASE_URL: ${{ vars.TRON_GASLESS_BASE_URL }}
+          EXPECTED_TRON_GASLESS_SERVICE_PROVIDER: ${{ vars.TRON_GASLESS_SERVICE_PROVIDER }}
+          EXPECTED_TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
+          EXPECTED_TRON_GASLESS_NETWORK: "nile"
 
       - name: Deploy Gleec Wallet web feature preview (Expires in 7 days)
         id: deploy_preview

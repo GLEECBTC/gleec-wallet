@@ -1,6 +1,14 @@
 name: "Validate build"
 description: "Checks that all the necessary files are present in the build directory"
 inputs:
+  EXPECTED_TRON_GASLESS_ENABLED:
+    description: "Whether the compiled Flutter web build must enable GasFree send"
+    required: false
+    default: "false"
+  EXPECTED_TRON_GASLESS_RECEIVE_ENABLED:
+    description: "Whether the compiled Flutter web build must enable GasFree receive"
+    required: false
+    default: "false"
   EXPECTED_TRON_GASLESS_BASE_URL:
     description: "TRON GasFree provider base URL expected in the compiled Flutter web build"
     required: false
@@ -13,6 +21,10 @@ inputs:
     description: "GasFree receive control endpoint expected in the compiled Flutter web build"
     required: false
     default: ""
+  EXPECTED_TRON_GASLESS_NETWORK:
+    description: "Optional deployment-policy restriction for the GasFree network path (tron/nile)"
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -20,6 +32,14 @@ runs:
       id: validate
       continue-on-error: false
       shell: bash
+      env:
+        TRON_GASLESS_ENABLED: ${{ inputs.EXPECTED_TRON_GASLESS_ENABLED }}
+        TRON_GASLESS_RECEIVE_ENABLED: ${{ inputs.EXPECTED_TRON_GASLESS_RECEIVE_ENABLED }}
+        TRON_GASLESS_BASE_URL: ${{ inputs.EXPECTED_TRON_GASLESS_BASE_URL }}
+        TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.EXPECTED_TRON_GASLESS_SERVICE_PROVIDER }}
+        TRON_GASLESS_CONTROL_URL: ${{ inputs.EXPECTED_TRON_GASLESS_CONTROL_URL }}
+        TRON_GASLESS_REQUIRED_NETWORK: ${{ inputs.EXPECTED_TRON_GASLESS_NETWORK }}
+        TRON_GASLESS_CONFIG_VALIDATOR: ${{ github.action_path }}/../../scripts/validate_tron_gasless_config.sh
       run: |
         SDK_KDF_ASSETS_DIR=build/web/assets/packages/komodo_defi_framework
 
@@ -51,25 +71,54 @@ runs:
           exit 1
         fi
 
-        EXPECTED_TRON_GASLESS_BASE_URL="${{ inputs.EXPECTED_TRON_GASLESS_BASE_URL }}"
-        EXPECTED_TRON_GASLESS_SERVICE_PROVIDER="${{ inputs.EXPECTED_TRON_GASLESS_SERVICE_PROVIDER }}"
-        EXPECTED_TRON_GASLESS_CONTROL_URL="${{ inputs.EXPECTED_TRON_GASLESS_CONTROL_URL }}"
+        bash "$TRON_GASLESS_CONFIG_VALIDATOR"
 
-        if [ -n "$EXPECTED_TRON_GASLESS_BASE_URL" ] && ! grep -Fq "$EXPECTED_TRON_GASLESS_BASE_URL" "$APP_JS"; then
+        case "$TRON_GASLESS_ENABLED:$TRON_GASLESS_RECEIVE_ENABLED" in
+          false:false)
+            EXPECTED_GASLESS_BUILD_POLICY_MARKER='gleec-gasfree-build-policy-v1:send=disabled;receive=disabled'
+            ;;
+          true:false)
+            EXPECTED_GASLESS_BUILD_POLICY_MARKER='gleec-gasfree-build-policy-v1:send=enabled;receive=disabled'
+            ;;
+          false:true)
+            EXPECTED_GASLESS_BUILD_POLICY_MARKER='gleec-gasfree-build-policy-v1:send=disabled;receive=enabled'
+            ;;
+          true:true)
+            EXPECTED_GASLESS_BUILD_POLICY_MARKER='gleec-gasfree-build-policy-v1:send=enabled;receive=enabled'
+            ;;
+        esac
+
+        if ! grep -Fq "$EXPECTED_GASLESS_BUILD_POLICY_MARKER" "$APP_JS"; then
+          echo "Error: Compiled GasFree switches do not match the expected build policy marker."
+          exit 1
+        fi
+
+        gasless_build_policy_markers=(
+          'gleec-gasfree-build-policy-v1:send=disabled;receive=disabled'
+          'gleec-gasfree-build-policy-v1:send=enabled;receive=disabled'
+          'gleec-gasfree-build-policy-v1:send=disabled;receive=enabled'
+          'gleec-gasfree-build-policy-v1:send=enabled;receive=enabled'
+        )
+        for marker in "${gasless_build_policy_markers[@]}"; do
+          if [ "$marker" != "$EXPECTED_GASLESS_BUILD_POLICY_MARKER" ] &&
+             grep -Fq "$marker" "$APP_JS"; then
+            echo "Error: Web build contains a conflicting GasFree build policy marker."
+            exit 1
+          fi
+        done
+
+        if [ -n "$TRON_GASLESS_BASE_URL" ] && ! grep -Fq "$TRON_GASLESS_BASE_URL" "$APP_JS"; then
           echo "Error: Web build is not configured with the expected TRON GasFree proxy."
-          echo "Expected TRON_GASLESS_BASE_URL=$EXPECTED_TRON_GASLESS_BASE_URL"
           exit 1
         fi
 
-        if [ -n "$EXPECTED_TRON_GASLESS_SERVICE_PROVIDER" ] && ! grep -Fq "$EXPECTED_TRON_GASLESS_SERVICE_PROVIDER" "$APP_JS"; then
+        if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ] && ! grep -Fq "$TRON_GASLESS_SERVICE_PROVIDER" "$APP_JS"; then
           echo "Error: Web build is not configured with the expected TRON GasFree service provider."
-          echo "Expected TRON_GASLESS_SERVICE_PROVIDER=$EXPECTED_TRON_GASLESS_SERVICE_PROVIDER"
           exit 1
         fi
 
-        if [ -n "$EXPECTED_TRON_GASLESS_CONTROL_URL" ] && ! grep -Fq "$EXPECTED_TRON_GASLESS_CONTROL_URL" "$APP_JS"; then
+        if [ -n "$TRON_GASLESS_CONTROL_URL" ] && ! grep -Fq "$TRON_GASLESS_CONTROL_URL" "$APP_JS"; then
           echo "Error: Web build is missing the expected TRON GasFree receive control endpoint."
-          echo "Expected TRON_GASLESS_CONTROL_URL=$EXPECTED_TRON_GASLESS_CONTROL_URL"
           exit 1
         fi
 
@@ -85,8 +134,8 @@ runs:
           fi
         done
 
-        if [ -n "$EXPECTED_TRON_GASLESS_BASE_URL" ]; then
-          echo "TRON GasFree build configuration verified: $EXPECTED_TRON_GASLESS_BASE_URL"
+        if [ -n "$TRON_GASLESS_BASE_URL" ]; then
+          echo "TRON GasFree build configuration and switches verified."
         else
           echo "TRON GasFree endpoint is not embedded in this disabled-by-default build."
         fi
