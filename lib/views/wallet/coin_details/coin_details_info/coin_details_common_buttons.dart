@@ -611,7 +611,7 @@ class CoinDetailsReceiveButton extends StatelessWidget {
   }
 }
 
-class CoinDetailsSendButton extends StatelessWidget {
+class CoinDetailsSendButton extends StatefulWidget {
   const CoinDetailsSendButton({
     required this.isMobile,
     required this.coin,
@@ -626,7 +626,37 @@ class CoinDetailsSendButton extends StatelessWidget {
   final BuildContext context;
 
   @override
+  State<CoinDetailsSendButton> createState() => _CoinDetailsSendButtonState();
+}
+
+class _CoinDetailsSendButtonState extends State<CoinDetailsSendButton> {
+  /// Held for the widget's lifetime - see [CoinBalance] for why creating this
+  /// in [build] restarts the SDK balance watcher on every rebuild.
+  late Stream<BalanceInfo> _balanceStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceStream = RepositoryProvider.of<KomodoDefiSdk>(
+      context,
+    ).balances.watchBalance(widget.coin.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant CoinDetailsSendButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coin.id != widget.coin.id) {
+      _balanceStream = RepositoryProvider.of<KomodoDefiSdk>(
+        context,
+      ).balances.watchBalance(widget.coin.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final coin = widget.coin;
+    final isMobile = widget.isMobile;
+    final selectWidget = widget.selectWidget;
     final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
     final ThemeData themeData = Theme.of(context);
     final walletType = context
@@ -659,7 +689,7 @@ class CoinDetailsSendButton extends StatelessWidget {
     // it does not by itself imply the coin is active in the current session.
     return StreamBuilder<BalanceInfo>(
       initialData: sdk.balances.lastKnown(coin.id),
-      stream: sdk.balances.watchBalance(coin.id),
+      stream: _balanceStream,
       builder: (context, snapshot) {
         // Fall back to the last known balance on a transient stream error
         // (e.g. wallet change) so a funded button does not flicker to disabled.
