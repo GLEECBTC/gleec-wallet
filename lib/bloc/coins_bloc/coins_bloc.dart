@@ -62,6 +62,10 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   /// for the same coin collapse into a single SDK fetch.
   final Set<String> _pubkeyRequestsInFlight = <String>{};
 
+  /// Wallet whose initial activation is currently running, used to ignore a
+  /// duplicate [CoinsSessionStarted] for the same wallet.
+  String? _activatingWalletId;
+
   @override
   Future<void> close() async {
     await _enabledCoinsSubscription?.cancel();
@@ -398,13 +402,32 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsSessionStarted event,
     Emitter<CoinsState> emit,
   ) async {
+    final Wallet signedInWallet = event.signedInUser.wallet;
+
+    // Defensive idempotency. A duplicate sign-in event for the wallet that is
+    // already activating would flush the coin cache (cancelling every balance
+    // watcher registered so far) and re-seed every row as `activating`, i.e.
+    // restart the whole load in front of the user. restartable() does not help:
+    // this handler has no await, so a duplicate runs a second pass rather than
+    // cancelling the first. An actual wallet switch still falls through and
+    // flushes, which is correct.
+    if (_isInitialActivationInProgress &&
+        _activatingWalletId == signedInWallet.id) {
+      _log.info(
+        'Ignoring duplicate CoinsSessionStarted for ${signedInWallet.id}: '
+        'initial activation already in progress',
+      );
+      return;
+    }
+
     _isInitialActivationInProgress = true;
+    _activatingWalletId = signedInWallet.id;
     try {
       // Ensure any cached addresses/pubkeys from a previous wallet are cleared
       // so that UI fetches fresh pubkeys for the newly logged-in wallet.
       emit(state.copyWith(pubkeys: {}));
       _coinsRepo.flushCache();
-      final Wallet currentWallet = event.signedInUser.wallet;
+      final Wallet currentWallet = signedInWallet;
 
       // Start off by emitting the newly activated coins so that they all appear
       // in the list at once, rather than one at a time as they are activated
@@ -427,10 +450,12 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
           _log.shout('Error during initial coin activation', e, s);
         } finally {
           _isInitialActivationInProgress = false;
+          _activatingWalletId = null;
         }
       }());
     } catch (e, s) {
       _isInitialActivationInProgress = false;
+      _activatingWalletId = null;
       _log.shout('Error on login', e, s);
     }
   }
@@ -546,6 +571,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
   void _resetInitialActivationState() {
     _isInitialActivationInProgress = false;
+    _activatingWalletId = null;
     _pubkeyRequestsInFlight.clear();
   }
 

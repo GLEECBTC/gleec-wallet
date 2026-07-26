@@ -58,6 +58,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
       WalletsManagerExistWalletAction.none;
   bool _initialHdMode = false;
   bool _rememberMe = false;
+  bool _didHandleSuccessfulLogin = false;
 
   @override
   void initState() {
@@ -75,6 +76,8 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthBlocState>(
+      listenWhen: (previous, current) =>
+          previous.mode != current.mode || previous.isError != current.isError,
       listener: (context, state) {
         if (state.mode == AuthorizeMode.logIn) {
           _onLogIn();
@@ -539,6 +542,17 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   }
 
   void _onLogIn() {
+    // A second successful-login delivery must not re-dispatch
+    // CoinsSessionStarted: that handler flushes the coin cache (cancelling
+    // every balance watcher registered so far) and re-seeds every row as
+    // `activating`, so the user watches the wallet restart from scratch
+    // mid-load. restartable() does not protect against this - _onLogin has no
+    // await, so a duplicate starts a second pass rather than cancelling the
+    // first. Mirrors the guard already shipped for Trezor in
+    // hardware_wallets_manager.dart.
+    if (_didHandleSuccessfulLogin) return;
+    _didHandleSuccessfulLogin = true;
+
     final currentUser = context.read<AuthBloc>().state.currentUser;
     final currentWallet = currentUser?.wallet;
     final action = _action;
