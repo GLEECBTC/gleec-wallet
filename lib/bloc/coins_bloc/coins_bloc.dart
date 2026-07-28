@@ -29,6 +29,17 @@ const Duration _loginActivationMaxRetryDelay = Duration(seconds: 2);
 const int _defaultActivationRetryAttempts = 15;
 const Duration _defaultActivationMaxRetryDelay = Duration(seconds: 10);
 
+/// Bounded retry budget for a single [CoinsPubkeysRequested].
+///
+/// The dispatch is driven by activation-state broadcasts, and those only fire
+/// on a state *transition*. Once a coin has settled on `active` there is no
+/// further trigger, so a fetch that fails is never retried by the caller - the
+/// coin's addresses would stay missing for the rest of the session. (The
+/// previous itemBuilder dispatch happened to retry forever, which is what made
+/// dropping the error survivable there.) Retry here instead.
+const int _pubkeyFetchAttempts = 3;
+const Duration _pubkeyFetchRetryDelay = Duration(seconds: 2);
+
 /// Responsible for coin activation, deactivation, syncing, and fiat price
 class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   CoinsBloc(this._kdfSdk, this._coinsRepo, this._tradingStatusService)
@@ -107,13 +118,45 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
     try {
       // Get pubkeys from the SDK through the repo
-      final asset = _kdfSdk.assets.available[coin.id]!;
-      final pubkeys = await _kdfSdk.pubkeys.getPubkeys(asset);
+      final asset = _kdfSdk.assets.available[coin.id];
+      if (asset == null) {
+        _log.warning('No SDK asset for ${event.coinId}, cannot fetch pubkeys');
+        return;
+      }
 
-      // Update state with new pubkeys
-      emit(state.copyWith(pubkeys: {...state.pubkeys, event.coinId: pubkeys}));
-    } catch (e, s) {
-      _log.shout('Failed to get pubkeys for ${event.coinId}', e, s);
+      for (var attempt = 1; attempt <= _pubkeyFetchAttempts; attempt++) {
+        if (isClosed) return;
+        try {
+          final pubkeys = await _kdfSdk.pubkeys.getPubkeys(asset);
+          if (isClosed) return;
+
+          // The coin may have been deactivated while the fetch was in flight.
+          if (!(state.walletCoins[event.coinId]?.isActive ?? false)) return;
+
+          // Update state with new pubkeys
+          emit(
+            state.copyWith(pubkeys: {...state.pubkeys, event.coinId: pubkeys}),
+          );
+          return;
+        } catch (e, s) {
+          if (attempt >= _pubkeyFetchAttempts) {
+            _log.shout(
+              'Failed to get pubkeys for ${event.coinId} after $attempt '
+              'attempts',
+              e,
+              s,
+            );
+            return;
+          }
+          _log.warning(
+            'Pubkeys attempt $attempt/$_pubkeyFetchAttempts failed for '
+            '${event.coinId}, retrying',
+            e,
+            s,
+          );
+          await Future<void>.delayed(_pubkeyFetchRetryDelay * attempt);
+        }
+      }
     } finally {
       _pubkeyRequestsInFlight.remove(event.coinId);
     }
