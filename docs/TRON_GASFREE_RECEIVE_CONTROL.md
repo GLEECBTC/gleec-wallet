@@ -54,11 +54,17 @@ additional receive kill switch. Builds may explicitly set either switch to
 `false`, but Receive cannot be enabled unless the primary GasFree switch is
 also enabled. Enabled builds require complete, valid provider configuration.
 
-An approved production rollout must pass environment-scoped
-`TRON_GASLESS_BASE_URL` and `TRON_GASLESS_SERVICE_PROVIDER` values into the
-build action. Receive-enabled builds must also pass
-`TRON_GASLESS_CONTROL_URL`. Feature-switch defaults do not waive artifact
-provenance, provider binding, canary, or Product/Design approval requirements.
+The public mainnet proxy URL and provider pin are version-controlled in the
+GasFree preview workflows. They are deliberately not GitHub repository
+variables: changing either identity is security-sensitive and must leave a
+reviewed source diff. The release master must pass the same values explicitly
+to a manual CI-server build, as documented in
+[`TRON_GASFREE_KDF_HANDOVER.md`](TRON_GASFREE_KDF_HANDOVER.md).
+
+The feature switches and Receive control URL remain operational inputs. A
+Receive-enabled build must also pass a real `TRON_GASLESS_CONTROL_URL`.
+Feature-switch defaults do not waive artifact provenance, provider binding,
+canary, or Product/Design approval requirements.
 
 ## Endpoint contract
 

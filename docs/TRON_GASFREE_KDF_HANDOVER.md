@@ -63,6 +63,63 @@ Expected archives:
 - Wallet BLoCs own product gating and localized state mapping. They do not
   parse raw RPC JSON or provider strings.
 
+## Mainnet deployment and release-master hand-over
+
+The approved public mainnet deployment identity is:
+
+| Setting | Value |
+| --- | --- |
+| `TRON_GASLESS_BASE_URL` | `https://quicknode.gleec.com/gasfree/tron` |
+| `TRON_GASLESS_SERVICE_PROVIDER` | `TLntW9Z59LYY5KEi9cmwk3PKjQga828ird` |
+
+These values are public but security-sensitive. They are version-controlled in
+the Firebase and SDK-integration preview workflows instead of GitHub repository
+variables, so provider changes require a reviewed commit and cannot be caused
+by a missing or out-of-band variable update. Secrets do not belong in either
+value.
+
+The release master performs final builds manually on the CI server. For an
+approved mainnet GasFree send build, append all of the following compile-time
+defines to the existing target-specific `flutter build` command:
+
+```sh
+--dart-define=TRON_GASLESS_ENABLED=true \
+--dart-define=TRON_GASLESS_RECEIVE_ENABLED=false \
+--dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+--dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+```
+
+Before building, validate the exact release environment:
+
+```sh
+TRON_GASLESS_ENABLED=true \
+TRON_GASLESS_RECEIVE_ENABLED=false \
+TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird \
+TRON_GASLESS_CONTROL_URL= \
+TRON_GASLESS_REQUIRED_NETWORK=tron \
+bash .github/scripts/validate_tron_gasless_config.sh
+```
+
+`String.fromEnvironment` values are compiled into the application, so setting
+these variables only in the shell without forwarding the matching
+`--dart-define` arguments is insufficient.
+
+Receive remains fail-closed until an actual HTTPS control service is deployed
+with the documented short-lived response contract. The
+`https://controls.gleec.com/v1/gasfree` value used by validation fixtures is a
+non-production example and currently does not resolve; it must not be supplied
+to a release. When Receive is separately approved, the release master must set
+`TRON_GASLESS_RECEIVE_ENABLED=true`, provide the reviewed production
+`TRON_GASLESS_CONTROL_URL`, rerun the validator, and verify the fresh control
+document before promotion.
+
+The mainnet proxy and upstream provider-list endpoints return `401` to unsigned
+`curl` requests by design. The pinned provider address above is the provider
+captured from the authenticated Gleec GasFree account and used by the amended
+KDF provider-list fixture. KDF revalidates the pin against
+`/api/v1/config/provider/all` on the first GasFree operation.
+
 ## Removed compatibility mechanisms
 
 - `gasless::configure` and restart fallback invocation;

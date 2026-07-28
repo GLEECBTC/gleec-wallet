@@ -15,6 +15,13 @@ permissions:
   issues: write
   pull-requests: write
 
+# These are public, security-sensitive mainnet identities rather than secrets or
+# rollout controls. Keep them version-controlled so a missing or out-of-band
+# repository variable cannot silently change the provider used by a preview.
+env:
+  TRON_GASLESS_MAINNET_BASE_URL: "https://quicknode.gleec.com/gasfree/tron"
+  TRON_GASLESS_MAINNET_SERVICE_PROVIDER: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+
 # Cancel an in-flight preview build when a new commit is pushed to the same PR,
 # so two runs never race to create/update the same Firebase preview channel.
 concurrency:
@@ -68,12 +75,13 @@ jobs:
           MATOMO_URL: ${{ secrets.MATOMO_URL }}
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
           ANALYTICS_DISABLED: true
-          # Feature previews are the internal GasFree canary. Public endpoint
-          # and provider-pin values are managed as repository variables.
+          # Feature previews are the internal GasFree canary. Rollout controls
+          # remain repository variables; the reviewed public provider identity
+          # is pinned in this workflow.
           TRON_GASLESS_ENABLED: "true"
           TRON_GASLESS_RECEIVE_ENABLED: ${{ vars.TRON_GASLESS_RECEIVE_ENABLED || 'false' }}
-          TRON_GASLESS_BASE_URL: ${{ vars.TRON_GASLESS_BASE_URL }}
-          TRON_GASLESS_SERVICE_PROVIDER: ${{ vars.TRON_GASLESS_SERVICE_PROVIDER }}
+          TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
+          TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
           TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
           TRON_GASLESS_REQUIRED_NETWORK: "tron"
 
@@ -83,8 +91,8 @@ jobs:
         with:
           EXPECTED_TRON_GASLESS_ENABLED: "true"
           EXPECTED_TRON_GASLESS_RECEIVE_ENABLED: ${{ vars.TRON_GASLESS_RECEIVE_ENABLED || 'false' }}
-          EXPECTED_TRON_GASLESS_BASE_URL: ${{ vars.TRON_GASLESS_BASE_URL }}
-          EXPECTED_TRON_GASLESS_SERVICE_PROVIDER: ${{ vars.TRON_GASLESS_SERVICE_PROVIDER }}
+          EXPECTED_TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
+          EXPECTED_TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
           EXPECTED_TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
           EXPECTED_TRON_GASLESS_NETWORK: "tron"
 
