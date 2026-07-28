@@ -429,11 +429,17 @@ class _MyAppViewState extends State<_MyAppView> {
 
       // Deduplicate by the key AssetIcon actually resolves against, so the
       // ~800 assets collapse to the number of distinct icons. Materialised
-      // because the count is read again below.
+      // because it is iterated in batches below.
+      //
+      // `coinsCount` below deliberately stays the number of *assets* covered,
+      // not the deduplicated icon count, so the analytics series remains
+      // comparable across this change.
       final seenSymbols = <String>{};
+      var coveredAssetCount = 0;
       final assetIdsToPrecache = sdk.assets.available.keys.where((assetId) {
         final configSymbol = assetId.symbol.configSymbol;
         if (excludedAssetList.contains(configSymbol)) return false;
+        coveredAssetCount++;
         return seenSymbols.add(configSymbol.toLowerCase());
       }).toList();
 
@@ -459,7 +465,7 @@ class _MyAppViewState extends State<_MyAppView> {
         CoinsDataUpdatedEventData(
           updateSource: 'remote',
           updateDurationMs: stopwatch.elapsedMilliseconds,
-          coinsCount: assetIdsToPrecache.length,
+          coinsCount: coveredAssetCount,
         ),
       );
     } catch (e) {
