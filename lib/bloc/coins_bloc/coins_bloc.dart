@@ -519,15 +519,24 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     _resetInitialActivationState();
     add(CoinsBalanceMonitoringStopped());
 
+    // Flush before rebuilding the catalogue below, so the fresh Coin objects
+    // are built against an empty balance cache rather than re-reading the
+    // signed-out wallet's balances.
+    _coinsRepo.flushCache();
+
     emit(
       state.copyWith(
         walletCoins: {},
+        // Rebuild rather than carrying the signed-out wallet's Coin objects
+        // forward: their balances belong to that wallet, and
+        // _prePopulateListWithActivatingCoins seeds the next session's rows
+        // from this map.
+        coins: _coinsRepo.getKnownCoinsMap(),
         // Clear pubkeys to avoid showing addresses from the previous wallet
         // after logout or wallet switch.
         pubkeys: {},
       ),
     );
-    _coinsRepo.flushCache();
   }
 
   void _scheduleInitialBalanceRefresh(Iterable<String> coinsToActivate) {
