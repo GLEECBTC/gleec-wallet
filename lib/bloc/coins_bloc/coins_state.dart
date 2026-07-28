@@ -50,6 +50,27 @@ class CoinsState extends Equatable {
   }
 
   static Map<String, Coin> _filterExcludedAssets(Map<String, Coin> coins) {
+    // Return the input untouched when there is nothing to strip.
+    //
+    // `Map.fromEntries` always allocated a new map, so every state carried maps
+    // that were never `identical` to the previous state's - which defeats
+    // `Bloc.emit`'s identity short-circuit and forces Equatable into a deep
+    // walk of both ~800-entry catalogues (each `Coin` recursing into its
+    // `parentCoin`) on every emission, dozens of times during login, only to
+    // conclude "unchanged".
+    //
+    // `excludedAssetList` is a const set and callers pass maps that have
+    // already been through this filter, so the common case is a pure scan with
+    // no allocation.
+    var hasExcluded = false;
+    for (final coinId in coins.keys) {
+      if (excludedAssetList.contains(coinId)) {
+        hasExcluded = true;
+        break;
+      }
+    }
+    if (!hasExcluded) return coins;
+
     return Map.fromEntries(
       coins.entries.where((entry) {
         final coinId = entry.key;
