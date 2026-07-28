@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:logging/logging.dart';
 import 'package:web_dex/analytics/events/user_acquisition_events.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -51,6 +52,8 @@ class IguanaWalletsManager extends StatefulWidget {
 }
 
 class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
+  static final _log = Logger('IguanaWalletsManager');
+
   bool _isLoading = false;
   WalletsManagerAction _action = WalletsManagerAction.none;
   Wallet? _selectedWallet;
@@ -555,34 +558,45 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     // first. Mirrors the guard already shipped for Trezor in
     // hardware_wallets_manager.dart.
     if (_didHandleSuccessfulLogin) return;
-    _didHandleSuccessfulLogin = true;
 
+    // Latch only once the work it guards has actually been done. Setting it
+    // above the guard below would let a delivery that arrives before the user
+    // is readable consume the one chance to dispatch CoinsSessionStarted, and
+    // the wallet would then never activate anything at all.
     final currentUser = context.read<AuthBloc>().state.currentUser;
     final currentWallet = currentUser?.wallet;
+    if (currentUser == null || currentWallet == null) {
+      _log.severe(
+        'Login listener fired with mode=logIn but no current user; not '
+        'dispatching CoinsSessionStarted',
+      );
+      return;
+    }
+    _didHandleSuccessfulLogin = true;
+
     final action = _action;
     _action = WalletsManagerAction.none;
-    if (currentUser != null && currentWallet != null) {
-      final analyticsBloc = context.read<AnalyticsBloc>();
-      final source = isMobile ? 'mobile' : 'desktop';
-      final walletType = currentWallet.config.type.name;
-      if (action == WalletsManagerAction.create) {
-        analyticsBloc.add(
-          AnalyticsWalletCreatedEvent(source: source, hdType: walletType),
-        );
-      } else if (action == WalletsManagerAction.import) {
-        analyticsBloc.add(
-          AnalyticsWalletImportedEvent(
-            source: source,
-            importType: 'seed_phrase',
-            hdType: walletType,
-          ),
-        );
-      }
-      context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
-      unawaited(_updateRememberedWallet(currentUser));
-      TextInput.finishAutofillContext(shouldSave: true);
-      widget.onSuccess(currentWallet);
+
+    final analyticsBloc = context.read<AnalyticsBloc>();
+    final source = isMobile ? 'mobile' : 'desktop';
+    final walletType = currentWallet.config.type.name;
+    if (action == WalletsManagerAction.create) {
+      analyticsBloc.add(
+        AnalyticsWalletCreatedEvent(source: source, hdType: walletType),
+      );
+    } else if (action == WalletsManagerAction.import) {
+      analyticsBloc.add(
+        AnalyticsWalletImportedEvent(
+          source: source,
+          importType: 'seed_phrase',
+          hdType: walletType,
+        ),
+      );
     }
+    context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
+    unawaited(_updateRememberedWallet(currentUser));
+    TextInput.finishAutofillContext(shouldSave: true);
+    widget.onSuccess(currentWallet);
 
     if (mounted) {
       setState(() {
