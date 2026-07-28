@@ -6,14 +6,6 @@ RegExp emailRegex = RegExp(
 );
 const int decimalRange = 8;
 
-const int _activationPollingIntervalMs = int.fromEnvironment(
-  'ACTIVATION_POLLING_INTERVAL_MS',
-  defaultValue: 2000,
-);
-const Duration kActivationPollingInterval = Duration(
-  milliseconds: _activationPollingIntervalMs,
-);
-
 // stored app preferences
 const String storedSettingsKey = '_atomicDexStoredSettings';
 // New settings key to avoid breaking older versions reading the legacy key
