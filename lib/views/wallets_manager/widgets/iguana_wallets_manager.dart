@@ -76,8 +76,12 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthBlocState>(
+      // `status` covers both `isError` and `isLoading`, and the listener
+      // branches on all three. Watching only mode/isError would skip a
+      // `loading()` -> `initial()` transition (dispatched by _cancel() and by
+      // sign-out), leaving the local `_isLoading` spinner stuck on.
       listenWhen: (previous, current) =>
-          previous.mode != current.mode || previous.isError != current.isError,
+          previous.mode != current.mode || previous.status != current.status,
       listener: (context, state) {
         if (state.mode == AuthorizeMode.logIn) {
           _onLogIn();
