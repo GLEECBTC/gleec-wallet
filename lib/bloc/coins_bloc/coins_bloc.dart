@@ -40,6 +40,34 @@ const Duration _defaultActivationMaxRetryDelay = Duration(seconds: 10);
 const int _pubkeyFetchAttempts = 3;
 const Duration _pubkeyFetchRetryDelay = Duration(seconds: 2);
 
+/// How long [_onCoinsStarted] waits for the geo/trading status before
+/// populating the coin catalogue anyway. [TradingStatusService.initialize]
+/// completes its completer on both the success and the failure path, but the
+/// underlying `fetchStatus()` has no timeout of its own, so a black-holed
+/// endpoint would otherwise block startup indefinitely.
+const Duration _initialTradingStatusTimeout = Duration(seconds: 10);
+
+/// Delays for the post-fan-out reconciliation passes.
+///
+/// Two passes, because the two failure classes they repair settle on different
+/// timelines. The first is long enough for the last in-flight activation
+/// broadcasts to have been processed by [_onWalletCoinUpdated], and short
+/// enough that a user watching a stuck row does not wait long. The second sits
+/// past the pubkey retry budget ([_pubkeyFetchAttempts] with
+/// [_pubkeyFetchRetryDelay] backoff, ~6s plus request time) so a coin whose
+/// address fetch exhausted its retries is picked up rather than skipped while
+/// the request is still in flight.
+const List<Duration> _postActivationReconcileDelays = [
+  Duration(seconds: 2),
+  Duration(seconds: 20),
+];
+
+/// Ceiling on a single SDK call made on the login critical path.
+///
+/// Applies to reads whose only failure mode would otherwise be an unbounded
+/// hang that strands every coin in `activating`.
+const Duration _loginPathRpcTimeout = Duration(seconds: 30);
+
 /// Responsible for coin activation, deactivation, syncing, and fiat price
 class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   CoinsBloc(this._kdfSdk, this._coinsRepo, this._tradingStatusService)
@@ -56,10 +84,34 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     on<CoinsSessionEnded>(_onLogout, transformer: restartable());
     on<CoinsWalletCoinUpdated>(_onWalletCoinUpdated, transformer: sequential());
     on<CoinsBalanceChanged>(_onBalanceChanged, transformer: droppable());
+    on<CoinsActivationReconciled>(
+      _onActivationReconciled,
+      transformer: droppable(),
+    );
     on<CoinsPubkeysRequested>(
       _onCoinsPubkeysRequested,
       transformer: concurrent(),
     );
+
+    // Subscribe here rather than in [_onCoinsStarted].
+    //
+    // [CoinsRepo._broadcastAsset] DROPS an event when the stream has no
+    // listener, and _onCoinsStarted only reached its `listen` calls after
+    // `await _tradingStatusService.initialStatusReady` - a network round trip
+    // with no timeout. A sign-in that lands inside that window ran the whole
+    // activation fan-out against a listener-less stream, so every
+    // `activating -> active` broadcast was discarded: rows stayed on
+    // `activating` forever, CoinsPubkeysRequested was never dispatched (so coin
+    // pages spun indefinitely) and no balance change ever reached the bloc.
+    //
+    // The second CoinsSessionStarted that _onCoinsStarted dispatches used to
+    // paper over this by re-running the whole activation once the subscription
+    // was live; the login idempotency guard (correctly) stopped that, which is
+    // what turned a self-healing race into a permanent stall.
+    //
+    // These are plain stream subscriptions with no async setup, so there is no
+    // reason for them to lag the producers they exist to observe.
+    _listenToRepoBroadcasts();
   }
 
   final KomodoDefiSdk _kdfSdk;
@@ -127,7 +179,14 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       for (var attempt = 1; attempt <= _pubkeyFetchAttempts; attempt++) {
         if (isClosed) return;
         try {
-          final pubkeys = await _kdfSdk.pubkeys.getPubkeys(asset);
+          // Bounded: getPubkeys has no timeout of its own, and a hang here
+          // would leave this coin's id in _pubkeyRequestsInFlight forever,
+          // blocking not just this fetch but every later retry - including the
+          // reconciler's, which is the only thing that would otherwise recover
+          // the coin's addresses.
+          final pubkeys = await _kdfSdk.pubkeys
+              .getPubkeys(asset)
+              .timeout(_loginPathRpcTimeout);
           if (isClosed) return;
 
           // The coin may have been deactivated while the fetch was in flight.
@@ -166,17 +225,32 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsStarted event,
     Emitter<CoinsState> emit,
   ) async {
-    // Wait for trading status service to receive initial status before
-    // populating coins list. This ensures geo-blocked assets are properly
-    // filtered from the start, preventing them from appearing in the UI
-    // before filtering is applied.
+    // Best-effort wait for the initial trading status before populating the
+    // coins list, so geo-blocked assets are not briefly shown before filtering
+    // applies. Cosmetic, and deliberately not a guarantee: the wait is bounded
+    // because a hung or slow geo endpoint must not hold the whole catalogue
+    // hostage. On timeout the catalogue is populated unfiltered - asset-level
+    // filtering keys off AppGeoStatus.disallowedAssets, which defaults to empty
+    // (only disallowedFeatures defaults restrictive), and nothing here re-emits
+    // when the real status lands, so blocked assets stay visible for the
+    // session. Accepted: a stalled bouncer stranding the whole wallet is the
+    // worse failure.
     //
     // TODO: UX Improvement - For faster startup, populate coins immediately
     // and reactively filter when trading status updates arrive. This would
     // eliminate startup delay (~100-500ms) but requires UI to handle dynamic
-    // removal of blocked assets. See TradingStatusService._currentStatus for
-    // related trade-offs.
-    await _tradingStatusService.initialStatusReady;
+    // removal of blocked assets. It would also close the timeout gap above.
+    // See TradingStatusService._currentStatus for related trade-offs.
+    try {
+      await _tradingStatusService.initialStatusReady.timeout(
+        _initialTradingStatusTimeout,
+      );
+    } on TimeoutException {
+      _log.warning(
+        'Trading status not ready after '
+        '${_initialTradingStatusTimeout.inSeconds}s; populating coins anyway',
+      );
+    }
 
     emit(state.copyWith(coins: _coinsRepo.getKnownCoinsMap()));
 
@@ -195,19 +269,21 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       }
       add(CoinsPricesUpdated());
     });
+  }
 
-    // This is used to connect [CoinsBloc] to [CoinsManagerBloc] via [CoinsRepo],
-    // since coins manager bloc activates and deactivates coins using the repository.
-    // Other auto-activation sources, like the DEX, will also use the repository
-    // to activate coins, so this subscription is needed to keep the coins bloc
-    // in sync with the coins manager and other auto-activation sources.
-    await _enabledCoinsSubscription?.cancel();
+  /// Bridges [CoinsRepo]'s broadcast streams into bloc events.
+  ///
+  /// Called from the constructor so the subscriptions are live before anything
+  /// can activate a coin. See the constructor comment for why this must not be
+  /// deferred behind an await.
+  ///
+  /// This connects [CoinsBloc] to [CoinsManagerBloc] via [CoinsRepo], since the
+  /// coins manager activates and deactivates coins through the repository.
+  /// Other auto-activation sources, like the DEX, use the repository too.
+  void _listenToRepoBroadcasts() {
     _enabledCoinsSubscription = _coinsRepo.enabledAssetsChanges.stream.listen(
       (Coin coin) => add(CoinsWalletCoinUpdated(coin)),
     );
-
-    // Subscribe to real-time balance changes from the repository
-    await _balanceChangesSubscription?.cancel();
     _balanceChangesSubscription = _coinsRepo.balanceChanges.stream.listen(
       (Coin coin) => add(CoinsBalanceChanged(coin)),
     );
@@ -274,6 +350,115 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     }
   }
 
+  /// Repairs the bloc's activation view from KDF's authoritative state.
+  ///
+  /// See [CoinsActivationReconciled]. This is the safety net for anything that
+  /// can be lost in transit between [CoinsRepo] and here: a broadcast delivered
+  /// while nothing was listening, a watcher that died, a pubkey fetch that
+  /// exhausted its retries. All three otherwise present identically to the user
+  /// - a row that spins forever - so they need a single, cheap repair path
+  /// rather than three separate ones.
+  Future<void> _onActivationReconciled(
+    CoinsActivationReconciled event,
+    Emitter<CoinsState> emit,
+  ) async {
+    // Deliberately no `walletCoins.isEmpty` early return: an empty wallet list
+    // is the *worst* version of this failure, not a reason to skip. If the rows
+    // were never seeded (or were emitted while nothing was listening) KDF is
+    // still the source of truth and the rows can be rebuilt from it.
+
+    final Set<AssetId> activatedIds;
+    try {
+      // This handler is the safety net for every other stall and is
+      // droppable(), so one stuck call would swallow every later reconcile for
+      // the session. ActivatedAssetsCache bounds the read itself, so a wedged
+      // node surfaces here as a TimeoutException rather than a hang.
+      activatedIds = await _coinsRepo.getActivatedAssetIds(forceRefresh: true);
+    } catch (e, s) {
+      _log.warning(
+        'Activation reconcile: failed to read activated assets',
+        e,
+        s,
+      );
+      return;
+    }
+    if (isClosed) return;
+    if (activatedIds.isEmpty) {
+      // Not necessarily benign: if rows are showing as active, KDF and the UI
+      // now disagree completely. Say so rather than returning in silence -
+      // this is the safety net, and a silent no-op here is exactly the shape
+      // of failure it exists to make visible.
+      if (state.walletCoins.isNotEmpty) {
+        _log.warning(
+          'Activation reconcile: KDF reports no enabled coins while the wallet '
+          'shows ${state.walletCoins.length} row(s); nothing to reconcile '
+          'against',
+        );
+      }
+      return;
+    }
+
+    final activatedStringIds = activatedIds.map((id) => id.id).toSet();
+    final knownCoins = state.coins.isNotEmpty
+        ? state.coins
+        : _coinsRepo.getKnownCoinsMap();
+
+    // Build a new map rather than writing into the one being iterated.
+    final walletCoins = <String, Coin>{};
+    final repaired = <String>[];
+    final restored = <String>[];
+
+    state.walletCoins.forEach((id, coin) {
+      if (coin.isActive || !activatedStringIds.contains(id)) {
+        walletCoins[id] = coin;
+        return;
+      }
+      // KDF has this asset enabled but the `active` broadcast never landed.
+      walletCoins[id] = coin.copyWith(state: CoinState.active);
+      repaired.add(id);
+    });
+
+    for (final assetId in activatedIds) {
+      if (walletCoins.containsKey(assetId.id)) continue;
+      final known = knownCoins[assetId.id];
+      if (known == null) continue;
+      // Enabled in KDF but absent from the wallet list entirely - the row was
+      // never seeded, or was evicted by a suspended broadcast that a later
+      // successful activation never corrected.
+      walletCoins[assetId.id] = known.copyWith(state: CoinState.active);
+      restored.add(assetId.id);
+    }
+
+    if (repaired.isNotEmpty || restored.isNotEmpty) {
+      _log.warning(
+        'Activation reconcile: repaired ${repaired.length} stuck row(s) '
+        '${repaired.join(', ')}; restored ${restored.length} missing row(s) '
+        '${restored.join(', ')}',
+      );
+      emit(state.copyWith(walletCoins: walletCoins));
+    }
+
+    // Re-drive the two things an `active` broadcast would have triggered, for
+    // every active coin - not just the repaired ones. A coin can be correctly
+    // marked active and still be missing its addresses (pubkey retries
+    // exhausted) or its balance watcher (watcher errored out; the subscription
+    // is removed on error/done and never restarted).
+    final activeCoins = walletCoins.values.where((c) => c.isActive).toList();
+
+    for (final coin in activeCoins) {
+      if (!state.pubkeys.containsKey(coin.id.id)) {
+        add(CoinsPubkeysRequested(coin.id.id));
+      }
+    }
+
+    final restarted = _coinsRepo.ensureBalanceWatchers(
+      activeCoins.map((c) => c.id),
+    );
+    if (restarted > 0) {
+      add(CoinsBalancesRefreshed());
+    }
+  }
+
   /// Real-time balance update handler
   Future<void> _onBalanceChanged(
     CoinsBalanceChanged event,
@@ -315,19 +500,62 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   ) async {
     _updateBalancesTimer?.cancel();
     _updateBalancesTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
-      final missingWatcherCount = _coinsRepo
-          .countMissingBalanceWatchersForActiveWalletCoins(state.walletCoins);
-      if (missingWatcherCount == 0) {
-        return;
+      final missingWatcherCount = _reconcileIfWalletUnhealthy();
+
+      // Fallback balance sweep, distinct from the reconcile above: that only
+      // refreshes when it actually restarted a repo-side watcher, which is
+      // false on every tick after the first repair. An asset whose SDK-side
+      // watcher never started - or gave up - would otherwise never have its
+      // balance refreshed again.
+      if (missingWatcherCount > 0) {
+        add(CoinsBalancesRefreshed());
       }
-      if (kDebugElectrumLogs) {
-        _log.info(
-          '[POLLING] Triggering fallback balance refresh (every 3 minutes) '
-          'for $missingWatcherCount active assets without live watchers',
-        );
-      }
-      add(CoinsBalancesRefreshed());
     });
+  }
+
+  /// Reconciles when the wallet is in any of the three ways a row can be stuck.
+  ///
+  /// They are indistinguishable to the user - all three render as a spinner -
+  /// and [_onActivationReconciled] repairs all three:
+  ///  - not `active` this long into the session: a lost broadcast, not a slow
+  ///    activation;
+  ///  - `active` with no live balance updates on either side of the SDK/repo
+  ///    boundary;
+  ///  - `active` with no addresses, i.e. the pubkey fetch exhausted its retries
+  ///    and nothing else would ever re-trigger it.
+  ///
+  /// Returns the SDK-side missing-watcher count - a strict subset of the
+  /// balance-repair count - for the caller's fallback sweep.
+  int _reconcileIfWalletUnhealthy() {
+    final total = state.walletCoins.length;
+    final stalled = state.walletCoins.values
+        .where((coin) => !coin.isActive)
+        .length;
+    final needingBalanceRepair = _coinsRepo.countAssetsNeedingBalanceRepair(
+      state.walletCoins,
+    );
+    final missingWatcherCount = _coinsRepo
+        .countMissingBalanceWatchersForActiveWalletCoins(state.walletCoins);
+    final missingAddresses = state.walletCoins.values
+        .where(
+          (coin) => coin.isActive && !state.pubkeys.containsKey(coin.id.id),
+        )
+        .length;
+
+    // At info so it survives release builds - Logger.root.level is INFO there,
+    // which makes every `fine` diagnostic on this path invisible in production.
+    // Without this line a user's log cannot distinguish "never dispatched" from
+    // "zero allowed coins" from "activated but the broadcast was lost".
+    if (stalled > 0 || needingBalanceRepair > 0 || missingAddresses > 0) {
+      _log.info(
+        'Wallet health: ${total - stalled}/$total active, $stalled stalled, '
+        '$needingBalanceRepair without live balances '
+        '($missingWatcherCount SDK-side), '
+        '$missingAddresses without addresses',
+      );
+      add(CoinsActivationReconciled());
+    }
+    return missingWatcherCount;
   }
 
   Future<void> _onCoinsActivated(
@@ -394,10 +622,22 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     );
     final updatedCoins = Map<String, Coin>.of(currentCoins);
     for (final assetId in coinsToDisable) {
-      final coin = currentWalletCoins[assetId]!;
+      final coin = currentWalletCoins[assetId];
+      if (coin == null) continue;
       updatedCoins[coin.id.id] = coin.copyWith(state: CoinState.inactive);
     }
-    return state.copyWith(walletCoins: updatedWalletCoins, coins: updatedCoins);
+
+    // Drop the addresses too. _onWalletCoinUpdated only requests pubkeys for a
+    // coin that has none, so a stale entry here means a reactivated coin keeps
+    // showing the addresses it had before - and never refetches them.
+    final updatedPubkeys = Map<String, AssetPubkeys>.of(state.pubkeys)
+      ..removeWhere((id, _) => coinsToDisable.contains(id));
+
+    return state.copyWith(
+      walletCoins: updatedWalletCoins,
+      coins: updatedCoins,
+      pubkeys: updatedPubkeys,
+    );
   }
 
   Future<void> _onPricesUpdated(
@@ -465,6 +705,12 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         'Ignoring duplicate CoinsSessionStarted for ${signedInWallet.id}: '
         'initial activation already in progress',
       );
+      // Reconcile rather than no-op. The duplicate used to re-run the whole
+      // fan-out, which incidentally repaired any activation broadcast that was
+      // lost in transit; suppressing it removed that repair. Reconciling costs
+      // one activated-assets read and restores the same guarantee without
+      // restarting the load in front of the user.
+      add(CoinsActivationReconciled());
       return;
     }
 
@@ -481,12 +727,30 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       // in the list at once, rather than one at a time as they are activated
       final coinsToActivate = currentWallet.config.activatedCoins;
 
-      // Filter out blocked coins before activation
+      // Filter out blocked coins before activation.
+      //
+      // Materialised, not lazy: the result is iterated three times below and
+      // findAssetsByConfigId is an O(catalogue) scan, so a lazy iterable meant
+      // three full scans per configured coin.
+      //
+      // `.single` here used to throw on a config id that resolves to more than
+      // one asset, and the throw propagated to _onLogin's catch - aborting the
+      // entire activation with no retry path, for every coin, because of one
+      // ambiguous id. Tolerate it instead: block only if every candidate is
+      // blocked, which is the conservative reading.
       final allowedCoins = coinsToActivate.where((coinId) {
         final assets = _kdfSdk.assets.findAssetsByConfigId(coinId);
         if (assets.isEmpty) return false;
-        return !_tradingStatusService.isAssetBlocked(assets.single.id);
-      });
+        if (assets.length > 1) {
+          _log.warning(
+            'Config id $coinId resolves to ${assets.length} assets '
+            '(${assets.map((a) => a.id.id).join(', ')})',
+          );
+        }
+        return assets.any(
+          (asset) => !_tradingStatusService.isAssetBlocked(asset.id),
+        );
+      }).toList();
 
       emit(_prePopulateListWithActivatingCoins(allowedCoins));
       _scheduleInitialBalanceRefresh(allowedCoins);
@@ -501,8 +765,25 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         } catch (e, s) {
           _log.shout('Error during initial coin activation', e, s);
         } finally {
-          _isInitialActivationInProgress = false;
-          _activatingWalletId = null;
+          // Only clear the guard if this activation is still the current one.
+          // A logout followed by a fresh sign-in can complete this detached
+          // future after the *next* login has claimed the flags; clearing them
+          // blindly would let a duplicate event restart that new session's load.
+          if (_activatingWalletId == signedInWallet.id) {
+            _isInitialActivationInProgress = false;
+            _activatingWalletId = null;
+          }
+        }
+        // The fan-out is done, so every activation broadcast that was going to
+        // arrive has arrived. Anything still not `active` here was lost, not
+        // pending: repair it rather than leaving the row spinning.
+        var elapsed = Duration.zero;
+        for (final delay in _postActivationReconcileDelays) {
+          if (isClosed) return;
+          await Future<void>.delayed(delay - elapsed);
+          if (isClosed) return;
+          elapsed = delay;
+          add(CoinsActivationReconciled());
         }
       }());
     } catch (e, s) {
@@ -563,11 +844,18 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       var triggeredByThreshold = false;
       var fired = false;
       final activeIds = <String>{};
+      StreamSubscription<Coin>? tempSub;
+      Timer? fallbackTimer;
 
-      void _fire() {
+      void fire() {
         if (fired || isClosed) return;
         fired = true;
         stopwatch.stop();
+        fallbackTimer?.cancel();
+        fallbackTimer = null;
+        final sub = tempSub;
+        tempSub = null;
+        unawaited(sub?.cancel());
         // Logged at info so it survives release builds (Logger.root.level is
         // INFO in release). This is the headline post-login timing: how long
         // from sign-in until enough coins are active to sweep balances.
@@ -579,20 +867,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         add(CoinsBalancesRefreshed());
       }
 
-      // Seed with currently activated assets from the SDK cache
-      try {
-        final activated = await _kdfSdk.activatedAssetsCache
-            .getActivatedAssetIds(forceRefresh: true);
-        for (final id in activated) {
-          if (targetIds.contains(id.id)) {
-            activeIds.add(id.id);
-          }
-        }
-      } catch (_) {
-        // Best-effort seeding; continue with streaming updates
-      }
-
-      bool _checkThreshold() {
+      bool checkThreshold() {
         if (targetIds.isEmpty) return true;
         final coverage = activeIds.length / targetIds.length;
         if (coverage >= 0.8) {
@@ -602,36 +877,42 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         return false;
       }
 
-      if (_checkThreshold()) {
-        _fire();
-        return;
-      }
-
-      StreamSubscription<Coin>? tempSub;
+      // Attach the listener and arm the fallback BEFORE the seed read, in that
+      // order. Previously the seed read came first and was awaited inline, so
+      // (a) any activation completing between the read and the attach was
+      // missed, and (b) an untimed hang in the read meant the listener was
+      // never attached and the fallback timer never armed - no threshold, no
+      // timeout, no initial balance sweep at all.
       tempSub = _coinsRepo.enabledAssetsChanges.stream.listen((coin) {
         if (isClosed || fired) return;
         if (!targetIds.contains(coin.id.id)) return;
-        if (coin.isActive) {
-          activeIds.add(coin.id.id);
-          if (_checkThreshold()) {
-            final sub = tempSub;
-            tempSub = null;
-            sub?.cancel();
-            _fire();
-          }
-        }
+        if (!coin.isActive) return;
+        activeIds.add(coin.id.id);
+        if (checkThreshold()) fire();
       });
 
-      // Fallback: timeout to avoid waiting indefinitely
-      const timeout = Duration(minutes: 1);
-      await Future<void>.delayed(timeout);
-      final sub = tempSub;
-      tempSub = null;
-      await sub?.cancel();
-      if (!fired) {
+      fallbackTimer = Timer(const Duration(minutes: 1), () {
         triggeredByThreshold = false;
-        _fire();
+        fire();
+      });
+
+      // Seed with assets the SDK already reports as activated.
+      try {
+        final activated = await _kdfSdk.activatedAssetsCache
+            .getActivatedAssetIds(forceRefresh: true);
+        if (fired || isClosed) return;
+        for (final id in activated) {
+          if (targetIds.contains(id.id)) {
+            activeIds.add(id.id);
+          }
+        }
+      } catch (e) {
+        // Best-effort seeding; the listener and the fallback still cover us.
+        _log.fine('Initial activation seed read failed: $e');
+        return;
       }
+
+      if (checkThreshold()) fire();
     }());
   }
 
@@ -660,10 +941,13 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // activation loops for assets not supported by the SDK.this may happen if the wallet
     // has assets that were removed from the SDK or the config has unsupported default
     // assets.
+    // `.first`, not `.single`: a config id that resolves to more than one asset
+    // must not throw here. This runs inside the login fan-out, where the throw
+    // would abort activation for every coin, not just the ambiguous one.
     final availableAssets = coins
         .map((coin) => _kdfSdk.assets.findAssetsByConfigId(coin))
         .where((assetsSet) => assetsSet.isNotEmpty)
-        .map((assetsSet) => assetsSet.single);
+        .map((assetsSet) => assetsSet.first);
 
     // Filter out blocked assets
     var coinsToActivate = _tradingStatusService.filterAllowedAssets(
@@ -681,9 +965,23 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // Batch-write all asset IDs to wallet metadata in a single call before
     // launching parallel activations. This avoids N concurrent read-modify-write
     // cycles on the same metadata key which caused last-write-wins data loss.
-    await _coinsRepo.addAssetsToWalletMetadata(
-      coinsToActivate.map((asset) => asset.id),
-    );
+    // Bounded, and failure-tolerant. This is a single serialised gate in front
+    // of the entire fan-out, so an unbounded hang here means no coin activates
+    // at all. Failing open is safe: the write is idempotent, activateAssetsSync
+    // re-attempts it per asset when addToWalletMetadata is true, and the worst
+    // case is that a coin is not remembered for the next session.
+    try {
+      await _coinsRepo
+          .addAssetsToWalletMetadata(coinsToActivate.map((asset) => asset.id))
+          .timeout(_loginPathRpcTimeout);
+    } catch (e, s) {
+      _log.warning(
+        'Failed to write activated coins to wallet metadata; continuing with '
+        'activation',
+        e,
+        s,
+      );
+    }
 
     if (isInitialLogin) {
       // One forced activated-assets read for the whole fan-out instead of one
@@ -691,10 +989,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       // window is sub-millisecond, preserving the freshness guarantee that the
       // per-asset force-refresh was added for (#3463, NoSuchCoin race).
       try {
+        // A single serialised gate in front of the entire fan-out, so it must
+        // not hang - ActivatedAssetsCache bounds the read itself. Failing open
+        // is safe: activateAssetsSync still checks isAssetActivated per asset,
+        // and SharedActivationCoordinator rechecks again before activating.
         await _coinsRepo.getActivatedAssetIds(forceRefresh: true);
       } catch (e, s) {
         _log.warning(
-          'Failed to pre-fetch activated assets before login fan-out',
+          'Failed to pre-fetch activated assets before login fan-out; '
+          'continuing with per-asset checks',
           e,
           s,
         );
@@ -775,29 +1078,48 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   }
 
   CoinsState _prePopulateListWithActivatingCoins(Iterable<String> coins) {
-    // Reuse the catalogue already in state where possible. Rebuilding it means
-    // converting every available asset to a Coin (recursing into the parent for
-    // each child token) synchronously on the frame the user is watching;
+    // Prefer the catalogue already in state: rebuilding it converts every
+    // available asset to a Coin (recursing into the parent for each child
+    // token) synchronously on the frame the user is watching, and
     // _onCoinsStarted has normally populated it already.
-    final knownCoins = state.coins.isNotEmpty
-        ? state.coins
-        : _coinsRepo.getKnownCoinsMap();
-    final activatingCoins = Map<String, Coin>.fromIterable(
-      coins
-          .map((coin) {
-            final sdkCoin = knownCoins[coin];
-            return sdkCoin?.copyWith(state: CoinState.activating);
-          })
-          .where((coin) => coin != null)
-          .cast<Coin>()
-          // Do not pre-populate zhtlc coins, as they require configuration
-          // and longer activation times, and are handled separately.
-          .where((coin) => coin.id.subClass != CoinSubClass.zhtlc),
-      key: (element) => (element as Coin).id.id,
-    );
+    //
+    // Fall back per lookup rather than only when state.coins is empty. A
+    // non-empty state.coins is not proof of a *complete* one - it is captured
+    // once and only rebuilt on logout, so a catalogue built while the SDK asset
+    // map was still loading would otherwise be reused for every login of the
+    // session, and any coin missing from it would silently never get a row.
+    var knownCoins = state.coins;
+    Map<String, Coin>? rebuiltCoins;
+    Coin? lookup(String id) {
+      final fromState = knownCoins[id];
+      if (fromState != null) return fromState;
+      rebuiltCoins ??= _coinsRepo.getKnownCoinsMap();
+      return rebuiltCoins![id];
+    }
+
+    final activatingCoins = <String, Coin>{};
+    for (final coinId in coins) {
+      final sdkCoin = lookup(coinId);
+      if (sdkCoin == null) {
+        _log.warning('No known coin for $coinId; it will have no wallet row');
+        continue;
+      }
+      // Do not pre-populate zhtlc coins, as they require configuration
+      // and longer activation times, and are handled separately.
+      if (sdkCoin.id.subClass == CoinSubClass.zhtlc) continue;
+      activatingCoins[sdkCoin.id.id] = sdkCoin.copyWith(
+        state: CoinState.activating,
+      );
+    }
+
+    if (rebuiltCoins != null) {
+      // Keep the fuller catalogue so the next login does not pay for it again.
+      knownCoins = {...rebuiltCoins!, ...knownCoins};
+    }
+
     return state.copyWith(
       walletCoins: {...state.walletCoins, ...activatingCoins},
-      coins: {...knownCoins, ...state.coins, ...activatingCoins},
+      coins: {...knownCoins, ...activatingCoins},
     );
   }
 }

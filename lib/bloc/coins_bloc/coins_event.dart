@@ -71,6 +71,19 @@ final class CoinsSessionEnded extends CoinsEvent {}
 /// Suspended coins should be reactivated
 final class CoinsSuspendedReactivated extends CoinsEvent {}
 
+/// Reconcile the bloc's view of activation state against KDF's own.
+///
+/// The bloc learns about activation exclusively from [CoinsRepo]'s
+/// `enabledAssetsChanges` broadcast, which is a plain broadcast stream: an
+/// event delivered while nothing is listening, or while the bloc is between
+/// sessions, is gone for good. A row left on [CoinState.activating] then never
+/// recovers - it has no balance watcher, no addresses, and no retry trigger.
+///
+/// This event re-reads the authoritative activated-asset set from the SDK and
+/// repairs any row whose state disagrees, so a missed broadcast degrades to a
+/// short delay instead of a permanently stuck wallet.
+final class CoinsActivationReconciled extends CoinsEvent {}
+
 /// Wallet coin is updated from the repository stream
 /// Links [CoinsBloc] with [CoinsManagerBloc]
 final class CoinsWalletCoinUpdated extends CoinsEvent {

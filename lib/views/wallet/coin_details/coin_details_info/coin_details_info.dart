@@ -982,6 +982,11 @@ class _BalanceState extends State<_Balance> {
       maxStartupRetries: _maxStartupRetries,
     );
 
+    // `watchBalance` re-establishes itself after the transient failures around
+    // sign-in and wallet switches, and forwards each one as a stream error
+    // first - which is what this `onError` is for. It does not end, so there is
+    // no closed-stream case that would leave `_isConfirmed` false with nothing
+    // left to set it.
     _balanceSubscription = sdk.balances
         .watchBalance(widget.coin.id)
         .listen(

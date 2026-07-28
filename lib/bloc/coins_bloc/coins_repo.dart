@@ -34,6 +34,19 @@ import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 
+/// Ceiling on a single coin's balance read during the fallback balance sweep.
+///
+/// The sweep is consumed by a `droppable()` bloc handler via `emit.forEach`, so
+/// it must always terminate: see [CoinsRepo.updateIguanaBalances].
+const Duration _balanceRefreshPerCoinTimeout = Duration(seconds: 20);
+
+/// Ceiling on a single activation attempt.
+///
+/// Generous: a cold UTXO activation legitimately takes tens of seconds. This
+/// exists only so an attempt that will *never* return becomes a retryable
+/// failure - see [CoinsRepo.activateAssetsSync].
+const Duration _activationAttemptTimeout = Duration(seconds: 90);
+
 /// Exception used to indicate that ZHTLC activation was cancelled by the user.
 class ZhtlcActivationCancelled implements Exception {
   ZhtlcActivationCancelled(this.coinId);
@@ -103,6 +116,37 @@ class CoinsRepo {
     return _kdfSdk.balances.countMissingWatchersForAssets(activeAssetIds);
   }
 
+  /// Active wallet coins whose live balance updates are broken on either side.
+  ///
+  /// There are two independent registries and each is blind to the other's
+  /// failures, so checking only one hides half the outages:
+  ///
+  /// * the SDK's `_activeWatchers` - the KDF subscription behind the per-asset
+  ///   broadcast controller;
+  /// * this repo's [_balanceWatchers] - the subscription that turns those
+  ///   emissions into `balanceChanges` events for [CoinsBloc].
+  ///
+  /// Either can be absent while the other looks healthy: this repo may never
+  /// have subscribed for an asset whose activation broadcast was lost, and the
+  /// SDK's watcher start can be still retrying (or have given up) behind a
+  /// controller that has listeners.
+  ///
+  /// A detector, not a repair: what it feeds is the health log and the
+  /// activation reconcile. Restarting an SDK-side watcher is the SDK's job -
+  /// see [ensureBalanceWatchers] for why this repo does not reach across.
+  int countAssetsNeedingBalanceRepair(Map<String, Coin> walletCoins) {
+    var count = 0;
+    for (final coin in walletCoins.values) {
+      if (!coin.isActive) continue;
+      if (_balanceWatchers.containsKey(coin.id) &&
+          _kdfSdk.balances.hasActiveWatcher(coin.id)) {
+        continue;
+      }
+      count++;
+    }
+    return count;
+  }
+
   /// Hack used to broadcast activated/deactivated coins to the CoinsBloc to
   /// update the status of the coins in the UI layer. This is needed as there
   /// are direct references to [CoinsRepo] that activate/deactivate coins
@@ -115,9 +159,16 @@ class CoinsRepo {
     if (_enabledAssetsHasListeners) {
       enabledAssetsChanges.add(coin);
     } else {
-      _log.warning(
+      // This is the only channel by which the UI learns a coin finished
+      // activating, and a broadcast with no listener is gone for good - the
+      // affected row stays on `activating` with no balance watcher and no
+      // addresses until something reconciles it. CoinsBloc subscribes from its
+      // constructor precisely so this cannot happen during login, so reaching
+      // here means a real defect (or a broadcast after the bloc was closed).
+      _log.severe(
         'No listeners for enabledAssetsChanges stream. '
-        'Skipping broadcast for ${coin.id.id}',
+        'Dropping ${coin.id.id} -> ${coin.state}. The coin will stay in a '
+        'stale UI state until the next activation reconcile.',
       );
     }
   }
@@ -171,28 +222,65 @@ class CoinsRepo {
             _broadcastBalanceChange(_assetToCoinWithoutAddress(asset));
           },
           onError: (Object error, StackTrace stackTrace) {
+            // Report only. `watchBalance` forwards its transient failures - an
+            // auth read that lands before the session is observable, a wallet
+            // switch recycling the per-asset controller - and then reconnects
+            // on its own. Cancelling here (which `cancelOnError: true` used to
+            // do) meant this subscription missed the recovery it was told about
+            // and the asset silently fell back to the 3-minute poll for the
+            // rest of the session.
             _log.warning(
-              'Balance watcher failed for ${assetId.id}; fallback polling will cover this asset',
+              'Balance watcher error for ${assetId.id}; the SDK stream will '
+              'reconnect',
               error,
               stackTrace,
             );
-            final current = _balanceWatchers[assetId];
-            if (watcher != null && identical(current, watcher)) {
-              _balanceWatchers.remove(assetId);
-            }
           },
           onDone: () {
-            _log.info(
-              'Balance watcher ended for ${assetId.id}; fallback polling will cover this asset',
-            );
+            // Only reachable once the SDK's balance manager is disposed - the
+            // stream does not end on a wallet change. Nothing will reconnect
+            // this, so drop the bookkeeping entry.
+            _log.info('Balance watcher ended for ${assetId.id}');
             final current = _balanceWatchers[assetId];
             if (watcher != null && identical(current, watcher)) {
               _balanceWatchers.remove(assetId);
             }
           },
-          cancelOnError: true,
         );
     _balanceWatchers[assetId] = watcher;
+  }
+
+  /// (Re)subscribes balance watchers for [assetIds] that this repo has none for.
+  ///
+  /// A backstop for an asset that was activated without
+  /// [_subscribeToBalanceUpdates] ever running for it - an activation broadcast
+  /// delivered while nothing was listening, or a subscription dropped when the
+  /// SDK's balance manager was disposed and rebuilt.
+  ///
+  /// Deliberately keyed on this repo's registry alone. A missing watcher on the
+  /// *SDK* side is the SDK's to restart: it retries the start with its own
+  /// backoff and stops when an asset proves un-startable, and re-listening here
+  /// would only churn a live subscription without changing that outcome.
+  ///
+  /// Returns the number of watchers started.
+  int ensureBalanceWatchers(Iterable<AssetId> assetIds) {
+    var started = 0;
+    for (final assetId in assetIds) {
+      if (_balanceWatchers.containsKey(assetId)) continue;
+      final asset = _kdfSdk.assets.available[assetId];
+      if (asset == null) {
+        _log.warning('Cannot start balance watcher: no asset for $assetId');
+        continue;
+      }
+      _subscribeToBalanceUpdates(asset);
+      // That is a no-op for a geo-blocked asset, so the registry - not the
+      // call - is what "started" means here.
+      if (_balanceWatchers.containsKey(assetId)) started += 1;
+    }
+    if (started > 0) {
+      _log.info('Restarted $started missing balance watcher(s)');
+    }
+    return started;
   }
 
   void flushCache() {
@@ -511,7 +599,14 @@ class CoinsRepo {
           // Use retry with exponential backoff for activation
           await retry<void>(
             () async {
-              final didActivate = await _kdfSdk.ensureAssetActivated(asset);
+              // Per-attempt bound. `retry` can only re-fire an attempt that
+              // *terminates*; an activation that hangs pins the asset on
+              // `activating` forever and, on the login path, stalls the
+              // `Future.wait` over the whole fan-out with it. A timeout turns
+              // that into an ordinary retryable failure.
+              final didActivate = await _kdfSdk
+                  .ensureAssetActivated(asset)
+                  .timeout(_activationAttemptTimeout);
               if (!didActivate) {
                 throw Exception('Activation failed for ${asset.id.id}');
               }
@@ -1020,8 +1115,18 @@ class CoinsRepo {
     // Get balances from the SDK for all active coins
     for (final coin in coins) {
       try {
-        // Use the SDK's balance manager to get the current balance
-        final balanceInfo = await _kdfSdk.balances.getBalance(coin.id);
+        // Use the SDK's balance manager to get the current balance.
+        //
+        // Bounded per coin. getBalance ultimately awaits getPubkeys, which has
+        // no timeout: one unresponsive asset would otherwise hold this stream
+        // open indefinitely. CoinsBloc consumes it through `emit.forEach` on a
+        // `droppable()` handler, so the handler would never complete and every
+        // later CoinsBalancesRefreshed - including the 3-minute fallback sweep
+        // that exists precisely to recover stalled assets - would be dropped
+        // for the rest of the session.
+        final balanceInfo = await _kdfSdk.balances
+            .getBalance(coin.id)
+            .timeout(_balanceRefreshPerCoinTimeout);
 
         // Convert to double for compatibility with existing code
         final newBalance = balanceInfo.total.toDouble();

@@ -23,12 +23,11 @@ class CoinBalance extends StatefulWidget {
 class _CoinBalanceState extends State<CoinBalance> {
   /// Held for the lifetime of the widget rather than created in [build].
   ///
-  /// [BalanceManager.watchBalance] is an `async*` generator, so every call
-  /// returns a *new* stream. Creating it in [build] makes [StreamBuilder]
-  /// unsubscribe and resubscribe on every rebuild, which flaps the SDK's
-  /// per-asset broadcast controller 1->0->1 and re-runs its `onCancel`/
-  /// `onListen` hooks - tearing down and restarting the KDF balance watcher
-  /// (an IndexedDB read plus several RPCs) each time.
+  /// Every `watchBalance` call returns a new stream. Creating one in [build]
+  /// makes [StreamBuilder] unsubscribe and resubscribe on every rebuild, which
+  /// flaps the SDK's per-asset broadcast controller 1->0->1 and re-runs its
+  /// `onCancel`/`onListen` hooks - tearing down and restarting the KDF balance
+  /// watcher (an IndexedDB read plus several RPCs) each time.
   late Stream<BalanceInfo> _balanceStream;
 
   @override

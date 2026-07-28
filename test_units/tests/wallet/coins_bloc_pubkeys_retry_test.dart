@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
@@ -157,6 +159,16 @@ class _FakeSdk implements KomodoDefiSdk {
 }
 
 class _FakeCoinsRepo implements CoinsRepo {
+  /// [CoinsBloc] subscribes to both of these from its constructor, so they have
+  /// to exist before the bloc is built.
+  @override
+  final StreamController<Coin> enabledAssetsChanges =
+      StreamController<Coin>.broadcast();
+
+  @override
+  final StreamController<Coin> balanceChanges =
+      StreamController<Coin>.broadcast();
+
   @override
   Map<String, Coin> getKnownCoinsMap({bool excludeExcludedAssets = false}) =>
       <String, Coin>{};
