@@ -159,11 +159,10 @@ class _FakeSdk implements KomodoDefiSdk {
 }
 
 class _FakeCoinsRepo implements CoinsRepo {
-  /// [CoinsBloc] subscribes to both of these from its constructor, so they have
-  /// to exist before the bloc is built.
+  /// [CoinsBloc] subscribes to both of these from its constructor, so they
+  /// have to exist before the bloc is built.
   @override
-  final StreamController<Coin> enabledAssetsChanges =
-      StreamController<Coin>.broadcast();
+  Stream<Coin> watchCoinActivationState() => const Stream<Coin>.empty();
 
   @override
   final StreamController<Coin> balanceChanges =

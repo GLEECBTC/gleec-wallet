@@ -6,6 +6,7 @@ import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
+import 'package:web_dex/bloc/coins_bloc/coin_activation_state_bridge.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
@@ -32,46 +33,52 @@ Asset _assetFromConfig(Map<String, dynamic> config) =>
 Coin _coin(Asset asset, CoinState state) =>
     asset.toCoin().copyWith(state: state);
 
-/// The bloc learns about activation exclusively through [CoinsRepo]'s
-/// `enabledAssetsChanges` broadcast. A broadcast stream discards events
-/// delivered while nothing is listening, so a subscription that is established
-/// late - or an event that is genuinely lost - leaves a row on
-/// [CoinState.activating] with no balance watcher, no addresses and nothing to
-/// retrigger it. These tests pin the two properties that keep that from being
-/// permanent.
+/// The bloc learns about activation from the SDK's activation-state stream,
+/// bridged through [CoinsRepo]. That stream replays current state to a late
+/// subscriber, which is what makes a lost transition impossible - the defect
+/// that used to leave rows on [CoinState.activating] with no balance watcher,
+/// no addresses and nothing to retrigger them.
 void testCoinsBlocActivationRecovery() {
-  group('CoinsBloc activation recovery', () {
+  group('CoinsBloc activation stream', () {
     late Asset asset;
+
+    CoinsBloc buildBloc(
+      _FakeCoinsRepo repo, {
+      Future<void>? initialStatusReady,
+    }) {
+      final bloc = CoinsBloc(
+        _FakeSdk(
+          assets: _FakeAssetManager({asset.id: asset}),
+          pubkeys: _FakePubkeyManager(),
+        ),
+        repo,
+        _FakeTradingStatusService(initialStatusReady: initialStatusReady),
+      );
+      addTearDown(bloc.close);
+      return bloc;
+    }
 
     setUp(() {
       asset = _assetFromConfig(_utxoConfig());
     });
 
     test(
-      'observes repo broadcasts from construction, before CoinsStarted runs',
+      'observes the activation stream from construction',
       () async {
-        // Regression guard. The subscriptions used to be established in
-        // _onCoinsStarted *after* `await _tradingStatusService
-        // .initialStatusReady` - an unbounded network wait. A login that landed
-        // inside that window ran its whole activation fan-out against a
-        // listener-less stream and every `active` broadcast was dropped, so
-        // every row stayed on `activating` for the rest of the session.
+        // The subscription used to be established in _onCoinsStarted, *after*
+        // `await _tradingStatusService.initialStatusReady` - an unbounded network
+        // wait. A login landing inside that window ran its whole activation
+        // fan-out against a listener-less stream and every `active` event was
+        // dropped, leaving every row on `activating` for the session.
         final repo = _FakeCoinsRepo();
-        final bloc = CoinsBloc(
-          _FakeSdk(
-            assets: _FakeAssetManager({asset.id: asset}),
-            pubkeys: _FakePubkeyManager(),
-          ),
+        // Never completes: stands in for a hung or very slow geo endpoint.
+        final bloc = buildBloc(
           repo,
-          // Never completes: stands in for a hung or very slow geo endpoint.
-          _FakeTradingStatusService(
-            initialStatusReady: Completer<void>().future,
-          ),
+          initialStatusReady: Completer<void>().future,
         );
-        addTearDown(bloc.close);
 
         // Deliberately no `bloc.add(CoinsStarted())`.
-        repo.enabledAssetsChanges.add(_coin(asset, CoinState.active));
+        repo.activationStates.add(_coin(asset, CoinState.active));
 
         await expectLater(
           bloc.stream.firstWhere(
@@ -84,28 +91,15 @@ void testCoinsBlocActivationRecovery() {
     );
 
     test(
-      'reconcile promotes a coin KDF reports as enabled',
+      'replays state that landed before the bloc existed',
       () async {
-        final repo = _FakeCoinsRepo(activatedAssetIds: {asset.id});
-        final bloc = CoinsBloc(
-          _FakeSdk(
-            assets: _FakeAssetManager({asset.id: asset}),
-            pubkeys: _FakePubkeyManager(),
-          ),
+        // The property that makes the old reconcile pass unnecessary: state is
+        // no longer lost just because nothing was listening yet.
+        final repo = _FakeCoinsRepo()..seed(_coin(asset, CoinState.active));
+        final bloc = buildBloc(
           repo,
-          _FakeTradingStatusService(),
+          initialStatusReady: Completer<void>().future,
         );
-        addTearDown(bloc.close);
-
-        // Row seeded as `activating`, mirroring _prePopulateListWithActivatingCoins.
-        bloc.add(CoinsWalletCoinUpdated(_coin(asset, CoinState.activating)));
-        await bloc.stream.firstWhere(
-          (state) => state.walletCoins.containsKey(asset.id.id),
-        );
-        expect(bloc.state.walletCoins[asset.id.id]!.isActive, isFalse);
-
-        // The `active` broadcast never arrives - it was dropped in transit.
-        bloc.add(CoinsActivationReconciled());
 
         await expectLater(
           bloc.stream.firstWhere(
@@ -113,34 +107,74 @@ void testCoinsBlocActivationRecovery() {
           ),
           completes,
         );
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+
+    test(
+      'an SDK-internal activation creates a row',
+      () async {
+        // Nothing in the app asked for this coin: the SDK activated it on its
+        // own behalf (pubkey, balance, withdrawal or tx-history manager). Before
+        // the stream existed the app could not see this at all.
+        final repo = _FakeCoinsRepo();
+        final bloc = buildBloc(repo);
+
+        repo.activationStates.add(_coin(asset, CoinState.active));
+
+        await expectLater(
+          bloc.stream.firstWhere(
+            (state) => state.walletCoins.containsKey(asset.id.id),
+          ),
+          completes,
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+
+    test(
+      'a later active event restores a row the app suspended',
+      () async {
+        // The app publishes `suspended` when its own retry budget runs out, and
+        // CoinsBloc evicts the row. If KDF turns out to have enabled the coin
+        // anyway, the stream must bring it back.
+        final repo = _FakeCoinsRepo();
+        final bloc = buildBloc(repo);
+
+        repo.activationStates.add(_coin(asset, CoinState.suspended));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(bloc.state.walletCoins.containsKey(asset.id.id), isFalse);
+
+        repo.activationStates.add(_coin(asset, CoinState.active));
+
+        await expectLater(
+          bloc.stream.firstWhere(
+            (state) => state.walletCoins[asset.id.id]?.isActive ?? false,
+          ),
+          completes,
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+
+    test(
+      'repair re-drives addresses and balance watchers',
+      () async {
+        // Activation state itself is no longer repaired here; what remains is
+        // the app-owned work that follows it and has no other retrigger.
+        final repo = _FakeCoinsRepo();
+        final bloc = buildBloc(repo);
+
+        repo.activationStates.add(_coin(asset, CoinState.active));
+        await bloc.stream.firstWhere(
+          (state) => state.walletCoins[asset.id.id]?.isActive ?? false,
+        );
+
+        bloc.add(CoinsWalletRepairRequested());
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+
         expect(repo.ensureBalanceWatchersCalls, isNotEmpty);
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
-
-    test(
-      'reconcile leaves a coin KDF does not report as enabled alone',
-      () async {
-        final repo = _FakeCoinsRepo(activatedAssetIds: const {});
-        final bloc = CoinsBloc(
-          _FakeSdk(
-            assets: _FakeAssetManager({asset.id: asset}),
-            pubkeys: _FakePubkeyManager(),
-          ),
-          repo,
-          _FakeTradingStatusService(),
-        );
-        addTearDown(bloc.close);
-
-        bloc.add(CoinsWalletCoinUpdated(_coin(asset, CoinState.activating)));
-        await bloc.stream.firstWhere(
-          (state) => state.walletCoins.containsKey(asset.id.id),
-        );
-
-        bloc.add(CoinsActivationReconciled());
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-
-        expect(bloc.state.walletCoins[asset.id.id]!.isActive, isFalse);
+        expect(repo.ensureBalanceWatchersCalls.last, contains(asset.id));
       },
       timeout: const Timeout(Duration(seconds: 30)),
     );
@@ -193,14 +227,24 @@ class _FakeSdk implements KomodoDefiSdk {
 }
 
 class _FakeCoinsRepo implements CoinsRepo {
-  _FakeCoinsRepo({this.activatedAssetIds = const {}});
-
-  final Set<AssetId> activatedAssetIds;
   final List<List<AssetId>> ensureBalanceWatchersCalls = <List<AssetId>>[];
 
-  @override
-  final StreamController<Coin> enabledAssetsChanges =
+  /// Backed by the real bridge, so the fake has the same retain-and-replay
+  /// behaviour as [CoinsRepo] rather than a bare broadcast controller that
+  /// would drop anything pushed before the bloc's subscription attaches.
+  final StreamController<Coin> activationStates =
       StreamController<Coin>.broadcast();
+
+  late final CoinActivationStateBridge _bridge = CoinActivationStateBridge(
+    sdkStates: activationStates.stream,
+    sdkSnapshot: () => const <Coin>[],
+  );
+
+  /// Seeds state that existed before the bloc was built.
+  void seed(Coin coin) => _bridge.publishAppState(coin);
+
+  @override
+  Stream<Coin> watchCoinActivationState() => _bridge.watch();
 
   @override
   final StreamController<Coin> balanceChanges =
@@ -213,7 +257,7 @@ class _FakeCoinsRepo implements CoinsRepo {
   @override
   Future<Set<AssetId>> getActivatedAssetIds({
     bool forceRefresh = false,
-  }) async => activatedAssetIds;
+  }) async => const <AssetId>{};
 
   @override
   int ensureBalanceWatchers(Iterable<AssetId> assetIds) {

@@ -15,6 +15,7 @@ import 'package:logging/logging.dart';
 import 'package:web_dex/app_config/app_config.dart'
     show excludedAssetList, kDebugElectrumLogs;
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
+import 'package:web_dex/bloc/coins_bloc/coin_activation_state_bridge.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart'
     show TradingStatusService;
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -65,14 +66,65 @@ class CoinsRepo {
        _mm2 = mm2,
        _tradingStatusService = tradingStatusService,
        _arrrActivationService = arrrActivationService {
-    enabledAssetsChanges = StreamController<Coin>.broadcast(
-      onListen: () => _enabledAssetListenerCount += 1,
-      onCancel: () => _enabledAssetListenerCount -= 1,
+    balanceChanges = StreamController<Coin>.broadcast();
+    _activationBridge = CoinActivationStateBridge(
+      sdkStates: _kdfSdk.watchActivationStates().expand(_coinsFromStates),
+      sdkSnapshot: () => _coinsFromStates(_kdfSdk.activationStates),
     );
-    balanceChanges = StreamController<Coin>.broadcast(
-      onListen: () => _balanceListenerCount += 1,
-      onCancel: () => _balanceListenerCount -= 1,
-    );
+  }
+
+  late final CoinActivationStateBridge _activationBridge;
+
+  /// Activation state of every coin, current state first then every change.
+  ///
+  /// Replaces the old `enabledAssetsChanges` controller. See
+  /// [CoinActivationStateBridge] for why the SDK stream alone is not enough.
+  Stream<Coin> watchCoinActivationState() => _activationBridge.watch();
+
+  /// Re-emits the SDK's current activation state for [assetIds].
+  ///
+  /// Needed because the SDK emits nothing for an asset that is *already*
+  /// active, so re-enabling a locally-disabled coin would otherwise produce no
+  /// row. See [CoinActivationStateBridge.release].
+  void republishActivationState(Iterable<AssetId> assetIds) =>
+      _activationBridge.republish(assetIds);
+
+  /// Stops SDK activation events for [assetIds] reaching the UI.
+  void suppressActivationBroadcasts(Iterable<AssetId> assetIds) =>
+      _activationBridge.suppress(assetIds);
+
+  /// Lifts suppression for [assetIds] and republishes their current state.
+  void releaseActivationBroadcasts(Iterable<AssetId> assetIds) =>
+      _activationBridge.release(assetIds);
+
+  /// Maps an SDK activation-state snapshot to app [Coin]s.
+  ///
+  /// Only `activating` and `active` cross the boundary:
+  ///
+  /// * SDK `failed` is *per attempt*, while this repo owns the retry envelope
+  ///   and publishes its own terminal `suspended` once the budget is spent.
+  ///   Forwarding it would evict and re-add the row on every retry, because
+  ///   `CoinsBloc._onWalletCoinUpdated` removes suspended rows.
+  /// * "absent" is not `inactive` for this app: `deactivateCoinsSync`
+  ///   deliberately leaves the coin enabled in KDF, so the app - not the SDK -
+  ///   owns leaving the wallet.
+  Iterable<Coin> _coinsFromStates(Map<AssetId, AssetActivationState> states) {
+    final coins = <Coin>[];
+    for (final state in states.values) {
+      final coinState = switch (state.status) {
+        AssetActivationStatus.activating => CoinState.activating,
+        AssetActivationStatus.active => CoinState.active,
+        AssetActivationStatus.failed => null,
+      };
+      if (coinState == null) continue;
+      final asset = _kdfSdk.assets.available[state.assetId];
+      if (asset == null) continue;
+      // An SDK-internal activation must not create a row for a geo-blocked
+      // asset; CoinsState only filters NFT_* assets.
+      if (_tradingStatusService.isAssetBlocked(asset.id)) continue;
+      coins.add(_assetToCoinWithoutAddress(asset).copyWith(state: coinState));
+    }
+    return coins;
   }
 
   final KomodoDefiSdk _kdfSdk;
@@ -147,45 +199,25 @@ class CoinsRepo {
     return count;
   }
 
-  /// Hack used to broadcast activated/deactivated coins to the CoinsBloc to
-  /// update the status of the coins in the UI layer. This is needed as there
-  /// are direct references to [CoinsRepo] that activate/deactivate coins
-  /// without the [CoinsBloc] being aware of the changes (e.g. [CoinsManagerBloc]).
-  late final StreamController<Coin> enabledAssetsChanges;
-  // why could they not implement this in streamcontroller or a wrapper :(
-  int _enabledAssetListenerCount = 0;
-  bool get _enabledAssetsHasListeners => _enabledAssetListenerCount > 0;
-  void _broadcastAsset(Coin coin) {
-    if (_enabledAssetsHasListeners) {
-      enabledAssetsChanges.add(coin);
-    } else {
-      // This is the only channel by which the UI learns a coin finished
-      // activating, and a broadcast with no listener is gone for good - the
-      // affected row stays on `activating` with no balance watcher and no
-      // addresses until something reconciles it. CoinsBloc subscribes from its
-      // constructor precisely so this cannot happen during login, so reaching
-      // here means a real defect (or a broadcast after the bloc was closed).
-      _log.severe(
-        'No listeners for enabledAssetsChanges stream. '
-        'Dropping ${coin.id.id} -> ${coin.state}. The coin will stay in a '
-        'stale UI state until the next activation reconcile.',
-      );
-    }
-  }
+  /// Publishes a coin state the SDK cannot know about.
+  ///
+  /// No longer the channel by which the UI learns a coin finished activating -
+  /// that is the SDK's activation-state stream now. What is left here is the
+  /// app's own vocabulary: a coin this app refuses to activate, a terminal
+  /// verdict over the app's retry budget, a local deactivation, and the
+  /// ZHTLC configuration/cancellation outcomes.
+  ///
+  /// The bridge retains the last state per asset and replays it, so a
+  /// listener-less moment is no longer lossy and needs no drop guard.
+  void _broadcastAsset(Coin coin) => _activationBridge.publishAppState(coin);
 
   /// Stream to broadcast real-time balance changes for coins
   late final StreamController<Coin> balanceChanges;
-  int _balanceListenerCount = 0;
-  bool get _balancesHasListeners => _balanceListenerCount > 0;
+
+  /// Balance updates are transient by nature - there is nothing to replay and
+  /// a listener-less moment is not a defect.
   void _broadcastBalanceChange(Coin coin) {
-    if (_balancesHasListeners) {
-      balanceChanges.add(coin);
-    } else {
-      _log.fine(
-        'No listeners for balanceChanges stream. '
-        'Skipping broadcast for ${coin.id.id}',
-      );
-    }
+    if (!balanceChanges.isClosed) balanceChanges.add(coin);
   }
 
   Future<BalanceInfo?> balance(AssetId id) => _kdfSdk.balances.getBalance(id);
@@ -288,6 +320,7 @@ class CoinsRepo {
     // of the user's session and should be updated on a regular basis.
     _addressCache.clear();
     _balancesCache.clear();
+    _activationBridge.reset();
 
     // Cancel all balance watchers
     for (final subscription in _balanceWatchers.values) {
@@ -303,7 +336,7 @@ class CoinsRepo {
     }
     _balanceWatchers.clear();
 
-    enabledAssetsChanges.close();
+    unawaited(_activationBridge.dispose());
     balanceChanges.close();
   }
 
@@ -484,6 +517,19 @@ class CoinsRepo {
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
   }) async {
+    final requestedIds = assets.map((asset) => asset.id).toList();
+    if (notifyListeners) {
+      // The user is asking for these coins, so undo any local deactivation.
+      // Release republishes, which matters because the SDK emits nothing for
+      // an asset that is *already* active - re-enabling a coin from the coins
+      // manager would otherwise never produce a row.
+      releaseActivationBroadcasts(requestedIds);
+    } else {
+      // A preview or side-effect activation: keep it out of the wallet list.
+      // The caller releases when the user commits to it.
+      suppressActivationBroadcasts(requestedIds);
+    }
+
     final isSignedIn = await _kdfSdk.auth.isSignedIn();
     if (!isSignedIn) {
       final coinIdList = assets.map((e) => e.id.id).join(', ');
@@ -894,6 +940,15 @@ class CoinsRepo {
     // Skip the deactivation step for now, as it results in "NoSuchCoin" errors
     // when trying to re-enable the coin later in the same session.
     // TODO: Revisit this and create an issue on KDF to track the problem.
+    //
+    // Because the coin stays enabled in KDF, the SDK keeps reporting it active
+    // and would put the row straight back. Suppress it until the user asks for
+    // it again - `activateAssetsSync` releases the suppression.
+    suppressActivationBroadcasts([
+      ...coins.map((coin) => coin.id),
+      ...allChildCoins.map((child) => child.id),
+    ]);
+
     final deactivationTasks = [
       ...coins.map((coin) async {
         // await _disableCoin(coin.id.id);

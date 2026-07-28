@@ -46,6 +46,7 @@ import 'tests/wallet/coin_details/transaction_views_widget_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_bloc_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_confirm_receipt_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_fill_section_test.dart';
+import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -143,6 +144,7 @@ void main() {
     testReceiveAddressFaucetWidgets();
   });
 
+  testCoinActivationStateBridge();
   testCoinsBlocActivationRecovery();
   testCoinsBlocPubkeysRetry();
   testTransactionEventPrivacy();
