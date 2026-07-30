@@ -18,7 +18,7 @@ on:
       sdk_branch:
         description: "SDK branch containing the immutable SDK commit"
         required: true
-        default: "add/tron-gas-free"
+        default: "fix/post-login-wallet-load-performance"
         type: string
       sdk_commit:
         description: "Immutable 40-character SDK commit belonging to the requested branch"
