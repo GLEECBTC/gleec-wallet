@@ -827,6 +827,55 @@ void testWithdrawFormConfirmReceipt() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('balance values and labels use their theme foreground roles', (
+      tester,
+    ) async {
+      const balanceBreakdown = GaslessBalanceBreakdown(
+        total: '10',
+        spendable: '8',
+        pending: '2',
+        symbol: 'USDT',
+        totalLabel: 'Gas-free total',
+        spendableLabel: 'Spendable',
+        pendingLabel: 'Pending / locked',
+      );
+      const amountTexts = <String>['10 USDT', '8 USDT', '2 USDT'];
+      const labelTexts = <String>[
+        'Gas-free total',
+        'Spendable',
+        'Pending / locked',
+      ];
+
+      for (final theme in <ThemeData>[newThemeLight, newThemeDark]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            darkTheme: theme,
+            themeMode: theme.brightness == Brightness.dark
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            themeAnimationDuration: Duration.zero,
+            home: const Material(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: balanceBreakdown,
+              ),
+            ),
+          ),
+        );
+
+        for (final amountText in amountTexts) {
+          final text = tester.widget<Text>(find.text(amountText));
+          expect(text.style?.color, theme.textTheme.bodyMedium?.color);
+          expect(text.style?.color, isNot(theme.colorScheme.onSurface));
+        }
+        for (final labelText in labelTexts) {
+          final text = tester.widget<Text>(find.text(labelText));
+          expect(text.style?.color, theme.colorScheme.onSurfaceVariant);
+        }
+      }
+    });
+
     testWidgets('balance values and confirmation items wrap at 200% text', (
       tester,
     ) async {

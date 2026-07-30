@@ -32,6 +32,7 @@
 - [Build release version of the App](docs/BUILD_RELEASE.md)
 - [Manual testing and debugging](docs/MANUAL_TESTING_DEBUGGING.md)
 - [Localization](docs/LOCALIZATION.md)
+- [Theme semantic color migration](docs/THEME_SEMANTIC_COLOR_MIGRATION_PLAN.md)
 - [Unit testing](docs/UNIT_TESTING.md)
 - [Integration testing](docs/INTEGRATION_TESTING.md)
 - [SDK Dependency Management](docs/SDK_DEPENDENCY_MANAGEMENT.md)
