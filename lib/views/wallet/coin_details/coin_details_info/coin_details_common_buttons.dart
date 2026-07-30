@@ -87,6 +87,10 @@ Future<_ReceiveRailSelection?> _showGaslessReceiveRailSelector(
   required Coin coin,
   required WalletId initialWalletId,
 }) {
+  // CoinAddressesBloc is scoped to CoinDetailsInfo, below the app Navigator.
+  // Dialog routes are built under the Navigator overlay and therefore cannot
+  // inherit that page-scoped provider unless it is carried into the route.
+  final addressesBloc = context.read<CoinAddressesBloc>();
   return showDialog<_ReceiveRailSelection>(
     context: context,
     builder: (dialogContext) {
@@ -107,6 +111,7 @@ Future<_ReceiveRailSelection?> _showGaslessReceiveRailSelector(
             final walletType = currentUser?.wallet.config.type;
             final isHdWallet = walletType == WalletType.hdwallet;
             return BlocBuilder<CoinAddressesBloc, CoinAddressesState>(
+              bloc: addressesBloc,
               builder: (context, addressesState) {
                 final options = <_ReceiveRailSelection>[
                   for (final address in addressesState.addresses) ...[

@@ -13,6 +13,8 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
         MarketDataManager;
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart'
     show AssetManager;
+import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart'
+    show PubkeyManager;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
@@ -33,6 +35,7 @@ import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/widgets/copyable_address_dialog.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_common_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/gasless_standard_balance_notice.dart';
 import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
@@ -160,6 +163,32 @@ class _FakeAssetManager implements AssetManager {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CachedPubkeyManager implements PubkeyManager {
+  const _CachedPubkeyManager({required this.walletId, required this.pubkeys});
+
+  final WalletId walletId;
+  final AssetPubkeys pubkeys;
+
+  @override
+  AssetPubkeys? lastKnownForWallet(AssetId assetId, WalletId walletId) =>
+      assetId == pubkeys.assetId && walletId == this.walletId ? pubkeys : null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ReceiveSelectorSdk extends _FakeSdk {
+  _ReceiveSelectorSdk({
+    required super.balances,
+    required super.assetValues,
+    required super.boundGaslessReceive,
+    required this.pubkeys,
+  });
+
+  @override
+  final PubkeyManager pubkeys;
 }
 
 class _FakeSettingsBloc extends Cubit<SettingsState> implements SettingsBloc {
@@ -864,6 +893,107 @@ void testReceiveAddressFaucetWidgets() {
       );
       expect(button.onPressed, isNotNull);
     });
+
+    testWidgets(
+      'GasFree Receive selector keeps the page-scoped address state',
+      (tester) async {
+        tester.view.physicalSize = const Size(900, 1800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+        final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+        final address = _trc20Address(
+          address: 'TRegularReceiveAddress000000000001',
+          gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+          balance: _balanceOf('7'),
+        );
+        final user = _softwareUser('wallet-a', _walletAHash);
+        final addressesBloc = _FakeCoinAddressesBloc(
+          CoinAddressesState(
+            addresses: [address],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            verifiedGasfreeAddress: address.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletAHash,
+            gaslessAccountStatus: _gaslessAccountStatus(
+              address.gasfreeAddress!,
+            ),
+            gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
+          ),
+        );
+        final authBloc = _FakeAuthBloc(AuthBlocState.loggedIn(user));
+        final sdk = _ReceiveSelectorSdk(
+          balances: _FakeBalanceManager(const {}),
+          assetValues: [parent, asset],
+          boundGaslessReceive: true,
+          pubkeys: _CachedPubkeyManager(
+            walletId: user.walletId,
+            pubkeys: AssetPubkeys(
+              assetId: asset.id,
+              keys: [address],
+              availableAddressesCount: 1,
+              syncStatus: SyncStatusEnum.success,
+            ),
+          ),
+        );
+        addTearDown(addressesBloc.close);
+        addTearDown(authBloc.close);
+
+        // Auth and the SDK live above the app Navigator, while the address
+        // BLoC intentionally mirrors CoinDetailsInfo's page-local scope.
+        await tester.pumpWidget(
+          RepositoryProvider<KomodoDefiSdk>.value(
+            value: sdk,
+            child: BlocProvider<AuthBloc>.value(
+              value: authBloc,
+              child: MaterialApp(
+                home: BlocProvider<CoinAddressesBloc>.value(
+                  value: addressesBloc,
+                  child: Scaffold(
+                    body: ListView(
+                      children: [
+                        GaslessStandardBalanceNotice(
+                          coin: asset.toCoin(),
+                          setPageType: (_) {},
+                        ),
+                        Builder(
+                          builder: (context) => CoinDetailsReceiveButton(
+                            isMobile: true,
+                            coin: asset.toCoin(),
+                            selectWidget: (_) {},
+                            context: context,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        expect(
+          find.byKey(const Key('gasless-consolidate-button')),
+          findsOneWidget,
+        );
+
+        await tester.tap(find.byKey(const Key('coin-details-receive-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SimpleDialog), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('receive-rail-gasfree-${address.address}')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ValueKey('receive-rail-standard-${address.address}')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+      skip: !isTronGaslessReceiveConfigured,
+    );
 
     group('stranded-balance recovery notice', () {
       Widget buildNotice({required BalanceInfo? parentTrxBalance}) {
