@@ -299,7 +299,6 @@ class _BitrefillButtonState extends State<BitrefillButton> {
                   accountStatusObservedAt: state.gaslessAccountStatusObservedAt,
                   verifiedAddress: state.verifiedGasfreeAddress,
                   custodyAddress: address.gasfreeAddress,
-                  expiresAt: state.gaslessReceiveConfigExpiresAt,
                   expectedServiceProvider: tronGaslessServiceProvider,
                 ),
           );

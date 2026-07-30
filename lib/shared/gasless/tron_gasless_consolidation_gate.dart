@@ -92,7 +92,6 @@ String? verifiedTronGaslessConsolidationAddress(
         accountStatusObservedAt: state.gaslessAccountStatusObservedAt,
         verifiedAddress: verifiedAddress,
         custodyAddress: cachedAddress,
-        expiresAt: state.gaslessReceiveConfigExpiresAt,
         expectedServiceProvider: tronGaslessServiceProvider,
         now: now,
       )

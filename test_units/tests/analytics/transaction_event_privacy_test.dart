@@ -3,7 +3,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
     show GaslessTransferState;
 import 'package:web_dex/analytics/events/transaction_events.dart';
 import 'package:web_dex/bloc/withdraw_form/gasless_transfer_state.dart';
-import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 
 void testTransactionEventPrivacy() {
   group('transaction analytics privacy', () {

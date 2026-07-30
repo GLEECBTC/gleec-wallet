@@ -63,19 +63,6 @@ if [[ -n "${TRON_GASLESS_BASE_URL:-}" ]]; then
   fi
 fi
 
-if [[ -n "${TRON_GASLESS_CONTROL_URL:-}" ]]; then
-  if [[ ! "$TRON_GASLESS_CONTROL_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$ ]] ||
-    [[ "$TRON_GASLESS_CONTROL_URL" == *"%"* ]]; then
-    fail "TRON_GASLESS_CONTROL_URL must be a strict HTTPS path without credentials, query, fragment, encoding, or ambiguous path segments."
-  fi
-
-  gasless_control_path=$(path_for_https_url "$TRON_GASLESS_CONTROL_URL") ||
-    fail "TRON_GASLESS_CONTROL_URL must include a path."
-  if has_ambiguous_path "$gasless_control_path"; then
-    fail "TRON_GASLESS_CONTROL_URL contains ambiguous path segments."
-  fi
-fi
-
 if [[ -n "${TRON_GASLESS_SERVICE_PROVIDER:-}" &&
   ! "$TRON_GASLESS_SERVICE_PROVIDER" =~ ^T[1-9A-HJ-NP-Za-km-z]{33}$ ]]; then
   fail "TRON_GASLESS_SERVICE_PROVIDER is not a valid pinned TRON address."
@@ -90,8 +77,5 @@ fi
 if [[ "$TRON_GASLESS_RECEIVE_ENABLED" == "true" ]]; then
   if [[ "$TRON_GASLESS_ENABLED" != "true" ]]; then
     fail "TRON GasFree Receive requires TRON_GASLESS_ENABLED=true."
-  fi
-  if [[ -z "${TRON_GASLESS_CONTROL_URL:-}" ]]; then
-    fail "Enabled TRON GasFree Receive builds require a runtime control URL."
   fi
 fi

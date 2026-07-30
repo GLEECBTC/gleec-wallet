@@ -19,7 +19,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/constants.dart';
-import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/notice_banner.dart';
@@ -130,7 +130,6 @@ bool _isVerifiedGaslessReceiveForAddress(
       accountStatusObservedAt: state.gaslessAccountStatusObservedAt,
       verifiedAddress: state.verifiedGasfreeAddress,
       custodyAddress: address.gasfreeAddress,
-      expiresAt: state.gaslessReceiveConfigExpiresAt,
       expectedServiceProvider: tronGaslessServiceProvider,
     );
   } catch (_) {
@@ -180,17 +179,10 @@ void _showGaslessReceivePaused(BuildContext context) {
 
 String _gaslessReceiveUnavailableMessage(GaslessReceiveReasonCode? reason) {
   return switch (reason) {
-    GaslessReceiveReasonCode.buildFeatureDisabled ||
-    GaslessReceiveReasonCode.receiveBuildDisabled ||
-    GaslessReceiveReasonCode.controlEndpointMissing ||
-    GaslessReceiveReasonCode.remoteDisabled =>
-      LocaleKeys.receiveGaslessRemoteDisabledNotice.tr(),
+    GaslessReceiveReasonCode.receiveBuildDisabled =>
+      LocaleKeys.receiveGaslessBuildDisabledNotice.tr(),
     GaslessReceiveReasonCode.providerTemporarilyUnavailable ||
-    GaslessReceiveReasonCode.accountStatusUnavailable ||
-    GaslessReceiveReasonCode.remoteUnavailable ||
-    GaslessReceiveReasonCode.remoteTimeout ||
-    GaslessReceiveReasonCode.remoteHttpRejected ||
-    GaslessReceiveReasonCode.remoteExpired =>
+    GaslessReceiveReasonCode.accountStatusUnavailable =>
       LocaleKeys.receiveGaslessProviderUnavailableNotice.tr(),
     GaslessReceiveReasonCode.pendingTransfer =>
       LocaleKeys.receiveGaslessPendingTransferNotice.tr(),
@@ -208,14 +200,6 @@ String _gaslessReceiveUnavailableMessage(GaslessReceiveReasonCode? reason) {
     GaslessReceiveReasonCode.custodyAddressMissing =>
       LocaleKeys.receiveGaslessAttestationMissingNotice.tr(),
     GaslessReceiveReasonCode.providerConfigurationInvalid ||
-    GaslessReceiveReasonCode.controlEndpointInvalid ||
-    GaslessReceiveReasonCode.localBindingInvalid ||
-    GaslessReceiveReasonCode.remoteContentTypeInvalid ||
-    GaslessReceiveReasonCode.remoteResponseTooLarge ||
-    GaslessReceiveReasonCode.remoteMalformed ||
-    GaslessReceiveReasonCode.remoteSchemaMismatch ||
-    GaslessReceiveReasonCode.remoteBindingMismatch ||
-    GaslessReceiveReasonCode.remoteExpiryTooFar ||
     GaslessReceiveReasonCode.malformedAccountStatus =>
       LocaleKeys.receiveGaslessSecurityBlockedNotice.tr(),
     _ => LocaleKeys.receiveGaslessPausedNotice.tr(),

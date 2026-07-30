@@ -159,9 +159,6 @@ CoinAddressesState _readyState({
   gaslessReceiveStatus: availability == GaslessAccountAvailability.available
       ? GaslessReceiveStatus.ready
       : GaslessReceiveStatus.temporarilyUnavailable,
-  gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-    const Duration(hours: 1),
-  ),
   verifiedGasfreeAddress: _custodyAddress,
   gaslessReceiveWalletPubkeyHash: _walletHash,
   gaslessAccountStatus: _accountStatus(availability: availability),

@@ -29,7 +29,7 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/shared/constants.dart'
     show isTronGaslessReceiveConfigured, tronGaslessServiceProvider;
-import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/widgets/copyable_address_dialog.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
@@ -354,9 +354,6 @@ Widget _liveGaslessReceiveDialog({
         CoinAddressesState(
           addresses: [address],
           gaslessReceiveStatus: GaslessReceiveStatus.ready,
-          gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-            const Duration(hours: 1),
-          ),
           verifiedGasfreeAddress: address.gasfreeAddress,
           gaslessReceiveWalletPubkeyHash: _walletAHash,
           gaslessAccountStatus: _gaslessAccountStatus(address.gasfreeAddress!),
@@ -558,9 +555,6 @@ void testReceiveAddressFaucetWidgets() {
           CoinAddressesState(
             addresses: [address],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
-            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-              const Duration(hours: 1),
-            ),
             verifiedGasfreeAddress: address.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletAHash,
             gaslessAccountStatus: _gaslessAccountStatus(
@@ -679,9 +673,6 @@ void testReceiveAddressFaucetWidgets() {
           CoinAddressesState(
             addresses: [address],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
-            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-              const Duration(hours: 1),
-            ),
             verifiedGasfreeAddress: 'TDifferentCustodyAddress',
             gaslessReceiveWalletPubkeyHash: _walletAHash,
             gaslessAccountStatus: _gaslessAccountStatus(
@@ -711,9 +702,6 @@ void testReceiveAddressFaucetWidgets() {
           CoinAddressesState(
             addresses: [address],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
-            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-              const Duration(hours: 1),
-            ),
             verifiedGasfreeAddress: address.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletAHash,
             gaslessAccountStatus: _gaslessAccountStatus(
@@ -762,9 +750,6 @@ void testReceiveAddressFaucetWidgets() {
           CoinAddressesState(
             addresses: [address],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
-            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-              const Duration(hours: 1),
-            ),
             verifiedGasfreeAddress: address.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletAHash,
             gaslessAccountStatus: _gaslessAccountStatus(
@@ -1440,7 +1425,7 @@ void testReceiveAddressFaucetWidgets() {
         },
       );
 
-      testWidgets('remote Receive disable retains the typed custody snapshot', (
+      testWidgets('build-time Receive disable retains the custody snapshot', (
         tester,
       ) async {
         final usdt = trc20Asset();
@@ -1457,7 +1442,7 @@ void testReceiveAddressFaucetWidgets() {
             gaslessAccountStatus: _gaslessAccountStatus(pubkey.gasfreeAddress!),
             gaslessReceiveEnabled: false,
             gaslessReceiveStatus: GaslessReceiveStatus.disabled,
-            gaslessReceiveReason: GaslessReceiveReasonCode.remoteDisabled,
+            gaslessReceiveReason: GaslessReceiveReasonCode.receiveBuildDisabled,
           ),
         );
         await tester.pumpAndSettle();
@@ -1621,8 +1606,8 @@ void testReceiveAddressFaucetWidgets() {
         }
 
         await expectReason(
-          GaslessReceiveReasonCode.remoteDisabled,
-          'receiveGaslessRemoteDisabledNotice',
+          GaslessReceiveReasonCode.receiveBuildDisabled,
+          'receiveGaslessBuildDisabledNotice',
         );
         await expectReason(
           GaslessReceiveReasonCode.malformedAccountStatus,
@@ -2064,9 +2049,6 @@ void testReceiveAddressFaucetWidgets() {
           CoinAddressesState(
             addresses: [pubkey],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
-            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-              const Duration(hours: 1),
-            ),
             verifiedGasfreeAddress: pubkey.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletAHash,
             gaslessAccountStatus: _gaslessAccountStatus(pubkey.gasfreeAddress!),

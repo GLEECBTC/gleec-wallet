@@ -135,10 +135,10 @@ bool isVerifiedTronGaslessReceiveStatus(
 
 /// Final app boundary for exposing or using a GasFree receive address.
 ///
-/// A previous `ready` result is insufficient once its remote-control document
-/// has expired, the typed status has changed, or the canonical custody address
-/// no longer matches. Every receive surface calls this immediately before
-/// revealing, copying, or passing the address to an integration.
+/// A previous `ready` result is insufficient once the typed status is stale,
+/// has changed, or the canonical custody address no longer matches. Every
+/// receive surface calls this immediately before revealing, copying, or
+/// passing the address to an integration.
 bool isVerifiedTronGaslessReceive(
   KomodoDefiSdk sdk,
   Asset asset, {
@@ -147,7 +147,6 @@ bool isVerifiedTronGaslessReceive(
   required DateTime? accountStatusObservedAt,
   required String? verifiedAddress,
   required String? custodyAddress,
-  required DateTime? expiresAt,
   required String expectedServiceProvider,
   DateTime? now,
 }) {
@@ -163,8 +162,6 @@ bool isVerifiedTronGaslessReceive(
       verified != verified.trim() ||
       custody != custody.trim() ||
       verified != custody ||
-      expiresAt == null ||
-      !expiresAt.toUtc().isAfter(currentTime) ||
       statusObservedAt == null ||
       statusObservedAt.isAfter(currentTime) ||
       currentTime.difference(statusObservedAt) > const Duration(minutes: 1) ||

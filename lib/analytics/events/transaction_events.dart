@@ -4,7 +4,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
 import 'package:web_dex/bloc/analytics/analytics_event.dart';
 import 'package:web_dex/bloc/withdraw_form/gasless_transfer_state.dart'
     show GaslessQuoteFailure, GaslessQuoteFailureClass;
-import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart'
+import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart'
     show GaslessReceiveReasonCode;
 
 import '../../bloc/analytics/analytics_repo.dart';

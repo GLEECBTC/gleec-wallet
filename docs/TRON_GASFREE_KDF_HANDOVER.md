@@ -73,18 +73,18 @@ The approved public mainnet deployment identity is:
 | `TRON_GASLESS_SERVICE_PROVIDER` | `TLntW9Z59LYY5KEi9cmwk3PKjQga828ird` |
 
 These values are public but security-sensitive. They are version-controlled in
-the Firebase and SDK-integration preview workflows instead of GitHub repository
+the preview, RC, mobile, and desktop workflows instead of GitHub repository
 variables, so provider changes require a reviewed commit and cannot be caused
 by a missing or out-of-band variable update. Secrets do not belong in either
 value.
 
 The release master performs final builds manually on the CI server. For an
-approved mainnet GasFree send build, append all of the following compile-time
+approved mainnet GasFree build, append all of the following compile-time
 defines to the existing target-specific `flutter build` command:
 
 ```sh
 --dart-define=TRON_GASLESS_ENABLED=true \
---dart-define=TRON_GASLESS_RECEIVE_ENABLED=false \
+--dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
 --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
 --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 ```
@@ -93,10 +93,9 @@ Before building, validate the exact release environment:
 
 ```sh
 TRON_GASLESS_ENABLED=true \
-TRON_GASLESS_RECEIVE_ENABLED=false \
+TRON_GASLESS_RECEIVE_ENABLED=true \
 TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
 TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird \
-TRON_GASLESS_CONTROL_URL= \
 TRON_GASLESS_REQUIRED_NETWORK=tron \
 bash .github/scripts/validate_tron_gasless_config.sh
 ```
@@ -105,14 +104,10 @@ bash .github/scripts/validate_tron_gasless_config.sh
 these variables only in the shell without forwarding the matching
 `--dart-define` arguments is insufficient.
 
-Receive remains fail-closed until an actual HTTPS control service is deployed
-with the documented short-lived response contract. The
-`https://controls.gleec.com/v1/gasfree` value used by validation fixtures is a
-non-production example and currently does not resolve; it must not be supplied
-to a release. When Receive is separately approved, the release master must set
-`TRON_GASLESS_RECEIVE_ENABLED=true`, provide the reviewed production
-`TRON_GASLESS_CONTROL_URL`, rerun the validator, and verify the fresh control
-document before promotion.
+GasFree send and receive are controlled exclusively by the compiled flags and
+pinned production identity. Changing their availability or provider binding
+requires a reviewed rebuild and deployment. Runtime KDF capability, typed
+account status, custody binding, and freshness checks remain fail-closed.
 
 The mainnet proxy and upstream provider-list endpoints return `401` to unsigned
 `curl` requests by design. The pinned provider address above is the provider
@@ -131,9 +126,9 @@ KDF provider-list fixture. KDF revalidates the pin against
 - direct provider/custody balance access and TronGrid finality checks.
 
 The local encrypted pre-submit reservation, unknown-outcome lockout, provider
-pin, remote Receive control, action-time QR/copy check, Standard recovery,
-wallet/session guards, and custody history refresh are permanent safeguards,
-not compatibility workarounds.
+pin, action-time QR/copy check, Standard recovery, wallet/session guards, and
+custody history refresh are permanent safeguards, not compatibility
+workarounds.
 
 ## Validation
 

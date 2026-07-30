@@ -15,8 +15,8 @@ import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/constants.dart';
-import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/utils/kdf_error_display.dart';
 
@@ -24,7 +24,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   final KomodoDefiSdk sdk;
   final String assetId;
   final AnalyticsBloc analyticsBloc;
-  final TronGaslessReceiveGate _gaslessReceiveGate;
 
   StreamSubscription<AssetPubkeys>? _pubkeysSub;
   int _pubkeysSubscriptionGeneration = 0;
@@ -34,19 +33,8 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   bool _lastLoggedGaslessReceiveWasReady = false;
   bool _isForeground = true;
 
-  CoinAddressesBloc(
-    this.sdk,
-    this.assetId,
-    this.analyticsBloc, {
-    TronGaslessReceiveGate? gaslessReceiveGate,
-  }) : _gaslessReceiveGate =
-           gaslessReceiveGate ??
-           HttpTronGaslessReceiveGate(
-             endpoint: tronGaslessControlUrl,
-             expectedNetwork: tronGaslessNetworkPath(tronGaslessBaseUrl) ?? '',
-             expectedServiceProvider: tronGaslessServiceProvider,
-           ),
-       super(const CoinAddressesState()) {
+  CoinAddressesBloc(this.sdk, this.assetId, this.analyticsBloc)
+    : super(const CoinAddressesState()) {
     on<CoinAddressesAddressCreationSubmitted>(_onCreateAddressSubmitted);
     on<CoinAddressesStarted>(_onStarted);
     on<CoinAddressesSubscriptionRequested>(_onAddressesSubscriptionRequested);
@@ -168,7 +156,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
             ? () => GaslessReceiveStatus.checking
             : null,
         gaslessReceiveReason: failClosed ? () => null : null,
-        gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
         verifiedGasfreeAddress: failClosed ? () => null : null,
         gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
         gaslessAccountStatus: () => null,
@@ -206,7 +193,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
             errorMessage: () => null,
             gaslessReceiveStatus: () => GaslessReceiveStatus.checking,
             gaslessReceiveReason: () => null,
-            gaslessReceiveConfigExpiresAt: () => null,
             verifiedGasfreeAddress: () => null,
             gaslessReceiveWalletPubkeyHash: () => null,
           ),
@@ -234,7 +220,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           errorMessage: () => null,
           gaslessReceiveStatus: () => gaslessReceive.status,
           gaslessReceiveReason: () => gaslessReceive.reason,
-          gaslessReceiveConfigExpiresAt: () => gaslessReceive.expiresAt,
           verifiedGasfreeAddress: () => gaslessReceive.address,
           gaslessReceiveWalletPubkeyHash: () =>
               _readyWalletPubkeyHash(gaslessReceive, walletPubkeyHash),
@@ -270,7 +255,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           gaslessReceiveReason: failClosed
               ? () => GaslessReceiveReasonCode.accountStatusUnavailable
               : null,
-          gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
           verifiedGasfreeAddress: failClosed ? () => null : null,
           gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
           gaslessAccountStatus: () => null,
@@ -371,7 +355,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           errorMessage: () => null,
           gaslessReceiveStatus: () => gaslessReceive.status,
           gaslessReceiveReason: () => gaslessReceive.reason,
-          gaslessReceiveConfigExpiresAt: () => gaslessReceive.expiresAt,
           verifiedGasfreeAddress: () => gaslessReceive.address,
           gaslessReceiveWalletPubkeyHash: () => _readyWalletPubkeyHash(
             gaslessReceive,
@@ -406,7 +389,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           gaslessReceiveReason: failClosed
               ? () => GaslessReceiveReasonCode.accountStatusUnavailable
               : null,
-          gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
           verifiedGasfreeAddress: failClosed ? () => null : null,
           gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
           gaslessAccountStatus: () => null,
@@ -425,23 +407,30 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     Emitter<CoinAddressesState> emit,
   ) async {
     final evaluationGeneration = ++_gaslessReceiveEvaluationGeneration;
-    final expiry = state.gaslessReceiveConfigExpiresAt;
-    final remoteExpired =
-        expiry == null || !expiry.isAfter(DateTime.now().toUtc());
+    final now = DateTime.now().toUtc();
+    final observedAt = state.gaslessAccountStatusObservedAt?.toUtc();
+    final accountStatusExpired =
+        observedAt == null ||
+        observedAt.isAfter(now) ||
+        now.difference(observedAt) > const Duration(minutes: 1);
     // A scheduled refresh starts halfway through the 60-second status TTL.
     // Keep a still-valid Ready presentation stable while it runs; every
     // sensitive action independently revalidates the cached domain state.
-    // Once the remote permission has expired, revoke before the first await.
+    // Once the typed KDF status has expired, revoke before the first await.
     if (state.gaslessReceiveStatus == GaslessReceiveStatus.ready &&
-        remoteExpired) {
-      _logGaslessReceiveRevocation(GaslessReceiveReasonCode.remoteExpired);
+        accountStatusExpired) {
+      _logGaslessReceiveRevocation(
+        GaslessReceiveReasonCode.accountStatusExpired,
+      );
       emit(
         state.copyWith(
           gaslessReceiveStatus: () => GaslessReceiveStatus.checking,
-          gaslessReceiveReason: () => GaslessReceiveReasonCode.remoteExpired,
-          gaslessReceiveConfigExpiresAt: () => null,
+          gaslessReceiveReason: () =>
+              GaslessReceiveReasonCode.accountStatusExpired,
           verifiedGasfreeAddress: () => null,
           gaslessReceiveWalletPubkeyHash: () => null,
+          gaslessAccountStatus: () => null,
+          gaslessAccountStatusObservedAt: () => null,
         ),
       );
     }
@@ -473,7 +462,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
           addresses: () => walletAddresses.addresses,
           gaslessReceiveStatus: () => gaslessReceive.status,
           gaslessReceiveReason: () => gaslessReceive.reason,
-          gaslessReceiveConfigExpiresAt: () => gaslessReceive.expiresAt,
           verifiedGasfreeAddress: () => gaslessReceive.address,
           gaslessReceiveWalletPubkeyHash: () => _readyWalletPubkeyHash(
             gaslessReceive,
@@ -499,7 +487,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         state.copyWith(
           gaslessReceiveStatus: () => unavailable.status,
           gaslessReceiveReason: () => unavailable.reason,
-          gaslessReceiveConfigExpiresAt: () => null,
           verifiedGasfreeAddress: () => null,
           gaslessReceiveWalletPubkeyHash: () => null,
           gaslessAccountStatus: () => null,
@@ -531,7 +518,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         state.copyWith(
           gaslessReceiveStatus: () => GaslessReceiveStatus.stale,
           gaslessReceiveReason: () => GaslessReceiveReasonCode.appBackgrounded,
-          gaslessReceiveConfigExpiresAt: () => null,
           verifiedGasfreeAddress: () => null,
           gaslessReceiveWalletPubkeyHash: () => null,
           gaslessAccountStatusObservedAt: () => null,
@@ -547,7 +533,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     required String custodyAddress,
     required String walletEpoch,
   }) {
-    final expiry = state.gaslessReceiveConfigExpiresAt;
     final observedAt = state.gaslessAccountStatusObservedAt;
     final status = state.gaslessAccountStatus;
     final now = DateTime.now().toUtc();
@@ -558,8 +543,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     var allowed =
         _isForeground &&
         state.gaslessReceiveStatus == GaslessReceiveStatus.ready &&
-        expiry != null &&
-        expiry.toUtc().isAfter(now) &&
         observedRecently &&
         state.verifiedGasfreeAddress?.trim() == custodyAddress.trim() &&
         state.gaslessReceiveWalletPubkeyHash?.trim() == walletEpoch.trim() &&
@@ -711,10 +694,9 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       );
     }
 
-    // Build and remote-control switches authorize new receives only. The
-    // account-status probe above remains active so existing custody balances,
-    // pending transfers, and recovery state never disappear when a receive
-    // rail is paused.
+    // The build switches authorize new receives only. The account-status probe
+    // above remains active so existing custody balances, pending transfers,
+    // and recovery state never disappear when a receive rail is disabled.
     if (!tronGaslessReceiveEnabled) {
       return _ResolvedGaslessReceive(
         status: GaslessReceiveStatus.disabled,
@@ -725,93 +707,14 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       );
     }
 
-    TronGaslessReceiveGateDecision remoteGate;
-    try {
-      remoteGate = await _gaslessReceiveGate.evaluate();
-    } catch (_) {
-      remoteGate = const TronGaslessReceiveGateDecision(
-        outcome: TronGaslessReceiveGateOutcome.unavailable,
-        reason: GaslessReceiveReasonCode.remoteUnavailable,
-      );
-    }
-
-    if (remoteGate.outcome == TronGaslessReceiveGateOutcome.enabled) {
-      final expiresAt = remoteGate.expiresAt;
-      if (remoteGate.reason != GaslessReceiveReasonCode.remoteEnabled ||
-          expiresAt == null) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.securityMismatch,
-          reason: GaslessReceiveReasonCode.remoteSchemaMismatch,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-      }
-      if (!expiresAt.isAfter(DateTime.now().toUtc())) {
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.stale,
-          reason: GaslessReceiveReasonCode.remoteExpired,
-          expiresAt: expiresAt,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-      }
-    }
-
-    switch (remoteGate.outcome) {
-      case TronGaslessReceiveGateOutcome.disabled:
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.disabled,
-          reason: remoteGate.reason,
-          expiresAt: remoteGate.expiresAt,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-      case TronGaslessReceiveGateOutcome.unavailable:
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.temporarilyUnavailable,
-          reason: remoteGate.reason,
-          expiresAt: remoteGate.expiresAt,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-      case TronGaslessReceiveGateOutcome.expired:
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.stale,
-          reason: remoteGate.reason,
-          expiresAt: remoteGate.expiresAt,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-      case TronGaslessReceiveGateOutcome.invalid:
-        final missingEndpoint =
-            remoteGate.reason ==
-            GaslessReceiveReasonCode.controlEndpointMissing;
-        return _ResolvedGaslessReceive(
-          status: missingEndpoint
-              ? GaslessReceiveStatus.disabled
-              : GaslessReceiveStatus.securityMismatch,
-          reason: remoteGate.reason,
-          expiresAt: remoteGate.expiresAt,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-      case TronGaslessReceiveGateOutcome.enabled:
-        return _ResolvedGaslessReceive(
-          status: GaslessReceiveStatus.ready,
-          reason: GaslessReceiveReasonCode.ready,
-          address: accountStatus.gasfreeAddress,
-          expiresAt: remoteGate.expiresAt,
-          shouldRefresh: true,
-          accountStatus: accountStatus,
-          observedAt: observedAt,
-        );
-    }
+    return _ResolvedGaslessReceive(
+      status: GaslessReceiveStatus.ready,
+      reason: GaslessReceiveReasonCode.ready,
+      address: accountStatus.gasfreeAddress,
+      shouldRefresh: true,
+      accountStatus: accountStatus,
+      observedAt: observedAt,
+    );
   }
 
   bool _isPrimarySoftwareWallet(KdfUser? user) =>
@@ -987,18 +890,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
 
     // Refresh the typed status before the action-time one-minute freshness
     // boundary. QR and copy still recheck it synchronously.
-    var delay = const Duration(seconds: 30);
-    final expiresAt = resolved.expiresAt;
-    if (expiresAt != null) {
-      final untilExpiry = expiresAt.difference(DateTime.now().toUtc());
-      if (untilExpiry > Duration.zero && untilExpiry < delay) {
-        // Fire just after the authorization expires so the handler clears an
-        // old ready address before awaiting the next remote response.
-        delay = untilExpiry + const Duration(milliseconds: 1);
-      }
-    }
-
-    _gaslessReceiveRefreshTimer = Timer(delay, () {
+    _gaslessReceiveRefreshTimer = Timer(const Duration(seconds: 30), () {
       if (!isClosed) {
         add(const CoinAddressesGaslessReceiveRefreshRequested());
       }
@@ -1034,7 +926,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         gaslessReceiveReason: failClosed
             ? () => GaslessReceiveReasonCode.accountStatusUnavailable
             : null,
-        gaslessReceiveConfigExpiresAt: failClosed ? () => null : null,
         verifiedGasfreeAddress: failClosed ? () => null : null,
         gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
         gaslessAccountStatus: failClosed ? () => null : null,
@@ -1192,7 +1083,6 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     _gaslessReceiveRefreshTimer = null;
     await _pubkeysSub?.cancel();
     _pubkeysSub = null;
-    _gaslessReceiveGate.dispose();
     return super.close();
   }
 }
@@ -1202,7 +1092,6 @@ class _ResolvedGaslessReceive {
     required this.status,
     required this.reason,
     this.address,
-    this.expiresAt,
     this.shouldRefresh = false,
     this.accountStatus,
     this.observedAt,
@@ -1211,7 +1100,6 @@ class _ResolvedGaslessReceive {
   final GaslessReceiveStatus status;
   final GaslessReceiveReasonCode reason;
   final String? address;
-  final DateTime? expiresAt;
   final bool shouldRefresh;
   final GaslessAccountStatusResponse? accountStatus;
   final DateTime? observedAt;

@@ -68,10 +68,6 @@ inputs:
     description: "TRON GasFree service provider address embedded in the Flutter web build"
     required: false
     default: ""
-  TRON_GASLESS_CONTROL_URL:
-    description: "HTTPS endpoint for the short-lived GasFree receive control document"
-    required: false
-    default: ""
   TRON_GASLESS_REQUIRED_NETWORK:
     description: "Optional deployment-policy restriction for the GasFree network path (tron/nile)"
     required: false
@@ -117,7 +113,6 @@ runs:
         TRON_GASLESS_RECEIVE_ENABLED: ${{ inputs.TRON_GASLESS_RECEIVE_ENABLED }}
         TRON_GASLESS_BASE_URL: ${{ inputs.TRON_GASLESS_BASE_URL }}
         TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
-        TRON_GASLESS_CONTROL_URL: ${{ inputs.TRON_GASLESS_CONTROL_URL }}
         TRON_GASLESS_REQUIRED_NETWORK: ${{ inputs.TRON_GASLESS_REQUIRED_NETWORK }}
         TRON_GASLESS_CONFIG_VALIDATOR: ${{ github.action_path }}/../../scripts/validate_tron_gasless_config.sh
       run: |
@@ -153,10 +148,6 @@ runs:
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true"
         else
           BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=false"
-        fi
-
-        if [ -n "$TRON_GASLESS_CONTROL_URL" ]; then
-          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_CONTROL_URL=$TRON_GASLESS_CONTROL_URL"
         fi
 
         if [ -n "$TRON_GASLESS_BASE_URL" ]; then

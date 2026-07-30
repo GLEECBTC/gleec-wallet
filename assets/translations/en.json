@@ -115,7 +115,7 @@
   "addressRowGasfreeCheckingTag": "GasFree · checking",
   "addressRowGasfreePausedTag": "GasFree account · deposits paused",
   "receiveGaslessPausedNotice": "New GasFree deposits are currently unavailable. Your existing custody balance remains visible, but sending supported tokens still depends on the GasFree provider.",
-  "receiveGaslessRemoteDisabledNotice": "GasFree deposits are turned off for this rollout. Use your Standard TRON address; any existing custody balance remains visible.",
+  "receiveGaslessBuildDisabledNotice": "GasFree deposits are disabled in this app build. Use your Standard TRON address; any existing custody balance remains visible.",
   "receiveGaslessSecurityBlockedNotice": "GasFree deposits are blocked because the account or service configuration could not be verified. Use your Standard TRON address and do not deposit to the GasFree address.",
   "receiveGaslessZeroFeeUnsupportedNotice": "This fee profile cannot be verified safely by this wallet version. Use your Standard TRON address until GasFree support is updated.",
   "receiveGaslessProviderUnavailableNotice": "New GasFree deposits are paused while the provider is unavailable. Existing custody funds remain on-chain, but cannot be sent through GasFree until service returns.",

@@ -297,10 +297,9 @@ jobs:
           MATOMO_URL: ${{ secrets.MATOMO_URL }}
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
           TRON_GASLESS_ENABLED: "true"
-          TRON_GASLESS_RECEIVE_ENABLED: ${{ vars.TRON_GASLESS_RECEIVE_ENABLED || 'false' }}
+          TRON_GASLESS_RECEIVE_ENABLED: "true"
           TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
           TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
-          TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
           TRON_GASLESS_REQUIRED_NETWORK: "tron"
 
       - name: Validate build
@@ -308,10 +307,9 @@ jobs:
         uses: ./.github/actions/validate-build
         with:
           EXPECTED_TRON_GASLESS_ENABLED: "true"
-          EXPECTED_TRON_GASLESS_RECEIVE_ENABLED: ${{ vars.TRON_GASLESS_RECEIVE_ENABLED || 'false' }}
+          EXPECTED_TRON_GASLESS_RECEIVE_ENABLED: "true"
           EXPECTED_TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
           EXPECTED_TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
-          EXPECTED_TRON_GASLESS_CONTROL_URL: ${{ vars.TRON_GASLESS_CONTROL_URL }}
           EXPECTED_TRON_GASLESS_NETWORK: "tron"
 
       - name: Deploy SDK Integration Preview (Expires in 7 days)

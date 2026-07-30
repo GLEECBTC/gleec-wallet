@@ -14,7 +14,7 @@ import 'package:web_dex/bloc/analytics/analytics_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
-import 'package:web_dex/shared/gasless/tron_gasless_receive_gate.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 
 const _assetId = 'USDT-TRC20';
 const _walletHash = 'wallet-a-pubkey-hash';
@@ -186,25 +186,8 @@ class _RecordingAnalyticsBloc implements AnalyticsBloc {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _DisabledReceiveGate implements TronGaslessReceiveGate {
-  @override
-  Future<TronGaslessReceiveGateDecision> evaluate() async =>
-      const TronGaslessReceiveGateDecision(
-        outcome: TronGaslessReceiveGateOutcome.disabled,
-        reason: GaslessReceiveReasonCode.remoteDisabled,
-      );
-
-  @override
-  void dispose() {}
-}
-
 class _TestCoinAddressesBloc extends CoinAddressesBloc {
-  _TestCoinAddressesBloc(
-    super.sdk,
-    super.assetId,
-    super.analyticsBloc, {
-    required super.gaslessReceiveGate,
-  });
+  _TestCoinAddressesBloc(super.sdk, super.assetId, super.analyticsBloc);
 
   void seedReady(CoinAddressesState ready) {
     // This harness seeds the pre-race state; all subsequent behavior is the
@@ -360,16 +343,12 @@ void testCoinAddressesBlocGaslessRevalidation() {
           ),
           asset.id.id,
           analytics,
-          gaslessReceiveGate: _DisabledReceiveGate(),
         );
         addTearDown(bloc.close);
         bloc.seedReady(
           CoinAddressesState(
             addresses: [original],
             gaslessReceiveStatus: GaslessReceiveStatus.ready,
-            gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-              const Duration(minutes: 1),
-            ),
             verifiedGasfreeAddress: original.gasfreeAddress,
             gaslessReceiveWalletPubkeyHash: _walletHash,
           ),
@@ -431,16 +410,12 @@ void testCoinAddressesBlocGaslessRevalidation() {
         ),
         asset.id.id,
         analytics,
-        gaslessReceiveGate: _DisabledReceiveGate(),
       );
       addTearDown(bloc.close);
       bloc.seedReady(
         CoinAddressesState(
           addresses: [walletAAddress],
           gaslessReceiveStatus: GaslessReceiveStatus.ready,
-          gaslessReceiveConfigExpiresAt: DateTime.now().toUtc().add(
-            const Duration(minutes: 1),
-          ),
           verifiedGasfreeAddress: walletAAddress.gasfreeAddress,
           gaslessReceiveWalletPubkeyHash: _walletHash,
         ),

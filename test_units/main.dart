@@ -19,7 +19,6 @@ import 'tests/helpers/total_24_change_tests.dart';
 import 'tests/helpers/total_fee_test.dart';
 import 'tests/helpers/update_sell_amount_tests.dart';
 import 'tests/gasless/tron_gasless_policy_test.dart';
-import 'tests/gasless/tron_gasless_receive_gate_test.dart';
 import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
@@ -111,7 +110,6 @@ void main() {
   });
 
   testTronGaslessPolicy();
-  testTronGaslessReceiveGate();
 
   group('Crypto:', () {
     testEncryptDataTool();

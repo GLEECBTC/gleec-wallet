@@ -123,8 +123,8 @@ abstract class LocaleKeys {
   static const addressRowGasfreeCheckingTag = 'addressRowGasfreeCheckingTag';
   static const addressRowGasfreePausedTag = 'addressRowGasfreePausedTag';
   static const receiveGaslessPausedNotice = 'receiveGaslessPausedNotice';
-  static const receiveGaslessRemoteDisabledNotice =
-      'receiveGaslessRemoteDisabledNotice';
+  static const receiveGaslessBuildDisabledNotice =
+      'receiveGaslessBuildDisabledNotice';
   static const receiveGaslessSecurityBlockedNotice =
       'receiveGaslessSecurityBlockedNotice';
   static const receiveGaslessZeroFeeUnsupportedNotice =

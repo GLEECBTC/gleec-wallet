@@ -74,7 +74,6 @@ bool _isVerifiedGaslessReceiveSelection(
       accountStatusObservedAt: state.gaslessAccountStatusObservedAt,
       verifiedAddress: state.verifiedGasfreeAddress,
       custodyAddress: address.gasfreeAddress,
-      expiresAt: state.gaslessReceiveConfigExpiresAt,
       expectedServiceProvider: tronGaslessServiceProvider,
     );
   } catch (_) {

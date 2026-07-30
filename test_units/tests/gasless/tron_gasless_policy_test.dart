@@ -563,7 +563,6 @@ void testTronGaslessPolicy() {
           accountStatusObservedAt: now,
           verifiedAddress: 'TCanonicalGasFreeAddress00000000001',
           custodyAddress: 'TCanonicalGasFreeAddress00000000001',
-          expiresAt: now.add(const Duration(minutes: 1)),
           expectedServiceProvider: tronGaslessServiceProvider.isEmpty
               ? 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'
               : tronGaslessServiceProvider,
@@ -731,7 +730,6 @@ void testTronGaslessPolicy() {
         DateTime? observedAt,
         String? verified = custody,
         String? candidate = custody,
-        DateTime? expiresAt,
       }) => isVerifiedTronGaslessReceive(
         sdk ?? capableSdk,
         asset,
@@ -740,7 +738,6 @@ void testTronGaslessPolicy() {
         accountStatusObservedAt: observedAt ?? now,
         verifiedAddress: verified,
         custodyAddress: candidate,
-        expiresAt: expiresAt ?? now.add(const Duration(minutes: 1)),
         expectedServiceProvider: provider,
         now: now,
       );
@@ -763,7 +760,6 @@ void testTronGaslessPolicy() {
         isFalse,
       );
       expect(verify(candidate: 'TDifferentCustodyAddress'), isFalse);
-      expect(verify(expiresAt: now), isFalse);
       expect(
         isVerifiedTronGaslessReceive(
           capableSdk,
@@ -773,11 +769,10 @@ void testTronGaslessPolicy() {
           accountStatusObservedAt: now,
           verifiedAddress: custody,
           custodyAddress: custody,
-          expiresAt: null,
           expectedServiceProvider: provider,
           now: now,
         ),
-        isFalse,
+        isTrue,
       );
     });
 

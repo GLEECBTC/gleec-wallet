@@ -78,7 +78,7 @@ const int? matomoPlatformDimensionId =
 const String moralisProxyUrl = 'https://moralis.gleec.com';
 const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
 
-/// Explicit build-time kill switch for the TRON GasFree rail.
+/// Explicit build-time flag for the TRON GasFree rail.
 ///
 /// Provider/runtime policy must also validate before sending or receiving is
 /// eligible.
@@ -87,11 +87,11 @@ const bool tronGaslessEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Additional kill switch for exposing GasFree custody addresses to depositors.
+/// Additional build-time flag for exposing GasFree custody addresses.
 ///
 /// Receive requires both GasFree switches because users may keep depositing
 /// after the send rail is disabled. Runtime account, provider, response-shape,
-/// and remote-control gates remain fail-closed.
+/// wallet, and freshness checks remain fail-closed.
 const bool tronGaslessReceiveEnabled = bool.fromEnvironment(
   'TRON_GASLESS_RECEIVE_ENABLED',
   defaultValue: false,
@@ -107,7 +107,7 @@ const String _tronGaslessBuildPolicyEnabled =
     'gleec-gasfree-build-policy-v1:send=enabled;receive=enabled';
 
 /// Non-secret marker retained in web builds so CI can verify the two compiled
-/// GasFree kill switches instead of trusting the requested build arguments.
+/// GasFree build switches instead of trusting the requested build arguments.
 const String tronGaslessBuildPolicyMarker = tronGaslessEnabled
     ? (tronGaslessReceiveEnabled
           ? _tronGaslessBuildPolicyEnabled
@@ -126,69 +126,6 @@ String tronGaslessBuildPolicyMarkerFor({
     : (receiveEnabled
           ? _tronGaslessBuildPolicyReceiveOnly
           : _tronGaslessBuildPolicyDisabled);
-
-/// Runtime control endpoint for exposing new GasFree custody receive
-/// addresses.
-///
-/// The build-time switches above are necessary but not sufficient: production
-/// must also serve a fresh, fail-closed JSON document from this HTTPS URL. The
-/// expected schema is intentionally small and strict so an unrelated endpoint,
-/// stale cache, or partially deployed response cannot accidentally enable new
-/// deposits:
-///
-/// ```json
-/// {
-///   "schemaVersion": 1,
-///   "receiveEnabled": true,
-///   "expiresAt": "2026-07-10T12:00:00Z",
-///   "network": "tron",
-///   "serviceProvider": "T..."
-/// }
-/// ```
-///
-/// Empty is the production-safe disabled default. Query parameters, fragments,
-/// embedded credentials, root-only URLs, and non-HTTPS endpoints are rejected.
-const String tronGaslessControlUrl = String.fromEnvironment(
-  'TRON_GASLESS_CONTROL_URL',
-  defaultValue: '',
-);
-
-/// Parses a structurally safe GasFree runtime-control endpoint.
-Uri? parseTronGaslessControlEndpoint(String rawUrl) {
-  final trimmed = rawUrl.trim();
-  final uri = Uri.tryParse(trimmed);
-  final hasSafeSurface = RegExp(
-    r'^https://[A-Za-z0-9.-]+(?::[0-9]+)?/[A-Za-z0-9._~/-]*[A-Za-z0-9._~-]$',
-  ).hasMatch(trimmed);
-  if (!hasSafeSurface ||
-      trimmed.isEmpty ||
-      uri == null ||
-      uri.scheme != 'https' ||
-      uri.host.isEmpty ||
-      uri.userInfo.isNotEmpty ||
-      uri.hasQuery ||
-      uri.hasFragment ||
-      uri.path.isEmpty ||
-      uri.path == '/' ||
-      uri.path.endsWith('/') ||
-      uri.path.contains('//') ||
-      trimmed.contains('%') ||
-      trimmed.contains('/../') ||
-      trimmed.contains('/./') ||
-      trimmed.endsWith('/..') ||
-      trimmed.endsWith('/.')) {
-    return null;
-  }
-
-  final pathSegments = uri.pathSegments;
-  if (pathSegments.any(
-    (segment) => segment.isEmpty || segment == '.' || segment == '..',
-  )) {
-    return null;
-  }
-
-  return uri;
-}
 
 /// Tron gas-free (GasFree) relay configuration for gas-free TRC20 withdrawals.
 ///
