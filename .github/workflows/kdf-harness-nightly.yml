@@ -38,6 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Real KDF smoke
+        id: process_tier
         working-directory: sdk/packages/komodo_defi_harness
         timeout-minutes: 30
         env:
@@ -65,4 +66,30 @@ jobs:
       # directory" the habit.
       - name: Report
         if: always()
-        run: echo "Process-tier results are in the step log above."
+        env:
+          # Only whether the secret exists, never its value.
+          HAS_SEED: ${{ secrets.KDF_TEST_SEED != '' }}
+          OUTCOME: ${{ steps.process_tier.outcome }}
+        run: |
+          # This job is `continue-on-error`, so it can never go red. Without a
+          # summary, "the seed expired and nothing has run for months" and "the
+          # tier passed" are the same green tick. Say which one it was.
+          {
+            echo "## KDF harness - process tier"
+            if [ "$HAS_SEED" != "true" ]; then
+              echo
+              echo ":warning: **Skipped - \`KDF_TEST_SEED\` is not set.**"
+              echo "No real KDF ran. This is expected on forks; on this repo it"
+              echo "means the secret is missing or expired and the nightly has"
+              echo "been measuring nothing."
+            elif [ "$OUTCOME" = "success" ]; then
+              echo
+              echo ":white_check_mark: Ran against a real KDF. Timings are in the"
+              echo "step log (\`PROCESS TIER\` lines)."
+            else
+              echo
+              echo ":x: **Ran and failed** (outcome: \`$OUTCOME\`)."
+              echo "This job does not gate merges, so nobody is blocked - but the"
+              echo "real-KDF path is broken and wants a look."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
