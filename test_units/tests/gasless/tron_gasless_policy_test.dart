@@ -232,11 +232,27 @@ void testTronGaslessPolicy() {
       );
     });
 
+    // Asserted as an invariant against the compiled switches, not as hardcoded
+    // `isFalse`. CI now builds with the same GasFree --dart-defines as the
+    // release workflows, so a literal expectation here only tested that the
+    // test runner had been left unconfigured - and inverted the moment the
+    // configuration was supplied. What must hold either way is that the
+    // feature is *configured* exactly when it is both switched on and given a
+    // structurally valid provider config: enabling one without the other must
+    // still resolve to closed.
     test('rollout switches and missing config stay closed by default', () {
-      expect(tronGaslessEnabled, isFalse);
-      expect(tronGaslessReceiveEnabled, isFalse);
-      expect(isTronGaslessConfigured, isFalse);
-      expect(isTronGaslessReceiveConfigured, isFalse);
+      expect(
+        isTronGaslessConfigured,
+        tronGaslessEnabled &&
+            hasValidTronGaslessProviderConfig &&
+            tronGaslessConfiguredAssetIds.isNotEmpty,
+      );
+      expect(
+        isTronGaslessReceiveConfigured,
+        tronGaslessReceiveEnabled &&
+            hasValidTronGaslessProviderConfig &&
+            tronGaslessReceiveConfiguredAssetIds.isNotEmpty,
+      );
       expect(
         tronGaslessReceiveConfiguredAssetIds,
         tronGaslessAssetIdsFor(
