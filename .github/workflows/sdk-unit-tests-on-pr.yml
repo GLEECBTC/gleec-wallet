@@ -1,0 +1,63 @@
+# Runs the SDK submodule's own unit tests.
+#
+# There was no CI running them at all: `unit-tests-on-pr.yml` runs the app's
+# `test_units/main.dart`, and the submodule's suite - which is where the auth,
+# activation, pubkey and balance logic actually lives - was only ever run by
+# hand. A PR that changed `sdk/` could break 600 tests and go green.
+#
+# Scoped by path so unrelated app PRs do not pay for it.
+name: SDK unit tests
+run-name: ${{ github.actor }} is running SDK unit tests 🧪
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "sdk/**"
+      - ".github/workflows/sdk-unit-tests-on-pr.yml"
+
+jobs:
+  sdk_unit_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Test komodo_defi_sdk
+        working-directory: sdk/packages/komodo_defi_sdk
+        timeout-minutes: 20
+        env:
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Must stay unset. The SDK suite contains no process-tier tests, but
+          # generate-assets above fetches the KDF binary, so anything that keys
+          # off binary-existence instead of this variable would spawn a real KDF
+          # here.
+          KDF_HARNESS: ""
+        run: flutter test
+
+      # komodo_defi_local_auth is deliberately NOT gated yet.
+      #
+      # Its suite is 57 pass / 1 fail on a clean tree:
+      # `trezor_repository_test.dart` -> "adds stream error when status returns
+      # Error" enqueues a device error of 'Device not ready' and asserts the
+      # raised TrezorException carries it, but the exception surfaces
+      # 'GeneralErrorResponse(errorType: TestError)' instead. That is either a
+      # stale fixture or a real loss of the device-error detail on the way
+      # through, and it is not safe to guess which while wiring up CI.
+      #
+      # Adding the package here before that is resolved would ship a workflow
+      # that is red on arrival, which is the reliable way to get a gate ignored.
+      # Fix or triage that test, then add the step - the package's other 57
+      # tests are worth gating.

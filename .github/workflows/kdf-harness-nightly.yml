@@ -1,0 +1,64 @@
+# Real-KDF smoke, nightly. Informational, never gating.
+#
+# Spawns the actual ~120 MB KDF binary and talks to live electrum servers, so
+# it depends on third-party uptime and on a funded seed. Neither belongs in a
+# per-PR gate; both are worth knowing about once a day.
+name: KDF harness nightly (real KDF)
+run-name: Nightly real-KDF smoke 🌙
+
+on:
+  schedule:
+    # 03:20 UTC. Off the hour on purpose - the top of the hour is when every
+    # other scheduled job on GitHub's shared runners fires.
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  process_tier:
+    # Guards the scheduled intent even under workflow_dispatch's absence of one.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # Never `continue-on-error: false` into a required check. This job reports;
+    # it does not block anything.
+    continue-on-error: true
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Real KDF smoke
+        working-directory: sdk/packages/komodo_defi_harness
+        timeout-minutes: 30
+        env:
+          # The opt-in switch. Gating is on this and NOT on binary-existence:
+          # generate-assets above runs the build transformer, so the binary is
+          # present in every job that uses it, and an existence check would fail
+          # to skip in workflows that have no timeout budget for a real KDF.
+          KDF_HARNESS: "1"
+          # Skips cleanly when unset, which is the correct behaviour on a fork
+          # or before the secret is configured. Never echoed: the harness wraps
+          # it in `Secret` and redacts it from the captured log stream.
+          KDF_TEST_SEED: ${{ secrets.KDF_TEST_SEED }}
+        # `-j 1`: KDF's RPC port is fixed at 7783 (generateWithDefaults defaults
+        # it and the auth path never overrides it), so concurrent test files
+        # would each spawn a binary and race for the same port.
+        run: flutter test --tags process -j 1
+
+      # Deliberately no artifact upload. The harness workspace contains a real
+      # wallet database derived from KDF_TEST_SEED; the numbers belong in the
+      # job log, and nothing here is worth the risk of making "upload the run
+      # directory" the habit.
+      - name: Report
+        if: always()
+        run: echo "Process-tier results are in the step log above."

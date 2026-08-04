@@ -1,0 +1,99 @@
+# Wallet-load performance gate.
+#
+# Lives in the app repo rather than the SDK submodule because only this repo has
+# the `generate-assets` composite action, which the harness needs: booting a
+# real KomodoDefiSdk reads the bundled coins config.
+#
+# Replay tier only. It spawns no KDF binary, opens no chain connection, and
+# holds no port, so it is safe to run on every PR. The real-KDF tier is a
+# nightly job (kdf-harness-nightly.yml) and never gates.
+name: KDF harness (wallet load)
+run-name: ${{ github.actor }} is checking wallet load performance ⏱️
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  replay_tier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # HD and iguana take genuinely different paths - HD pays an address scan
+      # that iguana does not - and before this harness the HD branch had no
+      # coverage anywhere in either repo. A shared failure must not hide the
+      # other mode's result.
+      fail-fast: false
+      matrix:
+        wallet_type: [hd, iguana]
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the harness (${{ matrix.wallet_type }})
+        working-directory: sdk/packages/komodo_defi_harness
+        timeout-minutes: 10
+        env:
+          # Never set here. The process tier must not start in this job: it
+          # would spawn a 120 MB binary and bind the fixed port 7783.
+          KDF_HARNESS: ""
+          # Makes the matrix real. Without it both legs would run both
+          # derivation modes and report the same result twice, and a failure
+          # would not say which mode broke.
+          KDF_HARNESS_WALLET_TYPE: ${{ matrix.wallet_type }}
+        run: flutter test --exclude-tags bench
+
+      - name: Benchmark
+        working-directory: sdk/packages/komodo_defi_harness
+        timeout-minutes: 10
+        env:
+          BENCH_OUT: build/bench_result.json
+          KDF_HARNESS_WALLET_TYPE: ${{ matrix.wallet_type }}
+        run: flutter test --tags bench
+
+      - name: Compare against the committed baseline
+        working-directory: sdk/packages/komodo_defi_harness
+        run: |
+          dart run tool/compare_bench.dart \
+            --baseline tool/bench_baseline.json \
+            --current build/bench_result.json \
+            --max-regression 0.30
+
+      - name: Upload bench result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.wallet_type }}
+          # ONLY the JSON. Never the harness workspace: on the process tier it
+          # contains a real wallet database, and making "upload the run
+          # directory" a habit here is how that leaks later.
+          path: sdk/packages/komodo_defi_harness/build/bench_result.json
+          if-no-files-found: warn
+
+      # `flutter test` rewrites pubspec.lock and the framework's
+      # app_build/build_config.json (bundled_coins_repo_commit). Those edits are
+      # a side effect of running tests, not a result, and a PR that silently
+      # carries them is a PR nobody reviewed properly.
+      - name: Fail if the tree is dirty
+        run: |
+          git checkout -- \
+            pubspec.lock \
+            sdk/pubspec.lock \
+            sdk/packages/komodo_defi_framework/app_build/build_config.json \
+            2>/dev/null || true
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::The test run left the working tree dirty:"
+            git status --porcelain
+            exit 1
+          fi
