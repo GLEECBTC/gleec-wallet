@@ -214,22 +214,21 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // session. Accepted: a stalled bouncer stranding the whole wallet is the
     // worse failure.
     //
-    // TODO: UX Improvement - For faster startup, populate coins immediately
-    // and reactively filter when trading status updates arrive. This would
-    // eliminate startup delay (~100-500ms) but requires UI to handle dynamic
-    // removal of blocked assets. It would also close the timeout gap above.
-    // See TradingStatusService._currentStatus for related trade-offs.
-    try {
-      await _tradingStatusService.initialStatusReady.timeout(
-        _initialTradingStatusTimeout,
-      );
-    } on TimeoutException {
-      _log.warning(
-        'Trading status not ready after '
-        '${_initialTradingStatusTimeout.inSeconds}s; populating coins anyway',
-      );
-    }
-
+    // Populate first, filter second (the UX improvement the comment above used
+    // to describe as a TODO).
+    //
+    // This ordering is now load-bearing rather than defensive: `main()` no
+    // longer awaits `TradingStatusService.initialize()` before `runApp`, so the
+    // geo call is genuinely in flight when this handler runs and
+    // `initialStatusReady` is genuinely not yet satisfied. Everything
+    // downstream - the catalogue emit that clears `WalletOverview`'s
+    // empty-state spinner, and the `CoinsSessionStarted` dispatch that starts
+    // the whole activation fan-out - would otherwise sit behind a geo call that
+    // none of it depends on.
+    //
+    // The window between the two emissions can show a geo-blocked asset in the
+    // catalogue list. That was already true for the whole session on the
+    // timeout path, so this narrows the exposure rather than widening it.
     emit(state.copyWith(coins: _coinsRepo.getKnownCoinsMap()));
 
     final existingUser = await _kdfSdk.auth.currentUser;
@@ -247,6 +246,22 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       }
       add(CoinsPricesUpdated());
     });
+
+    // Still inside the handler, so `emit` remains valid.
+    try {
+      await _tradingStatusService.initialStatusReady.timeout(
+        _initialTradingStatusTimeout,
+      );
+      if (!isClosed) {
+        emit(state.copyWith(coins: _coinsRepo.getKnownCoinsMap()));
+      }
+    } on TimeoutException {
+      _log.warning(
+        'Trading status not ready after '
+        '${_initialTradingStatusTimeout.inSeconds}s; leaving the catalogue '
+        'unfiltered',
+      );
+    }
   }
 
   /// Bridges [CoinsRepo]'s coin streams into bloc events.

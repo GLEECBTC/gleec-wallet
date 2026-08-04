@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/analytics/events.dart';
@@ -423,6 +424,39 @@ class _MyAppViewState extends State<_MyAppView> {
     return _currentPrecacheOperation = _runCoinIconPrecache(sdk);
   }
 
+  /// Moves the signed-in wallet's coins to the front of [assetIds], in place.
+  ///
+  /// Best effort: if the wallet list is not populated yet the original order is
+  /// kept, since this only decides *when* an already-scheduled icon loads.
+  void _prioritiseWalletIcons(List<AssetId> assetIds) {
+    if (!mounted) return;
+
+    final Set<String> walletSymbols;
+    try {
+      walletSymbols = context
+          .read<CoinsBloc>()
+          .state
+          .walletCoins
+          .values
+          .map((coin) => coin.id.symbol.configSymbol.toLowerCase())
+          .toSet();
+    } catch (_) {
+      return;
+    }
+    if (walletSymbols.isEmpty) return;
+
+    bool isWalletCoin(AssetId id) =>
+        walletSymbols.contains(id.symbol.configSymbol.toLowerCase());
+
+    final prioritised = [
+      ...assetIds.where(isWalletCoin),
+      ...assetIds.where((id) => !isWalletCoin(id)),
+    ];
+    assetIds
+      ..clear()
+      ..addAll(prioritised);
+  }
+
   Future<void> _runCoinIconPrecache(KomodoDefiSdk sdk) async {
     try {
       final stopwatch = Stopwatch()..start();
@@ -442,6 +476,13 @@ class _MyAppViewState extends State<_MyAppView> {
         coveredAssetCount++;
         return seenSymbols.add(configSymbol.toLowerCase());
       }).toList();
+
+      // Precache the wallet's own coins first. The set and `coveredAssetCount`
+      // are unchanged - only the order is - but the icons the user is actually
+      // looking at now land in the first batch or two instead of somewhere in
+      // the ~54 batches that follow, while every batch competes with KDF for
+      // the web main thread.
+      _prioritiseWalletIcons(assetIdsToPrecache);
 
       for (
         var i = 0;

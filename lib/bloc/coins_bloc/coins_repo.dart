@@ -41,12 +41,27 @@ import 'package:web_dex/shared/utils/platform_tuner.dart';
 /// it must always terminate: see [CoinsRepo.updateIguanaBalances].
 const Duration _balanceRefreshPerCoinTimeout = Duration(seconds: 20);
 
+/// How many coin balances the fallback sweep reads at once.
+///
+/// Small on purpose: on web every one of these is an RPC into a KDF instance
+/// that shares the browser's main thread with the UI, so the goal is to stop
+/// the sweep being a strict sum of per-coin latencies without turning it into
+/// a burst that starves activation.
+const int _balanceRefreshConcurrency = 4;
+
 /// Ceiling on a single activation attempt.
 ///
-/// Generous: a cold UTXO activation legitimately takes tens of seconds. This
-/// exists only so an attempt that will *never* return becomes a retryable
-/// failure - see [CoinsRepo.activateAssetsSync].
-const Duration _activationAttemptTimeout = Duration(seconds: 90);
+/// Generous: a cold UTXO activation legitimately takes tens of seconds, and a
+/// cold EVM one was measured at up to 346s. This exists only so an attempt that
+/// will *never* return becomes a retryable failure - see
+/// [CoinsRepo.activateAssetsSync].
+///
+/// Must stay **above** `SharedActivationCoordinator.evmActivationTimeout`
+/// (8 min). The coordinator has to fire first so it can clear its pending
+/// entry; if this fires first the retry re-joins the still-pending completer
+/// instead of starting fresh, which is the wedge the coordinator's deadline
+/// exists to break.
+const Duration _activationAttemptTimeout = Duration(minutes: 10);
 
 /// Exception used to indicate that ZHTLC activation was cancelled by the user.
 class ZhtlcActivationCancelled implements Exception {
@@ -648,8 +663,16 @@ class CoinsRepo {
               // Per-attempt bound. `retry` can only re-fire an attempt that
               // *terminates*; an activation that hangs pins the asset on
               // `activating` forever and, on the login path, stalls the
-              // `Future.wait` over the whole fan-out with it. A timeout turns
-              // that into an ordinary retryable failure.
+              // `Future.wait` over the whole fan-out with it.
+              //
+              // This timeout alone did NOT make that retryable: Dart timeouts
+              // do not cancel, so the SDK's pending-activation entry survived
+              // and the next attempt re-joined the same wedged future - four
+              // attempts, one attempt's worth of work, ~6 minutes of waiting.
+              // The real bound is SharedActivationCoordinator's own deadline
+              // (deliberately shorter than this one), which fails the attempt
+              // and clears the entry so this retry starts fresh. Keep this as
+              // the outer backstop.
               final didActivate = await _kdfSdk
                   .ensureAssetActivated(asset)
                   .timeout(_activationAttemptTimeout);
@@ -1167,58 +1190,75 @@ class CoinsRepo {
         .where((coin) => coin.isActive)
         .toList();
 
-    // Get balances from the SDK for all active coins
-    for (final coin in coins) {
-      try {
-        // Use the SDK's balance manager to get the current balance.
-        //
-        // Bounded per coin. getBalance ultimately awaits getPubkeys, which has
-        // no timeout: one unresponsive asset would otherwise hold this stream
-        // open indefinitely. CoinsBloc consumes it through `emit.forEach` on a
-        // `droppable()` handler, so the handler would never complete and every
-        // later CoinsBalancesRefreshed - including the 3-minute fallback sweep
-        // that exists precisely to recover stalled assets - would be dropped
-        // for the rest of the session.
-        final balanceInfo = await _kdfSdk.balances
-            .getBalance(coin.id)
-            .timeout(_balanceRefreshPerCoinTimeout);
-
-        // Convert to double for compatibility with existing code
-        final newBalance = balanceInfo.total.toDouble();
-        final newSpendable = balanceInfo.spendable.toDouble();
-
-        // Get the current cached values
-        final cachedBalance = _balancesCache[coin.id.id]?.balance;
-        final cachedSpendable = _balancesCache[coin.id.id]?.spendable;
-
-        // Check if balance has changed
-        final balanceChanged =
-            cachedBalance == null || newBalance != cachedBalance;
-        final spendableChanged =
-            cachedSpendable == null || newSpendable != cachedSpendable;
-
-        // Only yield if there's a change
-        if (balanceChanged || spendableChanged) {
-          // Update the cache
-          _balancesCache[coin.id.id] = (
-            balance: newBalance,
-            spendable: newSpendable,
-          );
-
-          final updatedCoin = coin.copyWith(sendableBalance: newSpendable);
-
-          // Broadcast the updated balance so non-streaming assets still emit
-          // real-time change events through the same path as streaming assets.
-          _broadcastBalanceChange(updatedCoin);
-
-          // Yield updated coin with new balance
-          // We still set both the deprecated fields and rely on the SDK
-          // for future access to maintain backward compatibility
-          yield updatedCoin;
-        }
-      } catch (e, s) {
-        _log.warning('Failed to update balance for ${coin.id}', e, s);
+    // Fetch in bounded-concurrency waves rather than strictly one at a time.
+    //
+    // Sequentially, the sweep's wall clock was the *sum* of every coin's read,
+    // and with [_balanceRefreshPerCoinTimeout] at 20s a handful of slow coins
+    // could hold it for minutes - while this is the only thing that populates
+    // `lastKnown` for coins whose balance watcher has not emitted, and
+    // therefore what the overview total and the wallet-list sort order wait on.
+    //
+    // The cap keeps the fan-out from competing with activation for the same
+    // single-threaded KDF instance; per-wave `Future.wait` keeps the stream
+    // incremental (rows update as each wave lands) and, because every read is
+    // individually bounded and every error is swallowed per coin, guarantees
+    // this stream still terminates - which the `droppable()` + `emit.forEach`
+    // consumer in [CoinsBloc._onCoinsRefreshed] depends on.
+    for (var i = 0; i < coins.length; i += _balanceRefreshConcurrency) {
+      final wave = coins.skip(i).take(_balanceRefreshConcurrency);
+      final updated = await Future.wait(wave.map(_refreshCoinBalance));
+      for (final coin in updated) {
+        if (coin != null) yield coin;
       }
+    }
+  }
+
+  /// Reads one coin's balance, updating the cache and broadcasting a change.
+  ///
+  /// Returns the updated coin when its balance actually moved, else null.
+  /// Never throws: a single unreadable coin must not end the sweep.
+  Future<Coin?> _refreshCoinBalance(Coin coin) async {
+    try {
+      // Bounded per coin. getBalance ultimately awaits getPubkeys, which has
+      // no timeout of its own.
+      final balanceInfo = await _kdfSdk.balances
+          .getBalance(coin.id)
+          .timeout(_balanceRefreshPerCoinTimeout);
+
+      // Convert to double for compatibility with existing code
+      final newBalance = balanceInfo.total.toDouble();
+      final newSpendable = balanceInfo.spendable.toDouble();
+
+      // Get the current cached values
+      final cachedBalance = _balancesCache[coin.id.id]?.balance;
+      final cachedSpendable = _balancesCache[coin.id.id]?.spendable;
+
+      // Check if balance has changed
+      final balanceChanged =
+          cachedBalance == null || newBalance != cachedBalance;
+      final spendableChanged =
+          cachedSpendable == null || newSpendable != cachedSpendable;
+
+      if (!balanceChanged && !spendableChanged) return null;
+
+      // Update the cache. Keyed per coin, so concurrent waves cannot collide.
+      _balancesCache[coin.id.id] = (
+        balance: newBalance,
+        spendable: newSpendable,
+      );
+
+      final updatedCoin = coin.copyWith(sendableBalance: newSpendable);
+
+      // Broadcast the updated balance so non-streaming assets still emit
+      // real-time change events through the same path as streaming assets.
+      _broadcastBalanceChange(updatedCoin);
+
+      // We still set both the deprecated fields and rely on the SDK
+      // for future access to maintain backward compatibility
+      return updatedCoin;
+    } catch (e, s) {
+      _log.warning('Failed to update balance for ${coin.id}', e, s);
+      return null;
     }
   }
 

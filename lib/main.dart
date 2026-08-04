@@ -12,6 +12,7 @@ import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.da
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:web_dex/analytics/wallet_load_timeline.dart';
 import 'package:web_dex/analytics/widgets/analytics_lifecycle_handler.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/app_config/package_information.dart';
@@ -52,6 +53,7 @@ PerformanceMode? get appDemoPerformanceMode =>
 
 Future<void> main() async {
   await runZonedGuarded(() async {
+    WalletLoadTimeline.instance.markProcessStart();
     usePathUrlStrategy();
     WidgetsFlutterBinding.ensureInitialized();
     Bloc.observer = AppBlocObserver();
@@ -86,7 +88,23 @@ Future<void> main() async {
 
     final tradingStatusRepository = TradingStatusRepository(komodoDefiSdk);
     final tradingStatusService = TradingStatusService(tradingStatusRepository);
-    await tradingStatusService.initialize();
+    // Deliberately not awaited: this is a geo-lookup over the network, and
+    // nothing between here and the first frame depends on its answer.
+    // `initialize()` sets `_isInitialized` synchronously before its first
+    // await, so the `currentStatus`/`isTradingEnabled` asserts stay satisfied,
+    // and the cached status starts restrictive - identical to what the failure
+    // path sets. `CoinsBloc` already waits on `initialStatusReady` with its own
+    // timeout and re-emits the catalogue when the real status lands.
+    unawaited(
+      tradingStatusService.initialize().catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        // `initialize()` swallows fetch failures itself, so reaching here means
+        // the watcher setup failed - worth a line, not worth a crash.
+        log('Trading status initialization failed: $error').ignore();
+      }),
+    );
     final arrrActivationService = ArrrActivationService(komodoDefiSdk, mm2);
 
     final coinsRepo = CoinsRepo(
@@ -102,21 +120,16 @@ Future<void> main() async {
       legacyNativeWalletMigration: legacyNativeWalletMigration,
     );
 
-    // Start FD monitoring on iOS (works in both Debug and Release)
+    // Start FD monitoring on iOS (works in both Debug and Release).
+    // A diagnostic, so it is bounded and never awaited: a method channel that
+    // does not answer must not hold the first frame.
     if (PlatformTuner.isIOS) {
-      try {
-        final result = await FdMonitorService().start(intervalSeconds: 60.0);
-        if (result['success'] == true) {
-          log(
-            'FD Monitor started successfully in ${kDebugMode ? "DEBUG" : "RELEASE"} mode',
-          );
-        } else {
-          log('FD Monitor failed to start: ${result['message']}');
-        }
-      } catch (e) {
-        log('Failed to start FD Monitor: $e');
-      }
+      unawaited(_startFdMonitor());
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WalletLoadTimeline.instance.mark(WalletLoadMark.appFirstFrame);
+    });
 
     runApp(
       EasyLocalization(
@@ -145,6 +158,27 @@ Future<void> main() async {
       ),
     );
   }, catchUnhandledExceptions);
+}
+
+/// iOS file-descriptor monitoring. Bounded so a silent method channel costs a
+/// log line rather than the startup path it used to sit on.
+Future<void> _startFdMonitor() async {
+  try {
+    final result = await FdMonitorService()
+        .start(intervalSeconds: 60.0)
+        .timeout(const Duration(seconds: 2));
+    if (result['success'] == true) {
+      log(
+        'FD Monitor started successfully in ${kDebugMode ? "DEBUG" : "RELEASE"} mode',
+      ).ignore();
+    } else {
+      log('FD Monitor failed to start: ${result['message']}').ignore();
+    }
+  } on TimeoutException {
+    log('FD Monitor did not start within 2s; continuing without it').ignore();
+  } catch (e) {
+    log('Failed to start FD Monitor: $e').ignore();
+  }
 }
 
 void catchUnhandledExceptions(Object error, StackTrace? stack) {
