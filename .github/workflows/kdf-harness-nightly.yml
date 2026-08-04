@@ -45,6 +45,10 @@ jobs:
           # generate-assets above runs the build transformer, so the binary is
           # present in every job that uses it, and an existence check would fail
           # to skip in workflows that have no timeout budget for a real KDF.
+          # `flutter test` re-runs the asset build transformer, which reads the
+          # coins repo over the GitHub API. Unauthenticated it shares the
+          # runner's IP rate budget and fails with `403 rate limit exceeded`.
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KDF_HARNESS: "1"
           # Skips cleanly when unset, which is the correct behaviour on a fork
           # or before the secret is configured. Never echoed: the harness wraps

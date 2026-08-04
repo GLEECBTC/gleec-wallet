@@ -45,6 +45,12 @@ jobs:
         working-directory: sdk/packages/komodo_defi_harness
         timeout-minutes: 10
         env:
+          # `flutter test` re-runs the asset build transformer, which reads the
+          # coins repo over the GitHub API. Unauthenticated it shares the
+          # runner's 60 req/hr IP budget and fails with `403 rate limit
+          # exceeded` - intermittently, so it looks like flake rather than a
+          # missing token.
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Never set here. The process tier must not start in this job: it
           # would spawn a 120 MB binary and bind the fixed port 7783.
           KDF_HARNESS: ""
@@ -58,6 +64,8 @@ jobs:
         working-directory: sdk/packages/komodo_defi_harness
         timeout-minutes: 10
         env:
+          # Same reason as the step above - this also runs the transformer.
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BENCH_OUT: build/bench_result.json
           KDF_HARNESS_WALLET_TYPE: ${{ matrix.wallet_type }}
         run: flutter test --tags bench
