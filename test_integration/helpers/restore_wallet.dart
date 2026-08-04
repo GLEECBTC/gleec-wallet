@@ -31,8 +31,10 @@ Future<void> restoreWalletToTest(WidgetTester tester) async {
   final Finder importSeedField = find.byKey(const Key('import-seed-field'));
   final Finder importConfirmButton =
       find.byKey(const Key('confirm-seed-button'));
-  final Finder eulaCheckBox = find.byKey(const Key('checkbox-eula'));
-  final Finder tocCheckBox = find.byKey(const Key('checkbox-toc'));
+  // EULA and ToS are one checkbox, not two. This looked for `checkbox-eula`
+  // and `checkbox-toc`, neither of which the widget has ever exposed, so the
+  // helper - and every test that logs in through it - failed at this line.
+  final Finder eulaTosCheckBox = find.byKey(const Key('checkbox-eula-tos'));
   final Finder walletsManagerWrapper =
       find.byKey(const Key('wallets-manager-wrapper'));
   final Finder allowCustomSeedCheckbox =
@@ -61,8 +63,7 @@ Future<void> restoreWalletToTest(WidgetTester tester) async {
   await tester.pump();
 
   print('🔍 RESTORE WALLET: Accepting terms');
-  await tester.tapAndPump(eulaCheckBox);
-  await tester.tapAndPump(tocCheckBox);
+  await tester.tapAndPump(eulaTosCheckBox);
 
   final isCustomSeed = validator.validateBip39(testSeed);
 
