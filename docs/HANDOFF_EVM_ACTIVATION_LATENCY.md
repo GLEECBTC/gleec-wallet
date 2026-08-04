@@ -9,6 +9,41 @@ are taken and [`KDF_IMPROVEMENT_OPPORTUNITIES.md`](KDF_IMPROVEMENT_OPPORTUNITIES
 
 ---
 
+## Where the work happens
+
+**Every file this document asks you to change is in a different repository than
+this document.** Three repos are involved:
+
+| repo | role | you will |
+|---|---|---|
+| `komodo-defi-framework` (sibling checkout) | the Rust source: `mm2src/coins/eth/**`, `common/wio.rs`, `mm2_net/**` | **edit every line here** |
+| this repo (`gleec-wallet-kdf-integrations`) | `tool/kdf_latency_probe.py`, `sdk/packages/komodo_defi_harness`, these docs | **measure and validate from here** |
+| `nitride-kdf-builds` | 7-target release build + Cloudflare R2 publish | only when shipping a binary to the app |
+
+So: **drive the task from this repo, but make no source edits in it.** This is
+the only place that has the probe, the harness, the recorded baselines and the
+validation loop; the KDF repo is the only place with the code.
+
+**Use the existing sibling checkout, not a fresh clone.** It carries a warm
+Cargo `target/` (~200 GB), which is the difference between a ~5 minute
+incremental build and a ~45 minute cold one. You will rebuild many times.
+
+**Branch from `perf/hd-scan-concurrency`** (`ed8de236b`), not from
+`feat/tron-gasfree` — you want the concurrent gap scan and the P2P panic fix
+underneath you, and that commit is what the app currently pins in
+`sdk/packages/komodo_defi_framework/app_build/build_config.json`. Note it is
+pushed only to the `fork` remote (`CharlVS/komodo-defi-framework`); if it lands
+on `feat/tron-gasfree` or upstream in the meantime, rebase rather than
+branching twice.
+
+The loop is: edit in the KDF repo → `cargo build --release --target
+aarch64-apple-darwin --bin kdf` → point the probe at the built binary with
+`--kdf` → compare. Only bother with the full `nitride-kdf-builds` release and
+the `build_config.json` bump once you have a result worth putting in front of
+the app.
+
+---
+
 ## Where things stand
 
 **Fixed already (KDF `perf/hd-scan-concurrency`, commit `ed8de236b`):** the HD
