@@ -30,7 +30,10 @@ import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/shared/constants.dart'
-    show isTronGaslessReceiveConfigured, tronGaslessServiceProvider;
+    show
+        isTronGaslessConfigured,
+        isTronGaslessReceiveConfigured,
+        tronGaslessServiceProvider;
 import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/widgets/copyable_address_dialog.dart';
@@ -1097,11 +1100,23 @@ void testReceiveAddressFaucetWidgets() {
         final trx = Asset.fromJson(_trxConfig(), knownIds: const {});
         final usdt = Asset.fromJson(_trc20Config(), knownIds: {trx.id});
 
-        // Tests run without a valid provider configuration. Runtime recovery
-        // identity remains available, but new-address restrictions do not
-        // advertise an inactive rail.
-        expect(trx.toCoin().isGaslessSingleAddressScope(sdk), isFalse);
-        expect(usdt.toCoin().isGaslessSingleAddressScope(sdk), isFalse);
+        // Asserted against the compiled switch rather than a hardcoded
+        // `isFalse`: CI now supplies the same GasFree --dart-defines as the
+        // release builds, so the rail is legitimately active there and
+        // inactive in an unconfigured build. The invariant that matters is
+        // that the single-address scope tracks `isTronGaslessConfigured`
+        // exactly - never open while the feature is unconfigured. Note it is
+        // deliberately NOT gated on the *receive* flag: pulling the receive
+        // kill switch must not re-open secondary TRON address creation.
+        expect(
+          trx.toCoin().isGaslessSingleAddressScope(sdk),
+          isTronGaslessConfigured,
+        );
+        expect(
+          usdt.toCoin().isGaslessSingleAddressScope(sdk),
+          isTronGaslessConfigured,
+        );
+        // Recovery identity is deliberately config-independent.
         expect(usdt.toCoin().isGaslessRecoveryAsset, isTrue);
 
         final utxo = Asset.fromJson({

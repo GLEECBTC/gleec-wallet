@@ -74,7 +74,10 @@ class TransactionTable extends StatelessWidget {
           return const SliverToBoxAdapter(child: UiSpinnerList());
         }
 
-        if (state.error != null) {
+        // Errors only take over the viewport when there is nothing to show.
+        // With rows already in hand a refresh failure keeps them on screen
+        // rather than replacing a correct list with a retry prompt.
+        if (state.error != null && state.transactions.isEmpty) {
           String errorText;
           if (state.error!.message.contains('Asset activation failed')) {
             errorText = 'Asset activation failed for ${coin.displayName}';

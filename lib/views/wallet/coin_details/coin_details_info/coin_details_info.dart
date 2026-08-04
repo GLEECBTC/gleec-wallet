@@ -843,6 +843,13 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   final BalanceInfo? latestBalance;
   final Widget? fiatBalance;
 
+  /// Skeleton shown only when there is genuinely nothing to render.
+  ///
+  /// A *cached* balance is rendered immediately (dimmed, with a refresh
+  /// affordance) rather than hidden behind this: hiding it meant a coin page
+  /// re-opened seconds after the last fetch showed a placeholder for the whole
+  /// duration of a fresh round trip, even though the number was already in
+  /// memory. See [build]'s `showGhost`/`isRefreshing` split.
   Widget _buildGhostValue(ThemeData themeData) {
     final style = themeData.textTheme.titleMedium?.copyWith(
       fontSize: isMobile ? 25 : 22,
@@ -885,12 +892,18 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeData = Theme.of(context);
-    final showGhost = !hideBalances && !isConfirmed;
     final balance = latestBalance?.spendable.toDouble();
+
+    // Unconfirmed *and* nothing cached -> skeleton. Unconfirmed *with* a cached
+    // value -> render it now, dimmed, with a refresh spinner. `isConfirmed`
+    // stays honest (only a completed fetch, or a stream value that arrives
+    // after a bootstrap attempt, sets it) - it just no longer decides whether
+    // the user sees a number at all.
+    final showGhost = !hideBalances && !isConfirmed && latestBalance == null;
+    final isRefreshing = !hideBalances && !isConfirmed && latestBalance != null;
+
     final value = hideBalances
         ? maskedBalanceText
-        : showGhost
-        ? ''
         : balance == null
         ? kBalancePlaceholder
         : doubleToString(balance);
@@ -929,7 +942,9 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                         style: themeData.textTheme.titleMedium!.copyWith(
                           fontSize: isMobile ? 25 : 22,
                           fontWeight: FontWeight.w700,
-                          color: theme.custom.headerFloatBoxColor,
+                          color: theme.custom.headerFloatBoxColor.withValues(
+                            alpha: isRefreshing ? 0.65 : 1,
+                          ),
                           height: 1.1,
                         ),
                       ),
@@ -940,10 +955,26 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                       style: themeData.textTheme.titleSmall!.copyWith(
                         fontSize: isMobile ? 25 : 20,
                         fontWeight: FontWeight.w500,
-                        color: theme.custom.headerFloatBoxColor,
+                        color: theme.custom.headerFloatBoxColor.withValues(
+                          alpha: isRefreshing ? 0.65 : 1,
+                        ),
                         height: 1.1,
                       ),
                     ),
+                    if (isRefreshing) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        key: const Key('coin-details-balance-refreshing'),
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: theme.custom.headerFloatBoxColor.withValues(
+                            alpha: 0.65,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
         ),

@@ -26,6 +26,10 @@ class TransactionHistoryBloc
   final KomodoDefiSdk _sdk;
   StreamSubscription<List<Transaction>>? _historySubscription;
 
+  /// The coin the current list belongs to, so a re-subscribe for the *same*
+  /// coin can keep showing it.
+  AssetId? _subscribedCoinId;
+
   String _errorMessageFrom(Object error) => formatKdfUserFacingError(error);
 
   @override
@@ -38,7 +42,17 @@ class TransactionHistoryBloc
     TransactionHistorySubscribe event,
     Emitter<TransactionHistoryState> emit,
   ) async {
-    emit(const TransactionHistoryState.initial());
+    // Only blank the list when the coin actually changed. Re-subscribing for
+    // the same coin - the retry button, a completed withdrawal, `restartable()`
+    // re-firing - used to reset to an empty list and therefore drop straight
+    // back to the full-page spinner, discarding rows that were already correct.
+    final isSameCoin = _subscribedCoinId == event.coin.id;
+    if (isSameCoin) {
+      emit(state.copyWith(clearError: true));
+    } else {
+      emit(const TransactionHistoryState.initial());
+    }
+    _subscribedCoinId = event.coin.id;
 
     if (!hasTxHistorySupport(event.coin)) {
       emit(
@@ -122,7 +136,13 @@ class TransactionHistoryBloc
     TransactionHistoryUpdated event,
     Emitter<TransactionHistoryState> emit,
   ) {
-    emit(state.copyWith(transactions: event.transactions, loading: false));
+    emit(
+      state.copyWith(
+        transactions: event.transactions,
+        loading: false,
+        clearError: true,
+      ),
+    );
   }
 
   void _onStartedLoading(
