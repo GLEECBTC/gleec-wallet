@@ -1,5 +1,23 @@
 # Hand-off: make EVM activation stop being the slowest thing in a login
 
+> **Status: done.** Both items are implemented on KDF branch
+> `perf/evm-rpc-concurrency` and measured. `enable_eth_with_tokens` went from a
+> 212.1s median to 27.3s (7.8×), and the post-activation steps that used to time
+> out and return **zero** balances now complete.
+>
+> Two premises in this document turned out to be wrong, and the corrections are
+> worth reading before trusting anything else here:
+>
+> * **The "~85% of per-RPC cost is unexplained" was a wrong denominator, not a
+>   real effect.** The activation makes ~1200 RPCs, not ~87; per-RPC wire time is
+>   a healthy 236ms and nothing was being rate limited.
+> * **`abandon … about` is not an empty wallet on Ethereum**, so the gap scan
+>   walks ~239 addresses rather than 21. Every EVM number in these docs is for a
+>   wallet with ~68 used addresses.
+>
+> Results and the full correction list are in
+> [`KDF_IMPROVEMENT_OPPORTUNITIES.md` § Validation round 2](KDF_IMPROVEMENT_OPPORTUNITIES.md#validation-round-2-the-evm-mutex-item-2-and-the-pooled-transport-item-4).
+
 You are picking up the second half of a wallet-load latency effort. The first
 half is **done, merged and measured**; this document is the remaining work.
 

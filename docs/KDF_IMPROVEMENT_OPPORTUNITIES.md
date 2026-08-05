@@ -133,6 +133,10 @@ so KDF could safely *raise* the default rather than clients lowering it.
 
 ## 2. Release the `web3_instances` mutex before the network round trip — ~90s off the 363.8s EVM call
 
+> **Done, and the estimate below is wrong — measured 212.1s → 27.3s (7.8×), not 25%.**
+> The "~85% unexplained per-RPC cost" was a wrong denominator, not a real effect.
+> See [Validation round 2](#validation-round-2-the-evm-mutex-item-2-and-the-pooled-transport-item-4).
+
 **Current behaviour.** `try_rpc_send` binds
 `let mut clients = self.web3_instances.lock().await;` (`eth/eth_rpc.rs:27`) ✅
 and the guard lives to end of function, because `clients.rotate_left(i)` (`:44`)
@@ -258,6 +262,12 @@ value is the liveness fix, which no test covers today.
 ---
 
 ## 4. Give the EVM transport a pooled Hyper client — ~13–26s, and it helps everyone
+
+> **Done. Measured −16% on per-RPC wire time (246ms → 207ms); the wall-clock
+> difference is inside the noise at n=3.** One claim below is refuted: the
+> `pool_idle_timeout` → SO_KEEPALIVE argument does not hold, because `wio.rs`
+> does not use `build_http()` and no HYPER socket has a keepalive today.
+> See [Validation round 2](#validation-round-2-the-evm-mutex-item-2-and-the-pooled-transport-item-4).
 
 **Current behaviour.** `HYPER` is one process-global `lazy_static` built with
 `.pool_max_idle_per_host(0)` (`common/wio.rs:115`). Every native EVM/TRON
@@ -630,3 +640,178 @@ Because the app-default set is EVM-dominated, its headline moved much less than
 the UTXO rows: **480.7s → 411.6s**, essentially all of it from KMD + BTC-segwit
 (168.2s → 14.3s) with the ETH call unchanged-to-noisy. The eight-minute login is
 now a ~7-minute login; **item 2 is what takes the rest out.**
+
+---
+
+# Validation round 2: the EVM mutex (item 2) and the pooled transport (item 4)
+
+Implemented on KDF branch `perf/evm-rpc-concurrency` off `perf/hd-scan-concurrency`
+(`ed8de236b`), built for `aarch64-apple-darwin`, measured with the same probe,
+the same seed and the same endpoints. Three alternating rounds per arm, arms
+alternating *within* each round so network drift hits both equally.
+
+## First: two things above were wrong, and one of them mattered a lot
+
+**There was no "unexplained ~85% of per-RPC cost". It was a wrong denominator.**
+The hand-off divided 363.8s by an *assumed* ~87 RPCs to get ~4.2s per round trip,
+could not explain it, and guessed at endpoint rate limiting. Instrumenting the
+pool and counting gives **1160 RPCs** on that call — 13× the assumption — which
+implies ~314ms each. KDF's own telemetry measures the median wire time at
+**236ms**, with **one failover in 1208 calls**. The endpoints were never slow and
+nothing was being rate limited. Do not go looking for that explanation again.
+
+Two compounding reasons the census was off:
+
+* **`abandon abandon … about` is not an empty wallet on Ethereum.** It is the
+  most-used public test vector there is, so the gap scan keeps finding *used*
+  addresses, keeps resetting its unused counter, and walked **239** addresses
+  instead of 21 — about 68 of them used. Every EVM measurement in these docs
+  used this seed. The `~87` arithmetic is still right for a genuinely empty
+  wallet, and still the right number for reasoning about a new user; it is not
+  the number this seed produces.
+* **A used address costs roughly double.** `AddressBalanceStatus::Used` issues a
+  full `known_address_balance` on top of everything `is_address_used` just
+  fetched, duplicating the native balance and every `balanceOf`.
+
+**The bimodality recorded above is now explained.** It was attributed to an
+unknown cause. Baseline round 3 here took 331.4s against 211-212s for the other
+two, reproducing the 196.9 / 219.0 / 346.4 spread — and its **wire median was
+372ms against 235ms**. The endpoint was simply slower for those few minutes.
+Under full serialization wall clock is a direct multiple of per-RPC latency, so
+a 58% latency excursion becomes a 57% longer activation. The mutex did not just
+make activation slow, it made it **fragile**.
+
+## Item 2 — release the `web3_instances` mutex: 7.8×, not 25%
+
+| | baseline | item 2 |
+|---|---:|---:|
+| `enable_eth_with_tokens` median | 212.1s | **27.3s** |
+| samples | 212.1 / 211.2 / 331.4s | 27.3 / 28.9 / 22.6s |
+| spread | 120.1s (57% of median) | **6.3s (23%)** |
+| `scan_for_new_addresses` | 20.1s, **timed out** ×2 | **2.1s**, completes |
+| `account_balance` | 60.0s, **timed out** ×3, **0 addresses** | **12.2s, 197 addresses** |
+| RPCs completed | 1208 / 1207 / 1086 | 1548 / 1548 / 1548 |
+| wire time, median | 238ms | 243ms |
+| wait before send, mean | 4028ms | **920ms** |
+
+The ranges do not overlap. Two things matter more than the headline.
+
+**The baseline never actually delivers balances.** `account_balance` hit the
+SDK's 60s ceiling and returned **0 addresses** in all three baseline rounds;
+`scan_for_new_addresses` hit its 20s ceiling in two of three. With the fix both
+complete. End to end that is 292s-ending-in-nothing versus 42s-ending-in-197-
+addresses — and it is why the baseline shows *fewer* RPCs: it was being cut off,
+not doing less work.
+
+**Wire time is unchanged: 238ms → 243ms.** That is the proof the mechanism was
+identified rather than merely perturbed — a mutex cannot slow a round trip, and
+it didn't. What collapsed is wait-before-send: mean 4028ms → 920ms, median
+232ms → 16ms. Sum of wire time in a baseline run is 289s inside a 292s wall
+clock, i.e. exactly one request in flight, always.
+
+The estimate of 25% was low because the wave arithmetic modelled the wrong
+thing. It reasoned about collapsing 4 sequential round trips into 3 waves per
+address. The real structure is ~1200 requests funnelled one-at-a-time through a
+per-coin mutex, so the win is not "4 waves → 3", it is "1-wide → 12-wide".
+
+## Item 4 — pooled Hyper client: real, but small and inside the noise
+
+| | item 2 only | + pooled client |
+|---|---:|---:|
+| `enable_eth_with_tokens` median | 26.2s | 23.5s (+10.6%) |
+| samples | 23.8 / 28.6s (1 run failed) | 20.0 / 23.5 / 24.6s |
+| **wire time, median** | 246ms | **207ms (-16%)** |
+| wire time, p90 | 379ms | **245ms (-35%)** |
+
+**The wall-clock difference is not separated by the noise** — the two arms'
+sample ranges overlap and the driver says so. The *mechanism*, though, is
+confirmed: per-request wire time drops 246ms → 207ms and holds at 206/206/208ms
+across all three rounds, which is what removing a per-request TLS handshake
+should look like. The handshake was worth ~40ms against these endpoints, not the
+~150ms a 3-4× improvement would have needed.
+
+So item 4 is worth keeping — it is ~16% off every EVM round trip, it makes
+concurrency cheaper rather than more expensive, and it costs one extra
+`lazy_static` — but on this workload it is a refinement, not a headline. Its
+value will be larger on higher-latency links, where the handshake is a larger
+share of the round trip.
+
+## What concurrency uncovered
+
+**Rate limiting is now real, where before it was not.** Serialization at ~4
+requests/second never provoked it; a 12-wide fan-out does. Counts rose from 1
+per baseline run to 24-26, then to 49-230 as testing continued. Treat the
+absolute numbers with suspicion: they climbed monotonically across ~40 minutes
+of sustained testing from one IP, which looks like accumulating endpoint-side
+limits against the tester rather than a property of either arm. Re-measure from
+a clean IP before tuning on them.
+
+Every 429 is handled — a non-200 returns immediately and fails over to the next
+node at the cost of one round trip, and the pool's cursor then prefers the node
+that answered. But two things follow:
+
+* The concurrency budget is **not optional**. It defaults to 12 and is
+  overridable with `KDF_EVM_RPC_MAX_CONCURRENCY` so this can be re-measured
+  without a rebuild.
+* **Spreading load across nodes instead of concentrating on one preferred node
+  is the obvious follow-up.** With 4 nodes it would cut per-node load ~4×. It is
+  not done here because it changes failover semantics and deserves its own
+  measurement from an uncontaminated IP.
+
+### A pre-existing single point of failure in activation
+
+Two measured runs failed outright — a 429 on the ERC-20 `decimals()` call aborted
+`enable_eth_with_tokens` for the platform *and* both tokens. That call goes
+through `EthCoin::web3()` → `get_live_client`, which hands back **a single
+transport with no failover at all**, so one rate-limited response kills the
+activation.
+
+**This is not caused by the concurrency change.** One of the two failures was on
+the *unmodified* baseline binary, which still serializes every RPC and drew only
+1-3 429s in its successful runs. A single unlucky one was enough. Concurrency
+raises the 429 rate and therefore the probability, but the fragility is
+pre-existing and fires on shipped code.
+
+Rate: **2 activation failures in 20 measured runs**, both in the second half of
+the session once the endpoints were rate-limiting hardest — 2 of the 12 runs in
+that window. Read the 1-in-10 as the honest overall figure and the 1-in-6 as what
+it degrades to on a bad hour; neither is a stable estimate from 20 samples, and
+both are from one IP that had been hammering these endpoints for an hour.
+
+It is also self-inflicted upstream: **neither `USDT-ERC20` nor `USDC-ERC20`
+carries `decimals` in the shipped coins config**, so `v2_activation.rs` falls
+back to reading it from chain on *every* ETH activation — two no-failover RPCs
+per login, on the critical path, for a constant that is known in advance.
+
+Fixed here by routing the ERC-20 constant getters through the pool, so they fail
+over like everything else. **Adding `decimals` to those two coins-config entries
+would remove the RPCs entirely** and is worth doing separately — that file is
+synced from the coins repo, so it is not changed here.
+
+## End to end, and why the baseline number moved
+
+A third A/B, original baseline versus the final build with everything in:
+
+| | baseline | final |
+|---|---:|---:|
+| `enable_eth_with_tokens` median | 329.1s | **21.9s** |
+| samples | 332.0 / 326.3s (1 run failed) | 21.9 / 24.3 / 20.0s |
+| wire time, median | 371ms | **210ms** |
+| wait before send, mean | 4185ms | **857ms** |
+
+The baseline is slower here than in the item-2 table above — 329.1s versus
+212.1s — because the endpoints degraded over roughly an hour of sustained
+testing from one IP. That is not noise to be apologised for; it is the clearest
+evidence in this whole exercise:
+
+> baseline wire time rose 238ms → 371ms, a factor of **1.56**.
+> baseline wall clock rose 212.1s → 329.1s, a factor of **1.55**.
+
+Serialized activation is a *linear function of per-RPC latency*, exactly as the
+"one request in flight, always" reading predicts. Over the same degradation the
+fixed build went 27.3s → 21.9s, i.e. did not track it at all. Whatever the
+network is doing, concurrency absorbs it and serialization multiplies it.
+
+Treat **7.8×** as the honest like-for-like figure (both arms measured early,
+under equal conditions) and **15×** as what the same change is worth when the
+network is having a bad hour.
