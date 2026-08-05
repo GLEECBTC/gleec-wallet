@@ -356,7 +356,17 @@ Three changes: retry with jittered exponential backoff when every node refused
 (bounded, outside the node loop, so healthy pools never reach it); the HTTP
 status carried as `TransportError::Code` on **both** targets instead of
 string-matched out of a message only the native arm produced; and a budget that
-starts scaled by node count and adapts down under sustained refusal.
+adapts down under sustained refusal and back up afterwards.
+
+**The budget is not capped per chain, and that was measured rather than
+assumed.** A sweep of 33 activations across budgets from 2 to 48, on a one-node
+chain and a four-node one, found every arm succeeding with zero
+`evm_rpc_exhausted` — GLEEC survives four times the default budget on a single
+node. Reliability comes from the retry, not the cap. Throttling also proved
+counterproductive: GLEEC's slowest arm was budget 2, the setting that provokes
+no 429s at all, because it trades each refusal for a round trip it waits on
+instead. Details in
+[`KDF_IMPROVEMENT_OPPORTUNITIES.md`](KDF_IMPROVEMENT_OPPORTUNITIES.md).
 
 The wasm half is not incidental. This endpoint's 429 comes from Cloudflare's
 edge with no `Access-Control-Allow-Origin`, so in a browser `fetch` rejects with
@@ -375,6 +385,10 @@ GLEEC was then re-run **10 consecutive times against the final binary** — the
 one built from the committed tree, not the one the A/B used, because a bug fix
 landed between them: **10/10 pass**, median 7.6s, worst 10.46s, all inside its
 pre-regression 11.44s.
+
+Re-verified again after the per-chain cap was removed, so these numbers describe
+the shipped behaviour rather than a throttled variant: GLEEC **10/10** (median
+8.7s, worst 10.45s), **web 9.6s**, app default set **48.92s** (48.85–51.58).
 | app default set, HD, `--p2p` | **FAIL 3/3** | **49.83s** (49.51-51.96) | works |
 | ETH + 2 ERC-20, HD (`enable_eth_with_tokens`) | 20.60s (20.47-21.33) | 20.96s (20.62-21.07) | **+1.7%, noise** |
 | TRX + USDT-TRC20, HD (whole path) | 8.70s (8.70-9.40) | 9.16s (8.53-11.47) | +5.3% |

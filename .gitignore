@@ -109,3 +109,6 @@ dist/
 **/*.jks
 **/*.p12
 android/key.properties
+
+# hookify rules are per-developer, not project policy
+.claude/*.local.md

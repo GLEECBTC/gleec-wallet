@@ -610,19 +610,71 @@ and treats the status as description rather than as the decision.
    marker only the native arm emitted — the wasm arm wrote `"!200: {status}"` —
    so on web every status classified as a bare `transport` and `http_429` never
    fired at all. That string contract caused this bug twice; it is gone.
-3. **A node-count-scaled, adaptive budget** (`web3_pool.rs`). Not because more
-   nodes spread load — `ordered()` returns on the first node that answers, so
-   they do not — but because a refusal costs a multi-node pool one round trip
-   and costs a single-node pool the activation. Single-node chains start at 6
-   instead of 12; **every chain with two or more nodes is byte-identical**. From
-   there the budget halves under sustained refusal and grows back one permit at
-   a time. Measured on GLEEC: 6 → 3, then activation completes.
+3. **An adaptive budget, and no per-chain cap** (`web3_pool.rs`). The budget
+   halves under sustained refusal and grows back one permit at a time, so each
+   pool converges on what its own endpoints will take.
+
+   A per-node *starting* cap was tried and removed — see the sweep below. It
+   bought no reliability and cost time.
 
 Also fixed, found by the new tests: `send_request` flattened JSON-RPC errors
 into `Error::Transport`, so `execution reverted` was indistinguishable from a
 dead socket. That made the retry try again on a deterministic failure, and it
 had already been silently defeating the websocket-teardown guard that exists to
 stop one reverted `eth_call` dropping a socket shared with every other coin.
+
+### The concurrency sweep: capping is the wrong lever
+
+The obvious follow-on question is whether the budget should be capped for
+chains that cannot fail over. Measured across **33 activations**, budgets 2 to
+48, on a one-node chain and a four-node one, three runs each:
+
+| budget | GLEEC (1 node) | 429s | ETH + 2 ERC-20 (4 nodes) | 429s |
+|---|---|---:|---|---:|
+| 2 | **10.20s** | 0 | – | – |
+| 4 | 8.34s | 8 | – | – |
+| 6 | 7.44s | 10 | – | – |
+| 12 | 8.31s | 20 | 35.88s | 53 |
+| 24 | 8.50s | 48 | **27.88s** | 492 |
+| 48 | 8.05s | 62 | 35.50s | 713 |
+
+**Every run succeeded, at every budget, with zero `evm_rpc_exhausted`.**
+
+Three things fall out:
+
+1. **The cap buys no reliability.** GLEEC survives a budget of 48 — four times
+   the default, on a single node against an endpoint that serves ~20/s. The
+   retry is what makes a refusal survivable; the budget only decides how much
+   work is wasted discovering the limit.
+2. **Throttling is counterproductive.** GLEEC's *slowest* arm is budget 2, the
+   one setting that provokes no 429s at all. It trades each refusal for a round
+   trip it then waits on, and round trips cost more than refusals.
+3. **The controller converges from anywhere.** GLEEC lands on 2–3 whether it
+   starts at 6, 12, 24 or 48; ETH lands on 12.
+
+So the per-node cap was removed. A permanent tax on all 580 EVM-family coins,
+levied to protect 5 of them from a failure mode they no longer have, does not
+earn its complexity — and it was worst exactly where it could not be measured,
+since `std::env::var` always fails on `wasm32` and a browser had no way to try
+a different number.
+
+Re-verified uncapped: GLEEC **10/10** consecutive HD activations (median 8.7s,
+worst 10.45s), **web 9.6s**, app-default set **48.92s** — all at or better than
+the capped numbers.
+
+> **ETH at 24 was ~20% faster than at 12** (27.88s vs 35.88s), which is a real
+> and unclaimed win. It is not taken here: it drew 492 × 429 against public
+> endpoints the budget exists to protect, and the controller walked it back to
+> 12 anyway. Raising `DEFAULT_MAX_CONCURRENT_RPCS` is a separate decision with
+> a node-operator cost, and wants its own measurement across more chains.
+
+> **One rough edge, recorded rather than fixed.** At budget 48 the controller
+> walked **ETH** — a four-node chain — down to 2–3, having read a burst of
+> simultaneous refusals across all four nodes as sustained pressure. It still
+> finished in 35.50s, but recovery is slow by design (60 successes per +1
+> permit), so a pool that over-shrinks early stays small for the rest of a
+> session. It does not arise at the shipped default of 12, where ETH holds at
+> 12 across every run.
 
 ### Single-node EVM coins are not a GLEEC quirk
 
