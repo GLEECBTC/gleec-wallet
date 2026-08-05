@@ -493,6 +493,64 @@ and `disable_p2p: true` appears in the integration tests but never with TRON or
 
 ---
 
+## OPEN REGRESSION — `34ab0e7` breaks GLEEC activation
+
+**Status: reverted.** The app's artefact reference is back on `ed8de236b`. The
+EVM work is *not* shipped and must not be until this is resolved.
+
+Reproduced 3/3, alternating arms, same seed and servers, GLEEC alone:
+
+| binary | r0 | r1 | r2 |
+|---|---|---|---|
+| `ed8de23` | 11.44s ok | 10.46s ok | 10.50s ok |
+| `34ab0e7` | **1.18s ERR** | **1.13s ERR** | **1.04s ERR** |
+
+Failure is a transport error on `eth_getBalance` about a second into
+activation:
+
+```
+Transport: request MethodCall { jsonrpc: Some(V2), method: "eth_getBalance", … }
+```
+
+**Why GLEEC and nothing else.** Its node topology is unique among the coins the
+app enables by default:
+
+| coin | nodes | with `ws_url` |
+|---|---:|---:|
+| **GLEEC** | **1** | **1** |
+| ETH | 4 | 2 |
+| TRX | 2 | 0 |
+| BNB / AVAX / MATIC | 5 / 5 / 4 | 2 / 2 / 4 |
+
+```json
+{"url": "https://evm-rpc.gleec.com", "ws_url": "wss://evm-ws.gleec.com"}
+```
+
+One node, carrying a websocket URL, so **there is no failover to hide a
+single-transport fault**. Every other EVM coin has HTTP siblings to fall back
+to. `34ab0e7` rewrote 93 lines of `websocket_transport.rs` — `Close` carrying a
+connection generation, no longer tearing the socket down on ordinary JSON-RPC
+errors, and the `maybe_spawn_connection_loop` `try_lock` race. That is the first
+place to look.
+
+**Start here:** activate GLEEC alone against `34ab0e7` with
+`KDF_EVM_RPC_TRACE=1` and read the `evm_rpc_failover` line — the telemetry added
+in the same commit should name the endpoint and status. A single-node pool that
+exhausts its only endpoint fails in about a second, which matches.
+
+**Everything else on that build was healthy**, so this is narrow rather than a
+reason to doubt the work: on the app's default set KMD 6.10s and BTC-segwit
+8.12s were unchanged, while ETH + 2 tokens went 246.1s → **20.71s** and TRX + 1
+token 41.0s → **5.50s**.
+
+**Coverage gap this exposes, worth fixing regardless.** Every gate passed on the
+broken build — sdk 631, harness replay 22, process tier 4, bench within 1.9%,
+app 528, and the full app CI 8/8 green. The real-KDF process tier exercises
+**KMD, a UTXO coin**; nothing in CI activates GLEEC or any single-node EVM coin.
+The failure surfaced only from a probe scenario run by hand.
+
+---
+
 ## Where the evidence is thin
 
 1. ~~**~85% of the EVM per-RPC cost is unexplained.**~~ **RESOLVED — the premise
