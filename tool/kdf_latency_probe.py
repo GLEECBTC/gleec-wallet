@@ -1495,9 +1495,12 @@ def main() -> int:
         action="store_true",
         help=(
             "Start KDF with p2p and seed nodes instead of disable_p2p. "
-            "REQUIRED for any set containing TRX: TRX activation panics at "
-            "mm2_p2p/src/p2p_ctx.rs:42 (Option::unwrap on None) when p2p is "
-            "off, which aborts the whole RPC service."
+            "This used to be REQUIRED for any set containing TRX, which "
+            "panicked at mm2_p2p/src/p2p_ctx.rs:42 (Option::unwrap on None) "
+            "with p2p off and took the whole RPC service down. Fixed in KDF "
+            "ed8de236b; TRX HD activation has since been measured repeatedly "
+            "with p2p off. Still needed for anything that actually uses the "
+            "network - swaps, peer health, proxy-signed gas-free relays."
         ),
     )
     parser.add_argument(
