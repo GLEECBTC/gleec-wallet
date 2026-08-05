@@ -93,3 +93,86 @@ jobs:
               echo "real-KDF path is broken and wants a look."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A single-node EVM coin, activated for real, on HD.
+  #
+  # This job exists because of a specific hole. The process tier above
+  # exercises KMD - a UTXO coin - so an EVM change that broke activation
+  # outright passed every gate this repo has: sdk 631, harness replay 22,
+  # process tier 4, bench within 1.9%, app 528, full app CI 8/8. GLEEC failed
+  # 100% of HD activations that entire time, on every login, because it is in
+  # `enabledByDefaultCoins`.
+  #
+  # Two properties are load-bearing and neither is incidental:
+  #
+  #   * **HD, not iguana.** iguana derives one address and activates GLEEC
+  #     fine even when broken; HD fans a ~21-wide gap scan out and is what
+  #     actually pressures the endpoint. An iguana gate would have stayed
+  #     green throughout.
+  #   * **A single-node coin.** The failure mode is "every node refused", and
+  #     on a chain with four nodes that needs four simultaneous outages. On a
+  #     chain with one it needs one refused request.
+  single_node_evm:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Reports rather than blocks, like the tier above: it talks to a live
+    # third-party endpoint, and a gate that goes red when someone else's
+    # server has a bad night trains people to ignore it.
+    continue-on-error: true
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Activate GLEEC (single-node EVM, HD)
+        id: gleec
+        timeout-minutes: 15
+        env:
+          KDF_TEST_SEED: ${{ secrets.KDF_TEST_SEED }}
+          # Names which endpoint refused what, so a red run says whether the
+          # cause was rate limiting or the node being down.
+          KDF_EVM_RPC_TRACE: "1"
+        run: |
+          if [ -z "$KDF_TEST_SEED" ]; then
+            echo "KDF_TEST_SEED is not set; skipping." >&2
+            exit 0
+          fi
+          # `generate-assets` has already fetched the KDF binary, which the
+          # probe discovers on its own. The exit code is the assertion: the
+          # probe returns non-zero if any activation step failed.
+          python3 tool/kdf_latency_probe.py --quick --coin-list GLEEC --p2p
+
+      - name: Report
+        if: always()
+        env:
+          HAS_SEED: ${{ secrets.KDF_TEST_SEED != '' }}
+          OUTCOME: ${{ steps.gleec.outcome }}
+        run: |
+          {
+            echo "## Single-node EVM activation (GLEEC, HD)"
+            if [ "$HAS_SEED" != "true" ]; then
+              echo
+              echo ":warning: **Skipped - \`KDF_TEST_SEED\` is not set.**"
+            elif [ "$OUTCOME" = "success" ]; then
+              echo
+              echo ":white_check_mark: GLEEC activated on HD against its one node."
+            else
+              echo
+              echo ":x: **GLEEC did not activate** (outcome: \`$OUTCOME\`)."
+              echo "This is on every login - GLEEC is in \`enabledByDefaultCoins\`."
+              echo "Check the step log for \`evm_rpc_failover\` and \`evm_rpc_backoff\`"
+              echo "lines: \`kind=http_429\` with no backoff means the retry"
+              echo "regressed, and \`evm_rpc_exhausted\` means it gave up."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

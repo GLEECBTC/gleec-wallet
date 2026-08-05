@@ -493,65 +493,164 @@ and `disable_p2p: true` appears in the integration tests but never with TRON or
 
 ---
 
-## OPEN REGRESSION — `34ab0e7` breaks GLEEC activation
+## RESOLVED — `34ab0e7` broke GLEEC activation; the pool now absorbs a 429
 
-**Status: reverted.** The app's artefact reference is back on `ed8de236b`. The
-EVM work is *not* shipped and must not be until this is resolved.
+**Status: fixed.** The pool retries a refused request with backoff instead of
+writing the endpoint off, carries the HTTP status structurally on both targets,
+and scales its concurrency budget by node count. `34ab0e7`'s 7.8× EVM win is
+shippable.
 
-Reproduced 3/3, alternating arms, same seed and servers, GLEEC alone:
+The original diagnosis was right about the *what* — HTTP 429 from
+`evm-rpc.gleec.com` — and wrong about the *shape*, in a way that would have
+produced a fix tuned to the wrong quantity. Both are recorded below, because
+the mistake is the reusable part.
 
-| binary | r0 | r1 | r2 |
-|---|---|---|---|
-| `ed8de23` | 11.44s ok | 10.46s ok | 10.50s ok |
-| `34ab0e7` | **1.18s ERR** | **1.13s ERR** | **1.04s ERR** |
+### The failure
 
-Failure is a transport error on `eth_getBalance` about a second into
-activation:
+Reproduced 6/6 on `34ab0e7`, GLEEC alone, alternating arms, same seed:
+
+| binary | HD | iguana |
+|---|---|---|
+| `ed8de23` | 11.44 / 10.46 / 10.50s ok | ok |
+| `34ab0e7` | **1.18 / 1.13 / 1.04s ERR** | **0.41s ok** |
+
+**It is HD-only**, which the first write-up did not say and which matters: on
+iguana GLEEC activates in 0.41s even on the broken build. iguana derives one
+address; HD fans a ~21-wide gap scan out across the permit budget, and the
+fan-out is the trigger. A test or CI gate written in iguana mode would have
+stayed green throughout.
+
+Confirmed with `KDF_EVM_RPC_TRACE=1` rather than inferred — KDF's own log:
 
 ```
-Transport: request MethodCall { jsonrpc: Some(V2), method: "eth_getBalance", … }
+INFO  EVM RPC pool: 1 node(s), max 12 concurrent request(s)
+WARN  evm_rpc_failover coin=GLEEC method=eth_getTransactionCount
+      node=evm-rpc.gleec.com attempt=0 after_ms=176 kind=http_429
+WARN  evm_rpc_exhausted coin=GLEEC method=eth_getTransactionCount nodes=1
 ```
 
-**Root cause — measured, not inferred.** `https://evm-rpc.gleec.com`
-rate-limits, and the new concurrency budget walks straight into it:
+18 × `kind=http_429` against 6 successful RPCs, all inside one second.
+`eth_getTransactionCount` was 21 of the 24 — the gap scan probing addresses.
+**The whole activation only asks for ~24-44 RPCs**, so this was never a volume
+problem.
 
-| concurrent requests | result |
-|---:|---|
-| 1 | 1/1 ok |
-| 4 | 4/4 ok |
-| **12** | **10/12 ok — `HTTP 429 Too Many Requests` begins** |
-| 24 | 3/24 ok |
+### The correction: it is a rate limit, not a concurrency limit
 
-`34ab0e7` defaults `KDF_EVM_RPC_MAX_CONCURRENCY` to **12**, which is precisely
-where this endpoint starts refusing. Before the change the mutex pinned
-concurrency at 1, so it never appeared.
+The earlier entry flagged a leftover puzzle — a budget of 4 still failed
+through KDF although the endpoint served 4 concurrent raw requests cleanly —
+and guessed that "KDF issues more request types per address and the pooled
+client opens more connections than a naive probe." **That guess was wrong.**
+Permits map 1:1 to in-flight requests; nothing on the activation path bypasses
+the budget.
 
-GLEEC is the only default coin that can be killed by this, because it is the
-only one with **a single node** — every other EVM coin has 2-5 and the pool
-fails over around a 429:
+The real answer is that the two experiments measured different quantities.
+Measured directly against the endpoint:
 
-| coin | nodes |
-|---|---:|
-| **GLEEC** | **1** |
-| ETH | 4 |
-| TRX | 2 |
-| BNB / AVAX / MATIC | 5 / 5 / 4 |
+| experiment | offered | served | codes |
+|---|---:|---:|---|
+| burst 12 (one instant) | 12 | **12** | all 200 |
+| burst 24 | 24 | 12 | 12 × 429 |
+| closed loop, budget 2, 6s | 9.2/s | 56/56 | all 200 |
+| closed loop, budget 4, 6s | 18.3/s | 110/112 | 2 × 429 |
+| **closed loop, budget 12, 6s** | 55.6/s | **120** | 227 × 429 |
+| open loop, 16/s, 6s | 15.6/s | 92/96 | 4 × 429 |
+| **open loop, 32/s, 6s** | 31.0/s | **119** | 73 × 429 |
+
+Two rows settle it: at budget 12 the endpoint served **exactly 120** requests
+in six seconds, and at an offered 32/s it served **119**. Both are 20/s × 6s.
+**The endpoint serves ~20 requests per second** and refuses the remainder.
+
+A budget of C at round trip R is a *sustained* C/R requests per second. At
+R ≈ 220ms, C=4 is ~18/s — right on the limit — and C=12 is ~55/s, nearly three
+times over. The burst table measured a **quantity**; the limit is a **rate**.
+Note also that the old "429 begins at 12 concurrent" row does not reproduce:
+12 at one instant is served cleanly, so the instantaneous allowance is
+somewhere between 12 and 24, and it was the sustained rate that mattered all
+along.
+
+**And a budget under the limit was still not enough.** At budget 4 the refusal
+rate is ~2%, yet activation failed every time, because KDF's tolerance for one
+refusal was **zero**: the gap scan collects its window with `try_collect`, so
+the first `Err` aborts the whole window and the whole activation. Over ~43
+RPCs, a 2% refusal rate fails 58% of the time. That is why the retry, not the
+budget, is the load-bearing half of the fix.
+
+### The trap: on web the status does not exist
+
+Full header capture of a real 429 from this endpoint:
+
+| | HTTP 200 | HTTP 429 |
+|---|---|---|
+| `access-control-allow-origin` | `*` | **absent** |
+| `retry-after` | – | `1` |
+| `via` | `1.1 Caddy` | **absent** |
+
+No `via: Caddy` means **Cloudflare's edge rate limiter** is answering, never
+reaching the origin that sets CORS. Its canned response carries no CORS
+headers, so in a browser `fetch` rejects before JavaScript sees anything: no
+status, no body, an opaque `TypeError`. `Retry-After` is unreadable there too —
+it is not CORS-safelisted and is not named in `Access-Control-Expose-Headers`.
+
+So **any retry keyed on reading `429` is dead code on web**, which is the
+platform the preview runs on. The fix triggers on transport failure generally
+and treats the status as description rather than as the decision.
+
+### What was built
+
+1. **Retry with backoff when every node refused** (`eth_rpc.rs`). Bounded at 4
+   retries, exponential from 150ms, jittered, floored by `Retry-After` where it
+   is readable. It sits *outside* the node loop, so a multi-node pool reaches it
+   only when every node failed — an outage, not a rate limit — and healthy pools
+   pay nothing. The permit is held across the wait on purpose: releasing it
+   would hand the slot to a queued request and keep offering the endpoint the
+   rate it just refused.
+2. **A machine-readable status on both targets** (`http_transport.rs`). Both
+   arms now return `TransportError::Code(status)`, which already existed in the
+   web3 fork. It had been recovered by string-matching `"response !200: "`, a
+   marker only the native arm emitted — the wasm arm wrote `"!200: {status}"` —
+   so on web every status classified as a bare `transport` and `http_429` never
+   fired at all. That string contract caused this bug twice; it is gone.
+3. **A node-count-scaled, adaptive budget** (`web3_pool.rs`). Not because more
+   nodes spread load — `ordered()` returns on the first node that answers, so
+   they do not — but because a refusal costs a multi-node pool one round trip
+   and costs a single-node pool the activation. Single-node chains start at 6
+   instead of 12; **every chain with two or more nodes is byte-identical**. From
+   there the budget halves under sustained refusal and grows back one permit at
+   a time. Measured on GLEEC: 6 → 3, then activation completes.
+
+Also fixed, found by the new tests: `send_request` flattened JSON-RPC errors
+into `Error::Transport`, so `execution reverted` was indistinguishable from a
+dead socket. That made the retry try again on a deterministic failure, and it
+had already been silently defeating the websocket-teardown guard that exists to
+stop one reverted `eth_call` dropping a socket shared with every other coin.
+
+### Single-node EVM coins are not a GLEEC quirk
+
+| nodes | EVM-family coins in the shipped config |
+|---:|---:|
+| **1** | **5** — AVAXT, BNBT, EWT, GLEEC, KMDT-GRC20 |
+| 2 | 33 |
+| 3 | 15 |
+| 4 | 315 |
+| 5 | 212 |
+
+GLEEC and KMDT-GRC20 share chain 11169 and the same endpoint. The 33 two-node
+coins have the same exposure whenever both nodes refuse.
 
 **Borrowing nodes from other coins is not an option** — tested. An EVM RPC node
 only serves the chain it is synced to: every other configured node returns its
 own `eth_chainId` (ETH 1, BNB 56, AVAX 43114, MATIC 137, ETC 61) and only
-`evm-rpc.gleec.com` returns GLEEC's 11169. Failover here needs additional
-*GLEEC* nodes.
+`evm-rpc.gleec.com` returns GLEEC's 11169.
 
 > **An earlier version of this entry blamed the websocket transport.** That was
 > wrong and worth recording: GLEEC's config carries a `ws_url`, so a 93-line
 > rewrite of `websocket_transport.rs` in the same commit looked like the obvious
 > culprit. But the probe *drops* `ws_url` and activates over HTTP only — the
 > failing path never touched websockets. The tell was there in the error itself
-> (`eth_getBalance` over HTTP); I reasoned from the config rather than from what
-> was actually sent.
+> (`eth_getBalance` over HTTP); the reasoning started from the config rather
+> than from what was actually sent.
 
-**The env-var cap is not a usable workaround — tested.**
+### The env-var cap was never the mitigation
 
 | `KDF_EVM_RPC_MAX_CONCURRENCY` | GLEEC | ETH + 2 tok |
 |---|---|---|
@@ -559,47 +658,31 @@ own `eth_chainId` (ETH 1, BNB 56, AVAX 43114, MATIC 137, ETC 61) and only
 | 4 | **2.57s FAIL** | — |
 | 2 | 4.90s ok | 94.67s |
 
-Only 2 rescues GLEEC, and it costs ETH 20.85s → 94.67s (4.5×). Note 4 still
-fails through KDF even though the endpoint served 4 concurrent raw HTTP requests
-cleanly — KDF issues more request types per address and the pooled client opens
-more connections than a naive probe.
+Only 2 rescued GLEEC, at ETH 20.85s → 94.67s (4.5×). And
+`configured_concurrency()` reads `std::env::var`, which on `wasm32` always
+returns `Err`, so the browser silently got 12 regardless. It is a native-only
+diagnostic knob. The node-count scaling deliberately lives outside it for
+exactly that reason — web has to get it too, and web is where the 429 is
+invisible.
 
-**And it cannot reach web at all.** `configured_concurrency()`
-(`web3_pool.rs:71-79`) reads `std::env::var`, which on `wasm32` always returns
-`Err`, so the browser silently gets the default 12. Since the preview is web,
-no env setting can protect it. The cap is a native-only diagnostic knob, not a
-mitigation.
+### Coverage gap, now closed
 
-The encouraging part: even throttled to 2, ETH holds 246.1s → 94.67s. A fix that
-adapts per endpoint should keep most of the 7.8× while making GLEEC work
-everywhere.
+Every gate passed on the broken build — sdk 631, harness replay 22, process
+tier 4, bench within 1.9%, app 528, full app CI 8/8 green. The real-KDF process
+tier exercises **KMD, a UTXO coin**; nothing in CI activated GLEEC or any
+single-node EVM coin, and the failure surfaced only from a probe scenario run
+by hand.
 
-**Fix options**, in rough order of preference:
+Closed by a `single_node_evm` job in `kdf-harness-nightly.yml` that activates
+GLEEC on HD against its one real node. Two properties are load-bearing: **HD**,
+because iguana passes even when broken, and **a single-node coin**, because on
+a four-node chain the failure needs four simultaneous outages.
 
-1. **Back off and retry on 429** rather than treating it as a dead endpoint.
-   The pool currently fails over, and with one node there is nowhere to go.
-2. **Make the budget per-endpoint**, learned from observed 429s, rather than one
-   process-wide default. A single-node coin should converge toward 1-4.
-3. **Scale the budget by node count** — trivially, `min(default, nodes × k)`.
-   GLEEC would get a small budget for free.
-4. Add more GLEEC nodes. Operational, not a code fix, and it does not protect
-   the next single-node chain.
-
-**Confirm with:** activate GLEEC alone against `34ab0e7` with
-`KDF_EVM_RPC_TRACE=1`; the `evm_rpc_failover` telemetry added in that same
-commit should name the endpoint and carry the 429 status. Or reproduce the
-table above directly — it takes seconds and needs no KDF at all.
-
-**Everything else on that build was healthy**, so this is narrow rather than a
-reason to doubt the work: on the app's default set KMD 6.10s and BTC-segwit
-8.12s were unchanged, while ETH + 2 tokens went 246.1s → **20.71s** and TRX + 1
-token 41.0s → **5.50s**.
-
-**Coverage gap this exposes, worth fixing regardless.** Every gate passed on the
-broken build — sdk 631, harness replay 22, process tier 4, bench within 1.9%,
-app 528, and the full app CI 8/8 green. The real-KDF process tier exercises
-**KMD, a UTXO coin**; nothing in CI activates GLEEC or any single-node EVM coin.
-The failure surfaced only from a probe scenario run by hand.
+Two probe defects that made the gate impossible are fixed alongside it:
+`_activate_eth_with_tokens` recorded a failure as `timed_out` rather than
+`failed`, so a 1.1s hard error printed as a timing; and the exit code was
+`0 if any(not r.error ...)`, which returns success as long as one row of the
+matrix survived. Both are why the probe could see the failure and still exit 0.
 
 ---
 

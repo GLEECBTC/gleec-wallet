@@ -132,6 +132,11 @@ COIN_SETS: Dict[str, List[str]] = {
     ],
 }
 
+# The default --coin-list. Named so `--quick` can tell "the user asked for
+# these coins" from "nobody said", which decides whether it runs the whole list
+# or just the first entry.
+COIN_LIST_DEFAULT = "KMD,MARTY,DOC,BTC,LTC,DGB,RVN,VRSC"
+
 # `type` values that activate through the EVM batch call. Mirrors
 # EthWithTokensActivationStrategy.supportedProtocols. Note TRX is here too -
 # there is no `enable_trx_with_tokens`; only the params object differs.
@@ -767,7 +772,12 @@ def _activate_eth_with_tokens(kdf, result, platform, tokens, coins_index,
             time.time() - started,
             polls=1,
             detail=detail,
-            timed_out=failed,
+            # `failed`, not `timed_out`. This call is synchronous, so a refused
+            # activation comes back in about a second - the fastest row in the
+            # table - and reporting it as a timeout made a hard 100% failure
+            # look like a timing. GLEEC failed every HD activation for a week
+            # while this printed "<-- TIMED OUT" next to 1.1s.
+            failed=failed,
         )
     )
 
@@ -978,11 +988,21 @@ def build_matrix(args) -> List[dict]:
             )
         ]
     if args.quick:
+        # An explicit --coin-list is taken literally; without one, the first
+        # coin of the default list.
+        #
+        # It used to be `[:1]` unconditionally, which made the two scenarios
+        # the EVM work is measured against - ETH + 2 ERC-20, TRX + USDT-TRC20 -
+        # impossible to express: the tokens were silently dropped and the row
+        # measured a bare platform activation while claiming otherwise. `--quick`
+        # means one *scenario*, which is what it says; how many coins are in it
+        # is the coin list's business.
+        tickers = args.coin_list if args.coin_list_explicit else args.coin_list[:1]
         return [
             dict(
-                label="quick: HD, 1 coin, gap 20",
+                label=f"quick: HD, {len(tickers)} coin(s), gap 20",
                 wallet_type="hd",
-                tickers=args.coin_list[:1],
+                tickers=tickers,
                 gap_limit=20,
                 scan_policy="scan_if_new_wallet",
             )
@@ -1469,8 +1489,10 @@ def main() -> int:
     parser.add_argument("--coins", help="Path to coins_config.json")
     parser.add_argument(
         "--coin-list",
-        default="KMD,MARTY,DOC,BTC,LTC,DGB,RVN,VRSC",
-        help="Comma-separated UTXO tickers, most important first",
+        default=COIN_LIST_DEFAULT,
+        help="Comma-separated tickers, most important first. Tokens are "
+             "grouped under their platform automatically, so "
+             "'ETH,USDT-ERC20' is one enable_eth_with_tokens call.",
     )
     parser.add_argument("--max-coins", type=int, default=4)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -1531,6 +1553,8 @@ def main() -> int:
     parser.add_argument("--keep-workdir", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
+    # Recorded before the split, while it is still comparable to the default.
+    args.coin_list_explicit = args.coin_list != COIN_LIST_DEFAULT
     args.coin_list = [c.strip() for c in args.coin_list.split(",") if c.strip()]
 
     seed = os.environ.get("KDF_TEST_SEED", "").strip()
@@ -1654,7 +1678,23 @@ def main() -> int:
             )
         print(f"JSON written to {args.json}")
 
-    return 0 if any(not r.error for r in results) else 1
+    # Non-zero if *anything* failed, not if everything did.
+    #
+    # This used to be `any(not r.error ...)`, which exits 0 as long as one row
+    # of the matrix survived - so a coin failing 100% of its activations was
+    # invisible to any caller that checked the exit code. That is precisely how
+    # the GLEEC regression reached a release with every gate green. A failed
+    # step counts too: an EVM activation error is recorded on the step, and the
+    # scenario itself carries no error unless a later call happened to raise.
+    failed_steps = [
+        (r.name, s.name) for r in results for s in r.steps if getattr(s, "failed", False)
+    ]
+    if failed_steps:
+        print("\nFAILED steps:", file=sys.stderr)
+        for scenario, step in failed_steps:
+            print(f"  {scenario}: {step}", file=sys.stderr)
+
+    return 0 if not failed_steps and all(not r.error for r in results) else 1
 
 
 if __name__ == "__main__":

@@ -38,13 +38,18 @@ not touch:
 | `enable_eth_with_tokens`, ETH + 2 ERC-20, first-time HD | 212.1s | **27.3s** | **7.8×** |
 | EVM round trip, median / p90 | 246 / 379ms | **207 / 245ms** | connection pooling |
 
-Four changes in total: **C1** stop scanning addresses twice (client), **K1**
+Five changes in total: **C1** stop scanning addresses twice (client), **K1**
 probe the address gap concurrently (KDF), **K2** stop holding the RPC pool lock
-across the round trip (KDF), **K3** a connection-pooling HTTP client (KDF).
+across the round trip (KDF), **K3** a connection-pooling HTTP client (KDF), and
+**K4** absorb a rate-limited node instead of dying on it (KDF).
 
-The app-default coin set has **not** been re-measured end to end since K2/K3, so
-no new whole-login total is published here — substituting per-call medians into
-the older table would not be like-for-like.
+K4 is not a speedup — it is what makes K2 shippable. K2's concurrency budget
+broke activation outright for every EVM coin with a single RPC node, GLEEC
+included, and GLEEC is in `enabledByDefaultCoins`. See [K4](#k4--kdf-absorb-a-rate-limited-node-instead-of-dying-on-it).
+
+**The app default set, HD, end to end: 49.83s** (median of three, 49.51-51.96),
+measured with K4 in place. It could not be measured before K4 because GLEEC is
+in that set and failed 100% of the time.
 
 ---
 
@@ -329,6 +334,59 @@ would have been an untested behaviour change well outside this work.
 |---|---:|---:|
 | median round trip | 246ms | **207ms** |
 | p90 | 379ms | **245ms** |
+
+### K4 — KDF: absorb a rate-limited node instead of dying on it
+
+K2's permit budget (12 concurrent per pool) broke **GLEEC**, which is in
+`enabledByDefaultCoins` — so it broke every login. It has **one** RPC node, and
+with one node "every node refused" and "the node said no once" are the same
+event: `try_rpc_send` returned the first error, and its caller is a
+`try_collect` over the HD address gap scan, so a single refused probe failed the
+whole activation. Measured 6/6 failures at ~1.1s.
+
+**The limit is a rate, not a concurrency**, which is what made the first
+diagnosis land on the wrong quantity. Measured directly against
+`evm-rpc.gleec.com`: a burst of 12 requests at one instant is served cleanly,
+but a *sustained* 12-in-flight is ~55 requests/second at a 220ms round trip, and
+the endpoint serves ~20/s. It answered exactly 120 requests in a six-second
+window whether offered 55/s or 32/s. A budget of C is a rate of C/R, and only
+the rate matters.
+
+Three changes: retry with jittered exponential backoff when every node refused
+(bounded, outside the node loop, so healthy pools never reach it); the HTTP
+status carried as `TransportError::Code` on **both** targets instead of
+string-matched out of a message only the native arm produced; and a budget that
+starts scaled by node count and adapts down under sustained refusal.
+
+The wasm half is not incidental. This endpoint's 429 comes from Cloudflare's
+edge with no `Access-Control-Allow-Origin`, so in a browser `fetch` rejects with
+an opaque error and **the status never exists**. Anything keyed on reading `429`
+is dead code on web. The retry therefore triggers on transport failure and
+treats the status as description, never as the decision.
+
+**Measured**, three alternating rounds per arm, same seed and servers, fresh
+KDF and database per run:
+
+| scenario | `34ab0e7` | with K4 | |
+|---|---|---|---|
+| GLEEC, HD (activation total) | **FAIL 3/3** at 1.5-1.9s | **7.64s** (7.40-7.98) | works |
+| app default set, HD, `--p2p` | **FAIL 3/3** | **49.83s** (49.51-51.96) | works |
+| ETH + 2 ERC-20, HD (`enable_eth_with_tokens`) | 20.60s (20.47-21.33) | 20.96s (20.62-21.07) | **+1.7%, noise** |
+| TRX + USDT-TRC20, HD (whole path) | 8.70s (8.70-9.40) | 9.16s (8.53-11.47) | +5.3% |
+
+The ETH row is the one that had to hold, and it does: K2's 7.8× is intact and
+the change costs it 0.36s against a 0.86s spread. GLEEC lands under its
+pre-regression `ed8de23` time of 11.44s.
+
+The TRX numbers were taken while a wasm build was competing for CPU, and its
+one slow draw (11.47s against 8.53s and 9.16s) is the whole difference; the
+other two runs are indistinguishable from the baseline. Both arms are within
+the 10s target on the median.
+
+**It is not a GLEEC-only fault.** During these runs `34ab0e7` also failed a
+**TRX** activation outright — two nodes, both refusing at once — with the same
+`No such coin` signature. The shipped config has 5 single-node EVM coins and 33
+two-node ones; the fault needs one simultaneous refusal per node.
 
 ---
 
