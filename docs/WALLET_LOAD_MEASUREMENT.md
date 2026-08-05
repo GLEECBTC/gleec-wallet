@@ -146,9 +146,13 @@ python3 tool/kdf_latency_probe.py --plan-only              # counts, no KDF
 python3 tool/kdf_latency_probe.py --coin-set top20-max --unbatched
 ```
 
-**`--p2p` is required for any set containing TRX** — with `disable_p2p: true`
-TRX activation panics in `mm2_p2p/src/p2p_ctx.rs:42` and takes the whole RPC
-service down. See §8 of the report.
+**`--p2p` was required for any set containing TRX** against a KDF older than
+`ed8de236b`: with `disable_p2p: true`, TRX activation panicked in
+`mm2_p2p/src/p2p_ctx.rs:42`. The panic aborts *that request* — the process
+survives, which the 500 body ("The RPC service aborted without responding.")
+badly misdescribes. Fixed KDF-side by making the P2P keypair optional for the
+three call sites that only need it for proxy signing; TRX now activates with
+p2p off. Keep `--p2p` only for older binaries.
 
 The point of it is one number in that report: **how much of the wall clock was
 spent inside HTTP calls.** In the first run that was 0.17s out of 90.7s. The
@@ -396,3 +400,43 @@ that causes the change, so the diff is reviewed.
 The committed values were measured on macOS; CI runs ubuntu-latest.
 `compare_bench.dart` warns when the platform differs. Replace them with the first
 green CI run's medians before trusting a marginal result.
+
+---
+
+## A/B-ing two KDF builds
+
+The only honest way to attribute a KDF change. Build both binaries, point the
+probe at each with `--kdf`, and **alternate the arms** — a non-alternating run
+once made a change look like a regression that was really time-of-day network
+drift.
+
+```bash
+export KDF_TEST_SEED='<throwaway seed>'
+python3 tool/kdf_latency_probe.py --coin-list ETH --kdf /path/to/baseline/kdf
+python3 tool/kdf_latency_probe.py --coin-list ETH --kdf /path/to/candidate/kdf
+```
+
+**Take at least three samples per arm and report the spread, not a single
+number.** EVM timings were bimodal before the RPC-pool fix (196.9 / 219.0 /
+346.4s against a tight 343.3 / 343.4 / 363.8s baseline) because activation was
+linear in per-RPC latency. One draw from that distribution proves nothing.
+
+Traps, each of which has produced a wrong number at least once:
+
+* **A failed step returns fast**, so tooling that records an error as a
+  completed step turns a failure into an apparent speedup. A `NoSuchCoin` once
+  presented as a 92× win. Both probes now flag failures explicitly — keep it
+  that way.
+* **Compare like for like.** A `--p2p` run with other coins already activated is
+  not comparable to a standalone row.
+* **The seed is not neutral.** `abandon … about` is unused on UTXO and TRON, so
+  those numbers are a floor. On **Ethereum it is the most-used public vector
+  there is**, so the gap scan walks used addresses (239 of them, against 21 for
+  an empty account) and the ETH numbers are a *ceiling*. Do not describe a whole
+  matrix as "a floor".
+* **Count the RPCs before reasoning about per-RPC cost.** Dividing a wall clock
+  by an assumed RPC count produced a confident, wrong conclusion that ~85% of
+  EVM time was unexplained; the real count was 14× higher and the per-RPC time
+  was healthy all along. `KDF_EVM_RPC_TRACE=1` gives the per-call breakdown.
+* **Build the binary with the CI-pinned toolchain**, and regenerate any Dart
+  lockfile with `fvm flutter pub get` — see [`FLUTTER_VERSION.md`](FLUTTER_VERSION.md).

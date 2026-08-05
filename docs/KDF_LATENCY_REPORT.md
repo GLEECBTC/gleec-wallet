@@ -1,10 +1,29 @@
-# KDF wallet-load latency — measured report
+# KDF wallet-load latency — the `bd413dc` baseline (superseded)
+
+> **This is a frozen record of how slow things were, not how they are.**
+> Every number below was measured against KDF `bd413dc`, before any of the
+> fixes. It is kept because it is the only full write-up of the *method* and of
+> the pre-fix matrix, and because the after-numbers are only meaningful against
+> it.
+>
+> For what things cost **now**, and what each change bought, read
+> [`WALLET_LOAD_PERFORMANCE_REPORT.md`](WALLET_LOAD_PERFORMANCE_REPORT.md).
+> For how to take these measurements yourself, read
+> [`WALLET_LOAD_MEASUREMENT.md`](WALLET_LOAD_MEASUREMENT.md).
+>
+> Two claims below are now known to be wrong and are corrected in place where
+> they appear: that every number here is a **floor** (the ETH rows are a
+> *ceiling* — the seed has Ethereum history), and that a large share of EVM
+> per-RPC cost was **unexplained** (it was a wrong RPC-count denominator).
 
 **Repo:** `gleec-wallet-kdf-integrations`, branch `add/gas-free-tron`
 **KDF:** `3.0.0-beta_bd413dc` (same build native and web — verified via `version`)
 **Host:** macOS 25.5.0, arm64
-**Seed:** the public BIP39 vector `abandon … about` (zero funds, so every number
-below is a *floor* — a wallet with history does more work, not less)
+**Seed:** the public BIP39 vector `abandon … about`. Zero funds, so the UTXO and
+TRON numbers are a *floor*. **The ETH numbers are a ceiling** — it is the
+most-used public test vector there is, so on Ethereum the gap scan keeps finding
+*used* addresses and walks 239 of them rather than 21. An earlier version of
+this document called the whole matrix a floor; that was wrong.
 
 ---
 

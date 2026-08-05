@@ -131,7 +131,7 @@ so KDF could safely *raise* the default rather than clients lowering it.
 
 ---
 
-## 2. Release the `web3_instances` mutex before the network round trip — ~90s off the 363.8s EVM call
+## 2. Release the `web3_instances` mutex before the network round trip — DONE, 212.1s → 27.3s
 
 > **Done, and the estimate below is wrong — measured 212.1s → 27.3s (7.8×), not 25%.**
 > The "~85% unexplained per-RPC cost" was a wrong denominator, not a real effect.
@@ -495,7 +495,16 @@ and `disable_p2p: true` appears in the integration tests but never with TRON or
 
 ## Where the evidence is thin
 
-1. **~85% of the EVM per-RPC cost is unexplained.** HD implies ~4.2s per round
+1. ~~**~85% of the EVM per-RPC cost is unexplained.**~~ **RESOLVED — the premise
+   was arithmetic error, not a real effect.** The reasoning below divided by an
+   *assumed* ~87 RPCs; per-call tracing shows **1208**, at a healthy 238ms
+   median, with 289s of wire time inside a 292s wall clock. There was no
+   unexplained per-RPC cost and nothing was rate limited — the mutex serialized
+   ~1200 healthy requests. Kept struck through rather than deleted because the
+   failure mode is worth remembering: a confident conclusion drawn from a
+   denominator nobody checked. The original text follows.
+   <br><br>
+   <em>HD implies ~4.2s per round
    trip (363.8s / ~87), iguana ~0.6s (2.5s / ~4) — same binary, same nodes, same
    transport. A mutex cannot slow an individual round trip. One reviewer flagged
    endpoint rate-limiting or failover against the 10s `TRY_RPC_NODE_TIMEOUT_S`;
@@ -527,10 +536,10 @@ and `disable_p2p: true` appears in the integration tests but never with TRON or
 3. **The TRX/NFT panic fix + tendermint deserializer** (~40 lines) — zero
    seconds, closes two WASM instance-kills, and fixes the misleading 500 string
    that caused the original misdiagnosis.
-4. **Item 2, with its three prerequisites and 429 instrumentation** — ~90s off
-   the largest single measured call, plus ~12–17s on the token-heavy iguana path.
-5. **Item 4, scoped to a dedicated EVM client** — ~13–26s, and the only item that
-   meaningfully helps steady-state and swap-time latency.
+4. ~~**Item 2**~~ **— DONE.** Measured 212.1s → 27.3s (7.8×), far beyond the
+   ~90s forecast, plus the TRON half at 68.1s → 8.4s.
+5. ~~**Item 4, scoped to a dedicated EVM client**~~ **— DONE.** Median round
+   trip 246ms → 207ms, p90 379ms → 245ms.
 6. **Item 3** — re-measure after item 1; most of the 21s should already be gone.
    Pursue the remainder for the HTLC liveness fix, and only with the
    `get_new_address` exclusion designed in.
@@ -623,11 +632,14 @@ alternating A/B rounds of `enable_eth_with_tokens` (ETH + 2 ERC-20, HD):
 | `bd413dc` | 3 | 343.3s | 343.4s | 363.8s |
 | with fix | 3 | **196.9s** | 219.0s | 346.4s |
 
-The baseline is remarkably tight (~343s); the fixed build is **bimodal** —
-sometimes ~200–220s, sometimes ~345s. So the change *sometimes* buys ~40% on
-EVM and sometimes nothing, and **never made it worse** (worst-with-fix 346.4s
-vs worst-baseline 363.8s). Why it is intermittent is not explained, and three
-samples per arm is not enough to explain it.
+The baseline is remarkably tight (~343s); this build was **bimodal** —
+sometimes ~200–220s, sometimes ~345s.
+
+**Now explained.** Under full serialization the wall clock is a direct multiple
+of per-RPC latency, so an endpoint having a slow hour turned a 212s activation
+into a 331s one: the slow round's wire median was 372ms against 235ms. The
+spread was the mechanism announcing itself, not noise. Once the mutex is
+released (item 2) the call does not track endpoint latency at all.
 
 What this does support: **~343s is a ceiling the concurrency cannot break
 through**, consistent with the mutex being the binding constraint. Item 2 is

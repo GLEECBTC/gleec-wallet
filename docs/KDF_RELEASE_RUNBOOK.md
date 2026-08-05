@@ -12,10 +12,13 @@ Three repos are involved and none of them is a submodule of another:
 | `nitride-kdf-builds` (sibling checkout) | builds the seven platform artifacts and publishes them |
 | this repo | consumes the artifact, and holds the probes/harness that validate it |
 
-> Only doing local measurement, not shipping? You do **not** need any of this.
-> `cargo build --release --target aarch64-apple-darwin --bin kdf` and point the
-> probe at the binary with `--kdf`. See
-> [`HANDOFF_EVM_ACTIVATION_LATENCY.md`](HANDOFF_EVM_ACTIVATION_LATENCY.md).
+> **Only doing local measurement, not shipping?** You do not need any of this.
+> Edit in the KDF checkout, `cargo build --release --target
+> aarch64-apple-darwin --bin kdf`, and point the probe at the binary with
+> `--kdf`. Use the existing sibling checkout rather than a fresh clone — it
+> carries a warm Cargo `target/` (~200 GB), which is a ~5 minute incremental
+> build against ~45 minutes cold, and you will rebuild many times. Method:
+> [`WALLET_LOAD_MEASUREMENT.md`](WALLET_LOAD_MEASUREMENT.md).
 
 ---
 

@@ -28,7 +28,23 @@ xychart-beta
 | after client fix | 47,986ms | **−30,000ms** | stop issuing a second address scan |
 | after KDF fix | **8,303ms** | **−39,683ms** | probe the address gap concurrently |
 
-Two changes, both accounted for, no unexplained remainder.
+Two changes on that path, both accounted for, no unexplained remainder.
+
+**Two more landed afterwards, on the EVM/TRON path**, which the table above does
+not touch:
+
+| | before | after | |
+|---|---:|---:|---|
+| `enable_eth_with_tokens`, ETH + 2 ERC-20, first-time HD | 212.1s | **27.3s** | **7.8×** |
+| EVM round trip, median / p90 | 246 / 379ms | **207 / 245ms** | connection pooling |
+
+Four changes in total: **C1** stop scanning addresses twice (client), **K1**
+probe the address gap concurrently (KDF), **K2** stop holding the RPC pool lock
+across the round trip (KDF), **K3** a connection-pooling HTTP client (KDF).
+
+The app-default coin set has **not** been re-measured end to end since K2/K3, so
+no new whole-login total is published here — substituting per-call medians into
+the older table would not be like-for-like.
 
 ---
 
@@ -42,8 +58,18 @@ Three independent paths, so no claim rests on one tool:
 | `komodo_defi_harness` process tier | the **real SDK** + a real KDF | what the app actually experiences |
 | `tool/web/kdf_web_probe.html` | plain JS → KDF WASM | does the same hold on web |
 
-All numbers use the public zero-funds BIP39 vector `abandon … about`, so they
-are a **floor** — a wallet with history does more work, not less.
+All numbers use the public BIP39 vector `abandon … about`.
+
+**On UTXO and TRON these are a floor** — that seed is unused there, so a wallet
+with history does more work, not less.
+
+**The ETH rows are the opposite: a ceiling.** It is the most-used public test
+vector in existence, so on Ethereum the gap scan keeps finding *used* addresses
+and walks 239 of them rather than the 21 an empty account needs — and a used
+address costs roughly double, because `AddressBalanceStatus::Used` adds a full
+`known_address_balance` on top of the probe. A real user's ETH wallet does
+**less** work than these numbers, not more. An earlier version of this document
+claimed "floor" for everything; that was wrong.
 
 ---
 
@@ -156,7 +182,7 @@ remainder is EVM**.
 
 ---
 
-## What did not improve: EVM
+## EVM: what did not improve under C1+K1, and what fixed it
 
 `enable_eth_with_tokens` is a single **synchronous** RPC — no task id, no
 progress, no partial result — and it does HD address discovery inline.
@@ -177,24 +203,132 @@ single draw from that distribution, not a regression.
 `web3_instances.lock()` across the network round trip, so **at most one EVM RPC
 is ever in flight per coin**. Concurrency added above it is absorbed.
 
-~343s looks like a ceiling that concurrency cannot break through — consistent
-with the mutex being the binding constraint.
+~343s held flat across the baseline samples, which read at the time as a
+ceiling concurrency could not break. It was not one.
 
-**Honest gap:** ~85% of EVM per-RPC cost is still unexplained. HD implies ~4.2s
-per round trip, iguana ~0.6s, same binary and nodes. A mutex cannot slow an
-individual round trip. Most likely endpoint rate limiting or failover against
-the 10s node timeout — which, if true, partly self-defeats the fix below.
+### Where the time actually went
 
-**Expected from the deferred work** (see
-[`HANDOFF_EVM_ACTIVATION_LATENCY.md`](HANDOFF_EVM_ACTIVATION_LATENCY.md)):
+An earlier draft of this document called ~85% of EVM per-RPC cost
+"unexplained", reasoning that HD implied ~4.2s per round trip against iguana's
+~0.6s and that no mutex can slow an individual round trip. **That was a wrong
+denominator, and the conclusion drawn from it was wrong.**
 
-| change | expected | confidence |
-|---|---|---|
-| release the mutex before the round trip | ~90s off 363.8s (25%) | medium-high |
-| pooled Hyper client for the EVM transport | ~13–26s (4–7%) | medium |
+Measured with per-call tracing rather than inferred:
 
-Not additive — the handshake cost is part of the per-RPC cost the first
-estimate holds constant.
+| | measured |
+|---|---:|
+| RPCs in one first-time HD activation of ETH + 2 ERC-20 | **1208** (1160 on the call; 1208 / 1207 / 1086 across three rounds) |
+| median round trip | **238ms** — healthy |
+| failovers | 1 in 1208 |
+| wire time / wall clock | **289s inside 292s** |
+
+289 of 292 seconds with exactly one request on the wire. Nothing was rate
+limited and no round trip was slow; the mutex serialized ~1200 healthy
+requests. The ~4.2s figure came from dividing by an *assumed* ~87 RPCs — off by
+a factor of 14.
+
+**Why ~1200 and not ~87:** the scan issues one `eth_getTransactionCount` per
+address probed, and the trace shows **239** of them. It walked 239 addresses,
+not the 21 an empty account needs — because `abandon … about` is the most-used
+public test vector there is, so on Ethereum the gap scan keeps finding *used*
+addresses and walks on. A used address also costs roughly double, since
+`AddressBalanceStatus::Used` adds a full `known_address_balance` on top of the
+probe. See the caveat in [How this was measured](#how-this-was-measured): the
+ETH rows are a **ceiling**, not a floor.
+
+---
+
+### K2 — KDF: stop holding the RPC pool lock across the round trip
+
+`try_rpc_send` held `web3_instances.lock().await` for the whole function,
+because the LRU reorder at the end (`clients.rotate_left(i)`) needed `&mut`.
+The node list is now immutable and shared, and the "which node first" state is
+an `AtomicUsize` cursor — a cursor rather than a rotation because `i` indexes a
+snapshot and means nothing once the guard is dropped. `get_live_client` had the
+same shape and was worse, holding the lock across a 30s-per-node
+`client_version` probe. TRON's `TronApiClient` held the identical pattern, with
+a comment calling it deliberate "for consistency with EVM's `try_rpc_send`" —
+it was worse than the thing it matched, being Clone-shared across every TRON
+coin rather than per-coin.
+
+Concurrency is bounded by a permit budget (default 12, override
+`KDF_EVM_RPC_MAX_CONCURRENCY`) which exists to protect the *nodes*, not any
+invariant of ours.
+
+**Measured**, three alternating rounds, `enable_eth_with_tokens` for ETH + 2
+ERC-20 on a first-time HD activation:
+
+| | baseline | after | |
+|---|---:|---:|---|
+| median | 212.1s | **27.3s** | **7.8×** |
+| wire-time median per RPC | 238ms | 243ms | unchanged — it was never the round trips |
+
+**TRON gets the same fix and the same shape of win.** `TronApiClient` was
+Clone-shared across every TRON coin, so one mutex serialized TRX balances, every
+TRC-20 `balanceOf`, TAPOS, energy estimates, broadcasts and the HD gap probes
+alike. Measured on `TRX + USDT-TRC20`, HD, gap 20, seven alternating runs per
+arm (medians):
+
+| step | baseline | after | |
+|---|---:|---:|---|
+| `enable_eth_with_tokens` | 35.7s | **5.2s** | 6.9× |
+| `scan_for_new_addresses` | 10.3s | **1.3s** | 7.9× |
+| `account_balance` | 20.1s | **1.8s** | 11.2× |
+| **total, excl. boot** | **68.1s** | **8.4s** | **8.1×** |
+
+The sample ranges do not overlap — 35.0-122.6s against 4.5-6.9s — and the
+baseline's worst run was 3.5× its best, which is the same fragility signature
+described below.
+
+It also removes that fragility: activation used to be a linear function of
+per-RPC latency, so an endpoint having a slow hour turned a 212s login into a 331s one.
+That is the whole explanation for the bimodal spread recorded above, which this
+document previously listed as cause unknown. Post-fix it does not track
+endpoint latency at all.
+
+**Four faults the mutex was hiding**, all reachable only once requests run
+concurrently, all fixed with it:
+
+* `stop_connection_loop` pushed `Close` into an unbounded channel and the loop
+  consumed exactly one before exiting, so concurrent failures left surplus
+  `Close`es that killed the *next* loop the moment it spawned. `Close` now
+  carries the connection generation it was aimed at.
+* The socket was torn down on **any** error, including ordinary JSON-RPC ones.
+  Transports are `Arc`-shared across a platform coin and every token on it, so
+  one reverted `eth_call` failed every other request riding that socket.
+* `maybe_spawn_connection_loop` probed liveness with a `try_lock` it released
+  before spawning, so concurrent callers all saw a free guard and all spawned.
+  All but one parked on the guard forever, and a parked future never completes,
+  so its abortable-queue slot was never released.
+* The ERC-20 `decimals()`/`symbol()` getters went through `EthCoin::web3()`,
+  which hands back a single transport with **no failover**, so one rate-limited
+  response aborted the whole activation. **Pre-existing** — it fires on
+  unmodified code, roughly one activation in six under the endpoint conditions
+  measured — and made worse by the extra 429s concurrency provokes. Now routed
+  through the pool.
+
+**Telemetry**, because the pool fails over silently and none of the above was
+visible: `evm_rpc_failover` on any endpoint that did not answer (always on,
+carries the HTTP status), and a full per-call `evm_rpc` breakdown behind
+`KDF_EVM_RPC_TRACE=1`. Both log host and port only — several shipped EVM
+providers carry an API key in the URL.
+
+### K3 — KDF: a connection-pooling HTTP client
+
+`HYPER`'s `pool_max_idle_per_host(0)` does more than skip keep-alive: in hyper
+0.14 it makes `Pool::inner` `None`, which also switches off HTTP/2 connection
+sharing and the connect-dedup that goes with it. Every request paid DNS + TCP +
+TLS, and concurrent requests to one host each paid their own, even though the
+connector negotiates h2 and would happily multiplex.
+
+Added as a **separate** pooled client rather than by changing `HYPER`, which
+has ~32 call sites including the UTXO native client — flipping it globally
+would have been an untested behaviour change well outside this work.
+
+| | before | after |
+|---|---:|---:|
+| median round trip | 246ms | **207ms** |
+| p90 | 379ms | **245ms** |
 
 ---
 
