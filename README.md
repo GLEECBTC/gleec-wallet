@@ -37,6 +37,7 @@
 - [Integration testing](docs/INTEGRATION_TESTING.md)
 - [SDK Dependency Management](docs/SDK_DEPENDENCY_MANAGEMENT.md)
 - [Shipping a KDF change to the app](docs/KDF_RELEASE_RUNBOOK.md)
+- [Wallet-load performance report](docs/WALLET_LOAD_PERFORMANCE_REPORT.md)
 - [Gitflow and branching strategy](docs/GITFLOW_BRANCHING.md)
 - [Issue: create and maintain](docs/ISSUE.md) ...in progress
 - [Contribution guide](docs/CONTRIBUTION_GUIDE.md)
