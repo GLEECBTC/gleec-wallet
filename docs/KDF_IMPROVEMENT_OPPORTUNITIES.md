@@ -512,31 +512,60 @@ activation:
 Transport: request MethodCall { jsonrpc: Some(V2), method: "eth_getBalance", … }
 ```
 
-**Why GLEEC and nothing else.** Its node topology is unique among the coins the
-app enables by default:
+**Root cause — measured, not inferred.** `https://evm-rpc.gleec.com`
+rate-limits, and the new concurrency budget walks straight into it:
 
-| coin | nodes | with `ws_url` |
-|---|---:|---:|
-| **GLEEC** | **1** | **1** |
-| ETH | 4 | 2 |
-| TRX | 2 | 0 |
-| BNB / AVAX / MATIC | 5 / 5 / 4 | 2 / 2 / 4 |
+| concurrent requests | result |
+|---:|---|
+| 1 | 1/1 ok |
+| 4 | 4/4 ok |
+| **12** | **10/12 ok — `HTTP 429 Too Many Requests` begins** |
+| 24 | 3/24 ok |
 
-```json
-{"url": "https://evm-rpc.gleec.com", "ws_url": "wss://evm-ws.gleec.com"}
-```
+`34ab0e7` defaults `KDF_EVM_RPC_MAX_CONCURRENCY` to **12**, which is precisely
+where this endpoint starts refusing. Before the change the mutex pinned
+concurrency at 1, so it never appeared.
 
-One node, carrying a websocket URL, so **there is no failover to hide a
-single-transport fault**. Every other EVM coin has HTTP siblings to fall back
-to. `34ab0e7` rewrote 93 lines of `websocket_transport.rs` — `Close` carrying a
-connection generation, no longer tearing the socket down on ordinary JSON-RPC
-errors, and the `maybe_spawn_connection_loop` `try_lock` race. That is the first
-place to look.
+GLEEC is the only default coin that can be killed by this, because it is the
+only one with **a single node** — every other EVM coin has 2-5 and the pool
+fails over around a 429:
 
-**Start here:** activate GLEEC alone against `34ab0e7` with
-`KDF_EVM_RPC_TRACE=1` and read the `evm_rpc_failover` line — the telemetry added
-in the same commit should name the endpoint and status. A single-node pool that
-exhausts its only endpoint fails in about a second, which matches.
+| coin | nodes |
+|---|---:|
+| **GLEEC** | **1** |
+| ETH | 4 |
+| TRX | 2 |
+| BNB / AVAX / MATIC | 5 / 5 / 4 |
+
+**Borrowing nodes from other coins is not an option** — tested. An EVM RPC node
+only serves the chain it is synced to: every other configured node returns its
+own `eth_chainId` (ETH 1, BNB 56, AVAX 43114, MATIC 137, ETC 61) and only
+`evm-rpc.gleec.com` returns GLEEC's 11169. Failover here needs additional
+*GLEEC* nodes.
+
+> **An earlier version of this entry blamed the websocket transport.** That was
+> wrong and worth recording: GLEEC's config carries a `ws_url`, so a 93-line
+> rewrite of `websocket_transport.rs` in the same commit looked like the obvious
+> culprit. But the probe *drops* `ws_url` and activates over HTTP only — the
+> failing path never touched websockets. The tell was there in the error itself
+> (`eth_getBalance` over HTTP); I reasoned from the config rather than from what
+> was actually sent.
+
+**Fix options**, in rough order of preference:
+
+1. **Back off and retry on 429** rather than treating it as a dead endpoint.
+   The pool currently fails over, and with one node there is nowhere to go.
+2. **Make the budget per-endpoint**, learned from observed 429s, rather than one
+   process-wide default. A single-node coin should converge toward 1-4.
+3. **Scale the budget by node count** — trivially, `min(default, nodes × k)`.
+   GLEEC would get a small budget for free.
+4. Add more GLEEC nodes. Operational, not a code fix, and it does not protect
+   the next single-node chain.
+
+**Confirm with:** activate GLEEC alone against `34ab0e7` with
+`KDF_EVM_RPC_TRACE=1`; the `evm_rpc_failover` telemetry added in that same
+commit should name the endpoint and carry the 429 status. Or reproduce the
+table above directly — it takes seconds and needs no KDF at all.
 
 **Everything else on that build was healthy**, so this is narrow rather than a
 reason to doubt the work: on the app's default set KMD 6.10s and BTC-segwit
