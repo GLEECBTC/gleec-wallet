@@ -370,6 +370,11 @@ KDF and database per run:
 | scenario | `34ab0e7` | with K4 | |
 |---|---|---|---|
 | GLEEC, HD (activation total) | **FAIL 3/3** at 1.5-1.9s | **7.64s** (7.40-7.98) | works |
+
+GLEEC was then re-run **10 consecutive times against the final binary** — the
+one built from the committed tree, not the one the A/B used, because a bug fix
+landed between them: **10/10 pass**, median 7.6s, worst 10.46s, all inside its
+pre-regression 11.44s.
 | app default set, HD, `--p2p` | **FAIL 3/3** | **49.83s** (49.51-51.96) | works |
 | ETH + 2 ERC-20, HD (`enable_eth_with_tokens`) | 20.60s (20.47-21.33) | 20.96s (20.62-21.07) | **+1.7%, noise** |
 | TRX + USDT-TRC20, HD (whole path) | 8.70s (8.70-9.40) | 9.16s (8.53-11.47) | +5.3% |
