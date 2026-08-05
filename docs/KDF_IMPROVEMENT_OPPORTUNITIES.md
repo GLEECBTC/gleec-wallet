@@ -135,6 +135,8 @@ so KDF could safely *raise* the default rather than clients lowering it.
 
 > **Done, and the estimate below is wrong — measured 212.1s → 27.3s (7.8×), not 25%.**
 > The "~85% unexplained per-RPC cost" was a wrong denominator, not a real effect.
+> The TRON half of this item is also done: 35.7s → 5.2s on activation (6.9×) and
+> 68.1s → 8.4s over the whole TRON path (8.1×).
 > See [Validation round 2](#validation-round-2-the-evm-mutex-item-2-and-the-pooled-transport-item-4).
 
 **Current behaviour.** `try_rpc_send` binds
@@ -735,6 +737,49 @@ concurrency cheaper rather than more expensive, and it costs one extra
 `lazy_static` — but on this workload it is a refinement, not a headline. Its
 value will be larger on higher-latency links, where the handshake is a larger
 share of the round trip.
+
+## TRON: 6.9× on activation, 8.1× on the whole path
+
+The same fix applies to `TronApiClient::try_clients`, whose comment called the
+hold-across-await deliberate "for consistency with EVM's `try_rpc_send`
+pattern". It was worse than the thing it matched: EVM's lock was per-coin, so
+ETH contended only with its own tokens, but the TRON pool is `Clone`-shared via
+`rpc_client: self.rpc_client.clone()` at activation — so **one mutex serialized
+every TRON RPC in the process**: TRX balances, every TRC-20 `balanceOf`, TAPOS,
+energy estimates, broadcasts and the HD gap probes alike.
+
+Measured on `TRX + USDT-TRC20`, HD, gap 20, seven runs per arm alternating:
+
+| step | baseline | final | |
+|---|---:|---:|---|
+| `enable_eth_with_tokens` | 35.7s | **5.2s** | **6.9×** |
+| `scan_for_new_addresses` | 10.3s | **1.3s** | 7.9× |
+| `account_balance` | 20.1s | **1.8s** | 11.2× |
+| **total, excl. boot** | **68.1s** | **8.4s** | **8.1×** |
+
+Medians. Activation samples were 35.0 / 35.1 / 35.6 / 35.8 / 48.3 / 122.6s
+against 4.5 / 4.5 / 5.1 / 5.2 / 5.3 / 5.5 / 6.9s — **the ranges do not overlap**,
+and the baseline's spread is again the fragility signature: its worst run was
+3.5× its best, while the fixed build stayed inside 4.5-6.9s.
+
+Both arms return all 41 addresses, so unlike the ETH case nothing is being
+truncated — this is a like-for-like comparison of completed work.
+
+**On iguana the change is not separated by the noise**, as expected: 1.6s → 0.9s
+medians with overlapping ranges. A single-address wallet has almost no fan-out
+to serialize, so there is nothing for the fix to recover. The win is a property
+of the gap scan, not of TRON activation per se.
+
+One baseline run failed outright with a TRON node-side
+`Program$OutOfTimeException` on a `triggerconstantcontract`, aborting activation
+for TRX *and* the token. As with the ERC-20 `decimals()` failure, this is on the
+**unmodified** binary and is not caused by the concurrency work.
+
+**Caveat: there is no TRON-side telemetry.** The `evm_rpc` / `evm_rpc_failover`
+instrumentation lives in `eth_rpc.rs` and covers the EVM pool only, so the TRON
+numbers above are wall clock and step timings, without the per-endpoint wire/wait
+breakdown that makes the EVM result self-evidencing. Giving `try_clients` the
+same two log lines is worth doing and would need both arms rebuilt to compare.
 
 ## What concurrency uncovered
 
