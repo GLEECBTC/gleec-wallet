@@ -551,6 +551,29 @@ own `eth_chainId` (ETH 1, BNB 56, AVAX 43114, MATIC 137, ETC 61) and only
 > (`eth_getBalance` over HTTP); I reasoned from the config rather than from what
 > was actually sent.
 
+**The env-var cap is not a usable workaround — tested.**
+
+| `KDF_EVM_RPC_MAX_CONCURRENCY` | GLEEC | ETH + 2 tok |
+|---|---|---|
+| 12 (default) | **1.14s FAIL** | 20.85s |
+| 4 | **2.57s FAIL** | — |
+| 2 | 4.90s ok | 94.67s |
+
+Only 2 rescues GLEEC, and it costs ETH 20.85s → 94.67s (4.5×). Note 4 still
+fails through KDF even though the endpoint served 4 concurrent raw HTTP requests
+cleanly — KDF issues more request types per address and the pooled client opens
+more connections than a naive probe.
+
+**And it cannot reach web at all.** `configured_concurrency()`
+(`web3_pool.rs:71-79`) reads `std::env::var`, which on `wasm32` always returns
+`Err`, so the browser silently gets the default 12. Since the preview is web,
+no env setting can protect it. The cap is a native-only diagnostic knob, not a
+mitigation.
+
+The encouraging part: even throttled to 2, ETH holds 246.1s → 94.67s. A fix that
+adapts per endpoint should keep most of the 7.8× while making GLEEC work
+everywhere.
+
 **Fix options**, in rough order of preference:
 
 1. **Back off and retry on 429** rather than treating it as a dead endpoint.
