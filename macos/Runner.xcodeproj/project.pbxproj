@@ -216,6 +216,7 @@
 				33CC10EB2044A3C60003C045 /* Resources */,
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
+				2F0A7C4B91D6E35A08B14C77 /* Sign KDF helper executable */,
 				9F7F68559C65826DCCC1B957 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
@@ -307,6 +308,25 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
+		};
+		2F0A7C4B91D6E35A08B14C77 /* Sign KDF helper executable */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Sign KDF helper executable";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Sign the bundled KDF helper before the framework that contains it is sealed.\n#\n# The prebuilt kdf binary ships \"adhoc, linker-signed\" (what the Rust linker\n# emits). codesign treats linker-signed as \"not signed at all\", so sealing\n# komodo_defi_framework.framework fails, and the app signing fails after it.\n#\n# The pod's own signing step cannot do this: it lives in the\n# komodo_defi_framework target, where CocoaPods sets CODE_SIGNING_ALLOWED=NO,\n# so it always takes the \"Code Signing DISABLED\" branch. This phase runs in\n# Runner, where the app's identity is already resolved, and before\n# \"[CP] Embed Pods Frameworks\" copies and seals the framework.\n#\n# Sign with NO entitlements. kdf is a nested executable with no\n# embedded.provisionprofile of its own, so giving it the app's\n# com.apple.application-identifier makes AMFI SIGKILL it at exec -- which\n# surfaces as KDF exiting with code -9 and a black window at launch. This is\n# why OTHER_CODE_SIGN_FLAGS=--deep must not be used here: --deep reapplies the\n# app's entitlements to every nested binary.\n\nset -eu\n\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = \"NO\" ] || [ -z \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ]; then\n  echo \"note: code signing disabled; leaving kdf helper as-is\"\n  exit 0\nfi\n\nKDF_HELPER=\"${BUILT_PRODUCTS_DIR}/komodo_defi_framework/komodo_defi_framework.framework/Versions/A/Helpers/kdf\"\n\nif [ ! -f \"$KDF_HELPER\" ]; then\n  echo \"error: kdf helper not found at $KDF_HELPER\" >&2\n  exit 1\nfi\n\necho \"Code Signing $KDF_HELPER with Identity ${EXPANDED_CODE_SIGN_IDENTITY_NAME:-$EXPANDED_CODE_SIGN_IDENTITY}\"\n/usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \"$KDF_HELPER\"\n";
 		};
 		3399D490228B24CF009A79C7 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -674,7 +694,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = B52ZCS7TMQ;
+				DEVELOPMENT_TEAM = 34Y7669588;
 				EXCLUDED_ARCHS = "";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -690,7 +710,7 @@
 					"$(PROJECT_DIR)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.5;
-				PRODUCT_BUNDLE_IDENTIFIER = com.GleecDEX.wallet;
+				PRODUCT_BUNDLE_IDENTIFIER = com23.GleecDEX.wallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 			};
