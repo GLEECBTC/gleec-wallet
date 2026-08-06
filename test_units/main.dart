@@ -76,6 +76,7 @@ import 'tests/wallet/coin_details/receive_address_faucet_widget_test.dart';
 import 'tests/wallet/coin_details/rewards_widget_test.dart';
 import 'tests/wallet/coin_details/transaction_details_logic_test.dart';
 import 'tests/wallet/coin_details/transaction_sanitize_custody_test.dart';
+import 'tests/wallet/coin_details/transaction_history_bloc_test.dart';
 import 'tests/wallet/coin_details/transaction_views_widget_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_bloc_test.dart';
 import 'tests/wallet/coin_details/withdraw_form_confirm_receipt_test.dart';
@@ -191,6 +192,7 @@ void main() {
     testKmdRewardsLogic();
     testRewardsWidgets();
     testTransactionViewsWidgets();
+    testTransactionHistoryBloc();
     testReceiveAddressFaucetWidgets();
   });
 
