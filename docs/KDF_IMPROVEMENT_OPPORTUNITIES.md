@@ -717,7 +717,63 @@ diagnostic knob. The node-count scaling deliberately lives outside it for
 exactly that reason — web has to get it too, and web is where the 429 is
 invisible.
 
-### Follow-up: TRON has the same weakness and did not get the fix
+### TRON had the same weakness — fixed, and the cause was worse than expected
+
+`tron/api.rs` builds its own pool and `try_clients` had no retry. Measured:
+**8 failures in 14 consecutive TRX + USDT-TRC20 activations.**
+
+The cause is not the TVM exception first observed. It is that
+**`api.trongrid.io` unauthenticated allows 3 requests per second**, and answers
+a breach with `HTTP 429` *plus a five-second suspension of the client*, stated
+in the body:
+
+```
+request rate exceeded the allowed_rps(3), and the query server is suspended for 5 s
+```
+
+Measured against the endpoints directly:
+
+| node | 40 calls @ concurrency 2 | median | note |
+|---|---|---|---|
+| `api.trongrid.io` | 39/40 | 1706ms | 3 rps cap, suspends 5s on breach |
+| `tron-rpc.publicnode.com` | **40/40** | **236ms** | 7x faster, no cap seen |
+| `public-trx-mainnet.fastnode.io` | **0/40** | - | **HTTP 404 - does not serve `/wallet/*` at all** |
+
+On trongrid alone, concurrency is decisive: 40/40 at 1, **12/40 at 4**, 3/40 at
+12. The pool allowed **12**.
+
+Three fixes, one per observed failure:
+
+1. **Retry with backoff in `try_clients`**, base 1.5s capped at 6s - sized to
+   outlast the five-second suspension rather than land inside it.
+2. **`OTHER_ERROR` is no longer uniformly permanent.** `OutOfTimeException` is
+   the TVM's per-transaction wall-clock budget, consumed by whatever else the
+   node is doing; java-tron itself re-runs the identical call on it and on no
+   other exception. Anchored on named exceptions, so the catch-all stays one.
+3. **Adaptive concurrency** for the TRON pool, reusing the EVM controller.
+   Twelve permits against three-per-second is not a budget.
+
+`broadcast_hex` is excluded from the retry - the only non-idempotent call
+reachable from the pool. Node rotation still applies; the backoff loop does not.
+
+**Result**, alternating arms, 7 activations each:
+
+| arm | passed | median |
+|---|---|---|
+| baseline | **5/7** | 10.77s |
+| with fix | **7/7** | 12.27s |
+
+Two hard failures to zero, for +1.5s median - the suspension being waited out
+rather than run into.
+
+> **Two follow-ups this leaves open, both config rather than code.**
+> `public-trx-mainnet.fastnode.io` in USDT-TRC20's node list answers `404` for
+> the wallet API and should be removed or replaced. And
+> `tron-rpc.publicnode.com` is 7x faster and un-capped, yet the node cursor
+> starts at index 0 (trongrid); ordering the list by observed health, or
+> obtaining a TronGrid API key, would remove most of the pressure at source.
+
+### Superseded note: the original TRON follow-up
 
 `tron/api.rs:836` builds `RpcPermits::new(configured_concurrency())` directly
 rather than going through `Web3Pool::new`, and its `try_clients` loop has **no
