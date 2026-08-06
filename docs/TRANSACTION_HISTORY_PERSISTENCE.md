@@ -153,21 +153,41 @@ another tab holds the database open and never completes; without a deadline,
 corruption recovery would hang forever. `compact()` is a safe no-op there —
 IndexedDB genuinely deletes, so there is no append-only log to compact.
 
-## Known gaps
+## Wallet deletion
 
-**No purge on wallet deletion.** `AuthService.deleteWallet` issues the KDF RPC
-and clears secure storage, and nothing else. This is pre-existing — the pubkey
-cache, the activation config box and the wallet asset list all already survive
-wallet deletion — but transaction history is the most sensitive of the four.
+`AuthService.deleteWallet` issues the KDF RPC and clears secure storage, and
+nothing else — so every wallet-scoped cache used to outlive the wallet it
+described. That was pre-existing and applied to all four stores, but transaction
+history is the most sensitive of them, so it is fixed here rather than worked
+around.
 
-Two mitigations ship here. `HiveTransactionStorage.purgeWallet(walletId)` is
-available to callers that delete a wallet, and a garbage collector runs at open
-against `auth.getUsers()`, dropping history for wallets that no longer exist. The
-GC **fails open**: a throwing or empty provider means "do not know", never
-"delete everything".
+`KomodoDefiAuth` now exposes `Stream<WalletId> walletDeletions`. The identity is
+resolved **before** the RPC — once the wallet is gone there is nothing left to
+derive a `WalletId` from — and emitted only after the deletion succeeds.
+`bootstrap` subscribes once and fans it out across all four stores:
 
-The cross-cutting fix — one purge covering all four stores, wired into
-`deleteWallet` — belongs in `komodo_defi_local_auth` and is not done.
+| Store | Purge |
+|---|---|
+| Transaction history | `HiveTransactionStorage.purgeWallet` |
+| Pubkeys | `PubkeyManager.purgeWallet` → `HivePubkeysStorage.purgeWallet` (covers the legacy compound-id keyspace too) |
+| Activation config | `ActivationConfigRepository.purgeWallet` |
+| Wallet assets | `AssetHistoryStorage.clearWalletAssets` |
+
+Every purge is best-effort and independent: a cache that will not clear must not
+make a deleted wallet look undeleted, and must not stop the others from
+clearing. Failures are logged.
+
+Two things this deliberately does **not** rely on. `_resolveWalletId` swallows
+lookup failures — a lookup that cannot complete costs a stale cache, whereas
+throwing would fail a deletion that is otherwise fine. And
+`HiveTransactionStorage`'s garbage collector still runs at open against
+`auth.getUsers()` as a backstop, dropping history for wallets that no longer
+exist; it **fails open**, so a throwing or empty provider means "do not know",
+never "delete everything".
+
+Note that wallets are identified by pubkey hash, not display name — a rename
+does not save a wallet from being purged, and two wallets sharing a name but not
+a pubkey hash are distinct.
 
 **Unencrypted.** Plain Hive, consistent with `HivePubkeysStorage`, which already
 persists every derived address and balance in the clear. Be honest about the
