@@ -41,16 +41,23 @@ Three repos are involved and none of them is a submodule of another:
 
 ```bash
 cd ../komodo-defi-framework
-git push -u fork <your-branch>
+git push -u origin <your-branch>
 ```
 
-**`fork` only.** The remotes are:
+**`origin` only.** As of 2026-08-06 the clone has a single remote:
 
 | remote | points at | push here? |
 |---|---|---|
-| `fork` | `CharlVS/komodo-defi-framework` | **yes** |
-| `origin` | `GLEECBTC/kdf-internal` | no |
-| `upstream` | `KomodoPlatform/komodo-defi-framework` | no |
+| `origin` | `GLEECBTC/kdf-internal` (private) | **yes** |
+
+The public `GLEECBTC/komodo-defi-framework` is retired, and the
+`CharlVS/komodo-defi-framework` fork and `KomodoPlatform` upstream have been
+removed from the clone. `remote.pushDefault=origin` is set, so a bare
+`git push` targets kdf-internal even if another remote is re-added later.
+
+Note that the build in step 2 reads the **local working tree**, not a remote, so
+a branch that has not been pushed anywhere still builds — but then the artefact's
+only source of truth is your laptop.
 
 ---
 

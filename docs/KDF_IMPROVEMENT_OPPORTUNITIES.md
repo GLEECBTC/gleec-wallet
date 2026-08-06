@@ -21,8 +21,9 @@ marked ✅ I re-verified myself against `bd413dc`.
 
 > ## ✅ Items 1 and the panic fix are IMPLEMENTED and MEASURED
 >
-> Branch `perf/hd-scan-concurrency` off `bd413dc` in the `komodo-defi-framework`
-> fork (`CharlVS/komodo-defi-framework`) — two commits. Built for
+> Branch `perf/hd-scan-concurrency` off `bd413dc` in the local KDF clone — two
+> commits. (It was pushed to `CharlVS/komodo-defi-framework` at the time; that
+> fork is no longer a remote of the clone.) Built for
 > `aarch64-apple-darwin` and re-measured with the same probe, same seed, same
 > servers. Results in [§ Validation](#validation-what-actually-happened) below.
 > **Headline: KMD activate 46.9s → 6.1s; BTC-segwit 121.2s → 8.2s; gap-50

@@ -3,7 +3,9 @@
 ## Authoritative inputs
 
 - KDF repository:
-  `GLEECBTC/komodo-defi-framework`
+  `GLEECBTC/kdf-internal` (private). The public
+  `GLEECBTC/komodo-defi-framework` is retired; its `feat/tron-gasfree` branch is
+  a May 2026 snapshot, 43 commits behind what ships.
 - KDF source:
   `bd413dcfea73c9de2e85903323946a378b180fa7`
 - KDF documentation path:
