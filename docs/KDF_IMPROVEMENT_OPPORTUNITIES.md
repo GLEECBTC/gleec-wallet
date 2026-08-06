@@ -766,12 +766,27 @@ reachable from the pool. Node rotation still applies; the backoff loop does not.
 Two hard failures to zero, for +1.5s median - the suspension being waited out
 rather than run into.
 
-> **Two follow-ups this leaves open, both config rather than code.**
-> `public-trx-mainnet.fastnode.io` in USDT-TRC20's node list answers `404` for
-> the wallet API and should be removed or replaced. And
-> `tron-rpc.publicnode.com` is 7x faster and un-capped, yet the node cursor
-> starts at index 0 (trongrid); ordering the list by observed health, or
-> obtaining a TronGrid API key, would remove most of the pressure at source.
+> **The follow-up this leaves open is config, and it lives in `GLEECBTC/coins`,
+> not here** - `coins_config.json` is fetched at build
+> (`fetch_at_build_enabled: true`), so editing the copy in this repo is
+> overwritten on the next build.
+>
+> **TRX's node list is ordered worst-first.** It is
+> `[api.trongrid.io, tron-rpc.publicnode.com]`, and the cursor starts at index
+> 0, so every cold activation aims its whole first burst at the 3-rps node
+> while the 7x-faster un-capped one idles until something fails. Swapping the
+> order, or obtaining a TronGrid API key, would remove most of the pressure at
+> source - more than the retry does, because it stops producing the refusals
+> rather than absorbing them.
+>
+> `public-trx-mainnet.fastnode.io` answers `404` on every path tried
+> (`wallet/*`, `/jsonrpc`, `/`), so it is dead - but it is **inert, not
+> harmful**, and an earlier draft of this note had that wrong. It appears only
+> in USDT-TRC20's own `nodes` list, and a TRC-20 token never builds a pool from
+> that list: activation clones the platform coin's client wholesale
+> (`v2_activation.rs:644,752` - `rpc_client: self.rpc_client.clone()`), so only
+> TRX's list is ever read. Worth deleting as tidiness and to stop it misleading
+> the next person, not as a fix.
 
 ### Superseded note: the original TRON follow-up
 
