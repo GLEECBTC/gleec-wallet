@@ -717,6 +717,32 @@ diagnostic knob. The node-count scaling deliberately lives outside it for
 exactly that reason — web has to get it too, and web is where the 429 is
 invisible.
 
+### Follow-up: TRON has the same weakness and did not get the fix
+
+`tron/api.rs:836` builds `RpcPermits::new(configured_concurrency())` directly
+rather than going through `Web3Pool::new`, and its `try_clients` loop has **no
+retry**. Nothing in this work reaches it — deliberately, to keep TRX out of the
+regression surface — but it means TRX still fails outright the first time every
+node refuses.
+
+**Observed live, twice, during this work's own measurements.** Once on
+`34ab0e7` and once on the final artefact, TRX activation failed with:
+
+```
+activate:TRX+1tok failed: Transport: OTHER_ERROR:
+class org.tron.core.vm.program.Program$OutOfTimeException : CPU ti...
+```
+
+That is a TRON node exhausting VM CPU on a contract call during token
+activation — not rate limiting — but the shape is identical to the GLEEC bug: a
+transient, retryable node-side failure that kills the whole activation because
+nothing above it will try again. Roughly 2 failures in ~15 TRX activations
+across both arms, so ~13%, and it is **pre-existing** rather than introduced
+here.
+
+Porting `try_rpc_send`'s retry to `try_clients` is the obvious fix and is
+already the subject of the `RpcPool` trait TODO at the top of `eth_rpc.rs`.
+
 ### Coverage gap, now closed
 
 Every gate passed on the broken build — sdk 631, harness replay 22, process

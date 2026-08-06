@@ -81,6 +81,49 @@ with `file`/`lipo`/`llvm-objdump`, and runs the macOS universal binary with
 > the guarantee that the build matches the commit. Do **not** delete someone's
 > files, and do not exclude modified tracked files.
 
+### Knowing when it finished
+
+This takes 40–60 minutes, which is long enough that you will do something else
+and come back. **Come back to the build's own state, not to a watcher.** Three
+independent facts, all free:
+
+```bash
+LOG=<wherever you redirected the run>
+grep -c "Cleanup audit passed" "$LOG"                    # 1 = finished cleanly
+echo $(( $(date +%s) - $(stat -f %m "$LOG") ))           # seconds since last write
+ls ../nitride-kdf-builds/public/<safe-branch>/manifest.json
+```
+
+A completed run ends with `Artifact validation passed.` and `Cleanup audit
+passed.`; a failed one ends with a `ReleaseError` or a traceback. The log's
+mtime separates "still working" from "died silently" — a build that has written
+nothing for ten minutes is not building.
+
+**This has been got wrong twice, in two different ways, and both cost real
+time.** They are worth stating separately because fixing the first does not
+prevent the second:
+
+1. **A `pgrep -f` wait loop matched itself.** `while pgrep -f "local_release.py
+   run"; do sleep 60; done` — `pgrep -f` matches the full command line of every
+   process, *including the shell running the loop*, whose command line contains
+   that exact string because you just typed it. The loop always finds one
+   process and never exits. The build had finished 32 minutes earlier.
+   If you must check for a process, make the pattern unmatchable by the wrapper:
+   `pgrep -f "[l]ocal_release.py run"`.
+2. **The watcher did not outlive the session; the build did.** The second time,
+   the wait was on a log marker and the logic was correct — but the waiting
+   shell was killed at a session boundary while the `nohup`-ed build kept
+   running to a clean finish. No watcher was left to notice, and *no
+   notification is not a signal*. The build sat done for two hours.
+
+The generalisation that covers both: **a watcher is a convenience, never the
+source of truth.** Re-derive state on every resume. It costs one `grep`.
+
+> Do not try to wait it out in the foreground either. Long-running-command
+> timeouts here are commonly capped at ten minutes, and a larger value is
+> silently clamped — so a foreground wait on a 45-minute build always looks
+> like a timeout, which tells you nothing about the build.
+
 ---
 
 ## 3. Publish to Cloudflare R2
@@ -224,6 +267,8 @@ Every one of these cost real time at least once.
 | build refuses to start: "KDF worktree is dirty" | untracked or modified files in the KDF checkout | see the note in step 2 |
 | downloaded artifact rejected | checksum in `build_config.json` does not match the published ZIP | re-derive from `manifest.json` (step 4) |
 | a CI job shows "failure" but no step failed | it was **cancelled** by a newer push (concurrency) | check `.jobs[].conclusion == "cancelled"` before diagnosing |
+| the build "never finishes" — no completion notice, hours pass | a watcher died (self-matching `pgrep -f`, or a shell that did not survive the session) while the `nohup`-ed build ran to a clean finish | `grep -c "Cleanup audit passed" "$LOG"`. **Absence of a notification is not evidence of progress** — see [Knowing when it finished](#knowing-when-it-finished) |
+| `GITHUB_API_PUBLIC_READONLY_TOKEN` set but the transformer still gets `401`/`403` | exported in `~/.zshrc`, which zsh reads **only for interactive shells**, so no build script or tool shell sees it | move the export to `~/.zshenv`, which every zsh invocation reads. Passing it as an empty string is worse than not setting it — empty is sent as a credential and rejected `401` |
 
 ## Rolling back
 
