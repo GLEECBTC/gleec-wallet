@@ -678,8 +678,12 @@ class _FakeBalanceManager implements BalanceManager {
   BalanceInfo? lastKnown(AssetId assetId) => _balances[assetId];
 
   @override
-  Future<BalanceInfo> getBalance(AssetId assetId) async =>
-      _balances[assetId] ?? BalanceInfo.zero();
+  Future<BalanceInfo> getBalance(
+    AssetId assetId, {
+    // This fake serves a fixed map, so a forced refresh has nothing to go back
+    // to; the flag exists on the real manager to bypass its pubkey cache.
+    bool forceRefresh = false,
+  }) async => _balances[assetId] ?? BalanceInfo.zero();
 
   @override
   Stream<BalanceInfo> watchBalance(
