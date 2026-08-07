@@ -26,7 +26,7 @@ Future<void> testCexPrices(WidgetTester tester) async {
   //   const Key('back-button'),
   // );
   final Finder kmdBep20CoinActive = find.byKey(
-    const Key('active-coin-item-kmd-bep20'),
+    const Key('coin-list-item-kmd-bep20'),
   );
   final Finder kmdBep20Price = find.byKey(
     const Key('fiat-price-kmd-bep20'),

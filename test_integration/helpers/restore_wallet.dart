@@ -65,7 +65,12 @@ Future<void> restoreWalletToTest(WidgetTester tester) async {
   print('🔍 RESTORE WALLET: Accepting terms');
   await tester.tapAndPump(eulaTosCheckBox);
 
-  final isCustomSeed = validator.validateBip39(testSeed);
+  // A custom seed is anything that is NOT a valid BIP39 mnemonic - a WIF key
+  // from `getFundedWif()` is exactly that. The app only renders the
+  // custom-seed toggle in that case (`_shouldShowCustomSeedToggle` in
+  // wallet_simple_import.dart), and without confirming it `_allowCustomSeed`
+  // stays false, seed validation fails, and the confirm button never enables.
+  final isCustomSeed = !validator.validateBip39(testSeed);
 
   if (isCustomSeed) {
     print('🔍 RESTORE WALLET: Handling custom seed input');

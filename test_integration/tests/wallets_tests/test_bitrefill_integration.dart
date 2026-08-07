@@ -21,7 +21,7 @@ Future<void> testBitrefillIntegration(WidgetTester tester) async {
     const Key('overview-total-balance'),
   );
   final Finder ltcActiveCoinItem = find.byKey(
-    const Key('active-coin-item-ltc-segwit'),
+    const Key('coin-list-item-ltc-segwit'),
   );
   final Finder ltcCoinSearchItem = find.byKey(
     const Key('coins-manager-list-item-ltc-segwit'),
