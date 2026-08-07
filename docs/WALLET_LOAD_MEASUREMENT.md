@@ -100,8 +100,33 @@ scanned. The condition is deliberately narrow - both halves matter:
   already enabled and scans nothing, so its scan is still meaningful), and
 * the protocol's activation params must actually carry a scan policy.
   `UtxoProtocol` sends `scan_policy: scan_if_new_wallet`; the ETH-family params
-  have no `scan_policy` field at all, so HD address discovery there is *not*
-  covered by activation and must still scan.
+  have no `scan_policy` field at all.
+
+> **Correction (2026-08-07).** This section used to conclude from that second
+> bullet that ETH-family "HD address discovery is *not* covered by activation
+> and must still scan". The premise is true of the Dart; the conclusion is
+> false, and it is what made a full gap walk on every 30-second poll look
+> intentional.
+>
+> `EthActivationV2Request` carries
+> `#[serde(flatten)] pub enable_params: EnabledCoinBalanceParams`
+> (`mm2src/coins/eth/v2_activation.rs:249-250`), so an absent `scan_policy`
+> takes its serde default — and that default is `ScanIfNewWallet`, not
+> `DoNotScan` (`mm2src/coins/coin_balance.rs:159-178`). ETH-family activation
+> therefore *does* walk the gap, but only when KDF has no stored HD account for
+> the coin (`coin_balance.rs:532-535`); once the account is persisted, every
+> later activation takes the branch at `coin_balance.rs:577`, which requires
+> `Scan`, and walks nothing.
+>
+> The SDK cannot see which branch KDF took, so it still does not skip the
+> post-activation scan for EVM — guessing wrong in the "already scanned"
+> direction would silently disable address discovery on every warm re-login.
+> What was actually wrong was the *repeat*: nothing bounded a **successful**
+> scan, so `watchPubkeys` re-walked the whole gap every 30 seconds for the life
+> of the session. `PubkeyManager._hdAddressScanCompletedAt` now records each
+> completed scan per `(wallet, asset)` and suppresses another for six hours.
+> The old `_hdAddressScanDone` set suppressed exactly one scan, so even UTXO
+> re-walked its gap from the second tick onward.
 
 Measured, same machine, same coin, same seed:
 
