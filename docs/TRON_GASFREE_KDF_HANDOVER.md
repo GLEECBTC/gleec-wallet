@@ -134,11 +134,17 @@ workarounds.
 
 ## Validation
 
-Repository policy treats the existing unit/integration suites as known failing;
-they are not release sign-off. Add and maintain focused fixtures, then use
-changed-file formatting, root `flutter analyze`, independent analysis of each
-changed SDK package, artifact provenance inspection, and a thorough combined
-diff review.
+The unit suite passes and gates every PR; run it with the four `TRON_GASLESS_*`
+dart-defines (`flutter test test_units/main.dart`, see `docs/TESTING.md`) —
+without them the gas-free suites hang rather than fail. Add and maintain focused
+fixtures there, then use changed-file formatting, root `flutter analyze`,
+independent analysis of each changed SDK package, artifact provenance
+inspection, and a thorough combined diff review.
+
+The integration suite is **not** release sign-off on its own: it injects no
+`TRON_GASLESS_*` defines, so it compiles GasFree off and covers none of this
+work — and it currently reports green even when a test throws (see the
+known-broken list in `docs/TESTING.md`).
 
 Perform Nile/manual canary validation before promotion. Do not execute a real
 mainnet transfer without separate authorization.

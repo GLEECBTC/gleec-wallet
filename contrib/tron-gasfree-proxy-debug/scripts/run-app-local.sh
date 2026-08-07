@@ -50,5 +50,6 @@ echo "Launching '$DEVICE' build against $PROXY_BASE (service_provider $SERVICE_P
 cd "$REPO"
 exec flutter run -d "$DEVICE" \
   --dart-define=TRON_GASLESS_ENABLED=true \
+  --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
   --dart-define=TRON_GASLESS_BASE_URL="$PROXY_BASE" \
   --dart-define=TRON_GASLESS_SERVICE_PROVIDER="$SERVICE_PROVIDER"

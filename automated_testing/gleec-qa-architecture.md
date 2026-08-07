@@ -2,7 +2,13 @@
 
 > **Skyvern + Ollama Vision-Based Testing — Consolidated Technical Reference**
 >
-> Komodo Platform · March 2026 · Version 1.0
+> Gleec · March 2026 · Version 1.0
+
+> **This is a design document.** For commands that actually run, see
+> [README.md](README.md): the runner is a Python package invoked as
+> `python -m runner.runner` from `automated_testing/`, and the matrix is
+> `test_matrix.yaml` in this directory. The `setup.sh` and `ci-pipeline.sh` listings
+> below are illustrative — the shipped scripts in this directory are authoritative.
 
 ---
 
@@ -78,7 +84,7 @@ The test execution flow follows this sequence:
 ### 2.3 System Diagram
 
 ```
-tests/test_matrix.yaml
+test_matrix.yaml
          │
          ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -233,7 +239,7 @@ PORT=8000
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Komodo QA Automation Setup ==="
+echo "=== Gleec QA Automation Setup ==="
 
 # 1. Install Ollama
 if ! command -v ollama &> /dev/null; then
@@ -250,10 +256,10 @@ if ! curl -sf http://localhost:11434/api/tags > /dev/null 2>&1; then
 fi
 
 # 4. Create project structure
-mkdir -p komodo-qa-automation/{tests,runner,results}
+mkdir -p results/screenshots results/videos
 
 # 5. Start Docker stack
-cd komodo-qa-automation
+cd automated_testing
 docker compose up -d
 
 echo "Setup complete. Ollama: :11434  Skyvern: :8000"
@@ -262,7 +268,7 @@ echo "Setup complete. Ollama: :11434  Skyvern: :8000"
 ### 4.4 Directory Structure
 
 ```
-komodo-qa-automation/
+automated_testing/
 ├── docker-compose.yml
 ├── .env
 ├── setup.sh
@@ -840,16 +846,16 @@ Each automated test case in `test_matrix.yaml` follows this structure:
 
 ```bash
 # Smoke pack (fastest gate check)
-python runner/runner.py --tag smoke
+python -m runner.runner --tag smoke
 
 # Critical money-movement tests
-python runner/runner.py --tag critical
+python -m runner.runner --tag critical
 
 # P0 only (highest priority)
-python runner/runner.py --tag p0
+python -m runner.runner --tag p0
 
 # Full automated suite
-python runner/runner.py
+python -m runner.runner
 ```
 
 ---
@@ -990,7 +996,7 @@ async def main(matrix_path: str, tag_filter: str = None, single: bool = False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--matrix", default="tests/test_matrix.yaml")
+    parser.add_argument("--matrix", default="test_matrix.yaml")
     parser.add_argument("--tag", default=None)
     parser.add_argument("--single", action="store_true")
     args = parser.parse_args()
@@ -1029,7 +1035,7 @@ docker compose up -d
 sleep 10
 
 # Run smoke gate
-python runner/runner.py --tag smoke --single
+python -m runner.runner --tag smoke --single
 SMOKE_EXIT=$?
 
 if [ $SMOKE_EXIT -ne 0 ]; then
@@ -1038,7 +1044,7 @@ if [ $SMOKE_EXIT -ne 0 ]; then
 fi
 
 # Run full suite with retries
-python runner/runner.py --matrix tests/test_matrix.yaml
+python -m runner.runner --matrix test_matrix.yaml
 FULL_EXIT=$?
 
 # Upload report as artifact
