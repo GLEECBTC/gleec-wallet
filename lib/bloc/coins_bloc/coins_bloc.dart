@@ -12,10 +12,17 @@ import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/model/cex_price.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/analytics/frame_timing_recorder.dart';
 import 'package:web_dex/model/wallet.dart';
 
 part 'coins_event.dart';
 part 'coins_state.dart';
+
+/// Frame-capture window covering the whole initial activation fan-out.
+///
+/// Named in the `WalletLoadMark.eventName` vocabulary so it lines up with the
+/// load timings `tool/parse_wallet_load_log.dart` prints beside it.
+const String _activationStormSpan = 'activation_storm';
 
 /// Retry budget for the initial login activation fan-out. Deliberately much
 /// tighter than [CoinsRepo.activateAssetsSync]'s defaults: on login a coin that
@@ -298,6 +305,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
           );
           return state;
         }
+        // Nothing to do when the sweep found the same values it already had.
+        // `updateIguanaBalances` re-emits every watched coin, and the only
+        // field it changes is `sendableBalance`, which `Coin.props` excludes -
+        // so most ticks reach `Bloc.emit` only for its equality check to
+        // deep-walk both maps and drop the emit. Same reasoning as
+        // `_onBalanceChanged`; see the comment there.
+        if (state.walletCoins[key] == coin && state.coins[key] == coin) {
+          return state;
+        }
         return state.copyWith(
           walletCoins: {...state.walletCoins, key: coin},
           coins: {...state.coins, key: coin},
@@ -389,6 +405,29 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
     // Preserve persistent state fields such as activation state
     final merged = updated.copyWith(state: existing.state);
+
+    // Bail before allocating anything when both maps already hold exactly what
+    // this handler would write.
+    //
+    // That is the common case during activation, not a rare one. `Coin.props`
+    // excludes `sendableBalance`, `state` is preserved just above, and
+    // `Coin.address` is never assigned anywhere in `lib/` - so on a
+    // balance-only tick `merged == existing` and nothing changes. Without this
+    // guard the handler still copied `walletCoins` *and* spread the whole
+    // ~800-entry `coins` catalogue, and `Bloc.emit`'s equality check then
+    // deep-walked ~840 `Coin`s (each recursing into `parentCoin`, because
+    // `equatable`'s `mapEquals` short-circuits only on `identical`) purely to
+    // conclude "unchanged" and drop the emit.
+    //
+    // Comparing the two entries costs 8 props for one coin instead. The state
+    // stream is unaffected by construction: every case where the emit was not
+    // already being dropped fails one of these checks.
+    // Covered by `test_units/tests/wallet/coins_bloc_balance_emit_test.dart`.
+    final shouldBePresent = merged.isActive || merged.isActivating;
+    if (state.coins[assetId] == merged &&
+        state.walletCoins[assetId] == (shouldBePresent ? merged : null)) {
+      return;
+    }
 
     final walletCoins = Map<String, Coin>.of(state.walletCoins);
     if (merged.isActive || merged.isActivating) {
@@ -892,12 +931,20 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         )
         .toList();
 
+    // The window the jank actually lives in. `WalletLoadMark.firstBalance`,
+    // which brackets the `wallet_load` span, fires as soon as *one* asset has
+    // both a balance and a price - while the rest of the fan-out is still
+    // running. Measuring only that span systematically misses the storm.
+    // No-op unless the build set FRAME_TIMING_CAPTURE.
+    if (isInitialLogin) frameSpanStart(_activationStormSpan);
+
     // Ignore the return type here and let the broadcast handle the state updates as
     // coins are activated.
     try {
       await Future.wait(enableFutures);
     } finally {
       if (isInitialLogin) {
+        frameSpanEnd(_activationStormSpan);
         // Leave the shared cache fresh for the consumers that follow (balance
         // refresh, portfolio blocs), since the fan-out skipped its per-asset
         // invalidations. Runs even if an asset failed.
