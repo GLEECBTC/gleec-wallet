@@ -1,6 +1,52 @@
 # Wallet-load diagnostics
 
-Two tools. Both answer "why is this login slow", from opposite ends.
+Three of these answer "why is this login slow", from opposite ends — KDF in
+isolation (native and web), and the shipped app's own logs. The rest answer
+narrower questions: how close KDF comes to exhausting the iOS file-descriptor
+budget, and how many HTTP requests a build actually makes.
+
+| tool | question | platform |
+|---|---|---|
+| `kdf_latency_probe.py` | is it KDF, or is it us? | native (`--web` serves the browser probe) |
+| `web/kdf_web_probe.html` | the same, in the browser, with **no Flutter** | web |
+| `parse_wallet_load_log.dart` | what did the shipped app actually do | any (reads a log) |
+| `kdf_fd_probe.py` | how close to the iOS 256-FD ceiling | macOS only |
+| `kdf_rpc_burst_bench.py` + `_report.py` + `_instrument.py` | how many RPCs, at what rate, against which nodes | native |
+| `web/bench_serve.py` + `bench_recorder.js` | the same for the **real web app**, driven through its GUI | web |
+| `bench_web_jank.sh` | does the post-login activation storm jank, and did a change help | web |
+| `evm_ws_probe.py` | which `ws_url` endpoints actually answer, on web and on native | any |
+
+For frame timing and jank — a different signal from everything here, which all
+measure wall clock or request counts — see `docs/TESTING.md` §7 and
+`docs/WEB_JANK_MEASUREMENT_REPORT.md`.
+
+## `bench_web_jank.sh` — did that change actually help?
+
+```bash
+tool/bench_web_jank.sh baseline 3     # archives build/bench/baseline/run-N.json
+# ... apply a change ...
+tool/bench_web_jank.sh my-change 3
+tool/bench_web_jank.sh --compare baseline my-change
+```
+
+Drives the login-activation perf flow N times and prints medians. Needs
+`assets/debug_data.json` (git-ignored; see `docs/MANUAL_TESTING_DEBUGGING.md`)
+so the app auto-logs-in rather than the test driving the wallet-manager UI.
+
+Three things it does deliberately, each because the naive version was wrong:
+
+* **`fvm flutter drive`, not `run_integration_tests.dart`.** The runner invokes
+  bare `flutter` from `PATH` while `.fvmrc` pins another version, which fails
+  inside `flutter_test` with a `_TestFlutterView` error that looks like a code
+  bug. It also hardcodes its dart-defines with no passthrough.
+* **Clears `.dart_tool/hooks_runner` first.** The two SDKs' native-assets caches
+  are mutually unreadable; the symptom is "Building native assets failed /
+  reserved exit code 253", which says nothing about versions.
+* **Checks the artifact, not the exit code.** The runner has been observed
+  exiting 0 on a run whose build failed outright.
+
+Read `gap_p50_ms` first — it is the gate. `yield_pct` is reported but is not
+one: a window containing genuine idle has a low yield and no jank at all.
 
 ## `kdf_latency_probe.py` — is it KDF, or is it us?
 
@@ -136,6 +182,96 @@ omit `dbdir`/`userhome`; **omit `event_streaming_configuration`** (the wasm does
 `new SharedWorker(worker_path)` and a 404 there fails the start); and send
 `userpass` in every payload. No COOP/COEP is needed — it is a single-threaded
 build with no `SharedArrayBuffer`.
+
+## `evm_ws_probe.py` — which `ws_url` endpoints actually answer?
+
+```bash
+python3 tool/evm_ws_probe.py                      # every ws_url in coins_config
+python3 tool/evm_ws_probe.py --json out.json      # archive the raw result
+python3 tool/evm_ws_probe.py --url wss://host/p   # one ad-hoc endpoint
+python3 tool/evm_ws_probe.py --baseline docs/assets/evm_ws_probe/evm_ws_probe_2026-08-07.json
+```
+
+Opens each endpoint as a real WebSocket, sends one `net_version` — the same
+JSON-RPC KDF's own keepalive sends — and records whether an answer came back.
+**Python 3 standard library only**; the RFC 6455 handshake and framing are
+implemented in the file so this runs on a fresh clone with no `pip install`.
+
+Run it before shipping a change to the ws node expansion, and drop whatever
+does not answer. A dead ws node is not free: KDF's `try_every_node` allots
+`TRY_RPC_NODE_TIMEOUT_S` = 10s per node and the ws path has no fast fail.
+
+Three things it does deliberately, each because the naive version was wrong:
+
+* **Probes every endpoint twice — with an `Origin` header and without.** That
+  one header is the verdict, and the platforms differ on it: native KDF uses
+  `tokio_tungstenite` and sends none, while on web it uses
+  `tokio_tungstenite_wasm` — the browser's own `WebSocket` — and the browser
+  stamps `Origin` where Rust cannot suppress it. Measured 2026-08-07,
+  `wss://rpc.energyweb.org/ws` answers **403 to any `Origin` and 101 without
+  one**. A single-setting probe calls that "dead" and permanently strips EWT of
+  its only ws endpoint.
+* **Spaces its retries** (`--spacing`, default 1.5s). Refusals correlate in
+  time, so back-to-back retries are one sample, not several.
+  `wss://rpc.gnosischain.com/wss` answered 400 on three consecutive tries in one
+  sweep and 101 on fifteen of sixteen spaced tries minutes later.
+* **`--baseline` reds only on a regression**, not on the endpoints already known
+  to be dead — otherwise the gate is permanently red and gets ignored.
+
+Results as of 2026-08-07 (`docs/assets/evm_ws_probe/`): of the 24 distinct
+`wss://` endpoints across the 13 EVM platform coins that publish one, **22 work
+on both platforms**, `wss://rpc.energyweb.org/ws` is native-only, and
+`wss://polygon.gateway.tenderly.co` is dead both ways — 404, because the
+Tenderly gateway wants an access key in the path and the config carries the bare
+host. The shipping policy lives in `EvmNode` in `komodo_defi_rpc_methods`.
+
+## `kdf_fd_probe.py` — how close is KDF to the FD ceiling?
+
+A different question from the other three. On iOS the soft `RLIMIT_NOFILE` is
+**256 for the whole app process**, and KDF is a static library sharing that
+budget with Flutter, the network stack, and everything else. This measures KDF's
+peak file-descriptor usage during a real activation.
+
+Measuring a spawned binary rather than the device is deliberate: how many sockets
+KDF's networking holds open at once is a property of the Rust code and is
+identical on every native target. The device contributes only the limit to
+compare against, which is a constant. So this costs no signing, no wallet and no
+hardware — and it samples fast enough to catch a burst a 60s in-app poll would
+miss.
+
+```bash
+export KDF_TEST_SEED='abandon abandon ... about'
+
+python3 tool/kdf_fd_probe.py --kdf before=/path/to/kdf --kdf after=/path/to/kdf
+python3 tool/kdf_fd_probe.py --kdf head=/path/to/kdf --idle-seconds 30 --json fd.json
+```
+
+`--kdf LABEL=PATH` is required and repeatable; two binaries print a delta. It
+reuses `kdf_latency_probe` wholesale for the activation itself, so the workload
+is exactly the one the latency work measured, down to the seed and coin set. The
+seed contract is the same — `KDF_TEST_SEED` only, never an argument, and **use a
+throwaway seed with no funds**: this starts a real KDF against real electrum
+servers, and KDF takes its config (passphrase included) as `argv[1]`, readable
+in `ps`.
+
+**`--port` if the wallet is running.** The default is 7783, which is also the
+port a running wallet holds. The probe does not steal it — the scenario fails
+rather than disturbing your session. Pass `--port 7784`, or quit the wallet.
+
+**macOS only.** It reads the FD table through `proc_pidinfo`, which has no
+portable equivalent. The same numbers come from `/proc/<pid>/fd` on Linux, but
+that path is not implemented.
+
+**`--idle-seconds` is what makes the number mean something.** With `0` (the
+default) you get the activation peak but no steady state. `HYPER_POOLED` holds a
+20s `pool_idle_timeout`, so you need to exceed that — 25-30s — to tell a
+transient connect burst from a pool that stays held. The report prints the drain
+curve and the idle floor.
+
+The report ends with each build's peak against the 256 limit as a percentage,
+plus the caveats: these are KDF's descriptors alone — Flutter, Hive and non-KDF
+sockets sit on top — and it is n=1 per build, so repeat before drawing a fine
+conclusion.
 
 ## `parse_wallet_load_log.dart` — what the real app did
 
