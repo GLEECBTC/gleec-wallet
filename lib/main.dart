@@ -12,6 +12,7 @@ import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.da
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:web_dex/analytics/frame_timing_recorder.dart';
 import 'package:web_dex/analytics/wallet_load_timeline.dart';
 import 'package:web_dex/analytics/widgets/analytics_lifecycle_handler.dart';
 import 'package:web_dex/app_config/app_config.dart';
@@ -58,6 +59,7 @@ Future<void> main() async {
     WidgetsFlutterBinding.ensureInitialized();
     Bloc.observer = AppBlocObserver();
     PerformanceAnalytics.init();
+    initFrameTimingCapture();
     if (kIsWeb) {
       log(tronGaslessBuildPolicyMarker, path: 'GasFree build policy').ignore();
     }

@@ -57,6 +57,58 @@ final _activeUser = RegExp(
   r'lock queue\s+(\d+)ms,\s+lock held\s+(\d+)ms',
 );
 
+// Emitted by lib/analytics/frame_timing_recorder.dart, which only runs when the
+// build passed --dart-define=FRAME_TIMING_CAPTURE=true. `_frameDevice` must be
+// matched before `_frameSpan`, since `device` also matches `\w+`.
+// `attribution` is optional so logs captured before the LoAF probe existed
+// still match.
+final _frameDevice = RegExp(
+  r'frames\[device\] refresh ([\d.]+)Hz budget ([\d.]+)ms '
+  r'platform (\S+) mode (\S+)(?: attribution (\S+))?',
+);
+final _frameSpan = RegExp(
+  r'frames\[(\w+)\]\s+(\d+) frames in (\d+)ms \| '
+  r'build p50 ([\d.]+)ms p90 ([\d.]+)ms p99 ([\d.]+)ms max ([\d.]+)ms \| '
+  r'raster p50 ([\d.]+)ms p90 ([\d.]+)ms p99 ([\d.]+)ms max ([\d.]+)ms \| '
+  r'jank (\d+) \(([\d.]+)%\) severe (\d+) \| budget ([\d.]+)ms',
+);
+
+// The frame-arrival view of the same span. This is the line that matters on
+// web: a long task stops the browser firing the rAF at all, so main-thread
+// blocking shows up as frames that never happened, which `_frameSpan`'s
+// build/raster percentiles cannot see - they only describe frames that did.
+final _frameGap = RegExp(
+  r'frames\[(\w+)\]\[gap\] '
+  r'yield ([\d.]+)% \((\d+)/(\d+)\) fps ([\d.]+) \| '
+  r'gap p50 ([\d.]+)ms p90 ([\d.]+)ms p99 ([\d.]+)ms max ([\d.]+)ms \| '
+  r'stall (\d+)ms \(([\d.]+)%\) missed (\d+) \| '
+  r'ui (\d+)ms \(([\d.]+)%\) raster (\d+)ms \(([\d.]+)%\) \| '
+  r'span (\d+)ms',
+);
+
+// Who blocked the thread, from the long-animation-frame observer. Never a
+// verdict: it is a description, and a partial one - LoAF has a 50ms floor and
+// credits a whole task to its entry point, so the KDF share is a floor rather
+// than a total.
+final _frameAttrib = RegExp(
+  r'frames\[(\w+)\]\[attrib\] '
+  r'loaf (\d+) total (\d+)ms blocking (\d+)ms \| (.+)$',
+);
+final _frameAttribSource = RegExp(r'([\w.-]+) (\d+)ms');
+
+/// Jank rate above which a span is called out. Deliberately loose: the budget is
+/// device-dependent, so this is a smell test, not a gate.
+const _jankRatioThresholdPct = 10.0;
+
+/// Longest acceptable gap between two painted frames. Past this the UI has
+/// visibly frozen rather than stuttered.
+const _worstGapThresholdMs = 500.0;
+
+/// Multiple of the frame budget the *median* gap may reach before painting is
+/// called unsmooth. The median is the honest test of "when the app painted, did
+/// it paint on time", because it is unmoved by idle stretches.
+const _medianGapBudgetMultiple = 1.5;
+
 /// Methods whose per-login count is the amplification story.
 const _identityMethods = {'get_wallet_names', 'get_public_key_hash'};
 
@@ -90,11 +142,82 @@ void main(List<String> arguments) {
   final assetActivationStatus = <String, String>{};
   final balancePaints = <Map<String, Object?>>[];
   final activeUserWindows = <Map<String, int>>[];
+  final frameSpans = <String, Map<String, Object?>>{};
+  Map<String, Object?>? frameDevice;
   int? initialActivationMs;
   String? initialActivationOutcome;
   int? initialActivationCoins;
 
   for (final line in file.readAsLinesSync()) {
+    final device = _frameDevice.firstMatch(line);
+    if (device != null) {
+      frameDevice = <String, Object?>{
+        'refresh_hz': double.parse(device.group(1)!),
+        'frame_budget_ms': double.parse(device.group(2)!),
+        'platform': device.group(3),
+        'mode': device.group(4),
+        'attribution': device.group(5) ?? 'none',
+      };
+      continue;
+    }
+    final attrib = _frameAttrib.firstMatch(line);
+    if (attrib != null) {
+      final sources = <String, int>{};
+      for (final m in _frameAttribSource.allMatches(attrib.group(5)!)) {
+        sources[m.group(1)!] = int.parse(m.group(2)!);
+      }
+      (frameSpans[attrib.group(1)!] ??= <String, Object?>{}).addAll({
+        'loaf_entries': int.parse(attrib.group(2)!),
+        'loaf_total_ms': int.parse(attrib.group(3)!),
+        'loaf_blocking_ms': int.parse(attrib.group(4)!),
+        'loaf_by_source_ms': sources,
+      });
+      continue;
+    }
+    // Before `_frameSpan`, for the same reason `_frameDevice` is: both start
+    // `frames[<word>]`, and only the trailing shape tells them apart.
+    final gap = _frameGap.firstMatch(line);
+    if (gap != null) {
+      (frameSpans[gap.group(1)!] ??= <String, Object?>{}).addAll({
+        'yield_pct': double.parse(gap.group(2)!),
+        'frames_painted': int.parse(gap.group(3)!),
+        'frames_possible': int.parse(gap.group(4)!),
+        'effective_fps': double.parse(gap.group(5)!),
+        'gap_p50_ms': double.parse(gap.group(6)!),
+        'gap_p90_ms': double.parse(gap.group(7)!),
+        'gap_p99_ms': double.parse(gap.group(8)!),
+        'gap_worst_ms': double.parse(gap.group(9)!),
+        'stall_ms': int.parse(gap.group(10)!),
+        'stall_pct': double.parse(gap.group(11)!),
+        'missed_frames': int.parse(gap.group(12)!),
+        'ui_ms': int.parse(gap.group(13)!),
+        'ui_pct': double.parse(gap.group(14)!),
+        'raster_total_ms': int.parse(gap.group(15)!),
+        'raster_pct': double.parse(gap.group(16)!),
+        'span_ms': int.parse(gap.group(17)!),
+      });
+      continue;
+    }
+    final frame = _frameSpan.firstMatch(line);
+    if (frame != null) {
+      (frameSpans[frame.group(1)!] ??= <String, Object?>{}).addAll(<String, Object?>{
+        'frame_count': int.parse(frame.group(2)!),
+        'elapsed_ms': int.parse(frame.group(3)!),
+        'build_p50_ms': double.parse(frame.group(4)!),
+        'build_p90_ms': double.parse(frame.group(5)!),
+        'build_p99_ms': double.parse(frame.group(6)!),
+        'build_worst_ms': double.parse(frame.group(7)!),
+        'raster_p50_ms': double.parse(frame.group(8)!),
+        'raster_p90_ms': double.parse(frame.group(9)!),
+        'raster_p99_ms': double.parse(frame.group(10)!),
+        'raster_worst_ms': double.parse(frame.group(11)!),
+        'jank_frames': int.parse(frame.group(12)!),
+        'jank_ratio_pct': double.parse(frame.group(13)!),
+        'severe_jank_frames': int.parse(frame.group(14)!),
+        'frame_budget_ms': double.parse(frame.group(15)!),
+      });
+      continue;
+    }
     final rpc = _rpcLine.firstMatch(line);
     if (rpc != null) {
       final method = rpc.group(1)!;
@@ -206,6 +329,75 @@ void main(List<String> arguments) {
     verdicts['retry_multiple_signature'] = 'PASS (no ~90s multiples)';
   }
 
+  // Absence of frame data means the build did not set FRAME_TIMING_CAPTURE - a
+  // build-time decision, unlike Diagnostic Logging which is a runtime toggle.
+  // Reporting PASS off no data at all is worse than saying nothing.
+  if (frameSpans.isEmpty) {
+    verdicts['frames'] =
+        'NO DATA (rebuild with --dart-define=FRAME_TIMING_CAPTURE=true)';
+  } else {
+    for (final entry in frameSpans.entries) {
+      final span = entry.value;
+
+      // Each of the two lines can be absent independently: an old log has no
+      // `[gap]` line, and a span with fewer than two frames emits a `[gap]`
+      // "no data" line instead of a parseable one. Neither may be reported as
+      // a pass.
+      final ratio = span['jank_ratio_pct'] as double?;
+      final budget = span['frame_budget_ms'] as double?;
+      if (ratio == null || budget == null) {
+        verdicts['frames_${entry.key}'] = 'NO DATA (no build/raster line)';
+      } else {
+        verdicts['frames_${entry.key}'] = ratio > _jankRatioThresholdPct
+            ? 'FAIL (${ratio.toStringAsFixed(1)}% jank > '
+                '${_jankRatioThresholdPct.toStringAsFixed(1)}% at a '
+                '${budget.toStringAsFixed(1)}ms budget)'
+            : 'PASS (${ratio.toStringAsFixed(1)}% jank at a '
+                '${budget.toStringAsFixed(1)}ms budget)';
+      }
+
+      // The frame-arrival view. Reported separately from the jank ratio above
+      // rather than folded into it, because they disagree in the direction that
+      // matters: every frame fast (jank PASS) while frames stopped arriving is
+      // the blocked-main-thread signature.
+      final yieldPct = span['yield_pct'] as double?;
+      final worstGap = span['gap_worst_ms'] as double?;
+      final medianGap = span['gap_p50_ms'] as double?;
+      if (yieldPct == null || worstGap == null || medianGap == null) {
+        verdicts['frames_${entry.key}_smoothness'] =
+            'NO DATA (log predates the [gap] line, or the span had <2 frames)';
+      } else {
+        final gapBudget = (budget ?? 1000 / 60) * _medianGapBudgetMultiple;
+
+        // The median is the gate, not the yield. A window containing genuine
+        // idle - nothing animating, so nothing to paint - has a low yield and
+        // no jank whatsoever, and gating on yield would call that a freeze.
+        // The median gap is unmoved by idle: it answers "when the app did
+        // paint, did it paint on time".
+        verdicts['frames_${entry.key}_smoothness'] = medianGap > gapBudget
+            ? 'FAIL (median gap ${medianGap.toStringAsFixed(1)}ms > '
+                '${gapBudget.toStringAsFixed(1)}ms)'
+            : 'PASS (median gap ${medianGap.toStringAsFixed(1)}ms at a '
+                '${(budget ?? 1000 / 60).toStringAsFixed(1)}ms budget)';
+
+        verdicts['frames_${entry.key}_worst_gap'] =
+            worstGap > _worstGapThresholdMs
+                ? 'FAIL (${worstGap.toStringAsFixed(0)}ms with nothing painted '
+                    '> ${_worstGapThresholdMs.toStringAsFixed(0)}ms)'
+                : 'PASS (worst gap ${worstGap.toStringAsFixed(0)}ms)';
+
+        // Never PASS/FAIL: yield only means "the UI froze" for a window in
+        // which something was animating the whole time. Compare it against
+        // the smoothness verdict above before reading anything into it.
+        verdicts['frames_${entry.key}_yield'] =
+            'INFO ${yieldPct.toStringAsFixed(1)}% '
+            '(painted ${span['frames_painted']} of '
+            '${span['frames_possible']} offered; low yield with a passing '
+            'median gap means idle, not blocking)';
+      }
+    }
+  }
+
   final report = <String, Object?>{
     'initial_activation': {
       'elapsed_ms': initialActivationMs,
@@ -227,6 +419,10 @@ void main(List<String> arguments) {
     },
     'balance_paints': balancePaints,
     'get_active_user_windows': activeUserWindows,
+    'frames': {
+      'device': frameDevice,
+      'spans': frameSpans,
+    },
     'verdicts': verdicts,
   };
 
@@ -278,6 +474,27 @@ void main(List<String> arguments) {
       stdout.writeln(
         '  ${paint['elapsed_ms'].toString().padLeft(7)}ms  '
         '${paint['asset']}  ${paint['kind']}',
+      );
+    }
+    stdout.writeln('');
+  }
+
+  if (frameSpans.isNotEmpty) {
+    stdout.writeln('== Frame timings ==');
+    if (frameDevice != null) {
+      stdout.writeln(
+        '  device: ${frameDevice['platform']} ${frameDevice['mode']}, '
+        '${frameDevice['refresh_hz']}Hz '
+        '(${frameDevice['frame_budget_ms']}ms budget)',
+      );
+    }
+    for (final entry in frameSpans.entries) {
+      final v = entry.value;
+      stdout.writeln(
+        '  ${entry.key}: ${v['frame_count']} frames in ${v['elapsed_ms']}ms  '
+        'build p90 ${v['build_p90_ms']}ms  raster p90 ${v['raster_p90_ms']}ms  '
+        'jank ${v['jank_frames']} (${v['jank_ratio_pct']}%) '
+        'severe ${v['severe_jank_frames']}',
       );
     }
     stdout.writeln('');

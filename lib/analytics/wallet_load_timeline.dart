@@ -69,6 +69,11 @@ class WalletLoadTimeline {
   /// a missed call degrades the numbers rather than crashing.
   void markProcessStart() => _processStart ??= DateTime.now();
 
+  /// Optional observer, so instrumentation can bracket a measurement window on
+  /// a mark without this class knowing what it is measuring. Registered from
+  /// `main` behind a build-time gate; null in every normal build and in tests.
+  void Function(WalletLoadMark mark)? onMark;
+
   /// Records [mark] and logs it at INFO, so the numbers are readable in a
   /// release build without an analytics backend.
   ///
@@ -86,11 +91,22 @@ class WalletLoadTimeline {
     // just cannot be expressed as a delta.
     if (referenceAt == null) {
       _log.info('${mark.eventName} reached (no ${reference!.eventName} mark)');
+      _notify(mark);
       return;
     }
     final elapsedMs = now.difference(referenceAt).inMilliseconds;
     final from = reference?.eventName ?? 'process_start';
     _log.info('${mark.eventName} reached ${elapsedMs}ms after $from');
+    _notify(mark);
+  }
+
+  void _notify(WalletLoadMark mark) {
+    final observer = onMark;
+    if (observer == null) return;
+    // An observer is diagnostics. It must never be able to break a login.
+    try {
+      observer(mark);
+    } catch (_) {}
   }
 
   /// What each mark is measured against. Process-scoped marks measure from

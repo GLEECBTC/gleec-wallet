@@ -61,6 +61,42 @@ const bool analyticsDisabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Build-time switch for the in-app frame-timing recorder.
+///
+/// Off by default and const-evaluated, so `initFrameTimingCapture()` folds to
+/// nothing and the recorder is unreachable in a normal release build. Turn it on
+/// for a field capture:
+///
+///   flutter run -d macos --profile --dart-define=FRAME_TIMING_CAPTURE=true
+///
+/// Frame timings are only meaningful in profile or release mode - a debug build
+/// measures the JIT, not the app. See `docs/TESTING.md`.
+const bool frameTimingCaptureEnabled = bool.fromEnvironment(
+  'FRAME_TIMING_CAPTURE',
+  defaultValue: false,
+);
+
+/// Build-time switch that lets the `assets/debug_data.json` auto-login run in a
+/// **profile** build (see `docs/MANUAL_TESTING_DEBUGGING.md`).
+///
+/// Auto-login is otherwise `kDebugMode`-only, which makes the post-login
+/// activation storm unmeasurable: frame timings in a debug build measure the
+/// JIT, not the app, and driving the wallet-manager UI from an integration test
+/// is far more fragile than letting the app restore a wallet on its own.
+///
+/// Off by default and const-evaluated, so a normal build tree-shakes the call
+/// out entirely and no shipped binary can be talked into reading a seed from an
+/// asset. `assets/debug_data.json` is git-ignored and is never bundled unless a
+/// developer creates it locally.
+///
+///   flutter build web --profile \
+///     --dart-define=FRAME_TIMING_CAPTURE=true \
+///     --dart-define=PERF_AUTO_LOGIN=true
+const bool perfAutoLoginEnabled = bool.fromEnvironment(
+  'PERF_AUTO_LOGIN',
+  defaultValue: false,
+);
+
 /// Matomo configuration (only used when both are non-empty)
 const String matomoUrl = String.fromEnvironment('MATOMO_URL', defaultValue: '');
 

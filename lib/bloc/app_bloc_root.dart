@@ -65,6 +65,7 @@ import 'package:web_dex/router/parsers/root_route_parser.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/services/platform_web_api/platform_web_api.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -338,7 +339,12 @@ class _MyAppViewState extends State<_MyAppView> {
     // Attempt to restore previously authenticated session
     context.read<AuthBloc>().add(const AuthStateRestoreRequested());
 
-    if (kDebugMode) {
+    // `perfAutoLoginEnabled` is a const dart-define, so a normal build folds
+    // this to `kDebugMode` exactly as before and tree-shakes the rest. It exists
+    // so a *profile* build can reach the post-login activation storm without an
+    // integration test driving the wallet-manager UI - debug frame timings
+    // measure the JIT, not the app. See `docs/TESTING.md` §7.
+    if (kDebugMode || perfAutoLoginEnabled) {
       final walletsRepo = RepositoryProvider.of<WalletsRepository>(context);
       final authBloc = context.read<AuthBloc>();
       initDebugData(authBloc, walletsRepo).ignore();
