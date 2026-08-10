@@ -24,6 +24,8 @@ import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
     as gasless_pending_transfer_panel_test;
+import 'tests/wallet/coin_details/gasless_recovery_banner_scope_test.dart'
+    as gasless_recovery_banner_scope_test;
 import 'tests/wallet/coin_details/gasless_support_diagnostics_test.dart'
     as gasless_support_diagnostics_test;
 import 'views/common/hw_wallet_dialog/trezor_dialog_select_wallet_test.dart'
@@ -226,6 +228,7 @@ void main() {
   table_utils_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();
+  gasless_recovery_banner_scope_test.main();
   trezor_dialog_select_wallet_test.main();
   hardware_wallets_manager_test.main();
   wallet_login_test.main();

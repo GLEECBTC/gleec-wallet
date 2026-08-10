@@ -215,6 +215,37 @@ bool _offersOfficialGaslessRecovery(
     reason == GaslessReceiveReasonCode.tokenUnsupported &&
     accountStatus?.availability == GaslessAccountAvailability.tokenUnsupported;
 
+/// Whether the "GasFree deposits paused" notice belongs on this coin's page.
+///
+/// [isGaslessRecoveryAsset] is the gate that matters, and it is why TRX is
+/// excluded. GasFree is a property of the eligible TRC-20 token, never of the
+/// platform coin: `isTronGaslessAssetIdEligible` rejects anything whose
+/// subclass is not `trc20` on its first line.
+///
+/// Without that gate the TRX page raised the banner for a coin that never had
+/// GasFree deposits to pause. KDF returns a `gasfree_address` on *every* TRON
+/// address, so [hasRetainedCustodyAddress] is true there; nothing sets a
+/// reason code on that path, so it fell through to the generic paused copy and
+/// read like a provider outage.
+///
+/// TRX remains inside `isGaslessSingleAddressScope` for address-creation
+/// gating - it shares one HD address list with its TRC-20 tokens. That is a
+/// separate question from whether a GasFree notice belongs on its page.
+bool shouldShowGaslessRecoveryBanner({
+  required bool isGaslessRecoveryAsset,
+  required bool gaslessReceiveEnabled,
+  required bool hasRetainedCustodyAddress,
+  required bool gaslessCustodyVisible,
+}) =>
+    isGaslessRecoveryAsset &&
+    !gaslessReceiveEnabled &&
+    hasRetainedCustodyAddress &&
+    // Reduced from `(!isGaslessRecoveryAsset || !gaslessCustodyVisible)`,
+    // which is equivalent once the asset gate above holds. The custody rows
+    // already carry their own paused tag, so the banner is for the case where
+    // no custody surface is rendered to carry it.
+    !gaslessCustodyVisible;
+
 /// Expands pubkeys into display rows: a gasless pubkey becomes a gas-free
 /// (custody) row followed by a standard (EOA) row; others stay one row. The
 /// gas-free row is exempt from the zero-balance toggle — it is the account
@@ -669,10 +700,12 @@ class _CoinAddressesState extends State<CoinAddresses>
                         isHdWallet: isHdWallet,
                       )),
             );
-            final showRecoveryBanner =
-                !gaslessReceiveEnabled &&
-                hasRetainedCustodyAddress &&
-                (!widget.coin.isGaslessRecoveryAsset || !gaslessCustodyVisible);
+            final showRecoveryBanner = shouldShowGaslessRecoveryBanner(
+              isGaslessRecoveryAsset: widget.coin.isGaslessRecoveryAsset,
+              gaslessReceiveEnabled: gaslessReceiveEnabled,
+              hasRetainedCustodyAddress: hasRetainedCustodyAddress,
+              gaslessCustodyVisible: gaslessCustodyVisible,
+            );
             final rows = visibleAddressRows(
               widget.coin,
               state.addresses,
