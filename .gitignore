@@ -85,8 +85,8 @@ AGENTS_1.md
 # .dmg Release
 dist/
  
-# KDF generated binaries
-web/kdf/kdf/bin/
+# KDF generated web artifacts (bin/ and res/ are both produced by the build).
+web/kdf/kdf/
 
 # AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
 /.claude/skills/
@@ -94,6 +94,14 @@ web/kdf/kdf/bin/
 /.nano-banana-config.json
 /generated_imgs
 /.1code
+
+# Local environment secrets — never commit. `*.env.example` templates stay
+# trackable because this matches the exact filename `.env` only.
+.env
+/.lifi/
+
+# Generated report/document output.
+/output/
 
 # Android release signing secrets — never commit.
 **/*.jks
