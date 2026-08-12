@@ -36,10 +36,8 @@
 .pub/
 **/build/
 contrib/coins_config.json
-devtools_options.yaml
 
 # Web related
-web/index.html
 web/src/*
 web/dist/*.js
 web/dist/*.wasm
