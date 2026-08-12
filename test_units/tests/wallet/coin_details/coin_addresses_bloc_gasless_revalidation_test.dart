@@ -121,18 +121,25 @@ class _ControlledAuth implements KomodoDefiLocalAuth {
 }
 
 class _FakePubkeyManager implements PubkeyManager {
-  _FakePubkeyManager(this.asset, this.keys);
+  _FakePubkeyManager(this.asset, this.keys, {this.error});
 
   final Asset asset;
   List<PubkeyInfo> keys;
 
+  /// Thrown instead of returning [keys], to drive the handlers' catch blocks.
+  final Object? error;
+
   @override
-  Future<AssetPubkeys> getPubkeys(Asset asset) async => AssetPubkeys(
-    assetId: this.asset.id,
-    keys: keys,
-    availableAddressesCount: keys.length,
-    syncStatus: SyncStatusEnum.success,
-  );
+  Future<AssetPubkeys> getPubkeys(Asset asset) async {
+    final failure = error;
+    if (failure != null) throw failure;
+    return AssetPubkeys(
+      assetId: this.asset.id,
+      keys: keys,
+      availableAddressesCount: keys.length,
+      syncStatus: SyncStatusEnum.success,
+    );
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -392,6 +399,144 @@ void testCoinAddressesBlocGaslessRevalidation() {
       },
     );
   }
+
+  group('the address-list load always reaches a terminal form status', () {
+    // `_onPubkeysUpdated` emits `submitting` with an empty address list before
+    // its first await (the revocation tested above). The GasFree-only handlers
+    // supersede the *GasFree* evaluation without ever emitting a `FormStatus`,
+    // so when both counters were one and the same, a 30-second refresh landing
+    // mid-load aborted the load and left `CoinAddresses` rendering a spinner
+    // under the address list until the coin page was reopened.
+
+    /// Spins the microtask queue until [condition] holds, so the test does not
+    /// depend on how many turns a concurrently-running handler needs.
+    Future<void> pumpUntil(
+      bool Function() condition, {
+      required String reason,
+    }) async {
+      for (var turn = 0; turn < 1000; turn++) {
+        if (condition()) return;
+        await Future<void>.delayed(Duration.zero);
+      }
+      fail(reason);
+    }
+
+    test(
+      'a superseding GasFree refresh cannot strand it at submitting',
+      () async {
+        final asset = _asset();
+        final original = _pubkey('Original');
+        // Three unused addresses so `getCantCreateNewAddressReasons` returns a
+        // non-null set: the pre-emit nulls that field too, and it drives the
+        // create-address button's disabled reasons.
+        final replacements = [_pubkey('A'), _pubkey('B'), _pubkey('C')];
+        final auth = _ControlledAuth(_user());
+        final analytics = _RecordingAnalyticsBloc();
+        final bloc = _TestCoinAddressesBloc(
+          _FakeSdk(
+            assets: _FakeAssetManager(asset),
+            auth: auth,
+            pubkeys: _FakePubkeyManager(asset, replacements),
+          ),
+          asset.id.id,
+          analytics,
+        );
+        addTearDown(bloc.close);
+        bloc.seedReady(
+          CoinAddressesState(
+            status: FormStatus.success,
+            addresses: [original],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            verifiedGasfreeAddress: original.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletHash,
+          ),
+        );
+
+        auth.pauseNextCurrentUser();
+        final pendingFuture = bloc.stream.first;
+        bloc.add(CoinAddressesPubkeysUpdated(replacements));
+        final pending = await pendingFuture.timeout(const Duration(seconds: 1));
+        expect(pending.status, FormStatus.submitting);
+        expect(pending.addresses, isEmpty);
+
+        // The scheduled GasFree refresh fires while the load is still awaiting
+        // its first wallet read, bumping the GasFree evaluation generation.
+        final callsBeforeRefresh = auth.currentUserCalls;
+        bloc.add(const CoinAddressesGaslessReceiveRefreshRequested());
+        await pumpUntil(
+          () => auth.currentUserCalls > callsBeforeRefresh,
+          reason: 'the GasFree refresh never reached its first wallet read',
+        );
+
+        final settledFuture = bloc.stream
+            .firstWhere((state) => state.status != FormStatus.submitting)
+            .timeout(const Duration(seconds: 1));
+        auth.releaseCurrentUser();
+        final settled = await settledFuture;
+
+        expect(settled.status, FormStatus.success);
+        expect(settled.addresses, replacements);
+        expect(
+          settled.cantCreateNewAddressReasons,
+          contains(CantCreateNewAddressReason.maxGapLimitReached),
+        );
+
+        // The superseding refresh settles afterwards and must not put the form
+        // back into a loading state it will never leave.
+        await pumpUntil(
+          () =>
+              bloc.state.gaslessReceiveStatus != GaslessReceiveStatus.checking,
+          reason: 'the GasFree refresh never settled',
+        );
+        expect(bloc.state.status, FormStatus.success);
+        expect(bloc.state.addresses, replacements);
+      },
+    );
+
+    test(
+      'a failed load reports the failure instead of loading forever',
+      () async {
+        final asset = _asset();
+        final original = _pubkey('Original');
+        final auth = _ControlledAuth(_user());
+        final analytics = _RecordingAnalyticsBloc();
+        final bloc = _TestCoinAddressesBloc(
+          _FakeSdk(
+            assets: _FakeAssetManager(asset),
+            auth: auth,
+            pubkeys: _FakePubkeyManager(
+              asset,
+              const [],
+              error: StateError('pubkey read failed'),
+            ),
+          ),
+          asset.id.id,
+          analytics,
+        );
+        addTearDown(bloc.close);
+        bloc.seedReady(
+          CoinAddressesState(
+            status: FormStatus.success,
+            addresses: [original],
+            gaslessReceiveStatus: GaslessReceiveStatus.ready,
+            verifiedGasfreeAddress: original.gasfreeAddress,
+            gaslessReceiveWalletPubkeyHash: _walletHash,
+          ),
+        );
+
+        final settledFuture = bloc.stream
+            .firstWhere((state) => state.errorMessage != null)
+            .timeout(const Duration(seconds: 1));
+        bloc.add(CoinAddressesPubkeysUpdated([original]));
+        final settled = await settledFuture;
+
+        // `ErrorDisplay` is gated on `FormStatus.failure`, so leaving `status` at
+        // the pre-emit's `submitting` hid the error behind a permanent spinner.
+        expect(settled.status, FormStatus.failure);
+        expect(settled.errorMessage, isNotNull);
+      },
+    );
+  });
 
   test(
     'queued previous-wallet pubkeys are never rendered after a wallet switch',
