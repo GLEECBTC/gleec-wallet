@@ -42,11 +42,55 @@ class _HistoryItemState extends State<HistoryItem> {
         : '-';
     final bool isSuccessful = !widget.swap.isFailed;
     final bool isTaker = widget.swap.isTaker;
-    final bool isRecoverable = widget.swap.recoverable;
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
 
+    // The recovery lock lives in the bloc so this list entry and the swap
+    // details page cannot each submit their own recovery for the same swap.
+    return StreamBuilder<Map<String, RecoverySubmissionStatus>>(
+      initialData: const {},
+      stream: tradingEntitiesBloc.outRecoveryStatuses,
+      builder: (context, snapshot) {
+        final recoveryStatus = tradingEntitiesBloc.recoveryStatusFor(uuid);
+        final bool canRecover =
+            recoveryStatus == RecoverySubmissionStatus.idle &&
+            tradingEntitiesBloc.canRecoverSwap(uuid);
+        final bool isRecovering =
+            _isRecovering ||
+            recoveryStatus == RecoverySubmissionStatus.submitting;
+        return _buildContent(
+          context,
+          tradingEntitiesBloc: tradingEntitiesBloc,
+          uuid: uuid,
+          sellCoin: sellCoin,
+          sellAmount: sellAmount,
+          buyCoin: buyCoin,
+          buyAmount: buyAmount,
+          date: date,
+          isSuccessful: isSuccessful,
+          isTaker: isTaker,
+          canRecover: canRecover,
+          isRecovering: isRecovering,
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context, {
+    required TradingEntitiesBloc tradingEntitiesBloc,
+    required String uuid,
+    required String sellCoin,
+    required Rational sellAmount,
+    required String buyCoin,
+    required Rational buyAmount,
+    required String date,
+    required bool isSuccessful,
+    required bool isTaker,
+    required bool canRecover,
+    required bool isRecovering,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -75,19 +119,19 @@ class _HistoryItemState extends State<HistoryItem> {
                     key: Key('swap-item-$uuid-mobile'),
                     swap: widget.swap,
                     uuid: uuid,
-                    isRecovering: _isRecovering,
+                    isRecovering: isRecovering,
                     buyAmount: buyAmount,
                     buyCoin: buyCoin,
                     date: date,
                     isSuccessful: isSuccessful,
                     sellAmount: sellAmount,
                     sellCoin: sellCoin,
-                    onRecoverPressed: isRecoverable ? _onRecoverPressed : null,
+                    onRecoverPressed: canRecover ? _onRecoverPressed : null,
                   )
                 : _HistoryItemDesktop(
                     key: Key('swap-item-$uuid-desktop'),
                     uuid: uuid,
-                    isRecovering: _isRecovering,
+                    isRecovering: isRecovering,
                     buyAmount: buyAmount,
                     buyCoin: buyCoin,
                     date: date,
@@ -96,7 +140,7 @@ class _HistoryItemState extends State<HistoryItem> {
                     sellAmount: sellAmount,
                     sellCoin: sellCoin,
                     typeColor: _typeColor,
-                    onRecoverPressed: isRecoverable ? _onRecoverPressed : null,
+                    onRecoverPressed: canRecover ? _onRecoverPressed : null,
                   ),
           ),
         ),
@@ -105,14 +149,22 @@ class _HistoryItemState extends State<HistoryItem> {
   }
 
   Future<void> _onRecoverPressed() async {
-    if (_isRecovering) return;
-    setState(() {
-      _isRecovering = true;
-    });
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
+    // Re-check rather than trusting the frame we were built with: the swap may
+    // have stopped being recoverable, or a recovery may already be in flight.
+    if (_isRecovering ||
+        tradingEntitiesBloc.recoveryStatusFor(widget.swap.uuid) !=
+            RecoverySubmissionStatus.idle ||
+        !tradingEntitiesBloc.canRecoverSwap(widget.swap.uuid)) {
+      return;
+    }
+    setState(() {
+      _isRecovering = true;
+    });
     await tradingEntitiesBloc.recoverFundsOfSwap(widget.swap.uuid);
+    if (!mounted) return;
     setState(() {
       _isRecovering = false;
     });

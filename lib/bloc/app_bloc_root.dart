@@ -256,7 +256,9 @@ class AppBlocRoot extends StatelessWidget {
                 myOrdersService,
                 SettingsRepository(),
                 coinsRepository,
+                komodoDefiSdk,
               ),
+              komodoDefiSdk,
             ),
           ),
           BlocProvider<TradingStatusBloc>(

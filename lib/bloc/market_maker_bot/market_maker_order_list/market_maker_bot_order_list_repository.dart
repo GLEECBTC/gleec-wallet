@@ -1,8 +1,11 @@
 import 'package:decimal/decimal.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_wallet_session.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_order_list/trade_pair.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
+import 'package:web_dex/shared/utils/kdf_wallet_authority.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_volume.dart';
 import 'package:web_dex/views/market_maker_bot/trade_volume_type.dart';
@@ -14,13 +17,25 @@ class MarketMakerBotOrderListRepository {
     this._ordersService,
     this._settingsRepository,
     this._coinsRepository,
+    this._kdfSdk,
   );
 
   final CoinsRepo _coinsRepository;
   final MyOrdersService _ordersService;
   final SettingsRepository _settingsRepository;
+  final KomodoDefiSdk _kdfSdk;
 
-  Future<void> cancelOrders(List<TradeCoinPairConfig> tradePairs) async {
+  /// Cancels the bot's maker orders for [tradePairs].
+  ///
+  /// [walletSession] is the wallet this cancellation was authorised against.
+  /// The loop below spans one RPC per order, so the live wallet is re-checked
+  /// before each one: a wallet switch part-way through must abort the
+  /// remaining cancellations rather than apply them to the new wallet.
+  Future<void> cancelOrders(
+    List<TradeCoinPairConfig> tradePairs, {
+    MarketMakerBotWalletSession? walletSession,
+    bool Function()? isSessionCurrent,
+  }) async {
     final orders = await _ordersService.getOrders();
     final ordersToCancel = orders
         ?.where(
@@ -34,12 +49,37 @@ class MarketMakerBotOrderListRepository {
         )
         .toList();
 
-    if (ordersToCancel?.isEmpty ?? false) {
+    if (ordersToCancel == null || ordersToCancel.isEmpty) {
       return;
     }
 
-    for (final order in ordersToCancel!) {
-      await _ordersService.cancelOrder(order.uuid);
+    for (final order in ordersToCancel) {
+      await _ordersService.cancelOrder(
+        order.uuid,
+        beforeMutation: walletSession == null
+            ? null
+            : () => _requireWalletSession(walletSession, isSessionCurrent),
+      );
+    }
+  }
+
+  Future<void> _requireWalletSession(
+    MarketMakerBotWalletSession walletSession,
+    bool Function()? isSessionCurrent,
+  ) async {
+    // The generation check catches a sign-out/sign-in into the same wallet,
+    // which the wallet ID alone cannot distinguish.
+    if (isSessionCurrent != null && !isSessionCurrent()) {
+      throw const MarketMakerBotWalletChanged();
+    }
+    final String? liveWalletId;
+    try {
+      liveWalletId = await freshKdfCurrentWalletId(_kdfSdk);
+    } on Object {
+      throw const MarketMakerBotWalletChanged();
+    }
+    if (liveWalletId != walletSession.walletId) {
+      throw const MarketMakerBotWalletChanged();
     }
   }
 
