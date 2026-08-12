@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 
 /// Shows a running or finished swap.
 ///
@@ -15,7 +15,7 @@ class SwapProgressView extends StatelessWidget {
   });
 
   /// The latest snapshot.
-  final RoutedSwapProgress progress;
+  final UnifiedSwapProgress progress;
 
   /// Called when the user asks to stop the swap.
   final VoidCallback onCancel;
@@ -34,13 +34,13 @@ class SwapProgressView extends StatelessWidget {
         Text(_headline, style: theme.textTheme.titleLarge),
         const SizedBox(height: 8),
         Text(_detail, style: theme.textTheme.bodyMedium),
-        if (progress.providerStatusDetail != null) ...[
+        if (progress.providerDetail != null) ...[
           const SizedBox(height: 8),
           // Provider passthrough: in the provider's own language, subject to
           // change without notice, and not translatable. It belongs in a
           // details line, never as the primary message.
           Text(
-            progress.providerStatusDetail!,
+            progress.providerDetail!,
             key: const Key('swap-provider-detail'),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -77,62 +77,47 @@ class SwapProgressView extends StatelessWidget {
     );
   }
 
+  /// The headline the source supplied, or a phase label while it runs.
+  ///
+  /// Terminal wording comes from the execution layer because only it knows
+  /// whether a finished swap actually delivered — a refund and a partial fill
+  /// are both finished and neither may be called complete.
   String get _headline {
-    final receipt = progress.receipt;
-    if (receipt != null) {
-      return switch (receipt.outcome.wire) {
-        'completed' => 'You received ${receipt.amount} ${receipt.tokenLabel}',
-        // A partial fill and a refund are terminal, and neither is the swap
-        // the user asked for. Calling either "complete" would misrepresent
-        // where their money went.
-        'partial' => 'Partly filled',
-        'refunded' => 'Swap refunded',
-        _ => 'Swap finished',
-      };
-    }
-    if (progress.failure != null) return 'Swap failed';
+    final headline = progress.headline;
+    if (headline != null) return headline;
+    if (progress.phase == SwapPhase.failed) return 'Swap failed';
 
     return switch (progress.phase) {
-      RoutedSwapPhase.preparing => 'Getting the best price…',
-      RoutedSwapPhase.approving => 'Approving token…',
-      RoutedSwapPhase.signing => 'Signing…',
-      RoutedSwapPhase.sending => 'Sending…',
-      RoutedSwapPhase.confirming => 'Confirming…',
-      RoutedSwapPhase.bridging => 'Moving funds across…',
+      SwapPhase.preparing => 'Getting the best price…',
+      SwapPhase.approving => 'Approving token…',
+      SwapPhase.signing => 'Signing…',
+      SwapPhase.sending => 'Sending…',
+      SwapPhase.confirming => 'Confirming…',
+      SwapPhase.settling => 'Completing the swap…',
       _ => 'Working…',
     };
   }
 
   String get _detail {
-    final receipt = progress.receipt;
-    if (receipt != null) {
-      return switch (receipt.outcome.wire) {
-        'partial' =>
-          'You received ${receipt.amount} ${receipt.tokenLabel}, which is not '
-              'the full amount you asked for.',
-        'refunded' =>
-          'The swap did not happen. ${receipt.amount} ${receipt.tokenLabel} '
-              'was returned to you.',
-        _ => 'The swap is complete.',
-      };
-    }
-
-    final failure = progress.failure;
-    if (failure != null) {
-      // Only claim the funds are untouched when the contract says so. Telling
-      // someone their money is safe when it may not be is the one mistake
-      // worth avoiding absolutely.
-      final safety = failure.fundsUntouched
+    if (progress.phase == SwapPhase.failed) {
+      // Only claim the funds are untouched where the source can prove it.
+      // Telling someone their money is safe when it may not be is the one
+      // mistake worth avoiding absolutely.
+      final safety = progress.fundsUntouched
           ? 'Nothing was sent, so your balance is unchanged.'
           : 'Check the transaction details before trying again.';
-      return '${failure.message}\n$safety';
+      final detail = progress.detail;
+      return detail == null ? safety : '$detail\n$safety';
     }
 
+    final detail = progress.detail;
+    if (detail != null) return detail;
+    if (progress.isTerminal) return 'The swap is complete.';
+
     return switch (progress.phase) {
-      RoutedSwapPhase.bridging =>
+      SwapPhase.settling =>
         'This can take a while. We keep tracking it in the background.',
-      RoutedSwapPhase.sending =>
-        'This step cannot be cancelled once it has started.',
+      SwapPhase.sending => 'This step cannot be cancelled once it has started.',
       _ => 'Nothing has left your wallet yet.',
     };
   }

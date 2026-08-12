@@ -1,7 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
@@ -112,7 +112,7 @@ class UnifiedSwapState extends Equatable {
   final Set<AssetId> tradableAssets;
 
   /// Live progress, once a swap is running.
-  final RoutedSwapProgress? progress;
+  final UnifiedSwapProgress? progress;
 
   /// Whether a start request is in flight.
   final bool isStarting;
@@ -184,7 +184,7 @@ class UnifiedSwapState extends Equatable {
     SwapQuote? selectedQuote,
     UnifiedSwapFormError? formError,
     Set<AssetId>? tradableAssets,
-    RoutedSwapProgress? progress,
+    UnifiedSwapProgress? progress,
     bool? isStarting,
     bool? isRepricing,
     SwapQuote? repricedQuote,

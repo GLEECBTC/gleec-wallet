@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
@@ -50,10 +51,10 @@ void main() {
   UnifiedSwapBloc blocWith(
     _ProgrammableSource source, {
     Decimal? balance,
-    RoutedSwapManager? manager,
+    _FakeExecutor? executor,
   }) => UnifiedSwapBloc(
     repository: UnifiedSwapRepository(sources: [source]),
-    routedSwaps: manager ?? _FakeRoutedSwaps(),
+    executors: [executor ?? _FakeExecutor()],
     spendableBalance: (_) async => balance,
   );
 
@@ -217,10 +218,10 @@ void main() {
     });
 
     test('proceeds when the re-price is not worse', () async {
-      final manager = _FakeRoutedSwaps();
+      final manager = _FakeExecutor();
       final source = _ProgrammableSource()
         ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source, manager: manager);
+      final bloc = blocWith(source, executor: manager);
       addTearDown(bloc.close);
 
       await fillForm(bloc);
@@ -238,10 +239,10 @@ void main() {
     });
 
     test('accepting a re-price executes against the new number', () async {
-      final manager = _FakeRoutedSwaps();
+      final manager = _FakeExecutor();
       final source = _ProgrammableSource()
         ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source, manager: manager);
+      final bloc = blocWith(source, executor: manager);
       addTearDown(bloc.close);
 
       await fillForm(bloc);
@@ -264,10 +265,10 @@ void main() {
     test(
       'rejecting a re-price sends the user back without executing',
       () async {
-        final manager = _FakeRoutedSwaps();
+        final manager = _FakeExecutor();
         final source = _ProgrammableSource()
           ..priced = quoteOf(guaranteed: '99', payload: _offer());
-        final bloc = blocWith(source, manager: manager);
+        final bloc = blocWith(source, executor: manager);
         addTearDown(bloc.close);
 
         await fillForm(bloc);
@@ -296,13 +297,15 @@ void main() {
     test('an atomic offer says so instead of silently doing nothing', () async {
       // The button spends money. Pressing it and having nothing happen is the
       // worst available outcome, so the unimplemented path is explicit.
-      final manager = _FakeRoutedSwaps();
+      // Only a routed executor is registered, so an atomic quote has nothing
+      // to execute it. The user must be told, not left with a dead button.
+      final manager = _FakeExecutor();
       final source = _ProgrammableSource()
         ..priced = quoteOf(
           guaranteed: '99',
           source: SwapLiquiditySource.atomic,
         );
-      final bloc = blocWith(source, manager: manager);
+      final bloc = blocWith(source, executor: manager);
       addTearDown(bloc.close);
 
       await fillForm(bloc);
@@ -318,10 +321,10 @@ void main() {
     });
 
     test('progress drives the step, and a refund is not a success', () async {
-      final manager = _FakeRoutedSwaps();
+      final manager = _FakeExecutor();
       final source = _ProgrammableSource()
         ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source, manager: manager);
+      final bloc = blocWith(source, executor: manager);
       addTearDown(bloc.close);
 
       await fillForm(bloc);
@@ -337,9 +340,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
       manager.emit(
-        const RoutedSwapProgress(
-          uuid: 'u',
-          phase: RoutedSwapPhase.finished,
+        const UnifiedSwapProgress(
+          id: 'u',
+          source: SwapLiquiditySource.routed,
+          phase: SwapPhase.finished,
           canCancel: false,
         ),
       );
@@ -423,34 +427,30 @@ class _ProgrammableSource implements SwapQuoteSource {
 }
 
 /// A routed manager that records starts and lets the test push progress.
-class _FakeRoutedSwaps implements RoutedSwapManager {
-  final _controller = StreamController<RoutedSwapProgress>.broadcast();
+class _FakeExecutor implements SwapExecutor {
+  @override
+  SwapLiquiditySource get source => SwapLiquiditySource.routed;
+
+  final _controller = StreamController<UnifiedSwapProgress>.broadcast();
   int startCount = 0;
 
-  void emit(RoutedSwapProgress progress) => _controller.add(progress);
+  void emit(UnifiedSwapProgress progress) => _controller.add(progress);
 
   @override
-  Future<RoutedSwapHandle> start(RoutedSwapOffer offer) async {
+  Future<SwapExecutionHandle> start(SwapQuote quote) async {
     startCount++;
     return _FakeHandle(_controller.stream);
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _FakeHandle implements RoutedSwapHandle {
+class _FakeHandle implements SwapExecutionHandle {
   _FakeHandle(this.progress);
 
   @override
-  final Stream<RoutedSwapProgress> progress;
+  final Stream<UnifiedSwapProgress> progress;
 
   @override
-  String get uuid => 'fake-uuid';
-
-  @override
-  Future<RoutedSwapProgress> get result =>
-      progress.firstWhere((p) => p.isTerminal);
+  String get id => 'fake-uuid';
 
   @override
   Future<void> cancel() async {}

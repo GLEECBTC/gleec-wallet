@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:decimal/decimal.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
@@ -24,10 +24,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Creates the bloc.
   UnifiedSwapBloc({
     required UnifiedSwapRepository repository,
-    required RoutedSwapManager routedSwaps,
+    required List<SwapExecutor> executors,
     required Future<Decimal?> Function(AssetId asset) spendableBalance,
   }) : _repository = repository,
-       _routedSwaps = routedSwaps,
+       _executors = executors,
        _spendableBalance = spendableBalance,
        super(const UnifiedSwapState()) {
     on<UnifiedSwapStarted>(_onStarted);
@@ -49,14 +49,14 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   }
 
   final UnifiedSwapRepository _repository;
-  final RoutedSwapManager _routedSwaps;
+  final List<SwapExecutor> _executors;
   final Future<Decimal?> Function(AssetId asset) _spendableBalance;
 
   /// Bumped on every change that invalidates an in-flight quote.
   int _quoteVersion = 0;
 
-  RoutedSwapHandle? _handle;
-  StreamSubscription<RoutedSwapProgress>? _progressSubscription;
+  SwapExecutionHandle? _handle;
+  StreamSubscription<UnifiedSwapProgress>? _progressSubscription;
 
   /// How much worse a re-price may be before the user must re-consent.
   ///
@@ -305,39 +305,30 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   }
 
   Future<void> _execute(SwapQuote quote, Emitter<UnifiedSwapState> emit) async {
-    if (quote.source != SwapLiquiditySource.routed) {
-      // Atomic execution goes through the existing DEX order path, which is
-      // not wired here yet. Failing loudly beats silently doing nothing after
-      // the user pressed a button that spends money.
+    final executor = _executors
+        .where((e) => e.source == quote.source)
+        .firstOrNull;
+    if (executor == null) {
+      // Every source that can produce a quote must have a way to execute it.
+      // Reaching here means the two lists disagree, which is a wiring bug, not
+      // something the user can act on.
       emit(
         state.copyWith(
           isStarting: false,
-          startError:
-              'Peer-to-peer swaps are placed from the Trade screen for now.',
-        ),
-      );
-      return;
-    }
-
-    final offer = quote.payload;
-    if (offer is! RoutedSwapOffer) {
-      emit(
-        state.copyWith(
-          isStarting: false,
-          startError: 'This offer can no longer be executed. Please re-quote.',
+          startError: 'This kind of swap cannot be started here.',
         ),
       );
       return;
     }
 
     try {
-      final handle = await _routedSwaps.start(offer);
+      final handle = await executor.start(quote);
       _handle = handle;
       emit(
         state.copyWith(
           isStarting: false,
           step: UnifiedSwapStep.inProgress,
-          activeSwapUuid: handle.uuid,
+          activeSwapUuid: handle.id,
         ),
       );
       await _progressSubscription?.cancel();
@@ -357,7 +348,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     if (handle == null) return;
     try {
       await handle.cancel();
-    } on RoutedSwapNotCancellableException {
+    } on Object {
       // Losing the race is expected: the transaction went out between the
       // button appearing and the tap landing. The progress stream already
       // reflects reality, so there is nothing to correct here.
@@ -373,8 +364,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       state.copyWith(
         progress: progress,
         step: switch (progress.phase) {
-          RoutedSwapPhase.finished => UnifiedSwapStep.complete,
-          RoutedSwapPhase.failed => UnifiedSwapStep.failed,
+          SwapPhase.finished => UnifiedSwapStep.complete,
+          SwapPhase.failed => UnifiedSwapStep.failed,
           _ => UnifiedSwapStep.inProgress,
         },
       ),

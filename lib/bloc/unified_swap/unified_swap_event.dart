@@ -1,6 +1,6 @@
 import 'package:equatable/equatable.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
 /// Base type for swap screen events.
@@ -110,7 +110,7 @@ final class UnifiedSwapProgressReceived extends UnifiedSwapEvent {
   const UnifiedSwapProgressReceived(this.progress);
 
   /// The new snapshot.
-  final RoutedSwapProgress progress;
+  final UnifiedSwapProgress progress;
 
   @override
   List<Object?> get props => [progress];

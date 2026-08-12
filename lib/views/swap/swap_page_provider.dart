@@ -6,7 +6,9 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
+import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
@@ -36,7 +38,13 @@ class SwapPageProvider extends StatelessWidget {
             ),
           ],
         ),
-        routedSwaps: sdk.routedSwaps,
+        executors: [
+          RoutedSwapExecutor(sdk.routedSwaps),
+          AtomicSwapExecutor(
+            dexRepository: RepositoryProvider.of<DexRepository>(context),
+            trading: sdk.trading,
+          ),
+        ],
         spendableBalance: (asset) => _spendable(coinsRepo, asset),
       )..add(const UnifiedSwapStarted()),
       child: const SwapPage(),

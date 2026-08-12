@@ -1,9 +1,8 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart' as rpc;
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/widgets/swap_progress_view.dart';
 import 'package:web_dex/views/swap/widgets/swap_quote_summary.dart';
@@ -116,17 +115,22 @@ void main() {
   });
 
   group('progress', () {
-    RoutedSwapProgress progressOf({
-      required RoutedSwapPhase phase,
+    UnifiedSwapProgress progressOf({
+      required SwapPhase phase,
       bool canCancel = false,
-      RoutedSwapReceipt? receipt,
-      RoutedSwapFailure? failure,
-    }) => RoutedSwapProgress(
-      uuid: 'u',
+      bool isSuccess = false,
+      String? headline,
+      String? detail,
+      bool fundsUntouched = false,
+    }) => UnifiedSwapProgress(
+      id: 'u',
+      source: SwapLiquiditySource.routed,
       phase: phase,
       canCancel: canCancel,
-      receipt: receipt,
-      failure: failure,
+      isSuccess: isSuccess,
+      headline: headline,
+      detail: detail,
+      fundsUntouched: fundsUntouched,
     );
 
     testWidgets('offers cancel only while it is actually possible', (
@@ -135,10 +139,7 @@ void main() {
       await pump(
         tester,
         SwapProgressView(
-          progress: progressOf(
-            phase: RoutedSwapPhase.preparing,
-            canCancel: true,
-          ),
+          progress: progressOf(phase: SwapPhase.preparing, canCancel: true),
           onCancel: () {},
           onDone: () {},
         ),
@@ -148,7 +149,7 @@ void main() {
       await pump(
         tester,
         SwapProgressView(
-          progress: progressOf(phase: RoutedSwapPhase.bridging),
+          progress: progressOf(phase: SwapPhase.settling),
           onCancel: () {},
           onDone: () {},
         ),
@@ -165,12 +166,11 @@ void main() {
         tester,
         SwapProgressView(
           progress: progressOf(
-            phase: RoutedSwapPhase.finished,
-            receipt: RoutedSwapReceipt(
-              outcome: rpc.RoutedSwapOutcome.refunded,
-              amount: Decimal.parse('99.10'),
-              assetId: usdt,
-            ),
+            phase: SwapPhase.finished,
+            headline: 'Swap refunded',
+            detail:
+                'The swap did not happen. 99.10 USDT-PLG20 was returned to '
+                'you.',
           ),
           onCancel: () {},
           onDone: () {},
@@ -187,12 +187,11 @@ void main() {
         tester,
         SwapProgressView(
           progress: progressOf(
-            phase: RoutedSwapPhase.finished,
-            receipt: RoutedSwapReceipt(
-              outcome: rpc.RoutedSwapOutcome.partial,
-              amount: Decimal.parse('40'),
-              assetId: usdc,
-            ),
+            phase: SwapPhase.finished,
+            headline: 'Partly filled',
+            detail:
+                'You received 40 USDC-ERC20, which is not the full amount you '
+                'asked for.',
           ),
           onCancel: () {},
           onDone: () {},
@@ -210,12 +209,8 @@ void main() {
         tester,
         SwapProgressView(
           progress: progressOf(
-            phase: RoutedSwapPhase.failed,
-            failure: const RoutedSwapFailure(
-              kind: RoutedSwapFailureKind.bridgeFailed,
-              message: 'The bridge reported a failure.',
-              fundsUntouched: false,
-            ),
+            phase: SwapPhase.failed,
+            detail: 'The bridge reported a failure.',
           ),
           onCancel: () {},
           onDone: () {},
@@ -235,12 +230,9 @@ void main() {
         tester,
         SwapProgressView(
           progress: progressOf(
-            phase: RoutedSwapPhase.failed,
-            failure: const RoutedSwapFailure(
-              kind: RoutedSwapFailureKind.priceMoved,
-              message: 'The price moved.',
-              fundsUntouched: true,
-            ),
+            phase: SwapPhase.failed,
+            detail: 'The price moved.',
+            fundsUntouched: true,
           ),
           onCancel: () {},
           onDone: () {},

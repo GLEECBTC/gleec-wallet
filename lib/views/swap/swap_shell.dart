@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/views/dex/dex_page.dart';
 import 'package:web_dex/views/swap/swap_activity_view.dart';
 import 'package:web_dex/views/swap/swap_page_provider.dart';
@@ -59,6 +60,38 @@ class SwapShell extends StatefulWidget {
 
 class _SwapShellState extends State<SwapShell> {
   late SwapDestination _destination = widget.initialDestination;
+
+  @override
+  void initState() {
+    super.initState();
+    routingState.dexState.addListener(_onRouteChanged);
+    _onRouteChanged();
+  }
+
+  @override
+  void dispose() {
+    routingState.dexState.removeListener(_onRouteChanged);
+    super.dispose();
+  }
+
+  /// Follows the existing dex deep links to the destination that can serve
+  /// them.
+  ///
+  /// A `/dex/trading_details/<uuid>` link addresses a specific atomic swap,
+  /// which only the full trading interface renders. Landing on the swap form
+  /// first would drop the user somewhere that cannot answer the link, so it
+  /// opens directly on Advanced. Every other dex link opens on Swap.
+  void _onRouteChanged() {
+    final wanted = routingState.dexState.isTradingDetails
+        ? SwapDestination.advanced
+        : null;
+    if (wanted == null || wanted == _destination) return;
+    if (!mounted) {
+      _destination = wanted;
+      return;
+    }
+    setState(() => _destination = wanted);
+  }
 
   @override
   Widget build(BuildContext context) {
