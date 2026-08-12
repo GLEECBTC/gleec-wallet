@@ -54,6 +54,7 @@ class _MarketMakerBotPageState extends State<MarketMakerBotPage> {
       myOrdersService,
       SettingsRepository(),
       coinsRepository,
+      RepositoryProvider.of<KomodoDefiSdk>(context),
     );
 
     final pageContent = MultiBlocProvider(
@@ -77,6 +78,7 @@ class _MarketMakerBotPageState extends State<MarketMakerBotPage> {
               myOrdersService,
               SettingsRepository(),
               coinsRepository,
+              RepositoryProvider.of<KomodoDefiSdk>(context),
             ),
           ),
         ),
