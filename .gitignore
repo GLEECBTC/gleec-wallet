@@ -83,8 +83,16 @@ AGENTS_1.md
 # .dmg Release
 dist/
  
-# KDF generated web artifacts (bin/ and res/ are both produced by the build).
-web/kdf/kdf/
+# KDF generated web artifacts.
+#
+# The build unzips a downloaded archive into web/kdf/, and the layout varies:
+# build_config.json declares `web/kdf/bin`, while current archives carry their
+# own `kdf/` root and land in `web/kdf/kdf/{bin,res}`. Enumerating spellings
+# has already failed once — a 32 MB kdflib_bg.wasm was committed in b84ba3c59
+# and removed in 7a9a05363 — so ignore everything under web/kdf/ and re-include
+# only res/, which is hand-maintained wrapper source that must stay tracked.
+web/kdf/*
+!web/kdf/res/
 
 # AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
 /.claude/skills/
