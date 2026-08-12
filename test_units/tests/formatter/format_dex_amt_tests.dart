@@ -26,11 +26,17 @@ void testFormatDexAmount() {
     expect(formatDexAmt(Rational.parse('0.00')), '0');
     expect(formatDexAmt(Rational.parse('0.000')), '0');
     expect(
-        formatDexAmt(Rational(BigInt.from(1), BigInt.from(100000))), '0.00001');
-    expect(formatDexAmt(Rational(BigInt.from(001), BigInt.from(100000))),
-        '0.00001');
-    expect(formatDexAmt(Rational(BigInt.from(101), BigInt.from(100000))),
-        '0.00101');
+      formatDexAmt(Rational(BigInt.from(1), BigInt.from(100000))),
+      '0.00001',
+    );
+    expect(
+      formatDexAmt(Rational(BigInt.from(001), BigInt.from(100000))),
+      '0.00001',
+    );
+    expect(
+      formatDexAmt(Rational(BigInt.from(101), BigInt.from(100000))),
+      '0.00101',
+    );
   });
 
   test('formatting int DEX amount tests:', () {

@@ -20,6 +20,8 @@ import 'tests/fiat/fiat_default_preference_test.dart'
 import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
+import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
+import 'tests/swap/unified_swap_bloc_test.dart' as unified_swap_bloc_test;
 import 'tests/swap/unified_swap_repository_test.dart'
     as unified_swap_repository_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
@@ -228,6 +230,8 @@ void main() {
   tron_fiat_mapping_test.main();
   tron_gasless_provider_config_test.main();
   unified_swap_repository_test.main();
+  unified_swap_bloc_test.main();
+  swap_widgets_test.main();
   table_utils_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();

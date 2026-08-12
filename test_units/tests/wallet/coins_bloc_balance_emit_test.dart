@@ -119,26 +119,28 @@ void testCoinsBlocBalanceEmit() {
       );
     });
 
-    test('a balance tick cannot deactivate a coin, so it cannot remove it',
-        () async {
-      // Measured, not assumed: the handler merges with `state: existing.state`,
-      // so an incoming `suspended` coin is rewritten to the state already held.
-      // `merged.isActive` therefore stays true and the `walletCoins.remove`
-      // branch is unreachable from this event. Any guard must not "fix" that -
-      // deactivation arrives via `CoinsWalletCoinUpdated`, not here.
-      final bloc = await seededBloc();
+    test(
+      'a balance tick cannot deactivate a coin, so it cannot remove it',
+      () async {
+        // Measured, not assumed: the handler merges with `state: existing.state`,
+        // so an incoming `suspended` coin is rewritten to the state already held.
+        // `merged.isActive` therefore stays true and the `walletCoins.remove`
+        // branch is unreachable from this event. Any guard must not "fix" that -
+        // deactivation arrives via `CoinsWalletCoinUpdated`, not here.
+        final bloc = await seededBloc();
 
-      final emissions = <CoinsState>[];
-      final sub = bloc.stream.listen(emissions.add);
-      addTearDown(sub.cancel);
+        final emissions = <CoinsState>[];
+        final sub = bloc.stream.listen(emissions.add);
+        addTearDown(sub.cancel);
 
-      bloc.add(CoinsBalanceChanged(_coin(asset, CoinState.suspended)));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+        bloc.add(CoinsBalanceChanged(_coin(asset, CoinState.suspended)));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(emissions, isEmpty);
-      expect(bloc.state.walletCoins.containsKey(asset.id.id), isTrue);
-      expect(bloc.state.walletCoins[asset.id.id]?.state, CoinState.active);
-    });
+        expect(emissions, isEmpty);
+        expect(bloc.state.walletCoins.containsKey(asset.id.id), isTrue);
+        expect(bloc.state.walletCoins[asset.id.id]?.state, CoinState.active);
+      },
+    );
 
     test('deactivation still works through CoinsWalletCoinUpdated', () async {
       // The channel that *is* allowed to change membership. Guarding

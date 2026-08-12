@@ -486,7 +486,9 @@ Future<void> _awaitSourceSelection(WithdrawFormBloc bloc) async {
   if (bloc.state.selectedSourceAddress != null) {
     return;
   }
-  await bloc.stream.firstWhereBounded((state) => state.selectedSourceAddress != null);
+  await bloc.stream.firstWhereBounded(
+    (state) => state.selectedSourceAddress != null,
+  );
 }
 
 Future<void> _primeFillState(
@@ -502,7 +504,9 @@ Future<void> _primeFillState(
   bloc.add(WithdrawFormRecipientChanged(recipient));
   await recipientState;
 
-  final amountState = bloc.stream.firstWhereBounded((state) => state.amount == amount);
+  final amountState = bloc.stream.firstWhereBounded(
+    (state) => state.amount == amount,
+  );
   bloc.add(WithdrawFormAmountChanged(amount));
   await amountState;
 }
@@ -767,7 +771,9 @@ void testWithdrawFormBloc() {
 
       await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
-      final sendingState = bloc.stream.firstWhereBounded((state) => state.isSending);
+      final sendingState = bloc.stream.firstWhereBounded(
+        (state) => state.isSending,
+      );
       bloc.add(const WithdrawFormPreviewSubmitted());
       await sendingState;
 
@@ -823,7 +829,9 @@ void testWithdrawFormBloc() {
 
         await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
-        final sendingState = bloc.stream.firstWhereBounded((state) => state.isSending);
+        final sendingState = bloc.stream.firstWhereBounded(
+          (state) => state.isSending,
+        );
         bloc.add(const WithdrawFormPreviewSubmitted());
         await sendingState;
 
@@ -871,7 +879,9 @@ void testWithdrawFormBloc() {
 
         await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
-        final sendingState = bloc.stream.firstWhereBounded((state) => state.isSending);
+        final sendingState = bloc.stream.firstWhereBounded(
+          (state) => state.isSending,
+        );
         bloc.add(const WithdrawFormPreviewSubmitted());
         await sendingState;
 
@@ -948,7 +958,9 @@ void testWithdrawFormBloc() {
 
         await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
-        final sendingState = bloc.stream.firstWhereBounded((state) => state.isSending);
+        final sendingState = bloc.stream.firstWhereBounded(
+          (state) => state.isSending,
+        );
         bloc.add(const WithdrawFormPreviewSubmitted());
         await sendingState;
 
@@ -1016,7 +1028,9 @@ void testWithdrawFormBloc() {
 
         await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
-        final sendingState = bloc.stream.firstWhereBounded((state) => state.isSending);
+        final sendingState = bloc.stream.firstWhereBounded(
+          (state) => state.isSending,
+        );
         bloc.add(const WithdrawFormPreviewSubmitted());
         bloc.add(const WithdrawFormPreviewSubmitted());
         await sendingState;
@@ -3409,7 +3423,9 @@ void testWithdrawFormBloc() {
             await _flush();
           }
           bloc.add(const WithdrawFormGaslessToggled(false));
-          await bloc.stream.firstWhereBounded((state) => !state.isGaslessEnabled);
+          await bloc.stream.firstWhereBounded(
+            (state) => !state.isGaslessEnabled,
+          );
 
           pendingStatus.complete(_gaslessStatus());
           await _flush();
@@ -3925,7 +3941,9 @@ void testWithdrawFormBloc() {
           );
           addTearDown(bloc.close);
 
-          await bloc.stream.firstWhereBounded((s) => s.gaslessAccountStatus != null);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.gaslessAccountStatus != null,
+          );
           await _awaitSourceSelection(bloc);
 
           bloc.add(const WithdrawFormMaxAmountEnabled(true));
@@ -3964,10 +3982,14 @@ void testWithdrawFormBloc() {
         );
         addTearDown(bloc.close);
 
-        await bloc.stream.firstWhereBounded((s) => s.gaslessAccountStatus != null);
+        await bloc.stream.firstWhereBounded(
+          (s) => s.gaslessAccountStatus != null,
+        );
         await _awaitSourceSelection(bloc);
 
-        final maxStateFuture = bloc.stream.firstWhereBounded((s) => s.isMaxAmount);
+        final maxStateFuture = bloc.stream.firstWhereBounded(
+          (s) => s.isMaxAmount,
+        );
         bloc.add(const WithdrawFormMaxAmountEnabled(true));
         final maxState = await maxStateFuture;
 
@@ -4002,7 +4024,9 @@ void testWithdrawFormBloc() {
           );
           addTearDown(bloc.close);
 
-          await bloc.stream.firstWhereBounded((s) => s.gaslessAccountStatus != null);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.gaslessAccountStatus != null,
+          );
           await _awaitSourceSelection(bloc);
 
           final maxStateFuture = bloc.stream.firstWhereBounded(
@@ -4035,7 +4059,9 @@ void testWithdrawFormBloc() {
           final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
           addTearDown(bloc.close);
 
-          await bloc.stream.firstWhereBounded((s) => s.gaslessAccountStatus != null);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.gaslessAccountStatus != null,
+          );
           await _awaitSourceSelection(bloc);
           final maxStateFuture = bloc.stream.firstWhereBounded(
             (s) => s.isMaxAmount && s.amount.isEmpty,
@@ -4067,7 +4093,9 @@ void testWithdrawFormBloc() {
         );
         addTearDown(bloc.close);
 
-        await bloc.stream.firstWhereBounded((s) => s.gaslessAccountStatus != null);
+        await bloc.stream.firstWhereBounded(
+          (s) => s.gaslessAccountStatus != null,
+        );
         await _awaitSourceSelection(bloc);
 
         bloc.add(const WithdrawFormAmountChanged('100'));
@@ -4077,7 +4105,9 @@ void testWithdrawFormBloc() {
         expect(acceptedForPreview.amountError, isNull);
 
         bloc.add(const WithdrawFormAmountChanged('99'));
-        final cleared = await bloc.stream.firstWhereBounded((s) => s.amount == '99');
+        final cleared = await bloc.stream.firstWhereBounded(
+          (s) => s.amount == '99',
+        );
         expect(cleared.amountError, isNull);
       });
 
@@ -4101,7 +4131,9 @@ void testWithdrawFormBloc() {
           final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
           addTearDown(bloc.close);
 
-          await bloc.stream.firstWhereBounded((s) => s.isGaslessProviderUnavailable);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.isGaslessProviderUnavailable,
+          );
           await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
           final callsBeforePreview = withdrawals.gaslessStatusCallCount;
 
@@ -4126,7 +4158,9 @@ void testWithdrawFormBloc() {
           // The block force-refreshes the status; with the provider back the
           // guard lifts without user action.
           providerUp = true;
-          await bloc.stream.firstWhereBounded((s) => !s.isGaslessProviderUnavailable);
+          await bloc.stream.firstWhereBounded(
+            (s) => !s.isGaslessProviderUnavailable,
+          );
           expect(
             withdrawals.gaslessStatusCallCount,
             greaterThan(callsBeforePreview),
@@ -4182,7 +4216,9 @@ void testWithdrawFormBloc() {
           );
           addTearDown(bloc.close);
 
-          await bloc.stream.firstWhereBounded((s) => s.gaslessAccountStatus != null);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.gaslessAccountStatus != null,
+          );
           await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
 
           bloc.add(const WithdrawFormPreviewSubmitted());
@@ -4545,7 +4581,9 @@ void testWithdrawFormBloc() {
         // The native self-transfer guard must not block sending to the
         // user's own custody address.
         bloc.add(const WithdrawFormPreviewSubmitted());
-        await bloc.stream.firstWhereBounded((s) => s.step == WithdrawFormStep.confirm);
+        await bloc.stream.firstWhereBounded(
+          (s) => s.step == WithdrawFormStep.confirm,
+        );
         expect(withdrawals.previewCallCount, 1);
       });
 

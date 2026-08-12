@@ -42,14 +42,13 @@ void testFrameGapMetrics() {
       double build = 1,
       double raster = 1,
       double budgetMs = budget60Hz,
-    }) =>
-        computeFrameGapMetrics(
-          vsyncUs: f.vsync,
-          rasterFinishUs: f.rasterFinish,
-          buildMs: List<double>.filled(f.vsync.length, build),
-          rasterMs: List<double>.filled(f.vsync.length, raster),
-          budgetMs: budgetMs,
-        );
+    }) => computeFrameGapMetrics(
+      vsyncUs: f.vsync,
+      rasterFinishUs: f.rasterFinish,
+      buildMs: List<double>.filled(f.vsync.length, build),
+      rasterMs: List<double>.filled(f.vsync.length, raster),
+      budgetMs: budgetMs,
+    );
 
     test('a clean 60Hz run yields ~100% and reports no stall', () {
       final m = compute(frames(count: 60))!;
@@ -84,8 +83,10 @@ void testFrameGapMetrics() {
         //
         // The inserted gap is the normal budget *plus* 60 skipped budgets, so
         // it spans 61 refreshes: 60 of them painted nothing.
-        expect(m.gapsMs.reduce((a, b) => a > b ? a : b),
-            closeTo(61 * budget60Hz, 0.5));
+        expect(
+          m.gapsMs.reduce((a, b) => a > b ? a : b),
+          closeTo(61 * budget60Hz, 0.5),
+        );
         expect(m.stallMs, closeTo(60 * budget60Hz, 0.5));
         expect(m.missedFrames, 60);
         expect(m.yieldPct, lessThan(55));
@@ -127,7 +128,8 @@ void testFrameGapMetrics() {
           budgetMs: budget60Hz,
         )!;
 
-        double median(List<double> v) => (List<double>.of(v)..sort())[v.length ~/ 2];
+        double median(List<double> v) =>
+            (List<double>.of(v)..sort())[v.length ~/ 2];
 
         // Both look equally bad on yield...
         expect(idle.yieldPct, lessThan(60));
@@ -166,10 +168,7 @@ void testFrameGapMetrics() {
       final f = frames(count: 60);
 
       expect(compute(f)!.yieldPct, closeTo(100, 2));
-      expect(
-        compute(f, budgetMs: budget120Hz)!.yieldPct,
-        closeTo(50, 2),
-      );
+      expect(compute(f, budgetMs: budget120Hz)!.yieldPct, closeTo(50, 2));
     });
 
     test('ui and raster are reported against the span, never summed', () {
@@ -183,46 +182,52 @@ void testFrameGapMetrics() {
       expect(m.spanMs, greaterThan(0));
     });
 
-    group('returns null rather than a zero, because zero reads as passing:',
-        () {
-      test('no frames', () {
-        expect(
-          computeFrameGapMetrics(
-            vsyncUs: const <int>[],
-            rasterFinishUs: const <int>[],
-            buildMs: const <double>[],
-            rasterMs: const <double>[],
-            budgetMs: budget60Hz,
-          ),
-          isNull,
-        );
-      });
+    group(
+      'returns null rather than a zero, because zero reads as passing:',
+      () {
+        test('no frames', () {
+          expect(
+            computeFrameGapMetrics(
+              vsyncUs: const <int>[],
+              rasterFinishUs: const <int>[],
+              buildMs: const <double>[],
+              rasterMs: const <double>[],
+              budgetMs: budget60Hz,
+            ),
+            isNull,
+          );
+        });
 
-      test('a single frame has no gap to measure', () {
-        expect(compute(frames(count: 1)), isNull);
-      });
+        test('a single frame has no gap to measure', () {
+          expect(compute(frames(count: 1)), isNull);
+        });
 
-      test('a non-monotonic frame clock', () {
-        expect(
-          computeFrameGapMetrics(
-            vsyncUs: const <int>[5000, 6000],
-            rasterFinishUs: const <int>[100, 200], // finishes before it starts
-            buildMs: const <double>[1, 1],
-            rasterMs: const <double>[1, 1],
-            budgetMs: budget60Hz,
-          ),
-          isNull,
-        );
-      });
+        test('a non-monotonic frame clock', () {
+          expect(
+            computeFrameGapMetrics(
+              vsyncUs: const <int>[5000, 6000],
+              rasterFinishUs: const <int>[
+                100,
+                200,
+              ], // finishes before it starts
+              buildMs: const <double>[1, 1],
+              rasterMs: const <double>[1, 1],
+              budgetMs: budget60Hz,
+            ),
+            isNull,
+          );
+        });
 
-      test('a zero or negative budget', () {
-        expect(compute(frames(count: 10), budgetMs: 0), isNull);
-      });
-    });
+        test('a zero or negative budget', () {
+          expect(compute(frames(count: 10), budgetMs: 0), isNull);
+        });
+      },
+    );
 
     test('summary renders every field and stays on one line', () {
-      final summary = compute(frames(count: 60, stallAfter: 30, stallFrames: 6))!
-          .summary;
+      final summary = compute(
+        frames(count: 60, stallAfter: 30, stallFrames: 6),
+      )!.summary;
 
       expect(summary, contains('yield '));
       expect(summary, contains('fps '));

@@ -21,13 +21,19 @@ void testFormattedDate() {
     expect(getFormattedDate(maxTimestampSecond, true), '13 Sep 275760, 00:00');
     // Minimal value
     expect(
-        getFormattedDate(minTimestampSecond, true), '20 Apr 271821, 00:00 BC');
+      getFormattedDate(minTimestampSecond, true),
+      '20 Apr 271821, 00:00 BC',
+    );
   });
 
   test('negative tests for formatting date', () {
-    expect(getFormattedDate(timestampOffset(9650000000000)),
-        'Date is out of the range');
-    expect(getFormattedDate(timestampOffset(-9650000000000)),
-        'Date is out of the range');
+    expect(
+      getFormattedDate(timestampOffset(9650000000000)),
+      'Date is out of the range',
+    );
+    expect(
+      getFormattedDate(timestampOffset(-9650000000000)),
+      'Date is out of the range',
+    );
   });
 }
