@@ -9,6 +9,8 @@ on:
 jobs:
   osv_scan:
     runs-on: ubuntu-latest
+    env:
+      OSV_SCANNER_VERSION: v2.3.5
 
     steps:
       - name: Checkout code
@@ -19,12 +21,12 @@ jobs:
         id: setup_go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.26.2'
 
       - name: Install osv-scanner
         id: install_osv_scanner
         run: |
-          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}
           echo "${HOME}/go/bin" >> $GITHUB_PATH
 
       - name: Scan for vulnerabilities
