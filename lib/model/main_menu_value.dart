@@ -60,13 +60,13 @@ enum MainMenuValue {
     switch (this) {
       case MainMenuValue.wallet:
       case MainMenuValue.dex:
+      case MainMenuValue.fiat:
+      case MainMenuValue.nft:
       case MainMenuValue.settings:
       case MainMenuValue.support:
       case MainMenuValue.none:
         return false;
-      case MainMenuValue.fiat:
       case MainMenuValue.marketMakerBot:
-      case MainMenuValue.nft:
         return true;
     }
   }
