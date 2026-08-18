@@ -39,11 +39,43 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
         add(const NftMainResetRequested());
       }
     });
+
+    // Without this the chain list only recomputed on login, on page entry, and
+    // on the 60s timer, so enabling ETH from the wallet page left the NFT page
+    // insisting no chain was enabled.
+    _activationSubscription = _sdk
+        .watchActivationStates()
+        .map(_parentActivationKey)
+        .distinct()
+        .skip(1)
+        .listen((_) => add(const NftMainChainUpdateRequested()));
+  }
+
+  static final Set<String> _nftParentTickers = NftBlockchains.values
+      .map((chain) => chain.coinAbbr())
+      .toSet();
+
+  /// Collapses a whole-map snapshot to just the NFT parent chains and their
+  /// status. `watchActivationStates` emits the ENTIRE map on every state change
+  /// of every asset, so without this projection the login fan-out would fire
+  /// hundreds of full NFT refetches. Status is part of the key so
+  /// activating->failed also wakes us: that is what releases the loading hold.
+  static String _parentActivationKey(
+    Map<AssetId, AssetActivationState> states,
+  ) {
+    final rows =
+        states.entries
+            .where((e) => _nftParentTickers.contains(e.key.id))
+            .map((e) => '${e.key.id}:${e.value.status.name}')
+            .toList()
+          ..sort();
+    return rows.join(',');
   }
 
   final NftsRepo _repo;
   final KomodoDefiSdk _sdk;
   late StreamSubscription<KdfUser?> _authorizationSubscription;
+  late final StreamSubscription<String> _activationSubscription;
   Timer? _updateTimer;
   final _log = Logger('NftMainBloc');
 
@@ -94,11 +126,17 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       return;
     }
 
+    // Sampled WITH the chain list rather than after the fetch: an activation
+    // that resolves while `_getAllNfts` runs is re-dispatched by the activation
+    // subscription anyway, and sampling late would flash the placeholder.
+    var hold = false;
     try {
       _log.info('Updating all NFT chains');
 
-      final List<NftBlockchains> activatedChains = await _repo
-          .getActivatedChains(NftBlockchains.values);
+      final activation = await _repo.resolveChains(NftBlockchains.values);
+      final List<NftBlockchains> activatedChains = activation.activated;
+      hold = activatedChains.isEmpty && activation.unresolved.isNotEmpty;
+
       final Map<NftBlockchains, List<NftToken>> nfts = await _getAllNfts();
       final (counts, sortedChains) = _calculateNftCount(nfts, activatedChains);
 
@@ -110,7 +148,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
           selectedChain: state.isInitialized || sortedChains.isEmpty
               ? null
               : () => sortedChains.first,
-          isInitialized: () => true,
+          isInitialized: () => state.isInitialized || !hold,
           error: () => null,
         ),
       );
@@ -119,13 +157,17 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       _log.info(
           'Updated all NFT chains, found $totalNfts NFTs across ${sortedChains.length} chains');
     } on BaseError catch (e) {
+      hold = false;
       _log.warning('Error updating NFT chains: ${e.message}');
       emit(state.copyWith(error: () => e));
     } catch (e, s) {
+      hold = false;
       _log.severe('Unexpected error updating NFT chains', e, s);
       emit(state.copyWith(error: () => TextError(error: e.toString())));
     } finally {
-      emit(state.copyWith(isInitialized: () => true));
+      emit(
+        state.copyWith(isInitialized: () => state.isInitialized || !hold),
+      );
     }
   }
 
@@ -279,6 +321,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   @override
   Future<void> close() {
     _authorizationSubscription.cancel();
+    _activationSubscription.cancel();
     _stopUpdate();
     return super.close();
   }
