@@ -27,13 +27,6 @@ Future<void> testMainMenu(WidgetTester tester) async {
   await goto.dexPage(tester);
   expect(find.byKey(const Key('dex-page')), findsOneWidget);
 
-  await goto.bridgePage(tester);
-  expect(
-    find.byKey(const Key('bridge-page')),
-    findsOneWidget,
-    reason: 'bridge-page key not found',
-  );
-
   await goto.nftsPage(tester);
   expect(find.byKey(const Key('nft-page')), findsOneWidget);
 

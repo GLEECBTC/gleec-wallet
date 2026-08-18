@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/model/first_uri_segment.dart';
 import 'package:web_dex/router/parsers/base_route_parser.dart';
-import 'package:web_dex/router/parsers/bridge_route_parser.dart';
 import 'package:web_dex/router/parsers/dex_route_parser.dart';
 import 'package:web_dex/router/parsers/fiat_route_parser.dart';
 import 'package:web_dex/router/parsers/nft_route_parser.dart';
@@ -19,7 +18,6 @@ class RootRouteInformationParser extends RouteInformationParser<AppRoutePath> {
         firstUriSegment.wallet: WalletRouteParser(coinsBloc),
         firstUriSegment.fiat: fiatRouteParser,
         firstUriSegment.dex: dexRouteParser,
-        firstUriSegment.bridge: bridgeRouteParser,
         firstUriSegment.nfts: nftRouteParser,
         firstUriSegment.settings: settingsRouteParser,
       };

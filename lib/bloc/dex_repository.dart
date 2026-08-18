@@ -183,10 +183,8 @@ class DexRepository {
   }
 
   Future<BestOrders> getBestOrders(BestOrdersRequest request) async {
-    // Only allow best_orders when user is on Swap (DEX) or Bridge pages
-    final MainMenuValue current = routingState.selectedMenu;
-    final bool isTradingPage =
-        current == MainMenuValue.dex || current == MainMenuValue.bridge;
+    // Only allow best_orders when user is on the Swap (DEX) page
+    final bool isTradingPage = routingState.selectedMenu == MainMenuValue.dex;
     if (!isTradingPage) {
       // Not an error – we intentionally suppress best_orders away from trading pages
       return BestOrders(result: <String, List<BestOrder>>{});

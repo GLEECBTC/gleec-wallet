@@ -13,8 +13,6 @@ import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_event.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/price_chart/price_chart_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/price_chart/price_chart_event.dart';
@@ -412,7 +410,6 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
   PopupDispatcher _createPopupDispatcher() {
     final TakerBloc takerBloc = context.read<TakerBloc>();
-    final BridgeBloc bridgeBloc = context.read<BridgeBloc>();
 
     return PopupDispatcher(
       width: 320,
@@ -424,7 +421,6 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
         eventType: WalletsManagerEventType.wallet,
         onSuccess: (_) async {
           takerBloc.add(TakerReInit());
-          bridgeBloc.add(const BridgeReInit());
           await reInitTradingForms(context);
           _popupDispatcher?.close();
         },

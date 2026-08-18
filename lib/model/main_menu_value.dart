@@ -5,7 +5,6 @@ enum MainMenuValue {
   wallet,
   dex,
   fiat,
-  bridge,
   marketMakerBot,
   nft,
   settings,
@@ -23,7 +22,6 @@ enum MainMenuValue {
   bool get isDisabledWhenWalletOnly {
     switch (this) {
       case MainMenuValue.dex:
-      case MainMenuValue.bridge:
       case MainMenuValue.marketMakerBot:
         return true;
       case MainMenuValue.wallet:
@@ -45,8 +43,6 @@ enum MainMenuValue {
         return LocaleKeys.fiat.tr();
       case MainMenuValue.dex:
         return LocaleKeys.swap.tr();
-      case MainMenuValue.bridge:
-        return LocaleKeys.bridge.tr();
       case MainMenuValue.marketMakerBot:
         return LocaleKeys.tradingBot.tr();
       case MainMenuValue.nft:
@@ -67,7 +63,6 @@ enum MainMenuValue {
       case MainMenuValue.settings:
       case MainMenuValue.support:
       case MainMenuValue.none:
-      case MainMenuValue.bridge:
         return false;
       case MainMenuValue.fiat:
       case MainMenuValue.marketMakerBot:
@@ -84,16 +79,14 @@ enum MainMenuValue {
         return 1;
       case MainMenuValue.fiat:
         return 2;
-      case MainMenuValue.bridge:
-        return 3;
       case MainMenuValue.nft:
-        return 4;
+        return 3;
       case MainMenuValue.settings:
-        return 5;
+        return 4;
       case MainMenuValue.marketMakerBot:
-        return 6;
+        return 5;
       case MainMenuValue.support:
-        return 6;
+        return 5;
       case MainMenuValue.none:
         return 0;
     }
