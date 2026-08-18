@@ -158,7 +158,14 @@ class AppBlocRoot extends StatelessWidget {
           dispose: (manager) => manager.dispose(),
         ),
         RepositoryProvider(
-          create: (_) => NftsRepo(api: mm2Api.nft, coinsRepo: coinsRepository),
+          create: (context) => NftsRepo(
+            api: mm2Api.nft,
+            coinsRepo: coinsRepository,
+            sdk: komodoDefiSdk,
+            tradingStatusService: RepositoryProvider.of<TradingStatusService>(
+              context,
+            ),
+          ),
         ),
         RepositoryProvider(create: (_) => tradingEntitiesBloc),
         RepositoryProvider(create: (_) => dexRepository),

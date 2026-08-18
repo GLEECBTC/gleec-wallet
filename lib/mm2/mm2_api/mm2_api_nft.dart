@@ -1,10 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart';
-import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/errors.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/nft/get_nft_list/get_nft_list_req.dart';
@@ -16,9 +13,8 @@ import 'package:web_dex/model/nft.dart';
 import 'package:web_dex/shared/constants.dart';
 
 class Mm2ApiNft {
-  Mm2ApiNft(this.call, this._sdk);
+  Mm2ApiNft(this.call);
 
-  final KomodoDefiSdk _sdk;
   final Future<JsonMap> Function(dynamic) call;
   final _log = Logger('Mm2ApiNft');
 
@@ -31,14 +27,14 @@ class Mm2ApiNft {
     List<NftBlockchains> chains,
   ) async {
     try {
-      final List<String> nftChains = await getActiveNftChains(chains);
-      if (nftChains.isEmpty) {
+      if (chains.isEmpty) {
         return {
           'error':
               'Please ensure an NFT chain is activated and patiently await '
               'while your NFTs are loaded.',
         };
       }
+      final nftChains = chains.map((c) => c.toApiRequest()).toList();
       final request = UpdateNftRequest(chains: nftChains);
 
       return await call(request);
@@ -68,8 +64,7 @@ class Mm2ApiNft {
 
   Future<Map<String, dynamic>> getNftList(List<NftBlockchains> chains) async {
     try {
-      final List<String> nftChains = await getActiveNftChains(chains);
-      if (nftChains.isEmpty) {
+      if (chains.isEmpty) {
         return {
           'error':
               'Please ensure the NFT chain is activated and patiently await '
@@ -77,6 +72,7 @@ class Mm2ApiNft {
         };
       }
 
+      final nftChains = chains.map((c) => c.toApiRequest()).toList();
       final request = GetNftListRequest(chains: nftChains);
       final JsonMap json = await call(request);
       return json;
@@ -127,89 +123,6 @@ class Mm2ApiNft {
     }
   }
 
-  /// Returns a list of the [chains] that are currently active in KDF via the SDK.
-  /// This is used to ensure that the NFT functionality only operates on
-  /// chains that are activated in the SDK.
-  /// If no chains are active, an empty list is returned.
-  Future<List<String>> getActiveNftChains(List<NftBlockchains> chains) async {
-    final activatedAssets = await _sdk.activatedAssetsCache
-        .getActivatedAssets();
-    final List<String> enabledCoinIds = activatedAssets
-        .map((c) => c.id.id)
-        .toList();
-    _log.fine('enabledCoinIds: $enabledCoinIds');
-    final List<String> nftCoins = chains.map((c) => c.coinAbbr()).toList();
-    _log.fine('nftCoins: $nftCoins');
-
-    final List<NftBlockchains> activeChains = chains
-        .map((c) => c)
-        .toList()
-        .where((c) => enabledCoinIds.contains(c.coinAbbr()))
-        .toList();
-    _log.fine('activeChains: $activeChains');
-
-    final List<String> nftChains = activeChains
-        .map((c) => c.toApiRequest())
-        .toList();
-    _log.fine('nftChains: $nftChains');
-
-    return nftChains;
-  }
-
-  Future<void> enableNft(Asset asset) async {
-    final configSymbol = asset.id.symbol.assetConfigId;
-    final activationParams = NftActivationParams(
-      provider: NftProvider.moralis(),
-    );
-    await retry<void>(
-      () async => await _sdk.client.rpc.nft.enableNft(
-        ticker: configSymbol,
-        activationParams: activationParams,
-      ),
-      maxAttempts: 3,
-      backoffStrategy: ExponentialBackoff(
-        initialDelay: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  Future<void> enableNftChains(List<NftBlockchains> chains) async {
-    final knownAssets = _sdk.assets.available;
-    final activeAssets = await _sdk.activatedAssetsCache.getActivatedAssets();
-    final inactiveChains = chains
-        .where(
-          (chain) => !activeAssets.any(
-            (asset) => asset.id.id == chain.nftAssetTicker(),
-          ),
-        )
-        .map(
-          (chain) => knownAssets.values.firstWhere(
-            (asset) => asset.id.id == chain.nftAssetTicker(),
-          ),
-        )
-        .toList();
-
-    if (inactiveChains.isEmpty) {
-      return;
-    }
-
-    // Attempt to enable all inactive NFT chains, logging any errors.
-    // but not throwing them immediately, so we can try to enable all chains.
-    // If any chain fails, we will throw the last error encountered.
-    Exception? lastError;
-    for (final chain in inactiveChains) {
-      try {
-        await enableNft(chain);
-      } catch (e) {
-        _log.shout('Failed to enable NFT chain: ${chain.id.id}', e);
-        lastError = e as Exception;
-      }
-    }
-
-    if (lastError != null) {
-      throw lastError;
-    }
-  }
 }
 
 class ProxyApiNft {

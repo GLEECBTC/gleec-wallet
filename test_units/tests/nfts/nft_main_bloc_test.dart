@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 // `KomodoDefiSdk.auth` is typed as the concrete `KomodoDefiLocalAuth`, which
 // the SDK barrel does not re-export, so faking it means importing the package
@@ -114,6 +116,46 @@ void testNftMainBloc() {
       expect(state.error, isNull);
     });
 
+    test('activation still pending holds the loading state instead of accusing '
+        'the user of having enabled nothing', () async {
+      // The wallet asked for ETH but KDF has not reported it active yet.
+      repo.activatedChains = [];
+      repo.unresolvedChains = [NftBlockchains.eth];
+
+      bloc.add(const NftMainChainUpdateRequested());
+      await bloc.stream.firstWhere((s) => s.nfts.isEmpty && s.error == null);
+
+      // isInitialized must stay false so NftMain paints NftMainLoading
+      // rather than NftNoChainsEnabled.
+      expect(bloc.state.isInitialized, isFalse);
+      expect(bloc.state.sortedChains, isEmpty);
+    });
+
+    test('an unresolved chain never becomes a tab', () async {
+      repo.activatedChains = [NftBlockchains.eth];
+      repo.unresolvedChains = [NftBlockchains.bsc];
+
+      final state = await runUpdate();
+
+      // Intent may hold the spinner, but only live activation makes a tab.
+      expect(state.sortedChains, [NftBlockchains.eth]);
+      expect(state.isInitialized, isTrue);
+    });
+
+    test(
+      'nothing pending releases the hold rather than spinning forever',
+      () async {
+        repo.activatedChains = [];
+        repo.unresolvedChains = [];
+
+        final state = await runUpdate();
+
+        expect(state.isInitialized, isTrue);
+        expect(state.sortedChains, isEmpty);
+        expect(state.error, isNull);
+      },
+    );
+
     test(
       'a fetch failure surfaces as an error, not an empty chain list',
       () async {
@@ -126,7 +168,46 @@ void testNftMainBloc() {
       },
     );
   });
+
+  group('NftMainBloc reactivity', () {
+    test('an activation-state change recomputes the chain list', () async {
+      final repo = _FakeNftsRepo()..activatedChains = [];
+      final controller =
+          StreamController<Map<AssetId, AssetActivationState>>.broadcast();
+      addTearDown(controller.close);
+
+      final bloc = NftMainBloc(
+        repo: repo,
+        sdk: _FakeSdk(_FakeAuth(), activationStates: controller.stream),
+      );
+      addTearDown(bloc.close);
+
+      bloc.add(const NftMainChainUpdateRequested());
+      await bloc.stream.firstWhere((s) => s.isInitialized);
+      expect(bloc.state.sortedChains, isEmpty);
+
+      // ETH comes up elsewhere in the app. Before this subscription existed the
+      // page stayed empty until the 60s timer.
+      repo.activatedChains = [NftBlockchains.eth];
+      controller.add({});
+      controller.add({_ethId: _activeState});
+
+      await bloc.stream.firstWhere((s) => s.sortedChains.isNotEmpty);
+      expect(bloc.state.sortedChains, [NftBlockchains.eth]);
+    });
+  });
 }
+
+final _ethId = AssetId(
+  id: 'ETH',
+  name: 'Ethereum',
+  symbol: AssetSymbol(assetConfigId: 'ETH'),
+  chainId: AssetChainId(chainId: 1),
+  derivationPath: "m/44'/60'/0'/0",
+  subClass: CoinSubClass.erc20,
+);
+
+final _activeState = AssetActivationState.active(_ethId);
 
 NftToken _token(NftBlockchains chain) => NftToken(
   chain: chain,
@@ -160,8 +241,16 @@ NftToken _token(NftBlockchains chain) => NftToken(
 
 class _FakeNftsRepo implements NftsRepo {
   List<NftBlockchains> activatedChains = [];
+  List<NftBlockchains> unresolvedChains = [];
   List<NftToken> nftsToReturn = [];
   Object? errorToThrow;
+
+  @override
+  Future<NftChainActivation> resolveChains(List<NftBlockchains> chains) async =>
+      NftChainActivation(
+        activated: chains.where(activatedChains.contains).toList(),
+        unresolved: chains.where(unresolvedChains.contains).toList(),
+      );
 
   @override
   Future<List<NftBlockchains>> getActivatedChains(
@@ -197,10 +286,21 @@ class _FakeAuth implements KomodoDefiLocalAuth {
 }
 
 class _FakeSdk implements KomodoDefiSdk {
-  _FakeSdk(this.auth);
+  _FakeSdk(
+    this.auth, {
+    Stream<Map<AssetId, AssetActivationState>>? activationStates,
+  }) : _activationStates =
+           activationStates ??
+           const Stream<Map<AssetId, AssetActivationState>>.empty();
 
   @override
   final KomodoDefiLocalAuth auth;
+
+  final Stream<Map<AssetId, AssetActivationState>> _activationStates;
+
+  @override
+  Stream<Map<AssetId, AssetActivationState>> watchActivationStates() =>
+      _activationStates;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
