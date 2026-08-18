@@ -29,8 +29,11 @@ class NftMain extends StatelessWidget {
     final bool hasEnabledChains = context.select<NftMainBloc, bool>(
         (bloc) => bloc.state.sortedChains.isNotEmpty);
 
-    // Only show loading screen if we're still initializing AND there are chains to load
-    if (isLoggedIn && isInitial && hasEnabledChains) {
+    // The chain list is only known after the first update completes, so it
+    // cannot gate the loading screen: requiring it here made NftMainLoading
+    // unreachable and painted the "enable NFT assets" placeholder for the
+    // whole of the first fetch.
+    if (isLoggedIn && isInitial) {
       return const NftMainLoading();
     }
     final ColorSchemeExtension colorScheme =
@@ -83,6 +86,16 @@ class NftMain extends StatelessWidget {
                     );
             }
 
+            // Read the error before the placeholder branch. A failed fetch
+            // also leaves sortedChains empty, so checking the chain list first
+            // reported a genuine failure as "enable NFT protocol assets" and
+            // hid the only retry affordance reachable in that state.
+            final BaseError? error = context
+                .select<NftMainBloc, BaseError?>((bloc) => bloc.state.error);
+            if (error != null) {
+              return NftMainFailure(error: error);
+            }
+
             // Show placeholder if no NFT chains are enabled
             if (!hasEnabledChains) {
               return isMobile
@@ -92,12 +105,6 @@ class NftMain extends StatelessWidget {
                       key: Key('msg-no-chains-enabled'),
                       children: [NftNoChainsEnabled()],
                     );
-            }
-
-            final BaseError? error = context
-                .select<NftMainBloc, BaseError?>((bloc) => bloc.state.error);
-            if (error != null) {
-              return NftMainFailure(error: error);
             }
 
             return const NftList();
