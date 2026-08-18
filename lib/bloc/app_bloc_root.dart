@@ -18,8 +18,6 @@ import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/assets_overview/investment_repository.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/bitrefill/bloc/bitrefill_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/generator.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/mock_transaction_history_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
@@ -236,15 +234,6 @@ class AppBlocRoot extends StatelessWidget {
             create: (context) => TakerBloc(
               kdfSdk: komodoDefiSdk,
               dexRepository: dexRepository,
-              coinsRepository: coinsRepository,
-              analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
-            ),
-          ),
-          BlocProvider<BridgeBloc>(
-            create: (context) => BridgeBloc(
-              kdfSdk: komodoDefiSdk,
-              dexRepository: dexRepository,
-              bridgeRepository: BridgeRepository(mm2Api, coinsRepository),
               coinsRepository: coinsRepository,
               analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
             ),
