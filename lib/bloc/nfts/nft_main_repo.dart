@@ -21,7 +21,7 @@ class NftsRepo {
 
   Future<void> updateNft(List<NftBlockchains> chains) async {
     // Filter to only chains whose parent coins are already activated
-    final activatedChains = await _getActivatedChains(chains);
+    final activatedChains = await getActivatedChains(chains);
     if (activatedChains.isEmpty) {
       _log.info('No NFT chains with activated parent coins');
       return;
@@ -36,7 +36,7 @@ class NftsRepo {
 
   Future<List<NftToken>> getNfts(List<NftBlockchains> chains) async {
     // Filter to only chains whose parent coins are already activated
-    final activatedChains = await _getActivatedChains(chains);
+    final activatedChains = await getActivatedChains(chains);
     if (activatedChains.isEmpty) {
       _log.info('No NFT chains with activated parent coins');
       return [];
@@ -79,7 +79,7 @@ class NftsRepo {
   /// Note: We no longer automatically activate parent coins to avoid unnecessary
   /// overhead. Users must manually enable the parent chain assets before using
   /// NFT functionality for that chain.
-  Future<List<NftBlockchains>> _getActivatedChains(
+  Future<List<NftBlockchains>> getActivatedChains(
     List<NftBlockchains> chains,
   ) async {
     final List<Coin> knownCoins = _coinsRepo.getKnownCoins();

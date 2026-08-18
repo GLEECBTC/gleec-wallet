@@ -20,6 +20,7 @@ import 'tests/fiat/fiat_default_preference_test.dart'
 import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
+import 'tests/nfts/nft_main_bloc_test.dart' as nft_main_bloc_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
@@ -210,6 +211,7 @@ void main() {
 
   testCoinActivationStateBridge();
   testAuthBloc();
+  nft_main_bloc_test.testNftMainBloc();
   testCoinsBlocActivationRecovery();
   testCoinsBlocPubkeysRetry();
   testCoinAddressesBlocGaslessRevalidation();
