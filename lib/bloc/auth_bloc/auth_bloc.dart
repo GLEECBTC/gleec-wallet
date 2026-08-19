@@ -52,6 +52,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     on<AuthErrorReported>(_onErrorReported);
     on<AuthRegisterRequested>(_onRegister);
     on<AuthRestoreRequested>(_onRestore);
+    on<AuthImportRequested>(_onImport);
     on<AuthLegacyMigrationRequested>(_onLegacyMigration);
     on<AuthSeedBackupConfirmed>(_onSeedBackupConfirmed);
     on<AuthWalletDownloadRequested>(_onWalletDownloadRequested);
@@ -514,6 +515,56 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         flow: AuthFlow.restore,
       );
     }
+  }
+
+  /// A user-initiated seed import.
+  ///
+  /// Differs from [_onRestore] only in what a name collision means. Restore
+  /// signs into the existing wallet, which silently discards the seed the user
+  /// typed and logs them into something else. For an import that is a bug with
+  /// a fund-loss shape, so this reports it and stops. Everything after the
+  /// check is the restore path verbatim.
+  Future<void> _onImport(
+    AuthImportRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    try {
+      if (await _didSignInExistingWallet(event.wallet, event.password)) {
+        _log.warning(
+          'Import rejected: a wallet named ${event.wallet.name} already exists',
+        );
+        emit(
+          AuthBlocState.error(
+            AuthException(
+              LocaleKeys.walletImportNameTaken.tr(args: [event.wallet.name]),
+              type: AuthExceptionType.walletAlreadyExists,
+              details: {'walletName': event.wallet.name},
+            ),
+          ),
+        );
+        return;
+      }
+    } catch (e, s) {
+      // The collision check itself failed. Fail closed: proceeding would
+      // re-introduce the silent-overwrite risk the check exists to prevent.
+      await _emitAuthFailure(
+        emit: emit,
+        errorMsg: 'Could not verify existing wallets before importing',
+        error: e,
+        stackTrace: s,
+        flow: AuthFlow.restore,
+      );
+      return;
+    }
+
+    await _onRestore(
+      AuthRestoreRequested(
+        wallet: event.wallet,
+        password: event.password,
+        seed: event.seed,
+      ),
+      emit,
+    );
   }
 
   Future<void> _onLegacyMigration(

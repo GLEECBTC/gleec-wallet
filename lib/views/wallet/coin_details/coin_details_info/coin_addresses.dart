@@ -30,6 +30,9 @@ import 'package:web_dex/shared/widgets/truncate_middle_text.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/coin_details/receive/trezor_new_address_confirmation.dart';
+import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
+import 'package:web_dex/views/common/seed_backup_gate/gated_copy_address.dart';
+import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
 
@@ -1028,13 +1031,13 @@ class AddressCard extends StatelessWidget {
 /// Same receive/QR dialog as [QrButton] and the Receive flow. A null
 /// [variant] lets the dialog pick (gas-free when available), preserving the
 /// behavior of call sites that predate the blended rows.
-void showPubkeyReceiveDialog(
+Future<void> showPubkeyReceiveDialog(
   BuildContext context,
   Coin coin,
   PubkeyInfo address, {
   AddressDisplayVariant? variant,
   bool gaslessReceiveEnabled = false,
-}) {
+}) async {
   final wantsGaslessReceive =
       gaslessReceiveEnabled && variant != AddressDisplayVariant.standard;
   CoinAddressesBloc? addressesBloc;
@@ -1052,7 +1055,17 @@ void showPubkeyReceiveDialog(
     }
   }
 
-  showDialog<void>(
+  // Deliberately after the gas-free revalidation above: that check must fail
+  // closed on its own terms, and running the backup gate first would swallow
+  // the revalidation entirely when the user declines.
+  final mayReveal = await ensureSeedBackedUp(
+    context,
+    reason: SeedBackupGateReason.receiveAddress,
+    isTestCoin: coin.isTestCoin,
+  );
+  if (!mayReveal || !context.mounted) return;
+
+  await showDialog<void>(
     context: context,
     builder: (context) {
       final dialog = PubkeyReceiveDialog(
@@ -1208,7 +1221,12 @@ class _MobileAddressContent extends StatelessWidget {
               if (isGaslessCustody)
                 _GaslessAddressCopyButton(coin: coin, address: address)
               else
-                AddressCopyButton(address: rowAddress, coinAbbr: coin.abbr),
+                AddressCopyButton(
+                  address: rowAddress,
+                  coinAbbr: coin.abbr,
+                  gateOnSeedBackup: true,
+                  isTestCoin: coin.isTestCoin,
+                ),
               QrButton(
                 coin: coin,
                 address: address,
@@ -1323,7 +1341,12 @@ class _DesktopAddressContent extends StatelessWidget {
                   if (isGaslessCustody)
                     _GaslessAddressCopyButton(coin: coin, address: address)
                   else
-                    AddressCopyButton(address: rowAddress, coinAbbr: coin.abbr),
+                    AddressCopyButton(
+                      address: rowAddress,
+                      coinAbbr: coin.abbr,
+                      gateOnSeedBackup: true,
+                      isTestCoin: coin.isTestCoin,
+                    ),
                   QrButton(
                     coin: coin,
                     address: address,
@@ -1377,7 +1400,7 @@ class _GaslessAddressCopyButton extends StatelessWidget {
       icon: const Icon(Icons.copy, size: 16),
       color: Theme.of(context).textTheme.bodyMedium?.color,
       tooltip: LocaleKeys.copyAddressToClipboard.tr(args: [coin.abbr]),
-      onPressed: () {
+      onPressed: () async {
         final state = context.read<CoinAddressesBloc>().state;
         if (!_passesGaslessActionTimeRevalidation(context, address) ||
             !_isVerifiedGaslessReceiveForAddress(
@@ -1390,10 +1413,16 @@ class _GaslessAddressCopyButton extends StatelessWidget {
           return;
         }
 
-        copyToClipBoard(
+        // The custody address is the fundable one under the gas-free design, so
+        // it gets the same backup prompt as the QR button beside it and as the
+        // standard sibling row.
+        await gatedCopyAddress(
           context,
           address.gasfreeAddress!,
-          LocaleKeys.copiedAddressToClipboard.tr(args: [coin.abbr]),
+          successMessage: LocaleKeys.copiedAddressToClipboard.tr(
+            args: [coin.abbr],
+          ),
+          isTestCoin: coin.isTestCoin,
         );
       },
     );

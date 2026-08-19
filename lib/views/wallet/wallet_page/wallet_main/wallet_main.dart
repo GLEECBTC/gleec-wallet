@@ -419,6 +419,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
       borderColor: theme.custom.specificButtonBorderColor,
       popupContent: WalletsManagerWrapper(
         eventType: WalletsManagerEventType.wallet,
+        onCancel: () => _popupDispatcher?.close(),
         onSuccess: (_) async {
           takerBloc.add(TakerReInit());
           await reInitTradingForms(context);

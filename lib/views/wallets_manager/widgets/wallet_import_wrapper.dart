@@ -8,6 +8,7 @@ class WalletImportWrapper extends StatefulWidget {
     Key? key,
     required this.onImport,
     required this.onCancel,
+    this.onImportTypeChanged,
   }) : super(key: key);
 
   final void Function({
@@ -18,6 +19,10 @@ class WalletImportWrapper extends StatefulWidget {
   })
   onImport;
   final void Function() onCancel;
+
+  /// Notifies the parent which import branch is on screen, so the onboarding
+  /// funnel can distinguish a typed seed from an encrypted-file import.
+  final void Function(WalletImportTypes)? onImportTypeChanged;
 
   @override
   State<WalletImportWrapper> createState() => _WalletImportWrapperState();
@@ -60,6 +65,7 @@ class _WalletImportWrapperState extends State<WalletImportWrapper> {
       _fileData = WalletFileData(content: fileData, name: fileName);
       _importType = WalletImportTypes.file;
     });
+    widget.onImportTypeChanged?.call(WalletImportTypes.file);
   }
 
   void _onCancel() {
@@ -68,6 +74,7 @@ class _WalletImportWrapperState extends State<WalletImportWrapper> {
         _importType = WalletImportTypes.simple;
         _fileData = null;
       });
+      widget.onImportTypeChanged?.call(WalletImportTypes.simple);
       return;
     }
 
