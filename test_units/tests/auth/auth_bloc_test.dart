@@ -175,6 +175,59 @@ void testAuthBloc() {
     });
   });
 
+  group('AuthBloc seed import', () {
+    late _FakeAuth auth;
+    late _FakeSdk sdk;
+
+    AuthBloc buildBloc() {
+      final bloc = AuthBloc(
+        sdk,
+        _FakeWalletsRepository(),
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+      );
+      addTearDown(bloc.close);
+      return bloc;
+    }
+
+    setUp(() {
+      auth = _FakeAuth();
+      sdk = _FakeSdk(auth);
+      WalletLoadTimeline.instance.reset();
+    });
+
+    test('a name collision errors instead of silently signing in', () async {
+      // The restore path signs into the existing wallet here, which discards
+      // the seed the user just typed. Import must not do that.
+      auth.userToReturn = _user();
+
+      final bloc = buildBloc();
+      final errored = bloc.stream.firstWhere((state) => state.isError);
+      bloc.add(
+        AuthImportRequested(wallet: _wallet(), password: 'pw', seed: 'a b c'),
+      );
+
+      final state = await errored.timeout(const Duration(seconds: 2));
+      expect(state.authError?.type, AuthExceptionType.walletAlreadyExists);
+      expect(auth.signInCalls, 0);
+    });
+
+    test('fails closed when the collision check itself fails', () async {
+      // Proceeding on an unverifiable lookup would reintroduce exactly the
+      // risk the check exists to remove.
+      auth.getUsersError = StateError('storage unavailable');
+
+      final bloc = buildBloc();
+      final errored = bloc.stream.firstWhere((state) => state.isError);
+      bloc.add(
+        AuthImportRequested(wallet: _wallet(), password: 'pw', seed: 'a b c'),
+      );
+
+      await errored.timeout(const Duration(seconds: 2));
+      expect(auth.signInCalls, 0);
+    });
+  });
+
   group('AuthBloc sign-out', () {
     test('clears state and resets the load timeline', () async {
       final auth = _FakeAuth()..userToReturn = _user();
@@ -271,6 +324,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   KdfUser? userToReturn;
   Object? errorToThrow;
   Object? signOutError;
+  Object? getUsersError;
   int signInCalls = 0;
   int signOutCalls = 0;
   int currentUserReads = 0;
@@ -307,8 +361,10 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   Stream<KdfUser?> watchCurrentUser() => _watcher.stream;
 
   @override
-  Future<List<KdfUser>> getUsers() async =>
-      userToReturn == null ? const [] : [userToReturn!];
+  Future<List<KdfUser>> getUsers() async {
+    if (getUsersError != null) throw getUsersError!;
+    return userToReturn == null ? const [] : [userToReturn!];
+  }
 
   @override
   Future<void> setOrRemoveActiveUserKeyValue(String key, dynamic value) async {

@@ -327,6 +327,9 @@ KdfUser _softwareUser(String walletName, String pubkeyHash) => KdfUser(
     pubkeyHash,
   ),
   isBip39Seed: true,
+  // Backed up, so these fixtures exercise the receive surfaces themselves
+  // rather than the seed-backup gate. The gate has its own coverage.
+  metadata: const {'has_backup': true},
 );
 
 GaslessAccountStatusResponse _gaslessAccountStatus(
@@ -2157,13 +2160,21 @@ void testReceiveAddressFaucetWidgets() {
           gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
         );
 
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+        );
+        addTearDown(authBloc.close);
+
         await tester.pumpWidget(
           MaterialApp(
-            home: Scaffold(
-              body: QrButton(
-                coin: usdt.toCoin(),
-                address: pubkey,
-                variant: AddressDisplayVariant.standard,
+            home: BlocProvider<AuthBloc>.value(
+              value: authBloc,
+              child: Scaffold(
+                body: QrButton(
+                  coin: usdt.toCoin(),
+                  address: pubkey,
+                  variant: AddressDisplayVariant.standard,
+                ),
               ),
             ),
           ),

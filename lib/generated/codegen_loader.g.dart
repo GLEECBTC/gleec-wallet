@@ -164,6 +164,15 @@ abstract class LocaleKeys {
   static const seedPhrase = 'seedPhrase';
   static const assetNumber = 'assetNumber';
   static const clipBoard = 'clipBoard';
+  static const onboardingConsentPrefix = 'onboardingConsentPrefix';
+  static const onboardingTitle = 'onboardingTitle';
+  static const onboardingSubtitle = 'onboardingSubtitle';
+  static const onboardingCreateWallet = 'onboardingCreateWallet';
+  static const onboardingImportTitle = 'onboardingImportTitle';
+  static const onboardingImportSubtitle = 'onboardingImportSubtitle';
+  static const onboardingHardwareTitle = 'onboardingHardwareTitle';
+  static const onboardingReturningTitle = 'onboardingReturningTitle';
+  static const onboardingReturningSubtitle = 'onboardingReturningSubtitle';
   static const walletsManagerCreateWalletButton =
       'walletsManagerCreateWalletButton';
   static const walletsManagerImportWalletButton =
@@ -499,9 +508,14 @@ abstract class LocaleKeys {
   static const customFeeHigherAmount = 'customFeeHigherAmount';
   static const noSenderAddress = 'noSenderAddress';
   static const confirmOnTrezor = 'confirmOnTrezor';
-  static const alphaVersionWarningTitle = 'alphaVersionWarningTitle';
-  static const alphaVersionWarningDescription =
-      'alphaVersionWarningDescription';
+  static const walletImportNameTaken = 'walletImportNameTaken';
+  static const seedBackupGateTitle = 'seedBackupGateTitle';
+  static const seedBackupGateGeneratedBody = 'seedBackupGateGeneratedBody';
+  static const seedBackupGateBody = 'seedBackupGateBody';
+  static const seedBackupGateBackUpNow = 'seedBackupGateBackUpNow';
+  static const seedBackupGateImportInstead = 'seedBackupGateImportInstead';
+  static const seedBackupGateContinueAnyway = 'seedBackupGateContinueAnyway';
+  static const seedBackupGateShowAddress = 'seedBackupGateShowAddress';
   static const sendToAnalytics = 'sendToAnalytics';
   static const backToWallet = 'backToWallet';
   static const backToDex = 'backToDex';

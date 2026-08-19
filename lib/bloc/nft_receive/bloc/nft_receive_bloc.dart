@@ -4,7 +4,6 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
-import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/nft.dart';
 
 part 'nft_receive_event.dart';
@@ -40,12 +39,6 @@ class NftReceiveBloc extends Bloc<NftReceiveEvent, NftReceiveState> {
     if (coin == null) {
       _log.warning('Failed to find coin for chain: ${event.chain}');
       return emit(const NftReceiveLoadFailure());
-    }
-
-    final walletConfig = (await _sdk.currentWallet())?.config;
-    if (walletConfig?.hasBackup == false && !coin.isTestCoin) {
-      _log.warning('Wallet does not have backup and is not a test coin');
-      return emit(NftReceiveBackupSuccess());
     }
 
     final asset = _sdk.assets.available[coin.id]!;

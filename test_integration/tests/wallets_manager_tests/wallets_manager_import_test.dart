@@ -71,7 +71,6 @@ Future<void> _createWallet(
   final Finder customSeedDialogOkButton =
       find.byKey(const Key('custom-seed-dialog-ok-button'));
   const String confirmCustomSeedText = 'I Understand';
-  final Finder eulaTosCheckbox = find.byKey(const Key('checkbox-eula-tos'));
   final Finder importConfirmButton =
       find.byKey(const Key('confirm-seed-button'));
 
@@ -79,7 +78,6 @@ Future<void> _createWallet(
   await tester.enterText(nameField, walletName);
   await tester.enterText(importSeedField, customSeed);
   await tester.pumpNFrames(10);
-  await tester.tapAndPump(eulaTosCheckbox);
   await tester.tapAndPump(allowCustomSeedCheckbox);
   await tester.enterText(customSeedDialogInput, confirmCustomSeedText);
   await tester.pumpNFrames(10);

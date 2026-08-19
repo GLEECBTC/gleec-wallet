@@ -36,6 +36,8 @@ import 'views/wallets_manager/widgets/hardware_wallets_manager_test.dart'
     as hardware_wallets_manager_test;
 import 'views/wallets_manager/widgets/wallet_login_test.dart'
     as wallet_login_test;
+import 'views/wallets_manager/widgets/wallets_manager_entry_test.dart'
+    as wallets_manager_entry_test;
 import 'views/wallets_manager/widgets/wallets_manager_test.dart'
     as wallets_manager_test;
 
@@ -74,6 +76,10 @@ import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
 import 'tests/analytics/frame_gap_metrics_test.dart';
 import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
+import 'tests/services/legal_acceptance_test.dart';
+import 'tests/services/storage_persistence_gate_test.dart';
+import 'tests/wallet/seed_backup_policy_test.dart';
+import 'tests/analytics/onboarding_funnel_test.dart';
 import 'tests/analytics/transaction_event_privacy_test.dart';
 import 'tests/bitrefill/bitrefill_refund_url_test.dart';
 import 'tests/bitrefill/bitrefill_wallet_binding_test.dart';
@@ -220,6 +226,10 @@ void main() {
   testFrameGapMetrics();
   testCoinSortOrder();
   testCoinsBlocBalanceEmit();
+  testLegalAcceptance();
+  testStoragePersistenceGate();
+  testSeedBackupPolicy();
+  testOnboardingFunnel();
   testTransactionEventPrivacy();
   testBitrefillRefundUrl();
   testBitrefillWalletBinding();
@@ -243,5 +253,6 @@ void main() {
   trezor_dialog_select_wallet_test.main();
   hardware_wallets_manager_test.main();
   wallet_login_test.main();
+  wallets_manager_entry_test.main();
   wallets_manager_test.main();
 }

@@ -483,11 +483,16 @@ class _SeedPhraseConfirmButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<SecuritySettingsBloc>();
-    final isCustom = !context
-        .read<KomodoDefiSdk>()
-        .mnemonicValidator
-        .validateBip39(seedPhrase);
-    if (isCustom) return const SizedBox.shrink();
+
+    // Gated on word count, not on BIP39 validity. The confirmation quiz just
+    // splits on whitespace and compares the reassembled string, so it works on
+    // any multi-word phrase. Requiring BIP39 left custom-seed users with no
+    // route to mark their seed backed up at all except downloading the wallet
+    // file - which also meant the receive-time backup gate could never be
+    // satisfied for them. Only a single-token passphrase degenerates into
+    // "select the one word", so that case still falls back to the file route.
+    final wordCount = seedPhrase.trim().split(RegExp(r'\s+')).length;
+    if (wordCount < 2) return const SizedBox.shrink();
 
     void onPressed() => bloc.add(const SeedConfirmEvent());
     final text = LocaleKeys.seedPhraseShowingSavedPhraseButton.tr();
