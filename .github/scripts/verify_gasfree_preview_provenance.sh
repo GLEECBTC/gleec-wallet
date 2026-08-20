@@ -1,15 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly expected_api_branch='feat/tron-gasfree'
-readonly expected_api_commit='bd413dcfea73c9de2e85903323946a378b180fa7'
+# Gate for the manual GasFree preview deploy: the requested KDF branch/commit
+# must be exactly the approved release, and the manifest the build actually
+# consumes must pin exactly the approved artifact digests.
+#
+# The approved release identity - branch, 40-character commit and the
+# per-platform SHA-256 digests - lives in one place only: the checked-in SDK
+# build manifest, passed here as --approved-config. Nothing in this script
+# restates those values, so rolling the KDF artifact is a single-file change.
+#
+# --approved-config MUST be the pristine checked-in manifest. The preview
+# workflow regenerates build_config.json from its dispatch inputs (see the
+# "Update KDF API configuration" step) before the build, so pointing both flags
+# at that regenerated file would compare it against itself and accept any KDF
+# branch. Snapshot the manifest immediately after the SDK checkout and pass the
+# snapshot as --approved-config, then pass the regenerated file as --config.
+#
+# The platform set below is a release-completeness requirement, not part of the
+# rolling identity: a preview must never ship a partial artifact set. Rolling
+# the KDF build never changes it.
+
 readonly expected_platform_set='android-aarch64,android-armv7,ios,linux,macos,web,windows'
+readonly release_blocker_checksum='0000000000000000000000000000000000000000000000000000000000000000'
 
 api_branch=''
 api_commit=''
 sdk_branch=''
 sdk_commit=''
 sdk_repo=''
+approved_config=''
 config_path=''
 
 fail() {
@@ -25,8 +45,9 @@ Usage:
     --api-commit <40-character SHA> \
     --sdk-branch <branch> \
     --sdk-commit <40-character SHA> \
+    --approved-config <pristine checked-in build_config.json> \
     [--sdk-repo <checked-out SDK repository>] \
-    [--config <build_config.json>]
+    [--config <build_config.json the build will consume>]
 USAGE
 }
 
@@ -57,6 +78,11 @@ while (($# > 0)); do
       sdk_repo=$2
       shift 2
       ;;
+    --approved-config)
+      (($# >= 2)) || fail 'missing value for --approved-config'
+      approved_config=$2
+      shift 2
+      ;;
     --config)
       (($# >= 2)) || fail 'missing value for --config'
       config_path=$2
@@ -76,6 +102,58 @@ done
 [[ -n "$api_commit" ]] || fail '--api-commit is required'
 [[ -n "$sdk_branch" ]] || fail '--sdk-branch is required'
 [[ -n "$sdk_commit" ]] || fail '--sdk-commit is required'
+[[ -n "$approved_config" ]] || fail '--approved-config is required'
+
+[[ -f "$approved_config" ]] ||
+  fail "approved build config not found: $approved_config"
+command -v jq >/dev/null 2>&1 || fail 'jq is required'
+
+# Reads one string out of a manifest, failing loudly instead of letting an
+# unreadable or malformed file collapse into an empty expectation.
+read_config_value() {
+  local path=$1 filter=$2 label=$3 value
+  value=$(jq -er "$filter" "$path" 2>/dev/null) ||
+    fail "$label could not be read from $path"
+  [[ -n "$value" ]] || fail "$label is empty in $path"
+  printf '%s' "$value"
+}
+
+assert_release_platform_set() {
+  local path=$1 label=$2 actual
+  actual=$(read_config_value \
+    "$path" '.api.platforms | keys | sort | join(",")' "$label platform set")
+  [[ "$actual" == "$expected_platform_set" ]] ||
+    fail "$label platform set is not the exact seven-target release set"
+  actual=$(read_config_value \
+    "$path" '.api.required_platforms | sort | join(",")' \
+    "$label required platform set")
+  [[ "$actual" == "$expected_platform_set" ]] ||
+    fail "$label required platform set is not the exact seven-target release set"
+}
+
+expected_api_branch=$(read_config_value \
+  "$approved_config" '.api.branch' 'approved KDF branch')
+expected_api_commit=$(read_config_value \
+  "$approved_config" '.api.api_commit_hash' 'approved KDF commit')
+
+# The approved manifest has to be a shippable release in its own right, or the
+# checks below would happily approve a half-rolled or deliberately blocked pin.
+git check-ref-format --branch "$expected_api_branch" >/dev/null 2>&1 ||
+  fail 'approved manifest declares an invalid KDF branch name'
+[[ "$expected_api_commit" =~ ^[0-9a-f]{40}$ ]] ||
+  fail 'approved manifest KDF commit must be an exact lowercase 40-character SHA'
+assert_release_platform_set "$approved_config" 'approved build config'
+jq -e \
+  --arg blocker "$release_blocker_checksum" \
+  '.api.platforms
+   | to_entries
+   | all(.[];
+       .value.valid_zip_sha256_checksums
+       | length == 1
+         and (.[0] | test("^[0-9a-f]{64}$"))
+         and .[0] != $blocker)' \
+  "$approved_config" >/dev/null ||
+  fail 'approved manifest must pin exactly one released digest per platform'
 
 git check-ref-format --branch "$api_branch" >/dev/null 2>&1 ||
   fail 'invalid KDF branch name'
@@ -111,11 +189,12 @@ if [[ -n "$sdk_repo" ]]; then
 fi
 
 if [[ -z "$config_path" ]]; then
+  printf 'Verified the requested KDF release identity for %s at %s.\n' \
+    "$expected_api_branch" "$expected_api_commit"
   exit 0
 fi
 
 [[ -f "$config_path" ]] || fail "build config not found: $config_path"
-command -v jq >/dev/null 2>&1 || fail 'jq is required'
 
 jq -e \
   --arg branch "$expected_api_branch" \
@@ -124,43 +203,21 @@ jq -e \
   "$config_path" >/dev/null ||
   fail 'build config KDF branch/commit does not match the approved release'
 
-actual_platform_set=$(
-  jq -r '.api.platforms | keys | sort | join(",")' "$config_path"
-)
-[[ "$actual_platform_set" == "$expected_platform_set" ]] ||
-  fail 'build config platform set is not the exact seven-target release set'
+assert_release_platform_set "$config_path" 'build config'
 
-required_platform_set=$(
-  jq -r '.api.required_platforms | sort | join(",")' "$config_path"
-)
-[[ "$required_platform_set" == "$expected_platform_set" ]] ||
-  fail 'required platform set is not the exact seven-target release set'
-
-platforms=(
-  web
-  ios
-  macos
-  android-armv7
-  android-aarch64
-  linux
-  windows
-)
-checksums=(
-  9242cbba06eda6e82fc057897781cea2adf85f67f0cf5710f4feaf0a5e6d844c
-  0cc494a8ff7b3f926cebc6956cda61c9928c7366624d592c71e29f080a3255bd
-  f1d8a52c7c34d9721761733586f7262177b5362f911d8a220b2550e1f9844bbe
-  929d57312908544c9e6ae94d660d8ae14c21fb84547821ba0e0aba26c4daf29a
-  9953572e03956a751dcef365df76b6b84a3675800323220d50409dbd8175f037
-  ec5e2c801520e00ed1fd18c82c0edc0ade30716c6a4fb8aab453f265ce6afb33
-  04062cf1a271888eab9a757fa1a19e41038beea15b19484a21e5731d4dfc05e0
-)
-
-for index in "${!platforms[@]}"; do
-  platform=${platforms[$index]}
-  checksum=${checksums[$index]}
+# Both manifests were just proven to declare exactly this platform set, so
+# walking the validated constant cannot silently skip a target the way an
+# unchecked `jq | while read` could.
+IFS=',' read -r -a release_platforms <<<"$expected_platform_set"
+for platform in "${release_platforms[@]}"; do
+  approved_checksum=$(
+    jq -er --arg platform "$platform" \
+      '.api.platforms[$platform].valid_zip_sha256_checksums[0]' \
+      "$approved_config" 2>/dev/null
+  ) || fail "approved $platform digest could not be read"
   jq -e \
     --arg platform "$platform" \
-    --arg checksum "$checksum" \
+    --arg checksum "$approved_checksum" \
     '.api.platforms[$platform].valid_zip_sha256_checksums == [$checksum]' \
     "$config_path" >/dev/null ||
     fail "$platform checksum allowlist is not the exact approved digest"

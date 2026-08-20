@@ -7,6 +7,17 @@ slow.
 Method and raw data: [`KDF_LATENCY_REPORT.md`](KDF_LATENCY_REPORT.md).
 Source analysis: [`KDF_IMPROVEMENT_OPPORTUNITIES.md`](KDF_IMPROVEMENT_OPPORTUNITIES.md).
 
+> **These deltas need re-measuring: the gap limit changed under them.**
+> Every before/after pair here was taken at `gap_limit: 20`, but the shipped SDK
+> now sends `software = 3` / `newlyGeneratedFirstSignIn = 1`
+> ([`hd_gap_limit.dart`](../sdk/packages/komodo_defi_types/lib/src/public_key/hd_gap_limit.dart)),
+> with `hardware = 20` kept for Trezor only. Scan cost on an unbatched KDF is
+> roughly linear in addresses walked, so narrowing the gap limit does much of
+> the same work the KDF-side fixes did — which means **the attribution below
+> double-counts**: a win credited to KDF may now be bought by the client-side
+> change alone. **Redo these at gap 3 and gap 1 before quoting them again.**
+> The Trezor path still sends 20 and remains correctly described.
+
 ---
 
 ## TL;DR

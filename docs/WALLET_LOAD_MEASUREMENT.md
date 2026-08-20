@@ -6,6 +6,16 @@ landed. This is how to prove they worked, and how to catch the next regression.
 Everything here produces a number. Nothing here asks anyone to "check if it
 feels faster".
 
+> **Set the gap limit deliberately when you measure.** Every published number in
+> this repo was taken at `gap_limit: 20`, but the app no longer sends that for
+> software wallets —
+> [`hd_gap_limit.dart`](../sdk/packages/komodo_defi_types/lib/src/public_key/hd_gap_limit.dart)
+> sends `software = 3` (restored) and `newlyGeneratedFirstSignIn = 1` (fresh),
+> reserving `hardware = 20` for Trezor. Scan cost is roughly linear in addresses
+> walked, so the gap limit dominates any run that includes a pubkey scan.
+> **A run that does not state its gap limit is not comparable to anything.**
+> The outstanding work is to re-measure the existing matrix at gap 3 and gap 1.
+
 > For the **findings** rather than the method — including the 8-minute HD login
 > on the shipped default coin set, native-vs-web, and min/median/max activation
 > counts over the top 20 by market cap — see

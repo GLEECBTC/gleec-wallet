@@ -7,6 +7,15 @@
 **Host:** macOS 25.5.0, arm64
 **Raw data:** [`docs/assets/kdf_rpc_burst_data/`](assets/kdf_rpc_burst_data/)
 
+> **Gap-limit caveat.** The bench here runs at `gap_limit: 20`, but the shipped
+> SDK now sends `software = 3` / `newlyGeneratedFirstSignIn = 1`
+> ([`hd_gap_limit.dart`](../sdk/packages/komodo_defi_types/lib/src/public_key/hd_gap_limit.dart)).
+> The burst *shape* — same logical work, compressed into a shorter window — is a
+> property of the RPC layer and holds regardless. The absolute **request counts
+> and durations do not**: fewer addresses walked means a smaller burst, so the
+> 429 pressure measured here is an upper bound for a software wallet. Re-measure
+> at gap 3 before quoting the counts. Trezor still walks 20.
+
 ---
 
 ## 0. TL;DR

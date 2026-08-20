@@ -3,6 +3,17 @@
 Companion to [`KDF_LATENCY_REPORT.md`](KDF_LATENCY_REPORT.md), which measures
 the problem. This one says what to do about it, in KDF's own code.
 
+> **The ranking is stale: the gap limit changed under the seconds it ranks by.**
+> Every figure inherited from the latency report was measured at
+> `gap_limit: 20`; the shipped SDK now sends `software = 3` /
+> `newlyGeneratedFirstSignIn = 1`
+> ([`hd_gap_limit.dart`](../sdk/packages/komodo_defi_types/lib/src/public_key/hd_gap_limit.dart)),
+> with `hardware = 20` for Trezor only. Since this document ranks opportunities
+> **by measured seconds**, and the gap-scan items scale with addresses walked,
+> narrowing the gap limit shrinks exactly those items — **so the running order
+> here is no longer trustworthy.** Re-measure at gap 3 and gap 1 before using
+> this to choose what to work on next.
+
 **Source:** `komodo-defi-framework` @ **`bd413dc`** (branch `feat/tron-gasfree`)
 — the exact commit of the binary that produced every number in the latency
 report. Line numbers are anchored to that commit. The repo's default checkout

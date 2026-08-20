@@ -1,5 +1,19 @@
 # KDF wallet-load latency — the `bd413dc` baseline (superseded)
 
+> **Stale for a second reason: the gap limit changed under these numbers.**
+> Every measurement in this file was taken at `gap_limit: 20`. The shipped SDK
+> no longer sends 20 —
+> [`hd_gap_limit.dart`](../sdk/packages/komodo_defi_types/lib/src/public_key/hd_gap_limit.dart)
+> sends `software = 3` for a restored wallet and `newlyGeneratedFirstSignIn = 1`
+> for a fresh one, keeping `hardware = 20` for Trezor only.
+>
+> Because the scan cost on an unbatched KDF is roughly linear in addresses
+> walked, that client-side change collapses most of the penalty measured here —
+> so these numbers overstate both the problem *and* the size of the KDF-side
+> wins claimed against them. **The benchmarks need redoing at gap 3 and gap 1.**
+> Until then, treat every figure below as a Trezor-path (gap 20) reference,
+> where it is still accurate.
+
 > **This is a frozen record of how slow things were, not how they are.**
 > Every number below was measured against KDF `bd413dc`, before any of the
 > fixes. It is kept because it is the only full write-up of the *method* and of

@@ -5,15 +5,19 @@ run-name: ${{ github.actor }} is deploying SDK integration preview with API bran
 on:
   workflow_dispatch:
     inputs:
+      # No defaults on purpose. The approved KDF release lives in the SDK's
+      # build_config.json, which is not readable at dispatch time, so a default
+      # here would be a copy that goes stale on the next artifact roll. Paste
+      # the `.api.branch` and `.api.api_commit_hash` values from
+      # sdk/packages/komodo_defi_framework/app_build/build_config.json; the
+      # provenance gate rejects anything else and names the expected values.
       api_branch:
-        description: "API branch name to update KDF configuration"
+        description: "KDF branch pinned in the SDK build_config.json"
         required: true
-        default: "feat/tron-gasfree"
         type: string
       api_commit:
-        description: "Immutable 40-character KDF source commit"
+        description: "Immutable 40-character KDF commit pinned in the SDK build_config.json"
         required: true
-        default: "bd413dcfea73c9de2e85903323946a378b180fa7"
         type: string
       sdk_branch:
         description: "SDK branch containing the immutable SDK commit"
@@ -45,7 +49,11 @@ jobs:
       sdk_sha: ${{ steps.update_sdk_branch.outputs.sdk_sha }}
 
     steps:
-      - name: Validate requested branches
+      # Format only. Whether the requested KDF release is the approved one is
+      # decided against the SDK manifest in "Snapshot the approved KDF release
+      # manifest" below, which is the first point in the run where that
+      # manifest exists.
+      - name: Validate requested branch and commit formats
         shell: bash
         env:
           API_BRANCH: ${{ inputs.api_branch }}
@@ -67,11 +75,6 @@ jobs:
           fi
           if [[ ! "$SDK_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Invalid immutable SDK commit."
-            exit 1
-          fi
-          if [ "$API_BRANCH" != "feat/tron-gasfree" ] ||
-            [ "$API_COMMIT" != "bd413dcfea73c9de2e85903323946a378b180fa7" ]; then
-            echo "This preview is bound to the approved feat/tron-gasfree KDF release."
             exit 1
           fi
 
@@ -147,6 +150,34 @@ jobs:
           echo "SDK updated to the verified detached commit"
           ls -la sdk/
 
+      - name: Snapshot the approved KDF release manifest
+        id: approved_kdf_manifest
+        shell: bash
+        env:
+          API_BRANCH: ${{ inputs.api_branch }}
+          API_COMMIT: ${{ inputs.api_commit }}
+          SDK_BRANCH: ${{ inputs.sdk_branch }}
+          SDK_SHA: ${{ steps.update_sdk_branch.outputs.sdk_sha }}
+        run: |
+          # build_config.json at the requested SDK commit is the only place the
+          # approved KDF release identity lives. The next step regenerates that
+          # file from the dispatch inputs, so snapshot it first - verifying the
+          # regenerated manifest against itself would approve any KDF branch.
+          approved_config="$RUNNER_TEMP/approved-build-config.json"
+          cp sdk/packages/komodo_defi_framework/app_build/build_config.json \
+            "$approved_config"
+          printf 'approved_config=%s\n' "$approved_config" >>"$GITHUB_OUTPUT"
+
+          # Reject a KDF release that is not the approved one before paying for
+          # the artifact download.
+          .github/scripts/verify_gasfree_preview_provenance.sh \
+            --api-branch "$API_BRANCH" \
+            --api-commit "$API_COMMIT" \
+            --sdk-branch "$SDK_BRANCH" \
+            --sdk-commit "$SDK_SHA" \
+            --sdk-repo sdk \
+            --approved-config "$approved_config"
+
       - name: Update KDF API configuration
         id: update_kdf_config
         shell: bash
@@ -165,13 +196,23 @@ jobs:
             dart pub get
             cd ../..
             
+            # Take the mirror from the manifest's own source_urls rather than
+            # naming one here: a hardcoded host silently stops hosting the pin.
+            # devbuilds.gleec.com was hardcoded here and does not carry the dev
+            # artifacts, so every dispatch on that pin failed at the strict
+            # download. This is read BEFORE the rewrite below, so it is the
+            # pristine value.
+            mirror_url=$(jq -er '.api.source_urls[0]' \
+              packages/komodo_defi_framework/app_build/build_config.json)
+            echo "Using mirror: $mirror_url"
+
             # Resolve the branch commit and require a complete mirror-matched
             # artifact set in the canonical SDK manifest.
             dart run packages/komodo_wallet_cli/bin/update_api_config.dart \
               --branch "$API_BRANCH" \
               --commit "$API_COMMIT" \
               --source mirror \
-              --mirror-url https://devbuilds.gleec.com \
+              --mirror-url "$mirror_url" \
               --platform all \
               --config packages/komodo_defi_framework/app_build/build_config.json \
               --output-dir packages/komodo_defi_framework/app_build/temp_downloads \
@@ -193,6 +234,7 @@ jobs:
           API_COMMIT: ${{ inputs.api_commit }}
           SDK_BRANCH: ${{ inputs.sdk_branch }}
           SDK_SHA: ${{ steps.update_sdk_branch.outputs.sdk_sha }}
+          APPROVED_CONFIG: ${{ steps.approved_kdf_manifest.outputs.approved_config }}
         run: |
           .github/scripts/verify_gasfree_preview_provenance.sh \
             --api-branch "$API_BRANCH" \
@@ -200,6 +242,7 @@ jobs:
             --sdk-branch "$SDK_BRANCH" \
             --sdk-commit "$SDK_SHA" \
             --sdk-repo sdk \
+            --approved-config "$APPROVED_CONFIG" \
             --config sdk/packages/komodo_defi_framework/app_build/build_config.json
 
           provenance_file="$RUNNER_TEMP/gasfree-preview-provenance.txt"
@@ -209,14 +252,12 @@ jobs:
             printf 'sdk_commit=%s\n' "$SDK_SHA"
             printf 'kdf_branch=%s\n' "$API_BRANCH"
             printf 'kdf_commit=%s\n' "$API_COMMIT"
-            printf '%s\n' \
-              'web=9242cbba06eda6e82fc057897781cea2adf85f67f0cf5710f4feaf0a5e6d844c' \
-              'ios=0cc494a8ff7b3f926cebc6956cda61c9928c7366624d592c71e29f080a3255bd' \
-              'macos=f1d8a52c7c34d9721761733586f7262177b5362f911d8a220b2550e1f9844bbe' \
-              'android-armv7=929d57312908544c9e6ae94d660d8ae14c21fb84547821ba0e0aba26c4daf29a' \
-              'android-aarch64=9953572e03956a751dcef365df76b6b84a3675800323220d50409dbd8175f037' \
-              'linux=ec5e2c801520e00ed1fd18c82c0edc0ade30716c6a4fb8aab453f265ce6afb33' \
-              'windows=04062cf1a271888eab9a757fa1a19e41038beea15b19484a21e5731d4dfc05e0'
+            # Recorded from the approved manifest that was just verified, so
+            # the record cannot drift from the digests the gate enforced.
+            jq -er '.api.platforms
+                    | to_entries[]
+                    | "\(.key)=\(.value.valid_zip_sha256_checksums[0])"' \
+              "$APPROVED_CONFIG"
           } >"$provenance_file"
           printf 'provenance_file=%s\n' "$provenance_file" >>"$GITHUB_OUTPUT"
           {
