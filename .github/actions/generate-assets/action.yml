@@ -158,14 +158,58 @@ runs:
           BUILD_CMD="$BUILD_CMD --dart-define=CI=true --dart-define=ANALYTICS_DISABLED=true"
         fi
 
-        # Run flutter build once to download coin icons and config files.
-        # The second build must re-register them in AssetManifest.bin, so we
-        # wipe the build directory afterwards -- but preserve native_assets
-        # which desktop builds generate and need to reuse.
-        echo ""
-        flutter pub get --enforce-lockfile > /dev/null 2>&1 || true
-        $BUILD_CMD > /dev/null 2>&1 || true
-        find build -mindepth 1 -maxdepth 1 ! -name 'native_assets' -exec rm -rf {} + 2>/dev/null || true
+        # Run flutter build once to download coin icons and config files. The
+        # transformer intentionally fails after updating these source assets so
+        # that the next build can register them in AssetManifest.bin.
+        #
+        # Asset downloads can fail transiently. Do not silently continue with
+        # an incomplete asset directory: retry the warm-up build and surface its
+        # output if the required assets are still missing.
+        required_generated_assets=(
+          "sdk/packages/komodo_defi_framework/assets/coin_icons/png/kmd.png"
+          "sdk/packages/komodo_defi_framework/assets/config/coins.json"
+          "sdk/packages/komodo_defi_framework/assets/config/coins_config.json"
+        )
+        warmup_log="$(mktemp)"
+        assets_ready=false
+
+        flutter pub get --enforce-lockfile
+
+        for attempt in 1 2 3; do
+          echo "Asset generation attempt $attempt of 3"
+
+          set +e
+          $BUILD_CMD > "$warmup_log" 2>&1
+          warmup_status=$?
+          set -e
+
+          assets_ready=true
+          for generated_asset in "${required_generated_assets[@]}"; do
+            if [ ! -s "$generated_asset" ]; then
+              echo "Missing generated asset: $generated_asset"
+              assets_ready=false
+            fi
+          done
+
+          # Force Flutter to rebuild the asset manifest on the next pass while
+          # preserving native_assets needed by desktop builds.
+          find build -mindepth 1 -maxdepth 1 ! -name 'native_assets' -exec rm -rf {} + 2>/dev/null || true
+
+          if [ "$assets_ready" = true ]; then
+            echo "Required coin assets generated successfully (warm-up exit status: $warmup_status)"
+            break
+          fi
+
+          echo "Asset generation attempt $attempt failed (exit status: $warmup_status)"
+          tail -n 200 "$warmup_log" || true
+        done
+
+        rm -f "$warmup_log"
+
+        if [ "$assets_ready" != true ]; then
+          echo "Error: Failed to generate required coin assets after 3 attempts"
+          exit 1
+        fi
 
         # Run flutter build and capture its output
         flutter pub get --enforce-lockfile

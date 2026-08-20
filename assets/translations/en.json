@@ -187,6 +187,8 @@
   "swapRecoverButtonText": "Unlock Funds",
   "swapRecoverButtonErrorMessage": "Something wrong, please try again",
   "swapRecoverButtonSuccessMessage": "Recover swap successful",
+  "swapRecoverButtonSubmittingMessage": "Submitting recovery request…",
+  "swapRecoverButtonUncertainMessage": "Recovery may already have been submitted. Wait for this swap to update before trying again.",
   "swapProgressStatusFailed": "Failed swap",
   "swapDetailsStepStatusFailed": "Failed",
   "disclaimerAcceptEulaCheckbox": "EULA",

@@ -301,7 +301,14 @@ class Mm2Api {
     }
   }
 
-  Future<Map<String, dynamic>> cancelOrder(CancelOrderRequest request) async {
+  /// [beforeMutation] runs immediately before the request leaves the client and
+  /// may throw to abort it. Callers use it to re-verify that the wallet the
+  /// cancellation was authorised against is still the live one.
+  Future<Map<String, dynamic>> cancelOrder(
+    CancelOrderRequest request, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    await beforeMutation?.call();
     try {
       return await _mm2.call(request);
     } catch (e, s) {
@@ -413,9 +420,14 @@ class Mm2Api {
     }
   }
 
+  /// [beforeMutation] runs immediately before the request leaves the client and
+  /// may throw to abort it. Callers use it to re-verify that the wallet the
+  /// recovery was authorised against is still the live one.
   Future<RecoverFundsOfSwapResponse?> recoverFundsOfSwap(
-    RecoverFundsOfSwapRequest request,
-  ) async {
+    RecoverFundsOfSwapRequest request, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    await beforeMutation?.call();
     try {
       final JsonMap json = await _mm2.call(request);
       if (json['error'] != null) {

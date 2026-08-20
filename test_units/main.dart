@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'tests/dex/order_model_validation_test.dart';
+import 'tests/dex/trading_entities_guards_test.dart';
 import 'tests/encryption/encrypt_data_tests.dart';
 import 'tests/formatter/compare_dex_to_cex_tests.dart';
 import 'tests/formatter/cut_trailing_zeros_tests.dart';
@@ -105,6 +107,11 @@ void main() {
 
   group('MyRecentSwaps:', () {
     testMyRecentSwapsResponse();
+  });
+
+  group('Dex trading safety:', () {
+    testTradingEntitiesGuards();
+    testOrderModelValidation();
   });
 
   group('SystemHealth: ', () {

@@ -1,0 +1,151 @@
+name: "Deploy Firebase Hosting"
+description: "Deploys Firebase Hosting with a pinned Firebase CLI and handles the current-active-version false positive"
+
+inputs:
+  firebaseServiceAccount:
+    description: "Firebase service account JSON"
+    required: true
+  channelId:
+    description: "Firebase Hosting channel ID. Use live for production deploys."
+    required: true
+  target:
+    description: "Firebase Hosting target or site"
+    required: false
+    default: ""
+  expires:
+    description: "Preview channel expiration"
+    required: false
+    default: "7d"
+  projectId:
+    description: "Firebase project ID"
+    required: true
+  firebaseToolsVersion:
+    description: "firebase-tools version to use"
+    required: false
+    default: "15.22.3"
+
+outputs:
+  details_url:
+    description: "Deployed Hosting URL"
+    value: ${{ steps.deploy.outputs.details_url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Deploy Firebase Hosting
+      id: deploy
+      shell: bash
+      env:
+        FIREBASE_SERVICE_ACCOUNT: ${{ inputs.firebaseServiceAccount }}
+        CHANNEL_ID: ${{ inputs.channelId }}
+        TARGET: ${{ inputs.target }}
+        EXPIRES: ${{ inputs.expires }}
+        PROJECT_ID: ${{ inputs.projectId }}
+        FIREBASE_TOOLS_VERSION: ${{ inputs.firebaseToolsVersion }}
+      run: |
+        set -euo pipefail
+
+        credentials_file="$RUNNER_TEMP/firebase-service-account.json"
+        deploy_log="$RUNNER_TEMP/firebase-hosting-deploy.log"
+
+        printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$credentials_file"
+        chmod 600 "$credentials_file"
+
+        if ! jq empty "$credentials_file" >/dev/null; then
+          echo "Firebase service account secret is not valid JSON."
+          exit 1
+        fi
+
+        export GOOGLE_APPLICATION_CREDENTIALS="$credentials_file"
+        export FIREBASE_DEPLOY_AGENT="action-hosting-deploy"
+
+        if [ "$CHANNEL_ID" = "live" ]; then
+          if [ -n "$TARGET" ]; then
+            deploy_args=(deploy --only "hosting:$TARGET")
+            details_url="https://$TARGET.web.app/"
+          else
+            deploy_args=(deploy --only hosting)
+            details_url="https://$PROJECT_ID.web.app/"
+          fi
+          is_preview=false
+        else
+          safe_channel_id=$(printf '%s' "$CHANNEL_ID" | sed 's/[^A-Za-z0-9_.-]/_/g')
+          if [ "$safe_channel_id" != "$CHANNEL_ID" ]; then
+            echo "ChannelId \"$CHANNEL_ID\" contains unsupported characters. Using \"$safe_channel_id\" instead."
+          fi
+
+          deploy_args=(hosting:channel:deploy "$safe_channel_id")
+          if [ -n "$TARGET" ]; then
+            deploy_args+=(--only "$TARGET")
+          fi
+          if [ -n "$EXPIRES" ]; then
+            deploy_args+=(--expires "$EXPIRES")
+          fi
+          details_url=""
+          is_preview=true
+        fi
+
+        deploy_args+=(--project "$PROJECT_ID" --debug)
+
+        # Firebase Hosting's REST API intermittently drops the connection
+        # ("premature close error") *after* the server has already actioned a
+        # request. firebase-tools then retries the call; for the non-idempotent
+        # channel create this comes back 409 ALREADY_EXISTS and fails the deploy
+        # even though the channel was created. Re-running hosting:channel:deploy
+        # is safe -- the existing channel is reused and the version is uploaded
+        # normally -- so retry these transient failures before giving up.
+        max_attempts=3
+        attempt=1
+        while :; do
+          set +e
+          npx "firebase-tools@$FIREBASE_TOOLS_VERSION" "${deploy_args[@]}" 2>&1 | tee "$deploy_log"
+          deploy_status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$deploy_status" -eq 0 ]; then
+            break
+          fi
+
+          # The deployed version already being the current active version is
+          # not an error -- the served content is already up to date, so
+          # Firebase refuses to re-release the identical version with
+          # FAILED_PRECONDITION. This applies to live deploys (unchanged web
+          # build pushed to `dev`/`main`) as well as preview channels, so it is
+          # intentionally NOT gated on is_preview.
+          if grep -q "supplied version" "$deploy_log" \
+            && grep -q "current active version" "$deploy_log"; then
+            echo "Firebase CLI reported the deployed version is already the current active version; treating deploy as successful."
+            deploy_status=0
+            break
+          fi
+
+          # Retry the transient channel/connection failures described above.
+          if [ "$attempt" -lt "$max_attempts" ] \
+            && grep -qiE "already exists|premature close|ECONNRESET|socket hang up|EAI_AGAIN" "$deploy_log"; then
+            echo "Transient Firebase Hosting error on attempt ${attempt}/${max_attempts}; retrying in $((attempt * 10))s..."
+            sleep "$((attempt * 10))"
+            attempt=$((attempt + 1))
+            continue
+          fi
+
+          exit "$deploy_status"
+        done
+
+        if [ "$is_preview" = "true" ]; then
+          set +e
+          channel_output=$(npx "firebase-tools@$FIREBASE_TOOLS_VERSION" hosting:channel:open "$safe_channel_id" --site "$TARGET" --project "$PROJECT_ID" 2>&1)
+          open_status=$?
+          set -e
+
+          printf '%s\n' "$channel_output"
+
+          details_url=$(printf '%s\n%s\n' "$(cat "$deploy_log")" "$channel_output" \
+            | grep -Eo 'https://[^"[:space:]]+\.web\.app[^"[:space:]]*' \
+            | tail -n 1 || true)
+
+          if [ "$open_status" -ne 0 ] && [ -z "$details_url" ]; then
+            exit "$open_status"
+          fi
+        fi
+
+        echo "details_url=$details_url" >> "$GITHUB_OUTPUT"

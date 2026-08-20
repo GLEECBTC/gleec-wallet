@@ -36,10 +36,8 @@
 .pub/
 **/build/
 contrib/coins_config.json
-devtools_options.yaml
 
 # Web related
-web/index.html
 web/src/*
 web/dist/*.js
 web/dist/*.wasm
@@ -85,8 +83,16 @@ AGENTS_1.md
 # .dmg Release
 dist/
  
-# KDF generated binaries
-web/kdf/kdf/bin/
+# KDF generated web artifacts.
+#
+# The build unzips a downloaded archive into web/kdf/, and the layout varies:
+# build_config.json declares `web/kdf/bin`, while current archives carry their
+# own `kdf/` root and land in `web/kdf/kdf/{bin,res}`. Enumerating spellings
+# has already failed once — a 32 MB kdflib_bg.wasm was committed in b84ba3c59
+# and removed in 7a9a05363 — so ignore everything under web/kdf/ and re-include
+# only res/, which is hand-maintained wrapper source that must stay tracked.
+web/kdf/*
+!web/kdf/res/
 
 # AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
 /.claude/skills/
@@ -94,3 +100,16 @@ web/kdf/kdf/bin/
 /.nano-banana-config.json
 /generated_imgs
 /.1code
+
+# Local environment secrets — never commit. `*.env.example` templates stay
+# trackable because this matches the exact filename `.env` only.
+.env
+/.lifi/
+
+# Generated report/document output.
+/output/
+
+# Android release signing secrets — never commit.
+**/*.jks
+**/*.p12
+android/key.properties

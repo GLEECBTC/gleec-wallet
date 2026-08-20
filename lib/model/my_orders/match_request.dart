@@ -1,4 +1,5 @@
 import 'package:rational/rational.dart';
+import 'package:web_dex/model/my_orders/order_model_validation.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class MatchRequest {
@@ -16,24 +17,37 @@ class MatchRequest {
     this.takerOrderUuid = '',
   });
 
+  /// Throws [FormatException] on a malformed payload.
   factory MatchRequest.fromJson(Map<String, dynamic> json) {
-    final Rational baseAmount = fract2rat(json['base_amount_fraction']) ??
-        Rational.parse(json['base_amount'] ?? '0');
-    final Rational relAmount = fract2rat(json['rel_amount_fraction']) ??
-        Rational.parse(json['rel_amount'] ?? '0');
-
     return MatchRequest(
-      action: json['action'] ?? '',
-      base: json['base'] ?? '',
-      baseAmount: baseAmount,
-      destPubKey: json['dest_pub_key'] ?? '',
-      method: json['method'] ?? '',
-      rel: json['rel'] ?? '',
-      relAmount: relAmount,
-      senderPubkey: json['sender_pubkey'] ?? '',
-      uuid: json['uuid'] ?? '',
-      makerOrderUuid: json['maker_order_uuid'] ?? '',
-      takerOrderUuid: json['taker_order_uuid'] ?? '',
+      action: orderBoundedText(json['action'] ?? '', 'action'),
+      base: orderAssetSymbol(json['base'], 'base'),
+      baseAmount: orderRational(
+        json['base_amount_fraction'],
+        json['base_amount'],
+        'base_amount',
+      ),
+      destPubKey: orderBoundedText(json['dest_pub_key'] ?? '', 'dest_pub_key'),
+      method: orderBoundedText(json['method'] ?? '', 'method'),
+      rel: orderAssetSymbol(json['rel'], 'rel'),
+      relAmount: orderRational(
+        json['rel_amount_fraction'],
+        json['rel_amount'],
+        'rel_amount',
+      ),
+      senderPubkey:
+          orderBoundedText(json['sender_pubkey'] ?? '', 'sender_pubkey'),
+      uuid: orderUuid(json['uuid'], 'uuid', allowEmpty: true),
+      makerOrderUuid: orderUuid(
+        json['maker_order_uuid'],
+        'maker_order_uuid',
+        allowEmpty: true,
+      ),
+      takerOrderUuid: orderUuid(
+        json['taker_order_uuid'],
+        'taker_order_uuid',
+        allowEmpty: true,
+      ),
     );
   }
 

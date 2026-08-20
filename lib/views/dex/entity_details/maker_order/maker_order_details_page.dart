@@ -81,7 +81,12 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
   }
 
   Widget _buildCancelButton() {
-    if (!widget.makerOrderStatus.order.cancelable) {
+    // `order.cancelable` is a snapshot captured when this page was pushed;
+    // canCancelOrder reflects the live wallet's current order set.
+    if (!widget.makerOrderStatus.order.cancelable ||
+        !RepositoryProvider.of<TradingEntitiesBloc>(
+          context,
+        ).canCancelOrder(widget.makerOrderStatus.order.uuid)) {
       return const SizedBox.shrink();
     }
 
@@ -205,17 +210,23 @@ class _MakerOrderDetailsPageState extends State<MakerOrderDetailsPage> {
   }
 
   Future<void> _cancelOrder() async {
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
+    final uuid = widget.makerOrderStatus.order.uuid;
+    // Re-check rather than trusting the frame we were built with: the order
+    // may have filled or been cancelled elsewhere since then.
+    if (_inProgress || !tradingEntitiesBloc.canCancelOrder(uuid)) return;
+
     setState(() {
       _cancelingError = null;
       _inProgress = true;
     });
 
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
-    final String? error = await tradingEntitiesBloc
-        .cancelOrder(widget.makerOrderStatus.order.uuid);
+    final String? error = await tradingEntitiesBloc.cancelOrder(uuid);
 
     await Future<dynamic>.delayed(const Duration(milliseconds: 1000));
+    if (!mounted) return;
 
     setState(() => _inProgress = false);
 
