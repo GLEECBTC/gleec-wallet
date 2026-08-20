@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:equatable/equatable.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_wallet_session.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_repository.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_status.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_order_list/market_maker_bot_order_list_repository.dart';
@@ -25,9 +28,16 @@ class MarketMakerBotBloc
   MarketMakerBotBloc(
     MarketMakerBotRepository marketMaketBotRepository,
     MarketMakerBotOrderListRepository orderRepository,
+    KomodoDefiSdk kdfSdk,
   ) : _botRepository = marketMaketBotRepository,
       _orderRepository = orderRepository,
+      _kdfSdk = kdfSdk,
       super(const MarketMakerBotState.initial()) {
+    _authListener = _kdfSdk.auth.watchCurrentUser().listen(
+      (user) => _onWalletObservation(user?.walletId.compoundId),
+      onError: (_) => _onWalletObservation(null),
+      onDone: () => _onWalletObservation(null),
+    );
     on<MarketMakerBotStartRequested>(
       _onStartRequested,
       transformer: restartable(),
@@ -48,6 +58,53 @@ class MarketMakerBotBloc
 
   final MarketMakerBotRepository _botRepository;
   final MarketMakerBotOrderListRepository _orderRepository;
+  final KomodoDefiSdk _kdfSdk;
+  StreamSubscription<KdfUser?>? _authListener;
+  String? _walletId;
+
+  /// Bumped on every wallet observation, so a sign-out and sign-in into the
+  /// same wallet produces a session that compares unequal to the previous one.
+  int _walletGeneration = 0;
+
+  void _onWalletObservation(String? walletId) {
+    _walletId = walletId;
+    _walletGeneration++;
+  }
+
+  /// The wallet session a bot mutation should be bound to, or `null` when
+  /// signed out.
+  MarketMakerBotWalletSession? captureWalletSession() {
+    final walletId = _walletId;
+    if (walletId == null) return null;
+    return MarketMakerBotWalletSession(
+      walletId: walletId,
+      generation: _walletGeneration,
+    );
+  }
+
+  bool _isCurrentWalletSession(MarketMakerBotWalletSession session) {
+    return _walletId == session.walletId &&
+        _walletGeneration == session.generation;
+  }
+
+  Future<void> _cancelOrdersForSession(
+    List<TradeCoinPairConfig> tradePairs,
+  ) async {
+    final session = captureWalletSession();
+    await _orderRepository.cancelOrders(
+      tradePairs,
+      walletSession: session,
+      isSessionCurrent: session == null
+          ? null
+          : () => _isCurrentWalletSession(session),
+    );
+  }
+
+  @override
+  Future<void> close() {
+    _authListener?.cancel();
+    return super.close();
+  }
 
   Future<void> _onStartRequested(
     MarketMakerBotStartRequested event,
@@ -120,7 +177,7 @@ class MarketMakerBotBloc
 
       // Cancel the order immediately to provide feedback to the user that
       // the bot is being updated, since the restart process may take some time.
-      await _orderRepository.cancelOrders([event.tradePair]);
+      await _cancelOrdersForSession([event.tradePair]);
       final Stream<MarketMakerBotStatus> botStatusStream = _botRepository
           .updateOrder(event.tradePair, botId: event.botId);
       await for (final botStatus in botStatusStream) {
@@ -157,7 +214,7 @@ class MarketMakerBotBloc
     emit(const MarketMakerBotState.stopping());
 
     try {
-      await _orderRepository.cancelOrders(event.tradePairs.toList());
+      await _cancelOrdersForSession(event.tradePairs.toList());
 
       final botStatusStream = _botRepository.cancelOrders(
         event.tradePairs,

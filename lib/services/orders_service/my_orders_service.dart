@@ -51,9 +51,16 @@ class MyOrdersService {
     }
   }
 
-  Future<String?> cancelOrder(String uuid) async {
-    final Map<String, dynamic> response =
-        await _mm2Api.cancelOrder(CancelOrderRequest(uuid: uuid));
+  /// [beforeMutation] runs immediately before the request leaves the client and
+  /// may throw to abort it.
+  Future<String?> cancelOrder(
+    String uuid, {
+    Future<void> Function()? beforeMutation,
+  }) async {
+    final Map<String, dynamic> response = await _mm2Api.cancelOrder(
+      CancelOrderRequest(uuid: uuid),
+      beforeMutation: beforeMutation,
+    );
     return response['error'];
   }
 
