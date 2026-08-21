@@ -4,6 +4,7 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_request.dart';
@@ -33,10 +34,7 @@ class _ShowSwapDataState extends State<ShowSwapData> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSwitcherButton(),
-        if (_showData) ...{
-          const SizedBox(height: 20),
-          _buildData(),
-        },
+        if (_showData) ...{const SizedBox(height: 20), _buildData()},
         const SizedBox(height: 20),
         _buildExportButton(),
         const SizedBox(height: 20),
@@ -116,21 +114,64 @@ class _ShowSwapDataState extends State<ShowSwapData> {
   }
 
   /// Fetches all raw swap data and writes it to a JSON file.
+  ///
+  /// Covers both swap kinds. `my_recent_swaps` knows nothing about routed
+  /// swaps, so an export built from it alone arrives at support with the
+  /// routed swap the ticket is about missing entirely.
   Future<void> _exportSwapData() async {
     setState(() => _isDownloading = true);
     try {
       final mm2Api = RepositoryProvider.of<Mm2Api>(context);
-      final response = await mm2Api.getRawSwapData(MyRecentSwapsRequest());
+      final atomic = await mm2Api.getRawSwapData(MyRecentSwapsRequest());
+
+      final bundle = <String, dynamic>{
+        'exported_at': DateTime.now().toUtc().toIso8601String(),
+        'atomic': jsonDecode(atomic),
+        'routed': await _routedSwapData(),
+      };
+
       // Use ISO timestamp so each file is unique and sorted chronologically.
       final fileName =
           'swap_data_${DateTime.now().toUtc().toIso8601String()}.json';
       await FileLoader.fromPlatform().save(
         fileName: fileName,
-        data: response,
+        data: jsonEncode(bundle),
         type: LoadFileType.text,
       );
     } finally {
       if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  /// Routed swaps for the export, or a recorded reason they are absent.
+  ///
+  /// A failure here must not lose the atomic half of the bundle, and it must
+  /// not look like the user simply has no routed swaps — support would draw
+  /// the wrong conclusion from an empty list.
+  Future<Object> _routedSwapData() async {
+    try {
+      final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+      final entries = await sdk.routedSwaps.history(limit: 200);
+      return [
+        for (final entry in entries)
+          {
+            'uuid': entry.uuid,
+            'phase': entry.phase.name,
+            'raw_state': entry.rawState,
+            'outcome': entry.receipt?.outcome.wire,
+            'received_amount': entry.receipt?.amount.toString(),
+            'received_token': entry.receipt?.tokenLabel,
+            'failure': entry.failure?.kind.name,
+            'failure_message': entry.failure?.message,
+            'funds_untouched': entry.failure?.fundsUntouched,
+            'approval_tx_hash': entry.approvalTxHash,
+            'source_tx_hash': entry.sourceTxHash,
+            'destination_tx_hash': entry.destinationTxHash,
+            'explorer_url': entry.explorerUrl,
+          },
+      ];
+    } on Object catch (error) {
+      return {'unavailable': error.toString()};
     }
   }
 

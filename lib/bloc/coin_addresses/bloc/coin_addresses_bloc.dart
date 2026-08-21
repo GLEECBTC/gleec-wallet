@@ -29,6 +29,21 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   int _pubkeysSubscriptionGeneration = 0;
   Timer? _gaslessReceiveRefreshTimer;
   int _gaslessReceiveEvaluationGeneration = 0;
+
+  /// Owner of [CoinAddressesState.status], [CoinAddressesState.addresses], and
+  /// [CoinAddressesState.cantCreateNewAddressReasons].
+  ///
+  /// Deliberately separate from [_gaslessReceiveEvaluationGeneration]. Only
+  /// [_onAddressesSubscriptionRequested], [_onPubkeysUpdated], and
+  /// [_onPubkeysSubscriptionFailed] load the address list, and the first two
+  /// emit `submitting` with an empty list before their first await. The
+  /// GasFree-only handlers - the 30-second refresh and the foreground/
+  /// background transition - legitimately supersede an in-flight *GasFree*
+  /// evaluation, but they never emit `status`, so sharing one counter meant a
+  /// timer tick landing mid-load aborted the load and left the coin page's
+  /// address list pinned under a spinner (and the create-address button
+  /// without its disabled reasons) until the page was reopened.
+  int _addressesLoadGeneration = 0;
   String? _lastGaslessReceiveAnalyticsKey;
   bool _lastLoggedGaslessReceiveWasReady = false;
   bool _isForeground = true;
@@ -141,6 +156,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     Emitter<CoinAddressesState> emit,
   ) async {
     final evaluationGeneration = ++_gaslessReceiveEvaluationGeneration;
+    final addressesLoadGeneration = ++_addressesLoadGeneration;
     _pubkeysSubscriptionGeneration += 1;
     final previousPubkeysSubscription = _pubkeysSub;
     _pubkeysSub = null;
@@ -180,8 +196,15 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       }
       final isHdWallet = currentUser.isHd;
       final walletPubkeyHash = currentUser.walletId.pubkeyHash?.trim();
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
+      if (emit.isDone || addressesLoadGeneration != _addressesLoadGeneration) {
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration) {
+        // A newer GasFree evaluation owns the gas-free fields and will emit a
+        // terminal one. Nothing else owns `status`, so land the address load
+        // rather than leaving `submitting` behind.
+        _emitAddressLoadSuccess(emit, addresses: addresses, reasons: reasons);
+        await _startWatchingPubkeys(asset);
         return;
       }
       if (asset.isTronGaslessReceiveConfiguredAsset) {
@@ -204,12 +227,16 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         isHdWallet: isHdWallet,
         isPrimarySoftwareWallet: _isPrimarySoftwareWallet(currentUser),
       );
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
+      if (emit.isDone || addressesLoadGeneration != _addressesLoadGeneration) {
         return;
       }
       if (!await _isCurrentWallet(currentUser.walletId)) {
         add(const CoinAddressesSubscriptionRequested());
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration) {
+        _emitAddressLoadSuccess(emit, addresses: addresses, reasons: reasons);
+        await _startWatchingPubkeys(asset);
         return;
       }
       emit(
@@ -232,11 +259,13 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
 
       await _startWatchingPubkeys(asset);
     } catch (e) {
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
+      if (emit.isDone || addressesLoadGeneration != _addressesLoadGeneration) {
         return;
       }
-      final failClosed = _shouldFailClosedGaslessReceive;
+      final ownsGaslessEvaluation =
+          evaluationGeneration == _gaslessReceiveEvaluationGeneration;
+      final failClosed =
+          ownsGaslessEvaluation && _shouldFailClosedGaslessReceive;
       const unavailable = _ResolvedGaslessReceive(
         status: GaslessReceiveStatus.temporarilyUnavailable,
         reason: GaslessReceiveReasonCode.accountStatusUnavailable,
@@ -257,8 +286,10 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
               : null,
           verifiedGasfreeAddress: failClosed ? () => null : null,
           gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
-          gaslessAccountStatus: () => null,
-          gaslessAccountStatusObservedAt: () => null,
+          gaslessAccountStatus: ownsGaslessEvaluation ? () => null : null,
+          gaslessAccountStatusObservedAt: ownsGaslessEvaluation
+              ? () => null
+              : null,
         ),
       );
       if (failClosed) {
@@ -266,6 +297,28 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         _scheduleGaslessReceiveRefresh(unavailable);
       }
     }
+  }
+
+  /// Lands the address-list half of a load whose GasFree evaluation was
+  /// superseded mid-flight.
+  ///
+  /// See [_addressesLoadGeneration] for why these three fields need an owner
+  /// of their own: the superseding handler emits a terminal GasFree state but
+  /// never a terminal [FormStatus], so without this the `submitting` set
+  /// before the first await would never be cleared.
+  void _emitAddressLoadSuccess(
+    Emitter<CoinAddressesState> emit, {
+    required List<PubkeyInfo> addresses,
+    required Set<CantCreateNewAddressReason>? reasons,
+  }) {
+    emit(
+      state.copyWith(
+        status: () => FormStatus.success,
+        addresses: () => addresses,
+        cantCreateNewAddressReasons: () => reasons,
+        errorMessage: () => null,
+      ),
+    );
   }
 
   void _onHideZeroBalanceChanged(
@@ -285,6 +338,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       return;
     }
     final evaluationGeneration = ++_gaslessReceiveEvaluationGeneration;
+    final addressesLoadGeneration = ++_addressesLoadGeneration;
     try {
       final asset = getSdkAsset(sdk, assetId);
       final revokeGasless =
@@ -325,12 +379,18 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       final addresses = walletAddresses.addresses;
       final currentUser = walletAddresses.user;
       final reasons = await asset.getCantCreateNewAddressReasons(sdk);
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
+      if (emit.isDone || addressesLoadGeneration != _addressesLoadGeneration) {
         return;
       }
       if (!await _isCurrentWallet(currentUser.walletId)) {
         add(const CoinAddressesSubscriptionRequested());
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration) {
+        // A newer GasFree evaluation owns the gas-free fields and will emit a
+        // terminal one. Nothing else owns `status`, so land the address load
+        // rather than leaving `submitting` behind.
+        _emitAddressLoadSuccess(emit, addresses: addresses, reasons: reasons);
         return;
       }
       final gaslessReceive = await _resolveGaslessReceive(
@@ -339,12 +399,15 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         isHdWallet: currentUser.isHd,
         isPrimarySoftwareWallet: _isPrimarySoftwareWallet(currentUser),
       );
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
+      if (emit.isDone || addressesLoadGeneration != _addressesLoadGeneration) {
         return;
       }
       if (!await _isCurrentWallet(currentUser.walletId)) {
         add(const CoinAddressesSubscriptionRequested());
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration) {
+        _emitAddressLoadSuccess(emit, addresses: addresses, reasons: reasons);
         return;
       }
       emit(
@@ -367,11 +430,13 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       _logGaslessReceiveDecision(gaslessReceive);
       _scheduleGaslessReceiveRefresh(gaslessReceive);
     } catch (e) {
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
+      if (emit.isDone || addressesLoadGeneration != _addressesLoadGeneration) {
         return;
       }
-      final failClosed = _shouldFailClosedGaslessReceive;
+      final ownsGaslessEvaluation =
+          evaluationGeneration == _gaslessReceiveEvaluationGeneration;
+      final failClosed =
+          ownsGaslessEvaluation && _shouldFailClosedGaslessReceive;
       const unavailable = _ResolvedGaslessReceive(
         status: GaslessReceiveStatus.temporarilyUnavailable,
         reason: GaslessReceiveReasonCode.accountStatusUnavailable,
@@ -379,6 +444,11 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       );
       emit(
         state.copyWith(
+          // Without this the handler's own pre-emit `submitting` survived the
+          // failure, so the addresses section rendered a spinner forever and
+          // the error below never reached the user - `ErrorDisplay` is gated
+          // on `FormStatus.failure`.
+          status: () => FormStatus.failure,
           addresses: () => const <PubkeyInfo>[],
           cantCreateNewAddressReasons: () => null,
           newAddressState: () => null,
@@ -391,8 +461,10 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
               : null,
           verifiedGasfreeAddress: failClosed ? () => null : null,
           gaslessReceiveWalletPubkeyHash: failClosed ? () => null : null,
-          gaslessAccountStatus: () => null,
-          gaslessAccountStatusObservedAt: () => null,
+          gaslessAccountStatus: ownsGaslessEvaluation ? () => null : null,
+          gaslessAccountStatusObservedAt: ownsGaslessEvaluation
+              ? () => null
+              : null,
         ),
       );
       if (failClosed) {
@@ -907,6 +979,9 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       return;
     }
     _gaslessReceiveEvaluationGeneration += 1;
+    // This emits a terminal `status`, so it must also supersede any in-flight
+    // address load rather than let one land on top of the failure.
+    _addressesLoadGeneration += 1;
     final failClosed = _shouldFailClosedGaslessReceive;
     const unavailable = _ResolvedGaslessReceive(
       status: GaslessReceiveStatus.temporarilyUnavailable,
@@ -1078,6 +1153,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
   @override
   Future<void> close() async {
     _gaslessReceiveEvaluationGeneration += 1;
+    _addressesLoadGeneration += 1;
     _pubkeysSubscriptionGeneration += 1;
     _gaslessReceiveRefreshTimer?.cancel();
     _gaslessReceiveRefreshTimer = null;

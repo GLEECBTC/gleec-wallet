@@ -30,15 +30,13 @@ void testCoinSortOrder() {
       List<Coin> coins, {
       Map<String, double> prices = const {},
       Map<String, double> balances = const {},
-    }) =>
-        sortByPriorityAndBalance(coins, _fakeSdk(prices, balances));
+    }) => sortByPriorityAndBalance(coins, _fakeSdk(prices, balances));
 
     List<Coin> sortFiat(
       List<Coin> coins, {
       Map<String, double> prices = const {},
       Map<String, double> balances = const {},
-    }) =>
-        sortFiatBalance(coins, _fakeSdk(prices, balances));
+    }) => sortFiatBalance(coins, _fakeSdk(prices, balances));
 
     List<String> tickers(List<Coin> coins) => coins.map((c) => c.abbr).toList();
 
@@ -91,10 +89,10 @@ void testCoinSortOrder() {
       // price is not. Those coins must fall through to the priority branch
       // rather than be ordered by a garbage number.
       final coins = [_coin('AAA', priority: 1), _coin('BBB', priority: 9)];
-      expect(
-        tickers(sortPriority(coins, balances: {'AAA': 10, 'BBB': 10})),
-        ['BBB', 'AAA'],
-      );
+      expect(tickers(sortPriority(coins, balances: {'AAA': 10, 'BBB': 10})), [
+        'BBB',
+        'AAA',
+      ]);
     });
 
     test('a zero balance short-circuits to zero before the price is read', () {
@@ -165,10 +163,10 @@ void testCoinSortOrder() {
         // Both price to zero USD, so the tie-break is the underlying balance -
         // a second pair of SDK reads per comparison in the original.
         final coins = [_coin('AAA'), _coin('BBB')];
-        expect(
-          tickers(sortFiat(coins, balances: {'AAA': 1, 'BBB': 3})),
-          ['BBB', 'AAA'],
-        );
+        expect(tickers(sortFiat(coins, balances: {'AAA': 1, 'BBB': 3})), [
+          'BBB',
+          'AAA',
+        ]);
       });
 
       test('parents still come first', () {
@@ -194,11 +192,10 @@ void main() => testCoinSortOrder();
 KomodoDefiSdk _fakeSdk(
   Map<String, double> prices,
   Map<String, double> balances,
-) =>
-    _FakeSdk(
-      balanceManager: _FakeBalanceManager(balances),
-      marketDataManager: _FakeMarketDataManager(prices),
-    );
+) => _FakeSdk(
+  balanceManager: _FakeBalanceManager(balances),
+  marketDataManager: _FakeMarketDataManager(prices),
+);
 
 Coin _coin(String ticker, {int priority = 0, Coin? parent}) {
   final asset = Asset.fromJson({
@@ -216,10 +213,10 @@ Coin _coin(String ticker, {int priority = 0, Coin? parent}) {
     'protocol': {'type': 'UTXO'},
   }, knownIds: const {});
   return asset.toCoin().copyWith(
-        state: CoinState.active,
-        priority: priority,
-        parentCoin: parent,
-      );
+    state: CoinState.active,
+    priority: priority,
+    parentCoin: parent,
+  );
 }
 
 class _FakeSdk implements KomodoDefiSdk {
