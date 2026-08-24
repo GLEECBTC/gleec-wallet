@@ -452,6 +452,33 @@ Green after the roll, for comparison:
 | `sdk/packages/komodo_wallet_build_transformer` | 113 passed |
 | `sdk/packages/komodo_defi_rpc_methods` | 236 passed |
 | `sdk/packages/komodo_defi_sdk` | 851 passed, 1 skipped |
+| `test_units/main.dart` (4 TRON_GASLESS defines) | 603 passed, 3 skipped |
+| `.github/scripts/test_verify_gasfree_preview_provenance.sh` | passed |
+
+Builds, all verified to carry `3.1.0-beta_f3efd2c` and **no** `web3_pool` symbol:
+
+| target | result | artefact checked |
+|---|---|---|
+| web `--release` | built | `web/kdf/kdf/bin/.api_last_updated_web` names `kdf_f3efd2c-wasm.zip` |
+| Android `apk --debug` | built | `lib/arm64-v8a/libkomodo_defi_framework.so` |
+| iOS device `--no-codesign` | built | `Frameworks/komodo_defi_framework.framework` |
+| macOS, unsigned | built | `Helpers/kdf` inside the app bundle |
+| macOS, signed | **not verified here** | no local provisioning profile for `com.GleecDEX.wallet` |
+| iOS simulator | **cannot build** | pre-existing, see below |
+| Windows / Linux | not attempted | no host available |
+
+> **The iOS simulator has never been buildable from the published artefact**, and
+> this is not a consequence of the roll. `kdf_f3efd2c-ios-aarch64.zip` and
+> `kdf_538724e-ios-aarch64.zip` are byte-for-byte equivalent in shape: a single
+> non-fat `arm64` `libkdf.a`, `platform 2` (iOS device), `minos 26.5`, 53
+> members. A simulator build fails at link with *"Building for 'iOS-simulator',
+> but linking in object file ... built for 'iOS'"*. Device builds are fine.
+> Fixing it needs a simulator slice in the KDF iOS release job.
+>
+> **The first `flutter build web` after a pin roll fails at `copyAssets`** and the
+> second succeeds — the new KDF runtime and coin assets land during the first
+> pass. This is why `.github/actions/generate-assets` runs a dry-run build and
+> then the real one. Do not diagnose it as a regression.
 
 ---
 
