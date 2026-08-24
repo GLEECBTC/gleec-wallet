@@ -142,6 +142,12 @@ jobs:
           KDF_TEST_SEED: ${{ secrets.KDF_TEST_SEED }}
           # Names which endpoint refused what, so a red run says whether the
           # cause was rate limiting or the node being down.
+          #
+          # INERT against the currently pinned KDF (main, f3efd2c): the
+          # telemetry module that reads it lives in the unmerged perf stack
+          # (kdf-internal PR #19/#20). Kept set so it starts working again the
+          # moment the pin carries that stack; until then a red run gives no
+          # per-endpoint attribution. See docs/KDF_PERF_STACK_DESCOPE.md.
           KDF_EVM_RPC_TRACE: "1"
         run: |
           if [ -z "$KDF_TEST_SEED" ]; then
@@ -171,8 +177,12 @@ jobs:
               echo
               echo ":x: **GLEEC did not activate** (outcome: \`$OUTCOME\`)."
               echo "This is on every login - GLEEC is in \`enabledByDefaultCoins\`."
-              echo "Check the step log for \`evm_rpc_failover\` and \`evm_rpc_backoff\`"
-              echo "lines: \`kind=http_429\` with no backoff means the retry"
-              echo "regressed, and \`evm_rpc_exhausted\` means it gave up."
+              echo "Read the activation error in the step log above."
+              echo "Per-endpoint attribution (\`evm_rpc_failover\`,"
+              echo "\`evm_rpc_backoff\`, \`evm_rpc_exhausted\`) is **not**"
+              echo "available on the pinned KDF: that telemetry lives in"
+              echo "kdf-internal PR #19/#20, still unmerged. GLEEC has one node,"
+              echo "so on this pin a rate-limited response and a dead node look"
+              echo "the same. See docs/KDF_PERF_STACK_DESCOPE.md."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

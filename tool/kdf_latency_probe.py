@@ -1517,12 +1517,16 @@ def main() -> int:
         action="store_true",
         help=(
             "Start KDF with p2p and seed nodes instead of disable_p2p. "
-            "This used to be REQUIRED for any set containing TRX, which "
-            "panicked at mm2_p2p/src/p2p_ctx.rs:42 (Option::unwrap on None) "
-            "with p2p off and took the whole RPC service down. Fixed in KDF "
-            "ed8de236b; TRX HD activation has since been measured repeatedly "
-            "with p2p off. Still needed for anything that actually uses the "
-            "network - swaps, peer health, proxy-signed gas-free relays."
+            "REQUIRED for any set containing TRX or NFT against the currently "
+            "pinned KDF (main, f3efd2c): mm2_p2p/src/p2p_ctx.rs:42 unwraps the "
+            "P2P context, and v2_activation.rs:1217 (build_tron_api_client) "
+            "and :686 (initialize_global_nft) reach it unconditionally, so "
+            "with p2p off the whole RPC service goes down. The non-panicking "
+            "try_fetch_from_mm_arc landed in ed8de236b / d2c16fc29, which is "
+            "kdf-internal PR #18 and still unmerged - see "
+            "docs/KDF_PERF_STACK_DESCOPE.md. Also needed for anything that "
+            "actually uses the network - swaps, peer health, proxy-signed "
+            "gas-free relays."
         ),
     )
     parser.add_argument(

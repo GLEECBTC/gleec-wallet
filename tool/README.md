@@ -117,9 +117,10 @@ config has no `ws_url` at all, and the probe mirrors that. Omitting it produces 
 connection failure that looks like a protocol failure.
 
 **`--p2p` and TRX.** Against a KDF *without* the `perf/hd-scan-concurrency`
-panic fix, any set containing TRX needs `--p2p`. With `disable_p2p: true` (the
-default here, since a balance-only harness has no use for the DEX network) TRX
-activation panicked inside KDF:
+panic fix — **which includes the currently pinned `main` / `f3efd2c`** — any set
+containing TRX or NFT needs `--p2p`. With `disable_p2p: true` (the default here,
+since a balance-only harness has no use for the DEX network) TRX activation
+panics inside KDF:
 
 ```
 panicked at mm2src/mm2_p2p/src/p2p_ctx.rs:42:14:
@@ -130,11 +131,22 @@ The panic aborts *that request* - the process survives and keeps serving, which
 the 500 body ("The RPC service aborted without responding.") badly misdescribes.
 The probe still fails the scenario, because the 500 is not JSON.
 
-Fixed KDF-side: `P2PContext::try_fetch_from_mm_arc` makes the keypair optional
-for the three call sites that only need it for proxy signing, so TRX now
-activates with p2p off. Keep `--p2p` for older binaries. Note that p2p changes
+The KDF-side fix — `P2PContext::try_fetch_from_mm_arc`, making the keypair
+optional for the call sites that only need it for proxy signing — is
+`ed8de236b` / `d2c16fc29`, **kdf-internal PR #18, still unmerged**. `main` calls
+`fetch_from_mm_arc` unconditionally from `v2_activation.rs:1217`
+(`build_tron_api_client`), `:686` (`initialize_global_nft`) and
+`eth/tron/gasfree/client.rs`, so `--p2p` is **required**, not optional, on the
+current pin. See `docs/KDF_PERF_STACK_DESCOPE.md` §2.4. Note that p2p changes
 the startup profile, so rows measured with it are not directly comparable to
 rows without.
+
+`tool/kdf_rpc_burst_bench.py` hardcodes `disable_p2p: True` (`:643`) with no
+`--p2p` escape, but it is **unaffected**: none of its six `--scenario` values
+activates TRX (`:897-905` — GLEEC, GLEEC+GRC-20s, ETH+2 ERC-20, and the
+`app-login-*` variants of each). Its `DEFAULT_COINS` list (`:77-86`) does name
+`TRX` and `USDT-TRC20`, but nothing reads it — it is unused. Adding a TRX
+scenario would need the escape first.
 
 **Safety.** The seed comes from `KDF_TEST_SEED` only, never an argument to this
 script, so it stays out of your shell history.
