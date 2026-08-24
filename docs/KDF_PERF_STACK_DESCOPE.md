@@ -342,6 +342,38 @@ These are things the roll gives up where nothing client-side can or should
 compensate. They are listed so that a future investigation does not spend time
 rediscovering them as bugs.
 
+> **First, what the roll does *not* give up.** The wallet-load work on this
+> branch has two halves and only one of them lived in KDF. Eight client-side
+> commits are independent of the pin and still ship: `28122573` (bound the
+> repeating HD gap scan and scale its limit), `8c1fa31f` (skip the redundant
+> post-activation scan), `3fc991a8` (cut identity RPCs, paint balances from
+> storage), `935552af` (yield cached transactions before activation),
+> `99312d68`, `1fbbc8ba` in the SDK, plus `c5aab12fe` and `aa78d4510` in the app.
+>
+> The gap-limit reduction is the load-bearing one, and it attacks precisely what
+> `main` is slow at. `HdGapLimit.resolve` (`activation_manager.dart:562`,
+> `pubkey_manager.dart:395`) sends **3**, or **1** on a newly generated wallet's
+> first sign-in, against KDF's default of 20. Measured on `bd413dc` — the
+> sequential KDF that `main` matches for this path — single-coin KMD HD
+> activation (`docs/KDF_LATENCY_REPORT.md:200-206`):
+>
+> | `gap_limit` | activate |
+> |---|---:|
+> | 20 (KDF default) | 46.9s |
+> | 3 (what we send) | ~13.1s, modelled at the measured ~2.0s/gap unit |
+> | 1 (generated, first sign-in) | 9.1s |
+> | `do_not_scan` (floor) | 2.0s |
+>
+> ~3.6x off a single-coin HD activation from the client alone. The perf stack
+> reached 6.1s at gap 20; the client-side change covers most of that distance on
+> `main` without it. **Trezor is exempt** (`hardware = 20`), and **TRX is
+> exempt** because `TrxWithTokensActivationParams` sends no `gap_limit` at all —
+> see §8.1.
+>
+> So: slower than the perf-stack builds, materially faster than the
+> pre-optimisation baseline, and first paint is better regardless of KDF because
+> balances and history now render from storage rather than waiting on activation.
+
 | Regression | Mechanism | Returns with |
 |---|---|---|
 | EVM RPCs serialize, one in flight per coin | `eth.rs:1124` `web3_instances: AsyncMutex<Vec<Web3Instance>>`, guard held across the round trip at `eth_rpc.rs:26-27` | #19 |
