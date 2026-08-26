@@ -361,8 +361,10 @@ class _MyAppViewState extends State<_MyAppView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    _precacheCoinIcons(sdk).ignore();
+    if (isIconPrecachingEnabled) {
+      final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+      _precacheCoinIcons(sdk).ignore();
+    }
   }
 
   /// Hides the native app launch loader. Currently only implemented for web.
