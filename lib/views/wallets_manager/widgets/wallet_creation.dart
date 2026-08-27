@@ -97,9 +97,14 @@ class _WalletCreationState extends State<WalletCreation> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.action == WalletsManagerAction.create
-                      ? LocaleKeys.walletCreationTitle.tr()
-                      : LocaleKeys.walletImportTitle.tr(),
+                  // Keyed on `import` rather than `create` so the neutral
+                  // `none` state - which this widget also renders, including
+                  // for the frame where the dialog is dismissing after a
+                  // successful create - reads as "Create wallet" instead of
+                  // briefly flipping to "Import wallet".
+                  widget.action == WalletsManagerAction.import
+                      ? LocaleKeys.walletImportTitle.tr()
+                      : LocaleKeys.walletCreationTitle.tr(),
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontSize: 18),

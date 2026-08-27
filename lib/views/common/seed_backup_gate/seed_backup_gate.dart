@@ -49,7 +49,8 @@ Future<bool> ensureSeedBackedUp(
   required SeedBackupGateReason reason,
   bool isTestCoin = false,
 }) async {
-  final wallet = context.read<AuthBloc>().state.currentUser?.wallet;
+  final authBloc = context.read<AuthBloc>();
+  final wallet = authBloc.state.currentUser?.wallet;
   if (!seedBackupGateRequired(wallet: wallet, isTestCoin: isTestCoin)) {
     return true;
   }
@@ -59,17 +60,29 @@ Future<bool> ensureSeedBackedUp(
     context: context,
     width: 420,
     barrierDismissible: false,
-    child: _SeedBackupGateDialog(wallet: wallet, reason: reason),
+    child: _SeedBackupGateDialog(
+      wallet: wallet,
+      reason: reason,
+      // Passed in rather than read off the dialog's own context: AppDialog
+      // pushes onto the root navigator, which is not guaranteed to sit under
+      // the same provider scope as the caller.
+      authBloc: authBloc,
+    ),
   );
 
   return proceed ?? false;
 }
 
 class _SeedBackupGateDialog extends StatefulWidget {
-  const _SeedBackupGateDialog({required this.wallet, required this.reason});
+  const _SeedBackupGateDialog({
+    required this.wallet,
+    required this.reason,
+    required this.authBloc,
+  });
 
   final Wallet wallet;
   final SeedBackupGateReason reason;
+  final AuthBloc authBloc;
 
   @override
   State<_SeedBackupGateDialog> createState() => _SeedBackupGateDialogState();
@@ -93,6 +106,19 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
     Navigator.of(context).pop(proceed);
   }
 
+  /// Declines the reveal *and* clears the way to actually restore.
+  ///
+  /// You cannot import a recovery phrase while signed into another wallet, so
+  /// stopping at "declined" left the user stranded on a coin page with no
+  /// address and no next step - the label promised an intent the button did
+  /// not deliver. Signing out is non-destructive (the wallet stays in the
+  /// list) and `MainLayout`'s auth listener routes back to the wallet page,
+  /// where Connect wallet opens the entry screen with the restore row on it.
+  void _restoreInstead() {
+    _close(false);
+    widget.authBloc.add(const AuthSignOutRequested());
+  }
+
   void _continueAnyway() {
     _acknowledgedThisSession.add(widget.wallet.name);
     _close(true);
@@ -114,7 +140,7 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
         isGenerated: seedWasGeneratedForUser(widget.wallet),
         reason: widget.reason,
         onBackUp: _startBackup,
-        onImportInstead: () => _close(false),
+        onImportInstead: _restoreInstead,
         onContinueAnyway: _continueAnyway,
       );
     }

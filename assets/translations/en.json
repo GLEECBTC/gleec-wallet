@@ -464,7 +464,7 @@
   "seedBackupGateGeneratedBody": "This wallet's recovery phrase was created for you and has never been shown. Anything sent to this address can only be recovered with those words \u2014 not with your password.",
   "seedBackupGateBody": "Save your recovery phrase before you receive funds. It is the only way to recover this wallet \u2014 your password will not do it.",
   "seedBackupGateBackUpNow": "Back up now",
-  "seedBackupGateImportInstead": "I meant to restore an existing wallet",
+  "seedBackupGateImportInstead": "Sign out and restore a different wallet",
   "seedBackupGateContinueAnyway": "Continue without backing up",
   "seedBackupGateShowAddress": "Show my address",
   "sendToAnalytics": "Send anonymous data to analytics",
