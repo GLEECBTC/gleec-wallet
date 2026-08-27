@@ -5,7 +5,7 @@
 (KDF `d56a7bc`)
 **Repo:** `gleec-wallet-kdf-integrations`, branch `add/gas-free-tron`
 **Host:** macOS 25.5.0, arm64
-**Raw data:** [`docs/assets/kdf_rpc_burst_data/`](assets/kdf_rpc_burst_data/)
+**Raw data:** regenerate with `tool/kdf_rpc_burst_bench.py` (writes `out/`), or retrieve the original captures from git history at `ca0212a1b31b` - see [`assets/kdf_rpc_burst_data/README.md`](assets/kdf_rpc_burst_data/README.md).
 
 > **Gap-limit caveat.** The bench here runs at `gap_limit: 20`, but the shipped
 > SDK now sends `software = 3` / `newlyGeneratedFirstSignIn = 1`
