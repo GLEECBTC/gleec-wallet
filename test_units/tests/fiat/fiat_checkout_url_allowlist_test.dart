@@ -196,6 +196,74 @@ void main() {
       expect(widgetSource, contains('_komodoIsAllowedMessageOrigin'));
     });
   });
+  group('firebase.json:', () {
+    // The wrapper page's own allowlist is the fix; these headers are the
+    // hardening layered on top. They only exist on a site whose hosting config
+    // declares them, and dex.gleec.com is a different Firebase project from
+    // the RC site, so the two configs are easy to let drift apart.
+    late List<Map<String, dynamic>> hostingConfigs;
+
+    setUpAll(() {
+      final file = File('firebase.json');
+      expect(file.existsSync(), isTrue, reason: 'run from the repository root');
+
+      // firebase-tools parses firebase.json as JSON-with-comments.
+      final withoutComments = file
+          .readAsStringSync()
+          .split('\n')
+          .map((line) => line.trimLeft().startsWith('//') ? '' : line)
+          .join('\n');
+
+      final hosting =
+          (jsonDecode(withoutComments) as Map<String, dynamic>)['hosting'];
+      hostingConfigs = (hosting as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+    });
+
+    test('declares both the RC site and the production site', () {
+      expect(
+        hostingConfigs.map((config) => config['site']),
+        containsAll(<String>['walletrc', 'gleec-wallet-official']),
+        reason: 'dex.gleec.com is served by the gleec-wallet-official site; a '
+            'config that does not declare it cannot give it these headers',
+      );
+    });
+
+    test('gives every site the same security headers', () {
+      final headerSets = hostingConfigs
+          .map((config) => jsonEncode(config['headers']))
+          .toSet();
+
+      expect(
+        headerSets,
+        hasLength(1),
+        reason: 'the sites must not drift apart, or production silently ends '
+            'up with weaker headers than the release candidate',
+      );
+    });
+
+    test('sets the headers the deploy verifier checks for', () {
+      final keys = (hostingConfigs.first['headers'] as List<dynamic>)
+          .cast<Map<String, dynamic>>()
+          .expand((entry) => (entry['headers'] as List<dynamic>)
+              .cast<Map<String, dynamic>>())
+          .map((header) => header['key'] as String)
+          .toList();
+
+      // Kept in step with tool/verify_web_deploy.sh.
+      expect(
+        keys,
+        containsAll(<String>[
+          'Content-Security-Policy',
+          'X-Frame-Options',
+          'X-Content-Type-Options',
+          'Referrer-Policy',
+          'Permissions-Policy',
+          'Cache-Control',
+        ]),
+      );
+    });
+  });
 }
 
 /// Reads a `var <name> = ['a', 'b'];` array out of the widget's inline script.
