@@ -36,7 +36,7 @@ via the CNAME.
 one project, so no CI job that deploys the RC can ever also deploy production.
 Merging to `dev` deploys `walletrc` and nothing else — a fix reaches users only
 when the release master deploys production by hand. At the time of writing
-production is two minor versions and four months behind `walletrc`.
+production is two patch versions and four months behind `walletrc`.
 
 **The `main` -> `prodrc` deploy step has never run.**
 `.github/workflows/firebase-hosting-merge.yml` triggers on `push` to `dev` only,

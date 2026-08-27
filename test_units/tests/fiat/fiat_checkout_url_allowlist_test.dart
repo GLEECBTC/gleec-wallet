@@ -109,7 +109,9 @@ void main() {
   });
 
   group('fiatWrapperPageUrl:', () {
-    const providerUrl = 'https://komodo.banxa.com/?orderId=abc&id=a+b/c';
+    // Chosen so that its standard-base64 encoding contains both `+` and `/`,
+    // which is what makes the escaping below observable at all.
+    const providerUrl = 'https://komodo.banxa.com/checkout?orderId=aa~bb?ref=x';
 
     test('refuses to wrap a URL that is not an approved provider', () {
       expect(
@@ -122,18 +124,40 @@ void main() {
       );
     });
 
-    test('encodes the provider URL so the wrapper can decode it again', () {
+    test('escapes the payload so URLSearchParams cannot corrupt it', () {
+      final wrapped = BaseFiatProvider.fiatWrapperPageUrl(providerUrl);
+      final rawQuery = Uri.parse(wrapped).query;
+
+      expect(base64.encode(utf8.encode(providerUrl)), contains('+'));
+      // The wrapper page reads this parameter with URLSearchParams, which
+      // decodes a literal `+` in the query as a space. Escaped, it survives.
+      expect(
+        rawQuery,
+        isNot(contains('+')),
+        reason: 'a literal `+` on the wire is read back as a space',
+      );
+    });
+
+    test('stays decodable by the wrapper page already deployed to users', () {
+      // Desktop and mobile builds fetch the wrapper from getOriginUrl(), which
+      // is production, which is deployed by hand and lags this code. The page
+      // sitting there calls `atob` on the URLSearchParams value with no
+      // normalisation, and `atob` rejects base64url's `-` and `_`. Sending
+      // anything it cannot decode turns the buy flow into a blank page for
+      // every already-shipped native client until production is redeployed.
       final wrapped = BaseFiatProvider.fiatWrapperPageUrl(providerUrl);
       final param = Uri.parse(wrapped).queryParameters['fiatUrl'];
 
       expect(param, isNotNull);
-      // A `+` in the query string is decoded as a space by the wrapper page's
-      // URLSearchParams, so standard base64 must not be used here.
-      expect(param, isNot(contains('+')));
       expect(
-        utf8.decode(base64Url.decode(param!)),
+        param,
+        isNot(matches(RegExp('[-_]'))),
+        reason: 'base64url is not decodable by the deployed wrapper page',
+      );
+      expect(
+        utf8.decode(base64.decode(param!)),
         providerUrl,
-        reason: 'the wrapper page must recover the exact provider URL',
+        reason: 'the deployed wrapper page must recover the exact provider URL',
       );
     });
   });
@@ -192,9 +216,33 @@ void main() {
     });
 
     test('does not broadcast provider messages with a wildcard origin', () {
-      expect(widgetSource, isNot(contains('postMessage(messageString, "*")')));
+      // Quote-agnostic on purpose: the realistic regression is someone
+      // debugging a broken relay and reaching for `'*'`, which a check pinned
+      // to the pre-fix file's double-quoted spelling would not see.
+      expect(
+        _wildcardPostMessage.hasMatch(widgetSource),
+        isFalse,
+        reason: 'a wildcard target origin hands the provider payload to '
+            'whatever origin is listening',
+      );
       expect(widgetSource, contains('_komodoIsAllowedMessageOrigin'));
     });
+  });
+
+  test('no changed web page broadcasts with a wildcard target origin', () {
+    // The other two pages this change touched have no tests of their own.
+    for (final path in const <String>[
+      'assets/web_pages/checkout_status_redirect.html',
+      'assets/web_pages/bitrefill_widget.js',
+    ]) {
+      final file = File(path);
+      expect(file.existsSync(), isTrue, reason: 'run from the repository root');
+      expect(
+        _wildcardPostMessage.hasMatch(file.readAsStringSync()),
+        isFalse,
+        reason: '$path must pin its postMessage target origin',
+      );
+    }
   });
   group('firebase.json:', () {
     // The wrapper page's own allowlist is the fix; these headers are the
@@ -207,15 +255,17 @@ void main() {
       final file = File('firebase.json');
       expect(file.existsSync(), isTrue, reason: 'run from the repository root');
 
-      // firebase-tools parses firebase.json as JSON-with-comments.
-      final withoutComments = file
-          .readAsStringSync()
-          .split('\n')
-          .map((line) => line.trimLeft().startsWith('//') ? '' : line)
-          .join('\n');
+      final withoutComments = _stripJsonComments(file.readAsStringSync());
 
-      final hosting =
-          (jsonDecode(withoutComments) as Map<String, dynamic>)['hosting'];
+      Object? decoded;
+      try {
+        decoded = jsonDecode(withoutComments);
+      } on FormatException catch (error) {
+        fail('firebase.json did not parse after comments were stripped, so '
+            'these tests could not run: $error');
+      }
+
+      final hosting = (decoded! as Map<String, dynamic>)['hosting'];
       hostingConfigs = (hosting as List<dynamic>)
           .cast<Map<String, dynamic>>();
     });
@@ -242,37 +292,162 @@ void main() {
       );
     });
 
-    test('sets the headers the deploy verifier checks for', () {
-      final keys = (hostingConfigs.first['headers'] as List<dynamic>)
-          .cast<Map<String, dynamic>>()
-          .expand((entry) => (entry['headers'] as List<dynamic>)
-              .cast<Map<String, dynamic>>())
-          .map((header) => header['key'] as String)
-          .toList();
-
-      // Kept in step with tool/verify_web_deploy.sh.
-      expect(
-        keys,
-        containsAll(<String>[
-          'Content-Security-Policy',
-          'X-Frame-Options',
-          'X-Content-Type-Options',
-          'Referrer-Policy',
-          'Permissions-Policy',
-          'Cache-Control',
-        ]),
-      );
+    test('sets the header values the deploy verifier checks for', () {
+      // Values, not just keys: `frame-ancestors *` and `X-Frame-Options:
+      // ALLOWALL` keep every key in place while removing the protection, and
+      // a key-only assertion would call that green.
+      for (final config in hostingConfigs) {
+        final site = config['site'];
+        expect(
+          _headerValue(config, '**', 'Content-Security-Policy'),
+          contains("frame-ancestors 'self'"),
+          reason: '$site must not allow itself to be framed cross-origin',
+        );
+        expect(_headerValue(config, '**', 'X-Frame-Options'), 'SAMEORIGIN');
+        expect(_headerValue(config, '**', 'X-Content-Type-Options'), 'nosniff');
+        expect(
+          _headerValue(config, '**', 'Referrer-Policy'),
+          'strict-origin-when-cross-origin',
+        );
+        expect(
+          _headerValue(config, '**', 'Permissions-Policy'),
+          isNotNull,
+          reason: '$site must send a Permissions-Policy',
+        );
+        expect(
+          _headerValue(config, '/assets/assets/web_pages/**', 'Cache-Control'),
+          contains('must-revalidate'),
+          reason: 'desktop and mobile fetch the wrapper page from $site at '
+              'runtime, so a cached copy outlives a fix to it',
+        );
+      }
     });
   });
 }
 
-/// Reads a `var <name> = ['a', 'b'];` array out of the widget's inline script.
-List<String> _jsStringArray(String source, String name) {
-  final declaration = RegExp('var $name = \\[([^\\]]*)\\];').firstMatch(source);
-  expect(declaration, isNotNull, reason: 'missing $name in $_widgetAssetPath');
+/// Any `postMessage(..., '*')` or `postMessage(..., "*")`.
+final RegExp _wildcardPostMessage =
+    RegExp('''postMessage\\([^)]*,\\s*['"]\\*['"]''');
 
-  return RegExp("'([^']*)'")
-      .allMatches(declaration!.group(1)!)
-      .map((match) => match.group(1)!)
-      .toList();
+/// Reads a `var <name> = ['a', 'b'];` array out of the widget's inline script.
+///
+/// Strict on purpose. This helper exists to notice when the deployed asset's
+/// allowlist stops matching the Dart one, so every way of writing an entry
+/// that it cannot read has to be an error rather than a quietly shorter list:
+/// a second declaration, a commented-out entry, a double-quoted entry, or an
+/// element that is not a string literal at all.
+List<String> _jsStringArray(String source, String name) {
+  final declarations =
+      RegExp('$name\\s*=\\s*\\[([^\\]]*)\\]').allMatches(source).toList();
+  expect(
+    declarations,
+    hasLength(1),
+    reason: '$name must be assigned exactly once in $_widgetAssetPath',
+  );
+  expect(
+    RegExp('$name\\s*=(?!=)').allMatches(source),
+    hasLength(1),
+    reason: '$name must be assigned exactly once in $_widgetAssetPath',
+  );
+  expect(
+    RegExp('$name\\s*\\.\\s*'
+            '(push|pop|shift|unshift|splice|sort|reverse|fill|copyWithin)\\b')
+        .hasMatch(source),
+    isFalse,
+    reason: '$name must not be mutated after it is declared',
+  );
+
+  // A `//` comment inside the array would otherwise leave a dropped entry
+  // still visible to the literal match below.
+  final body = declarations.single
+      .group(1)!
+      .split('\n')
+      .map((line) {
+        final comment = line.indexOf('//');
+        return comment == -1 ? line : line.substring(0, comment);
+      })
+      .join('\n');
+
+  final literal = RegExp('''['"]([^'"]*)['"]''');
+  expect(
+    body.replaceAll(literal, '').replaceAll(RegExp(r'[\s,]'), ''),
+    isEmpty,
+    reason: '$name must hold nothing but quoted string literals',
+  );
+
+  return literal.allMatches(body).map((match) => match.group(1)!).toList();
+}
+
+/// The value of [key] in the `headers` entry matching [source], or null.
+String? _headerValue(
+  Map<String, dynamic> hostingConfig,
+  String source,
+  String key,
+) {
+  final entry = (hostingConfig['headers'] as List<dynamic>)
+      .cast<Map<String, dynamic>>()
+      .firstWhere(
+        (entry) => entry['source'] == source,
+        orElse: () => <String, dynamic>{'headers': <dynamic>[]},
+      );
+
+  for (final header
+      in (entry['headers'] as List<dynamic>).cast<Map<String, dynamic>>()) {
+    if (header['key'] == key) return header['value'] as String?;
+  }
+  return null;
+}
+
+/// Strips `//` and `/* */` comments outside string literals.
+///
+/// firebase-tools reads firebase.json as JSON-with-comments, and this file is
+/// comment-heavy. Handling only whole-line `//` would make these tests fail on
+/// a trailing comment that firebase-tools itself accepts, reporting a config
+/// problem where there is none.
+String _stripJsonComments(String source) {
+  final out = StringBuffer();
+  var inString = false;
+  var escaped = false;
+  var i = 0;
+
+  while (i < source.length) {
+    final char = source[i];
+
+    if (inString) {
+      out.write(char);
+      if (escaped) {
+        escaped = false;
+      } else if (char == r'\') {
+        escaped = true;
+      } else if (char == '"') {
+        inString = false;
+      }
+      i++;
+      continue;
+    }
+
+    if (char == '"') {
+      inString = true;
+      out.write(char);
+      i++;
+      continue;
+    }
+
+    if (source.startsWith('//', i)) {
+      final end = source.indexOf('\n', i);
+      i = end == -1 ? source.length : end;
+      continue;
+    }
+
+    if (source.startsWith('/*', i)) {
+      final end = source.indexOf('*/', i + 2);
+      i = end == -1 ? source.length : end + 2;
+      continue;
+    }
+
+    out.write(char);
+    i++;
+  }
+
+  return out.toString();
 }

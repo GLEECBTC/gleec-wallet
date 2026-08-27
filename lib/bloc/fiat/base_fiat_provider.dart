@@ -276,13 +276,20 @@ abstract class BaseFiatProvider {
       );
     }
 
-    // base64url rather than standard base64: a `+` in a query string is
-    // decoded as a space by the wrapper page's URLSearchParams, which corrupts
-    // roughly one in every sixty-four characters of a standard base64 payload.
-    final encodedUrl = base64UrlEncode(utf8.encode(providerUrl));
+    // Standard base64, percent-encoded. The `+` it can produce is decoded as
+    // a space by the wrapper page's URLSearchParams and silently corrupts the
+    // payload, so it has to be escaped -- but the encoding itself must stay
+    // standard base64, because the wrapper page these builds actually talk to
+    // is the one deployed at getOriginUrl(), which lags this code by however
+    // long it takes someone to deploy production by hand. That deployed page
+    // calls `atob` directly, and `atob` rejects base64url's `-` and `_`.
+    // Percent-encoded standard base64 is understood by both the old page and
+    // the new one; base64url is understood only by the new one.
+    final encodedUrl =
+        Uri.encodeComponent(base64Encode(utf8.encode(providerUrl)));
 
     return '${getOriginUrl()}/assets/assets/'
-        'web_pages/fiat_widget.html?fiatUrl=${Uri.encodeComponent(encodedUrl)}';
+        'web_pages/fiat_widget.html?fiatUrl=$encodedUrl';
   }
 
   /// Provides the URL to the checkout handler HTML page that posts the payment

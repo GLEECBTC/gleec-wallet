@@ -309,7 +309,12 @@
     function _komodoIsAllowedMessageOrigin(origin) {
       // An opaque origin arrives as the string "null" and fails to parse.
       try {
-        return _komodoIsAllowedCheckoutHost(new URL(origin).hostname);
+        const parsed = new URL(origin);
+        // The scheme matters as much as the host: the framed provider can
+        // navigate itself after the first load, and an `http:` page on a
+        // provider host is not the provider.
+        return parsed.protocol === 'https:'
+          && _komodoIsAllowedCheckoutHost(parsed.hostname);
       } catch (error) {
         return false;
       }

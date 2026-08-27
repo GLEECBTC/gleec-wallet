@@ -39,6 +39,9 @@ RETRY_DELAY="${VERIFY_RETRY_DELAY:-10}"
 CURL_OPTS=(--silent --show-error --max-time 30 --location
            --header 'Cache-Control: no-cache' --header 'Pragma: no-cache')
 
+CURL_ERR=$(mktemp)
+trap 'rm -f "$CURL_ERR"' EXIT
+
 failures=0
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; failures=$((failures + 1)); }
@@ -58,6 +61,29 @@ fetch_widget() {
       return 1
     fi
     echo "  ..    wrapper not updated yet (attempt ${attempt}/${ATTEMPTS}), retrying in ${RETRY_DELAY}s" >&2
+    sleep "$RETRY_DELAY"
+    attempt=$((attempt + 1))
+  done
+}
+
+# Response headers come from the hosting config of the version being served, so
+# they have to be read from a request that actually reaches the origin -- hence
+# the cache-bust, for the same reason the body probe has one. Retried, because a
+# single transport hiccup would otherwise be reported as every header being
+# absent, which reads exactly like a deploy that lost the config.
+fetch_headers() {
+  local attempt=1 out
+  while :; do
+    out=$(curl "${CURL_OPTS[@]}" --output /dev/null --dump-header - \
+      "${BASE_URL}${1}?cachebust=headers-${attempt}-$$" 2>"$CURL_ERR" | tr -d '\r')
+    if [ -n "$out" ]; then
+      printf '%s' "$out"
+      return 0
+    fi
+    if [ "$attempt" -ge "$ATTEMPTS" ]; then
+      return 1
+    fi
+    echo "  ..    no response for ${1} (attempt ${attempt}/${ATTEMPTS}): $(tr -d '\n' <"$CURL_ERR")" >&2
     sleep "$RETRY_DELAY"
     attempt=$((attempt + 1))
   done
@@ -96,7 +122,7 @@ else
     pass "iframe sandbox does not grant unconditional top navigation"
   fi
 
-  if printf '%s' "$widget" | grep -q 'postMessage(messageString, "\*")'; then
+  if printf '%s' "$widget" | grep -qE "postMessage\([^)]*,[[:space:]]*['\"]\*['\"]"; then
     fail "wrapper still broadcasts postMessage with a wildcard target origin"
   else
     pass "postMessage target origin is pinned"
@@ -105,29 +131,53 @@ fi
 
 echo
 echo "Response headers (from firebase.json)"
-headers=$(curl "${CURL_OPTS[@]}" --output /dev/null --dump-header - "${BASE_URL}/" 2>/dev/null | tr -d '\r')
-header_value() { printf '%s' "$headers" | grep -i "^$1:" | head -1 | cut -d' ' -f2-; }
+header_value() { printf '%s' "$headers" | grep -i "^$1:" | head -1 | sed 's/^[^:]*: *//'; }
 
-csp=$(header_value 'content-security-policy')
-case "$csp" in
-  *frame-ancestors*) pass "content-security-policy: ${csp}" ;;
-  '')                fail "content-security-policy is missing (no frame-ancestors)" ;;
-  *)                 fail "content-security-policy has no frame-ancestors: ${csp}" ;;
-esac
+if ! headers=$(fetch_headers "/"); then
+  # One transport failure, reported once, rather than as five absent headers.
+  fail "could not read response headers from ${BASE_URL}/ - $(tr -d '\n' <"$CURL_ERR")"
+else
+  csp=$(header_value 'content-security-policy')
+  case "$csp" in
+    # The verifier and test_units/.../fiat_checkout_url_allowlist_test.dart
+    # both require the directive AND its value: `frame-ancestors *` keeps the
+    # header in place while removing what it is here for.
+    *"frame-ancestors 'self'"*) pass "content-security-policy: ${csp}" ;;
+    '')                fail "content-security-policy is missing" ;;
+    *)                 fail "content-security-policy does not set frame-ancestors 'self': ${csp}" ;;
+  esac
 
-for name in x-frame-options x-content-type-options referrer-policy permissions-policy; do
-  value=$(header_value "$name")
-  if [ -n "$value" ]; then pass "${name}: ${value}"; else fail "${name} is missing"; fi
-done
+  xfo=$(header_value 'x-frame-options')
+  case "$xfo" in
+    SAMEORIGIN|DENY) pass "x-frame-options: ${xfo}" ;;
+    '')              fail "x-frame-options is missing" ;;
+    *)               fail "x-frame-options is '${xfo}', which does not prevent framing" ;;
+  esac
 
-widget_cache=$(curl "${CURL_OPTS[@]}" --output /dev/null --dump-header - \
-  "${BASE_URL}${WIDGET_PATH}" 2>/dev/null | tr -d '\r' \
-  | grep -i '^cache-control:' | head -1 | cut -d' ' -f2-)
-case "$widget_cache" in
-  *must-revalidate*) pass "wrapper cache-control: ${widget_cache}" ;;
-  '')                fail "wrapper has no cache-control header" ;;
-  *)                 fail "wrapper cache-control is '${widget_cache}', not revalidating - a future fix to this file takes up to that long to reach already-shipped desktop and mobile builds" ;;
-esac
+  xcto=$(header_value 'x-content-type-options')
+  case "$xcto" in
+    nosniff) pass "x-content-type-options: ${xcto}" ;;
+    '')      fail "x-content-type-options is missing" ;;
+    *)       fail "x-content-type-options is '${xcto}', not nosniff" ;;
+  esac
+
+  for name in referrer-policy permissions-policy; do
+    value=$(header_value "$name")
+    if [ -n "$value" ]; then pass "${name}: ${value}"; else fail "${name} is missing"; fi
+  done
+fi
+
+if ! widget_headers=$(fetch_headers "$WIDGET_PATH"); then
+  fail "could not read response headers from ${BASE_URL}${WIDGET_PATH} - $(tr -d '\n' <"$CURL_ERR")"
+else
+  widget_cache=$(printf '%s' "$widget_headers" \
+    | grep -i '^cache-control:' | head -1 | sed 's/^[^:]*: *//')
+  case "$widget_cache" in
+    *must-revalidate*) pass "wrapper cache-control: ${widget_cache}" ;;
+    '')                fail "wrapper has no cache-control header" ;;
+    *)                 fail "wrapper cache-control is '${widget_cache}', not revalidating - a future fix to this file takes up to that long to reach already-shipped desktop and mobile builds" ;;
+  esac
+fi
 
 echo
 if [ "$failures" -eq 0 ]; then

@@ -82,7 +82,7 @@
               // delegate them to the provider iframe via its `allow`
               // attribute. Denying them here would break provider KYC.
               "key": "Permissions-Policy",
-              "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=(), interest-cohort=()"
+              "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=()"
             }
           ]
         },
@@ -137,7 +137,7 @@
             },
             {
               "key": "Permissions-Policy",
-              "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=(), interest-cohort=()"
+              "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=()"
             }
           ]
         },

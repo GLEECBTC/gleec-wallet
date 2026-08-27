@@ -210,6 +210,12 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       ),
     );
 
+    // Captured before the request goes out. Event handlers run concurrently,
+    // so the user can change the selected payment method while the order is
+    // in flight; everything decided below belongs to the order being created,
+    // not to whatever the form happens to show when the response lands.
+    final bool isBanxaOrder = state.isBanxaSelected;
+
     try {
       final newOrder = await _fiatRepository.buyCoin(
         accountReference: state.selectedAssetAddress!.address,
@@ -236,10 +242,16 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
         return emit(state.copyWith(fiatOrderStatus: FiatOrderStatus.failed));
       }
 
-      final checkoutUrl = _requiresWrapperPage
-          ? BaseFiatProvider.fiatWrapperPageUrl(providerCheckoutUrl)
-          : providerCheckoutUrl;
-      final webViewMode = _determineWebViewMode();
+      // Only a provider that reports status through `postMessage` needs the
+      // intermediate html page at `assets/web_pages/fiat_widget.html`, which
+      // is also the one place a provider URL becomes an iframe `src` inside
+      // the wallet's own origin. Banxa reports status through order polling
+      // instead, so its checkout page is opened directly and never goes near
+      // the wrapper.
+      final checkoutUrl = isBanxaOrder
+          ? providerCheckoutUrl
+          : BaseFiatProvider.fiatWrapperPageUrl(providerCheckoutUrl);
+      final webViewMode = _determineWebViewMode(isBanxaOrder);
 
       emit(
         state.copyWith(
@@ -256,26 +268,16 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
     }
   }
 
-  /// Whether the checkout page has to be loaded through the intermediate
-  /// html page at `assets/web_pages/fiat_widget.html`.
-  ///
-  /// That page exists only to relay a provider's `postMessage` and
-  /// `console.log` status events back to the app, and it is also the one place
-  /// where a provider URL becomes an iframe `src` inside the wallet's own
-  /// origin. Banxa reports status through order polling instead, so its
-  /// checkout page is opened directly and never goes near the wrapper.
-  bool get _requiresWrapperPage => !state.isBanxaSelected;
-
   /// Determines the appropriate WebViewDialogMode based on platform and
   /// environment
-  WebViewDialogMode _determineWebViewMode() {
+  WebViewDialogMode _determineWebViewMode(bool isBanxaOrder) {
     final bool isLinux = !kIsWeb && !kIsWasm && Platform.isLinux;
     const bool isWeb = kIsWeb || kIsWasm;
 
     // Banxa "Return to Komodo" button attempts to navigate the top window to
     // the return URL, which is not supported in a dialog. So we need to open
     // it in a new tab.
-    if (isLinux || (isWeb && state.isBanxaSelected)) {
+    if (isLinux || (isWeb && isBanxaOrder)) {
       return WebViewDialogMode.newTab;
     } else if (isWeb) {
       return WebViewDialogMode.dialog;
