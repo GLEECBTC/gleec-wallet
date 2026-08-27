@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:decimal/decimal.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
+    show
+        BalanceManager,
+        GaslessAccountAvailability,
+        GaslessAccountStatusResponse,
+        KomodoDefiSdk;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart' show UiPrimaryButton;
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
@@ -21,6 +30,173 @@ Map<String, dynamic> _utxoConfig() => {
   'protocol': {'type': 'UTXO'},
 };
 
+Map<String, dynamic> _trxConfig() => {
+  'coin': 'TRX',
+  'type': 'TRX',
+  'name': 'TRON',
+  'fname': 'TRON',
+  'wallet_only': true,
+  'mm2': 1,
+  'decimals': 6,
+  'required_confirmations': 1,
+  'derivation_path': "m/44'/195'",
+  'protocol': {
+    'type': 'TRX',
+    'protocol_data': {'network': 'Mainnet'},
+  },
+  'nodes': <Map<String, dynamic>>[],
+};
+
+Map<String, dynamic> _trc20Config() => {
+  'coin': 'USDT-TRC20',
+  'type': 'TRC-20',
+  'name': 'Tether',
+  'fname': 'Tether',
+  'wallet_only': true,
+  'mm2': 1,
+  'decimals': 6,
+  'derivation_path': "m/44'/195'",
+  'protocol': {
+    'type': 'TRC20',
+    'protocol_data': {
+      'platform': 'TRX',
+      'contract_address': 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    },
+  },
+  'contract_address': 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+  'parent_coin': 'TRX',
+  'nodes': <Map<String, dynamic>>[],
+};
+
+BalanceInfo _balance(String amount) {
+  final value = Decimal.parse(amount);
+  return BalanceInfo(total: value, spendable: value, unspendable: Decimal.zero);
+}
+
+GaslessAccountStatusResponse _gaslessStatus({
+  GaslessAccountAvailability availability =
+      GaslessAccountAvailability.available,
+  bool active = true,
+  String? activationFee,
+}) {
+  return GaslessAccountStatusResponse.parse({
+    'mmrpc': '2.0',
+    'result': {
+      'gasfree_address': 'TGasFreeSourceAddress',
+      'on_chain_balance': '100',
+      'availability': availability.wireValue,
+      'service_provider':
+          availability == GaslessAccountAvailability.providerUnreachable
+          ? null
+          : 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+      'active':
+          availability == GaslessAccountAvailability.available ||
+              availability == GaslessAccountAvailability.pendingTransfer
+          ? active
+          : null,
+      'frozen_balance':
+          availability == GaslessAccountAvailability.pendingTransfer
+          ? '1'
+          : availability == GaslessAccountAvailability.available
+          ? '0'
+          : null,
+      'spendable_balance':
+          availability == GaslessAccountAvailability.pendingTransfer
+          ? '99'
+          : availability == GaslessAccountAvailability.available
+          ? '100'
+          : null,
+      'transfer_fee':
+          availability == GaslessAccountAvailability.available ||
+              availability == GaslessAccountAvailability.pendingTransfer
+          ? '1'
+          : null,
+      'activation_fee':
+          availability == GaslessAccountAvailability.available ||
+              availability == GaslessAccountAvailability.pendingTransfer
+          ? activationFee
+          : null,
+      'max_withdrawable': availability == GaslessAccountAvailability.available
+          ? '99'
+          : null,
+    },
+  });
+}
+
+WithdrawFormState _trc20FillState({
+  bool isGaslessEnabled = true,
+  GaslessAccountStatusResponse? gaslessAccountStatus,
+  GaslessAvailability? gaslessAvailability,
+  WalletType? walletType = WalletType.hdwallet,
+  bool isGaslessStatusLoading = false,
+  bool isSending = false,
+  String sourceBalance = '100',
+  bool gaslessPendingStoreHealthy = true,
+  bool gaslessPendingStoreReady = true,
+}) {
+  final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+  final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+  final source = PubkeyInfo(
+    address: 'TRegularSourceAddress',
+    derivationPath: "m/44'/195'/0'/0/0",
+    chain: 'external',
+    balance: _balance(sourceBalance),
+    coinTicker: asset.id.id,
+    gasfreeAddress: 'TGasFreeSourceAddress',
+  );
+  final resolvedGaslessAvailability = isGaslessStatusLoading
+      ? GaslessAvailability.checking
+      : gaslessAvailability ??
+            switch (gaslessAccountStatus?.availability) {
+              null => GaslessAvailability.initial,
+              GaslessAccountAvailability.available => GaslessAvailability.ready,
+              GaslessAccountAvailability.pendingTransfer =>
+                GaslessAvailability.pendingTransfer,
+              GaslessAccountAvailability.tokenUnsupported =>
+                GaslessAvailability.unsupported,
+              GaslessAccountAvailability.providerUnreachable =>
+                GaslessAvailability.providerUnavailable,
+            };
+  return WithdrawFormState(
+    isGaslessFeatureConfigured: true,
+    asset: asset,
+    pubkeys: AssetPubkeys(
+      assetId: asset.id,
+      keys: [source],
+      availableAddressesCount: 1,
+      syncStatus: SyncStatusEnum.success,
+    ),
+    selectedSourceAddress: source,
+    step: WithdrawFormStep.fill,
+    recipientAddress: 'recipient',
+    amount: '1',
+    isGaslessEnabled: isGaslessEnabled,
+    gaslessPendingStoreHealthy: gaslessPendingStoreHealthy,
+    gaslessPendingStoreReady: gaslessPendingStoreReady,
+    gaslessAccountStatus: gaslessAccountStatus,
+    gaslessAvailability: resolvedGaslessAvailability,
+    walletType: walletType,
+    isGaslessStatusLoading: isGaslessStatusLoading,
+    isSending: isSending,
+  );
+}
+
+class _FakeBalanceManager implements BalanceManager {
+  @override
+  BalanceInfo? lastKnown(AssetId assetId) => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeSdk implements KomodoDefiSdk {
+  @override
+  final BalanceManager balances = _FakeBalanceManager();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
     implements WithdrawFormBloc {
   _FakeWithdrawFormBloc(super.initialState);
@@ -32,22 +208,33 @@ class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
     events.add(event);
   }
 
+  void replaceState(WithdrawFormState state) => emit(state);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _buildTestWidget(WithdrawFormBloc bloc) {
+Widget _buildTestWidget(
+  WithdrawFormBloc bloc, {
+  bool disableAnimations = false,
+}) {
   return MaterialApp(
     home: MediaQuery(
-      data: const MediaQueryData(size: Size(1280, 1200)),
+      data: MediaQueryData(
+        size: const Size(1280, 1200),
+        disableAnimations: disableAnimations,
+      ),
       child: Builder(
         builder: (context) {
           updateScreenType(context);
-          return BlocProvider<WithdrawFormBloc>.value(
-            value: bloc,
-            child: const Scaffold(
-              body: SingleChildScrollView(
-                child: WithdrawFormFillSection(suppressPreviewError: false),
+          return RepositoryProvider<KomodoDefiSdk>.value(
+            value: _FakeSdk(),
+            child: BlocProvider<WithdrawFormBloc>.value(
+              value: bloc,
+              child: const Scaffold(
+                body: SingleChildScrollView(
+                  child: WithdrawFormFillSection(suppressPreviewError: false),
+                ),
               ),
             ),
           );
@@ -65,6 +252,7 @@ void testWithdrawFormFillSection() {
       final asset = Asset.fromJson(_utxoConfig(), knownIds: const {});
       final bloc = _FakeWithdrawFormBloc(
         WithdrawFormState(
+          isGaslessFeatureConfigured: true,
           asset: asset,
           step: WithdrawFormStep.fill,
           recipientAddress: 'recipient',
@@ -89,6 +277,7 @@ void testWithdrawFormFillSection() {
       final asset = Asset.fromJson(_utxoConfig(), knownIds: const {});
       final bloc = _FakeWithdrawFormBloc(
         WithdrawFormState(
+          isGaslessFeatureConfigured: true,
           asset: asset,
           step: WithdrawFormStep.fill,
           recipientAddress: 'recipient',
@@ -105,6 +294,403 @@ void testWithdrawFormFillSection() {
       );
 
       expect(lockWidget.ignoring, isFalse);
+    });
+
+    testWidgets('gas-free rail selects the custody entry in the source '
+        'selector', (tester) async {
+      final bloc = _FakeWithdrawFormBloc(_trc20FillState());
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      // The selector's closed state shows the address the send actually
+      // settles from — the GasFree custody address — not the signing
+      // address (which previously rendered, locked, while the transfer
+      // left the custody address).
+      expect(
+        find.byKey(const Key('withdraw-gasless-source-selector')),
+        findsOneWidget,
+      );
+      expect(find.text('withdrawSendFrom'), findsOneWidget);
+      expect(find.textContaining('TGasFr...ddress'), findsOneWidget);
+      expect(find.textContaining('TRegul...ddress'), findsNothing);
+      expect(find.textContaining('Maximum sendable amount'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('native rail selects the standard entry in the source '
+        'selector', (tester) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(isGaslessEnabled: false),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      expect(
+        find.byKey(const Key('withdraw-gasless-source-selector')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('TRegul...ddress'), findsOneWidget);
+      expect(find.textContaining('TGasFr...ddress'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('picking the standard entry switches to the native rail', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(_trc20FillState());
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      final selectorFinder = find.byKey(
+        const Key('withdraw-gasless-rail-source-dropdown'),
+      );
+      expect(selectorFinder, findsOneWidget);
+      expect(
+        tester.widget(selectorFinder),
+        isA<DropdownButtonFormField<dynamic>>(),
+      );
+      final dropdownFinder = find.descendant(
+        of: selectorFinder,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<dynamic>,
+        ),
+      );
+      expect(dropdownFinder, findsOneWidget);
+      final dynamic dropdown = tester.widget(dropdownFinder);
+      expect(dropdown.items, hasLength(2));
+      expect(dropdown.onChanged, isNotNull);
+
+      // Exercise the production selector callback directly. The generic
+      // dropdown owns a process-wide overlay; direct selection keeps this
+      // rail-wiring test deterministic.
+      dropdown.onChanged(dropdown.items.last.value);
+
+      final toggle = bloc.events.whereType<WithdrawFormGaslessToggled>().single;
+      expect(toggle.isEnabled, isFalse);
+      final sourceChange = bloc.events
+          .whereType<WithdrawFormSourceChanged>()
+          .single;
+      expect(sourceChange.address.address, 'TRegularSourceAddress');
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('gasless rail shows a status chip, not a checkbox', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(_trc20FillState());
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      expect(find.byKey(const Key('withdraw-gasless-chip')), findsOneWidget);
+      // The amount field still has its legitimate "send maximum" checkbox;
+      // ensure there is no checkbox inside the rail-specific Advanced card.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('withdraw-advanced-section')),
+          matching: find.byType(CheckboxListTile),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('withdraw-advanced-section')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('chip shows a checking state while the first status fetch is '
+        'in flight', (tester) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(isGaslessStatusLoading: true),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      expect(find.text('withdrawGaslessCheckingAvailability'), findsOneWidget);
+      // Preview is held until availability is known, so it cannot hard-fail
+      // against an unreachable provider the user was never told about.
+      final button = tester.widget<UiPrimaryButton>(
+        find.byType(UiPrimaryButton),
+      );
+      expect(button.onPressed, isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('checking and quote progress honor reduced motion', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(isGaslessStatusLoading: true, isSending: true),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc, disableAnimations: true));
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        find.byKey(const Key('withdraw-gasless-checking-static-progress')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('withdraw-preview-static-progress')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets(
+      'source selector still offers both pots when the standard address is '
+      'empty',
+      (tester) async {
+        final bloc = _FakeWithdrawFormBloc(_trc20FillState(sourceBalance: '0'));
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(_buildTestWidget(bloc));
+
+        expect(
+          find.byKey(const Key('withdraw-gasless-source-selector')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('withdraw-gasless-chip')), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets('advanced native switch dispatches the gasless toggle', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(_trc20FillState());
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      // Collapsed by default while gasless is active — expand it first.
+      await tester.ensureVisible(
+        find.byKey(const Key('withdraw-advanced-section')),
+      );
+      await tester.tap(find.byKey(const Key('withdraw-advanced-section')));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final nativeSwitch = tester.widget<SwitchListTile>(
+        find.byKey(const Key('withdraw-native-send-switch')),
+      );
+      nativeSwitch.onChanged!(true);
+      expect(
+        bloc.events.whereType<WithdrawFormGaslessToggled>().single.isEnabled,
+        isFalse,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('native rail expands Advanced with the active note', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(isGaslessEnabled: false),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('withdraw-gasless-chip')), findsNothing);
+      expect(
+        find.byKey(const Key('withdraw-native-send-active-note')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('activation banner appears only for an inactive account', (
+      tester,
+    ) async {
+      final inactiveBloc = _FakeWithdrawFormBloc(
+        _trc20FillState(
+          gaslessAccountStatus: _gaslessStatus(
+            active: false,
+            activationFee: '1',
+          ),
+        ),
+      );
+      addTearDown(inactiveBloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(inactiveBloc));
+      expect(
+        find.byKey(const Key('withdraw-gasless-activation-banner')),
+        findsOneWidget,
+      );
+
+      final activeBloc = _FakeWithdrawFormBloc(
+        _trc20FillState(gaslessAccountStatus: _gaslessStatus()),
+      );
+      addTearDown(activeBloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(activeBloc));
+      expect(
+        find.byKey(const Key('withdraw-gasless-activation-banner')),
+        findsNothing,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('provider-unavailable notice blocks preview and can retry', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(
+          gaslessAccountStatus: _gaslessStatus(
+            availability: GaslessAccountAvailability.providerUnreachable,
+          ),
+        ),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      expect(
+        find.byKey(const Key('gasless-provider-unavailable-notice')),
+        findsOneWidget,
+      );
+      final previewButton = tester.widget<PreviewWithdrawButton>(
+        find.byType(PreviewWithdrawButton),
+      );
+      expect(previewButton.onPressed, isNull);
+
+      await tester.ensureVisible(
+        find.byKey(const Key('gasless-provider-unavailable-retry')),
+      );
+      await tester.tap(
+        find.byKey(const Key('gasless-provider-unavailable-retry')),
+      );
+      final retry = bloc.events
+          .whereType<WithdrawFormGaslessStatusRequested>()
+          .single;
+      expect(retry.force, isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets(
+      'unreadable journal shows storage retry while Standard remains usable',
+      (tester) async {
+        final blockedState = _trc20FillState(
+          isGaslessEnabled: false,
+          gaslessAvailability: GaslessAvailability.securityMismatch,
+          gaslessPendingStoreHealthy: false,
+        );
+        final bloc = _FakeWithdrawFormBloc(blockedState);
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(_buildTestWidget(bloc));
+
+        expect(
+          find.byKey(const Key('gasless-storage-unavailable-notice')),
+          findsOneWidget,
+        );
+        expect(blockedState.useGasless, isFalse);
+        expect(
+          blockedState.selectedSourceAddress?.balance.total,
+          greaterThan(Decimal.zero),
+        );
+        final previewButton = tester.widget<PreviewWithdrawButton>(
+          find.byType(PreviewWithdrawButton),
+        );
+        expect(previewButton.onPressed, isNotNull);
+
+        await tester.ensureVisible(
+          find.byKey(const Key('gasless-storage-unavailable-retry')),
+        );
+        await tester.tap(
+          find.byKey(const Key('gasless-storage-unavailable-retry')),
+        );
+        expect(
+          bloc.events.whereType<WithdrawFormPendingGaslessLoadRequested>(),
+          hasLength(1),
+        );
+
+        bloc.replaceState(
+          blockedState.copyWith(
+            gaslessPendingStoreHealthy: true,
+            gaslessPendingStoreReady: true,
+            gaslessAvailability: GaslessAvailability.initial,
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.byKey(const Key('gasless-storage-unavailable-notice')),
+          findsNothing,
+        );
+        final recoveredPreviewButton = tester.widget<PreviewWithdrawButton>(
+          find.byType(PreviewWithdrawButton),
+        );
+        expect(recoveredPreviewButton.onPressed, isNotNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets(
+      'disabled rail uses controlled-reactivation copy without retry action',
+      (tester) async {
+        final bloc = _FakeWithdrawFormBloc(
+          _trc20FillState(gaslessAvailability: GaslessAvailability.disabled),
+        );
+        addTearDown(bloc.close);
+
+        await tester.pumpWidget(_buildTestWidget(bloc));
+
+        expect(find.byKey(const Key('withdraw-gasless-chip')), findsOneWidget);
+        expect(
+          find.text('withdrawGaslessReactivationRequired'),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('gasless-provider-unavailable-retry')),
+          findsNothing,
+        );
+        final previewButton = tester.widget<PreviewWithdrawButton>(
+          find.byType(PreviewWithdrawButton),
+        );
+        expect(previewButton.onPressed, isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets('Trezor sees the honest hardware notice instead of gasless', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _trc20FillState(walletType: WalletType.trezor),
+      );
+      addTearDown(bloc.close);
+
+      await tester.pumpWidget(_buildTestWidget(bloc));
+
+      expect(
+        find.byKey(const Key('withdraw-gasless-trezor-notice')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('withdraw-gasless-chip')), findsNothing);
+      expect(find.byKey(const Key('withdraw-advanced-section')), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
     });
   });
 }

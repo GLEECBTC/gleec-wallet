@@ -43,6 +43,7 @@ class SecuritySettingsState extends Equatable {
     required this.isUnbanningPubkeys,
     this.unbanResult,
     this.unbanError,
+    this.backupStartedAt,
   });
 
   factory SecuritySettingsState.initialState() {
@@ -96,6 +97,18 @@ class SecuritySettingsState extends Equatable {
   /// Error message if the last unban operation failed.
   final String? unbanError;
 
+  /// When the user entered a backup flow (seed reveal or private-key export).
+  ///
+  /// The anchor for `backup_complete`'s `backup_time`, which was previously
+  /// hardcoded to 0 and so measured nothing. Null outside a backup flow, which
+  /// is why the event falls back to 0 rather than inventing a duration.
+  final DateTime? backupStartedAt;
+
+  /// How long the current backup flow has been open, or null outside one.
+  Duration? get backupElapsed => backupStartedAt == null
+      ? null
+      : DateTime.now().difference(backupStartedAt!);
+
   @override
   List<Object?> get props => [
     step,
@@ -109,6 +122,7 @@ class SecuritySettingsState extends Equatable {
     isUnbanningPubkeys,
     unbanResult,
     unbanError,
+    backupStartedAt,
   ];
 
   /// Creates a copy of this state with the given fields replaced with new values.
@@ -126,6 +140,8 @@ class SecuritySettingsState extends Equatable {
     UnbanPubkeysResult? unbanResult,
     String? unbanError,
     bool clearUnbanError = false,
+    DateTime? backupStartedAt,
+    bool clearBackupStartedAt = false,
   }) {
     return SecuritySettingsState(
       step: step ?? this.step,
@@ -141,6 +157,9 @@ class SecuritySettingsState extends Equatable {
       isUnbanningPubkeys: isUnbanningPubkeys ?? this.isUnbanningPubkeys,
       unbanResult: unbanResult ?? this.unbanResult,
       unbanError: clearUnbanError ? null : (unbanError ?? this.unbanError),
+      backupStartedAt: clearBackupStartedAt
+          ? null
+          : (backupStartedAt ?? this.backupStartedAt),
     );
   }
 }

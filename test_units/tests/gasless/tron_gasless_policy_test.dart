@@ -1,0 +1,804 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
+import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
+import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
+
+const _walletId = WalletId(
+  name: 'wallet-a',
+  authOptions: AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+  pubkeyHash: 'wallet-a-pubkey-hash',
+);
+
+Map<String, dynamic> _trxConfig({bool testnet = false}) => {
+  'coin': testnet ? 'TRXT' : 'TRX',
+  'type': 'TRX',
+  'name': testnet ? 'TRON Testnet' : 'TRON',
+  'fname': testnet ? 'TRON Testnet' : 'TRON',
+  'wallet_only': true,
+  'mm2': 1,
+  'decimals': 6,
+  'is_testnet': testnet,
+  'derivation_path': "m/44'/195'",
+  'protocol': {
+    'type': 'TRX',
+    'protocol_data': {'network': testnet ? 'Nile' : 'Mainnet'},
+  },
+  'nodes': <Map<String, dynamic>>[],
+};
+
+Map<String, dynamic> _usdtConfig({
+  bool testnet = false,
+  bool custom = false,
+  String? contract,
+}) {
+  final parent = testnet ? 'TRXT' : 'TRX';
+  final address =
+      contract ??
+      (testnet
+          ? 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf'
+          : 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t');
+  return {
+    'coin': testnet ? 'TESTUSDT-TRC20' : 'USDT-TRC20',
+    'type': 'TRC-20',
+    'name': testnet ? 'Tether Testnet' : 'Tether',
+    'fname': testnet ? 'Tether Testnet' : 'Tether',
+    'wallet_only': true,
+    'is_custom_token': custom,
+    'is_testnet': testnet,
+    'mm2': 1,
+    'decimals': 6,
+    'derivation_path': "m/44'/195'",
+    'contract_address': address,
+    'parent_coin': parent,
+    'protocol': {
+      'type': 'TRC20',
+      'protocol_data': {'platform': parent, 'contract_address': address},
+    },
+    'nodes': <Map<String, dynamic>>[],
+  };
+}
+
+Asset _asset({bool testnet = false, bool custom = false, String? contract}) {
+  final parent = Asset.fromJson(
+    _trxConfig(testnet: testnet),
+    knownIds: const {},
+  );
+  return Asset.fromJson(
+    _usdtConfig(testnet: testnet, custom: custom, contract: contract),
+    knownIds: {parent.id},
+  );
+}
+
+class _ReceiveCapabilitySdk implements KomodoDefiSdk {
+  const _ReceiveCapabilitySdk(this.canReceive);
+
+  final bool canReceive;
+
+  @override
+  bool canReceiveGasless(Asset asset) => canReceive;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _UnavailableReceiveCapabilitySdk implements KomodoDefiSdk {
+  const _UnavailableReceiveCapabilitySdk();
+
+  @override
+  bool canReceiveGasless(Asset asset) => throw StateError('SDK unavailable');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CachedPubkeyManager implements PubkeyManager {
+  const _CachedPubkeyManager(this.cached);
+
+  final AssetPubkeys? cached;
+
+  @override
+  AssetPubkeys? lastKnown(AssetId assetId) =>
+      cached?.assetId == assetId ? cached : null;
+
+  @override
+  AssetPubkeys? lastKnownForWallet(AssetId assetId, WalletId walletId) =>
+      walletId == _walletId ? lastKnown(assetId) : null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CachedReceiveCapabilitySdk implements KomodoDefiSdk {
+  const _CachedReceiveCapabilitySdk({
+    required this.pubkeys,
+    required this.canReceive,
+  });
+
+  @override
+  final PubkeyManager pubkeys;
+
+  final bool canReceive;
+
+  @override
+  bool canReceiveGasless(Asset asset) => canReceive;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+PubkeyInfo _gaslessPubkey({
+  required String address,
+  required String gasfreeAddress,
+  required String? derivationPath,
+  String? chain = 'external',
+}) {
+  return PubkeyInfo(
+    address: address,
+    derivationPath: derivationPath,
+    chain: chain,
+    balance: BalanceInfo.zero(),
+    coinTicker: 'USDT-TRC20',
+    gasfreeAddress: gasfreeAddress,
+  );
+}
+
+AssetPubkeys _cachedPubkeys(Asset asset, List<PubkeyInfo> keys) {
+  return AssetPubkeys(
+    assetId: asset.id,
+    keys: keys,
+    availableAddressesCount: keys.length,
+    syncStatus: SyncStatusEnum.success,
+  );
+}
+
+GaslessAccountStatusResponse _accountStatus({
+  String availability = 'available',
+  String gasfreeAddress = 'TCanonicalGasFreeAddress00000000001',
+  String? serviceProvider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
+}) {
+  return GaslessAccountStatusResponse.parse({
+    'mmrpc': '2.0',
+    'result': {
+      'gasfree_address': gasfreeAddress,
+      'on_chain_balance': '25',
+      'availability': availability,
+      'service_provider': serviceProvider,
+      'active':
+          availability == 'available' || availability == 'pending_transfer'
+          ? true
+          : null,
+      'frozen_balance':
+          availability == 'available' || availability == 'pending_transfer'
+          ? '0'
+          : null,
+      'spendable_balance':
+          availability == 'available' || availability == 'pending_transfer'
+          ? '25'
+          : null,
+      'transfer_fee':
+          availability == 'available' || availability == 'pending_transfer'
+          ? '1'
+          : null,
+      'activation_fee': null,
+      'max_withdrawable': availability == 'available' ? '24' : null,
+    },
+  });
+}
+
+void testTronGaslessPolicy() {
+  group('TRON GasFree policy', () {
+    test('build policy marker covers every compiled switch combination', () {
+      expect(
+        tronGaslessBuildPolicyMarkerFor(
+          sendEnabled: false,
+          receiveEnabled: false,
+        ),
+        'gleec-gasfree-build-policy-v1:send=disabled;receive=disabled',
+      );
+      expect(
+        tronGaslessBuildPolicyMarkerFor(
+          sendEnabled: true,
+          receiveEnabled: false,
+        ),
+        'gleec-gasfree-build-policy-v1:send=enabled;receive=disabled',
+      );
+      expect(
+        tronGaslessBuildPolicyMarkerFor(
+          sendEnabled: false,
+          receiveEnabled: true,
+        ),
+        'gleec-gasfree-build-policy-v1:send=disabled;receive=enabled',
+      );
+      expect(
+        tronGaslessBuildPolicyMarkerFor(
+          sendEnabled: true,
+          receiveEnabled: true,
+        ),
+        'gleec-gasfree-build-policy-v1:send=enabled;receive=enabled',
+      );
+      expect(
+        tronGaslessBuildPolicyMarker,
+        tronGaslessBuildPolicyMarkerFor(
+          sendEnabled: tronGaslessEnabled,
+          receiveEnabled: tronGaslessReceiveEnabled,
+        ),
+      );
+    });
+
+    // Asserted as an invariant against the compiled switches, not as hardcoded
+    // `isFalse`. CI now builds with the same GasFree --dart-defines as the
+    // release workflows, so a literal expectation here only tested that the
+    // test runner had been left unconfigured - and inverted the moment the
+    // configuration was supplied. What must hold either way is that the
+    // feature is *configured* exactly when it is both switched on and given a
+    // structurally valid provider config: enabling one without the other must
+    // still resolve to closed.
+    test('rollout switches and missing config stay closed by default', () {
+      expect(
+        isTronGaslessConfigured,
+        tronGaslessEnabled &&
+            hasValidTronGaslessProviderConfig &&
+            tronGaslessConfiguredAssetIds.isNotEmpty,
+      );
+      expect(
+        isTronGaslessReceiveConfigured,
+        tronGaslessReceiveEnabled &&
+            hasValidTronGaslessProviderConfig &&
+            tronGaslessReceiveConfiguredAssetIds.isNotEmpty,
+      );
+      expect(
+        tronGaslessReceiveConfiguredAssetIds,
+        tronGaslessAssetIdsFor(
+          enabled: tronGaslessReceiveEnabled,
+          baseUrl: tronGaslessBaseUrl,
+          serviceProvider: tronGaslessServiceProvider,
+        ),
+      );
+    });
+
+    test('recovery route follows the custody network', () {
+      expect(
+        tronGaslessRecoveryUrl(isTestnet: false),
+        'https://gasfree.io/withdraw',
+      );
+      expect(
+        tronGaslessRecoveryUrl(isTestnet: true),
+        'https://test.gasfree.io/withdraw',
+      );
+    });
+
+    test('configuration rejects unsafe URLs and malformed provider pins', () {
+      expect(
+        tronGaslessNetworkPath('https://quicknode.gleec.com/gasfree/tron'),
+        'tron',
+      );
+      expect(
+        tronGaslessNetworkPath('https://quicknode.gleec.com/gasfree/nile'),
+        'nile',
+      );
+      expect(
+        tronGaslessNetworkPath('http://localhost:8080/gasfree/nile'),
+        'nile',
+      );
+      expect(
+        tronGaslessNetworkPath('http://127.0.0.1:8080/gasfree/tron'),
+        'tron',
+      );
+      expect(tronGaslessNetworkPath('http://example.com/gasfree/tron'), isNull);
+      expect(
+        tronGaslessNetworkPath(
+          'http://user:secret@localhost:8080/gasfree/tron',
+        ),
+        isNull,
+      );
+      expect(
+        tronGaslessNetworkPath('https://user:secret@example.com/gasfree/tron'),
+        isNull,
+      );
+      expect(
+        isValidTronServiceProvider('TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'),
+        isTrue,
+      );
+      expect(isValidTronServiceProvider('not-a-tron-address'), isFalse);
+    });
+
+    test('app rollout allowlist is exact and configuration-dependent', () {
+      const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
+      expect(
+        tronGaslessAssetIdsFor(
+          enabled: true,
+          baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+          serviceProvider: provider,
+        ),
+        {'USDT-TRC20'},
+      );
+      expect(
+        tronGaslessAssetIdsFor(
+          enabled: true,
+          baseUrl: 'https://quicknode.gleec.com/gasfree/nile',
+          serviceProvider: provider,
+        ),
+        {'TESTUSDT-TRC20'},
+      );
+      expect(
+        tronGaslessAssetIdsFor(
+          enabled: false,
+          baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+          serviceProvider: provider,
+        ),
+        isEmpty,
+      );
+      expect(
+        tronGaslessRecoveryAssetIdsFor(
+          baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+          serviceProvider: provider,
+        ),
+        {'USDT-TRC20'},
+      );
+      expect(
+        tronGaslessAssetIdsFor(
+          enabled: true,
+          baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+          serviceProvider: 'invalid',
+        ),
+        isEmpty,
+      );
+    });
+
+    group('activation asset configuration', () {
+      const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
+
+      test('enrolls only the canonical mainnet and Nile token configs', () {
+        final mainnet = _usdtConfig();
+        final nile = _usdtConfig(testnet: true);
+
+        expect(
+          configureGleecTronGaslessActivation(
+            mainnet,
+            baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+            serviceProvider: provider,
+          )['gasless'],
+          {'enabled': true},
+        );
+        expect(
+          configureGleecTronGaslessActivation(
+            nile,
+            baseUrl: 'https://quicknode.gleec.com/gasfree/nile',
+            serviceProvider: provider,
+          )['gasless'],
+          {'enabled': true},
+        );
+        expect(mainnet, isNot(contains('gasless')));
+        expect(nile, isNot(contains('gasless')));
+      });
+
+      test('preserves every explicit upstream gasless configuration', () {
+        final disabled = _usdtConfig()
+          ..['gasless'] = <String, dynamic>{'enabled': false};
+        final capped = _usdtConfig()
+          ..['gasless'] = <String, dynamic>{
+            'enabled': true,
+            'transfer_max_fee': '2.5',
+          };
+        final malformed = _usdtConfig()..['gasless'] = 'invalid';
+
+        for (final config in [disabled, capped, malformed]) {
+          final transformed = configureGleecTronGaslessActivation(
+            config,
+            baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+            serviceProvider: provider,
+          );
+          expect(transformed['gasless'], same(config['gasless']));
+          expect(transformed, isNot(same(config)));
+        }
+      });
+
+      test('rejects every non-canonical identity component', () {
+        final candidates = <Map<String, dynamic>>[
+          _usdtConfig()..['coin'] = 'LOOKALIKE-TRC20',
+          _usdtConfig()..['type'] = 'ERC-20',
+          _usdtConfig()..['parent_coin'] = 'TRXT',
+          _usdtConfig()..['is_custom_token'] = true,
+          _usdtConfig()..['is_testnet'] = true,
+          _usdtConfig()..['derivation_path'] = "m/44'/195'/1'",
+          _usdtConfig()
+            ..['contract_address'] = 'TWrongContractAddress11111111111111',
+          _usdtConfig()
+            ..['protocol'] = <String, dynamic>{
+              'type': 'ERC20',
+              'protocol_data': <String, dynamic>{
+                'platform': 'TRX',
+                'contract_address': 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+              },
+            },
+          _usdtConfig()
+            ..['protocol'] = <String, dynamic>{
+              'type': 'TRC20',
+              'protocol_data': <String, dynamic>{
+                'platform': 'TRXT',
+                'contract_address': 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+              },
+            },
+          _usdtConfig()
+            ..['protocol'] = <String, dynamic>{
+              'type': 'TRC20',
+              'protocol_data': <String, dynamic>{
+                'platform': 'TRX',
+                'contract_address': 'TWrongContractAddress11111111111111',
+              },
+            },
+        ];
+
+        for (final candidate in candidates) {
+          final transformed = configureGleecTronGaslessActivation(
+            candidate,
+            baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+            serviceProvider: provider,
+          );
+          expect(
+            transformed,
+            isNot(contains('gasless')),
+            reason: 'Unexpected enrollment for ${candidate['coin']}',
+          );
+        }
+      });
+
+      test('provider validity and network selection stay fail-closed', () {
+        final config = _usdtConfig();
+
+        expect(
+          configureGleecTronGaslessActivation(
+            config,
+            baseUrl: 'https://quicknode.gleec.com/gasfree/nile',
+            serviceProvider: provider,
+          ),
+          isNot(contains('gasless')),
+        );
+        expect(
+          configureGleecTronGaslessActivation(
+            config,
+            baseUrl: 'https://quicknode.gleec.com/gasfree/tron',
+            serviceProvider: 'invalid',
+          ),
+          isNot(contains('gasless')),
+        );
+      });
+    });
+
+    test('accepts only the exact mainnet asset identity', () {
+      expect(
+        isTronGaslessAssetEligible(_asset(), providerNetworkPath: 'tron'),
+        isTrue,
+      );
+      expect(
+        isTronGaslessAssetEligible(_asset(), providerNetworkPath: 'nile'),
+        isFalse,
+      );
+      expect(
+        isTronGaslessAssetEligible(
+          _asset(contract: 'TWrongContractAddress11111111111111'),
+          providerNetworkPath: 'tron',
+        ),
+        isFalse,
+      );
+      expect(
+        isTronGaslessAssetEligible(
+          _asset(custom: true),
+          providerNetworkPath: 'tron',
+        ),
+        isFalse,
+      );
+    });
+
+    test('Nile asset cannot cross into the mainnet provider rail', () {
+      expect(
+        isTronGaslessAssetEligible(
+          _asset(testnet: true),
+          providerNetworkPath: 'nile',
+        ),
+        isTrue,
+      );
+      expect(
+        isTronGaslessAssetEligible(
+          _asset(testnet: true),
+          providerNetworkPath: 'tron',
+        ),
+        isFalse,
+      );
+    });
+
+    test('recovery eligibility survives disabled feature flags', () {
+      expect(_asset().isTronGaslessRecoveryEligibleAsset, isTrue);
+      expect(_asset(testnet: true).isTronGaslessRecoveryEligibleAsset, isTrue);
+      expect(_asset(custom: true).isTronGaslessRecoveryEligibleAsset, isFalse);
+      expect(
+        _asset(
+          contract: 'TWrongContractAddress11111111111111',
+        ).isTronGaslessRecoveryEligibleAsset,
+        isFalse,
+      );
+    });
+
+    test('new receives require the canonical SDK capability', () {
+      final asset = _asset();
+
+      expect(
+        hasTronGaslessReceiveCapability(
+          const _ReceiveCapabilitySdk(true),
+          asset,
+        ),
+        isTrue,
+      );
+      expect(
+        hasTronGaslessReceiveCapability(
+          const _ReceiveCapabilitySdk(false),
+          asset,
+        ),
+        isFalse,
+      );
+      expect(
+        hasTronGaslessReceiveCapability(
+          const _UnavailableReceiveCapabilitySdk(),
+          asset,
+        ),
+        isFalse,
+      );
+    });
+
+    test('wallet receive capability follows the canonical SDK predicate', () {
+      final asset = _asset();
+      final now = DateTime.utc(2026, 7, 12, 12);
+
+      expect(
+        hasTronGaslessReceiveCapability(
+          const _ReceiveCapabilitySdk(false),
+          asset,
+        ),
+        isFalse,
+      );
+      expect(
+        hasTronGaslessReceiveCapability(
+          const _ReceiveCapabilitySdk(true),
+          asset,
+        ),
+        isTrue,
+      );
+      expect(
+        isVerifiedTronGaslessReceive(
+          const _ReceiveCapabilitySdk(true),
+          asset,
+          capabilityReady: true,
+          accountStatus: _accountStatus(),
+          accountStatusObservedAt: now,
+          verifiedAddress: 'TCanonicalGasFreeAddress00000000001',
+          custodyAddress: 'TCanonicalGasFreeAddress00000000001',
+          expectedServiceProvider: tronGaslessServiceProvider.isEmpty
+              ? 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird'
+              : tronGaslessServiceProvider,
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
+    test('typed receive status requires the exact provider and address', () {
+      const custody = 'TCanonicalGasFreeAddress00000000001';
+      const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
+      final available = _accountStatus();
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          available,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isTrue,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(serviceProvider: 'TDifferentProvider1111111111111111'),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(serviceProvider: ' $provider'),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(gasfreeAddress: 'TDifferentCustodyAddress'),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          _accountStatus(gasfreeAddress: '$custody '),
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+      final unreachable = _accountStatus(
+        availability: 'provider_unreachable',
+        serviceProvider: null,
+      );
+      expect(
+        isPinnedTronGaslessAccountStatus(
+          unreachable,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isTrue,
+      );
+      expect(
+        isVerifiedTronGaslessReceiveStatus(
+          unreachable,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+        ),
+        isFalse,
+      );
+    });
+
+    test('consolidation accepts only one cached canonical software key', () {
+      final asset = _asset();
+      const custody = 'TCanonicalGasFreeAddress00000000001';
+      final canonical = _gaslessPubkey(
+        address: 'TCanonicalStandardAddress0000000001',
+        gasfreeAddress: custody,
+        derivationPath: "m/44'/195'/0'/0/0",
+      );
+      final secondary = _gaslessPubkey(
+        address: 'TSecondaryStandardAddress0000000001',
+        gasfreeAddress: 'TSecondaryGasFreeAddress00000000001',
+        derivationPath: "m/44'/195'/0'/0/1",
+      );
+
+      KomodoDefiSdk sdkFor(List<PubkeyInfo> keys) =>
+          _CachedReceiveCapabilitySdk(
+            pubkeys: _CachedPubkeyManager(_cachedPubkeys(asset, keys)),
+            canReceive: true,
+          );
+
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical, secondary]),
+          asset,
+          walletType: WalletType.hdwallet,
+          currentWalletId: _walletId,
+        ),
+        custody,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([secondary]),
+          asset,
+          walletType: WalletType.hdwallet,
+          currentWalletId: _walletId,
+        ),
+        isNull,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical]),
+          asset,
+          walletType: WalletType.trezor,
+          currentWalletId: _walletId,
+        ),
+        isNull,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical]),
+          asset,
+          walletType: WalletType.hdwallet,
+          currentWalletId: _walletId.copyWith(
+            authOptions: const AuthOptions(
+              derivationMethod: DerivationMethod.iguana,
+            ),
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        cachedCanonicalTronGaslessCustodyAddress(
+          sdkFor([canonical, canonical]),
+          asset,
+          walletType: WalletType.hdwallet,
+          currentWalletId: _walletId,
+        ),
+        isNull,
+      );
+    });
+
+    test('receive verifier requires typed, exact, and fresh context', () {
+      final asset = _asset();
+      const custody = 'TCanonicalGasFreeAddress00000000001';
+      const provider = 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird';
+      final now = DateTime.utc(2026, 7, 12, 12);
+      final capableSdk = _CachedReceiveCapabilitySdk(
+        pubkeys: const _CachedPubkeyManager(null),
+        canReceive: true,
+      );
+      final incapableSdk = _CachedReceiveCapabilitySdk(
+        pubkeys: const _CachedPubkeyManager(null),
+        canReceive: false,
+      );
+
+      bool verify({
+        KomodoDefiSdk? sdk,
+        bool ready = true,
+        GaslessAccountStatusResponse? accountStatus,
+        DateTime? observedAt,
+        String? verified = custody,
+        String? candidate = custody,
+      }) => isVerifiedTronGaslessReceive(
+        sdk ?? capableSdk,
+        asset,
+        capabilityReady: ready,
+        accountStatus: accountStatus ?? _accountStatus(),
+        accountStatusObservedAt: observedAt ?? now,
+        verifiedAddress: verified,
+        custodyAddress: candidate,
+        expectedServiceProvider: provider,
+        now: now,
+      );
+
+      expect(verify(), isTrue);
+      expect(verify(sdk: incapableSdk), isFalse);
+      expect(verify(ready: false), isFalse);
+      expect(
+        verify(observedAt: now.subtract(const Duration(minutes: 2))),
+        isFalse,
+      );
+      expect(verify(observedAt: now.add(const Duration(seconds: 1))), isFalse);
+      expect(
+        verify(
+          accountStatus: _accountStatus(
+            availability: 'provider_unreachable',
+            serviceProvider: null,
+          ),
+        ),
+        isFalse,
+      );
+      expect(verify(candidate: 'TDifferentCustodyAddress'), isFalse);
+      expect(
+        isVerifiedTronGaslessReceive(
+          capableSdk,
+          asset,
+          capabilityReady: true,
+          accountStatus: _accountStatus(),
+          accountStatusObservedAt: now,
+          verifiedAddress: custody,
+          custodyAddress: custody,
+          expectedServiceProvider: provider,
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
+    test('canonical GasFree assets are denied at the shared DEX boundary', () {
+      final state = TradingStatusLoadSuccess();
+      expect(state.canTradeAssets([_asset().id]), isFalse);
+      expect(state.canTradeAssets([_asset(testnet: true).id]), isFalse);
+      expect(canTradeAssetPair('BTC', 'USDT-TRC20'), isFalse);
+      expect(canTradeAssetPair('TESTUSDT-TRC20', 'KMD'), isFalse);
+      expect(canTradeAssetPair('BTC', 'KMD'), isTrue);
+    });
+  });
+}

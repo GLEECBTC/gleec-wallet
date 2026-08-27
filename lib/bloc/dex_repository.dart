@@ -26,6 +26,7 @@ import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/trade_preimage.dart';
 import 'package:web_dex/services/mappers/trade_preimage_mappers.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class DexRepository {
@@ -39,6 +40,14 @@ class DexRepository {
   static const Duration _minVolumeCacheTtl = Duration(seconds: 10);
 
   Future<SellResponse> sell(SellRequest request) async {
+    if (!canTradeAssetPair(request.base, request.rel)) {
+      return SellResponse(
+        error: TextError(
+          error: 'Wallet-only assets cannot be submitted to the DEX.',
+        ),
+      );
+    }
+
     try {
       final Map<String, dynamic> response = await _mm2Api.sell(request);
       return SellResponse.fromJson(response);
@@ -55,6 +64,16 @@ class DexRepository {
     Rational? volume,
     bool max = false,
   ]) async {
+    if (!canTradeAssetPair(base, rel)) {
+      final blockedCoin = isWalletOnlyTradingAssetId(base) ? base : rel;
+      return DataFromService(
+        error: TradePreimageCoinIsWalletOnlyError(
+          coin: blockedCoin,
+          error: 'Wallet-only assets cannot be submitted to the DEX.',
+        ),
+      );
+    }
+
     final cacheKey =
         'trade_preimage:$base:$rel:${price.toString()}:$swapMethod:${volume?.toString() ?? 'null'}:$max';
 

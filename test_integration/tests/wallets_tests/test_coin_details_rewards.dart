@@ -22,7 +22,7 @@ void main() {
     await acceptAlphaWarning(tester);
     await restoreWalletToTest(tester);
 
-    final kmdCoinActive = find.byKeyName('active-coin-item-kmd');
+    final kmdCoinActive = find.byKeyName('coin-list-item-kmd');
     if (kmdCoinActive.evaluate().isEmpty) {
       print('Skipping rewards check: KMD is not active in this environment.');
       return;

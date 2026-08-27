@@ -146,10 +146,10 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   final walletTab = find.byKeyName('main-menu-wallet');
   final coinsList = find.byKey(const Key('wallet-page-coins-list'));
   final docItem = find.byKeyName('coins-manager-list-item-doc');
-  final docCoinActive = find.byKeyName('active-coin-item-doc');
+  final docCoinActive = find.byKeyName('coin-list-item-doc');
   final docCoinBalance = find.byKeyName('coin-balance-asset-doc');
   final martyItem = find.byKeyName('coins-manager-list-item-marty');
-  final martyCoinActive = find.byKeyName('active-coin-item-marty');
+  final martyCoinActive = find.byKeyName('coin-list-item-marty');
   final martyCoinBalance = find.byKeyName('coin-balance-asset-marty');
   final walletPageScrollView = find.byKeyName('wallet-page-scroll-view');
   final faucetButton = find.byKeyName('coin-details-faucet-button');

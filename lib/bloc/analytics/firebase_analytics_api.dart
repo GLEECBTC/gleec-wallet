@@ -13,6 +13,20 @@ import 'analytics_repo.dart';
 
 class FirebaseAnalyticsApi implements AnalyticsApi {
   late FirebaseAnalytics _instance;
+
+  /// Completes when initialisation settles, one way or the other.
+  ///
+  /// The `ignore()` below is load-bearing. This completer is completed with an
+  /// error when every retry has been exhausted, and a `Future` completed with
+  /// an error that nothing is listening to becomes an *unhandled* async error -
+  /// raised in whatever happens to be running when the last retry gives up,
+  /// seconds after the call that caused it. In a test run that lands on an
+  /// unrelated test; in the app it reaches the zone error handler as a crash
+  /// with no useful stack.
+  ///
+  /// Callers that care still `await` the future and still see the error. This
+  /// only says that *nobody at all* listening is an acceptable state - which it
+  /// is, because analytics failing must never take anything else down.
   final Completer<void> _initCompleter = Completer<void>();
 
   bool _isInitialized = false;
@@ -38,6 +52,9 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
 
   @override
   Future<void> initialize(AnalyticsSettings settings) async {
+    // Claim the error before anything can observe it as unhandled. Harmless
+    // when a real caller also awaits: a future may have many listeners.
+    _initCompleter.future.ignore();
     return _initializeWithRetry(settings);
   }
 

@@ -1,0 +1,3 @@
+# Local secrets / runtime state — never commit.
+.env
+*.log

@@ -25,26 +25,29 @@ class UpdateBloc extends BlocBase {
     final currentVersion = await _getCurrentAppVersion();
     final versionInfo = await appUpdateService.getUpdateInfo();
     if (versionInfo == null) return;
-    final bool isNewVersion =
-        _isVersionGreaterThan(versionInfo.version, currentVersion);
+    final bool isNewVersion = _isVersionGreaterThan(
+      versionInfo.version,
+      currentVersion,
+    );
 
     if (!isNewVersion || _isPopupShown) return;
 
     PopupDispatcher(
-        barrierDismissible: false,
-        contentPadding: isMobile
-            ? const EdgeInsets.all(15.0)
-            : const EdgeInsets.fromLTRB(26, 15, 26, 42),
-        popupContent: UpdatePopUp(
-          versionInfo: versionInfo,
-          onAccept: () {
-            _isPopupShown = false;
-          },
-          onCancel: () {
-            _isPopupShown = false;
-            _checkerTime.cancel();
-          },
-        )).show();
+      barrierDismissible: false,
+      contentPadding: isMobile
+          ? const EdgeInsets.all(15.0)
+          : const EdgeInsets.fromLTRB(26, 15, 26, 42),
+      popupContent: UpdatePopUp(
+        versionInfo: versionInfo,
+        onAccept: () {
+          _isPopupShown = false;
+        },
+        onCancel: () {
+          _isPopupShown = false;
+          _checkerTime.cancel();
+        },
+      ),
+    ).show();
     _isPopupShown = true;
   }
 

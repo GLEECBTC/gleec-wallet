@@ -11,57 +11,90 @@ import 'package:web_dex/shared/utils/utils.dart';
 /// 2. If no balance, sort by priority (higher priority first)
 /// 3. If same priority, sort alphabetically
 List<Coin> sortByPriorityAndBalance(List<Coin> coins, KomodoDefiSdk sdk) {
-  final List<Coin> list = List.of(coins);
-  list.sort((a, b) {
-    final bool aIsParent = a.parentCoin == null;
-    final bool bIsParent = b.parentCoin == null;
-    if (aIsParent != bIsParent) return aIsParent ? -1 : 1;
+  // Decorate-sort-undecorate: each coin's USD value is read **once**, not once
+  // per comparison.
+  //
+  // This runs inside `ActiveCoinsList.build()` on every `CoinsBloc` emission,
+  // and `lastKnownUsdBalance` is not a field read - it does a `Map<AssetId, _>`
+  // lookup, then `priceIfKnown`, which builds a cache key by allocating a map
+  // literal, sorting its keys and joining strings (`asset_cache_key.dart`), and
+  // finally a `Decimal`/`BigInt` multiply. A comparison-based sort of n items
+  // makes ~n·log2(n) comparisons, so at 40 coins the old shape paid for it
+  // roughly 426 times per rebuild instead of 40.
+  //
+  // The comparator below is otherwise unchanged, including the `> 0` / `== 0`
+  // asymmetry. `test_units/tests/sorting/coin_sort_order_test.dart` pins the
+  // resulting order against the original.
+  final decorated = List.generate(
+    coins.length,
+    (i) {
+      final coin = coins[i];
+      return (
+        coin: coin,
+        isParent: coin.parentCoin == null,
+        usd: coin.lastKnownUsdBalance(sdk) ?? 0.00,
+      );
+    },
+    growable: false,
+  );
 
-    final double usdBalanceA = a.lastKnownUsdBalance(sdk) ?? 0.00;
-    final double usdBalanceB = b.lastKnownUsdBalance(sdk) ?? 0.00;
+  decorated.sort((a, b) {
+    if (a.isParent != b.isParent) return a.isParent ? -1 : 1;
 
     // Both have balance - sort by USD balance descending
-    if (usdBalanceA > 0 && usdBalanceB > 0) {
-      return usdBalanceB.compareTo(usdBalanceA);
-    }
+    if (a.usd > 0 && b.usd > 0) return b.usd.compareTo(a.usd);
 
     // Only one has balance - that one comes first
-    if (usdBalanceA > 0 && usdBalanceB == 0) return -1;
-    if (usdBalanceB > 0 && usdBalanceA == 0) return 1;
+    if (a.usd > 0 && b.usd == 0) return -1;
+    if (b.usd > 0 && a.usd == 0) return 1;
 
     // Both have no balance - sort by priority then alphabetically
-    final int priorityA = a.priority;
-    final int priorityB = b.priority;
-    if (priorityA != priorityB) return priorityB - priorityA;
+    if (a.coin.priority != b.coin.priority) {
+      return b.coin.priority - a.coin.priority;
+    }
 
-    return a.abbr.compareTo(b.abbr);
+    return a.coin.abbr.compareTo(b.coin.abbr);
   });
-  return list;
+
+  return [for (final entry in decorated) entry.coin];
 }
 
 List<Coin> sortFiatBalance(List<Coin> coins, KomodoDefiSdk sdk) {
-  final List<Coin> list = List.of(coins);
-  list.sort((a, b) {
-    final bool aIsParent = a.parentCoin == null;
-    final bool bIsParent = b.parentCoin == null;
-    if (aIsParent != bIsParent) return aIsParent ? -1 : 1;
+  // Same reasoning as [sortByPriorityAndBalance], and worse in the original:
+  // this comparator read *two* SDK-backed values per side, so four lookups per
+  // comparison rather than two.
+  final decorated = List.generate(
+    coins.length,
+    (i) {
+      final coin = coins[i];
+      return (
+        coin: coin,
+        isParent: coin.parentCoin == null,
+        usd: coin.lastKnownUsdBalance(sdk) ?? 0.00,
+        balance: coin.balance(sdk) ?? 0,
+      );
+    },
+    growable: false,
+  );
 
-    final double usdBalanceA = a.lastKnownUsdBalance(sdk) ?? 0.00;
-    final double usdBalanceB = b.lastKnownUsdBalance(sdk) ?? 0.00;
-    if (usdBalanceA > usdBalanceB) return -1;
-    if (usdBalanceA < usdBalanceB) return 1;
+  decorated.sort((a, b) {
+    if (a.isParent != b.isParent) return a.isParent ? -1 : 1;
 
-    if ((a.balance(sdk) ?? 0) > (b.balance(sdk) ?? 0)) return -1;
-    if ((a.balance(sdk) ?? 0) < (b.balance(sdk) ?? 0)) return 1;
+    if (a.usd > b.usd) return -1;
+    if (a.usd < b.usd) return 1;
 
-    final bool isAEnabled = a.isActive;
-    final bool isBEnabled = b.isActive;
+    if (a.balance > b.balance) return -1;
+    if (a.balance < b.balance) return 1;
+
+    final bool isAEnabled = a.coin.isActive;
+    final bool isBEnabled = b.coin.isActive;
     if (isAEnabled && !isBEnabled) return -1;
     if (isBEnabled && !isAEnabled) return 1;
 
-    return a.abbr.compareTo(b.abbr);
+    return a.coin.abbr.compareTo(b.coin.abbr);
   });
-  return list;
+
+  return [for (final entry in decorated) entry.coin];
 }
 
 List<Coin> removeTestCoins(List<Coin> coins) {

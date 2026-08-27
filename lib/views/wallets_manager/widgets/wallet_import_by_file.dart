@@ -248,6 +248,12 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
         json.decode(fileData),
       );
       walletConfig.type = _isHdMode ? WalletType.hdwallet : WalletType.iguana;
+      // Holding an encrypted file is not the same as holding the recovery
+      // phrase, and `has_backup` in that file is whatever a previous session
+      // self-reported. Importing one is evidence of a file, so the backup
+      // prompt stays on until the phrase itself is confirmed. The typed-phrase
+      // import path keeps `true` - there the user demonstrably has the words.
+      walletConfig.hasBackup = false;
 
       final String? decryptedSeed = await encryptionTool.decryptData(
         _filePasswordController.text,

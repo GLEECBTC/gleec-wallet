@@ -7,12 +7,12 @@ import 'package:web_dex/views/common/page_header/page_header.dart';
 import 'package:web_dex/views/common/pages/page_layout.dart';
 
 class KmdRewardClaimSuccess extends StatelessWidget {
-  const KmdRewardClaimSuccess(
-      {Key? key,
-      required this.reward,
-      required this.formattedUsd,
-      required this.onBackButtonPressed})
-      : super(key: key);
+  const KmdRewardClaimSuccess({
+    Key? key,
+    required this.reward,
+    required this.formattedUsd,
+    required this.onBackButtonPressed,
+  }) : super(key: key);
 
   final String reward;
   final String formattedUsd;
@@ -43,8 +43,9 @@ class KmdRewardClaimSuccess extends StatelessWidget {
           Text(
             LocaleKeys.youClaimed.tr(),
             style: TextStyle(
-              color:
-                  themeData.textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
+              color: themeData.textTheme.bodyMedium?.color?.withValues(
+                alpha: 0.4,
+              ),
               fontWeight: FontWeight.w700,
               fontSize: 14,
             ),
@@ -52,17 +53,15 @@ class KmdRewardClaimSuccess extends StatelessWidget {
           const SizedBox(height: 5.0),
           SelectableText(
             reward,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 25,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 25),
           ),
           const SizedBox(height: 5.0),
           SelectableText(
             '\$$formattedUsd',
             style: TextStyle(
-              color:
-                  themeData.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+              color: themeData.textTheme.bodyMedium?.color?.withValues(
+                alpha: 0.7,
+              ),
               fontWeight: FontWeight.w500,
               fontSize: 14,
             ),
@@ -74,7 +73,7 @@ class KmdRewardClaimSuccess extends StatelessWidget {
               onPressed: onBackButtonPressed,
               text: LocaleKeys.done.tr(),
             ),
-          )
+          ),
         ],
       ),
     );

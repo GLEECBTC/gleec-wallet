@@ -1,8 +1,7 @@
-# Unit and Widget testing
+# Unit and widget testing
 
-To run unit test:
+Moved. See [TESTING.md](TESTING.md#2-unit-and-widget-tests).
 
-```bash
-flutter pub get --enforce-lockfile
-flutter test --no-pub test_units/main.dart
-```
+`flutter test test_units/main.dart` **requires four `--dart-define`s** — without them ~36
+GasFree tests hang rather than fail and wedge the whole run. The full command is in
+TESTING.md.

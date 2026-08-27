@@ -1,0 +1,121 @@
+# Local reproduction stack for the TRON gas-free komodo_proxy 401.
+#
+# What it runs:
+#   redis       - rate-limiter / address-status store the proxy depends on
+#   kdf-probe   - the KDF node the PROXY queries via `peer_connection_healthcheck`
+#                 (the analogue of the node behind quicknode.gleec.com). Runs as a
+#                 netid-6133 seed so a client can connect directly to it.
+#   kdf-client  - a wallet-like KDF node. When its seednodes include kdf-probe it is
+#                 directly meshed with the probe (healthcheck => true). Point it
+#                 elsewhere to reproduce the production "not connected => 401".
+#   proxy       - GLEECBTC/komodo-defi-proxy built from fix/healthcheck-serialization,
+#                 with /gasfree -> open.gasfree.io (HMAC creds from .env).
+#
+# See README.md for the full run + debug procedure. Secrets come from .env
+# (copy .env.example -> .env). Nothing here prints secret values.
+
+name: tron-gasfree-proxy-debug
+
+# Fixed subnet so the KDF probe has a stable IP. KDF's `seednodes` only accepts
+# IPv4 / dotted-DNS / memory addresses (a bare Docker service name like "kdf-probe"
+# is rejected), so the client dials the probe by IP.
+networks:
+  kdfnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  redis:
+    image: redis:7.2.4-alpine3.19
+    restart: unless-stopped
+    networks: [kdfnet]
+    # Exposed only inside the compose network; no host port needed.
+
+  kdf-probe:
+    build:
+      context: ./kdf
+      dockerfile: Dockerfile
+    # The bundled KDF binary is linux/x86-64; force amd64 (emulated on Apple Silicon).
+    platform: linux/amd64
+    restart: unless-stopped
+    volumes:
+      # Reuse the exact KDF build the wallet ships (repo-relative, read-only).
+      - ../../sdk/packages/komodo_defi_framework/linux/bin/kdf:/usr/local/bin/kdf:ro
+    environment:
+      KDF_ROLE: probe
+      KDF_NETID: "6133"
+      KDF_I_AM_SEED: "true"
+      KDF_SEEDNODES: ""                       # standalone local seed
+      KDF_RPC_PASSWORD: ${KDF_RPC_PASSWORD:?set KDF_RPC_PASSWORD in .env}
+      KDF_PASSPHRASE: ${KDF_PROBE_PASSPHRASE:?set KDF_PROBE_PASSPHRASE in .env}
+    networks:
+      kdfnet:
+        ipv4_address: 172.28.0.10             # stable IP the client uses as a seednode
+    ports:
+      - "7790:7783"                           # host -> probe RPC (for diagnose.sh)
+
+  kdf-client:
+    build:
+      context: ./kdf
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    restart: unless-stopped
+    depends_on:
+      - kdf-probe
+    volumes:
+      - ../../sdk/packages/komodo_defi_framework/linux/bin/kdf:/usr/local/bin/kdf:ro
+    environment:
+      KDF_ROLE: client
+      KDF_NETID: "6133"
+      KDF_I_AM_SEED: "false"
+      # Connected case (healthcheck => true). Set KDF_CLIENT_SEEDNODES="" in .env
+      # and recreate this service to reproduce the "not connected => 401".
+      KDF_SEEDNODES: ${KDF_CLIENT_SEEDNODES-172.28.0.10}
+      KDF_RPC_PASSWORD: ${KDF_RPC_PASSWORD:?set KDF_RPC_PASSWORD in .env}
+      KDF_PASSPHRASE: ${KDF_CLIENT_PASSPHRASE:?set KDF_CLIENT_PASSPHRASE in .env}
+    networks: [kdfnet]
+    ports:
+      - "7791:7783"                           # host -> client RPC (for diagnose.sh)
+
+  proxy:
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
+      args:
+        # Pin the GLEEC proxy repo + fixed proxy commit so the build is reproducible.
+        PROXY_REPO: ${PROXY_REPO:-https://github.com/GLEECBTC/komodo-defi-proxy.git}
+        PROXY_COMMIT: ${PROXY_COMMIT:-45c9a06e6a98c611520317933414113480530b60}
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - kdf-probe
+    environment:
+      AUTH_APP_CONFIG_PATH: /config/config.json
+      PROXY_PORT: "6150"
+      RUST_LOG: ${PROXY_RUST_LOG:-info}        # quiet the default Trace/mio/tokio noise
+      REDIS_CONNECTION_STRING: redis://redis:6379
+      KDF_RPC_URL: http://kdf-probe:7783
+      KDF_RPC_PASSWORD: ${KDF_RPC_PASSWORD:?set KDF_RPC_PASSWORD in .env}
+      GASFREE_OUTBOUND_URL: ${GASFREE_OUTBOUND_URL:-https://open.gasfree.io}
+      GASFREE_API_KEY: ${GASFREE_API_KEY:?set GASFREE_API_KEY in .env}
+      GASFREE_API_SECRET: ${GASFREE_API_SECRET:?set GASFREE_API_SECRET in .env}
+    networks: [kdfnet]
+    ports:
+      - "6150:6150"                           # host -> proxy DIRECT (diagnose.sh / prove.sh)
+
+  # NGINX edge: the production-shaped place to handle browser CORS without patching the
+  # proxy's Rust. The app points at this (6160); diagnostics still hit the proxy directly
+  # on 6150. See nginx/nginx.conf.
+  nginx:
+    # OpenResty (nginx + lua) so the edge can log upstream error response bodies. LOCAL ONLY.
+    image: openresty/openresty:alpine
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    volumes:
+      - ./nginx/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+    networks: [kdfnet]
+    ports:
+      - "6160:80"                             # host -> nginx -> proxy (app uses this)

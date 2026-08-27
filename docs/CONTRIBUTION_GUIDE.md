@@ -32,14 +32,15 @@
 
 - [ ] Sync your work branch with the latest changes from the target branch (`dev` or `master`), resolve merge conflicts if any
 - [ ] (Re)read original issue and comments, make sure that changes are solving the issue or adding the feature
-- [ ] Run [integration tests](INTEGRATION_TESTING.md) locally
-- [ ] Consider adding integration tests for your changes
+- [ ] Run the unit suite locally — `flutter test test_units/main.dart` **with the four GasFree dart-defines** ([TESTING.md](TESTING.md#2-unit-and-widget-tests)). This is the gating CI job; without the defines it hangs rather than fails
+- [ ] Run [integration tests](TESTING.md#3-integration--gui-tests) locally
+- [ ] Consider adding tests for your changes — see [which suite to run](TESTING.md#8-which-suite-do-i-run)
 - [ ] Test your changes manually
   - [ ] Desktop/mobile view
   - [ ] Dark/light mode
   - [ ] Different browsers (for web build): Chrome, Firefox, Safari, Edge, Brave
   - [ ] Different build modes: debug, release, profile
-- [ ] Make sure that `flutter analyze` and `flutter format` are passing
+- [ ] Make sure that `flutter analyze` and `dart format` are passing
 - [ ] Always use `flutter pub get --enforce-lockfile` in CI or shared environments for security
 - [ ] Use `--no-pub` flag with Flutter commands that automatically run pub get
 

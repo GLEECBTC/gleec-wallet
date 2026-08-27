@@ -1,5 +1,21 @@
 {
   "projects": {
-    "default": "komodo-wallet-official"
+    "default": "komodo-wallet-preview"
+  },
+  "targets": {
+    "komodo-wallet-official": {
+      "hosting": {
+        "walletrc": [
+          "walletrc"
+        ]
+      }
+    },
+    "komodo-wallet-preview": {
+      "hosting": {
+        "walletrc": [
+          "komodo-wallet-preview"
+        ]
+      }
+    }
   }
 }

@@ -33,9 +33,11 @@ class _FaucetButtonState extends State<FaucetButton> {
 
     return BlocConsumer<FaucetBloc, FaucetState>(
       listenWhen: (previous, current) {
-        final isLoading = current is FaucetRequestInProgress &&
+        final isLoading =
+            current is FaucetRequestInProgress &&
             current.address == widget.address.address;
-        final didStopLoading = previous is FaucetRequestInProgress &&
+        final didStopLoading =
+            previous is FaucetRequestInProgress &&
             previous.address == widget.address.address;
 
         return isLoading || didStopLoading;
@@ -59,7 +61,8 @@ class _FaucetButtonState extends State<FaucetButton> {
         }
       },
       builder: (context, state) {
-        final isLoading = state is FaucetRequestInProgress &&
+        final isLoading =
+            state is FaucetRequestInProgress &&
             state.address == widget.address.address;
         return Padding(
           padding: EdgeInsets.only(left: isMobile ? 4 : 8),
@@ -77,10 +80,12 @@ class _FaucetButtonState extends State<FaucetButton> {
               onPressed: isLoading
                   ? null
                   : () {
-                      context.read<FaucetBloc>().add(FaucetRequested(
-                            coinAbbr: widget.coinAbbr,
-                            address: widget.address.address,
-                          ));
+                      context.read<FaucetBloc>().add(
+                        FaucetRequested(
+                          coinAbbr: widget.coinAbbr,
+                          address: widget.address.address,
+                        ),
+                      );
                     },
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -90,14 +95,18 @@ class _FaucetButtonState extends State<FaucetButton> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.local_drink_rounded,
-                        color: Colors.blue, size: isMobile ? 14 : 16),
+                    Icon(
+                      Icons.local_drink_rounded,
+                      color: Colors.blue,
+                      size: isMobile ? 14 : 16,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       LocaleKeys.faucet.tr(),
                       style: TextStyle(
-                          fontSize: isMobile ? 9 : 12,
-                          fontWeight: FontWeight.w500),
+                        fontSize: isMobile ? 9 : 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),

@@ -476,6 +476,9 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     final WalletConfig config = WalletConfig(
       type: _isHdMode ? WalletType.hdwallet : WalletType.iguana,
       activatedCoins: enabledByDefaultCoins,
+      // The user typed every word, which is stronger evidence of holding the
+      // phrase than the confirmation quiz asks for. File import is the case
+      // that must not claim this - see `wallet_import_by_file.dart`.
       hasBackup: true,
       seedPhrase: _seedController.text,
     );

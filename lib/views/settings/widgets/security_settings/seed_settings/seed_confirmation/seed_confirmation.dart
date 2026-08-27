@@ -139,6 +139,9 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
 
     if (result == widget.seedPhrase) {
       final settingsBloc = context.read<SecuritySettingsBloc>();
+      // Read before dispatching: `SeedConfirmedEvent` advances the step, and
+      // the anchor must be sampled against the state that is still in the flow.
+      final backupSeconds = settingsBloc.state.backupElapsed?.inSeconds ?? 0;
       settingsBloc.add(const SeedConfirmedEvent());
       context.read<AuthBloc>().add(AuthSeedBackupConfirmed());
       final walletType =
@@ -146,7 +149,7 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
           '';
       context.read<AnalyticsBloc>().add(
         AnalyticsBackupCompletedEvent(
-          backupTime: 0,
+          backupTime: backupSeconds,
           method: 'manual',
           hdType: walletType,
         ),
