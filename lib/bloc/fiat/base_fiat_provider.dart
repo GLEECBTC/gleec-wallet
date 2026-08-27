@@ -265,8 +265,7 @@ abstract class BaseFiatProvider {
   /// it has to belong to an approved provider. Callers are expected to have
   /// checked it with [isAllowedFiatCheckoutUrl] already and to report a
   /// failure to the user; the throw here is the backstop for the ones that
-  /// forget. The wrapper page repeats the check for itself, because it is
-  /// served to already-shipped clients this code cannot reach.
+  /// forget.
   static String fiatWrapperPageUrl(String providerUrl) {
     if (!isAllowedFiatCheckoutUrl(providerUrl)) {
       throw ArgumentError.value(

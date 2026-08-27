@@ -243,11 +243,9 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       }
 
       // Only a provider that reports status through `postMessage` needs the
-      // intermediate html page at `assets/web_pages/fiat_widget.html`, which
-      // is also the one place a provider URL becomes an iframe `src` inside
-      // the wallet's own origin. Banxa reports status through order polling
-      // instead, so its checkout page is opened directly and never goes near
-      // the wrapper.
+      // intermediate html page at `assets/web_pages/fiat_widget.html`. Banxa
+      // reports status through order polling instead, so its checkout page is
+      // opened directly.
       final checkoutUrl = isBanxaOrder
           ? providerCheckoutUrl
           : BaseFiatProvider.fiatWrapperPageUrl(providerCheckoutUrl);

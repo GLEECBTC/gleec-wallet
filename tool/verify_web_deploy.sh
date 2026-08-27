@@ -12,17 +12,10 @@
 #
 # Exit status is 0 only when every check passes.
 #
-# Two independent things are checked, because they ship through different
-# mechanisms and can land separately:
-#
-#   1. The wrapper asset (build output). Travels with the Flutter build, so it
-#      is correct regardless of which Firebase site or firebase.json was used.
-#      This is the check that matters: it is the actual vulnerability fix, and
-#      desktop and mobile builds already in users' hands fetch this file from
-#      the deployed site at runtime.
-#   2. The response headers (firebase.json). These only exist if the deploy
-#      used a firebase.json that declares them for the site being deployed, so
-#      they are the half that can silently go missing.
+# The wrapper asset and the response headers are checked separately, because
+# they ship through different mechanisms and can land apart: the asset travels
+# with the Flutter build and is the actual fix, while the headers exist only if
+# the deploy used a firebase.json that declares them for this site.
 
 set -uo pipefail
 
@@ -66,11 +59,9 @@ fetch_widget() {
   done
 }
 
-# Response headers come from the hosting config of the version being served, so
-# they have to be read from a request that actually reaches the origin -- hence
-# the cache-bust, for the same reason the body probe has one. Retried, because a
-# single transport hiccup would otherwise be reported as every header being
-# absent, which reads exactly like a deploy that lost the config.
+# Headers belong to the version being served, so the request has to reach the
+# origin rather than an edge copy of the previous one -- hence the cache-bust,
+# for the same reason the body probe has one.
 fetch_headers() {
   local attempt=1 out
   while :; do
