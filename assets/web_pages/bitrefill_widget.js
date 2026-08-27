@@ -82,7 +82,10 @@ function postMessageToParent(message) {
 
     // universal_url opener 
     if (window.opener) {
-        return window.opener.postMessage(message, "*");
+        // The opener is always the wallet app, which serves this page,
+        // so pin the target origin rather than broadcasting the
+        // invoice with "*".
+        return window.opener.postMessage(message, window.location.origin);
     }
 
     // desktop_webview_window - https://github.com/MixinNetwork/flutter-plugins/blob/main/packages/desktop_webview_window/example/test_web_pages/test.html

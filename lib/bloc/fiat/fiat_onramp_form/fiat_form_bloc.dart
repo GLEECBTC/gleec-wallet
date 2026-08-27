@@ -15,6 +15,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/fiat/base_fiat_provider.dart';
+import 'package:web_dex/bloc/fiat/fiat_checkout_url_allowlist.dart';
 import 'package:web_dex/bloc/fiat/fiat_default_preference.dart';
 import 'package:web_dex/bloc/fiat/fiat_order_status.dart';
 import 'package:web_dex/bloc/fiat/fiat_repository.dart';
@@ -227,16 +228,17 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
         return emit(_parseOrderError(newOrder.error));
       }
 
-      var checkoutUrl = newOrder.checkoutUrl as String? ?? '';
-      if (checkoutUrl.isEmpty) {
-        _log.severe('Invalid checkout URL received.');
+      final providerCheckoutUrl = newOrder.checkoutUrl;
+      if (!isAllowedFiatCheckoutUrl(providerCheckoutUrl)) {
+        // The order response is served by the fiat-ramps API, so a hostile or
+        // compromised response must not get to choose what the webview loads.
+        _log.severe('Rejected checkout URL received from the fiat provider.');
         return emit(state.copyWith(fiatOrderStatus: FiatOrderStatus.failed));
       }
 
-      // Only Ramp on web requires the intermediate html page to satisfy cors
-      // rules and allow for console.log and postMessage events to be handled.
-      // Banxa does not use `postMessage` and does not require this.
-      checkoutUrl = BaseFiatProvider.fiatWrapperPageUrl(checkoutUrl);
+      final checkoutUrl = _requiresWrapperPage
+          ? BaseFiatProvider.fiatWrapperPageUrl(providerCheckoutUrl)
+          : providerCheckoutUrl;
       final webViewMode = _determineWebViewMode();
 
       emit(
@@ -253,6 +255,16 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       emit(state.copyWith(status: FiatFormStatus.failure, checkoutUrl: ''));
     }
   }
+
+  /// Whether the checkout page has to be loaded through the intermediate
+  /// html page at `assets/web_pages/fiat_widget.html`.
+  ///
+  /// That page exists only to relay a provider's `postMessage` and
+  /// `console.log` status events back to the app, and it is also the one place
+  /// where a provider URL becomes an iframe `src` inside the wallet's own
+  /// origin. Banxa reports status through order polling instead, so its
+  /// checkout page is opened directly and never goes near the wrapper.
+  bool get _requiresWrapperPage => !state.isBanxaSelected;
 
   /// Determines the appropriate WebViewDialogMode based on platform and
   /// environment

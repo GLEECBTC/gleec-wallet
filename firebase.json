@@ -3,6 +3,10 @@
     "site": "walletrc",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    // DO NOT enable this block. `credentialless` strips the cross-origin
+    // cookies that the fiat provider KYC flow documents as required, so
+    // turning it on silently breaks identity verification part-way through a
+    // purchase.
     // "headers": [
     //   {
     //     "source": "**",
@@ -18,6 +22,60 @@
     //     ]
     //   }
     // ],
+    "headers": [
+      {
+        // Each glob below owns a distinct set of header keys, so no key is
+        // ever set by two entries and the order of this array does not matter.
+        "source": "**",
+        "headers": [
+          {
+            // The wallet is only ever framed by itself (the web build renders
+            // the fiat wrapper page in a same-origin iframe). `frame-ancestors`
+            // is the header that actually governs this; X-Frame-Options is kept
+            // alongside it for clients that predate CSP Level 2.
+            "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'self'"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            // Only features that neither the wallet nor the fiat providers
+            // use. `camera`, `microphone`, `payment`, `encrypted-media` and
+            // `midi` are deliberately absent: their default allowlist is
+            // `self`, which is exactly what lets the fiat wrapper page
+            // delegate them to the provider iframe via its `allow` attribute.
+            // Denying them here would break provider KYC.
+            "key": "Permissions-Policy",
+            "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=(), interest-cohort=()"
+          }
+        ]
+      },
+      {
+        // These pages decide what a webview is allowed to load, and desktop and
+        // mobile builds fetch them from here rather than from their own bundle.
+        // Firebase's default max-age=3600 would leave already-shipped clients
+        // running a superseded copy for up to an hour after a fix is deployed,
+        // so require revalidation instead; a 304 on a page loaded once per
+        // purchase costs nothing.
+        "source": "/assets/assets/web_pages/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",

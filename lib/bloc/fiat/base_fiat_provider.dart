@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:web_dex/bloc/fiat/fiat_checkout_url_allowlist.dart';
 import 'package:web_dex/bloc/fiat/fiat_order_status.dart';
 import 'package:web_dex/bloc/fiat/models/models.dart';
 import 'package:web_dex/model/coin_type.dart';
@@ -259,11 +260,29 @@ abstract class BaseFiatProvider {
   /// Provides the base URL to the intermediate html page that is used to
   /// bypass CORS restrictions so that console.log and postMessage events
   /// can be received and handled.
+  ///
+  /// [providerUrl] becomes an iframe `src` inside the wallet's own origin, so
+  /// it has to belong to an approved provider. Callers are expected to have
+  /// checked it with [isAllowedFiatCheckoutUrl] already and to report a
+  /// failure to the user; the throw here is the backstop for the ones that
+  /// forget. The wrapper page repeats the check for itself, because it is
+  /// served to already-shipped clients this code cannot reach.
   static String fiatWrapperPageUrl(String providerUrl) {
-    final encodedUrl = base64Encode(utf8.encode(providerUrl));
+    if (!isAllowedFiatCheckoutUrl(providerUrl)) {
+      throw ArgumentError.value(
+        providerUrl,
+        'providerUrl',
+        'not an approved fiat provider checkout URL',
+      );
+    }
+
+    // base64url rather than standard base64: a `+` in a query string is
+    // decoded as a space by the wrapper page's URLSearchParams, which corrupts
+    // roughly one in every sixty-four characters of a standard base64 payload.
+    final encodedUrl = base64UrlEncode(utf8.encode(providerUrl));
 
     return '${getOriginUrl()}/assets/assets/'
-        'web_pages/fiat_widget.html?fiatUrl=$encodedUrl';
+        'web_pages/fiat_widget.html?fiatUrl=${Uri.encodeComponent(encodedUrl)}';
   }
 
   /// Provides the URL to the checkout handler HTML page that posts the payment

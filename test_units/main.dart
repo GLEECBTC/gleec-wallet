@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'tests/fiat/fiat_checkout_url_allowlist_test.dart'
+    as fiat_checkout_url_allowlist_test;
 import 'tests/dex/order_model_validation_test.dart';
 import 'tests/dex/trading_entities_guards_test.dart';
 import 'tests/encryption/encrypt_data_tests.dart';
@@ -133,4 +135,6 @@ void main() {
     testTransactionViewsWidgets();
     testReceiveAddressFaucetWidgets();
   });
+
+  fiat_checkout_url_allowlist_test.main();
 }
