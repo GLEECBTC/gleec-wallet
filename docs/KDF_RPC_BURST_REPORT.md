@@ -5,7 +5,7 @@
 (KDF `d56a7bc`)
 **Repo:** `gleec-wallet-kdf-integrations`, branch `add/gas-free-tron`
 **Host:** macOS 25.5.0, arm64
-**Raw data:** regenerate with `tool/kdf_rpc_burst_bench.py` (writes `out/`), or retrieve the original captures from git history at `ca0212a1b31b` - see [`assets/kdf_rpc_burst_data/README.md`](assets/kdf_rpc_burst_data/README.md).
+**Raw data:** historical. The tables below were measured against a ladder of nine KDF commits, none of which is reachable any more (the fork is gone; the wallet now pins KDF `main`). The captures are recoverable only from git history at `ca0212a1b31b` - see [`assets/kdf_rpc_burst_data/README.md`](assets/kdf_rpc_burst_data/README.md). A fresh `tool/kdf_rpc_burst_bench.py` run measures today's KDF and is *not* a reproduction of these numbers.
 
 > **Gap-limit caveat.** The bench here runs at `gap_limit: 20`, but the shipped
 > SDK now sends `software = 3` / `newlyGeneratedFirstSignIn = 1`
