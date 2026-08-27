@@ -5,11 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/fiat/base_fiat_provider.dart';
 import 'package:web_dex/bloc/fiat/fiat_checkout_url_allowlist.dart';
 
-/// `assets/web_pages/fiat_widget.html` turns a base64 query parameter into an
-/// iframe `src` inside the wallet's own origin. These tests pin the check that
-/// stands between that parameter and the iframe, on both sides: the Dart
-/// caller, and the deployed HTML asset that already-shipped desktop and mobile
-/// builds fetch straight from production.
+/// Pins the checkout-URL check on both sides: the Dart caller, and the
+/// deployed HTML asset that already-shipped builds fetch from production.
 const String _widgetAssetPath = 'assets/web_pages/fiat_widget.html';
 
 void main() {
@@ -139,12 +136,7 @@ void main() {
     });
 
     test('stays decodable by the wrapper page already deployed to users', () {
-      // Desktop and mobile builds fetch the wrapper from getOriginUrl(), which
-      // is production, which is deployed by hand and lags this code. The page
-      // sitting there calls `atob` on the URLSearchParams value with no
-      // normalisation, and `atob` rejects base64url's `-` and `_`. Sending
-      // anything it cannot decode turns the buy flow into a blank page for
-      // every already-shipped native client until production is redeployed.
+      // That page calls `atob` directly, which rejects base64url's `-`/`_`.
       final wrapped = BaseFiatProvider.fiatWrapperPageUrl(providerUrl);
       final param = Uri.parse(wrapped).queryParameters['fiatUrl'];
 
@@ -194,7 +186,6 @@ void main() {
       expect(widgetSource, contains("parsed.protocol !== 'https:'"));
       expect(widgetSource, contains('_komodoIsAllowedCheckoutHost'));
       expect(widgetSource, contains('parsed.username || parsed.password'));
-      // The validated, re-serialised URL is what gets loaded.
       expect(
         widgetSource,
         contains("document.getElementById('fiat-onramp-iframe').src = approvedUrl;"),
@@ -245,15 +236,9 @@ void main() {
     }
   });
   group('hosting config:', () {
-    // The wrapper page's own allowlist is the fix; these headers are the
-    // hardening layered on top, and they only exist on a site whose deployed
-    // hosting config declares them. dex.gleec.com is a different Firebase
-    // project from the RC site, so the thing to protect is that ONE config
-    // reaches both: firebase.json holds a single `hosting` entry selected by a
-    // deploy target, and .firebaserc maps that target to a site per project.
-    // Nothing has to be kept in step by hand, so nothing can drift -- but the
-    // mapping itself can be dropped, and production would then have no config
-    // to deploy at all.
+    // One config reaches both the RC site and production, so the headers
+    // cannot drift. What can still break is the .firebaserc mapping that makes
+    // production reachable at all.
     late Map<String, dynamic> hostingConfig;
     late Map<String, dynamic> deployTargets;
 
@@ -287,7 +272,6 @@ void main() {
       final target = hostingConfig['target'] as String;
 
       for (final entry in <String, String>{
-        // project -> the site it must resolve to.
         'komodo-wallet-official': 'walletrc',
         'gleec-wallet-official': 'gleec-wallet-official',
       }.entries) {
@@ -355,7 +339,6 @@ void main() {
   });
 }
 
-/// Any `postMessage(..., '*')` or `postMessage(..., "*")`.
 final RegExp _wildcardPostMessage =
     RegExp('''postMessage\\([^)]*,\\s*['"]\\*['"]''');
 

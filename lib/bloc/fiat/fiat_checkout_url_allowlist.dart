@@ -1,15 +1,8 @@
 /// Canonical allowlist for fiat on-ramp checkout URLs.
 ///
-/// The wrapper page at `assets/web_pages/fiat_widget.html` takes its iframe
-/// `src` from a base64 query parameter, so whatever reaches that parameter is
-/// loaded inside the wallet's own origin. Every checkout URL is checked
-/// against this list before it can get there.
-///
 /// `assets/web_pages/fiat_widget.html` carries a copy of both lists, because
-/// the deployed asset is fetched straight from production by desktop and
-/// mobile builds that are already in users' hands and cannot be re-released.
-/// `test_units/tests/fiat/fiat_checkout_url_allowlist_test.dart` fails if the
-/// two copies drift apart.
+/// already-shipped desktop and mobile builds fetch that page from production
+/// and cannot be re-released. A test fails if the two copies drift apart.
 library;
 
 /// Hosts that may serve a fiat checkout page, matched exactly.
@@ -42,17 +35,15 @@ final RegExp _kAmbiguousUrlCharacters = RegExp(r'[\\\s\u0000-\u001f\u007f]');
 
 /// Whether [url] is an `https` URL served by an approved fiat provider.
 ///
-/// This is the Dart-side half of the check. The authoritative one runs in
-/// `fiat_widget.html`, because that is where the URL actually becomes an
-/// iframe `src`, and because a hostile or compromised order response reaches
-/// already-shipped clients whose Dart code cannot be changed.
+/// The authoritative check is the one in `fiat_widget.html`, where the URL
+/// actually becomes an iframe `src`; this one keeps a rejected URL from
+/// getting that far.
 bool isAllowedFiatCheckoutUrl(String? url) {
   if (url == null || url.isEmpty) return false;
   if (_kAmbiguousUrlCharacters.hasMatch(url)) return false;
 
   final Uri? parsed = Uri.tryParse(url);
   if (parsed == null) return false;
-  // Blocks javascript:, data:, blob:, file: and plain http:.
   if (parsed.scheme.toLowerCase() != 'https') return false;
   if (!parsed.hasAuthority) return false;
   // `https://komodo.banxa.com@attacker.example/` authenticates to
