@@ -5,14 +5,14 @@
   "targets": {
     "komodo-wallet-official": {
       "hosting": {
-        "walletrc": [
+        "web": [
           "walletrc"
         ]
       }
     },
     "komodo-wallet-preview": {
       "hosting": {
-        "walletrc": [
+        "web": [
           "komodo-wallet-preview"
         ]
       }

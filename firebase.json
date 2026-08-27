@@ -1,6 +1,21 @@
 {
+  // One hosting config, deployed to a different site depending on which
+  // Firebase project it is deployed against. `.firebaserc` maps the `web`
+  // deploy target per project:
+  //
+  //   komodo-wallet-official -> site walletrc              (CI, push to `dev`)
+  //   komodo-wallet-preview  -> site komodo-wallet-preview (local default)
+  //
+  //   firebase deploy --only hosting:web --project <project>
+  //
+  // `web` names the ROLE ("the wallet web app site for this project"), not a
+  // site. Do not name it after any one site: the target is shared across
+  // projects, so a site-shaped name is wrong everywhere except one place.
+  // `--project` is what selects the site, so always pass it -- a bare
+  // `firebase deploy` uses `.firebaserc`'s default, which is the preview
+  // project on purpose.
   "hosting": {
-    "target": "walletrc",
+    "target": "web",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     // "headers": [

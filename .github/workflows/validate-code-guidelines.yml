@@ -38,6 +38,13 @@ jobs:
             dart pub get -C sdk
           fi
 
+      # The Firebase deploy action reads its published URL out of the CLI's
+      # own output. That is a regex over another tool's text, so it can stop
+      # matching silently; these fixtures are what notice.
+      - name: Test the hosting deploy URL reader
+        id: test_hosting_deploy_url
+        run: .github/scripts/test_hosting_deploy_url.sh
+
       - name: Validate dart code
         id: validate_dart
         run: |
