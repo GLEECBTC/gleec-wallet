@@ -79,10 +79,10 @@ did.
 ## Deploying
 
 There is **one** `hosting` entry in `firebase.json`, and it is not tied to a
-site. It names the deploy target `walletrc`, and `.firebaserc` maps that target
+site. It names the deploy target `web`, and `.firebaserc` maps that target
 to a different site in each project:
 
-| `--project` | target `walletrc` resolves to | who deploys it |
+| `--project` | target `web` resolves to | who deploys it |
 |---|---|---|
 | `komodo-wallet-official` | site `walletrc` | CI, every push to `dev` |
 | `komodo-wallet-preview` | site `komodo-wallet-preview` | local default |
@@ -90,25 +90,26 @@ to a different site in each project:
 
 ```bash
 # Release candidate (what CI runs on every push to dev)
-firebase deploy --only hosting:walletrc --project komodo-wallet-official
+firebase deploy --only hosting:web --project komodo-wallet-official
 
 # Production, dex.gleec.com
-firebase deploy --only hosting:walletrc --project gleec-wallet-official
+firebase deploy --only hosting:web --project gleec-wallet-official
 ```
 
 Production being the *same* config rather than a second entry is deliberate:
 production must never end up with weaker headers than the release candidate,
-and one entry cannot drift from itself. The target is called `walletrc` for
-historical reasons — read it as "the wallet web app site belonging to the
-project you named". `--project` is what selects the site, so it is the only
-thing separating an RC deploy from a production one. Always pass it: a bare
+and one entry cannot drift from itself. The target is called `web` because it
+names a role — "the wallet web app site for this project" — not a site; a
+site-shaped name would be wrong in every project but one. `--project` is what
+selects the site, so it is the only thing separating an RC deploy from a
+production one. Always pass it: a bare
 `firebase deploy` uses `.firebaserc`'s default, which is deliberately the
 preview project, and a bare `firebase deploy --project gleec-wallet-official`
 will push whatever is currently in `build/web` straight to dex.gleec.com.
 
 `.firebaserc` is load-bearing here. Remove the `gleec-wallet-official` block
 and production cannot be deployed from this config at all — the CLI aborts with
-"Deploy target walletrc not configured". `test_units/tests/fiat/fiat_checkout_url_allowlist_test.dart`
+"Deploy target web not configured". `test_units/tests/fiat/fiat_checkout_url_allowlist_test.dart`
 fails if that mapping is dropped or repointed.
 
 ## Verifying a deploy

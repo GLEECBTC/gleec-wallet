@@ -98,7 +98,7 @@ jobs:
         with:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: "${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
-          target: walletrc
+          target: web
           expires: 7d
           projectId: komodo-wallet-official
 
@@ -153,5 +153,5 @@ jobs:
         with:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: dev-preview
-          target: walletrc
+          target: web
           projectId: komodo-wallet-official

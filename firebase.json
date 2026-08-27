@@ -1,19 +1,22 @@
 {
-  // ONE hosting config, deployed to three different sites depending on which
-  // Firebase project it is deployed against. `.firebaserc` maps the `walletrc`
+  // One hosting config, deployed to a different site depending on which
+  // Firebase project it is deployed against. `.firebaserc` maps the `web`
   // deploy target per project (see docs/WEB_HOSTING_TOPOLOGY.md):
   //
-  //   komodo-wallet-official  -> site walletrc               (CI, every push to `dev`)
-  //   komodo-wallet-preview   -> site komodo-wallet-preview  (local default)
-  //   gleec-wallet-official   -> site gleec-wallet-official  (dex.gleec.com, by hand)
+  //   komodo-wallet-official -> site walletrc              (CI, push to `dev`)
+  //   komodo-wallet-preview  -> site komodo-wallet-preview (local default)
+  //   gleec-wallet-official  -> site gleec-wallet-official (dex.gleec.com,
+  //                                                         deployed by hand)
   //
-  //   firebase deploy --only hosting:walletrc --project komodo-wallet-official
-  //   firebase deploy --only hosting:walletrc --project gleec-wallet-official
+  //   firebase deploy --only hosting:web --project <project>
   //
-  // The target is named `walletrc` for historical reasons; read it as "the
-  // wallet web app site belonging to the project you named". Always pass
-  // --project, because a bare deploy uses `.firebaserc`'s default, which is
-  // deliberately the preview project.
+  // `web` names the ROLE ("the wallet web app site for this project"), not a
+  // site. Do not name it after any one site: the target is shared across
+  // projects, so a site-shaped name is wrong everywhere except one place.
+  // `--project` is what selects the site, so always pass it -- a bare
+  // `firebase deploy` uses `.firebaserc`'s default, which is the preview
+  // project on purpose, and a bare `firebase deploy --project
+  // gleec-wallet-official` publishes whatever is in build/web to production.
   //
   // Production being the SAME config rather than a second entry is the point:
   // dex.gleec.com serves the fiat on-ramp wrapper page that desktop and mobile
@@ -21,7 +24,7 @@
   // with weaker headers than the release candidate. A second entry would have
   // to be kept in step by hand; one entry cannot drift.
   "hosting": {
-    "target": "walletrc",
+    "target": "web",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     // DO NOT enable this block. `credentialless` strips the cross-origin

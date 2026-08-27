@@ -74,7 +74,7 @@ jobs:
         with:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KOMODO_WALLET_OFFICIAL }}"
           channelId: live
-          target: walletrc
+          target: web
           projectId: komodo-wallet-official
 
       - name: Verify the deployed RC is hardened
