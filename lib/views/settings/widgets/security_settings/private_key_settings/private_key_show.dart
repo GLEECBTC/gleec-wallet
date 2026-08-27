@@ -65,10 +65,10 @@ class PrivateKeyShow extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 16.0),
               child: SeedBackButton(() {
                 // Track analytics based on whether keys were copied
-                final wasBackupCompleted = context
+                final securityState = context
                     .read<SecuritySettingsBloc>()
-                    .state
-                    .arePrivateKeysSaved;
+                    .state;
+                final wasBackupCompleted = securityState.arePrivateKeysSaved;
 
                 final walletType =
                     context
@@ -85,7 +85,7 @@ class PrivateKeyShow extends StatelessWidget {
                   // User copied keys, so track as completed backup
                   context.read<AnalyticsBloc>().add(
                     AnalyticsBackupCompletedEvent(
-                      backupTime: 0,
+                      backupTime: securityState.backupElapsed?.inSeconds ?? 0,
                       method: 'private_key_export',
                       hdType: walletType,
                     ),

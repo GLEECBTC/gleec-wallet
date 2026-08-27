@@ -244,51 +244,77 @@ void main() {
       );
     }
   });
-  group('firebase.json:', () {
+  group('hosting config:', () {
     // The wrapper page's own allowlist is the fix; these headers are the
-    // hardening layered on top. They only exist on a site whose hosting config
-    // declares them, and dex.gleec.com is a different Firebase project from
-    // the RC site, so the two configs are easy to let drift apart.
-    late List<Map<String, dynamic>> hostingConfigs;
+    // hardening layered on top, and they only exist on a site whose deployed
+    // hosting config declares them. dex.gleec.com is a different Firebase
+    // project from the RC site, so the thing to protect is that ONE config
+    // reaches both: firebase.json holds a single `hosting` entry selected by a
+    // deploy target, and .firebaserc maps that target to a site per project.
+    // Nothing has to be kept in step by hand, so nothing can drift -- but the
+    // mapping itself can be dropped, and production would then have no config
+    // to deploy at all.
+    late Map<String, dynamic> hostingConfig;
+    late Map<String, dynamic> deployTargets;
 
     setUpAll(() {
-      final file = File('firebase.json');
-      expect(file.existsSync(), isTrue, reason: 'run from the repository root');
-
-      final withoutComments = _stripJsonComments(file.readAsStringSync());
-
-      Object? decoded;
-      try {
-        decoded = jsonDecode(withoutComments);
-      } on FormatException catch (error) {
-        fail('firebase.json did not parse after comments were stripped, so '
-            'these tests could not run: $error');
-      }
-
-      final hosting = (decoded! as Map<String, dynamic>)['hosting'];
-      hostingConfigs = (hosting as List<dynamic>)
-          .cast<Map<String, dynamic>>();
+      hostingConfig =
+          _readJsonWithComments('firebase.json')['hosting']
+              as Map<String, dynamic>;
+      deployTargets =
+          _readJsonWithComments('.firebaserc')['targets']
+              as Map<String, dynamic>;
     });
 
-    test('declares both the RC site and the production site', () {
+    test('selects its site by deploy target rather than pinning one', () {
       expect(
-        hostingConfigs.map((config) => config['site']),
-        containsAll(<String>['walletrc', 'gleec-wallet-official']),
-        reason: 'dex.gleec.com is served by the gleec-wallet-official site; a '
-            'config that does not declare it cannot give it these headers',
+        hostingConfig['target'],
+        isNotNull,
+        reason: 'a `site` key pins this config to one site, which is what '
+            'stops the same headers reaching production and the local '
+            'preview project',
+      );
+      expect(
+        hostingConfig.containsKey('site'),
+        isFalse,
+        reason: 'firebase-tools rejects a config carrying both `site` and '
+            '`target`',
       );
     });
 
-    test('gives every site the same security headers', () {
-      final headerSets = hostingConfigs
-          .map((config) => jsonEncode(config['headers']))
-          .toSet();
+    test('maps that target for production as well as the release candidate',
+        () {
+      final target = hostingConfig['target'] as String;
 
+      for (final entry in <String, String>{
+        // project -> the site it must resolve to.
+        'komodo-wallet-official': 'walletrc',
+        'gleec-wallet-official': 'gleec-wallet-official',
+      }.entries) {
+        final hosting =
+            (deployTargets[entry.key] as Map<String, dynamic>?)?['hosting']
+                as Map<String, dynamic>?;
+        expect(
+          (hosting?[target] as List<dynamic>?)?.cast<String>(),
+          <String>[entry.value],
+          reason: 'without this mapping `firebase deploy --only '
+              'hosting:$target --project ${entry.key}` cannot resolve a site, '
+              'so ${entry.value} cannot be deployed from this config at all',
+        );
+      }
+    });
+
+    test('keeps the caching rules the RC site already relied on', () {
+      // Not this PR's header, but this PR restructured the file it lives in.
+      // Nothing else asserts it, so a future merge could drop it silently.
       expect(
-        headerSets,
-        hasLength(1),
-        reason: 'the sites must not drift apart, or production silently ends '
-            'up with weaker headers than the release candidate',
+        _headerValue(
+          hostingConfig,
+          '/assets/packages/komodo_defi_framework/assets/coin_icons/**',
+          'Cache-Control',
+        ),
+        contains('max-age=2592000'),
+        reason: 'coin icons are re-validated on every visit without this',
       );
     });
 
@@ -296,31 +322,35 @@ void main() {
       // Values, not just keys: `frame-ancestors *` and `X-Frame-Options:
       // ALLOWALL` keep every key in place while removing the protection, and
       // a key-only assertion would call that green.
-      for (final config in hostingConfigs) {
-        final site = config['site'];
-        expect(
-          _headerValue(config, '**', 'Content-Security-Policy'),
-          contains("frame-ancestors 'self'"),
-          reason: '$site must not allow itself to be framed cross-origin',
-        );
-        expect(_headerValue(config, '**', 'X-Frame-Options'), 'SAMEORIGIN');
-        expect(_headerValue(config, '**', 'X-Content-Type-Options'), 'nosniff');
-        expect(
-          _headerValue(config, '**', 'Referrer-Policy'),
-          'strict-origin-when-cross-origin',
-        );
-        expect(
-          _headerValue(config, '**', 'Permissions-Policy'),
-          isNotNull,
-          reason: '$site must send a Permissions-Policy',
-        );
-        expect(
-          _headerValue(config, '/assets/assets/web_pages/**', 'Cache-Control'),
-          contains('must-revalidate'),
-          reason: 'desktop and mobile fetch the wrapper page from $site at '
-              'runtime, so a cached copy outlives a fix to it',
-        );
-      }
+      expect(
+        _headerValue(hostingConfig, '**', 'Content-Security-Policy'),
+        contains("frame-ancestors 'self'"),
+        reason: 'the wallet must not allow itself to be framed cross-origin',
+      );
+      expect(_headerValue(hostingConfig, '**', 'X-Frame-Options'), 'SAMEORIGIN');
+      expect(
+        _headerValue(hostingConfig, '**', 'X-Content-Type-Options'),
+        'nosniff',
+      );
+      expect(
+        _headerValue(hostingConfig, '**', 'Referrer-Policy'),
+        'strict-origin-when-cross-origin',
+      );
+      expect(
+        _headerValue(hostingConfig, '**', 'Permissions-Policy'),
+        isNotNull,
+        reason: 'the wallet must send a Permissions-Policy',
+      );
+      expect(
+        _headerValue(
+          hostingConfig,
+          '/assets/assets/web_pages/**',
+          'Cache-Control',
+        ),
+        contains('must-revalidate'),
+        reason: 'desktop and mobile fetch the wrapper page at runtime, so a '
+            'cached copy outlives a fix to it',
+      );
     });
   });
 }
@@ -396,6 +426,20 @@ String? _headerValue(
     if (header['key'] == key) return header['value'] as String?;
   }
   return null;
+}
+
+/// Reads a JSON-with-comments file from the repository root.
+Map<String, dynamic> _readJsonWithComments(String path) {
+  final file = File(path);
+  expect(file.existsSync(), isTrue, reason: 'run from the repository root');
+
+  try {
+    return jsonDecode(_stripJsonComments(file.readAsStringSync()))
+        as Map<String, dynamic>;
+  } on FormatException catch (error) {
+    fail('$path did not parse after comments were stripped, so these tests '
+        'could not run: $error');
+  }
 }
 
 /// Strips `//` and `/* */` comments outside string literals.

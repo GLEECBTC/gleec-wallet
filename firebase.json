@@ -1,162 +1,132 @@
 {
-  // Two sites, in two different Firebase projects (see
-  // docs/WEB_HOSTING_TOPOLOGY.md):
+  // ONE hosting config, deployed to three different sites depending on which
+  // Firebase project it is deployed against. `.firebaserc` maps the `walletrc`
+  // deploy target per project (see docs/WEB_HOSTING_TOPOLOGY.md):
   //
-  //   walletrc               -> project komodo-wallet-official, deployed by CI
-  //                             on every push to `dev`.
-  //   gleec-wallet-official  -> project gleec-wallet-official, serves
-  //                             dex.gleec.com, deployed by hand.
+  //   komodo-wallet-official  -> site walletrc               (CI, every push to `dev`)
+  //   komodo-wallet-preview   -> site komodo-wallet-preview  (local default)
+  //   gleec-wallet-official   -> site gleec-wallet-official  (dex.gleec.com, by hand)
   //
-  // A single deploy can only target one project, so each site is selected
-  // explicitly and the other entry is ignored:
+  //   firebase deploy --only hosting:walletrc --project komodo-wallet-official
+  //   firebase deploy --only hosting:walletrc --project gleec-wallet-official
   //
-  //   firebase deploy --only hosting:walletrc \
-  //     --project komodo-wallet-official
-  //   firebase deploy --only hosting:gleec-wallet-official \
-  //     --project gleec-wallet-official
+  // The target is named `walletrc` for historical reasons; read it as "the
+  // wallet web app site belonging to the project you named". Always pass
+  // --project, because a bare deploy uses `.firebaserc`'s default, which is
+  // deliberately the preview project.
   //
-  // A bare `firebase deploy` would try both and fail on credentials, so always
-  // pass --only and --project.
-  //
-  // The two `headers` blocks MUST stay identical, otherwise production quietly
-  // loses the security headers that the RC has.
-  // test_units/tests/fiat/fiat_checkout_url_allowlist_test.dart fails if they
-  // drift apart.
-  "hosting": [
-    {
-      "site": "walletrc",
-      "public": "build/web",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-      // DO NOT enable this block. `credentialless` strips the cross-origin
-      // cookies that the fiat provider KYC flow documents as required, so
-      // turning it on silently breaks identity verification part-way through a
-      // purchase.
-      // "headers": [
-      //   {
-      //     "source": "**",
-      //     "headers": [
-      //       {
-      //         "key": "Cross-Origin-Embedder-Policy",
-      //         "value": "credentialless"
-      //       },
-      //       {
-      //         "key": "Cross-Origin-Opener-Policy",
-      //         "value": "same-origin"
-      //       }
-      //     ]
-      //   }
-      // ],
-      "headers": [
-        {
-          // Each glob below owns a distinct set of header keys, so no key is
-          // ever set by two entries and the order of this array does not
-          // matter.
-          "source": "**",
-          "headers": [
-            {
-              // The wallet is only ever framed by itself (the web build
-              // renders the fiat wrapper page in a same-origin iframe).
-              // `frame-ancestors` is the header that actually governs this;
-              // X-Frame-Options is kept alongside it for clients that predate
-              // CSP Level 2.
-              "key": "Content-Security-Policy",
-              "value": "frame-ancestors 'self'"
-            },
-            {
-              "key": "X-Frame-Options",
-              "value": "SAMEORIGIN"
-            },
-            {
-              "key": "X-Content-Type-Options",
-              "value": "nosniff"
-            },
-            {
-              "key": "Referrer-Policy",
-              "value": "strict-origin-when-cross-origin"
-            },
-            {
-              // Only features that neither the wallet nor the fiat providers
-              // use. `camera`, `microphone`, `payment`, `encrypted-media` and
-              // `midi` are deliberately absent: their default allowlist is
-              // `self`, which is exactly what lets the fiat wrapper page
-              // delegate them to the provider iframe via its `allow`
-              // attribute. Denying them here would break provider KYC.
-              "key": "Permissions-Policy",
-              "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=()"
-            }
-          ]
-        },
-        {
-          // These pages decide what a webview is allowed to load, and desktop
-          // and mobile builds fetch them from here rather than from their own
-          // bundle. Firebase's default max-age=3600 would leave already-shipped
-          // clients running a superseded copy for up to an hour after a fix is
-          // deployed, so require revalidation instead; a 304 on a page loaded
-          // once per purchase costs nothing.
-          "source": "/assets/assets/web_pages/**",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=0, must-revalidate"
-            }
-          ]
-        }
-      ],
-      "rewrites": [
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
-    },
-    {
-      // dex.gleec.com. Kept byte-identical to the walletrc entry above apart
-      // from `site`, so that whichever one is deployed serves the same policy.
-      "site": "gleec-wallet-official",
-      "public": "build/web",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-      "headers": [
-        {
-          "source": "**",
-          "headers": [
-            {
-              "key": "Content-Security-Policy",
-              "value": "frame-ancestors 'self'"
-            },
-            {
-              "key": "X-Frame-Options",
-              "value": "SAMEORIGIN"
-            },
-            {
-              "key": "X-Content-Type-Options",
-              "value": "nosniff"
-            },
-            {
-              "key": "Referrer-Policy",
-              "value": "strict-origin-when-cross-origin"
-            },
-            {
-              "key": "Permissions-Policy",
-              "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=()"
-            }
-          ]
-        },
-        {
-          "source": "/assets/assets/web_pages/**",
-          "headers": [
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=0, must-revalidate"
-            }
-          ]
-        }
-      ],
-      "rewrites": [
-        {
-          "source": "**",
-          "destination": "/index.html"
-        }
-      ]
-    }
-  ]
+  // Production being the SAME config rather than a second entry is the point:
+  // dex.gleec.com serves the fiat on-ramp wrapper page that desktop and mobile
+  // builds already in users' hands fetch at runtime, so it must never end up
+  // with weaker headers than the release candidate. A second entry would have
+  // to be kept in step by hand; one entry cannot drift.
+  "hosting": {
+    "target": "walletrc",
+    "public": "build/web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    // DO NOT enable this block. `credentialless` strips the cross-origin
+    // cookies that the fiat provider KYC flow documents as required, so
+    // turning it on silently breaks identity verification part-way through a
+    // purchase.
+    // "headers": [
+    //   {
+    //     "source": "**",
+    //     "headers": [
+    //       {
+    //         "key": "Cross-Origin-Embedder-Policy",
+    //         "value": "credentialless"
+    //       },
+    //       {
+    //         "key": "Cross-Origin-Opener-Policy",
+    //         "value": "same-origin"
+    //       }
+    //     ]
+    //   }
+    // ],
+    "headers": [
+      {
+        // Each glob below owns a distinct set of header keys, so no key is
+        // ever set by two entries. Firebase applies the headers of every
+        // matching entry, so the security headers here still reach the paths
+        // that the narrower globs below also match.
+        "source": "**",
+        "headers": [
+          {
+            // The wallet is only ever framed by itself (the web build renders
+            // the fiat wrapper page in a same-origin iframe).
+            // `frame-ancestors` is the header that actually governs this;
+            // X-Frame-Options is kept alongside it for clients that predate
+            // CSP Level 2.
+            "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'self'"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            // Only features that neither the wallet nor the fiat providers
+            // use. `camera`, `microphone`, `payment`, `encrypted-media` and
+            // `midi` are deliberately absent: their default allowlist is
+            // `self`, which is exactly what lets the fiat wrapper page
+            // delegate them to the provider iframe via its `allow` attribute.
+            // Denying them here would break provider KYC.
+            "key": "Permissions-Policy",
+            "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=()"
+          }
+        ]
+      },
+      {
+        // Coin icons are a large, rarely-changing set (hundreds of files).
+        // Without this they inherit Firebase's default max-age=3600, so every
+        // repeat visit more than an hour apart re-validates the whole set while
+        // the user is logging in.
+        //
+        // Flutter web assets are not content-hashed, so this is a bounded TTL
+        // rather than `immutable`. Note that AssetIcon's bundled -> CDN ->
+        // fallback chain does NOT rescue a stale icon: it only triggers when an
+        // asset is missing, and a cached-but-outdated file still loads fine.
+        // The TTL is the whole mitigation, so re-arting an existing icon can
+        // take up to 30 days to propagate. Adding an icon under a new filename
+        // is unaffected. If an in-place icon change ever needs to ship fast,
+        // shorten this value or rename the file.
+        "source": "/assets/packages/komodo_defi_framework/assets/coin_icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=2592000"
+          }
+        ]
+      },
+      {
+        // These pages decide what a webview is allowed to load, and desktop
+        // and mobile builds fetch them from here rather than from their own
+        // bundle. Firebase's default max-age=3600 would leave already-shipped
+        // clients running a superseded copy for up to an hour after a fix is
+        // deployed, so require revalidation instead; a 304 on a page loaded
+        // once per purchase costs nothing.
+        "source": "/assets/assets/web_pages/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
 }

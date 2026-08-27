@@ -181,14 +181,14 @@ GLEEC_WALLET_MANUAL_TEST_CASES.md (original — keep as-is)
     ├── All 85 test cases, all platforms, all edge cases
     └── Used by human QA team for full regression
 
-tests/test_matrix.yaml (NEW — Skyvern automation)
+test_matrix.yaml (NEW — Skyvern automation)
     │
     ├── Grade-A tests converted to vision-compatible prompts
     ├── Grade-B tests with automatable portions only
     ├── Hardened with checkpoints, explicit data, visual descriptions
     └── Used by the Skyvern runner for automated regression
 
-tests/manual_companion.yaml (NEW — manual-only checklist)
+manual_companion.yaml (NEW — manual-only checklist)
     │
     ├── Grade-C tests formatted as pass/fail checklist
     ├── Grade-B manual verification steps

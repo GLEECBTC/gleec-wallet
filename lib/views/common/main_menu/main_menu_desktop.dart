@@ -13,6 +13,7 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/shared/widgets/gleec_dex_logo.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_desktop_item.dart';
 
@@ -119,18 +120,6 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                 ),
                               ),
                             ),
-                            Tooltip(
-                              message: tradingTooltipMessage(),
-                              child: DesktopMenuDesktopItem(
-                                key: const Key('main-menu-bridge'),
-                                enabled: currentWallet?.isHW != true,
-                                menu: MainMenuValue.bridge,
-                                onTap: onTapItem,
-                                isSelected: _checkSelectedItem(
-                                  MainMenuValue.bridge,
-                                ),
-                              ),
-                            ),
                             if (isMMBotEnabled && isAuthenticated)
                               Tooltip(
                                 message: tradingTooltipMessage(),
@@ -144,18 +133,22 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                                   ),
                                 ),
                               ),
-                            Tooltip(
-                              message: LocaleKeys.nftDisabledTooltip.tr(),
-                              child: DesktopMenuDesktopItem(
-                                key: const Key('main-menu-nft'),
-                                enabled: false,
-                                menu: MainMenuValue.nft,
-                                onTap: onTapItem,
-                                isSelected: _checkSelectedItem(
-                                  MainMenuValue.nft,
+                            // NFTs ship on web and native desktop. Native
+                            // mobile is excluded until the mobile NFT flows
+                            // are ready.
+                            if (!PlatformTuner.isNativeMobile)
+                              Tooltip(
+                                message: walletOnlyTooltipMessage(),
+                                child: DesktopMenuDesktopItem(
+                                  key: const Key('main-menu-nft'),
+                                  enabled: currentWallet?.isHW != true,
+                                  menu: MainMenuValue.nft,
+                                  onTap: onTapItem,
+                                  isSelected: _checkSelectedItem(
+                                    MainMenuValue.nft,
+                                  ),
                                 ),
                               ),
-                            ),
                             const Spacer(),
                             Divider(thickness: 1),
                             DesktopMenuDesktopItem(

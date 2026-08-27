@@ -2,23 +2,56 @@ import 'dart:async';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show GaslessServiceKomodoProxy, TronGaslessProviderConfig;
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
+import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 final MM2 mm2 = MM2();
 
+TronGaslessProviderConfig buildGleecTronGaslessProviderConfig({
+  required String baseUrl,
+  required String serviceProvider,
+}) {
+  return TronGaslessProviderConfig(
+    baseUrl: baseUrl.trim(),
+    service: const GaslessServiceKomodoProxy(),
+    serviceProvider: serviceProvider.trim(),
+    requestTimeoutMs: 10000,
+  );
+}
+
 final class MM2 {
   MM2() {
     _kdfSdk = KomodoDefiSdk(
-      config: const KomodoDefiSdkConfig(
+      config: KomodoDefiSdkConfig(
         // Syncing pre-activation coin states is not yet implemented,
         // so we disable it for now.
         // TODO: sync pre-activation of coins (show activating coins in list)
         preActivateHistoricalAssets: false,
         preActivateDefaultAssets: false,
+        tronGaslessProvider: _tronGaslessProviderConfig(),
+        assetConfigTransform: applyGleecTronGaslessActivationConfig,
       ),
       onLog: _handleSdkLog,
+    );
+  }
+
+  TronGaslessProviderConfig? _tronGaslessProviderConfig() {
+    if (!hasValidTronGaslessProviderConfig) return null;
+
+    final baseUrl = tronGaslessBaseUrl.trim();
+
+    // GasFree requires server-side credentials, so route through KDF's
+    // komodo_proxy rail (libp2p-key auth, no secrets on the client). The base
+    // URL is the GasFree endpoint itself (the proxy's /gasfree mount); KDF
+    // preserves it as-is and appends api/v1/...; see [tronGaslessBaseUrl].
+    return buildGleecTronGaslessProviderConfig(
+      baseUrl: baseUrl,
+      serviceProvider: tronGaslessServiceProvider.trim(),
     );
   }
 

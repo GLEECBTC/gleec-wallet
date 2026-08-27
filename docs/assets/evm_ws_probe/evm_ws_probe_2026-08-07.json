@@ -1,0 +1,859 @@
+{
+  "answered_any": 23,
+  "answered_with_origin": 22,
+  "config": "sdk/packages/komodo_defi_framework/assets/config/coins_config.json",
+  "origin": "https://app.gleec.com",
+  "probed_at": "2026-08-07T13:36:15+0200",
+  "repeat": 4,
+  "request": {
+    "id": 0,
+    "jsonrpc": "2.0",
+    "method": "net_version",
+    "params": []
+  },
+  "results": [
+    {
+      "browser": {
+        "connect_ms": 29.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "43114",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 203.9,
+        "server": "cloudflare",
+        "tls_ms": 18.4,
+        "total_ms": 894.4,
+        "tries": 1,
+        "upgrade_ms": 642.8
+      },
+      "native": {
+        "connect_ms": 8.8,
+        "error": null,
+        "http_status": 101,
+        "net_version": "43114",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 211.9,
+        "server": "cloudflare",
+        "tls_ms": 16.1,
+        "total_ms": 889.7,
+        "tries": 1,
+        "upgrade_ms": 652.9
+      },
+      "tickers": [
+        "AVAX"
+      ],
+      "url": "wss://avalanche-c-chain-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 9.1,
+        "error": null,
+        "http_status": 101,
+        "net_version": "43114",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 245.7,
+        "server": "cloudflare",
+        "tls_ms": 16.1,
+        "total_ms": 1049.7,
+        "tries": 1,
+        "upgrade_ms": 778.7
+      },
+      "native": {
+        "connect_ms": 9.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "43114",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 243.6,
+        "server": "cloudflare",
+        "tls_ms": 27.2,
+        "total_ms": 1049.9,
+        "tries": 1,
+        "upgrade_ms": 769.8
+      },
+      "tickers": [
+        "AVAX"
+      ],
+      "url": "wss://avalanche.drpc.org",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 19.1,
+        "error": null,
+        "http_status": 101,
+        "net_version": "56",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 202.7,
+        "server": "cloudflare",
+        "tls_ms": 14.3,
+        "total_ms": 878.4,
+        "tries": 1,
+        "upgrade_ms": 642.1
+      },
+      "native": {
+        "connect_ms": 8.7,
+        "error": null,
+        "http_status": 101,
+        "net_version": "56",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 205.7,
+        "server": "cloudflare",
+        "tls_ms": 15.2,
+        "total_ms": 878.9,
+        "tries": 1,
+        "upgrade_ms": 649.2
+      },
+      "tickers": [
+        "BNB"
+      ],
+      "url": "wss://bsc-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 197.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "56",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 195.9,
+        "server": "nginx",
+        "tls_ms": 210.7,
+        "total_ms": 991.3,
+        "tries": 1,
+        "upgrade_ms": 387.3
+      },
+      "native": {
+        "connect_ms": 197.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "56",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 192.8,
+        "server": "nginx",
+        "tls_ms": 400.7,
+        "total_ms": 1175.8,
+        "tries": 1,
+        "upgrade_ms": 384.9
+      },
+      "tickers": [
+        "BNB"
+      ],
+      "url": "wss://bsc1.cipig.net:38655",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 192.7,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 727.5,
+        "server": "nginx",
+        "tls_ms": 212.9,
+        "total_ms": 2239.9,
+        "tries": 1,
+        "upgrade_ms": 1106.7
+      },
+      "native": {
+        "connect_ms": 189.6,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 188.7,
+        "server": "nginx",
+        "tls_ms": 203.1,
+        "total_ms": 957.0,
+        "tries": 1,
+        "upgrade_ms": 375.4
+      },
+      "tickers": [
+        "ETC"
+      ],
+      "url": "wss://0xrpc.io/etc",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 18.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 207.3,
+        "server": "cloudflare",
+        "tls_ms": 26.2,
+        "total_ms": 894.1,
+        "tries": 1,
+        "upgrade_ms": 642.1
+      },
+      "native": {
+        "connect_ms": 8.1,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 203.8,
+        "server": "cloudflare",
+        "tls_ms": 14.1,
+        "total_ms": 862.6,
+        "tries": 1,
+        "upgrade_ms": 636.4
+      },
+      "tickers": [
+        "ETH"
+      ],
+      "url": "wss://ethereum-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 19.5,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 185.2,
+        "server": "envoy",
+        "tls_ms": 24.4,
+        "total_ms": 429.3,
+        "tries": 1,
+        "upgrade_ms": 200.0
+      },
+      "native": {
+        "connect_ms": 9.8,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 197.6,
+        "server": "envoy",
+        "tls_ms": 27.2,
+        "total_ms": 437.3,
+        "tries": 1,
+        "upgrade_ms": 202.3
+      },
+      "tickers": [
+        "ETH"
+      ],
+      "url": "wss://mainnet.gateway.tenderly.co",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 19.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "42161",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 200.8,
+        "server": "cloudflare",
+        "tls_ms": 21.4,
+        "total_ms": 876.6,
+        "tries": 1,
+        "upgrade_ms": 635.0
+      },
+      "native": {
+        "connect_ms": 9.1,
+        "error": null,
+        "http_status": 101,
+        "net_version": "42161",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 203.1,
+        "server": "cloudflare",
+        "tls_ms": 22.9,
+        "total_ms": 879.9,
+        "tries": 1,
+        "upgrade_ms": 644.6
+      },
+      "tickers": [
+        "ETH-ARB20"
+      ],
+      "url": "wss://arbitrum-one-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 20.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "8453",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 207.6,
+        "server": "cloudflare",
+        "tls_ms": 22.1,
+        "total_ms": 896.2,
+        "tries": 1,
+        "upgrade_ms": 646.0
+      },
+      "native": {
+        "connect_ms": 9.7,
+        "error": null,
+        "http_status": 101,
+        "net_version": "8453",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 205.2,
+        "server": "cloudflare",
+        "tls_ms": 20.3,
+        "total_ms": 887.7,
+        "tries": 1,
+        "upgrade_ms": 652.3
+      },
+      "tickers": [
+        "ETH-BASE"
+      ],
+      "url": "wss://base-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 14.6,
+        "error": "HTTP 403 rather than 101",
+        "http_status": 403,
+        "net_version": null,
+        "ok": false,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": null,
+        "server": "cloudflare",
+        "tls_ms": 24.9,
+        "total_ms": 662.7,
+        "tries": 4,
+        "upgrade_ms": 623.0
+      },
+      "native": {
+        "connect_ms": 8.9,
+        "error": null,
+        "http_status": 101,
+        "net_version": "246",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 342.3,
+        "server": "cloudflare",
+        "tls_ms": 23.9,
+        "total_ms": 1182.1,
+        "tries": 1,
+        "upgrade_ms": 806.8
+      },
+      "tickers": [
+        "EWT"
+      ],
+      "url": "wss://rpc.energyweb.org/ws",
+      "verdict": "native-only"
+    },
+    {
+      "browser": {
+        "connect_ms": 123.5,
+        "error": null,
+        "http_status": 101,
+        "net_version": "11169",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 186.9,
+        "server": "cloudflare",
+        "tls_ms": 140.7,
+        "total_ms": 1382.5,
+        "tries": 1,
+        "upgrade_ms": 931.2
+      },
+      "native": {
+        "connect_ms": 9.6,
+        "error": null,
+        "http_status": 101,
+        "net_version": "11169",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 186.5,
+        "server": "cloudflare",
+        "tls_ms": 24.6,
+        "total_ms": 1000.2,
+        "tries": 1,
+        "upgrade_ms": 779.3
+      },
+      "tickers": [
+        "GLEEC"
+      ],
+      "url": "wss://evm-ws.gleec.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 19.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1284",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 214.5,
+        "server": "cloudflare",
+        "tls_ms": 19.3,
+        "total_ms": 905.2,
+        "tries": 1,
+        "upgrade_ms": 652.0
+      },
+      "native": {
+        "connect_ms": 8.5,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1284",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 355.5,
+        "server": "cloudflare",
+        "tls_ms": 19.7,
+        "total_ms": 1027.8,
+        "tries": 1,
+        "upgrade_ms": 644.0
+      },
+      "tickers": [
+        "GLMR"
+      ],
+      "url": "wss://moonbeam-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 20.9,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1284",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 243.0,
+        "server": "cloudflare",
+        "tls_ms": 25.0,
+        "total_ms": 1052.1,
+        "tries": 1,
+        "upgrade_ms": 763.0
+      },
+      "native": {
+        "connect_ms": 8.8,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1284",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 245.7,
+        "server": "cloudflare",
+        "tls_ms": 22.9,
+        "total_ms": 1054.2,
+        "tries": 1,
+        "upgrade_ms": 776.7
+      },
+      "tickers": [
+        "GLMR"
+      ],
+      "url": "wss://moonbeam.drpc.org",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 23.1,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1284",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 217.8,
+        "server": "cloudflare",
+        "tls_ms": 22.4,
+        "total_ms": 940.6,
+        "tries": 1,
+        "upgrade_ms": 677.1
+      },
+      "native": {
+        "connect_ms": 12.4,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1284",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 214.4,
+        "server": "cloudflare",
+        "tls_ms": 20.2,
+        "total_ms": 914.1,
+        "tries": 1,
+        "upgrade_ms": 666.9
+      },
+      "tickers": [
+        "GLMR"
+      ],
+      "url": "wss://wss.api.moonbeam.network",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 207.8,
+        "error": null,
+        "http_status": 101,
+        "net_version": "137",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 195.8,
+        "server": "nginx",
+        "tls_ms": 212.1,
+        "total_ms": 1006.2,
+        "tries": 1,
+        "upgrade_ms": 390.3
+      },
+      "native": {
+        "connect_ms": 193.5,
+        "error": null,
+        "http_status": 101,
+        "net_version": "137",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 193.7,
+        "server": "nginx",
+        "tls_ms": 211.6,
+        "total_ms": 985.9,
+        "tries": 1,
+        "upgrade_ms": 386.8
+      },
+      "tickers": [
+        "MATIC"
+      ],
+      "url": "wss://pol3.cipig.net:38755",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 17.5,
+        "error": null,
+        "http_status": 101,
+        "net_version": "137",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 291.9,
+        "server": "cloudflare",
+        "tls_ms": 22.4,
+        "total_ms": 1037.3,
+        "tries": 1,
+        "upgrade_ms": 705.2
+      },
+      "native": {
+        "connect_ms": 10.5,
+        "error": null,
+        "http_status": 101,
+        "net_version": "137",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 292.8,
+        "server": "cloudflare",
+        "tls_ms": 22.4,
+        "total_ms": 978.8,
+        "tries": 1,
+        "upgrade_ms": 653.1
+      },
+      "tickers": [
+        "MATIC"
+      ],
+      "url": "wss://polygon-bor-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 18.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "137",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 243.4,
+        "server": "cloudflare",
+        "tls_ms": 22.4,
+        "total_ms": 1068.2,
+        "tries": 1,
+        "upgrade_ms": 784.0
+      },
+      "native": {
+        "connect_ms": 10.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "137",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 245.3,
+        "server": "cloudflare",
+        "tls_ms": 21.5,
+        "total_ms": 1054.9,
+        "tries": 1,
+        "upgrade_ms": 777.6
+      },
+      "tickers": [
+        "MATIC"
+      ],
+      "url": "wss://polygon.drpc.org",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 17.7,
+        "error": "HTTP 404 rather than 101",
+        "http_status": 404,
+        "net_version": null,
+        "ok": false,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": null,
+        "server": "envoy",
+        "tls_ms": 25.0,
+        "total_ms": 244.4,
+        "tries": 4,
+        "upgrade_ms": 201.6
+      },
+      "native": {
+        "connect_ms": 12.2,
+        "error": "HTTP 404 rather than 101",
+        "http_status": 404,
+        "net_version": null,
+        "ok": false,
+        "origin": null,
+        "rpc_ms": null,
+        "server": "envoy",
+        "tls_ms": 30.0,
+        "total_ms": 241.5,
+        "tries": 4,
+        "upgrade_ms": 199.1
+      },
+      "tickers": [
+        "MATIC"
+      ],
+      "url": "wss://polygon.gateway.tenderly.co",
+      "verdict": "dead"
+    },
+    {
+      "browser": {
+        "connect_ms": 19.0,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1285",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 208.6,
+        "server": "cloudflare",
+        "tls_ms": 24.6,
+        "total_ms": 897.2,
+        "tries": 1,
+        "upgrade_ms": 644.8
+      },
+      "native": {
+        "connect_ms": 10.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1285",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 291.9,
+        "server": "cloudflare",
+        "tls_ms": 20.0,
+        "total_ms": 969.6,
+        "tries": 1,
+        "upgrade_ms": 647.3
+      },
+      "tickers": [
+        "MOVR"
+      ],
+      "url": "wss://moonriver-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 247.3,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1285",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 246.7,
+        "server": null,
+        "tls_ms": 254.3,
+        "total_ms": 1239.2,
+        "tries": 1,
+        "upgrade_ms": 490.7
+      },
+      "native": {
+        "connect_ms": 245.0,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1285",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 245.8,
+        "server": null,
+        "tls_ms": 254.7,
+        "total_ms": 1236.9,
+        "tries": 1,
+        "upgrade_ms": 491.3
+      },
+      "tickers": [
+        "MOVR"
+      ],
+      "url": "wss://moonriver.api.onfinality.io/public-ws",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 26.7,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1285",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 180.1,
+        "server": "cloudflare",
+        "tls_ms": 22.4,
+        "total_ms": 796.6,
+        "tries": 1,
+        "upgrade_ms": 567.2
+      },
+      "native": {
+        "connect_ms": 9.9,
+        "error": null,
+        "http_status": 101,
+        "net_version": "1285",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 175.2,
+        "server": "cloudflare",
+        "tls_ms": 26.0,
+        "total_ms": 770.3,
+        "tries": 1,
+        "upgrade_ms": 559.1
+      },
+      "tickers": [
+        "MOVR"
+      ],
+      "url": "wss://wss.api.moonriver.moonbeam.network",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 21.0,
+        "error": null,
+        "http_status": 101,
+        "net_version": "30",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 245.6,
+        "server": "cloudflare",
+        "tls_ms": 17.9,
+        "total_ms": 1071.4,
+        "tries": 1,
+        "upgrade_ms": 786.7
+      },
+      "native": {
+        "connect_ms": 9.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "30",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 343.1,
+        "server": "cloudflare",
+        "tls_ms": 22.4,
+        "total_ms": 1155.9,
+        "tries": 1,
+        "upgrade_ms": 781.0
+      },
+      "tickers": [
+        "RBTC"
+      ],
+      "url": "wss://rootstock.drpc.org",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 133.9,
+        "error": null,
+        "http_status": 101,
+        "net_version": "100",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 207.3,
+        "server": "cloudflare",
+        "tls_ms": 92.3,
+        "total_ms": 1197.2,
+        "tries": 1,
+        "upgrade_ms": 763.6
+      },
+      "native": {
+        "connect_ms": 9.2,
+        "error": null,
+        "http_status": 101,
+        "net_version": "100",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 207.8,
+        "server": "cloudflare",
+        "tls_ms": 20.8,
+        "total_ms": 896.4,
+        "tries": 1,
+        "upgrade_ms": 658.4
+      },
+      "tickers": [
+        "XDAI"
+      ],
+      "url": "wss://gnosis-rpc.publicnode.com",
+      "verdict": "both"
+    },
+    {
+      "browser": {
+        "connect_ms": 19.7,
+        "error": null,
+        "http_status": 101,
+        "net_version": "100",
+        "ok": true,
+        "origin": "https://app.gleec.com",
+        "rpc_ms": 182.6,
+        "server": "nginx",
+        "tls_ms": 193.8,
+        "total_ms": 604.7,
+        "tries": 1,
+        "upgrade_ms": 208.4
+      },
+      "native": {
+        "connect_ms": 10.6,
+        "error": null,
+        "http_status": 101,
+        "net_version": "100",
+        "ok": true,
+        "origin": null,
+        "rpc_ms": 192.3,
+        "server": "nginx",
+        "tls_ms": 201.8,
+        "total_ms": 615.4,
+        "tries": 1,
+        "upgrade_ms": 210.6
+      },
+      "tickers": [
+        "XDAI"
+      ],
+      "url": "wss://rpc.gnosischain.com/wss",
+      "verdict": "both"
+    }
+  ],
+  "spacing_s": 1.5,
+  "timeout_s": 10.0,
+  "total": 24
+}

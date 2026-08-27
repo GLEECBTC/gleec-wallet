@@ -13,7 +13,9 @@ import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_bloc.dart';
+import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_bloc.dart';
+import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
@@ -35,6 +37,7 @@ import 'package:web_dex/shared/widgets/segwit_icon.dart';
 import 'package:web_dex/views/common/page_header/disable_coin_button.dart';
 import 'package:web_dex/views/common/page_header/page_header.dart';
 import 'package:web_dex/views/common/pages/page_layout.dart';
+import 'package:web_dex/views/wallet/coin_details/coin_details_info/gasless_standard_balance_notice.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_growth_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/charts/portfolio_profit_loss_chart.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
@@ -75,58 +78,86 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
     context.read<AnalyticsBloc>(),
   )..add(const CoinAddressesStarted());
 
-  @override
-  void initState() {
-    super.initState();
-    const selectedDurationInitial = Duration(hours: 1);
-
-    context.read<PortfolioGrowthBloc>().add(
-      PortfolioGrowthLoadRequested(
-        coins: [widget.coin],
-        fiatCoinId: 'USDT',
-        selectedPeriod: selectedDurationInitial,
-        walletId: _walletId!,
-      ),
-    );
-
-    context.read<ProfitLossBloc>().add(
-      ProfitLossPortfolioChartLoadRequested(
-        coins: [widget.coin],
-        selectedPeriod: const Duration(hours: 1),
-        fiatCoinId: 'USDT',
-        walletId: _walletId!,
-      ),
-    );
-  }
+  /// Initial period shown by the growth and profit/loss charts.
+  static const _initialChartPeriod = Duration(hours: 1);
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _coinAddressesBloc,
-      child: BlocListener<CoinAddressesBloc, CoinAddressesState>(
-        listenWhen: (previous, current) =>
-            previous.createAddressStatus != current.createAddressStatus &&
-            current.createAddressStatus == FormStatus.success,
-        listener: (context, state) {
-          context.read<CoinsBloc>().add(
-            CoinsPubkeysRequested(widget.coin.abbr),
-          );
-        },
-        child: PageLayout(
-          padding: const EdgeInsets.fromLTRB(15, 32, 15, 20),
-          header: PageHeader(
-            title: widget.coin.displayName,
-            widgetTitle: widget.coin.mode == CoinMode.segwit
-                ? const Padding(
-                    padding: EdgeInsets.only(left: 6.0),
-                    child: SegwitIcon(height: 22),
-                  )
-                : null,
-            backText: _backText,
-            onBackButtonPressed: _onBackButtonPressed,
-            actions: [_buildDisableButton()],
+    // Provide chart blocs scoped to THIS single coin. The app-wide
+    // PortfolioGrowthBloc/ProfitLossBloc are driven by the wallet overview with
+    // the whole coin set, so reusing them here would render the whole-portfolio
+    // series (which sums every coin, e.g. USDT-TRC20) on a single-coin page and
+    // make both charts re-fetch/animate the large portfolio dataset. Page-local
+    // instances guarantee this page only ever shows [widget.coin] data and are
+    // disposed (stopping their periodic refresh loops) when the page closes.
+    //
+    // The user can become null mid-rebuild during sign-out (the auth-driven
+    // rebuild can reach this subtree before the router disposes the page) —
+    // render nothing rather than crash on a bang.
+    final walletId = _walletId;
+    if (walletId == null) {
+      return const SizedBox.shrink();
+    }
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<PortfolioGrowthBloc>(
+          lazy: false,
+          create: (ctx) =>
+              PortfolioGrowthBloc(
+                portfolioGrowthRepository: ctx
+                    .read<PortfolioGrowthRepository>(),
+                sdk: ctx.sdk,
+              )..add(
+                PortfolioGrowthLoadRequested(
+                  coins: [widget.coin],
+                  fiatCoinId: 'USDT',
+                  selectedPeriod: _initialChartPeriod,
+                  walletId: walletId,
+                ),
+              ),
+        ),
+        BlocProvider<ProfitLossBloc>(
+          lazy: false,
+          create: (ctx) =>
+              ProfitLossBloc(ctx.read<ProfitLossRepository>(), ctx.sdk)..add(
+                ProfitLossPortfolioChartLoadRequested(
+                  coins: [widget.coin],
+                  selectedPeriod: _initialChartPeriod,
+                  fiatCoinId: 'USDT',
+                  walletId: walletId,
+                ),
+              ),
+        ),
+      ],
+      child: BlocProvider.value(
+        value: _coinAddressesBloc,
+        child: BlocListener<CoinAddressesBloc, CoinAddressesState>(
+          listenWhen: (previous, current) =>
+              previous.createAddressStatus != current.createAddressStatus &&
+              current.createAddressStatus == FormStatus.success,
+          listener: (context, state) {
+            context.read<CoinsBloc>().add(
+              CoinsPubkeysRequested(widget.coin.abbr),
+            );
+          },
+          child: PageLayout(
+            padding: const EdgeInsets.fromLTRB(15, 32, 15, 20),
+            header: PageHeader(
+              title: widget.coin.displayName,
+              widgetTitle: widget.coin.mode == CoinMode.segwit
+                  ? const Padding(
+                      padding: EdgeInsets.only(left: 6.0),
+                      child: SegwitIcon(height: 22),
+                    )
+                  : null,
+              backText: _backText,
+              onBackButtonPressed: _onBackButtonPressed,
+              actions: [_buildDisableButton()],
+            ),
+            content: Expanded(
+              child: _EntranceTransition(child: _buildContent(context)),
+            ),
           ),
-          content: Expanded(child: _buildContent(context)),
         ),
       ),
     );
@@ -220,6 +251,98 @@ class _CoinDetailsInfoState extends State<CoinDetailsInfo>
     _coinAddressesBloc.close().ignore();
     _scrollController.dispose();
     super.dispose();
+  }
+}
+
+/// A soft circular glow rendered behind an asset logo, tinted with the coin's
+/// brand color. Uses [BoxShadow] so the halo bleeds outward without affecting
+/// layout. Falls back to the theme primary when the coin has no brand color.
+class _AssetGlow extends StatelessWidget {
+  const _AssetGlow({required this.child, required this.color});
+
+  final Widget child;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.50),
+            blurRadius: 24,
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: color.withValues(alpha: 0.26),
+            blurRadius: 44,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Plays a one-time fade + slide-up when the coin-details content first
+/// appears. Subsequent rebuilds (balance/chart updates) do not replay it.
+/// Honors the platform "reduce motion" setting by snapping to the end state.
+class _EntranceTransition extends StatefulWidget {
+  const _EntranceTransition({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_EntranceTransition> createState() => _EntranceTransitionState();
+}
+
+class _EntranceTransitionState extends State<_EntranceTransition>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _curve,
+      child: AnimatedBuilder(
+        animation: _curve,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, (1 - _curve.value) * 14),
+          child: child,
+        ),
+        child: widget.child,
+      ),
+    );
   }
 }
 
@@ -320,7 +443,12 @@ class _DesktopCoinDetails extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 5, 12, 0),
-                child: AssetLogo.ofId(coin.id, size: 50),
+                child: _AssetGlow(
+                  color:
+                      getCoinColor(coin.abbr) ??
+                      Theme.of(context).colorScheme.primary,
+                  child: AssetLogo.ofId(coin.id, size: 50),
+                ),
               ),
               _Balance(coin: coin),
               const SizedBox(width: 10),
@@ -343,6 +471,7 @@ class _DesktopCoinDetails extends StatelessWidget {
               coin: coin,
             ),
           ),
+          GaslessStandardBalanceNotice(coin: coin, setPageType: setPageType),
           const Gap(12),
           _SectionAnchorChips(
             isMobile: false,
@@ -446,7 +575,12 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
       ),
       child: Column(
         children: [
-          AssetIcon.ofTicker(coin.abbr, size: 35),
+          _AssetGlow(
+            color:
+                getCoinColor(coin.abbr) ??
+                Theme.of(context).colorScheme.primary,
+            child: AssetIcon.ofTicker(coin.abbr, size: 35),
+          ),
           const SizedBox(height: 8),
           _Balance(coin: coin),
           const SizedBox(height: 12),
@@ -466,6 +600,7 @@ class _CoinDetailsInfoHeader extends StatelessWidget {
               coin: coin,
             ),
           ),
+          GaslessStandardBalanceNotice(coin: coin, setPageType: setPageType),
           _SectionAnchorChips(
             isMobile: true,
             onShowTransactions: onShowTransactions,
@@ -708,6 +843,13 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   final BalanceInfo? latestBalance;
   final Widget? fiatBalance;
 
+  /// Skeleton shown only when there is genuinely nothing to render.
+  ///
+  /// A *cached* balance is rendered immediately (dimmed, with a refresh
+  /// affordance) rather than hidden behind this: hiding it meant a coin page
+  /// re-opened seconds after the last fetch showed a placeholder for the whole
+  /// duration of a fresh round trip, even though the number was already in
+  /// memory. See [build]'s `showGhost`/`isRefreshing` split.
   Widget _buildGhostValue(ThemeData themeData) {
     final style = themeData.textTheme.titleMedium?.copyWith(
       fontSize: isMobile ? 25 : 22,
@@ -750,12 +892,18 @@ class CoinDetailsBalanceContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeData = Theme.of(context);
-    final showGhost = !hideBalances && !isConfirmed;
     final balance = latestBalance?.spendable.toDouble();
+
+    // Unconfirmed *and* nothing cached -> skeleton. Unconfirmed *with* a cached
+    // value -> render it now, dimmed, with a refresh spinner. `isConfirmed`
+    // stays honest (only a completed fetch, or a stream value that arrives
+    // after a bootstrap attempt, sets it) - it just no longer decides whether
+    // the user sees a number at all.
+    final showGhost = !hideBalances && !isConfirmed && latestBalance == null;
+    final isRefreshing = !hideBalances && !isConfirmed && latestBalance != null;
+
     final value = hideBalances
         ? maskedBalanceText
-        : showGhost
-        ? ''
         : balance == null
         ? kBalancePlaceholder
         : doubleToString(balance);
@@ -794,7 +942,9 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                         style: themeData.textTheme.titleMedium!.copyWith(
                           fontSize: isMobile ? 25 : 22,
                           fontWeight: FontWeight.w700,
-                          color: theme.custom.headerFloatBoxColor,
+                          color: theme.custom.headerFloatBoxColor.withValues(
+                            alpha: isRefreshing ? 0.65 : 1,
+                          ),
                           height: 1.1,
                         ),
                       ),
@@ -805,10 +955,26 @@ class CoinDetailsBalanceContent extends StatelessWidget {
                       style: themeData.textTheme.titleSmall!.copyWith(
                         fontSize: isMobile ? 25 : 20,
                         fontWeight: FontWeight.w500,
-                        color: theme.custom.headerFloatBoxColor,
+                        color: theme.custom.headerFloatBoxColor.withValues(
+                          alpha: isRefreshing ? 0.65 : 1,
+                        ),
                         height: 1.1,
                       ),
                     ),
+                    if (isRefreshing) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        key: const Key('coin-details-balance-refreshing'),
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: theme.custom.headerFloatBoxColor.withValues(
+                            alpha: 0.65,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
         ),
@@ -847,6 +1013,11 @@ class _BalanceState extends State<_Balance> {
       maxStartupRetries: _maxStartupRetries,
     );
 
+    // `watchBalance` re-establishes itself after the transient failures around
+    // sign-in and wallet switches, and forwards each one as a stream error
+    // first - which is what this `onError` is for. It does not end, so there is
+    // no closed-stream case that would leave `_isConfirmed` false with nothing
+    // left to set it.
     _balanceSubscription = sdk.balances
         .watchBalance(widget.coin.id)
         .listen(

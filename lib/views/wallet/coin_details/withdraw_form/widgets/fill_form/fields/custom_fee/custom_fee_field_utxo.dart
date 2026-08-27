@@ -21,8 +21,9 @@ class CustomFeeFieldUtxo extends StatefulWidget {
 
 class _CustomFeeFieldUtxoState extends State<CustomFeeFieldUtxo> {
   final TextEditingController _feeController = TextEditingController();
-  TextSelection _previousTextSelection =
-      const TextSelection.collapsed(offset: 0);
+  TextSelection _previousTextSelection = const TextSelection.collapsed(
+    offset: 0,
+  );
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(
@@ -62,9 +63,9 @@ class _CustomFeeFieldUtxoState extends State<CustomFeeFieldUtxo> {
                   coin: asset.id.id,
                   amount: Decimal.tryParse(value ?? '0') ?? Decimal.zero,
                 );
-                context
-                    .read<WithdrawFormBloc>()
-                    .add(WithdrawFormCustomFeeChanged(feeInfo));
+                context.read<WithdrawFormBloc>().add(
+                  WithdrawFormCustomFeeChanged(feeInfo),
+                );
               },
               filteringRegExp: numberRegExp.pattern,
               style: style,
@@ -75,8 +76,10 @@ class _CustomFeeFieldUtxoState extends State<CustomFeeFieldUtxo> {
                   ),
                 ],
               ),
-              hintTextStyle:
-                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              hintTextStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             );
           },
         );

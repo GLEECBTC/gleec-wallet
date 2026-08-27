@@ -6,6 +6,10 @@ in front of users. Everything under "Measured" was read from the live sites with
 
 ## Measured, 2026-08-27
 
+There are three Firebase projects in play: `komodo-wallet-official` (the RC),
+`gleec-wallet-official` (production), and `komodo-wallet-preview` (the local
+default in `.firebaserc`, used for ad-hoc previews).
+
 | URL | Firebase site | Firebase project | Version | Last deployed | Deployed by |
 |---|---|---|---|---|---|
 | `dex.gleec.com` | `gleec-wallet-official` | **`gleec-wallet-official`** | 0.9.4 | 2026-04-17 | **by hand, not CI** |
@@ -65,23 +69,47 @@ Deploying production therefore fixes shipped native clients with no app release
 — and conversely, until production is deployed, those clients keep fetching the
 old page no matter what has merged.
 
+That deploy is not a small change, and it is not this PR's to make. Production
+is on 0.9.4 from 2026-04-17; deploying current `dev` to it moves the whole web
+app forward by everything merged since, not just the on-ramp fix. Treat it as a
+release, with whatever sign-off a release normally gets. The narrow question
+this document answers is only *where* it has to land and *how to check* that it
+did.
+
 ## Deploying
 
-`firebase.json` declares both sites, so the same config serves the same policy
-either way. Each deploy has to name its site *and* its project, because the two
-sites are in different projects:
+There is **one** `hosting` entry in `firebase.json`, and it is not tied to a
+site. It names the deploy target `walletrc`, and `.firebaserc` maps that target
+to a different site in each project:
+
+| `--project` | target `walletrc` resolves to | who deploys it |
+|---|---|---|
+| `komodo-wallet-official` | site `walletrc` | CI, every push to `dev` |
+| `komodo-wallet-preview` | site `komodo-wallet-preview` | local default |
+| `gleec-wallet-official` | site `gleec-wallet-official` (dex.gleec.com) | by hand |
 
 ```bash
 # Release candidate (what CI runs on every push to dev)
 firebase deploy --only hosting:walletrc --project komodo-wallet-official
 
 # Production, dex.gleec.com
-firebase deploy --only hosting:gleec-wallet-official --project gleec-wallet-official
+firebase deploy --only hosting:walletrc --project gleec-wallet-official
 ```
 
-A bare `firebase deploy` would try both entries and fail on credentials for
-whichever project you are not authenticated against. Always pass `--only` and
-`--project`.
+Production being the *same* config rather than a second entry is deliberate:
+production must never end up with weaker headers than the release candidate,
+and one entry cannot drift from itself. The target is called `walletrc` for
+historical reasons — read it as "the wallet web app site belonging to the
+project you named". `--project` is what selects the site, so it is the only
+thing separating an RC deploy from a production one. Always pass it: a bare
+`firebase deploy` uses `.firebaserc`'s default, which is deliberately the
+preview project, and a bare `firebase deploy --project gleec-wallet-official`
+will push whatever is currently in `build/web` straight to dex.gleec.com.
+
+`.firebaserc` is load-bearing here. Remove the `gleec-wallet-official` block
+and production cannot be deployed from this config at all — the CLI aborts with
+"Deploy target walletrc not configured". `test_units/tests/fiat/fiat_checkout_url_allowlist_test.dart`
+fails if that mapping is dropped or repointed.
 
 ## Verifying a deploy
 

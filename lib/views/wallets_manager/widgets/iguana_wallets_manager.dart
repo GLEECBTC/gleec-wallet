@@ -6,7 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:logging/logging.dart';
+import 'package:web_dex/analytics/events/auth_events.dart';
 import 'package:web_dex/analytics/events/user_acquisition_events.dart';
+import 'package:web_dex/analytics/onboarding_funnel.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
@@ -25,8 +28,6 @@ import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
 import 'package:web_dex/views/wallets_manager/widgets/legacy_migration_compatibility_dialog.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_wrapper.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
-import 'package:web_dex/views/wallets_manager/widgets/wallets_list.dart';
-import 'package:web_dex/views/wallets_manager/widgets/wallets_manager_controls.dart';
 
 class IguanaWalletsManager extends StatefulWidget {
   const IguanaWalletsManager({
@@ -36,6 +37,7 @@ class IguanaWalletsManager extends StatefulWidget {
     this.initialWallet,
     this.initialHdMode = false,
     this.rememberMe = false,
+    this.initialAction = WalletsManagerAction.none,
     super.key,
   });
 
@@ -46,11 +48,17 @@ class IguanaWalletsManager extends StatefulWidget {
   final bool initialHdMode;
   final bool rememberMe;
 
+  /// Which form to open on. The create-or-import decision now happens on the
+  /// entry screen, so this widget is forms-only.
+  final WalletsManagerAction initialAction;
+
   @override
   State<IguanaWalletsManager> createState() => _IguanaWalletsManagerState();
 }
 
 class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
+  static final _log = Logger('IguanaWalletsManager');
+
   bool _isLoading = false;
   WalletsManagerAction _action = WalletsManagerAction.none;
   Wallet? _selectedWallet;
@@ -58,6 +66,9 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
       WalletsManagerExistWalletAction.none;
   bool _initialHdMode = false;
   bool _rememberMe = false;
+  bool _didHandleSuccessfulLogin = false;
+  WalletImportTypes _importType = WalletImportTypes.simple;
+  late final OnboardingFunnel _funnel;
 
   @override
   void initState() {
@@ -67,14 +78,61 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         ? true
         : widget.initialHdMode;
     _rememberMe = widget.rememberMe;
+    _action = widget.initialAction;
     if (_selectedWallet != null) {
       _existWalletAction = WalletsManagerExistWalletAction.logIn;
     }
+
+    final walletsRepository = context.read<WalletsRepository>();
+    _funnel = OnboardingFunnel(
+      analytics: context.read<AnalyticsBloc>(),
+      entryPoint: widget.eventType.name,
+      existingWalletCount: () => walletsRepository.wallets?.length,
+    );
+    _syncFunnel();
+  }
+
+  @override
+  void dispose() {
+    _funnel.dispose();
+    super.dispose();
+  }
+
+  /// The funnel step implied by the current screen, or null when this screen is
+  /// not part of onboarding (logging into or deleting an existing wallet).
+  OnboardingStep? get _currentFunnelStep {
+    if (_selectedWallet != null &&
+        _existWalletAction != WalletsManagerExistWalletAction.none) {
+      return null;
+    }
+    switch (_action) {
+      case WalletsManagerAction.none:
+        // The create-or-import choice lives on the entry screen now, which
+        // owns `setup_action_select`. Nothing to report from here.
+        return null;
+      case WalletsManagerAction.create:
+        return OnboardingStep.createForm;
+      case WalletsManagerAction.import:
+        return _importType == WalletImportTypes.file
+            ? OnboardingStep.importFileUnlock
+            : OnboardingStep.importSeedEntry;
+    }
+  }
+
+  void _syncFunnel() {
+    final step = _currentFunnelStep;
+    if (step != null) _funnel.enter(step);
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthBlocState>(
+      // `status` covers both `isError` and `isLoading`, and the listener
+      // branches on all three. Watching only mode/isError would skip a
+      // `loading()` -> `initial()` transition (dispatched by _cancel() and by
+      // sign-out), leaving the local `_isLoading` spinner stuck on.
+      listenWhen: (previous, current) =>
+          previous.mode != current.mode || previous.status != current.status,
       listener: (context, state) {
         if (state.mode == AuthorizeMode.logIn) {
           _onLogIn();
@@ -82,6 +140,11 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
 
         if (state.isError) {
           setState(() => _isLoading = false);
+
+          // Auth failed, so the user is back on the form they submitted from.
+          // The failure itself is covered by `auth_signin_failed`.
+          _funnel.abandon();
+          _syncFunnel();
 
           // Don't show a snackbar when the error is shown on the form.
           if (state.authError != null) return;
@@ -105,57 +168,6 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
       },
       child: Builder(
         builder: (context) {
-          if (_action == WalletsManagerAction.none &&
-              _existWalletAction == WalletsManagerExistWalletAction.none) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: Column(
-                children: [
-                  WalletsList(
-                    walletType: WalletType.iguana,
-                    onWalletClick:
-                        (
-                          Wallet wallet,
-                          WalletsManagerExistWalletAction existWalletAction,
-                        ) {
-                          setState(() {
-                            _selectedWallet = wallet;
-                            _existWalletAction = existWalletAction;
-                          });
-                        },
-                  ),
-                  if (context.read<WalletsRepository>().wallets?.isNotEmpty ??
-                      false)
-                    const Divider(height: 32, thickness: 2),
-                  WalletsManagerControls(
-                    onTap: (newAction) {
-                      setState(() {
-                        _action = newAction;
-                      });
-
-                      final method = newAction == WalletsManagerAction.create
-                          ? 'create'
-                          : 'import';
-                      context.read<AnalyticsBloc>().logEvent(
-                        OnboardingStartedEventData(
-                          method: method,
-                          referralSource: widget.eventType.name,
-                        ),
-                      );
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: UiUnderlineTextButton(
-                      text: LocaleKeys.cancel.tr(),
-                      onPressed: widget.close,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return Center(
             child: isMobile ? _buildMobileContent() : _buildNormalContent(),
           );
@@ -188,6 +200,16 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
           key: const Key('wallet-import'),
           onImport: _importWallet,
           onCancel: _cancel,
+          onImportTypeChanged: (type) {
+            if (_importType == type) return;
+            setState(() => _importType = type);
+            _funnel.setFlow(
+              type == WalletImportTypes.file
+                  ? OnboardingFlowKind.importFile
+                  : OnboardingFlowKind.importSeed,
+            );
+            _syncFunnel();
+          },
         );
       case WalletsManagerAction.create:
       case WalletsManagerAction.none:
@@ -243,13 +265,20 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   }
 
   void _cancel() {
-    setState(() {
-      _selectedWallet = null;
-      _action = WalletsManagerAction.none;
-      _existWalletAction = WalletsManagerExistWalletAction.none;
-    });
+    _funnel.abandon();
+    _funnel.setFlow(OnboardingFlowKind.undecided);
+    _syncFunnel();
 
     context.read<AuthBloc>().add(const AuthStateClearRequested());
+
+    // Hand control back to the wrapper, which either dismisses the dialog (when
+    // the user was dropped straight into this manager) or returns to the entry
+    // screen. Resetting `_action` to `none` here instead left the user inside a
+    // barrierDismissible: false modal rendering the create form under the
+    // "Import wallet" title, with no way out but to create a wallet or restart:
+    // this is the only caller of `close`, and the previous one was removed with
+    // the old action-select screen.
+    widget.close();
   }
 
   void _createWallet({
@@ -288,6 +317,10 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         name: name,
         walletType: walletType ?? WalletType.iguana,
       );
+
+      _funnel
+        ..complete()
+        ..enter(OnboardingStep.authSubmitted);
 
       context.read<AuthBloc>().add(
         AuthRegisterRequested(wallet: newWallet, password: password),
@@ -350,8 +383,12 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
         config: walletConfig,
       );
 
+      _funnel
+        ..complete()
+        ..enter(OnboardingStep.authSubmitted);
+
       authBloc.add(
-        AuthRestoreRequested(
+        AuthImportRequested(
           wallet: newWallet,
           password: password,
           seed: walletConfig.seedPhrase,
@@ -486,6 +523,9 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     );
     analyticsBloc.logEvent(analyticsEvent);
 
+    // Signing into an existing wallet is not the onboarding funnel.
+    _funnel.finish();
+
     context.read<AuthBloc>().add(
       AuthSignInRequested(wallet: wallet, password: password),
     );
@@ -508,6 +548,8 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     if (!mounted) return;
 
     if (migratedWallet != null) {
+      // Legacy migration is a different funnel; stop reporting into this one.
+      _funnel.finish();
       setState(() {
         _selectedWallet = migratedWallet;
         _existWalletAction = WalletsManagerExistWalletAction.logIn;
@@ -539,32 +581,64 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
   }
 
   void _onLogIn() {
+    // A second successful-login delivery must not re-dispatch
+    // CoinsSessionStarted: that handler flushes the coin cache (cancelling
+    // every balance watcher registered so far) and re-seeds every row as
+    // `activating`, so the user watches the wallet restart from scratch
+    // mid-load. restartable() does not protect against this - _onLogin has no
+    // await, so a duplicate starts a second pass rather than cancelling the
+    // first. Mirrors the guard already shipped for Trezor in
+    // hardware_wallets_manager.dart.
+    if (_didHandleSuccessfulLogin) return;
+
+    // Latch only once the work it guards has actually been done. Setting it
+    // above the guard below would let a delivery that arrives before the user
+    // is readable consume the one chance to dispatch CoinsSessionStarted, and
+    // the wallet would then never activate anything at all.
     final currentUser = context.read<AuthBloc>().state.currentUser;
     final currentWallet = currentUser?.wallet;
+    if (currentUser == null || currentWallet == null) {
+      _log.severe(
+        'Login listener fired with mode=logIn but no current user; not '
+        'dispatching CoinsSessionStarted',
+      );
+      return;
+    }
+    _didHandleSuccessfulLogin = true;
+
+    _funnel
+      ..complete()
+      ..finish();
+
     final action = _action;
     _action = WalletsManagerAction.none;
-    if (currentUser != null && currentWallet != null) {
-      final analyticsBloc = context.read<AnalyticsBloc>();
-      final source = isMobile ? 'mobile' : 'desktop';
-      final walletType = currentWallet.config.type.name;
-      if (action == WalletsManagerAction.create) {
-        analyticsBloc.add(
-          AnalyticsWalletCreatedEvent(source: source, hdType: walletType),
-        );
-      } else if (action == WalletsManagerAction.import) {
-        analyticsBloc.add(
-          AnalyticsWalletImportedEvent(
-            source: source,
-            importType: 'seed_phrase',
-            hdType: walletType,
-          ),
-        );
-      }
-      context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
-      unawaited(_updateRememberedWallet(currentUser));
-      TextInput.finishAutofillContext(shouldSave: true);
-      widget.onSuccess(currentWallet);
+
+    final analyticsBloc = context.read<AnalyticsBloc>();
+    final source = isMobile ? 'mobile' : 'desktop';
+    final walletType = currentWallet.config.type.name;
+    if (action == WalletsManagerAction.create) {
+      analyticsBloc.add(
+        AnalyticsWalletCreatedEvent(source: source, hdType: walletType),
+      );
+    } else if (action == WalletsManagerAction.import) {
+      analyticsBloc.add(
+        AnalyticsWalletImportedEvent(
+          source: source,
+          // Extends the value domain rather than breaking it: the typed-seed
+          // path keeps reporting `seed_phrase`, so that series stays
+          // continuous, and file imports become distinguishable instead of
+          // being silently counted as typed.
+          importType: _importType == WalletImportTypes.file
+              ? 'encrypted_file'
+              : 'seed_phrase',
+          hdType: walletType,
+        ),
+      );
     }
+    context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
+    unawaited(_updateRememberedWallet(currentUser));
+    TextInput.finishAutofillContext(shouldSave: true);
+    widget.onSuccess(currentWallet);
 
     if (mounted) {
       setState(() {

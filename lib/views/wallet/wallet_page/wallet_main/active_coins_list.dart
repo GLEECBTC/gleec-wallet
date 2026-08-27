@@ -44,7 +44,7 @@ class ActiveCoinsList extends StatelessWidget {
     return BlocBuilder<CoinsBloc, CoinsState>(
       builder: (context, state) {
         final coins = state.walletCoins.values.toList();
-        final Iterable<Coin> displayedCoins = _getDisplayedCoins(
+        final List<Coin> displayedCoins = _getDisplayedCoins(
           coins,
           context.sdk,
         );
@@ -61,7 +61,7 @@ class ActiveCoinsList extends StatelessWidget {
         }
 
         List<Coin> sorted = sortByPriorityAndBalance(
-          displayedCoins.toList(),
+          displayedCoins,
           context.sdk,
         );
 
@@ -85,14 +85,9 @@ class ActiveCoinsList extends StatelessWidget {
               itemBuilder: (context, index) {
                 final coin = sorted[index];
 
-                // Fetch pubkeys if not already loaded
-                if (!state.pubkeys.containsKey(coin.abbr)) {
-                  // TODO: Investigate if this is causing performance issues
-                  context.read<CoinsBloc>().add(
-                    CoinsPubkeysRequested(coin.abbr),
-                  );
-                }
-
+                // Pubkeys are requested by CoinsBloc when a coin reaches the
+                // active state. Dispatching from here re-fired for every row on
+                // every emission, and each response emitted again.
                 return Padding(
                   padding: EdgeInsets.only(bottom: 10),
                   child: ExpandableCoinListItem(
@@ -115,7 +110,7 @@ class ActiveCoinsList extends StatelessWidget {
     );
   }
 
-  Iterable<Coin> _getDisplayedCoins(Iterable<Coin> coins, KomodoDefiSdk sdk) =>
+  List<Coin> _getDisplayedCoins(Iterable<Coin> coins, KomodoDefiSdk sdk) =>
       filterCoinsByPhrase(coins, searchPhrase).where((Coin coin) {
         if (!coin.isActive && !coin.isActivating) {
           return false;
@@ -249,6 +244,8 @@ class AddressBalanceCard extends StatelessWidget {
                           AddressCopyButton(
                             address: pubkey.address,
                             coinAbbr: coin.abbr,
+                            gateOnSeedBackup: true,
+                            isTestCoin: coin.isTestCoin,
                           ),
                           if (pubkey.isActiveForSwap)
                             // TODO: Refactor to use "DexPill" component from the SDK UI library (not yet created)
@@ -309,27 +306,12 @@ class AddressBalanceCard extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.qr_code),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => Dialog(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              QrCode(
-                                address: pubkey.address,
-                                coinAbbr: coin.abbr,
-                              ),
-                              const SizedBox(height: 16),
-                              SelectableText(pubkey.address),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                  // Delegates to the shared receive dialog rather than building
+                  // its own. This used to be a second, divergent QR surface
+                  // that bypassed everything the shared one enforces - now
+                  // including the seed-backup gate.
+                  onPressed: () =>
+                      showPubkeyReceiveDialog(context, coin, pubkey),
                 ),
               ],
             ),

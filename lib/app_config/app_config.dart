@@ -201,8 +201,14 @@ List<String> get enabledByDefaultCoins => [
   'KMD', // Komodo ecosystem coin
   'BTC-segwit', // Default Fiat Ramps coin
   'ETH',
-  'TRX',
+  'TRX', // TRON parent chain (also the parent of USDT-TRC20)
   'USDT-ERC20',
+  // Primary gas-free (gasless) withdrawal token. Its TRX parent is activated
+  // atomically by the SDK; the SDK ActivationManager also tolerates TRX being
+  // activated concurrently (the join branch re-verifies and activates any
+  // missing children, and always emits a terminal completion), so listing TRX
+  // separately is safe and keeps TRX seeded even when USDT-TRC20 is removed by
+  // the regional trading blacklist.
   'USDT-TRC20',
   'USDC-ERC20',
 ];

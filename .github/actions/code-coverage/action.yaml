@@ -5,6 +5,13 @@ inputs:
     description: "The test file to run"
     required: false
     default: "test_units/main.dart"
+  dart_defines:
+    description: >-
+      Extra `--dart-define=` flags for the coverage run. Must match the ones the
+      caller's own `flutter test` uses, or this second run compiles a different
+      configuration than the one that was just verified.
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -12,6 +19,9 @@ runs:
       id: run_coverage
       continue-on-error: false
       shell: bash
+      env:
+        TEST_FILE: ${{ inputs.test_file }}
+        DART_DEFINES: ${{ inputs.dart_defines }}
       run: |
         echo "Running code coverage"
         if [ "$RUNNER_OS" == "Linux" ]; then
@@ -37,7 +47,7 @@ runs:
            echo "Unsupported operating system"
            exit 1
         fi
-        flutter test --coverage ${{ inputs.test_file }} 2>&1 > /dev/null && \
+        flutter test --coverage "$TEST_FILE" $DART_DEFINES 2>&1 > /dev/null && \
           echo "Generated code coverage report" || \
           echo "ERROR: Failed to generate code coverage report"
 

@@ -9,6 +9,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/ui/custom_tooltip.dart';
+import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
@@ -31,12 +32,20 @@ class TransactionListRow extends StatefulWidget {
 }
 
 class _TransactionListRowState extends State<TransactionListRow> {
+  bool get _isInternalTransfer => widget.transaction.isInternalTransfer;
+
   IconData get _icon {
+    if (_isInternalTransfer) return Icons.swap_horiz;
     return _isReceived ? Icons.arrow_circle_down : Icons.arrow_circle_up;
   }
 
   Decimal get _displayAmount {
     final tx = widget.transaction;
+    if (_isInternalTransfer) {
+      // Unsigned magnitude moved between the wallet's own addresses.
+      return tx.balanceChanges.spentByMe;
+    }
+
     final netChange = tx.amount;
     if (netChange != Decimal.zero) {
       return netChange;
@@ -61,7 +70,22 @@ class _TransactionListRowState extends State<TransactionListRow> {
   bool get _isReceived => _displayAmount > Decimal.zero;
 
   String get _sign {
+    if (_isInternalTransfer) return '';
     return _isReceived ? '+' : '-';
+  }
+
+  String get _typeLabel {
+    if (_isInternalTransfer) return LocaleKeys.txInternalTransfer.tr();
+    return _isReceived ? LocaleKeys.receive.tr() : LocaleKeys.send.tr();
+  }
+
+  Color? _amountColor(BuildContext context) {
+    if (_isInternalTransfer) {
+      return Theme.of(context).textTheme.bodyMedium?.color;
+    }
+    return _isReceived
+        ? theme.custom.increaseColor
+        : theme.custom.decreaseColor;
   }
 
   bool _hasFocus = false;
@@ -108,25 +132,18 @@ class _TransactionListRowState extends State<TransactionListRow> {
 
   Widget _buildBalanceChanges() {
     final String formatted = formatDexAmt(_displayAmount.toDouble().abs());
+    final Color? color = _amountColor(context);
 
     return Row(
       children: [
-        Icon(
-          _icon,
-          size: 16,
-          color: _isReceived
-              ? theme.custom.increaseColor
-              : theme.custom.decreaseColor,
-        ),
+        Icon(_icon, size: 16, color: color),
         const SizedBox(width: 4),
         Flexible(
           child: AutoScrollText(
             text:
                 '$formatted ${Coin.normalizeAbbr(widget.transaction.assetId.id)} ',
             style: TextStyle(
-              color: _isReceived
-                  ? theme.custom.increaseColor
-                  : theme.custom.decreaseColor,
+              color: color,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -139,18 +156,30 @@ class _TransactionListRowState extends State<TransactionListRow> {
   Widget _buildBalanceChangesMobile(BuildContext context) {
     return Row(
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _isReceived ? LocaleKeys.receive.tr() : LocaleKeys.send.tr(),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-            ),
-            Text(
-              formatTransactionDateTime(widget.transaction),
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
-            ),
-          ],
+        // Flexible so the (long) internal-transfer label wraps within the
+        // row's cell instead of overflowing into the amount column.
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _typeLabel,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                formatTransactionDateTime(widget.transaction),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -234,9 +263,12 @@ class _TransactionListRowState extends State<TransactionListRow> {
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 8),
           alignment: Alignment.centerLeft,
-          width: 60,
+          // Constant width: a per-row 60/120 split made the amount and date
+          // columns jog horizontally between adjacent rows whenever an
+          // internal transfer sat in a mixed list.
+          width: 120,
           child: Text(
-            _isReceived ? LocaleKeys.receive.tr() : LocaleKeys.send.tr(),
+            _typeLabel,
             style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
           ),
         ),
@@ -284,12 +316,11 @@ class _TransactionListRowState extends State<TransactionListRow> {
       _displayAmount.toDouble(),
       widget.coinAbbr,
     );
+    final String prefix = _sign.isEmpty ? '' : '$_sign ';
     return AutoScrollText(
-      text: '$_sign \$${formatAmt((usdChanges ?? 0).abs())}',
+      text: '$prefix\$${formatAmt((usdChanges ?? 0).abs())}',
       style: TextStyle(
-        color: _isReceived
-            ? theme.custom.increaseColor
-            : theme.custom.decreaseColor,
+        color: _amountColor(context),
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
@@ -299,7 +330,11 @@ class _TransactionListRowState extends State<TransactionListRow> {
 
 extension _TransactionExtension on Transaction {
   String get myAddress {
-    List<String> addressList = isIncoming ? to : from;
+    // Internal transfers show the destination; post-sanitize the wallet's
+    // own (custody) address is sorted first in `to`.
+    final List<String> addressList = isInternalTransfer || isIncoming
+        ? to
+        : from;
     return addressList.isNotEmpty ? addressList.first : LocaleKeys.unknown.tr();
   }
 }

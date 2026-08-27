@@ -60,6 +60,10 @@ class SecuritySettingsBloc
     final newState = state.copyWith(
       step: SecuritySettingsStep.seedShow,
       showSeedWords: false,
+      // Entering the flow is the honest start of "how long did backing up
+      // take" - the confirmation screen alone would omit the reading and
+      // writing-down that is most of the work.
+      backupStartedAt: DateTime.now(),
     );
     emit(newState);
   }
@@ -183,6 +187,7 @@ class SecuritySettingsBloc
       showPrivateKeys: false,
       // Reset authentication success flag after use
       privateKeyAuthenticationSuccess: false,
+      backupStartedAt: DateTime.now(),
     );
     emit(newState);
   }

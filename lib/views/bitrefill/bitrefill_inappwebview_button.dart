@@ -22,7 +22,7 @@ class BitrefillInAppWebviewButton extends StatefulWidget {
   /// The [windowTitle] property is used as the title of the window.
   /// The [url] property is the URL to open in the window.
   /// The [tooltip] property is used to show a tooltip message when hovering or when button is disabled.
-  /// The [onPressed] property is called when the button is pressed, before opening the webview.
+  /// [onBeforeOpen] resolves the exact URL after any pre-launch selection.
   const BitrefillInAppWebviewButton({
     required this.url,
     required this.windowTitle,
@@ -30,7 +30,7 @@ class BitrefillInAppWebviewButton extends StatefulWidget {
     required this.onMessage,
     super.key,
     this.tooltip,
-    this.onPressed,
+    this.onBeforeOpen,
   });
 
   /// The title of the pop-up browser window.
@@ -49,8 +49,8 @@ class BitrefillInAppWebviewButton extends StatefulWidget {
   /// Optional tooltip message to show when hovering or when button is disabled.
   final String? tooltip;
 
-  /// Optional callback that is called when the button is pressed, before opening the webview.
-  final Future<void> Function()? onPressed;
+  /// Optional callback invoked before opening. Returning null cancels launch.
+  final Future<String?> Function()? onBeforeOpen;
 
   @override
   BitrefillInAppWebviewButtonState createState() =>
@@ -83,22 +83,22 @@ class BitrefillInAppWebviewButtonState
   }
 
   Future<void> _handlePress() async {
-    // Call the onPressed callback first if provided
-    await widget.onPressed;
+    final callback = widget.onBeforeOpen;
+    final resolvedUrl = callback == null ? widget.url : await callback();
+    if (!mounted || resolvedUrl == null || resolvedUrl.trim().isEmpty) return;
 
-    // Then open the dialog
-    await _openDialog();
+    await _openDialog(resolvedUrl);
   }
 
-  Future<void> _openDialog() async {
+  Future<void> _openDialog(String url) async {
     if (kIsWeb) {
-      await _showWebDialog();
+      await _showWebDialog(url);
     } else {
-      await _showFullScreenDialog();
+      await _showFullScreenDialog(url);
     }
   }
 
-  Future<void> _showWebDialog() async {
+  Future<void> _showWebDialog(String url) async {
     await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -114,7 +114,7 @@ class BitrefillInAppWebviewButtonState
             child: ScreenshotSensitive(
               child: InAppWebView(
                 key: const Key('bitrefill-inappwebview'),
-                initialUrlRequest: _createUrlRequest(),
+                initialUrlRequest: _createUrlRequest(url),
                 initialSettings: settings,
                 onWebViewCreated: _onCreated,
                 onConsoleMessage: _onConsoleMessage,
@@ -134,7 +134,7 @@ class BitrefillInAppWebviewButtonState
     );
   }
 
-  Future<void> _showFullScreenDialog() async {
+  Future<void> _showFullScreenDialog(String url) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
@@ -149,7 +149,7 @@ class BitrefillInAppWebviewButtonState
               child: ScreenshotSensitive(
                 child: InAppWebView(
                   key: const Key('bitrefill-inappwebview'),
-                  initialUrlRequest: _createUrlRequest(),
+                  initialUrlRequest: _createUrlRequest(url),
                   initialSettings: settings,
                   onWebViewCreated: _onCreated,
                   onConsoleMessage: _onConsoleMessage,
@@ -174,7 +174,7 @@ class BitrefillInAppWebviewButtonState
     widget.onMessage(consoleMessage.message);
   }
 
-  URLRequest _createUrlRequest() {
-    return URLRequest(url: WebUri(widget.url));
+  URLRequest _createUrlRequest(String url) {
+    return URLRequest(url: WebUri(url));
   }
 }

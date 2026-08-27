@@ -187,7 +187,8 @@ fi
 echo "FAIL - ${failures} check(s) failed on ${BASE_URL}."
 echo
 echo "If the wrapper checks failed, the site is running a build from before the"
-echo "fix; redeploy it. If only the header checks failed, the deploy used a"
-echo "firebase.json that does not declare these headers for this site - see"
+echo "fix; redeploy it. If only the header checks failed, the deploy did not use"
+echo "this repository's hosting config - either it ran from a different checkout,"
+echo "or the deploy target resolved somewhere other than this site. See"
 echo "docs/WEB_HOSTING_TOPOLOGY.md."
 exit 1

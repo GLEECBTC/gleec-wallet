@@ -2,8 +2,37 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
+
+/// True only for the software-wallet key allowed by the GasFree custody policy.
+///
+/// Non-HD wallets expose no derivation path. HD wallets must use the external
+/// account-zero/address-zero key. Secondary and change keys remain standard
+/// TRON addresses in Gleec even when KDF reports a valid GasFree address for
+/// them. This is an application rollout restriction, not an SDK/KDF limit.
+bool isCanonicalTronGaslessPubkey(
+  PubkeyInfo pubkey, {
+  required bool isHdWallet,
+}) {
+  final derivationPath = pubkey.derivationPath?.trim();
+  final chain = pubkey.chain?.trim().toLowerCase();
+
+  if (!isHdWallet) {
+    // Iguana wallets have one software key and no HD metadata. Reject stale
+    // derivation metadata rather than treating it as another custody account.
+    return (derivationPath == null || derivationPath.isEmpty) &&
+        (chain == null || chain.isEmpty || chain == 'external');
+  }
+
+  // Gleec exposes GasFree custody only for TRON BIP44 account 0, external
+  // chain, address 0. A suffix check is not sufficient: account 1 and other
+  // coin types can end in `/0/0` as well. Missing metadata fails closed.
+  return chain == 'external' && derivationPath == "m/44'/195'/0'/0/0";
+}
 
 extension LegacyCoinMigrationExtensions on Coin {
   /// Gets the current USD price of this coin
@@ -65,5 +94,69 @@ extension LegacyCoinMigrationExtensions on Coin {
   /// This bridges the gap until SDK provides cached 24hr data
   double? lastKnown24hChange(BuildContext context) {
     return context.read<CoinsBloc>().state.get24hChangeForAsset(id);
+  }
+
+  /// Whether this asset is a TRON TRC-20 token eligible for gas-free (GasFree)
+  /// transfers.
+  ///
+  /// For these assets the spendable balance lives at the opaque
+  /// **KDF-reported GasFree custody address**, not the EOA — a gasless
+  /// withdrawal settles from custody and ordinarily pays its fee in the token.
+  /// Exceptional recovery may still require TRX in the Standard wallet.
+  /// The coin's `my_balance` still reports the EOA balance. Custody-aware
+  /// surfaces consume the typed KDF account-status snapshot held by their
+  /// feature state and never substitute this standard balance.
+  bool isGaslessAsset(KomodoDefiSdk sdk) =>
+      isTronGaslessConfigured && _matchesGaslessAssetPolicy;
+
+  /// Whether the custody receive address may be exposed for this asset.
+  /// Sending and recovery can remain available while new GasFree deposits are
+  /// disabled independently.
+  bool isGaslessReceiveAsset(KomodoDefiSdk sdk) =>
+      isTronGaslessReceiveConfigured && _matchesGaslessAssetPolicy;
+
+  /// Existing custody/pending/recovery visibility must survive send and
+  /// receive kill switches. This derives network identity from the coin
+  /// itself while retaining the exact token policy.
+  bool get isGaslessRecoveryAsset => isTronGaslessAssetIdEligible(
+    id,
+    isCustomToken: isCustomCoin,
+    isTestnet: isTestCoin,
+    platform: protocolData?.platform,
+    contractAddress: protocolData?.contractAddress,
+    providerNetworkPath: isTestCoin ? 'nile' : 'tron',
+  );
+
+  /// Whether this coin falls under Gleec's single-custody-address rollout.
+  ///
+  /// KDF supports GasFree withdrawals from other valid HD selectors, but this
+  /// app exposes custody receive/send only for the primary address. TRX and
+  /// its TRC-20 tokens share one HD address list, so address creation is gated
+  /// on the TRX platform page as well. Existing secondary addresses remain
+  /// visible for Standard transfers and recovery.
+  bool isGaslessSingleAddressScope(KomodoDefiSdk sdk) =>
+      isTronGaslessConfigured &&
+      (_matchesGaslessAssetPolicy || _matchesGaslessParentPolicy);
+
+  /// The app rollout supports only the pinned Tether contracts on their
+  /// matching provider network. Custom tokens and network/contract lookalikes
+  /// fail closed even when KDF happens to return a `gasfreeAddress` field.
+  bool get _matchesGaslessAssetPolicy {
+    return isTronGaslessAssetIdEligible(
+      id,
+      isCustomToken: isCustomCoin,
+      isTestnet: isTestCoin,
+      platform: protocolData?.platform,
+      contractAddress: protocolData?.contractAddress,
+    );
+  }
+
+  bool get _matchesGaslessParentPolicy {
+    if (id.subClass != CoinSubClass.trx) return false;
+    return switch (tronGaslessNetworkPath(tronGaslessBaseUrl)) {
+      'tron' => !isTestCoin && id.id == 'TRX',
+      'nile' => isTestCoin && id.id == 'TRXT',
+      _ => false,
+    };
   }
 }

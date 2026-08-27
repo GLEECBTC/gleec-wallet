@@ -23,16 +23,22 @@ class WithdrawFormHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
-        return PageHeader(
-          title: state.step.title,
-          widgetTitle: _isSegwit
-              ? const Padding(
-                  padding: EdgeInsets.only(left: 6.0),
-                  child: SegwitIcon(height: 22),
-                )
-              : null,
-          backText: LocaleKeys.backToWallet.tr(),
-          onBackButtonPressed: onBackButtonPressed,
+        return Semantics(
+          container: true,
+          header: true,
+          liveRegion: true,
+          label: state.step.title,
+          child: PageHeader(
+            title: state.step.title,
+            widgetTitle: _isSegwit
+                ? const Padding(
+                    padding: EdgeInsets.only(left: 6.0),
+                    child: SegwitIcon(height: 22),
+                  )
+                : null,
+            backText: LocaleKeys.backToWallet.tr(),
+            onBackButtonPressed: onBackButtonPressed,
+          ),
         );
       },
     );

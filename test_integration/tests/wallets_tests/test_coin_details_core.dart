@@ -15,7 +15,7 @@ import 'wallet_tools.dart';
 Future<void> _activateMarty(WidgetTester tester) async {
   final coinsList = find.byKeyName('wallet-page-scroll-view');
   final martyCoinItem = find.byKeyName('coins-manager-list-item-marty');
-  final martyCoinActive = find.byKeyName('active-coin-item-marty');
+  final martyCoinActive = find.byKeyName('coin-list-item-marty');
 
   await addAsset(tester, asset: martyCoinItem, search: 'marty');
   await tester.pumpUntilVisible(

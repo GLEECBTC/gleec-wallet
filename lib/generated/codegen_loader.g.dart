@@ -92,6 +92,62 @@ abstract class LocaleKeys {
   static const transactions = 'transactions';
   static const send = 'send';
   static const receive = 'receive';
+  static const txInternalTransfer = 'txInternalTransfer';
+  static const receiveGasfreeAddressStatus = 'receiveGasfreeAddressStatus';
+  static const bitrefillGasfreeRefundStatus = 'bitrefillGasfreeRefundStatus';
+  static const bitrefillGasfreeRefundBalanceUnavailable =
+      'bitrefillGasfreeRefundBalanceUnavailable';
+  static const bitrefillGasfreeRefundUnavailable =
+      'bitrefillGasfreeRefundUnavailable';
+  static const receiveGaslessBadgeTitle = 'receiveGaslessBadgeTitle';
+  static const receiveGaslessBadgeSubtitle = 'receiveGaslessBadgeSubtitle';
+  static const receiveGaslessOnlySendToAddress =
+      'receiveGaslessOnlySendToAddress';
+  static const receiveStandardAddressToggle = 'receiveStandardAddressToggle';
+  static const receiveStandardAddressCaveat = 'receiveStandardAddressCaveat';
+  static const receiveStandardAddressLabel = 'receiveStandardAddressLabel';
+  static const receiveStandardBalanceNotice = 'receiveStandardBalanceNotice';
+  static const gaslessStandardBalanceTitle = 'gaslessStandardBalanceTitle';
+  static const gaslessStandardBalanceBody = 'gaslessStandardBalanceBody';
+  static const gaslessStandardBalanceAction = 'gaslessStandardBalanceAction';
+  static const gaslessStandardBalanceNoTrxWarning =
+      'gaslessStandardBalanceNoTrxWarning';
+  static const gaslessInfoTitle = 'gaslessInfoTitle';
+  static const gaslessInfoBodyHow = 'gaslessInfoBodyHow';
+  static const gaslessInfoProviderDependence = 'gaslessInfoProviderDependence';
+  static const gaslessRecoveryTitle = 'gaslessRecoveryTitle';
+  static const gaslessRecoveryBody = 'gaslessRecoveryBody';
+  static const gaslessRecoveryAction = 'gaslessRecoveryAction';
+  static const gaslessSingleAddressTooltip = 'gaslessSingleAddressTooltip';
+  static const addressRowGasfreeTag = 'addressRowGasfreeTag';
+  static const addressRowGasfreeCheckingTag = 'addressRowGasfreeCheckingTag';
+  static const addressRowGasfreePausedTag = 'addressRowGasfreePausedTag';
+  static const receiveGaslessPausedNotice = 'receiveGaslessPausedNotice';
+  static const receiveGaslessBuildDisabledNotice =
+      'receiveGaslessBuildDisabledNotice';
+  static const receiveGaslessSecurityBlockedNotice =
+      'receiveGaslessSecurityBlockedNotice';
+  static const receiveGaslessZeroFeeUnsupportedNotice =
+      'receiveGaslessZeroFeeUnsupportedNotice';
+  static const receiveGaslessProviderUnavailableNotice =
+      'receiveGaslessProviderUnavailableNotice';
+  static const receiveGaslessPendingTransferNotice =
+      'receiveGaslessPendingTransferNotice';
+  static const receiveGaslessTokenUnsupportedNotice =
+      'receiveGaslessTokenUnsupportedNotice';
+  static const receiveGaslessDecimalsMismatchNotice =
+      'receiveGaslessDecimalsMismatchNotice';
+  static const receiveGaslessCustodyMismatchNotice =
+      'receiveGaslessCustodyMismatchNotice';
+  static const receiveGaslessProviderMismatchNotice =
+      'receiveGaslessProviderMismatchNotice';
+  static const receiveGaslessReactivationRequiredNotice =
+      'receiveGaslessReactivationRequiredNotice';
+  static const receiveGaslessAttestationMissingNotice =
+      'receiveGaslessAttestationMissingNotice';
+  static const addressRowStandardTag = 'addressRowStandardTag';
+  static const receiveStandardVariantCaveat = 'receiveStandardVariantCaveat';
+  static const addressBalanceAvailable = 'addressBalanceAvailable';
   static const faucet = 'faucet';
   static const reward = 'reward';
   static const loadingSwap = 'loadingSwap';
@@ -108,6 +164,15 @@ abstract class LocaleKeys {
   static const seedPhrase = 'seedPhrase';
   static const assetNumber = 'assetNumber';
   static const clipBoard = 'clipBoard';
+  static const onboardingConsentPrefix = 'onboardingConsentPrefix';
+  static const onboardingTitle = 'onboardingTitle';
+  static const onboardingSubtitle = 'onboardingSubtitle';
+  static const onboardingCreateWallet = 'onboardingCreateWallet';
+  static const onboardingImportTitle = 'onboardingImportTitle';
+  static const onboardingImportSubtitle = 'onboardingImportSubtitle';
+  static const onboardingHardwareTitle = 'onboardingHardwareTitle';
+  static const onboardingReturningTitle = 'onboardingReturningTitle';
+  static const onboardingReturningSubtitle = 'onboardingReturningSubtitle';
   static const walletsManagerCreateWalletButton =
       'walletsManagerCreateWalletButton';
   static const walletsManagerImportWalletButton =
@@ -443,9 +508,14 @@ abstract class LocaleKeys {
   static const customFeeHigherAmount = 'customFeeHigherAmount';
   static const noSenderAddress = 'noSenderAddress';
   static const confirmOnTrezor = 'confirmOnTrezor';
-  static const alphaVersionWarningTitle = 'alphaVersionWarningTitle';
-  static const alphaVersionWarningDescription =
-      'alphaVersionWarningDescription';
+  static const walletImportNameTaken = 'walletImportNameTaken';
+  static const seedBackupGateTitle = 'seedBackupGateTitle';
+  static const seedBackupGateGeneratedBody = 'seedBackupGateGeneratedBody';
+  static const seedBackupGateBody = 'seedBackupGateBody';
+  static const seedBackupGateBackUpNow = 'seedBackupGateBackUpNow';
+  static const seedBackupGateImportInstead = 'seedBackupGateImportInstead';
+  static const seedBackupGateContinueAnyway = 'seedBackupGateContinueAnyway';
+  static const seedBackupGateShowAddress = 'seedBackupGateShowAddress';
   static const sendToAnalytics = 'sendToAnalytics';
   static const backToWallet = 'backToWallet';
   static const backToDex = 'backToDex';
@@ -514,17 +584,18 @@ abstract class LocaleKeys {
   static const lowTradeVolumeError = 'lowTradeVolumeError';
   static const bridgeSelectReceiveCoinError = 'bridgeSelectReceiveCoinError';
   static const withdrawNoParentCoinError = 'withdrawNoParentCoinError';
-  static const withdrawTopUpBalanceError = 'withdrawTopUpBalanceError';
   static const withdrawNotEnoughBalanceForGasError =
       'withdrawNotEnoughBalanceForGasError';
   static const withdrawNotSufficientBalanceError =
       'withdrawNotSufficientBalanceError';
   static const withdrawZeroBalanceError = 'withdrawZeroBalanceError';
   static const withdrawAmountTooLowError = 'withdrawAmountTooLowError';
+  static const withdrawInvalidAmountError = 'withdrawInvalidAmountError';
   static const withdrawNoSuchCoinError = 'withdrawNoSuchCoinError';
   static const withdrawPreview = 'withdrawPreview';
   static const withdrawPreviewZhtlcNote = 'withdrawPreviewZhtlcNote';
   static const withdrawPreviewError = 'withdrawPreviewError';
+  static const withdrawNoResultError = 'withdrawNoResultError';
   static const withdrawDestination = 'withdrawDestination';
   static const withdrawNetworkDetails = 'withdrawNetworkDetails';
   static const withdrawHighFee = 'withdrawHighFee';
@@ -550,6 +621,139 @@ abstract class LocaleKeys {
       'withdrawTronPreviewRefreshFailed';
   static const withdrawTronPreviewRegenerate = 'withdrawTronPreviewRegenerate';
   static const withdrawAwaitingConfirmations = 'withdrawAwaitingConfirmations';
+  static const withdrawGaslessBadge = 'withdrawGaslessBadge';
+  static const withdrawGaslessNetworkDetails = 'withdrawGaslessNetworkDetails';
+  static const withdrawGaslessProvider = 'withdrawGaslessProvider';
+  static const withdrawGaslessTransferFee = 'withdrawGaslessTransferFee';
+  static const withdrawGaslessActivationFee = 'withdrawGaslessActivationFee';
+  static const withdrawGaslessTotalFee = 'withdrawGaslessTotalFee';
+  static const withdrawGaslessMaxFee = 'withdrawGaslessMaxFee';
+  static const withdrawGaslessFinalFee = 'withdrawGaslessFinalFee';
+  static const withdrawGaslessConfirmationTime =
+      'withdrawGaslessConfirmationTime';
+  static const withdrawGaslessConfirmationBlock =
+      'withdrawGaslessConfirmationBlock';
+  static const withdrawGaslessFeeSummary = 'withdrawGaslessFeeSummary';
+  static const withdrawGaslessUnavailableBlocked =
+      'withdrawGaslessUnavailableBlocked';
+  static const withdrawGaslessSourceAddress = 'withdrawGaslessSourceAddress';
+  static const withdrawSendFrom = 'withdrawSendFrom';
+  static const withdrawSourceGasfreeEntry = 'withdrawSourceGasfreeEntry';
+  static const withdrawSourceStandardEntry = 'withdrawSourceStandardEntry';
+  static const withdrawGaslessInsufficientBalance =
+      'withdrawGaslessInsufficientBalance';
+  static const withdrawGaslessInsufficientBalanceGeneric =
+      'withdrawGaslessInsufficientBalanceGeneric';
+  static const withdrawGaslessInsufficientGasFreeBalance =
+      'withdrawGaslessInsufficientGasFreeBalance';
+  static const withdrawGaslessInsufficientGasFreeBalanceForActivation =
+      'withdrawGaslessInsufficientGasFreeBalanceForActivation';
+  static const withdrawGaslessNoSourceAddress =
+      'withdrawGaslessNoSourceAddress';
+  static const withdrawGaslessRailChip = 'withdrawGaslessRailChip';
+  static const withdrawGaslessRailChipWithFee =
+      'withdrawGaslessRailChipWithFee';
+  static const withdrawAdvancedSection = 'withdrawAdvancedSection';
+  static const withdrawNativeSendToggle = 'withdrawNativeSendToggle';
+  static const withdrawNativeSendToggleSubtitle =
+      'withdrawNativeSendToggleSubtitle';
+  static const withdrawNativeSendActive = 'withdrawNativeSendActive';
+  static const withdrawGaslessTrezorNotice = 'withdrawGaslessTrezorNotice';
+  static const withdrawGaslessActivationBanner =
+      'withdrawGaslessActivationBanner';
+  static const withdrawGaslessActivationBannerGeneric =
+      'withdrawGaslessActivationBannerGeneric';
+  static const withdrawGaslessAmountExceedsMax =
+      'withdrawGaslessAmountExceedsMax';
+  static const withdrawGaslessBalanceBelowFees =
+      'withdrawGaslessBalanceBelowFees';
+  static const withdrawGaslessSendableLabel = 'withdrawGaslessSendableLabel';
+  static const withdrawGaslessTotalBalance = 'withdrawGaslessTotalBalance';
+  static const withdrawGaslessSpendableBalance =
+      'withdrawGaslessSpendableBalance';
+  static const withdrawGaslessPendingLockedBalance =
+      'withdrawGaslessPendingLockedBalance';
+  static const withdrawGaslessProviderUnavailable =
+      'withdrawGaslessProviderUnavailable';
+  static const withdrawGaslessUnsupported = 'withdrawGaslessUnsupported';
+  static const withdrawGaslessReactivationRequired =
+      'withdrawGaslessReactivationRequired';
+  static const withdrawGaslessSecurityMismatch =
+      'withdrawGaslessSecurityMismatch';
+  static const withdrawNoFundedAddresses = 'withdrawNoFundedAddresses';
+  static const withdrawTronNativeNeedsTrx = 'withdrawTronNativeNeedsTrx';
+  static const withdrawGaslessPendingTransfer =
+      'withdrawGaslessPendingTransfer';
+  static const withdrawRecipientGets = 'withdrawRecipientGets';
+  static const withdrawGaslessStatusSubmitting =
+      'withdrawGaslessStatusSubmitting';
+  static const withdrawGaslessStatusAwaitingRelay =
+      'withdrawGaslessStatusAwaitingRelay';
+  static const withdrawGaslessStatusSubmitted =
+      'withdrawGaslessStatusSubmitted';
+  static const withdrawGaslessStatusConfirmingOnChain =
+      'withdrawGaslessStatusConfirmingOnChain';
+  static const withdrawGaslessStatusUnknown = 'withdrawGaslessStatusUnknown';
+  static const withdrawGaslessStatusAcceptanceUnknown =
+      'withdrawGaslessStatusAcceptanceUnknown';
+  static const withdrawGaslessPendingTitle = 'withdrawGaslessPendingTitle';
+  static const withdrawGaslessPendingDescription =
+      'withdrawGaslessPendingDescription';
+  static const withdrawGaslessAcceptanceUnknownTitle =
+      'withdrawGaslessAcceptanceUnknownTitle';
+  static const withdrawGaslessAcceptanceUnknownDescription =
+      'withdrawGaslessAcceptanceUnknownDescription';
+  static const withdrawGaslessContinueChecking =
+      'withdrawGaslessContinueChecking';
+  static const withdrawGaslessUseStandard = 'withdrawGaslessUseStandard';
+  static const withdrawGaslessViewActivity = 'withdrawGaslessViewActivity';
+  static const withdrawGaslessTraceId = 'withdrawGaslessTraceId';
+  static const withdrawGaslessSupportDiagnosticsTitle =
+      'withdrawGaslessSupportDiagnosticsTitle';
+  static const withdrawGaslessSupportDiagnosticsBody =
+      'withdrawGaslessSupportDiagnosticsBody';
+  static const withdrawGaslessSupportDiagnosticsAction =
+      'withdrawGaslessSupportDiagnosticsAction';
+  static const withdrawGaslessStorageUnavailable =
+      'withdrawGaslessStorageUnavailable';
+  static const gaslessConsolidationTitle = 'gaslessConsolidationTitle';
+  static const gaslessConsolidationBody = 'gaslessConsolidationBody';
+  static const gaslessConsolidationFeeNotice = 'gaslessConsolidationFeeNotice';
+  static const gaslessConsolidationComplete = 'gaslessConsolidationComplete';
+  static const gaslessConsolidationEmpty = 'gaslessConsolidationEmpty';
+  static const gaslessConsolidationDestination =
+      'gaslessConsolidationDestination';
+  static const gaslessConsolidationTokenBalance =
+      'gaslessConsolidationTokenBalance';
+  static const gaslessConsolidationTrxBalance =
+      'gaslessConsolidationTrxBalance';
+  static const gaslessConsolidationTokenFrozen =
+      'gaslessConsolidationTokenFrozen';
+  static const gaslessConsolidationNeedsTrx = 'gaslessConsolidationNeedsTrx';
+  static const gaslessConsolidationFeeEstimate =
+      'gaslessConsolidationFeeEstimate';
+  static const gaslessConsolidationFeeShortfall =
+      'gaslessConsolidationFeeShortfall';
+  static const gaslessConsolidationPreflightUnavailable =
+      'gaslessConsolidationPreflightUnavailable';
+  static const gaslessConsolidationSourceComplete =
+      'gaslessConsolidationSourceComplete';
+  static const gaslessConsolidationMoveSource =
+      'gaslessConsolidationMoveSource';
+  static const gaslessConsolidationLoadError = 'gaslessConsolidationLoadError';
+  static const withdrawGaslessAvailabilityUnknown =
+      'withdrawGaslessAvailabilityUnknown';
+  static const withdrawGaslessRelayHint = 'withdrawGaslessRelayHint';
+  static const withdrawGaslessIrreversibleWarning =
+      'withdrawGaslessIrreversibleWarning';
+  static const withdrawGaslessCheckingAvailability =
+      'withdrawGaslessCheckingAvailability';
+  static const withdrawFullAmountFeeNotice = 'withdrawFullAmountFeeNotice';
+  static const withdrawAmountMaximum = 'withdrawAmountMaximum';
+  static const withdrawAvailableLabel = 'withdrawAvailableLabel';
+  static const withdrawTotalDeducted = 'withdrawTotalDeducted';
+  static const withdrawGaslessConfirmedOnChain =
+      'withdrawGaslessConfirmedOnChain';
   static const txHistoryFetchError = 'txHistoryFetchError';
   static const txHistoryNoTransactions = 'txHistoryNoTransactions';
   static const maxGapLimitReached = 'maxGapLimitReached';
@@ -1055,6 +1259,34 @@ abstract class LocaleKeys {
   static const sdk_errors_auth_unauthorized = 'sdk_errors.auth_unauthorized';
   static const sdk_errors_auth_wallet_not_found =
       'sdk_errors.auth_wallet_not_found';
+  static const sdk_errors_gasless_capability_not_ready =
+      'sdk_errors.gasless_capability_not_ready';
+  static const sdk_errors_gasless_status_unavailable =
+      'sdk_errors.gasless_status_unavailable';
+  static const sdk_errors_gasless_response_invalid =
+      'sdk_errors.gasless_response_invalid';
+  static const sdk_errors_gasless_max_fee_exceeded =
+      'sdk_errors.gasless_max_fee_exceeded';
+  static const sdk_errors_gasless_final_failure =
+      'sdk_errors.gasless_final_failure';
+  static const sdk_errors_gasless_submission_unknown =
+      'sdk_errors.gasless_submission_unknown';
+  static const sdk_errors_gasless_recovery_context_missing =
+      'sdk_errors.gasless_recovery_context_missing';
+  static const sdk_errors_gasless_preview_invalid =
+      'sdk_errors.gasless_preview_invalid';
+  static const sdk_errors_gasless_storage_unavailable =
+      'sdk_errors.gasless_storage_unavailable';
+  static const sdk_errors_gasless_transfer_unresolved =
+      'sdk_errors.gasless_transfer_unresolved';
+  static const sdk_errors_gasless_token_unsupported =
+      'sdk_errors.gasless_token_unsupported';
+  static const sdk_errors_gasless_authorization_expired =
+      'sdk_errors.gasless_authorization_expired';
+  static const sdk_errors_gasless_authentication_rejected =
+      'sdk_errors.gasless_authentication_rejected';
+  static const sdk_errors_gasless_rejected_before_relay =
+      'sdk_errors.gasless_rejected_before_relay';
   static const sdk_errors_general = 'sdk_errors.general';
   static const sdk_errors = 'sdk_errors';
 }
