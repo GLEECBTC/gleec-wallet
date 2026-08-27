@@ -79,6 +79,7 @@ import 'tests/wallet/coins_bloc_balance_emit_test.dart';
 import 'tests/services/legal_acceptance_test.dart';
 import 'tests/services/storage_persistence_gate_test.dart';
 import 'tests/wallet/seed_backup_policy_test.dart';
+import 'views/common/seed_backup_gate_test.dart';
 import 'tests/analytics/onboarding_funnel_test.dart';
 import 'tests/analytics/transaction_event_privacy_test.dart';
 import 'tests/bitrefill/bitrefill_refund_url_test.dart';
@@ -229,6 +230,7 @@ void main() {
   testLegalAcceptance();
   testStoragePersistenceGate();
   testSeedBackupPolicy();
+  testSeedBackupGate();
   testOnboardingFunnel();
   testTransactionEventPrivacy();
   testBitrefillRefundUrl();
