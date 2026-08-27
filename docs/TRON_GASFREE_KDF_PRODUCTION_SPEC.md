@@ -10,7 +10,7 @@ KDF documentation: `d175558a6c5d33a4f7ce4843227f0b54cc3dbc9b`
 
 This document defines the contract consumed by Gleec Wallet and the nested
 Komodo DeFi Flutter SDK. Historical V0/V1/V2 rollout proposals are retained in
-`docs/archive/gasfree/`; they are not runtime specifications.
+git history at `ca0212a1b31b` under `docs/archive/gasfree/`; they are historical hand-off notes, not runtime specifications.
 
 ## Product invariants
 

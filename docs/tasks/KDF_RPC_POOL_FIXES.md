@@ -69,7 +69,7 @@ cost. **Do not pick the starting value here** — see [Out of scope](#deliberate
 endpoint serves 20/s and refuses the rest, so successes and refusals interleave *by construction*
 and a run of `REFUSALS_BEFORE_SHRINK = 3` rarely completes.
 
-In the raw data ([`assets/kdf_rpc_burst_data/mitigation_12.json`](../assets/kdf_rpc_burst_data/))
+In the raw data (`mitigation_12.json`, retrievable from git history at `ca0212a1b31b`)
 the controller descends at most `12 → 6 → 3` across a whole ~2s activation and never reaches
 `MIN_CONCURRENCY`.
 
