@@ -5,7 +5,7 @@
 (KDF `d56a7bc`)
 **Repo:** `gleec-wallet-kdf-integrations`, branch `add/gas-free-tron`
 **Host:** macOS 25.5.0, arm64
-**Raw data:** [`docs/assets/kdf_rpc_burst_data/`](assets/kdf_rpc_burst_data/)
+**Raw data:** historical. The tables below were measured against a ladder of nine KDF commits, none of which is reachable any more (the fork is gone; the wallet now pins KDF `main`). The captures are recoverable only from git history at `ca0212a1b31b` - see [`assets/kdf_rpc_burst_data/README.md`](assets/kdf_rpc_burst_data/README.md). A fresh `tool/kdf_rpc_burst_bench.py` run measures today's KDF and is *not* a reproduction of these numbers.
 
 > **Gap-limit caveat.** The bench here runs at `gap_limit: 20`, but the shipped
 > SDK now sends `software = 3` / `newlyGeneratedFirstSignIn = 1`
@@ -132,7 +132,9 @@ fresh wallet, then watch.
 export KDF_TEST_SEED='...'   # not needed; the bench generates its own
 python3 tool/kdf_rpc_burst_bench.py --bin-root <dir-of-extracted-kdf-builds> \
   --scenario gleec-only --mode unlimited --repeat 3 --json out.json
-python3 tool/kdf_rpc_burst_report.py
+# (tool/kdf_rpc_burst_report.py was removed 2026-08-27 - it had no argparse and
+#  read four hardcoded paths in an untracked out/, so it printed nothing on a
+#  clean checkout. The tables below are the published output.)
 ```
 
 ### Evidence limits
@@ -450,6 +452,32 @@ history polling can repeat the status request. It is real extra traffic, but it
 does not explain the dozens of simultaneous EVM-node requests.
 
 ---
+
+### Checked and ruled out — do not spend time here
+
+Carried over from the retired `SDK_BALANCE_STREAMERS.md` task. Negative results
+are exactly what gets re-derived at cost, so they outlive the task that produced
+them.
+
+- **`get_enabled_coins` is a local KDF state read** (`mm2src/coins/rpc_command/get_enabled_coins.rs:37`).
+  Zero node traffic. So `ActivatedAssetsCache` (`assets/activated_assets_cache.dart:184`),
+  `_waitForCoinAvailability` (15 tries) and `waitForEnabledAssetsToPassThreshold`'s 2s backstop
+  (`activation/shared_activation_coordinator.dart:350-395`, `komodo_defi_sdk.dart:101`, `:534`) are
+  not amplifiers. The 250ms join window already collapses the login burst.
+- **`retry(() => _activationCoordinator.activateAsset(...))`** in `pubkey_manager.dart` looks like a
+  5× activation amplifier (`retry_utils.dart:39-41`, no `shouldRetry` filter) but is **inert on the
+  failure path**: `activateAsset` returns `ActivationResult.failure(...)` rather than throwing
+  (`shared_activation_coordinator.dart:225-268`). It can only fire on a *thrown* error, and
+  `_fetchFreshPubkeys` ignores the result and proceeds regardless.
+- **EVM transaction history hits the explorer, not the node.** `EtherscanTransactionStrategy` is
+  first in the factory list and matches any `Erc20Protocol` with a configured API URL
+  (`transaction_history_strategies.dart:17`). The tx-history manager's 30s `my_balance` timer poll
+  (`transaction_history_manager.dart:107`, `:923`, `:1144`) is gated to non-streaming or gasless
+  TRC-20 assets (`:1090-1096`) and therefore **never runs for GRC-20**.
+- **`MarketDataManager`, `FeeManager`, and `coins_bloc`'s two 3-minute timers**
+  (`market_data/market_data_manager.dart:95`; `lib/bloc/coins_bloc/coins_bloc.dart:248`, `:427`)
+  touch CEX price APIs or app state only. The balance sweep only fires when a watcher is actually
+  missing.
 
 ## 8. What to do
 

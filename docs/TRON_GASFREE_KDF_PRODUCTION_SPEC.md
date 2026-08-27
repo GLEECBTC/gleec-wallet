@@ -10,7 +10,7 @@ KDF documentation: `d175558a6c5d33a4f7ce4843227f0b54cc3dbc9b`
 
 This document defines the contract consumed by Gleec Wallet and the nested
 Komodo DeFi Flutter SDK. Historical V0/V1/V2 rollout proposals are retained in
-`docs/archive/gasfree/`; they are not runtime specifications.
+git history at `ca0212a1b31b` under `docs/archive/gasfree/`; they are historical hand-off notes, not runtime specifications.
 
 ## Product invariants
 
@@ -185,3 +185,23 @@ activation and read-only account status are not suppressed by the SDK.
   streaming, restart recovery, provider outage, remote Receive revocation,
   Standard access, and external custody deposit refresh.
 - A real mainnet transfer requires separate explicit authorization.
+
+## Removed compatibility mechanisms
+
+Folded in from the retired `TRON_GASFREE_KDF_HANDOVER.md`. The handover's own
+pin and SHA-256 digests are dead - following them rolls the wallet backwards
+off KDF `main` - but this section is a durable statement of what was taken out
+and must not be reintroduced.
+
+- `gasless::configure` and restart fallback invocation;
+- `provider_available`, `reason_code`, and explicit/legacy status branching;
+- V0/V1/bound receive-evidence generations;
+- request-ID, fingerprint, expected-authorization, and bound-response echoes;
+- regex-derived relay lifecycle states and raw error-copy display;
+- local maximum/fee authority and native-fallback notices;
+- direct provider/custody balance access and TronGrid finality checks.
+
+The local encrypted pre-submit reservation, unknown-outcome lockout, provider
+pin, action-time QR/copy check, Standard recovery, wallet/session guards, and
+custody history refresh are permanent safeguards, not compatibility
+workarounds.

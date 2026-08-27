@@ -376,6 +376,11 @@ fortnight. The chart flow additionally needs keys added to
 
 Current as of the last audit. Each is a real defect, not a caveat.
 
+> Three entries were removed on 2026-08-27 after verifying they had been fixed on this
+> branch: the `pumpUntilDisappear` timeout is now a `timeout` parameter defaulting to 60s
+> (`widget_tester_pump_extension.dart:55`), `clearNativeAppsData()` uses the Gleec bundle
+> ids (`app_data.dart:16-17`), and nothing references `active-coin-item-` any more.
+
 1. **The integration suite reports green when a test throws.** `app.main()` sets
    `FlutterError.onError = catchUnhandledExceptions` (`lib/main.dart:65-67`), and that
    handler **never rethrows when `isTestMode` is true** (`lib/main.dart:186-194`) — which
@@ -386,50 +391,33 @@ Current as of the last audit. Each is a real defect, not a caveat.
    reached `restoreWalletToTest`, never printed its own `END MISC TESTS`, and exited 0.
    **Do not trust a green integration run** — read the browser console
    (`chromedriver.log`) and confirm the suite's final marker actually printed.
-2. **`restoreWalletToTest` cannot finish inside its own 30s budget.** Its last line is
-   `pumpUntilDisappear(walletsManagerWrapper)`, and `pumpUntilDisappear` hardcodes
-   `timeout: Duration(seconds: 30)` (`test_integration/common/widget_tester_pump_extension.dart:50`).
-   On web, importing the wallet starts KDF from cold — measured here: KDF start at
-   `00:23:17`, import submitted `00:23:32`, `TimeoutException: Pump until has timed out`
-   at `00:24:02` — so the helper throws while sign-in is still legitimately in progress.
-   The import itself completes; the wait does not. Raising that timeout (or making it a
-   parameter) is the next thing standing between this suite and a real pass.
-3. **Three `test_units/` files are orphaned** and never run anywhere:
+2. **Three `test_units/` files are orphaned** and never run anywhere:
    `tests/wallet/legacy_native_wallet_migration_test.dart`,
    `views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart`,
    `views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart`.
    `testTruncateDecimal()` is also commented out in `test_units/main.dart`.
-4. **`clearNativeAppsData()` targets the wrong paths.** `test_integration/runners/app_data.dart`
-   deletes `com.komodo.wallet` / `com.komodo.KomodoWallet`; this app is
-   `com.GleecDEX.wallet` (macOS) and `com.gleec.GleecDEX` (Linux). Native runs are not
-   isolated, and the function tries to delete an unrelated container — observed on a
-   macOS run as `rm: …/Containers/com.komodo.wallet: Operation not permitted`, because
-   that path is SIP-protected. The failure is printed and the run continues.
-5. **The macOS Debug/Profile configuration has no provisioning profile.** A
+3. **The macOS Debug/Profile configuration has no provisioning profile.** A
    `-D macos -m profile` run fails at `No profiles for 'com.GleecDEX.wallet' were found`.
    Only the Release configuration (bundle id `com23.GleecDEX.wallet`, Developer ID
    signing) is set up. Until that is fixed, the native perf target of §7 cannot run
    locally, and web is the only path — with the caveat there that web frame numbers are
    not baseline-worthy.
-6. **`active-coin-item-<abbr>` does not exist in `lib/`.** Six integration test files look
-   for it — the real key is `coin-list-item-<abbr>` (`active_coins_list.dart:95`). Every
-   test depending on it fails at the finder.
-7. **`--timeout=600` is inert.** `flutter drive` only arms that timer when `--screenshot`
+4. **`--timeout=600` is inert.** `flutter drive` only arms that timer when `--screenshot`
    is passed, which the runner never does. A hung integration test has no wrapper-level
    cap; only a test's own `Timeout` bounds it.
-8. **`suspended_assets_test` is hardcoded off** (`getTestsList(false)`). The `*.cipig.net`
+5. **`suspended_assets_test` is hardcoded off** (`getTestsList(false)`). The `*.cipig.net`
    URL-blocking machinery is intact but unreachable.
-9. **`nfts_tests` and `no_login_tests` are not in the default list** — `-t` only, so they
+6. **`nfts_tests` and `no_login_tests` are not in the default list** — `-t` only, so they
    run only when someone remembers.
-10. **Integration coverage is disabled** in `ui-tests-on-pr.yml` — Hive and other storage
+7. **Integration coverage is disabled** in `ui-tests-on-pr.yml` — Hive and other storage
    providers need mocking, and `flutter drive` is deprecated upstream.
-11. **`komodo_defi_local_auth` is deliberately ungated** — 57 pass, 1 fails
+8. **`komodo_defi_local_auth` is deliberately ungated** — 57 pass, 1 fails
    (`trezor_repository_test.dart`). Unresolved: either a stale fixture or a real loss of
    device-error detail.
-12. **`test/gasless_journal_web_key_discovery_test.dart` is `@TestOn('browser')`** and no
+9. **`test/gasless_journal_web_key_discovery_test.dart` is `@TestOn('browser')`** and no
    workflow runs it: `flutter test --platform chrome test/…`.
-13. **No integration coverage of the GasFree rail** — §3.
-14. **Skyvern is not in CI** — §6.
+10. **No integration coverage of the GasFree rail** — §3.
+11. **Skyvern is not in CI** — §6.
 
 ## 10. See also
 
