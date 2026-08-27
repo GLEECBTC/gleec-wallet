@@ -186,8 +186,13 @@ python3 tool/kdf_latency_probe.py --coin-set top20-max --unbatched
 `mm2_p2p/src/p2p_ctx.rs:42`. The panic aborts *that request* — the process
 survives, which the 500 body ("The RPC service aborted without responding.")
 badly misdescribes. Fixed KDF-side by making the P2P keypair optional for the
-three call sites that only need it for proxy signing; TRX now activates with
-p2p off. Keep `--p2p` only for older binaries.
+three call sites that only need it for proxy signing.
+
+**That fix is not in the shipped build.** It lives in kdf-internal PR #18, which
+the 2026-08-24 roll to KDF `main` (`f3efd2c`) descoped - see
+[`KDF_PERF_STACK_DESCOPE.md`](KDF_PERF_STACK_DESCOPE.md) §2.4. Against the
+currently pinned KDF, `--p2p` is **required** for any set containing TRX, which
+is what `tool/kdf_latency_probe.py` now says in its own `--p2p` help text.
 
 The point of it is one number in that report: **how much of the wall clock was
 spent inside HTTP calls.** In the first run that was 0.17s out of 90.7s. The
@@ -197,52 +202,10 @@ settles where the latency lives.
 
 ### What the full matrix found
 
-macOS arm64, KDF 3.0.0-beta, KMD (+MARTY/DOC/BTC for the multi-coin rows),
-`abandon…about`, fresh KDF and fresh database per row:
-
-| scenario | total | activate | scan | balance |
-|---|---:|---:|---:|---:|
-| BEST address: HD, 1 coin, `gap_limit: 1` | 53.15s | 9.14s | 20.14s | 22.84s |
-| baseline: HD, 1 coin, `gap_limit: 20` (shipped) | 89.40s | 46.99s | 20.10s | 22.05s |
-| WORST address: HD, 1 coin, `gap_limit: 50` | 149.41s | 107.02s | 20.14s | 21.99s |
-| HD, 1 coin, `scan_policy: do_not_scan` | 47.37s | **2.03s** | 20.12s | 24.96s |
-| WORST activation: HD, **4 coins**, gap 20 | 305.06s | 261.48s | 20.11s | 23.21s |
-| BEST overall: iguana, 1 coin | **2.88s** | 2.02s | – | 0.60s |
-| iguana, 4 coins | 7.54s | 7.07s | – | 0.21s |
-
-Four things fall straight out of it:
-
-1. **Activation time is the address walk, and nothing else.** Same coin, same
-   everything, `scan_policy: do_not_scan` activates in **2.03s** against
-   **46.99s** for `scan_if_new_wallet`. 45 of the 47 seconds are the walk.
-2. **It scales with the gap limit, roughly linearly** — 9.1s at 1, 47.0s at 20,
-   107.0s at 50, i.e. ~2.1s per gap unit against these electrum servers.
-   `gap_limit: 20` is a configuration choice, not a fixed cost.
-3. **It is per-coin.** Four coins cost 261.5s to activate (65.4s each — *worse*
-   than the 47.0s a single coin takes, so they contend rather than pipeline).
-   A login that enables 20 coins is in minutes territory on HD by arithmetic
-   alone.
-4. **HD vs iguana is 31x** (89.4s vs 2.9s) on identical inputs.
-
-That table is UTXO-only. The EVM rows are worse (`enable_eth_with_tokens` for
-ETH + 2 tokens: **363.8s HD vs 2.5s iguana**, one synchronous call with no
-progress), the app's own default set takes **480.7s** on HD, and batching turns
-out not to be a lever at all — all in
-[`KDF_LATENCY_REPORT.md`](KDF_LATENCY_REPORT.md) §4.
-
-And the number that answers "is it KDF or is it us": across all seven
-scenarios, **2.0s of 654.8s (0.3%) was spent inside HTTP calls.** The other
-99.7% is the probe sleeping between polls while KDF works on a task it already
-accepted. No Flutter, Dart or SDK code was involved.
-
-Its quick-mode numbers reproduce the Dart harness almost exactly, which is the
-cross-check that makes both trustworthy:
-
-| step | Python probe | Dart harness |
-|---|---|---|
-| activate KMD | 46.91s (94 polls) | 46.6-47.5s (93-95 polls) |
-| `scan_for_new_addresses` | 20.09s, timed out (80 polls) | 20.0s, timed out (79-80) |
-| `account_balance` | 22.12s (213 polls) | 21.0s (209-210) |
+Moved to [`KDF_LATENCY_REPORT.md`](KDF_LATENCY_REPORT.md) §4a, which is the canonical
+record. It was duplicated here, and this copy still carried the "four coins contend
+rather than pipeline" reading that §4e of that report formally retracts as an
+unsupported inference from an average.
 
 ### Scan parameters
 

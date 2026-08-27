@@ -3,6 +3,24 @@
 Companion to [`KDF_LATENCY_REPORT.md`](KDF_LATENCY_REPORT.md), which measures
 the problem. This one says what to do about it, in KDF's own code.
 
+> **Every "DONE" / "IMPLEMENTED AND MEASURED" marker below describes the perf
+> fork, not the shipped build.** On 2026-08-24 the wallet rolled to KDF `main`
+> (`f3efd2c`) and descoped the perf stack. Items 1 (concurrent gap scan), 2
+> (`web3_instances` mutex) and 4 (pooled Hyper client), plus the TRX/NFT p2p
+> panic fix and the TRON `try_clients` retry, are all implemented **only on
+> kdf-internal PRs #18/#19/#20, which are unmerged and out of the pin**. Read
+> every completion marker as "done on a branch we are not shipping". Items 3
+> (`HDAccountsMutex` held across network I/O), 5 (electrum `responses.clear()`
+> drain), the Tendermint unwraps, the `rpc.rs:361` string and the three
+> coins-config items were never implemented and remain genuinely open — item 3
+> is now *more* relevant, since item 1 is not shipped and its ~21s does not
+> evaporate. Authoritative status:
+> [`KDF_PERF_STACK_DESCOPE.md`](KDF_PERF_STACK_DESCOPE.md).
+>
+> **The Rust `file:line` anchors are also unusable**: they point into `bd413dc`
+> on a fork that is no longer a remote. Re-anchor against `f3efd2c` before
+> acting on any of them.
+
 > **The ranking is stale: the gap limit changed under the seconds it ranks by.**
 > Every figure inherited from the latency report was measured at
 > `gap_limit: 20`; the shipped SDK now sends `software = 3` /

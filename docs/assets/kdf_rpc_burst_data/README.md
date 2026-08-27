@@ -19,12 +19,10 @@ tree would not otherwise survive.
 
 ## Regenerating is NOT reproducing
 
-`tool/kdf_rpc_burst_bench.py` will happily produce fresh captures into `out/`,
-which is where `tool/kdf_rpc_burst_report.py` reads from:
+`tool/kdf_rpc_burst_bench.py` will happily produce fresh captures into `out/`:
 
 ```sh
 python3 tool/kdf_rpc_burst_bench.py     # writes out/*.json
-python3 tool/kdf_rpc_burst_report.py    # renders the tables
 ```
 
 But that gives you **new measurements against today's KDF, not the report's

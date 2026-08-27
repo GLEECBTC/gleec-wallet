@@ -1,5 +1,10 @@
 # KDF: five RPC-pool defects that make a rate-limited node worse
 
+> Sole surviving item from the EVM RPC burst investigation queue. Its two
+> siblings - `SDK_GAP_SCAN_AND_WEBSOCKET.md` and `SDK_BALANCE_STREAMERS.md` -
+> shipped and were retired; their durable decisions are folded in below.
+> Parent report: [`KDF_RPC_BURST_REPORT.md`](../KDF_RPC_BURST_REPORT.md).
+
 Follow-up work from [`KDF_RPC_BURST_REPORT.md`](../KDF_RPC_BURST_REPORT.md). Each item below is
 **measurement-independent** — none waits on the pending rate-ladder benchmark.
 
@@ -7,8 +12,8 @@ Follow-up work from [`KDF_RPC_BURST_REPORT.md`](../KDF_RPC_BURST_REPORT.md). Eac
 shipped build. Remote is `GLEECBTC/kdf-internal` only (no fork, no upstream). Line numbers are
 anchored to that commit.
 
-**Sibling tasks:** [`SDK_GAP_SCAN_AND_WEBSOCKET.md`](SDK_GAP_SCAN_AND_WEBSOCKET.md),
-[`SDK_BALANCE_STREAMERS.md`](SDK_BALANCE_STREAMERS.md). All three are independent — no ordering
+**Sibling tasks:** _(both retired 2026-08-27 — shipped; decisions folded in below)_ `SDK_GAP_SCAN_AND_WEBSOCKET.md`,
+`SDK_BALANCE_STREAMERS.md` _(retired)_. All three are independent — no ordering
 constraint between them. Item 5 here is the only one that interacts with another task, and it is
 an optimisation there rather than a prerequisite.
 
@@ -152,7 +157,7 @@ eth_nodes.as_mut_slice().shuffle(&mut rng);
 and `Web3Pool.preferred` starts at `AtomicUsize::new(0)` — index 0 of the **shuffled** list.
 
 This is inert today because every node is HTTP. It stops being inert the moment
-[`SDK_GAP_SCAN_AND_WEBSOCKET.md`](SDK_GAP_SCAN_AND_WEBSOCKET.md) part 2 lands and pools contain
+`SDK_GAP_SCAN_AND_WEBSOCKET.md` part 2 lands and pools contain
 both `wss://` and `https://` entries for the same chain: which transport a chain actually uses
 becomes a coin flip per login, and the pool can thrash `preferred` between the two.
 
@@ -166,6 +171,24 @@ costs roughly the first wave (up to the permit budget, ~12 requests) landing on 
 determinism and the removal of preferred-thrashing.
 
 ---
+
+## Rejected fixes, and why
+
+Carried over from the retired `SDK_GAP_SCAN_AND_WEBSOCKET.md` task. These are
+decisions, not findings: the reasoning is what stops someone re-proposing them.
+
+- **Do not add `scan_policy` to the ETH activation params as the fix for part 1.** KDF would accept
+  it (no `deny_unknown_fields`; values are snake_case `do_not_scan`/`scan_if_new_wallet`/`scan`), but
+  `scan_policy: scan` moves the 42 probes *inside* `enable_eth_with_tokens`, into the same burst
+  window as every other coin's activation — trading a later burst for a denser earlier one, on
+  exactly the axis the 429s live on. Total requests do not fall.
+- **Do not touch the activation retry counts** (`coins_bloc.dart:24`, `coins_repo.dart:531`) — app
+  scope, separate concern.
+
+> The `scan_policy` rejection above ideally belongs as a doc comment on
+> `pubkey_manager.dart` in the SDK repo, where someone editing the activation
+> params would actually see it. That is a cross-repo change; until it happens,
+> this is the only written record.
 
 ## Deliberately out of scope
 
