@@ -12,6 +12,13 @@ const String storedSettingsKey = '_atomicDexStoredSettings';
 const String storedSettingsKeyV2 = 'komodo_wallet_settings_v2';
 const String storedAnalyticsSettingsKey = 'analytics_settings';
 const String storedMarketMakerSettingsKey = 'market_maker_settings';
+
+/// Bump to force re-acceptance of the legal documents independently of a
+/// change to their content. Document SHAs already invalidate acceptance when
+/// the EULA or Terms text itself changes; this covers the cases they cannot
+/// see, such as a policy change that does not touch those two files.
+const int kCurrentTermsVersion = 1;
+
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
 const String hdWalletModePreferenceKey = 'wallet_hd_mode_preference';
 const String defaultFiatPreferenceKey = 'default_fiat_preference_v1';

@@ -1,7 +1,6 @@
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
-import 'package:web_dex/router/state/bridge_section_state.dart';
 import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/router/state/fiat_state.dart';
 import 'package:web_dex/router/state/main_menu_state.dart';
@@ -14,7 +13,6 @@ class RoutingState {
   final WalletState walletState = WalletState();
   final FiatState fiatState = FiatState();
   final DexState dexState = DexState();
-  final BridgeSectionState bridgeState = BridgeSectionState();
   final MarketMakerBotState marketMakerState = MarketMakerBotState();
   final NFTsState nftsState = NFTsState();
   final SettingsSectionState settingsState = SettingsSectionState();
@@ -45,7 +43,6 @@ class RoutingState {
     walletState.reset();
     fiatState.reset();
     dexState.reset();
-    bridgeState.reset();
     marketMakerState.reset();
     nftsState.reset();
     settingsState.reset();
@@ -56,7 +53,6 @@ class RoutingState {
     walletState.addListener(notifyListeners);
     fiatState.addListener(notifyListeners);
     dexState.addListener(notifyListeners);
-    bridgeState.addListener(notifyListeners);
     marketMakerState.addListener(notifyListeners);
     nftsState.addListener(notifyListeners);
     settingsState.addListener(notifyListeners);
@@ -76,7 +72,6 @@ class RoutingState {
     walletState.resetOnLogOut();
     fiatState.resetOnLogOut();
     dexState.resetOnLogOut();
-    bridgeState.resetOnLogOut();
     marketMakerState.resetOnLogOut();
     nftsState.resetOnLogOut();
     settingsState.resetOnLogOut();

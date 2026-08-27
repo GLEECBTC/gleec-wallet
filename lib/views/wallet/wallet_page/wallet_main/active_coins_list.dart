@@ -244,6 +244,8 @@ class AddressBalanceCard extends StatelessWidget {
                           AddressCopyButton(
                             address: pubkey.address,
                             coinAbbr: coin.abbr,
+                            gateOnSeedBackup: true,
+                            isTestCoin: coin.isTestCoin,
                           ),
                           if (pubkey.isActiveForSwap)
                             // TODO: Refactor to use "DexPill" component from the SDK UI library (not yet created)
@@ -304,27 +306,12 @@ class AddressBalanceCard extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.qr_code),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => Dialog(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              QrCode(
-                                address: pubkey.address,
-                                coinAbbr: coin.abbr,
-                              ),
-                              const SizedBox(height: 16),
-                              SelectableText(pubkey.address),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                  // Delegates to the shared receive dialog rather than building
+                  // its own. This used to be a second, divergent QR surface
+                  // that bypassed everything the shared one enforces - now
+                  // including the seed-backup gate.
+                  onPressed: () =>
+                      showPubkeyReceiveDialog(context, coin, pubkey),
                 ),
               ],
             ),

@@ -10,8 +10,13 @@ Future<void> tapOnAppBarConnectWallet(
   await tester.ensureVisible(connectWallet);
   await tester.tap(connectWallet);
   await tester.pumpAndSettle();
-  await tester.tap(connectAtomicDexWalletButton);
-  await tester.pumpAndSettle();
+  // The wallet-type router screen was merged into the entry screen. A compat
+  // no-op target still carries this key, so the tap is harmless where it
+  // exists and skipped where it does not.
+  if (connectAtomicDexWalletButton.evaluate().isNotEmpty) {
+    await tester.tap(connectAtomicDexWalletButton);
+    await tester.pumpAndSettle();
+  }
 }
 
 Future<void> tapOnMobileConnectWallet(
@@ -25,6 +30,11 @@ Future<void> tapOnMobileConnectWallet(
   await tester.ensureVisible(connectWallet);
   await tester.tap(connectWallet);
   await tester.pumpAndSettle();
-  await tester.tap(connectAtomicDexWalletButton);
-  await tester.pumpAndSettle();
+  // The wallet-type router screen was merged into the entry screen. A compat
+  // no-op target still carries this key, so the tap is harmless where it
+  // exists and skipped where it does not.
+  if (connectAtomicDexWalletButton.evaluate().isNotEmpty) {
+    await tester.tap(connectAtomicDexWalletButton);
+    await tester.pumpAndSettle();
+  }
 }

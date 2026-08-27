@@ -15,7 +15,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/shared/utils/utils.dart';
-import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
@@ -60,7 +60,6 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isSeedHidden = true;
-  bool _eulaAndTosChecked = false;
   bool _inProgress = false;
   bool _allowCustomSeed = false;
   bool _isHdMode = true;
@@ -73,7 +72,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   bool get _isButtonEnabled {
     final isFormValid = _refreshFormValidationState();
 
-    return _eulaAndTosChecked && !_inProgress && isFormValid;
+    return !_inProgress && isFormValid;
   }
 
   @override
@@ -393,15 +392,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         const SizedBox(height: 15),
         if (_shouldShowCustomSeedToggle) _buildCheckBoxCustomSeed(),
         const SizedBox(height: 15),
-        EulaTosCheckboxes(
-          key: const Key('import-wallet-eula-checks'),
-          isChecked: _eulaAndTosChecked,
-          onCheck: (isChecked) {
-            setState(() {
-              _eulaAndTosChecked = isChecked;
-            });
-          },
-        ),
+        const TermsConsentText(),
       ],
     );
   }

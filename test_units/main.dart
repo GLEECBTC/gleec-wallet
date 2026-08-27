@@ -20,6 +20,8 @@ import 'tests/fiat/fiat_default_preference_test.dart'
 import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
+import 'tests/nfts/nft_main_bloc_test.dart' as nft_main_bloc_test;
+import 'tests/nfts/nft_main_repo_test.dart' as nft_main_repo_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
@@ -34,6 +36,8 @@ import 'views/wallets_manager/widgets/hardware_wallets_manager_test.dart'
     as hardware_wallets_manager_test;
 import 'views/wallets_manager/widgets/wallet_login_test.dart'
     as wallet_login_test;
+import 'views/wallets_manager/widgets/wallets_manager_entry_test.dart'
+    as wallets_manager_entry_test;
 import 'views/wallets_manager/widgets/wallets_manager_test.dart'
     as wallets_manager_test;
 
@@ -72,6 +76,11 @@ import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
 import 'tests/analytics/frame_gap_metrics_test.dart';
 import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
+import 'tests/services/legal_acceptance_test.dart';
+import 'tests/services/storage_persistence_gate_test.dart';
+import 'tests/wallet/seed_backup_policy_test.dart';
+import 'views/common/seed_backup_gate_test.dart';
+import 'tests/analytics/onboarding_funnel_test.dart';
 import 'tests/analytics/transaction_event_privacy_test.dart';
 import 'tests/bitrefill/bitrefill_refund_url_test.dart';
 import 'tests/bitrefill/bitrefill_wallet_binding_test.dart';
@@ -210,12 +219,19 @@ void main() {
 
   testCoinActivationStateBridge();
   testAuthBloc();
+  nft_main_bloc_test.testNftMainBloc();
+  nft_main_repo_test.testNftMainRepo();
   testCoinsBlocActivationRecovery();
   testCoinsBlocPubkeysRetry();
   testCoinAddressesBlocGaslessRevalidation();
   testFrameGapMetrics();
   testCoinSortOrder();
   testCoinsBlocBalanceEmit();
+  testLegalAcceptance();
+  testStoragePersistenceGate();
+  testSeedBackupPolicy();
+  testSeedBackupGate();
+  testOnboardingFunnel();
   testTransactionEventPrivacy();
   testBitrefillRefundUrl();
   testBitrefillWalletBinding();
@@ -239,5 +255,6 @@ void main() {
   trezor_dialog_select_wallet_test.main();
   hardware_wallets_manager_test.main();
   wallet_login_test.main();
+  wallets_manager_entry_test.main();
   wallets_manager_test.main();
 }

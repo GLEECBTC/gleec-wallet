@@ -92,7 +92,9 @@ class _NftMainControlsState extends State<NftMainControls> {
       width: 320,
       context: scaffoldKey.currentContext ?? context,
       popupContent: WalletsManagerWrapper(
-        eventType: WalletsManagerEventType.header,
+        // Was `header`, which mislabelled every NFT-initiated login in analytics.
+        eventType: WalletsManagerEventType.nft,
+        onCancel: () => _popupDispatcher?.close(),
         onSuccess: (_) async {
           nftBloc.add(const NftMainChainUpdateRequested());
           _popupDispatcher?.close();

@@ -53,6 +53,26 @@ class AuthRestoreRequested extends AuthBlocEvent {
   final LegacyWalletSecrets? legacyNativeSecrets;
 }
 
+/// A user-initiated seed import.
+///
+/// Split from [AuthRestoreRequested] because the two want opposite behaviour on
+/// a wallet-name collision. Restore falls back to signing into the existing
+/// wallet, which is what the debug auto-login path relies on. For a real
+/// import that fallback is destructive to intent: the seed the user just typed
+/// is discarded and they are signed into a *different* wallet, with only a log
+/// line to say so. This event fails loudly instead.
+class AuthImportRequested extends AuthBlocEvent {
+  const AuthImportRequested({
+    required this.wallet,
+    required this.password,
+    required this.seed,
+  });
+
+  final Wallet wallet;
+  final String password;
+  final String seed;
+}
+
 class AuthLegacyMigrationRequested extends AuthBlocEvent {
   const AuthLegacyMigrationRequested({
     required this.sourceWallet,

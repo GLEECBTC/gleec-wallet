@@ -10,6 +10,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile_item.dart';
 
 class MainMenuBarMobile extends StatelessWidget {
@@ -87,16 +88,6 @@ class MainMenuBarMobile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: Tooltip(
-                      message: tradingTooltipMessage(),
-                      child: MainMenuBarMobileItem(
-                        value: MainMenuValue.bridge,
-                        enabled: currentWallet?.isHW != true,
-                        isActive: selected == MainMenuValue.bridge,
-                      ),
-                    ),
-                  ),
                   if (isMMBotEnabled)
                     Expanded(
                       child: Tooltip(
@@ -108,16 +99,21 @@ class MainMenuBarMobile extends StatelessWidget {
                         ),
                       ),
                     ),
-                  Expanded(
-                    child: Tooltip(
-                      message: LocaleKeys.nftDisabledTooltip.tr(),
-                      child: MainMenuBarMobileItem(
-                        value: MainMenuValue.nft,
-                        enabled: false,
-                        isActive: selected == MainMenuValue.nft,
+                  // NFTs ship on web and native desktop. Native mobile is
+                  // excluded until the mobile NFT flows are ready. This bar is
+                  // also the narrow-viewport layout on web, so the gate is on
+                  // the platform rather than the layout.
+                  if (!PlatformTuner.isNativeMobile)
+                    Expanded(
+                      child: Tooltip(
+                        message: walletOnlyTooltipMessage(),
+                        child: MainMenuBarMobileItem(
+                          value: MainMenuValue.nft,
+                          enabled: currentWallet?.isHW != true,
+                          isActive: selected == MainMenuValue.nft,
+                        ),
                       ),
                     ),
-                  ),
                   Expanded(
                     child: MainMenuBarMobileItem(
                       value: MainMenuValue.settings,

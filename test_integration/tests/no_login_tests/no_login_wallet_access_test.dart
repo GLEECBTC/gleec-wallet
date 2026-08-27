@@ -95,25 +95,6 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   await _closeWalletManagerPopup(tester);
   expect(walletsManagerWrapper, findsNothing);
 
-  // Bridge page
-  print('TEST ACCESS FROM BRIDGE PAGE');
-  final Finder connectWalletBridge =
-      find.byKey(const Key('connect-wallet-bridge'));
-  final Finder bridgeMenuButton = find.byKey(const Key('main-menu-bridge'));
-  final Finder bridgePageTabBar = find.byKey(const Key('bridge-page-tab-bar'));
-
-  await tester.tap(bridgeMenuButton);
-  await tester.pumpAndSettle();
-
-  expect(connectWalletBridge, findsOneWidget);
-
-  await _openWalletManagerPopupByKey(connectWalletBridge, tester);
-  expect(walletsManagerWrapper, findsOneWidget);
-  await _closeWalletManagerPopup(tester);
-  expect(walletsManagerWrapper, findsNothing);
-
-  expect(bridgePageTabBar, findsNothing);
-
   // Settings page
   print('TEST ACCESS TO SETTINGS PAGE');
   final Finder settingsMenuButton = find.byKey(const Key('main-menu-settings'));

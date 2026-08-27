@@ -50,8 +50,6 @@ Future<void> testCexPrices(WidgetTester tester) async {
 
   WidgetController.hitTestWarningShouldBeFatal = true;
 
-  await goto.bridgePage(tester);
-  print('🔍 CEX PRICES: Navigated to bridge page');
   await goto.walletPage(tester);
   print('🔍 CEX PRICES: Navigated to wallet page');
   expect(page, findsOneWidget);
