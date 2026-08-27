@@ -21,7 +21,8 @@
 > it.
 >
 > For what things cost **now**, and what each change bought, read
-> [`WALLET_LOAD_PERFORMANCE_REPORT.md`](WALLET_LOAD_PERFORMANCE_REPORT.md).
+> `WALLET_LOAD_PERFORMANCE_REPORT.md` (retired 2026-08-27 — its 9.4x headline described
+> the perf fork, not the shipped build; see `KDF_PERF_STACK_DESCOPE.md`).
 > For how to take these measurements yourself, read
 > [`WALLET_LOAD_MEASUREMENT.md`](WALLET_LOAD_MEASUREMENT.md).
 >
