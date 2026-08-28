@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/model/settings/analytics_settings.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/firebase_options.dart';
+import 'firebase_options_placeholders.dart';
 import 'analytics_api.dart';
 import 'analytics_repo.dart';
 
@@ -93,10 +94,29 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
         return;
       }
 
+      // A build that never had real Firebase values substituted in. Returning
+      // here rather than letting the placeholders reach Firebase is the point:
+      // on Apple platforms a malformed app ID raises inside the platform
+      // channel, which takes the process down instead of failing this call.
+      final options = DefaultFirebaseOptions.currentPlatform;
+      if (isPlaceholderFirebaseOptions(options)) {
+        if (kDebugMode) {
+          log(
+            'Firebase is not configured for this build; marking as '
+            'initialized=false and enabled=false',
+            path: 'analytics -> FirebaseAnalyticsApi -> _initialize',
+          );
+        }
+        _isInitialized = false;
+        _isEnabled = false;
+        if (!_initCompleter.isCompleted) {
+          _initCompleter.complete();
+        }
+        return;
+      }
+
       // Initialize Firebase
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      await Firebase.initializeApp(options: options);
       _instance = FirebaseAnalytics.instance;
 
       _isInitialized = true;
