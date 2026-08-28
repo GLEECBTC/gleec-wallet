@@ -35,6 +35,39 @@
     // ],
     "headers": [
       {
+        // Version-coupled entry files must revalidate on every use. Firebase
+        // defaults to max-age=3600, so without this the in-app "Update now"
+        // reload keeps serving the build the browser already has for up to an
+        // hour -- which is what made the button look dead. UpdateBloc's
+        // hard reload clears service workers and CacheStorage, but the HTTP
+        // cache cannot be purged from JS; these headers are what cover it.
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/flutter_bootstrap.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/flutter.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
         // Coin icons are a large, rarely-changing set (hundreds of files).
         // Without this they inherit Firebase's default max-age=3600, so every
         // repeat visit more than an hour apart re-validates the whole set while
