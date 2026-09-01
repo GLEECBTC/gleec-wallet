@@ -157,6 +157,118 @@ void testNftMainRepo() {
         NftBlockchains.eth,
       ]);
     });
+
+    test('every catalogue chain is supported, activated or not', () async {
+      // The tab strip is built from this. A chain the user has never enabled
+      // must still appear, or tapping it can never be the way to enable it.
+      final repo = build(enabled: {'ETH'});
+
+      final result = await repo.resolveChains(NftBlockchains.values);
+
+      expect(result.supported, [
+        NftBlockchains.eth,
+        NftBlockchains.polygon,
+        NftBlockchains.bsc,
+        NftBlockchains.avalanche,
+      ]);
+      // FTM is absent from the bundled coins config, so Fantom can never be a
+      // tab no matter what the enum says.
+      expect(result.supported, isNot(contains(NftBlockchains.fantom)));
+      expect(result.activated, [NftBlockchains.eth]);
+    });
+
+    test('a geo-blocked chain is not supported', () async {
+      final repo = build(enabled: {'ETH'});
+      tradingStatus.blocked = {_ethId};
+
+      final result = await repo.resolveChains(NftBlockchains.values);
+
+      expect(result.supported, isNot(contains(NftBlockchains.eth)));
+    });
+  });
+
+  group('NftsRepo.activateChain', () {
+    late _FakeCoinsRepo coinsRepo;
+    late _FakeTradingStatusService tradingStatus;
+
+    NftsRepo build({List<String> walletCoins = const []}) {
+      coinsRepo = _FakeCoinsRepo();
+      tradingStatus = _FakeTradingStatusService();
+      return NftsRepo(
+        api: _FakeMm2ApiNft(),
+        coinsRepo: coinsRepo,
+        sdk: _FakeSdk(
+          auth: _FakeAuth(walletCoins),
+          assets: _FakeAssetManager({for (final a in _catalogue) a.id: a}),
+          nftActivation: _FakeNftActivation(),
+          activationStates: const {},
+        ),
+        tradingStatusService: tradingStatus,
+      );
+    }
+
+    test('the parent coin is activated, session-scoped', () async {
+      final repo = build();
+
+      await repo.activateChain(NftBlockchains.polygon);
+
+      // The PARENT gates the tab; NFT_MATIC is activated later, in the fetch.
+      expect(coinsRepo.activateCalls.single.single.id.id, 'MATIC');
+      // Pins the product decision so it cannot be silently flipped: browsing an
+      // NFT tab must not add MATIC to the wallet or to the next login's set.
+      expect(coinsRepo.lastAddToWalletMetadata, isFalse);
+      expect(coinsRepo.lastNotifyListeners, isFalse);
+      // A user is watching, so this must not inherit the 15-attempt background
+      // fan-out budget.
+      expect(coinsRepo.lastMaxRetryAttempts, 3);
+    });
+
+    test('a parent the wallet already holds keeps its coin-list row', () async {
+      // `notifyListeners: false` suppresses the asset's activation broadcasts
+      // for the whole session. On a coin the wallet owns that freezes a real
+      // row - reachable whenever a wallet coin's activation failed, because
+      // resolveChains reports that as inactive and the tab offers to enable it.
+      final repo = build(walletCoins: ['MATIC']);
+
+      await repo.activateChain(NftBlockchains.polygon);
+
+      expect(coinsRepo.lastNotifyListeners, isTrue);
+      // Still never re-added to metadata: it is already there.
+      expect(coinsRepo.lastAddToWalletMetadata, isFalse);
+    });
+
+    test('a chain absent from the catalogue never reaches CoinsRepo', () async {
+      final repo = build();
+
+      await expectLater(
+        repo.activateChain(NftBlockchains.fantom),
+        throwsA(isA<ApiError>()),
+      );
+      expect(coinsRepo.activateCalls, isEmpty);
+    });
+
+    test('a geo-blocked chain never reaches CoinsRepo', () async {
+      final repo = build();
+      tradingStatus.blocked = {_ethId};
+
+      await expectLater(
+        repo.activateChain(NftBlockchains.eth),
+        throwsA(isA<ApiError>()),
+      );
+      expect(coinsRepo.activateCalls, isEmpty);
+    });
+
+    test('a bare activation failure becomes a typed ApiError', () async {
+      final repo = build();
+      coinsRepo.errorToThrow = Exception('activation exhausted');
+
+      // CoinsRepo throws a bare Exception, which no `on BaseError` arm in the
+      // bloc could match.
+      await expectLater(
+        repo.activateChain(NftBlockchains.eth),
+        throwsA(isA<ApiError>()),
+      );
+    });
   });
 
   group('NftsRepo NFT asset activation', () {
@@ -325,6 +437,29 @@ class _FakeAuth implements KomodoDefiLocalAuth {
 }
 
 class _FakeCoinsRepo implements CoinsRepo {
+  final List<List<Asset>> activateCalls = [];
+  bool? lastNotifyListeners;
+  bool? lastAddToWalletMetadata;
+  int? lastMaxRetryAttempts;
+  Object? errorToThrow;
+
+  @override
+  Future<void> activateAssetsSync(
+    List<Asset> assets, {
+    bool notifyListeners = true,
+    bool addToWalletMetadata = true,
+    bool useSharedActivationCache = false,
+    int maxRetryAttempts = 15,
+    Duration initialRetryDelay = const Duration(milliseconds: 500),
+    Duration maxRetryDelay = const Duration(seconds: 10),
+  }) async {
+    activateCalls.add(assets);
+    lastNotifyListeners = notifyListeners;
+    lastAddToWalletMetadata = addToWalletMetadata;
+    lastMaxRetryAttempts = maxRetryAttempts;
+    if (errorToThrow != null) throw errorToThrow!;
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

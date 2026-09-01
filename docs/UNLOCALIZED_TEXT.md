@@ -31,7 +31,6 @@ Generated: 2026-02-04
 - `lib/views/fiat/fiat_inputs.dart:167` — "${LocaleKeys.enterAmount.tr()} $boundariesString" (localized label + bounds)
 
 ## NFTs
-- `lib/views/nfts/common/widgets/nft_no_chains_enabled.dart:15` — "Please enable NFT protocol assets in the wallet. Enable chains like ETH, BNB, AVAX, MATIC, or FTM to view your NFTs."
 - `lib/views/nfts/nft_transactions/desktop/widgets/nft_txn_desktop_filters.dart:83` — "Status"
 - `lib/views/nfts/nft_transactions/desktop/widgets/nft_txn_desktop_filters.dart:96` — "Blockchain"
 - `lib/views/nfts/nft_transactions/common/widgets/nft_txn_media.dart:45` — "-" (fallback title)
@@ -42,11 +41,11 @@ Generated: 2026-02-04
 - `lib/views/nfts/nft_transactions/common/utils/formatter.dart:18` — "-"
 - `lib/views/nfts/nft_transactions/common/utils/formatter.dart:21` — "-"
 - `lib/views/nfts/nft_transactions/common/utils/formatter.dart:23` — `NumberFormat.decimalPatternDigits(locale: "en_US", ...)` and "USD"
-- `lib/views/nfts/nft_tabs/nft_tab.dart:105` — "Ethereum"
-- `lib/views/nfts/nft_tabs/nft_tab.dart:107` — "BNB Smart Chain"
-- `lib/views/nfts/nft_tabs/nft_tab.dart:109` — "Avalanche C-Chain"
-- `lib/views/nfts/nft_tabs/nft_tab.dart:111` — "Polygon"
-- `lib/views/nfts/nft_tabs/nft_tab.dart:113` — "Fantom"
+- `lib/views/nfts/nft_tabs/nft_tab.dart:122` — "Ethereum"
+- `lib/views/nfts/nft_tabs/nft_tab.dart:124` — "BNB Smart Chain"
+- `lib/views/nfts/nft_tabs/nft_tab.dart:126` — "Avalanche C-Chain"
+- `lib/views/nfts/nft_tabs/nft_tab.dart:128` — "Polygon"
+- `lib/views/nfts/nft_tabs/nft_tab.dart:130` — "Fantom"
 
 ## Bitrefill
 - `lib/views/bitrefill/bitrefill_button.dart:120` — "${widget.coin.abbr} is currently suspended"

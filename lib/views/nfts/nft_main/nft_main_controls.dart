@@ -16,7 +16,13 @@ import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dar
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
 class NftMainControls extends StatefulWidget {
-  const NftMainControls({super.key});
+  const NftMainControls({super.key, this.canReceive = true});
+
+  /// Whether "Receive NFT" can be offered. Receiving starts NftReceiveBloc on
+  /// the selected chain, which fetches pubkeys for that chain's parent coin -
+  /// something an un-enabled chain does not have. "Transactions" is chain
+  /// independent, so the row itself stays.
+  final bool canReceive;
 
   @override
   State<NftMainControls> createState() => _NftMainControlsState();
@@ -51,7 +57,7 @@ class _NftMainControlsState extends State<NftMainControls> {
             angle: math.pi / 4,
             child: Icon(Icons.arrow_forward, color: colorScheme.primary),
           ),
-          onPressed: _onReceiveNft,
+          onPressed: widget.canReceive ? _onReceiveNft : null,
           textStyle: textTheme.bodySBold.copyWith(color: colorScheme.primary),
         ),
         const Spacer(),
