@@ -1,12 +1,12 @@
 # Gitflow and branching strategy
 
-1. `dev` branch is created from `master`
+1. `dev` branch is created from `main`
 2. A release branch is created from `dev` just before release (e.g. `release-0.4.2`)
 3. Feature branches are created from `dev`
 4. When a feature is complete it is merged into the `dev` branch
-5. When the release branch is done it is merged into `master` and `dev`
-6. If an issue in `master` is detected a hotfix branch is created from `master`
-7. Once the hotfix is complete it is merged to both `dev` and `master`
+5. When the release branch is done it is merged into `main` and `dev`
+6. If an issue in `main` is detected a hotfix branch is created from `main`
+7. Once the hotfix is complete it is merged to both `dev` and `main`
 
 [More...](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow)
 
@@ -27,11 +27,11 @@
   - `remove-`
 - Bug fix branch (regular bug fixes):
   - `fix-`
-- Hotfix branch (hotfixes based on `master` branch):
+- Hotfix branch (hotfixes based on `main` branch):
   - `hotfix-`
 - Release branch:
   - `release-RELEASE.VERSION.NUMBER` (e.g. `release-0.4.2`)
-- Sync branch (for resolving merging conflicts between release and dev branch after merging it to master):
+- Sync branch (for resolving merging conflicts between release and dev branch after merging it to main):
   - `sync-`
 - Test branch (testing, temp branches, etc):
   - `test-`
