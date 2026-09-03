@@ -87,10 +87,8 @@ class NftFailure extends StatelessWidget {
                 text: LocaleKeys.retryButtonText.tr(),
                 width: 324,
                 prefix: isSpinnerShown
-                    ? null
-                    : UiSpinner(
-                        color: colorScheme.primary,
-                      ),
+                    ? UiSpinner(color: colorScheme.primary)
+                    : null,
                 onPressed: isSpinnerShown ? null : onTryAgain,
               ),
               const SizedBox(height: 20),
