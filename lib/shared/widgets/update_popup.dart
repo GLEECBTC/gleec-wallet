@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/blocs/update_bloc.dart';
+import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
@@ -110,7 +111,22 @@ class UpdatePopUp extends StatelessWidget {
                   backgroundColor: Theme.of(context).colorScheme.secondary,
                   onPressed: () async {
                     onAccept();
-                    await updateBloc.update();
+                    // Close before starting the update. On web the update is a
+                    // page reload, so nothing after this runs -- but if the
+                    // reload is blocked or the native download launcher throws,
+                    // leaving the dialog up strands the user behind a modal
+                    // that has no dismiss button.
+                    Navigator.of(context).pop();
+                    try {
+                      await updateBloc.update(versionInfo);
+                    } catch (e, s) {
+                      log(
+                        'Failed to start the app update: $e',
+                        path: 'update_popup => updateNow',
+                        trace: s,
+                        isError: true,
+                      );
+                    }
                   },
                 ),
               ),

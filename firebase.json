@@ -88,6 +88,33 @@
         ]
       },
       {
+        // The boot files that carry the app's version. Every one of these is
+        // served at a stable, un-hashed name, so a client that has any of them
+        // in its HTTP cache keeps running the build it already has -- and
+        // Firebase's default is max-age=3600, so that lasts an hour.
+        //
+        // This is what actually breaks the in-app "Update now" button. It is
+        // not a service worker: both deployed sites serve Flutter's modern
+        // self-unregistering worker (no RESOURCES map, caches nothing), so
+        // there is no SW cache left to defeat. The HTTP cache is the whole
+        // problem, and JS cannot purge it -- only these headers can.
+        //
+        // main.dart.js is the compiled app itself and is the one most easily
+        // missed: revalidating index.html alone just re-serves a fresh shell
+        // that boots an hour-old application.
+        //
+        // version.json is here because UpdateBloc reads it to decide whether a
+        // reload could install anything (see update_bloc.dart). A stale copy
+        // makes that decision on stale data.
+        "source": "/@(index.html|flutter_bootstrap.js|flutter.js|main.dart.js|flutter_service_worker.js|version.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
         // Coin icons are a large, rarely-changing set (hundreds of files).
         // Without this they inherit Firebase's default max-age=3600, so every
         // repeat visit more than an hour apart re-validates the whole set while
