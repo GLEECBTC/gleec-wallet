@@ -17,15 +17,22 @@ part 'nft_main_event.dart';
 part 'nft_main_state.dart';
 
 class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
-  NftMainBloc({
-    required NftsRepo repo,
-    required KomodoDefiSdk sdk,
-  })  : _repo = repo,
-        _sdk = sdk,
-        super(NftMainState.initial()) {
-    on<NftMainChainUpdateRequested>(_onChainNftsUpdateRequested,
-        transformer: restartable());
+  NftMainBloc({required NftsRepo repo, required KomodoDefiSdk sdk})
+    : _repo = repo,
+      _sdk = sdk,
+      super(NftMainState.initial()) {
+    on<NftMainChainUpdateRequested>(
+      _onChainNftsUpdateRequested,
+      transformer: restartable(),
+    );
     on<NftMainTabChanged>(_onTabChanged);
+    // concurrent(), not restartable(): a cancelled bloc Emitter silently drops
+    // emits, so a restarted activation would never write its terminal status
+    // and the tab would spin forever. Two chains must also come up at once.
+    on<NftMainChainActivationRequested>(
+      _onChainActivationRequested,
+      transformer: concurrent(),
+    );
     on<NftMainResetRequested>(_onReset);
     on<NftMainChainNftsRefreshed>(_onRefreshForChain);
     on<NftMainUpdateNftsStarted>(_onStartUpdate);
@@ -79,6 +86,17 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   Timer? _updateTimer;
   final _log = Logger('NftMainBloc');
 
+  /// Chains this bloc is currently bringing up. Drained in a `finally`, so the
+  /// status merge can only hold `activating` while an activation is really
+  /// running.
+  final Set<NftBlockchains> _activationsInFlight = <NftBlockchains>{};
+
+  /// Bumped on reset, and re-checked by every post-await emit, so an activation
+  /// landing after logout cannot write `active` onto a freshly reset state.
+  /// `emit.isDone` will not do: a concurrent() emitter is not done just because
+  /// the state was reset underneath it.
+  int _session = 0;
+
   Future<void> _onTabChanged(
     NftMainTabChanged event,
     Emitter<NftMainState> emit,
@@ -86,30 +104,120 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     emit(state.copyWith(selectedChain: () => event.chain));
     if (!await _sdk.auth.isSignedIn() || !state.isInitialized) {
       _log.warning(
-          'User is not signed in or state is not initialized. Cannot change NFT tab.');
+        'User is not signed in or state is not initialized. Cannot change NFT tab.',
+      );
       return;
+    }
+
+    // A chain the user has never enabled has nothing to fetch: `getNfts`
+    // filters it out and returns []. The tap IS the request to enable it.
+    switch (state.statusOf(event.chain)) {
+      case NftChainStatus.inactive:
+        add(NftMainChainActivationRequested(event.chain));
+        return;
+      case NftChainStatus.activating:
+        return;
+      case NftChainStatus.failed:
+        // Selecting a tab is navigation; retrying is a separate, labelled
+        // decision, which the pane offers.
+        return;
+      case NftChainStatus.active:
+        break;
     }
 
     try {
       _log.info('Changing NFT tab to ${event.chain}');
       final List<NftToken> nftList = await _repo.getNfts([event.chain]);
 
-      final (newNftS, newNftCount) =
-          _recalculateNftsForChain(nftList, event.chain);
+      final (newNftS, newNftCount) = _recalculateNftsForChain(
+        nftList,
+        event.chain,
+      );
       emit(
         state.copyWith(
           nfts: () => newNftS,
           nftCount: () => newNftCount,
-          error: () => null,
+          chainErrors: () => _withoutChainError(event.chain),
         ),
       );
       _log.info('Found ${nftList.length} NFTs for chain ${event.chain}');
     } on BaseError catch (e) {
       _log.warning('Error changing NFT tab to ${event.chain}: ${e.message}');
-      emit(state.copyWith(error: () => e));
+      emit(state.copyWith(chainErrors: () => _withChainError(event.chain, e)));
     } catch (e, s) {
       _log.severe('Unexpected error changing NFT tab', e, s);
-      emit(state.copyWith(error: () => TextError(error: e.toString())));
+      emit(
+        state.copyWith(
+          chainErrors: () =>
+              _withChainError(event.chain, TextError(error: e.toString())),
+        ),
+      );
+    }
+  }
+
+  Future<void> _onChainActivationRequested(
+    NftMainChainActivationRequested event,
+    Emitter<NftMainState> emit,
+  ) async {
+    final chain = event.chain;
+    if (!state.availableChains.contains(chain)) {
+      _log.warning('Ignoring activation of unsupported NFT chain $chain');
+      return;
+    }
+    if (state.statusOf(chain) == NftChainStatus.active) return;
+    // Claimed before the first await, so a double tap cannot start two
+    // activations even though the second event is handled concurrently.
+    if (!_activationsInFlight.add(chain)) return;
+
+    final session = _session;
+    try {
+      if (!await _sdk.auth.isSignedIn()) return;
+
+      emit(
+        state.copyWith(
+          chainStatus: () => _withStatus(chain, NftChainStatus.activating),
+          chainErrors: () => _withoutChainError(chain),
+        ),
+      );
+
+      _log.info('Activating ${chain.coinAbbr()} for the NFT page');
+      await _repo.activateChain(chain);
+
+      // "No exception" is not proof: activateAssetsSync returns silently when
+      // no wallet is signed in. Ask KDF whether the chain actually came up.
+      final activated = (await _repo.resolveChains([
+        chain,
+      ])).activated.contains(chain);
+      if (_session != session || emit.isDone) return;
+
+      if (activated) {
+        emit(
+          state.copyWith(
+            chainStatus: () => _withStatus(chain, NftChainStatus.active),
+          ),
+        );
+        add(const NftMainChainUpdateRequested());
+      } else {
+        _log.warning('KDF did not report ${chain.coinAbbr()} as enabled');
+        emit(
+          _failChain(
+            chain,
+            TextError(
+              error: 'KDF did not report ${chain.coinAbbr()} as enabled',
+            ),
+          ),
+        );
+      }
+    } on BaseError catch (e) {
+      _log.warning('Failed to enable NFT chain $chain: ${e.message}');
+      if (_session != session || emit.isDone) return;
+      emit(_failChain(chain, e));
+    } catch (e, s) {
+      _log.severe('Unexpected error enabling NFT chain $chain', e, s);
+      if (_session != session || emit.isDone) return;
+      emit(_failChain(chain, TextError(error: e.toString())));
+    } finally {
+      _activationsInFlight.remove(chain);
     }
   }
 
@@ -127,7 +235,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     }
 
     // Sampled WITH the chain list rather than after the fetch: an activation
-    // that resolves while `_getAllNfts` runs is re-dispatched by the activation
+    // that resolves while the fetch runs is re-dispatched by the activation
     // subscription anyway, and sampling late would flash the placeholder.
     var hold = false;
     try {
@@ -137,17 +245,24 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       final List<NftBlockchains> activatedChains = activation.activated;
       hold = activatedChains.isEmpty && activation.unresolved.isNotEmpty;
 
-      final Map<NftBlockchains, List<NftToken>> nfts = await _getAllNfts();
-      final (counts, sortedChains) = _calculateNftCount(nfts, activatedChains);
+      final results = await _fetchPerChain(activatedChains);
+      final nfts = _groupByChain(results);
+      // A chain whose fetch failed must not claim "0 items".
+      final countable = [
+        for (final entry in results.entries)
+          if (entry.value.$2 == null) entry.key,
+      ];
+      final (counts, sortedChains) = _calculateNftCount(nfts, countable);
 
       emit(
         state.copyWith(
           nftCount: () => counts,
           nfts: () => nfts,
           sortedChains: () => sortedChains,
-          selectedChain: state.isInitialized || sortedChains.isEmpty
-              ? null
-              : () => sortedChains.first,
+          availableChains: () => activation.supported,
+          chainStatus: () => _mergeChainStatuses(activation),
+          chainErrors: () => _mergeChainErrors(activation, results),
+          selectedChain: _nextSelection(activation.supported, sortedChains),
           isInitialized: () => state.isInitialized || !hold,
           error: () => null,
         ),
@@ -155,7 +270,8 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
 
       final totalNfts = counts.values.fold(0, (sum, count) => sum + count);
       _log.info(
-          'Updated all NFT chains, found $totalNfts NFTs across ${sortedChains.length} chains');
+        'Updated all NFT chains, found $totalNfts NFTs across ${sortedChains.length} chains',
+      );
     } on BaseError catch (e) {
       hold = false;
       _log.warning('Error updating NFT chains: ${e.message}');
@@ -165,14 +281,14 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       _log.severe('Unexpected error updating NFT chains', e, s);
       emit(state.copyWith(error: () => TextError(error: e.toString())));
     } finally {
-      emit(
-        state.copyWith(isInitialized: () => state.isInitialized || !hold),
-      );
+      emit(state.copyWith(isInitialized: () => state.isInitialized || !hold));
     }
   }
 
   void _onReset(NftMainResetRequested event, Emitter<NftMainState> emit) {
     _log.info('Resetting NFT state');
+    _session++;
+    _activationsInFlight.clear();
     emit(NftMainState.initial());
   }
 
@@ -191,23 +307,31 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       _log.info('Refreshing NFTs for chain ${event.chain}');
       final List<NftToken> nftList = await _repo.getNfts([event.chain]);
 
-      final (newNftS, newNftCount) =
-          _recalculateNftsForChain(nftList, event.chain);
+      final (newNftS, newNftCount) = _recalculateNftsForChain(
+        nftList,
+        event.chain,
+      );
       emit(
         state.copyWith(
           nfts: () => newNftS,
           nftCount: () => newNftCount,
-          error: () => null,
+          chainErrors: () => _withoutChainError(event.chain),
         ),
       );
       _log.info('Refreshed ${nftList.length} NFTs for chain ${event.chain}');
     } on BaseError catch (e) {
       _log.warning(
-          'Error refreshing NFTs for chain ${event.chain}: ${e.message}');
-      emit(state.copyWith(error: () => e));
+        'Error refreshing NFTs for chain ${event.chain}: ${e.message}',
+      );
+      emit(state.copyWith(chainErrors: () => _withChainError(event.chain, e)));
     } catch (e, s) {
       _log.severe('Unexpected error refreshing NFTs', e, s);
-      emit(state.copyWith(error: () => TextError(error: e.toString())));
+      emit(
+        state.copyWith(
+          chainErrors: () =>
+              _withChainError(event.chain, TextError(error: e.toString())),
+        ),
+      );
     } finally {
       final updatingChains = _removeUpdatingChains(event.chain);
       emit(state.copyWith(updatingChains: () => updatingChains));
@@ -215,13 +339,17 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   }
 
   void _onStopUpdate(
-      NftMainUpdateNftsStopped event, Emitter<NftMainState> emit) {
+    NftMainUpdateNftsStopped event,
+    Emitter<NftMainState> emit,
+  ) {
     _log.info('Stopping NFT update timer');
     _stopUpdate();
   }
 
   void _onStartUpdate(
-      NftMainUpdateNftsStarted event, Emitter<NftMainState> emit) {
+    NftMainUpdateNftsStarted event,
+    Emitter<NftMainState> emit,
+  ) {
     _log.info('Starting NFT update timer (1 minute interval)');
     _stopUpdate();
     _updateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
@@ -229,50 +357,131 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     });
   }
 
-  Future<Map<NftBlockchains, List<NftToken>>> _getAllNfts({
-    List<NftBlockchains> chains = NftBlockchains.values,
-  }) async {
-    try {
-      await retry<void>(
-        () async => await _repo.updateNft(chains),
-        maxAttempts: 3,
-        backoffStrategy:
-            ExponentialBackoff(initialDelay: const Duration(seconds: 1)),
-      );
-    } catch (e, s) {
-      _log.severe('Error updating NFTs for chains $chains', e, s);
-    }
-    final List<NftToken> list = await _repo.getNfts(chains);
+  /// Fetches each activated chain independently.
+  ///
+  /// One batched `getNfts` was a single point of failure - `_enableNftAssets`
+  /// throws for the whole `NFT_*` batch - so one flaky chain blanked the page.
+  Future<Map<NftBlockchains, (List<NftToken>, BaseError?)>> _fetchPerChain(
+    List<NftBlockchains> chains,
+  ) async {
+    final entries = await Future.wait(
+      chains.map<
+        Future<MapEntry<NftBlockchains, (List<NftToken>, BaseError?)>>
+      >((chain) async {
+        try {
+          await retry<void>(
+            () async => _repo.updateNft([chain]),
+            maxAttempts: 3,
+            backoffStrategy: ExponentialBackoff(
+              initialDelay: const Duration(seconds: 1),
+            ),
+          );
+        } catch (e, s) {
+          // Non-fatal, as before: `getNfts` still returns what KDF has cached.
+          _log.severe('Error updating NFTs for chain $chain', e, s);
+        }
 
-    final Map<NftBlockchains, List<NftToken>> nfts =
-        list.fold<Map<NftBlockchains, List<NftToken>>>(
-      <NftBlockchains, List<NftToken>>{},
-      (prev, element) {
-        final List<NftToken> chainList = prev[element.chain] ?? []
-          ..add(element);
-        prev[element.chain] = chainList;
-
-        return prev;
-      },
+        try {
+          final tokens = await _repo.getNfts([chain]);
+          return MapEntry(chain, (tokens, null));
+        } on BaseError catch (e) {
+          _log.warning('Error fetching NFTs for chain $chain: ${e.message}');
+          return MapEntry(chain, (const <NftToken>[], e));
+        } catch (e, s) {
+          _log.severe('Unexpected error fetching NFTs for chain $chain', e, s);
+          return MapEntry(chain, (
+            const <NftToken>[],
+            TextError(error: e.toString()),
+          ));
+        }
+      }),
     );
+    return Map.fromEntries(entries);
+  }
 
+  /// Groups tokens under the chain they report, as the batched fetch did.
+  Map<NftBlockchains, List<NftToken>> _groupByChain(
+    Map<NftBlockchains, (List<NftToken>, BaseError?)> results,
+  ) {
+    final nfts = <NftBlockchains, List<NftToken>>{};
+    for (final entry in results.entries) {
+      if (entry.value.$2 != null) continue;
+      for (final token in entry.value.$1) {
+        (nfts[token.chain] ??= <NftToken>[]).add(token);
+      }
+    }
     return nfts;
+  }
+
+  Map<NftBlockchains, NftChainStatus> _mergeChainStatuses(
+    NftChainActivation activation,
+  ) {
+    final statuses = <NftBlockchains, NftChainStatus>{};
+    for (final chain in activation.supported) {
+      if (activation.activated.contains(chain)) {
+        statuses[chain] = NftChainStatus.active;
+      } else if (_activationsInFlight.contains(chain) ||
+          activation.unresolved.contains(chain)) {
+        // Ours in flight, or someone else's (the login fan-out). Either way
+        // the 60s tick must not flip a live spinner back to "not enabled".
+        statuses[chain] = NftChainStatus.activating;
+      } else if (state.statusOf(chain) == NftChainStatus.failed) {
+        // Sticky, so the retry affordance survives a refresh tick. The first
+        // branch clears it if the chain comes up some other way.
+        statuses[chain] = NftChainStatus.failed;
+      } else {
+        statuses[chain] = NftChainStatus.inactive;
+      }
+    }
+    return statuses;
+  }
+
+  Map<NftBlockchains, BaseError> _mergeChainErrors(
+    NftChainActivation activation,
+    Map<NftBlockchains, (List<NftToken>, BaseError?)> results,
+  ) {
+    final errors = <NftBlockchains, BaseError>{};
+    for (final chain in activation.supported) {
+      final fetchError = results[chain]?.$2;
+      if (fetchError != null) {
+        errors[chain] = fetchError;
+      } else if (!activation.activated.contains(chain)) {
+        final previous = state.chainErrors[chain];
+        if (previous != null) errors[chain] = previous;
+      }
+    }
+    return errors;
+  }
+
+  /// Null leaves the selection alone.
+  NftBlockchains Function()? _nextSelection(
+    List<NftBlockchains> available,
+    List<NftBlockchains> sorted,
+  ) {
+    if (available.isEmpty) return null;
+    if (!state.isInitialized) {
+      // First paint prefers a chain that actually holds NFTs.
+      return () => sorted.isNotEmpty ? sorted.first : available.first;
+    }
+    // Afterwards the user's choice stands unless it left the catalogue.
+    return available.contains(state.selectedChain)
+        ? null
+        : () => available.first;
   }
 
   (Map<NftBlockchains, int>, List<NftBlockchains>) _calculateNftCount(
     Map<NftBlockchains, List<NftToken>> nfts,
-    List<NftBlockchains> activatedChains,
+    List<NftBlockchains> countableChains,
   ) {
     final Map<NftBlockchains, int> countMap = {};
 
-    // Tabs follow the chains the user has *activated*, not the chains that
-    // happen to hold an NFT. An activated chain with zero NFTs still earns a
-    // tab and the "no collectibles" empty state; keying this off the returned
-    // tokens instead told owners of nothing to enable chains they already had.
-    // Iterate the enum rather than activatedChains so insertion order stays
+    // Only a chain that answered a `get_nft_list` earns a count - zero NFTs
+    // included. A chain nobody enabled is absent entirely, which is what makes
+    // its tab say "not enabled" rather than "0 items".
+    // Iterate the enum rather than countableChains so insertion order stays
     // tied to the declaration order NftBlockchains documents as significant.
     for (final NftBlockchains chain in NftBlockchains.values) {
-      if (activatedChains.contains(chain)) {
+      if (countableChains.contains(chain)) {
         countMap[chain] = nfts[chain]?.length ?? 0;
       }
     }
@@ -294,10 +503,8 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     _updateTimer = null;
   }
 
-  (
-    Map<NftBlockchains, List<NftToken>?>,
-    Map<NftBlockchains, int?>
-  ) _recalculateNftsForChain(List<NftToken> newNftList, NftBlockchains chain) {
+  (Map<NftBlockchains, List<NftToken>?>, Map<NftBlockchains, int?>)
+  _recalculateNftsForChain(List<NftToken> newNftList, NftBlockchains chain) {
     final Map<NftBlockchains, int?> nftCount = {...state.nftCount};
     final Map<NftBlockchains, List<NftToken>?> nfts = {...state.nfts};
     nfts[chain] = newNftList;
@@ -305,6 +512,27 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
 
     return (nfts, nftCount);
   }
+
+  Map<NftBlockchains, NftChainStatus> _withStatus(
+    NftBlockchains chain,
+    NftChainStatus status,
+  ) => {...state.chainStatus, chain: status};
+
+  Map<NftBlockchains, BaseError> _withChainError(
+    NftBlockchains chain,
+    BaseError error,
+  ) => {...state.chainErrors, chain: error};
+
+  Map<NftBlockchains, BaseError> _withoutChainError(NftBlockchains chain) =>
+      {...state.chainErrors}..remove(chain);
+
+  /// A per-chain activation failure never touches the page-level error: that
+  /// would swap the whole page for NftMainFailure and hide the tabs that work.
+  NftMainState _failChain(NftBlockchains chain, BaseError error) =>
+      state.copyWith(
+        chainStatus: () => _withStatus(chain, NftChainStatus.failed),
+        chainErrors: () => _withChainError(chain, error),
+      );
 
   Map<NftBlockchains, bool> _addUpdatingChains(NftBlockchains chain) {
     final Map<NftBlockchains, bool> updatingChains = {...state.updatingChains};

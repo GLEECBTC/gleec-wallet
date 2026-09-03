@@ -58,8 +58,7 @@ expect 'live deploy reports the resolved site' \
   'Project Console: https://console.firebase.google.com/project/komodo-wallet-official/overview' \
   'Hosting URL: https://walletrc.web.app'
 
-# The case the old "https://$TARGET.web.app" construction got wrong: the same
-# target deployed against a different project resolves to a different site.
+# One target resolves to a different site in each project.
 expect 'live deploy to another project reports that project'"'"'s site' \
   'https://gleec-wallet-official.web.app' \
   'Project Console: https://console.firebase.google.com/project/gleec-wallet-official/overview' \

@@ -6,6 +6,7 @@ import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api_nft.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/errors.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/nft/get_nft_list/get_nft_list_res.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
@@ -14,15 +15,27 @@ import 'package:web_dex/model/text_error.dart';
 
 /// How a set of NFT chains stands against KDF's live activation state.
 class NftChainActivation {
-  const NftChainActivation({required this.activated, required this.unresolved});
+  const NftChainActivation({
+    required this.supported,
+    required this.activated,
+    required this.unresolved,
+  });
+
+  /// Every chain this build can offer: present in the coins catalogue and not
+  /// geo-blocked. A superset of [activated] and [unresolved] - a chain nobody
+  /// has enabled still earns a tab, because tapping it is how it gets enabled.
+  ///
+  /// Shipped in the same snapshot as [activated] so the two cannot be read
+  /// across a geo-status flip.
+  final List<NftBlockchains> supported;
 
   /// Chains KDF currently reports as enabled, and that are not geo-blocked.
-  /// The ONLY thing that may become a tab.
+  /// The only thing that may carry an NFT count.
   final List<NftBlockchains> activated;
 
   /// Chains the wallet asked for whose activation has neither succeeded nor
-  /// failed yet. Never becomes a tab; it only separates "still coming up" from
-  /// "you really have not enabled anything".
+  /// failed yet. Renders as an in-progress tab, never as a count: it separates
+  /// "still coming up" from "you have not enabled this".
   final List<NftBlockchains> unresolved;
 }
 
@@ -150,10 +163,12 @@ class NftsRepo {
         .toSet();
     final intendedParents = intended.where(_parentTickers.contains).toSet();
 
+    final supported = <NftBlockchains>[];
     final activated = <NftBlockchains>[];
     final unresolved = <NftBlockchains>[];
     for (final chain in chains) {
       if (!_isChainAllowed(chain)) continue;
+      supported.add(chain);
       final ticker = chain.coinAbbr();
       if (active.contains(ticker)) {
         activated.add(chain);
@@ -161,7 +176,11 @@ class NftsRepo {
         unresolved.add(chain);
       }
     }
-    return NftChainActivation(activated: activated, unresolved: unresolved);
+    return NftChainActivation(
+      supported: supported,
+      activated: activated,
+      unresolved: unresolved,
+    );
   }
 
   /// Chains whose parent coin KDF currently reports as enabled.
@@ -169,13 +188,76 @@ class NftsRepo {
     List<NftBlockchains> chains,
   ) async => (await resolveChains(chains)).activated;
 
+  /// Enables the PARENT coin behind [chain] so its NFTs become fetchable.
+  ///
+  /// Deliberately NOT reachable from [getNfts]/[updateNft]. Those run on a 60s
+  /// timer across `NftBlockchains.values`, so activating from inside them would
+  /// restore the eager all-chain activation removed in 7953dffe. Only an
+  /// explicit user gesture reaches this; the `NFT_*` asset is still activated
+  /// lazily by [_enableNftAssets] once the parent is up.
+  ///
+  /// A parent the NFT page brings up on its own is session-scoped: it stays out
+  /// of the next login's set and out of the wallet coin list. A parent the
+  /// wallet already holds is activated normally - see [_isWalletCoin].
+  Future<void> activateChain(NftBlockchains chain) async {
+    final asset = _allowedParentAsset(chain);
+    if (asset == null) {
+      // A guard, not a user-facing path: no tab should have been offered.
+      _log.warning('Refusing to activate unsupported NFT chain $chain');
+      throw ApiError(message: LocaleKeys.somethingWrong.tr());
+    }
+    final isWalletCoin = await _isWalletCoin(asset);
+    try {
+      await _coinsRepo.activateAssetsSync(
+        [asset],
+        // `false` suppresses the asset's activation broadcasts for the rest of
+        // the session, which keeps a browsed-only chain out of the wallet list.
+        // On a coin the wallet holds it would freeze a real row instead -
+        // reachable whenever a wallet coin's activation failed, which
+        // `resolveChains` reports as inactive and the tab offers to enable.
+        notifyListeners: isWalletCoin,
+        addToWalletMetadata: false,
+        // CoinsRepo's default of 15 is a background budget, ~105s of pure
+        // sleep. Someone is watching this one.
+        maxRetryAttempts: 3,
+        maxRetryDelay: const Duration(seconds: 2),
+      );
+    } on BaseError {
+      rethrow;
+    } catch (e, s) {
+      // A bare Exception no `on BaseError` arm can match, as in
+      // [_enableNftAssets].
+      _log.severe('Failed to activate ${asset.id.id} for $chain', e, s);
+      throw ApiError(message: LocaleKeys.somethingWrong.tr());
+    }
+  }
+
+  /// Whether [asset] is already one of the wallet's own coins. Falls back to
+  /// `false` if the read fails, rather than failing an activation the user
+  /// asked for over a bookkeeping question.
+  Future<bool> _isWalletCoin(Asset asset) async {
+    try {
+      return (await _sdk.getWalletCoinIds()).contains(asset.id.id);
+    } catch (e, s) {
+      _log.warning('Could not read wallet coins for ${asset.id.id}', e, s);
+      return false;
+    }
+  }
+
   /// Reproduces the geo filter that `CoinsRepo.getKnownCoins()` applied here,
   /// and the unknown-ticker case with it: a ticker absent from the catalogue
   /// yields an empty set, which filters to empty - matching the previous
   /// `firstWhereOrNull(...) == null -> false`.
-  bool _isChainAllowed(NftBlockchains chain) => _tradingStatusService
-      .filterAllowedAssets(
-        _sdk.assets.findAssetsByConfigId(chain.coinAbbr()).toList(),
-      )
-      .isNotEmpty;
+  ///
+  /// `findAssetsByConfigId` is indexed on `asset.id.id`, so every survivor is
+  /// the parent coin itself and the first is the one to enable.
+  Asset? _allowedParentAsset(NftBlockchains chain) {
+    final allowed = _tradingStatusService.filterAllowedAssets(
+      _sdk.assets.findAssetsByConfigId(chain.coinAbbr()).toList(),
+    );
+    return allowed.isEmpty ? null : allowed.first;
+  }
+
+  bool _isChainAllowed(NftBlockchains chain) =>
+      _allowedParentAsset(chain) != null;
 }
