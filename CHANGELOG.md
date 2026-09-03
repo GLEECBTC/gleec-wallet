@@ -1,11 +1,12 @@
 # Gleec Wallet v0.9.7 Release Notes
 
-This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a fresh HD sign-in, makes transaction history survive a restart, and reworks wallet setup so the create-or-import decision, the terms you agree to, and the prompt to save your recovery phrase all happen where they belong. It also rolls the native trading engine to the `3.1.0-beta` line, which reprices EVM swap gas under the Amsterdam/Bogota fork rules and is visible in DEX fee estimates.
+This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a fresh HD sign-in, makes transaction history survive a restart, and reworks wallet setup so the create-or-import decision, the terms you agree to, and the prompt to save your recovery phrase all happen where they belong. It gives every supported NFT chain its own tab that enables the chain on tap, and rolls the native trading engine to the `3.1.0-beta` line, which reprices EVM swap gas under the Amsterdam/Bogota fork rules and is visible in DEX fee estimates.
 
 ## 🚀 New Features
 
 - **TRON Gas-Free Sends & Receives** ([@CharlVS], #3500) - Send and receive TRC-20 tokens on TRON without holding TRX for gas, using the custody-address model and the GasFree relay. Includes the send and receive flows, address handling, and the supporting transaction history.
 - **Transaction History Survives a Restart** ([@CharlVS], #3500) - Transaction history is now cached on disk between sessions. A coin's details page renders the history it already knows on a cold start instead of waiting for the first network round trip, and the walk that follows becomes a refresh rather than a cold fetch. On by default; retention is deliberately unbounded.
+- **An NFT Tab for Every Supported Chain** ([@CharlVS], #3523) - The NFT page now shows a tab for every catalogue chain available in your region rather than only the chains already enabled, and tapping an un-enabled one activates it. A tab reports **Not enabled**, a spinner, or **Couldn't enable** instead of a count, so a chain nobody has queried can never read as "you own nothing here". Browsing a chain is session-scoped: it does not add the coin to your wallet or to the next sign-in's set.
 
 ## ⚡ Performance Enhancements
 
@@ -30,6 +31,8 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **Activation Could Hang Forever on a Silent Progress Stream** ([@CharlVS], #3500) - A stream that never emitted and never closed suspended before the caller received its future, so the deadline fired while the caller kept waiting.
 - **Activation Timeout Fired Mid-Login and Issued Duplicate Requests** ([@CharlVS], #3500) - A flat 60-second deadline fired during every fresh HD login, and the retry started a second concurrent activation. Timeouts are now protocol-aware.
 - **Login Form No Longer Reads the Clipboard** ([@CharlVS], #3500) - The password field auto-filled from the system clipboard. Removed.
+- **Enabling an NFT Chain Could Silence a Coin You Already Hold** ([@CharlVS], #3523) - Enabling a chain from the NFT page suppressed that asset's activation broadcasts for the rest of the session. That is right for a chain the NFT page brings up on its own and wrong for a held coin whose activation had failed: its wallet row then stayed silent until the next sign-in.
+- **The NFT Retry Button Spun Forever** ([@CharlVS], #3523) - Every NFT failure screen shipped a permanently-spinning Retry button, from an inverted spinner condition no caller could get right.
 - **NFT Chain Activation Reported Incorrectly** ([@CharlVS], #3509) - The NFT screen could tell you to enable a chain that was already enabled. Chain activation state now comes from a single source of truth.
 
 ## 💻 Platform-Specific Changes
@@ -39,6 +42,10 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **Rolled to `3.1.0-beta` (`f3efd2c`)** ([@CharlVS], #3500) - The engine moves to the `main` release line, which carries the merged gas-free support this release depends on.
 - **EVM Swap Gas Limits Roughly Double** ([@CharlVS], #3500) - The engine reprices EVM swap gas for the Amsterdam/Bogota fork rules. A DEX fee estimate for an ETH pair goes 165,000 → 280,000 gas, and for an ERC-20/GRC-20 pair 300,000 → 540,000. The same figures back the pre-trade balance check, so a wallet holding *just* enough platform coin to cover the old estimate will now report insufficient funds. This is correct under the new fork rules - the old limits would have under-funded the transaction - but it is a visible change to fee previews rather than a regression.
 - **Priority Fee Estimates Move** ([@CharlVS], #3500) - The simple EIP-1559 estimator now reads the pending block's base fee rather than the oldest entry in its window, so priority-fee estimates shift.
+### SDK (komodo-defi-sdk-flutter)
+
+- **Rolled to the `0.7.0` Release Line** (SDK#360, SDK#367) - The submodule was pinned to a mid-review snapshot of the branch that became SDK#360, taken before that pull request's final review round merged. The pin advances to the released `0.7.0` commit on SDK `main`, which carries 24 fixes to the exact paths this release advertises: the gas-free withdrawal journal, persisted transaction history, balance watching across a degraded wallet identity, activation state, and the cache purge on wallet deletion. The trading engine artefact is unchanged at `f3efd2c`.
+- **KDF Downloads Restricted to Official Mirrors** (SDK#373) - Two third-party hosts were dropped from the trading-engine download sources, leaving only Gleec's own build host and the upstream mirror.
 
 ## 🔧 Technical Improvements
 
@@ -47,10 +54,12 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **Wallet-Load Measurement Harness** ([@CharlVS], #3500) - A test harness running a real SDK with only the RPC backend faked, so authentication, activation, public keys, balances and storage are exercised as production code. A replay tier gates every pull request and a real-engine tier runs nightly. 18 test files that existed but had never been registered now run, and the real failures they surfaced are fixed.
 - **Alpha Testing Notice Removed** ([@CharlVS], #3509) - The alpha-testing disclaimer shown on launch has been removed; the risk disclosure lives in the EULA and Terms. This also stops the notice from silently re-enabling analytics for users who had turned them off.
 - **KDF Performance Stack Descoped** ([@CharlVS], #3500) - Three engine-side performance changes - a concurrent HD gap scan, concurrent EVM RPCs with connection pooling, and EVM/TRON rate-limit backoff - are not in this build. What each would add, and the regressions accepted without them, are recorded in [`docs/KDF_PERF_STACK_DESCOPE.md`](docs/KDF_PERF_STACK_DESCOPE.md). The client-side half of that work does ship, and is what the performance section above measures.
+- **Web Deploys Use the Site the CLI Actually Published To** ([@CharlVS], #3518) - The deploy workflow treated its Firebase deploy target as though it were a site ID. The two names only coincided in the one project previews run against, and #3500 made them diverge, so a preview link could point at a site the build never reached. The workflow now reads the resolved site out of the Firebase CLI's own output, and the target is renamed from `walletrc` to `web`.
 
 ## 📚 Documentation
 
 - **Measurement Captures Lifted Out of the Repository** ([@CharlVS], #3516) - Retire the spent KDF measurement documents and their raw capture data, and correct the ones that no longer describe the shipped build - roughly 15,000 lines removed. The wallet-load performance report was deleted outright: its headline figure was measured against the descoped engine stack and is false for what ships here.
+- **Contributor Docs Point at a Branch That Exists** ([@CharlVS], #3519) - The contribution and branching guides told contributors to branch from, sync with, and open pull requests against `master`, which this repository does not have. 11 references corrected to `main`.
 
 **Full Changelog**: [0.9.6...0.9.7](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.6...0.9.7)
 
