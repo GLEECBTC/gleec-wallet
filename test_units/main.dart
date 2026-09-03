@@ -64,6 +64,7 @@ import 'tests/helpers/max_min_rational_tests.dart';
 import 'tests/helpers/total_24_change_tests.dart';
 import 'tests/helpers/total_fee_test.dart';
 import 'tests/helpers/update_sell_amount_tests.dart';
+import 'tests/helpers/update_version_compare_tests.dart';
 import 'tests/gasless/tron_gasless_policy_test.dart';
 import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
@@ -132,6 +133,11 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  group('App update:', () {
+    testUpdateVersionCompare();
+    testUpdateDownloadUri();
+  });
+
   group('Formatters:', () {
     testCutTrailingZeros();
     testFormatAmount();
