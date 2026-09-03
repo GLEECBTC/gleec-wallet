@@ -919,6 +919,17 @@ abstract class LocaleKeys {
   static const tokensAmount = 'tokensAmount';
   static const noCollectibles = 'noCollectibles';
   static const tryReceiveNft = 'tryReceiveNft';
+  static const nftChainNotEnabled = 'nftChainNotEnabled';
+  static const nftChainEnabling = 'nftChainEnabling';
+  static const nftChainEnableFailed = 'nftChainEnableFailed';
+  static const nftEnableChainTitle = 'nftEnableChainTitle';
+  static const nftEnableChainBody = 'nftEnableChainBody';
+  static const nftEnableChainAction = 'nftEnableChainAction';
+  static const nftEnablingChainTitle = 'nftEnablingChainTitle';
+  static const nftEnablingChainBody = 'nftEnablingChainBody';
+  static const nftEnableChainFailedTitle = 'nftEnableChainFailedTitle';
+  static const nftEnableChainFailedBody = 'nftEnableChainFailedBody';
+  static const nftNoNetworksAvailable = 'nftNoNetworksAvailable';
   static const networkFee = 'networkFee';
   static const titleUnknown = 'titleUnknown';
   static const maxCount = 'maxCount';
