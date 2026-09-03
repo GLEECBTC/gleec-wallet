@@ -39,6 +39,10 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **Rolled to `3.1.0-beta` (`f3efd2c`)** ([@CharlVS], #3500) - The engine moves to the `main` release line, which carries the merged gas-free support this release depends on.
 - **EVM Swap Gas Limits Roughly Double** ([@CharlVS], #3500) - The engine reprices EVM swap gas for the Amsterdam/Bogota fork rules. A DEX fee estimate for an ETH pair goes 165,000 → 280,000 gas, and for an ERC-20/GRC-20 pair 300,000 → 540,000. The same figures back the pre-trade balance check, so a wallet holding *just* enough platform coin to cover the old estimate will now report insufficient funds. This is correct under the new fork rules - the old limits would have under-funded the transaction - but it is a visible change to fee previews rather than a regression.
 - **Priority Fee Estimates Move** ([@CharlVS], #3500) - The simple EIP-1559 estimator now reads the pending block's base fee rather than the oldest entry in its window, so priority-fee estimates shift.
+### SDK (komodo-defi-sdk-flutter)
+
+- **Rolled to the `0.7.0` Release Line** (SDK#360, SDK#367) - The submodule was pinned to a mid-review snapshot of the branch that became SDK#360, taken before that pull request's final review round merged. The pin advances to the released `0.7.0` commit on SDK `main`, which carries 24 fixes to the exact paths this release advertises: the gas-free withdrawal journal, persisted transaction history, balance watching across a degraded wallet identity, activation state, and the cache purge on wallet deletion. The trading engine artefact is unchanged at `f3efd2c`.
+- **KDF Downloads Restricted to Official Mirrors** (SDK#373) - Two third-party hosts were dropped from the trading-engine download sources, leaving only Gleec's own build host and the upstream mirror.
 
 ## 🔧 Technical Improvements
 
