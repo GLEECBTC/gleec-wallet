@@ -44,6 +44,9 @@ class _AgreementNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.5);
     final notice = LocaleKeys.onboardingAgreementNotice.tr(
       namedArgs: {'action': actionLabel},
     );
@@ -56,7 +59,8 @@ class _AgreementNotice extends StatelessWidget {
         final isEula = match.group(1) == 'eula';
         spans.add(
           WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
             // WidgetSpan already scales its entire child with the paragraph.
             // Avoid applying the user's text scale a second time inside it.
             child: MediaQuery.withNoTextScaling(
@@ -68,14 +72,15 @@ class _AgreementNotice extends StatelessWidget {
                   link: true,
                   child: TextButton(
                     style: TextButton.styleFrom(
-                      minimumSize: const Size(48, 48),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      textStyle: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            decoration: TextDecoration.underline,
-                          ),
+                      // Inline links follow the sentence's line height (WCAG
+                      // 2.5.8's inline exception), not standalone button sizing.
+                      minimumSize: Size.zero,
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: textStyle?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                     onPressed: () => _showDocument(context, isEula: isEula),
                     child: Text(
@@ -102,7 +107,7 @@ class _AgreementNotice extends StatelessWidget {
     return Text.rich(
       TextSpan(children: spans),
       key: const Key('legal-agreement-notice'),
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14),
+      style: textStyle,
     );
   }
 

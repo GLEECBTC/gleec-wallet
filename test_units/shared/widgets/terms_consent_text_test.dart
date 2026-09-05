@@ -258,7 +258,7 @@ void main() {
       expect(accepted, 1);
     });
 
-    testWidgets('links expose labels and meet accessible target sizes', (
+    testWidgets('inline links expose accessible labels and actions', (
       tester,
     ) async {
       final semantics = tester.ensureSemantics();
@@ -284,10 +284,30 @@ void main() {
             ),
           );
         }
-        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+        // WCAG 2.5.8 exempts links within sentences from standalone target
+        // sizing. Keyboard access is covered above; labels still apply.
         await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
       } finally {
         semantics.dispose();
+      }
+    });
+
+    testWidgets('inline links do not inflate the sentence line spacing', (
+      tester,
+    ) async {
+      await _pump(tester, documents: _LegalDocuments(), onAgree: () {});
+
+      final notice = find.byKey(const Key('legal-agreement-notice'));
+      // The sentence fits into three 21px lines at this width with the test
+      // font. Standalone button sizing must not add space between the lines.
+      expect(tester.getSize(notice).height, lessThanOrEqualTo(63));
+      for (final label in ['EULA', 'Terms & Conditions']) {
+        final text = find.text(label);
+        final button = find.ancestor(
+          of: text,
+          matching: find.byType(TextButton),
+        );
+        expect(tester.getSize(button).height, tester.getSize(text).height);
       }
     });
 
