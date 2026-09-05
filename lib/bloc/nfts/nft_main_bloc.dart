@@ -86,10 +86,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   Timer? _updateTimer;
   final _log = Logger('NftMainBloc');
 
-  /// Chains this bloc is currently bringing up. Drained in a `finally`, so the
-  /// status merge can only hold `activating` while an activation is really
-  /// running.
-  final Set<NftBlockchains> _activationsInFlight = <NftBlockchains>{};
+  /// The session bringing each chain up. An old request must not release a
+  /// claim made by a new wallet after reset.
+  final Map<NftBlockchains, int> _activationsInFlight = {};
 
   /// Bumped on reset, and re-checked by every post-await emit, so an activation
   /// landing after logout cannot write `active` onto a freshly reset state.
@@ -167,11 +166,12 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     if (state.statusOf(chain) == NftChainStatus.active) return;
     // Claimed before the first await, so a double tap cannot start two
     // activations even though the second event is handled concurrently.
-    if (!_activationsInFlight.add(chain)) return;
-
+    if (_activationsInFlight.containsKey(chain)) return;
     final session = _session;
+    _activationsInFlight[chain] = session;
     try {
       if (!await _sdk.auth.isSignedIn()) return;
+      if (_session != session || emit.isDone) return;
 
       emit(
         state.copyWith(
@@ -182,6 +182,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
 
       _log.info('Activating ${chain.coinAbbr()} for the NFT page');
       await _repo.activateChain(chain);
+      if (_session != session || emit.isDone) return;
 
       // "No exception" is not proof: activateAssetsSync returns silently when
       // no wallet is signed in. Ask KDF whether the chain actually came up.
@@ -217,7 +218,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       if (_session != session || emit.isDone) return;
       emit(_failChain(chain, TextError(error: e.toString())));
     } finally {
-      _activationsInFlight.remove(chain);
+      if (_activationsInFlight[chain] == session) {
+        _activationsInFlight.remove(chain);
+      }
     }
   }
 
@@ -420,7 +423,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     for (final chain in activation.supported) {
       if (activation.activated.contains(chain)) {
         statuses[chain] = NftChainStatus.active;
-      } else if (_activationsInFlight.contains(chain) ||
+      } else if (_activationsInFlight.containsKey(chain) ||
           activation.unresolved.contains(chain)) {
         // Ours in flight, or someone else's (the login fan-out). Either way
         // the 60s tick must not flip a live spinner back to "not enabled".

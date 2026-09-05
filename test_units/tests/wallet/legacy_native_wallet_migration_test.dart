@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
@@ -727,6 +729,59 @@ void main() {
     );
 
     test(
+      'a stale migration linkage write cannot sign out the replacement wallet',
+      () async {
+        final auth = _FakeAuth(users: const <KdfUser>[]);
+        final writeStarted = Completer<void>();
+        final writeGate = Completer<void>();
+        auth.beforeMetadataWrite = (_) async {
+          writeStarted.complete();
+          await writeGate.future;
+        };
+        final sdk = _FakeSdk(auth: auth);
+        final bloc = AuthBloc(
+          sdk,
+          WalletsRepository(sdk, _FakeMm2Api(), _FakeStorage()),
+          SettingsRepository(storage: _FakeStorage()),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+
+        bloc.add(
+          AuthLegacyMigrationRequested(
+            sourceWallet: _sharedPrefsLegacyWallet(),
+            legacyPassword: 'Strong1!A',
+            kdfPassword: 'Strong1!A',
+            targetWalletName: 'Legacy_Wallet_',
+            seedPhrase: _legacySeedPhrase,
+          ),
+        );
+        await writeStarted.future.timeout(const Duration(seconds: 2));
+        final originalWalletId = auth.currentUserValue!.walletId;
+        final replacement = _buildUser(
+          walletName: 'Replacement Wallet',
+          derivationMethod: DerivationMethod.hdWallet,
+        );
+        auth.currentUserValue = replacement;
+        final replacementSelected = bloc.stream.firstWhere(
+          (state) => state.currentUser?.walletId == replacement.walletId,
+        );
+        bloc.add(
+          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
+        );
+        await replacementSelected;
+        final replacementState = bloc.state;
+        writeGate.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(auth.metadataWriteWalletIds, [originalWalletId]);
+        expect(auth.signOutCalls, 0);
+        expect(auth.currentUserValue, same(replacement));
+        expect(bloc.state, same(replacementState));
+      },
+    );
+
+    test(
       'legacy migration signs in to an existing target wallet when the same password can be reused',
       () async {
         final auth = _FakeAuth(
@@ -1177,9 +1232,10 @@ KdfUser _buildUser({
   Map<String, dynamic> metadata = const <String, dynamic>{},
 }) {
   return KdfUser(
-    walletId: WalletId.fromName(
+    walletId: WalletId.withPubkeyHash(
       walletName,
       AuthOptions(derivationMethod: derivationMethod),
+      'pubkey-$walletName',
     ),
     isBip39Seed: derivationMethod == DerivationMethod.hdWallet,
     metadata: <String, dynamic>{'activated_coins': <String>[], ...metadata},
@@ -1302,6 +1358,18 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   String? signedInWalletName;
   String? signedInPassword;
   AuthOptions? signedInOptions;
+  Future<void> Function(WalletId expectedWalletId)? beforeMetadataWrite;
+  final List<WalletId> metadataWriteWalletIds = [];
+  int signOutCalls = 0;
+
+  @override
+  Future<bool> isSignedIn() async => currentUserValue != null;
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+    currentUserValue = null;
+  }
 
   @override
   Future<KdfUser?> get currentUser async => currentUserValue;
@@ -1352,10 +1420,19 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   }
 
   @override
-  Future<void> setOrRemoveActiveUserKeyValue(String key, dynamic value) async {
+  Future<void> setOrRemoveActiveUserKeyValue(
+    String key,
+    dynamic value, {
+    required WalletId expectedWalletId,
+  }) async {
+    metadataWriteWalletIds.add(expectedWalletId);
+    await beforeMetadataWrite?.call(expectedWalletId);
     final currentUser = currentUserValue;
     if (currentUser == null) {
       throw StateError('No active user');
+    }
+    if (currentUser.walletId != expectedWalletId) {
+      throw const WalletChangedDisconnectException('Wallet changed');
     }
 
     final metadata = Map<String, dynamic>.from(currentUser.metadata);
@@ -1372,11 +1449,15 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   @override
   Future<void> updateActiveUserKeyValue(
     String key,
-    dynamic Function(dynamic currentValue) transform,
-  ) async {
+    dynamic Function(dynamic currentValue) transform, {
+    required WalletId expectedWalletId,
+  }) async {
     final currentUser = currentUserValue;
     if (currentUser == null) {
       throw StateError('No active user');
+    }
+    if (currentUser.walletId != expectedWalletId) {
+      throw const WalletChangedDisconnectException('Wallet changed');
     }
 
     final metadata = Map<String, dynamic>.from(currentUser.metadata);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:web_dex/main.dart' as app;
+import 'package:web_dex/services/feedback/feedback_service.dart';
 
 import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
@@ -11,18 +12,12 @@ import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 
 Future<void> testMainMenu(WidgetTester tester) async {
-  final Finder general = find.byKey(
-    const Key('settings-menu-item-general'),
-  );
-  final Finder security = find.byKey(
-    const Key('settings-menu-item-security'),
-  );
-  final Finder feedback = find.byKey(
-    const Key('settings-menu-item-feedback'),
-  );
+  final Finder general = find.byKey(const Key('settings-menu-item-general'));
+  final Finder security = find.byKey(const Key('settings-menu-item-security'));
+  final Finder feedback = find.byKey(const Key('settings-menu-item-feedback'));
 
   await goto.walletPage(tester);
-  expect(find.byKey(const Key('wallet-page-coins-list')), findsOneWidget);
+  expect(find.byKey(const Key('wallet-page')), findsOneWidget);
 
   await goto.dexPage(tester);
   expect(find.byKey(const Key('dex-page')), findsOneWidget);
@@ -33,7 +28,10 @@ Future<void> testMainMenu(WidgetTester tester) async {
   await goto.settingsPage(tester);
   expect(general, findsOneWidget);
   expect(security, findsOneWidget);
-  expect(feedback, findsOneWidget);
+  expect(
+    feedback,
+    FeedbackService.create() == null ? findsNothing : findsOneWidget,
+  );
 
   // TODO: restore if/when support page is added back to a menu
   // await goto.supportPage(tester);
@@ -45,20 +43,16 @@ Future<void> testMainMenu(WidgetTester tester) async {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'Run menu tests:',
-    (WidgetTester tester) async {
-      tester.testTextInput.register();
-      await app.main();
-      await tester.pumpAndSettle();
-      await acceptAlphaWarning(tester);
-      print('ACCEPT ALPHA WARNING');
-      await restoreWalletToTest(tester);
-      await testMainMenu(tester);
-      await tester.pumpAndSettle();
+  testWidgets('Run menu tests:', (WidgetTester tester) async {
+    tester.testTextInput.register();
+    await app.main();
+    await tester.pumpAndSettle();
+    await acceptAlphaWarning(tester);
+    print('ACCEPT ALPHA WARNING');
+    await restoreWalletToTest(tester);
+    await testMainMenu(tester);
+    await tester.pumpAndSettle();
 
-      print('END MAIN MENU TESTS');
-    },
-    semanticsEnabled: false,
-  );
+    print('END MAIN MENU TESTS');
+  }, semanticsEnabled: false);
 }

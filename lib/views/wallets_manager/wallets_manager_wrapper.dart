@@ -41,6 +41,8 @@ class WalletsManagerWrapper extends StatefulWidget {
 class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
   _WalletsManagerRoute _route = _WalletsManagerRoute.entry;
   WalletsManagerAction _pendingAction = WalletsManagerAction.none;
+  WalletsManagerExistWalletAction _pendingWalletAction =
+      WalletsManagerExistWalletAction.logIn;
   Wallet? _pendingWallet;
 
   /// True when the dialog opened straight onto a wallet's login form (the
@@ -114,6 +116,7 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
               ? WalletType.trezor
               : WalletType.iguana,
           initialAction: _pendingAction,
+          initialWalletAction: _pendingWalletAction,
           close: _closeWalletManager,
           onSuccess: widget.onSuccess ?? (_) {},
           selectedWallet: _pendingWallet,
@@ -169,6 +172,7 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
       ..finish();
     setState(() {
       _pendingWallet = wallet;
+      _pendingWalletAction = action;
       _pendingAction = WalletsManagerAction.none;
       _route = _WalletsManagerRoute.iguana;
     });

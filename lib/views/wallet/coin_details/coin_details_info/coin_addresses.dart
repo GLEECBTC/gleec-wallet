@@ -31,7 +31,6 @@ import 'package:web_dex/views/wallet/coin_details/coin_page_type.dart';
 import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/coin_details/receive/trezor_new_address_confirmation.dart';
 import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
-import 'package:web_dex/views/common/seed_backup_gate/gated_copy_address.dart';
 import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
@@ -1401,6 +1400,11 @@ class _GaslessAddressCopyButton extends StatelessWidget {
       color: Theme.of(context).textTheme.bodyMedium?.color,
       tooltip: LocaleKeys.copyAddressToClipboard.tr(args: [coin.abbr]),
       onPressed: () async {
+        final initialWalletId = context
+            .read<AuthBloc>()
+            .state
+            .currentUser
+            ?.walletId;
         final state = context.read<CoinAddressesBloc>().state;
         if (!_passesGaslessActionTimeRevalidation(context, address) ||
             !_isVerifiedGaslessReceiveForAddress(
@@ -1416,13 +1420,31 @@ class _GaslessAddressCopyButton extends StatelessWidget {
         // The custody address is the fundable one under the gas-free design, so
         // it gets the same backup prompt as the QR button beside it and as the
         // standard sibling row.
-        await gatedCopyAddress(
+        final mayCopy = await ensureSeedBackedUp(
+          context,
+          reason: SeedBackupGateReason.copyAddress,
+          isTestCoin: coin.isTestCoin,
+        );
+        if (!mayCopy || !context.mounted) return;
+
+        // Backup confirmation can remain open beyond the status TTL or a
+        // wallet change. Recheck immediately before handing out the address.
+        if (context.read<AuthBloc>().state.currentUser?.walletId !=
+                initialWalletId ||
+            !_passesGaslessActionTimeRevalidation(context, address) ||
+            !_isVerifiedGaslessReceiveForAddress(
+              context,
+              coin,
+              context.read<CoinAddressesBloc>().state,
+              address,
+            )) {
+          _showGaslessReceivePaused(context);
+          return;
+        }
+        copyToClipBoard(
           context,
           address.gasfreeAddress!,
-          successMessage: LocaleKeys.copiedAddressToClipboard.tr(
-            args: [coin.abbr],
-          ),
-          isTestCoin: coin.isTestCoin,
+          LocaleKeys.copiedAddressToClipboard.tr(args: [coin.abbr]),
         );
       },
     );

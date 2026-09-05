@@ -17,11 +17,19 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 
 - **Reworked Wallet Setup Screen** ([@CharlVS], #3509) - Wallet setup is now a single screen instead of a wallet-type router followed by an unlabelled pair of buttons. Creating a wallet is the prominent action, while restoring one stays a full-width, clearly-labelled option rather than an equally-weighted button - described by what you actually hold ("I already have a recovery phrase") instead of asking you to classify yourself. Two permanently-disabled wallet-type rows were removed, and cancelling now behaves consistently at every step.
 - **Recovery Phrase Prompt Before You Receive Funds** ([@CharlVS], #3509) - A wallet whose recovery phrase has never been shown now warns you before revealing an address you could be paid at, with the option to save the phrase there and then. The prompt also offers a way out for anyone who meant to restore an existing wallet and ended up creating a new one. Previously this check guarded only the NFT receive screen while every other receive path was unguarded.
-- **Terms Acceptance Is Recorded** ([@CharlVS], #3509) - Accepting the EULA and Terms is now implicit in continuing, and the acceptance is stored along with the version of the documents you agreed to, so a genuine change to either re-asks rather than being silently assumed. Previously acceptance was a checkbox on every form that was never recorded anywhere.
+- **Terms Acceptance Is Recorded on Submission** ([@CharlVS], #3509, #3527) - The EULA and Terms are linked beside the Create, final Import, Log in, and hardware Continue actions. Submitting records the versions accepted; changed terms appear inline on those same forms. Opening a form or legal document does not record acceptance. Previously acceptance was a checkbox on every form that was never recorded anywhere.
 - **Navigation Cleanup** ([@CharlVS], #3509) - Enable NFTs outside native mobile, remove the Bridge page, and drop the "New" badges from NFTs and Buy / Sell.
 
 ## 🐛 Bug Fixes
 
+- **Wallet Import Password Validation Updates Immediately** - Enable import when the password and confirmation are valid, and disable it again when they no longer match.
+
+- **On-Ramp Checkout URLs Are Validated** ([@CharlVS], #3514) - Only HTTPS checkout URLs on supported provider domains can open in the wallet's payment frame. The deployed wrapper also enforces this for existing native clients, and payment messages are checked at the frame boundary.
+- **Web Updates Reload the Deployed App** ([@CharlVS], #3514, #3526) - Restore update checks, compare deployed versions, and clear obsolete Flutter service-worker caches when applying an update.
+- **Wallet Setup and Receive Recovery** - Restore the saved-wallet Delete action, allow backing out of mobile recovery-phrase backup, and recover Receive after failed or interrupted address loads. Re-enabling a previously hidden coin now restores its active state.
+- **Wallet Switches Keep NFT Requests and History Separate** - Discard NFT activation work belonging to an earlier session and keep transaction history attached to the same wallet during a temporary identity lookup failure.
+- **Backup and Setup Stay Bound to the Original Wallet** - Reject delayed backup confirmations, exports, setup writes, and rollback work after switching wallets. A temporary identity lookup failure cannot approve a different wallet recreated under the same name.
+- **TRX Funding Guidance During Consolidation** - When a standard TRON address needs TRX for fees, show the funding guidance instead of reporting a connection problem.
 - **Importing a Seed No Longer Silently Signs You Into a Different Wallet** ([@CharlVS], #3509) - Importing a recovery phrase under a wallet name that already existed discarded the phrase and logged you into the existing wallet instead, with no message. It now reports the name conflict, and fails safely if it cannot check.
 - **GLEEC and GRC-20 Transaction History Was Always Empty** ([@CharlVS], #3500) - Neither had a working history source, so the list simply stayed empty rather than reporting a problem. Both are now served from Blockscout.
 - **A Brief Network Drop Could Sign You Out** ([@CharlVS], #3500) - A transient transport failure was treated as an authentication failure and ended the session.
@@ -37,6 +45,10 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 
 ## 💻 Platform-Specific Changes
 
+### Apple Platforms
+
+- **Safe Startup Without Firebase Configuration** ([@CharlVS], #3520) - Remove placeholder Firebase configuration from the native resource bundles and keep Firebase analytics disabled when the build has no valid configuration, preventing startup crashes and accidental use of another project's settings.
+
 ### Native Trading Engine (KDF)
 
 - **Rolled to `3.1.0-beta` (`f3efd2c`)** ([@CharlVS], #3500) - The engine moves to the `main` release line, which carries the merged gas-free support this release depends on.
@@ -44,7 +56,7 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **Priority Fee Estimates Move** ([@CharlVS], #3500) - The simple EIP-1559 estimator now reads the pending block's base fee rather than the oldest entry in its window, so priority-fee estimates shift.
 ### SDK (komodo-defi-sdk-flutter)
 
-- **Rolled to the `0.7.0` Release Line** (SDK#360, SDK#367) - The submodule was pinned to a mid-review snapshot of the branch that became SDK#360, taken before that pull request's final review round merged. The pin advances to the released `0.7.0` commit on SDK `main`, which carries 24 fixes to the exact paths this release advertises: the gas-free withdrawal journal, persisted transaction history, balance watching across a degraded wallet identity, activation state, and the cache purge on wallet deletion. The trading engine artefact is unchanged at `f3efd2c`.
+- **SDK Release Line and Wallet-Identity RC** (SDK#360, SDK#367, [SDK#374](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/374)) - The submodule includes the `0.7.0` release fixes and the `0.8.0-rc.1` wallet-identity hotfix candidate, with local-auth `0.6.0-rc.1`. Metadata writes require the verified identity captured when work starts, and the app's callers are migrated. History keeps one wallet context across cached and live results, preserves streams during temporary identity failures, and rechecks the session before recording activation, including on WebAssembly. The trading engine artefact is unchanged at `f3efd2c`.
 - **KDF Downloads Restricted to Official Mirrors** (SDK#373) - Two third-party hosts were dropped from the trading-engine download sources, leaving only Gleec's own build host and the upstream mirror.
 
 ## 🔧 Technical Improvements

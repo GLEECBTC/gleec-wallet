@@ -174,16 +174,17 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       final addresses = walletAddresses.addresses;
       final reasons = await asset.getCantCreateNewAddressReasons(sdk);
       final currentUser = walletAddresses.user;
-      if (!await _isCurrentWallet(currentUser.walletId)) {
+      final walletIsCurrent = await _isCurrentWallet(currentUser.walletId);
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
+          emit.isDone) {
+        return;
+      }
+      if (!walletIsCurrent) {
         add(const CoinAddressesSubscriptionRequested());
         return;
       }
       final isHdWallet = currentUser.isHd;
       final walletPubkeyHash = currentUser.walletId.pubkeyHash?.trim();
-      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
-          emit.isDone) {
-        return;
-      }
       if (asset.isTronGaslessReceiveConfiguredAsset) {
         emit(
           state.copyWith(
@@ -210,6 +211,10 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       }
       if (!await _isCurrentWallet(currentUser.walletId)) {
         add(const CoinAddressesSubscriptionRequested());
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
+          emit.isDone) {
         return;
       }
       emit(
@@ -333,6 +338,10 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
         add(const CoinAddressesSubscriptionRequested());
         return;
       }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
+          emit.isDone) {
+        return;
+      }
       final gaslessReceive = await _resolveGaslessReceive(
         asset,
         addresses,
@@ -345,6 +354,10 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       }
       if (!await _isCurrentWallet(currentUser.walletId)) {
         add(const CoinAddressesSubscriptionRequested());
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
+          emit.isDone) {
         return;
       }
       emit(
@@ -379,6 +392,7 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       );
       emit(
         state.copyWith(
+          status: () => FormStatus.failure,
           addresses: () => const <PubkeyInfo>[],
           cantCreateNewAddressReasons: () => null,
           newAddressState: () => null,
@@ -406,6 +420,13 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
     CoinAddressesGaslessReceiveRefreshRequested event,
     Emitter<CoinAddressesState> emit,
   ) async {
+    // A failed or background-interrupted initial load also needs address
+    // creation restrictions and the pubkeys watcher restored. A status-only
+    // refresh cannot complete that subscription lifecycle.
+    if (state.status != FormStatus.success || _pubkeysSub == null) {
+      add(const CoinAddressesSubscriptionRequested());
+      return;
+    }
     final evaluationGeneration = ++_gaslessReceiveEvaluationGeneration;
     final now = DateTime.now().toUtc();
     final observedAt = state.gaslessAccountStatusObservedAt?.toUtc();
@@ -455,6 +476,10 @@ class CoinAddressesBloc extends Bloc<CoinAddressesEvent, CoinAddressesState> {
       }
       if (!await _isCurrentWallet(currentUser.walletId)) {
         add(const CoinAddressesSubscriptionRequested());
+        return;
+      }
+      if (evaluationGeneration != _gaslessReceiveEvaluationGeneration ||
+          emit.isDone) {
         return;
       }
       emit(

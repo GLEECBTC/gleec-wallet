@@ -118,6 +118,33 @@ void testCoinActivationStateBridge() {
       expect(seen.single.isActive, isTrue);
     });
 
+    test(
+      'release replays an active state retained before suppression',
+      () async {
+        final kmd = _coin('KMD', CoinState.active);
+        snapshot = [kmd];
+        final seen = <Coin>[];
+        final sub = bridge.watch().listen(seen.add);
+        addTearDown(sub.cancel);
+        sdk.add(kmd);
+        await Future<void>.delayed(Duration.zero);
+        expect(seen, [kmd]);
+
+        // Coin details removes the wallet row itself and deactivates with
+        // notify: false, so the bridge never receives an inactive app state.
+        bridge.suppress([kmd.id]);
+        seen.clear();
+        sdk.add(kmd);
+        await Future<void>.delayed(Duration.zero);
+        expect(seen, isEmpty);
+
+        // Re-enabling cannot rely on an SDK transition: KDF kept it active.
+        bridge.release([kmd.id]);
+        await Future<void>.delayed(Duration.zero);
+        expect(seen, [kmd]);
+      },
+    );
+
     test('an app state is superseded by a later SDK event', () async {
       final seen = <Coin>[];
       final sub = bridge.watch().listen(seen.add);

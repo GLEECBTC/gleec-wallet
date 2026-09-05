@@ -80,6 +80,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     on<CoinsPricesUpdated>(_onPricesUpdated, transformer: droppable());
     on<CoinsSessionStarted>(_onLogin, transformer: restartable());
     on<CoinsSessionEnded>(_onLogout, transformer: restartable());
+    on<_CoinsActivationCancelled>(_onActivationCancelled);
     on<CoinsWalletCoinUpdated>(_onWalletCoinUpdated, transformer: sequential());
     on<CoinsBalanceChanged>(_onBalanceChanged, transformer: droppable());
     on<CoinsWalletRepairRequested>(
@@ -110,6 +111,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   Timer? _updateBalancesTimer;
   Timer? _updatePricesTimer;
   bool _isInitialActivationInProgress = false;
+  int _walletSessionGeneration = 0;
+  WalletId? _sessionWalletId;
 
   /// Coins with an in-flight [CoinsPubkeysRequested], so repeated broadcasts
   /// for the same coin collapse into a single SDK fetch.
@@ -520,10 +523,15 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsActivated event,
     Emitter<CoinsState> emit,
   ) async {
+    final generation = _walletSessionGeneration;
+    final user = await _kdfSdk.auth.currentUser;
+    if (user == null || emit.isDone || generation != _walletSessionGeneration) {
+      return;
+    }
     // Start off by emitting the newly activated coins so that they all appear
     // in the list at once, rather than one at a time as they are activated
     emit(_prePopulateListWithActivatingCoins(event.coinIds));
-    await _activateCoins(event.coinIds, emit);
+    await _activateCoins(event.coinIds, emit, expectedWalletId: user.walletId);
 
     add(CoinsBalancesRefreshed());
   }
@@ -658,7 +666,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // cancelling the first. An actual wallet switch still falls through and
     // flushes, which is correct.
     if (_isInitialActivationInProgress &&
-        _activatingWalletId == signedInWallet.id) {
+        _activatingWalletId == signedInWallet.id &&
+        _sessionWalletId == event.signedInUser.walletId) {
       _log.info(
         'Ignoring duplicate CoinsSessionStarted for ${signedInWallet.id}: '
         'initial activation already in progress',
@@ -666,6 +675,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       return;
     }
 
+    final generation = ++_walletSessionGeneration;
+    _sessionWalletId = event.signedInUser.walletId;
     _isInitialActivationInProgress = true;
     _activatingWalletId = signedInWallet.id;
     try {
@@ -709,6 +720,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       final activationFuture = _activateCoins(
         allowedCoins,
         emit,
+        expectedWalletId: event.signedInUser.walletId,
         isInitialLogin: true,
       );
       unawaited(() async {
@@ -721,7 +733,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
           // A logout followed by a fresh sign-in can complete this detached
           // future after the *next* login has claimed the flags; clearing them
           // blindly would let a duplicate event restart that new session's load.
-          if (_activatingWalletId == signedInWallet.id) {
+          if (generation == _walletSessionGeneration) {
             _isInitialActivationInProgress = false;
             _activatingWalletId = null;
           }
@@ -738,6 +750,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsSessionEnded event,
     Emitter<CoinsState> emit,
   ) async {
+    _walletSessionGeneration++;
+    _sessionWalletId = null;
     _resetInitialActivationState();
     add(CoinsBalanceMonitoringStopped());
 
@@ -834,10 +848,26 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   Future<void> _activateCoins(
     Iterable<String> coins,
     Emitter<CoinsState> emit, {
+    required WalletId expectedWalletId,
     bool isInitialLogin = false,
   }) async {
+    final generation = _walletSessionGeneration;
+    void cancelPendingActivation() {
+      if (isClosed) return;
+      add(
+        _CoinsActivationCancelled(
+          coinIds: coins.toSet(),
+          generation: generation,
+        ),
+      );
+    }
+
     if (coins.isEmpty) {
       _log.warning('No coins to activate');
+      return;
+    }
+    if (expectedWalletId.pubkeyHash?.trim().isNotEmpty != true) {
+      cancelPendingActivation();
       return;
     }
 
@@ -876,8 +906,14 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // case is that a coin is not remembered for the next session.
     try {
       await _coinsRepo
-          .addAssetsToWalletMetadata(coinsToActivate.map((asset) => asset.id))
+          .addAssetsToWalletMetadata(
+            coinsToActivate.map((asset) => asset.id),
+            expectedWalletId: expectedWalletId,
+          )
           .timeout(_loginPathRpcTimeout);
+    } on WalletChangedDisconnectException {
+      cancelPendingActivation();
+      return;
     } catch (e, s) {
       _log.warning(
         'Failed to write activated coins to wallet metadata; continuing with '
@@ -915,6 +951,11 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // the budget flips to suspended sooner and is recovered by the 3-minute
     // CoinsBalanceMonitoringStarted sweep and by the SDK balance watcher's own
     // _ensureAssetActivated.
+    if ((await _kdfSdk.auth.currentUser)?.walletId != expectedWalletId ||
+        generation != _walletSessionGeneration) {
+      cancelPendingActivation();
+      return;
+    }
     final enableFutures = coinsToActivate
         .map(
           (asset) => _coinsRepo.activateAssetsSync(
@@ -942,6 +983,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // coins are activated.
     try {
       await Future.wait(enableFutures);
+    } on WalletChangedDisconnectException {
+      cancelPendingActivation();
     } finally {
       if (isInitialLogin) {
         frameSpanEnd(_activationStormSpan);
@@ -951,6 +994,31 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         _coinsRepo.invalidateActivatedAssetsCache();
       }
     }
+  }
+
+  void _onActivationCancelled(
+    _CoinsActivationCancelled event,
+    Emitter<CoinsState> emit,
+  ) {
+    if (event.generation != _walletSessionGeneration) {
+      return;
+    }
+
+    // A temporarily unverifiable identity also cancels activation. Leave an
+    // actionable failure state without applying an old cancellation to a new
+    // login, or replacing an asset that has already become active.
+    Map<String, Coin> suspendPending(Map<String, Coin> coins) => {
+      for (final entry in coins.entries)
+        entry.key: event.coinIds.contains(entry.key) && entry.value.isActivating
+            ? entry.value.copyWith(state: CoinState.suspended)
+            : entry.value,
+    };
+    emit(
+      state.copyWith(
+        coins: suspendPending(state.coins),
+        walletCoins: suspendPending(state.walletCoins),
+      ),
+    );
   }
 
   /// Filters assets for initial auto-activation on login.

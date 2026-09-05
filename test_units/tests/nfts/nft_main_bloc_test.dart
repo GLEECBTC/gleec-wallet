@@ -213,11 +213,13 @@ void testNftMainBloc() {
 
   group('NftMainBloc chain activation', () {
     late _FakeNftsRepo repo;
+    late _FakeAuth auth;
     late NftMainBloc bloc;
 
     setUp(() {
       repo = _FakeNftsRepo()..activatedChains = [NftBlockchains.eth];
-      bloc = NftMainBloc(repo: repo, sdk: _FakeSdk(_FakeAuth()));
+      auth = _FakeAuth();
+      bloc = NftMainBloc(repo: repo, sdk: _FakeSdk(auth));
       addTearDown(bloc.close);
     });
 
@@ -362,6 +364,63 @@ void testNftMainBloc() {
       // onto a freshly reset state.
       expect(bloc.state, NftMainState.initial());
     });
+
+    test('reset during the auth check prevents an old activation', () async {
+      await initialise();
+      final authGate = Completer<bool>();
+      auth.signInCheck = authGate.future;
+
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      await Future<void>.delayed(Duration.zero);
+      bloc.add(const NftMainResetRequested());
+      await bloc.stream.firstWhere((s) => s.availableChains.isEmpty);
+
+      authGate.complete(true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repo.activateCalls, isEmpty);
+      expect(bloc.state, NftMainState.initial());
+    });
+
+    test('old activation completion preserves a new session claim', () async {
+      await initialise();
+      final oldActivation = Completer<void>();
+      final newActivation = Completer<void>();
+      repo.onActivateChain = (_) => repo.activateCalls.length == 1
+          ? oldActivation.future
+          : newActivation.future;
+
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      await bloc.stream.firstWhere(
+        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+      );
+      bloc.add(const NftMainResetRequested());
+      await bloc.stream.firstWhere((s) => s.availableChains.isEmpty);
+      await initialise();
+
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      await bloc.stream.firstWhere(
+        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+      );
+      oldActivation.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      // A refresh must keep the new wallet's spinner even after the previous
+      // wallet's request has finished. The chain is deliberately not enabled.
+      repo.nftsToReturn = [_token(NftBlockchains.eth)];
+      bloc.add(const NftMainChainUpdateRequested());
+      await bloc.stream.firstWhere((s) => s.nfts.isNotEmpty);
+      final statusAfterRefresh = bloc.state.statusOf(NftBlockchains.polygon);
+
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      await Future<void>.delayed(Duration.zero);
+      final activationCount = repo.activateCalls.length;
+      newActivation.complete();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(statusAfterRefresh, NftChainStatus.activating);
+      expect(activationCount, 2);
+    });
   });
 
   group('NftMainBloc reactivity', () {
@@ -455,6 +514,7 @@ class _FakeNftsRepo implements NftsRepo {
   /// `activating` state.
   Completer<void>? activationGate;
   Object? activationErrorToThrow;
+  Future<void> Function(NftBlockchains)? onActivateChain;
 
   @override
   Future<NftChainActivation> resolveChains(List<NftBlockchains> chains) async =>
@@ -467,6 +527,8 @@ class _FakeNftsRepo implements NftsRepo {
   @override
   Future<void> activateChain(NftBlockchains chain) async {
     activateCalls.add(chain);
+    final handler = onActivateChain;
+    if (handler != null) return handler(chain);
     if (activationGate != null) await activationGate!.future;
     if (activationErrorToThrow != null) throw activationErrorToThrow!;
     // KDF now agrees, so the bloc's verification read succeeds.
@@ -497,8 +559,10 @@ class _FakeNftsRepo implements NftsRepo {
 }
 
 class _FakeAuth implements KomodoDefiLocalAuth {
+  Future<bool>? signInCheck;
+
   @override
-  Future<bool> isSignedIn() async => true;
+  Future<bool> isSignedIn() => signInCheck ?? Future.value(true);
 
   // An empty stream keeps the bloc's constructor subscription from dispatching
   // a second update and making these tests order-dependent.

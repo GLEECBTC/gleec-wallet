@@ -1,10 +1,12 @@
 {
   // One hosting config, deployed to a different site depending on which
   // Firebase project it is deployed against. `.firebaserc` maps the `web`
-  // deploy target per project:
+  // deploy target per project (see docs/WEB_HOSTING_TOPOLOGY.md):
   //
   //   komodo-wallet-official -> site walletrc              (CI, push to `dev`)
   //   komodo-wallet-preview  -> site komodo-wallet-preview (local default)
+  //   gleec-wallet-official  -> site gleec-wallet-official (dex.gleec.com,
+  //                                                         deployed by hand)
   //
   //   firebase deploy --only hosting:web --project <project>
   //
@@ -13,11 +15,22 @@
   // projects, so a site-shaped name is wrong everywhere except one place.
   // `--project` is what selects the site, so always pass it -- a bare
   // `firebase deploy` uses `.firebaserc`'s default, which is the preview
-  // project on purpose.
+  // project on purpose, and a bare `firebase deploy --project
+  // gleec-wallet-official` publishes whatever is in build/web to production.
+  //
+  // Production being the SAME config rather than a second entry is the point:
+  // dex.gleec.com serves the fiat on-ramp wrapper page that desktop and mobile
+  // builds already in users' hands fetch at runtime, so it must never end up
+  // with weaker headers than the release candidate. A second entry would have
+  // to be kept in step by hand; one entry cannot drift.
   "hosting": {
     "target": "web",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    // DO NOT enable this block. `credentialless` strips the cross-origin
+    // cookies that the fiat provider KYC flow documents as required, so
+    // turning it on silently breaks identity verification part-way through a
+    // purchase.
     // "headers": [
     //   {
     //     "source": "**",
@@ -34,6 +47,74 @@
     //   }
     // ],
     "headers": [
+      {
+        // Each glob below owns a distinct set of header keys, so no key is
+        // ever set by two entries. Firebase applies the headers of every
+        // matching entry, so the security headers here still reach the paths
+        // that the narrower globs below also match.
+        "source": "**",
+        "headers": [
+          {
+            // The wallet is only ever framed by itself (the web build renders
+            // the fiat wrapper page in a same-origin iframe).
+            // `frame-ancestors` is the header that actually governs this;
+            // X-Frame-Options is kept alongside it for clients that predate
+            // CSP Level 2.
+            "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'self'"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            // USB stays available to the wallet's Trezor transport, but is
+            // not delegated to cross-origin payment frames. `camera`,
+            // `microphone`, `payment`, `encrypted-media` and
+            // `midi` are deliberately absent: their default allowlist is
+            // `self`, which is exactly what lets the fiat wrapper page
+            // delegate them to the provider iframe via its `allow` attribute.
+            // Denying them here would break provider KYC.
+            "key": "Permissions-Policy",
+            "value": "geolocation=(), usb=(self), serial=(), bluetooth=(), idle-detection=()"
+          }
+        ]
+      },
+      {
+        // The boot files that carry the app's version. Every one of these is
+        // served at a stable, un-hashed name, so a client that has any of them
+        // in its HTTP cache keeps running the build it already has -- and
+        // Firebase's default is max-age=3600, so that lasts an hour.
+        //
+        // This is what actually breaks the in-app "Update now" button. It is
+        // not a service worker: both deployed sites serve Flutter's modern
+        // self-unregistering worker (no RESOURCES map, caches nothing), so
+        // there is no SW cache left to defeat. The HTTP cache is the whole
+        // problem, and JS cannot purge it -- only these headers can.
+        //
+        // main.dart.js is the compiled app itself and is the one most easily
+        // missed: revalidating index.html alone just re-serves a fresh shell
+        // that boots an hour-old application.
+        //
+        // version.json is here because UpdateBloc reads it to decide whether a
+        // reload could install anything (see update_bloc.dart). A stale copy
+        // makes that decision on stale data.
+        "source": "/@(index.html|flutter_bootstrap.js|flutter.js|main.dart.js|flutter_service_worker.js|version.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
       {
         // Coin icons are a large, rarely-changing set (hundreds of files).
         // Without this they inherit Firebase's default max-age=3600, so every
@@ -53,6 +134,21 @@
           {
             "key": "Cache-Control",
             "value": "public, max-age=2592000"
+          }
+        ]
+      },
+      {
+        // These pages decide what a webview is allowed to load, and desktop
+        // and mobile builds fetch them from here rather than from their own
+        // bundle. Firebase's default max-age=3600 would leave already-shipped
+        // clients running a superseded copy for up to an hour after a fix is
+        // deployed, so require revalidation instead; a 304 on a page loaded
+        // once per purchase costs nothing.
+        "source": "/assets/assets/web_pages/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
           }
         ]
       }

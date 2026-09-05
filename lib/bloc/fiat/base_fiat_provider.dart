@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:web_dex/bloc/fiat/fiat_checkout_url_allowlist.dart';
 import 'package:web_dex/bloc/fiat/fiat_order_status.dart';
 import 'package:web_dex/bloc/fiat/models/models.dart';
 import 'package:web_dex/model/coin_type.dart';
@@ -259,8 +260,33 @@ abstract class BaseFiatProvider {
   /// Provides the base URL to the intermediate html page that is used to
   /// bypass CORS restrictions so that console.log and postMessage events
   /// can be received and handled.
+  ///
+  /// [providerUrl] becomes an iframe `src` inside the wallet's own origin, so
+  /// it has to belong to an approved provider. Callers are expected to have
+  /// checked it with [isAllowedFiatCheckoutUrl] already and to report a
+  /// failure to the user; the throw here is the backstop for the ones that
+  /// forget.
   static String fiatWrapperPageUrl(String providerUrl) {
-    final encodedUrl = base64Encode(utf8.encode(providerUrl));
+    if (!isAllowedFiatCheckoutUrl(providerUrl)) {
+      throw ArgumentError.value(
+        providerUrl,
+        'providerUrl',
+        'not an approved fiat provider checkout URL',
+      );
+    }
+
+    // Standard base64, percent-encoded. The `+` it can produce is decoded as
+    // a space by the wrapper page's URLSearchParams and silently corrupts the
+    // payload, so it has to be escaped -- but the encoding itself must stay
+    // standard base64, because the wrapper page these builds actually talk to
+    // is the one deployed at getOriginUrl(), which lags this code by however
+    // long it takes someone to deploy production by hand. That deployed page
+    // calls `atob` directly, and `atob` rejects base64url's `-` and `_`.
+    // Percent-encoded standard base64 is understood by both the old page and
+    // the new one; base64url is understood only by the new one.
+    final encodedUrl = Uri.encodeComponent(
+      base64Encode(utf8.encode(providerUrl)),
+    );
 
     return '${getOriginUrl()}/assets/assets/'
         'web_pages/fiat_widget.html?fiatUrl=$encodedUrl';

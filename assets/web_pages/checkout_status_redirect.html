@@ -31,8 +31,12 @@
         status = 'unknown';
       }
 
-      // Send the parameters to the opener window
-      window.opener.postMessage({ type: 'PAYMENT-STATUS', status: status, params: params }, '*');
+      // The opener is always the wallet app, which serves this page, so pin
+      // the target origin rather than broadcasting the payment status with '*'.
+      window.opener.postMessage(
+        { type: 'PAYMENT-STATUS', status: status, params: params },
+        window.location.origin
+      );
       window.opener.focus();
     }
 

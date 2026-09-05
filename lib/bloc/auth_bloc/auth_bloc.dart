@@ -385,24 +385,38 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
             );
             await _runBoundedPostLoginStep(
               logMessage: 'Failed to persist wallet type',
-              action: () => _kdfSdk.setWalletType(event.wallet.config.type),
+              action: () => _kdfSdk.setWalletType(
+                event.wallet.config.type,
+                expectedWalletId: currentUser.walletId,
+              ),
             );
             await _runBoundedPostLoginStep(
               logMessage: 'Failed to persist wallet provenance',
-              action: () =>
-                  _kdfSdk.setWalletProvenance(WalletProvenance.generated),
+              action: () => _kdfSdk.setWalletProvenance(
+                WalletProvenance.generated,
+                expectedWalletId: currentUser.walletId,
+              ),
             );
             await _runBoundedPostLoginStep(
               logMessage: 'Failed to persist wallet creation date',
-              action: () => _kdfSdk.setWalletCreatedAt(DateTime.now()),
+              action: () => _kdfSdk.setWalletCreatedAt(
+                DateTime.now(),
+                expectedWalletId: currentUser.walletId,
+              ),
             );
             await _runBoundedPostLoginStep(
               logMessage: 'Failed to persist seed backup state',
-              action: () => _kdfSdk.confirmSeedBackup(hasBackup: false),
+              action: () => _kdfSdk.confirmSeedBackup(
+                hasBackup: false,
+                expectedWalletId: currentUser.walletId,
+              ),
             );
             await _runBoundedPostLoginStep(
               logMessage: 'Failed to persist default activated coins',
-              action: () => _kdfSdk.addActivatedCoins(allowedDefaultCoins),
+              action: () => _kdfSdk.addActivatedCoins(
+                allowedDefaultCoins,
+                expectedWalletId: currentUser.walletId,
+              ),
             );
           },
         ),
@@ -479,11 +493,21 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               warningMessage: _metadataMigrationWarning,
               logMessage: 'Failed to update restored wallet metadata',
               action: () async {
-                await _kdfSdk.setWalletType(event.wallet.config.type);
-                await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
-                await _kdfSdk.setWalletCreatedAt(DateTime.now());
+                await _kdfSdk.setWalletType(
+                  event.wallet.config.type,
+                  expectedWalletId: currentUser.walletId,
+                );
+                await _kdfSdk.setWalletProvenance(
+                  WalletProvenance.imported,
+                  expectedWalletId: currentUser.walletId,
+                );
+                await _kdfSdk.setWalletCreatedAt(
+                  DateTime.now(),
+                  expectedWalletId: currentUser.walletId,
+                );
                 await _kdfSdk.confirmSeedBackup(
                   hasBackup: event.wallet.config.hasBackup,
+                  expectedWalletId: currentUser.walletId,
                 );
               },
             );
@@ -492,9 +516,15 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               warningMessage: _assetMigrationWarning,
               logMessage: 'Failed to migrate restored wallet assets',
               action: () async {
-                await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
+                await _kdfSdk.addActivatedCoins(
+                  allowedDefaultCoins,
+                  expectedWalletId: currentUser.walletId,
+                );
                 if (allowedWalletCoins.isNotEmpty) {
-                  await _kdfSdk.addActivatedCoins(allowedWalletCoins);
+                  await _kdfSdk.addActivatedCoins(
+                    allowedWalletCoins,
+                    expectedWalletId: currentUser.walletId,
+                  );
                 }
               },
             );
@@ -635,12 +665,16 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       final LegacyWalletSource? linkageSource = event.sourceWallet.legacySource;
       if (linkageSource != null) {
         await _kdfSdk.setMigratedLegacySource(
+          expectedWalletId: currentUser.walletId,
           source: linkageSource,
           cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
         );
       }
       if (event.legacyWalletExtras.isNotEmpty) {
-        await _kdfSdk.setLegacyWalletExtras(event.legacyWalletExtras);
+        await _kdfSdk.setLegacyWalletExtras(
+          event.legacyWalletExtras,
+          expectedWalletId: currentUser.walletId,
+        );
       }
       final baseActivatedCoins = <String>{
         ..._filterBlockedAssets(enabledByDefaultCoins),
@@ -676,6 +710,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               await _runBoundedPostLoginStep(
                 logMessage: 'Failed to write migration linkage metadata',
                 action: () => _kdfSdk.setMigratedLegacySource(
+                  expectedWalletId: currentUser.walletId,
                   source: source,
                   cleanupStatus: LegacyMigrationCleanupStatus.incomplete,
                 ),
@@ -687,11 +722,21 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               warningMessage: _metadataMigrationWarning,
               logMessage: 'Failed to update migrated wallet metadata',
               action: () async {
-                await _kdfSdk.setWalletType(targetWallet.config.type);
-                await _kdfSdk.setWalletProvenance(WalletProvenance.imported);
-                await _kdfSdk.setWalletCreatedAt(DateTime.now());
+                await _kdfSdk.setWalletType(
+                  targetWallet.config.type,
+                  expectedWalletId: currentUser.walletId,
+                );
+                await _kdfSdk.setWalletProvenance(
+                  WalletProvenance.imported,
+                  expectedWalletId: currentUser.walletId,
+                );
+                await _kdfSdk.setWalletCreatedAt(
+                  DateTime.now(),
+                  expectedWalletId: currentUser.walletId,
+                );
                 await _kdfSdk.confirmSeedBackup(
                   hasBackup: targetWallet.config.hasBackup,
+                  expectedWalletId: currentUser.walletId,
                 );
               },
             );
@@ -703,6 +748,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               action: () async {
                 final specialCasesResult = await _walletsRepository
                     .importPreparedLegacySpecialCases(
+                      expectedWalletId: currentUser.walletId,
                       migration: PreparedLegacyMigration(
                         sourceWallet: event.sourceWallet,
                         seedPhrase: event.seedPhrase,
@@ -723,7 +769,10 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
                 final allowedDefaultCoins = _filterBlockedAssets(
                   enabledByDefaultCoins,
                 );
-                await _kdfSdk.addActivatedCoins(allowedDefaultCoins);
+                await _kdfSdk.addActivatedCoins(
+                  allowedDefaultCoins,
+                  expectedWalletId: currentUser.walletId,
+                );
                 if (specialCasesResult.walletCoinIdsToActivate.isNotEmpty) {
                   final availableWalletCoins = _filterOutUnsupportedCoins(
                     specialCasesResult.walletCoinIdsToActivate,
@@ -731,7 +780,10 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
                   final allowedWalletCoins = _filterBlockedAssets(
                     availableWalletCoins,
                   );
-                  await _kdfSdk.addActivatedCoins(allowedWalletCoins);
+                  await _kdfSdk.addActivatedCoins(
+                    allowedWalletCoins,
+                    expectedWalletId: currentUser.walletId,
+                  );
                 }
               },
             );
@@ -756,7 +808,10 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               _log.shout('Legacy wallet cleanup failed', error, stackTrace);
             }
             try {
-              await _kdfSdk.setLegacyCleanupStatus(cleanupStatus);
+              await _kdfSdk.setLegacyCleanupStatus(
+                cleanupStatus,
+                expectedWalletId: currentUser.walletId,
+              );
             } catch (error, stackTrace) {
               warnings.add(
                 'Wallet migrated, but cleanup status could not be persisted.',
@@ -778,6 +833,10 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           },
         ),
       );
+    } on WalletChangedDisconnectException {
+      // A replacement session must survive a stale migration finalizer.
+      _listenToAuthStateChanges();
+      return;
     } catch (e, s) {
       // Registration may have succeeded before the failure (e.g. linkage
       // metadata write). Sign out to avoid leaving SDK auth active while
@@ -811,6 +870,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   }) async {
     try {
       await action().timeout(_postLoginStepTimeout);
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (error, stackTrace) {
       warnings.add(warningMessage);
       _log.shout(logMessage, error, stackTrace);
@@ -823,6 +884,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   }) async {
     try {
       await action().timeout(_postLoginStepTimeout);
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (error, stackTrace) {
       _log.shout(logMessage, error, stackTrace);
     }
@@ -950,37 +1013,63 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthSeedBackupConfirmed event,
     Emitter<AuthBlocState> emit,
   ) async {
-    // emit the current user again to pull in the updated seed backup status
-    // and make the backup notification banner disappear
-    await _kdfSdk.confirmSeedBackup();
-    emit(
-      AuthBlocState(
-        mode: AuthorizeMode.logIn,
-        currentUser: await _kdfSdk.auth.currentUser,
-      ),
-    );
+    final expectedWalletId = event.expectedWalletId;
+    if (state.currentUser?.walletId != expectedWalletId) {
+      return;
+    }
+
+    final user = await _kdfSdk.auth.currentUser;
+    if (emit.isDone ||
+        user?.walletId != expectedWalletId ||
+        state.currentUser?.walletId != expectedWalletId) {
+      return;
+    }
+
+    try {
+      // The auth layer checks identity while holding the metadata write lock.
+      // A UI check alone cannot protect a queued write during a wallet switch.
+      await _kdfSdk.confirmSeedBackup(expectedWalletId: expectedWalletId);
+    } on WalletChangedDisconnectException {
+      return;
+    }
+    if (emit.isDone || state.currentUser?.walletId != expectedWalletId) return;
+
+    final updatedUser = await _kdfSdk.auth.currentUser;
+    if (emit.isDone ||
+        updatedUser?.walletId != expectedWalletId ||
+        state.currentUser?.walletId != expectedWalletId) {
+      return;
+    }
+    emit(AuthBlocState(mode: AuthorizeMode.logIn, currentUser: updatedUser));
   }
 
   Future<void> _onWalletDownloadRequested(
     AuthWalletDownloadRequested event,
     Emitter<AuthBlocState> emit,
   ) async {
+    final expectedWalletId = event.expectedWalletId;
     try {
-      final Wallet? wallet = (await _kdfSdk.auth.currentUser)?.wallet;
-      if (wallet == null) return;
+      final user = await _kdfSdk.auth.currentUser;
+      if (emit.isDone || user?.walletId != expectedWalletId) return;
+      final wallet = user!.wallet;
 
-      await _walletsRepository.downloadEncryptedWallet(wallet, event.password);
-
-      await _kdfSdk.confirmSeedBackup();
-      emit(
-        AuthBlocState(
-          mode: AuthorizeMode.logIn,
-          currentUser: await _kdfSdk.auth.currentUser,
-        ),
+      await _walletsRepository.downloadEncryptedWallet(
+        wallet,
+        event.password,
+        expectedWalletId: expectedWalletId,
       );
+
+      await _kdfSdk.confirmSeedBackup(expectedWalletId: expectedWalletId);
+      final updatedUser = await _kdfSdk.auth.currentUser;
+      if (emit.isDone || updatedUser?.walletId != expectedWalletId) return;
+      emit(AuthBlocState(mode: AuthorizeMode.logIn, currentUser: updatedUser));
+    } on WalletChangedDisconnectException {
+      // The export belongs to the original wallet, not its replacement.
+      return;
     } catch (e, s) {
       _log.shout('Failed to download wallet data', e, s);
       final currentUser = await _kdfSdk.auth.currentUser;
+      if (emit.isDone || currentUser?.walletId != expectedWalletId) return;
       emit(
         AuthBlocState(
           mode: currentUser != null
@@ -1106,7 +1195,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       final walletType = user.walletId.isHd
           ? WalletType.hdwallet
           : WalletType.iguana;
-      await _kdfSdk.setWalletType(walletType);
+      await _kdfSdk.setWalletType(walletType, expectedWalletId: user.walletId);
     }
 
     if (_isMissingMetadataStringValue(user.metadata['wallet_provenance'])) {
@@ -1114,6 +1203,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       if (isImported is bool) {
         await _kdfSdk.setWalletProvenance(
           isImported ? WalletProvenance.imported : WalletProvenance.generated,
+          expectedWalletId: user.walletId,
         );
       }
     }

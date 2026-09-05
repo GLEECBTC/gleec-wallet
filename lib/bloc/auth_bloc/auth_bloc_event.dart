@@ -98,12 +98,19 @@ class AuthLegacyMigrationRequested extends AuthBlocEvent {
 }
 
 class AuthSeedBackupConfirmed extends AuthBlocEvent {
-  const AuthSeedBackupConfirmed();
+  const AuthSeedBackupConfirmed({required this.expectedWalletId});
+
+  /// The wallet whose recovery phrase was confirmed.
+  final WalletId expectedWalletId;
 }
 
 class AuthWalletDownloadRequested extends AuthBlocEvent {
-  const AuthWalletDownloadRequested({required this.password});
+  const AuthWalletDownloadRequested({
+    required this.password,
+    required this.expectedWalletId,
+  });
   final String password;
+  final WalletId expectedWalletId;
 }
 
 /// Dispatched to restore authentication state after the SDK has been

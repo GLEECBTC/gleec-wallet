@@ -21,7 +21,7 @@ Future<void> restoreWalletToTest(WidgetTester tester) async {
   // Restores wallet to be used in following tests
   final String testSeed = getFundedWif();
   const String walletName = 'my-wallet';
-  const String password = 'pppaaasssDDD555444@@@';
+  const String password = 'Y7!m9pQ2rV4#sT6z';
   final Finder importWalletButton = find.byKey(
     const Key('import-wallet-button'),
   );

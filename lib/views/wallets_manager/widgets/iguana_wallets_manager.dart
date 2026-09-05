@@ -38,6 +38,7 @@ class IguanaWalletsManager extends StatefulWidget {
     this.initialHdMode = false,
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
+    this.initialWalletAction = WalletsManagerExistWalletAction.logIn,
     super.key,
   });
 
@@ -51,6 +52,7 @@ class IguanaWalletsManager extends StatefulWidget {
   /// Which form to open on. The create-or-import decision now happens on the
   /// entry screen, so this widget is forms-only.
   final WalletsManagerAction initialAction;
+  final WalletsManagerExistWalletAction initialWalletAction;
 
   @override
   State<IguanaWalletsManager> createState() => _IguanaWalletsManagerState();
@@ -80,7 +82,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     _rememberMe = widget.rememberMe;
     _action = widget.initialAction;
     if (_selectedWallet != null) {
-      _existWalletAction = WalletsManagerExistWalletAction.logIn;
+      _existWalletAction = widget.initialWalletAction;
     }
 
     final walletsRepository = context.read<WalletsRepository>();
