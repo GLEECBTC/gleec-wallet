@@ -15,6 +15,7 @@ import 'package:web_dex/bloc/platform/platform_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
+import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 import 'package:web_dex/views/wallets_manager/widgets/hardware_wallets_manager.dart';
@@ -68,6 +69,9 @@ class _FakeLegalDocumentsRepository implements LegalDocumentsRepository {
 
   @override
   Future<bool> hasAcceptedCurrentTerms() async => acceptanceCheck ?? accepted;
+
+  @override
+  Future<LegalAcceptance?> readAcceptance() async => null;
 
   @override
   Future<void> recordAcceptance({required String surface}) async =>
@@ -197,7 +201,7 @@ void main() {
 
       expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
       expect(find.byKey(const Key('import-wallet-button')), findsOneWidget);
-      expect(find.byKey(const Key('terms-consent-text')), findsOneWidget);
+      expect(find.byKey(const Key('legal-agreement-notice')), findsNothing);
       // The retired wallet-type router had permanently-disabled rows for these.
       expect(
         find.byKey(const Key('wallet-type-list-item-metamask')),
@@ -295,70 +299,57 @@ void main() {
       expect(find.byKey(const Key('import-wallet-button')), findsOneWidget);
     });
 
-    testWidgets('a returning user re-consents when the terms have changed', (
-      tester,
-    ) async {
-      final legal = _FakeLegalDocumentsRepository(accepted: false);
-      await _pump(
-        tester,
-        analyticsBloc: analyticsBloc,
-        stored: [_storedWallet('wallet-a')],
-        legal: legal,
+    for (final returning in [false, true]) {
+      for (final accepted in [false, true]) {
+        testWidgets('create goes directly to its form without acceptance '
+            '(returning: $returning, accepted: $accepted)', (tester) async {
+          final legal = _FakeLegalDocumentsRepository(accepted: accepted);
+          await _pump(
+            tester,
+            analyticsBloc: analyticsBloc,
+            stored: returning ? [_storedWallet('wallet-a')] : [],
+            legal: legal,
+          );
+          await tester.pump();
+          expect(find.byKey(const Key('checkbox-eula-tos')), findsNothing);
+          expect(
+            find.byKey(const Key('agree-and-continue-button')),
+            findsNothing,
+          );
+          expect(find.byKey(const Key('legal-agreement-notice')), findsNothing);
+          await tester.tap(find.byKey(const Key('create-wallet-button')));
+          await tester.pump();
+          expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
+          expect(
+            find.byKey(const Key('legal-agreement-notice')),
+            findsOneWidget,
+          );
+          expect(legal.recordedSurfaces, isEmpty);
+        });
+      }
+      testWidgets(
+        'hardware selection opens directly without accepting (returning: $returning)',
+        (tester) async {
+          final legal = _FakeLegalDocumentsRepository(accepted: false);
+          await _pump(
+            tester,
+            analyticsBloc: analyticsBloc,
+            stored: returning ? [_storedWallet('wallet-a')] : [],
+            legal: legal,
+          );
+          await tester.pump();
+          await tester.tap(
+            find.byKey(const Key('connect-hardware-wallet-button')),
+          );
+          await tester.pump();
+          expect(find.byType(HardwareWalletsManager), findsOneWidget);
+          expect(legal.recordedSurfaces, isEmpty);
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.macOS),
       );
-      await tester.pump();
+    }
 
-      expect(find.byKey(const Key('checkbox-eula-tos')), findsNothing);
-      expect(find.byKey(const Key('terms-consent-text')), findsNothing);
-      expect(find.byKey(const Key('legal-agreement-notice')), findsOneWidget);
-      expect(find.byKey(const Key('create-wallet-button')), findsNothing);
-      expect(find.byKey(const Key('import-wallet-button')), findsNothing);
-      expect(
-        find.byKey(const Key('connect-hardware-wallet-button')),
-        findsNothing,
-      );
-      expect(find.text('wallet-a'), findsOneWidget);
-      expect(legal.recordedSurfaces, isEmpty);
-
-      await tester.tap(find.byKey(const Key('agree-and-continue-button')));
-      await tester.pump();
-
-      expect(legal.recordedSurfaces, ['onboarding']);
-      expect(find.byKey(const Key('legal-agreement-notice')), findsNothing);
-      expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
-      expect(find.byKey(const Key('import-wallet-button')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('create-wallet-button')));
-      await tester.pump();
-
-      expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
-      expect(
-        legal.recordedSurfaces,
-        ['onboarding'],
-        reason: 'choosing a setup path must not overwrite explicit acceptance',
-      );
-    });
-
-    testWidgets('cancelling renewed acceptance does not accept the terms', (
-      tester,
-    ) async {
-      var cancelled = false;
-      final legal = _FakeLegalDocumentsRepository(accepted: false);
-      await _pump(
-        tester,
-        analyticsBloc: analyticsBloc,
-        stored: [_storedWallet('wallet-a')],
-        legal: legal,
-        onCancel: () => cancelled = true,
-      );
-      await tester.pump();
-
-      await tester.tap(find.byKey(const Key('onboarding-cancel-button')));
-      await tester.pumpAndSettle();
-
-      expect(legal.recordedSurfaces, isEmpty);
-      expect(cancelled, isTrue);
-    });
-
-    testWidgets('existing setup actions wait for a delayed acceptance check', (
+    testWidgets('legal status lookup never delays opening a form', (
       tester,
     ) async {
       final check = Completer<bool>();
@@ -371,74 +362,33 @@ void main() {
         stored: [_storedWallet('wallet-a')],
         legal: legal,
       );
-      await tester.pump();
-
       await tester.tap(find.byKey(const Key('create-wallet-button')));
       await tester.pump();
+      expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
+      expect(find.byKey(const Key('legal-agreement-notice')), findsOneWidget);
       expect(legal.recordedSurfaces, isEmpty);
-      expect(find.byKey(const Key('wallet-creation')), findsNothing);
-      expect(find.text('wallet-a'), findsOneWidget);
-
       check.complete(false);
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('agree-and-continue-button')),
-        findsOneWidget,
-      );
-      expect(legal.recordedSurfaces, isEmpty);
+      expect(find.byKey(const Key('agree-and-continue-button')), findsNothing);
     });
 
-    testWidgets('current acceptance needs no additional agreement action', (
-      tester,
-    ) async {
-      final legal = _FakeLegalDocumentsRepository();
+    testWidgets('cancelling the chooser does not accept terms', (tester) async {
+      var cancelled = false;
+      final legal = _FakeLegalDocumentsRepository(accepted: false);
       await _pump(
         tester,
         analyticsBloc: analyticsBloc,
-        stored: [_storedWallet('wallet-a')],
         legal: legal,
+        stored: [_storedWallet('wallet-a')],
+        onCancel: () => cancelled = true,
       );
-      await tester.pump();
-      expect(find.byKey(const Key('agree-and-continue-button')), findsNothing);
-      expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('onboarding-cancel-button')));
+      await tester.pumpAndSettle();
+      expect(cancelled, isTrue);
       expect(legal.recordedSurfaces, isEmpty);
     });
 
-    for (final returning in [false, true]) {
-      testWidgets(
-        'desktop hardware setup preserves acceptance (returning: $returning)',
-        (tester) async {
-          final legal = _FakeLegalDocumentsRepository(accepted: false);
-          await _pump(
-            tester,
-            analyticsBloc: analyticsBloc,
-            stored: returning ? [_storedWallet('wallet-a')] : [],
-            legal: legal,
-          );
-          await tester.pump();
-
-          if (returning) {
-            expect(
-              find.byKey(const Key('connect-hardware-wallet-button')),
-              findsNothing,
-            );
-            await tester.tap(
-              find.byKey(const Key('agree-and-continue-button')),
-            );
-            await tester.pump();
-          }
-          await tester.tap(
-            find.byKey(const Key('connect-hardware-wallet-button')),
-          );
-          await tester.pump();
-          expect(find.byType(HardwareWalletsManager), findsOneWidget);
-          expect(legal.recordedSurfaces, ['onboarding']);
-        },
-        variant: TargetPlatformVariant.only(TargetPlatform.macOS),
-      );
-    }
-
-    testWidgets('renewed acceptance also reveals the import action', (
+    testWidgets('updated terms do not interrupt opening import', (
       tester,
     ) async {
       final legal = _FakeLegalDocumentsRepository(accepted: false);
@@ -448,41 +398,35 @@ void main() {
         stored: [_storedWallet('wallet-a')],
         legal: legal,
       );
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('agree-and-continue-button')));
-      await tester.pump();
       await tester.tap(find.byKey(const Key('import-wallet-button')));
       await tester.pump();
       expect(analyticsBloc.trace.last, (
         'onboarding_step_viewed',
         'import_seed_entry',
       ));
-      expect(legal.recordedSurfaces, ['onboarding']);
+      expect(legal.recordedSurfaces, isEmpty);
     });
 
-    testWidgets(
-      'cached wallets still require acceptance if refreshing them fails',
-      (tester) async {
-        final legal = _FakeLegalDocumentsRepository(accepted: false);
-        await _pump(
-          tester,
-          analyticsBloc: analyticsBloc,
-          legal: legal,
-          wallets: _FakeWalletsRepository(
-            stored: [_storedWallet('wallet-a')],
-            refreshError: StateError('offline'),
-          ),
-        );
-        await tester.pump();
-        expect(find.text('wallet-a'), findsOneWidget);
-        expect(
-          find.byKey(const Key('agree-and-continue-button')),
-          findsOneWidget,
-        );
-        expect(legal.recordedSurfaces, isEmpty);
-        expect(tester.takeException(), isNull);
-      },
-    );
+    testWidgets('cached wallets and setup stay available after refresh fails', (
+      tester,
+    ) async {
+      final legal = _FakeLegalDocumentsRepository(accepted: false);
+      await _pump(
+        tester,
+        analyticsBloc: analyticsBloc,
+        legal: legal,
+        wallets: _FakeWalletsRepository(
+          stored: [_storedWallet('wallet-a')],
+          refreshError: StateError('offline'),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('wallet-a'), findsOneWidget);
+      expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
+      expect(find.byKey(const Key('agree-and-continue-button')), findsNothing);
+      expect(legal.recordedSurfaces, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('the compatibility header cannot accept terms or navigate', (
       tester,
@@ -493,19 +437,6 @@ void main() {
       await tester.pump();
       expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
       expect(legal.recordedSurfaces, isEmpty);
-    });
-
-    testWidgets('a first run keeps acceptance through its existing action', (
-      tester,
-    ) async {
-      final legal = _FakeLegalDocumentsRepository(accepted: false);
-      await _pump(tester, analyticsBloc: analyticsBloc, legal: legal);
-      expect(find.byKey(const Key('agree-and-continue-button')), findsNothing);
-
-      await tester.tap(find.byKey(const Key('create-wallet-button')));
-      await tester.pump();
-
-      expect(legal.recordedSurfaces, ['onboarding']);
     });
 
     testWidgets('unmounting abandons the open step exactly once', (

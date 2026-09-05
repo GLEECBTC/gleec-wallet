@@ -153,7 +153,7 @@
   },
   "clipBoard": "Copied to the clipboard",
   "onboardingConsentPrefix": "By continuing you agree to the",
-  "onboardingAgreeAndContinue": "Agree and continue",
+  "onboardingAgreementsUpdated": "Our legal agreements have changed.",
   "onboardingAgreementNotice": "By selecting ‘{action}’, you accept the {eula} and {terms}.",
   "onboardingTitle": "Open your wallet",
   "onboardingSubtitle": "Non-custodial. Your keys stay on this device.",

@@ -1,4 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'bloc/legal_agreement/legal_agreement_bloc_test.dart'
+    as legal_agreement_bloc_test;
+import 'views/wallets_manager/widgets/inline_legal_acceptance_test.dart'
+    as inline_legal_acceptance_test;
 
 // Suites that only expose `main()`, imported with a prefix so they can be
 // aggregated here. CI runs *only* this file
@@ -10,8 +14,7 @@ import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
 import 'shared/widgets/quick_login_switch_test.dart' as quick_login_switch_test;
-import 'shared/widgets/legal_agreement_prompt_test.dart'
-    as legal_agreement_prompt_test;
+import 'shared/widgets/terms_consent_text_test.dart' as terms_consent_text_test;
 import 'tests/analytics/firebase_config_test.dart' as firebase_config_test;
 import 'tests/analytics/firebase_analytics_api_test.dart'
     as firebase_analytics_api_test;
@@ -135,7 +138,9 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
-  legal_agreement_prompt_test.main();
+  terms_consent_text_test.main();
+  legal_agreement_bloc_test.main();
+  inline_legal_acceptance_test.main();
   group('Formatters:', () {
     testCutTrailingZeros();
     testFormatAmount();

@@ -165,7 +165,7 @@ abstract class LocaleKeys {
   static const assetNumber = 'assetNumber';
   static const clipBoard = 'clipBoard';
   static const onboardingConsentPrefix = 'onboardingConsentPrefix';
-  static const onboardingAgreeAndContinue = 'onboardingAgreeAndContinue';
+  static const onboardingAgreementsUpdated = 'onboardingAgreementsUpdated';
   static const onboardingAgreementNotice = 'onboardingAgreementNotice';
   static const onboardingTitle = 'onboardingTitle';
   static const onboardingSubtitle = 'onboardingSubtitle';

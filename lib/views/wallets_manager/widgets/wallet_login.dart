@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -15,6 +16,7 @@ import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/hd_wallet_mode_preference.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
@@ -106,6 +108,10 @@ class _WalletLogInState extends State<WalletLogIn> {
         config: widget.wallet.config.copyWith(type: derivedType),
       );
 
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-login'),
+      );
       widget.onLogin(
         _passwordController.text,
         walletToUse,
@@ -169,6 +175,8 @@ class _WalletLogInState extends State<WalletLogIn> {
                   ),
                   const SizedBox(height: 24),
                 ],
+                TermsConsentText(actionLabel: LocaleKeys.logIn.tr()),
+                const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2.0),
                   child: UiPrimaryButton(

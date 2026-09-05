@@ -137,9 +137,10 @@ config.
 `pppaaasssDDD555444@@@` in iguana mode. The seed is a randomly chosen **funded WIF key**
 from `helpers/get_funded_wif.dart` — RICK/MORTY testnet keys, not secrets, not a BIP39
 mnemonic. Because it is not a mnemonic, the helper must confirm the app's custom-seed
-dialog. First-time legal acceptance is tied to the setup action. Returning users
-who need to accept current agreements use `agree-and-continue-button`; opening a
-legal document does not record acceptance. The agreement widget and entry-flow
+dialog. Legal acceptance is tied to the normal Create, final Import, Log in, or hardware
+Continue submission beside the linked notice. Updated terms add an inline notice
+to those same forms; there is no checkbox or separate acceptance step. Opening a
+form or legal document does not record acceptance. Legal state, notice, and form
 regressions are included in `test_units/main.dart`.
 
 ### Web vs native

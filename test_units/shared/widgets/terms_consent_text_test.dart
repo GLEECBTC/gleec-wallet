@@ -10,9 +10,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
+import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
-import 'package:web_dex/shared/widgets/disclaimer/legal_agreement_prompt.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
 
 class _EnglishAssetLoader extends AssetLoader {
@@ -25,7 +27,20 @@ class _EnglishAssetLoader extends AssetLoader {
 }
 
 class _LegalDocuments extends Fake implements LegalDocumentsRepository {
+  _LegalDocuments({this.updated = false});
+  bool updated;
   final List<LegalDocumentType> opened = [];
+
+  @override
+  Future<bool> hasAcceptedCurrentTerms() async => !updated;
+
+  @override
+  Future<LegalAcceptance?> readAcceptance() async => LegalAcceptance(
+    termsVersion: 0,
+    acceptedAt: DateTime(2020),
+    surface: 'test',
+    documentShas: {},
+  );
 
   @override
   Future<LegalDocumentContent> loadPreferredContent(
@@ -84,7 +99,23 @@ Future<void> _pump(
                 child: Center(
                   child: SizedBox(
                     width: 440,
-                    child: LegalAgreementPrompt(onAgree: onAgree),
+                    child: BlocProvider(
+                      create: (_) =>
+                          LegalAgreementBloc(documents)
+                            ..add(const LegalAgreementOpened()),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const TermsConsentText(actionLabel: 'Create'),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            key: const Key('form-submit-button'),
+                            onPressed: onAgree,
+                            child: const Text('Create'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -100,7 +131,7 @@ Future<void> _pump(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Legal agreement prompt', () {
+  group('Inline legal notice', () {
     setUpAll(() async {
       // The analyzer does not recognize the repository's test_units directory.
       // ignore: invalid_use_of_visible_for_testing_member
@@ -111,6 +142,19 @@ void main() {
     // Other suites intentionally assert untranslated keys. Do not leak this
     // group's real English copy through easy_localization's global singleton.
     tearDown(() => Localization.load(const Locale('en')));
+    testWidgets('changed agreements are announced within the form', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        documents: _LegalDocuments(updated: true),
+        onAgree: () {},
+      );
+      expect(find.text('Our legal agreements have changed.'), findsOneWidget);
+      expect(find.byKey(const Key('form-submit-button')), findsOneWidget);
+      expect(find.byKey(const Key('agree-and-continue-button')), findsNothing);
+    });
+
     testWidgets('names the action and puts linked agreements above it', (
       tester,
     ) async {
@@ -122,15 +166,15 @@ void main() {
       );
 
       final notice = find.byKey(const Key('legal-agreement-notice'));
-      final button = find.byKey(const Key('agree-and-continue-button'));
+      final button = find.byKey(const Key('form-submit-button'));
       final text = tester.widget<Text>(notice).textSpan!;
       expect(
         text.toPlainText(includePlaceholders: false),
-        'By selecting ‘Agree and continue’, you accept the  and .',
+        'By selecting ‘Create’, you accept the  and .',
       );
       expect(find.text('EULA'), findsOneWidget);
       expect(find.text('Terms & Conditions'), findsOneWidget);
-      expect(find.text('Agree and continue'), findsOneWidget);
+      expect(find.text('Create'), findsOneWidget);
       expect(find.byType(Checkbox), findsNothing);
       expect(
         tester.getBottomLeft(notice).dy,
@@ -167,13 +211,26 @@ void main() {
         await tester.tap(find.byKey(const Key('close-disclaimer')));
         await tester.pumpAndSettle();
         expect(find.byType(LegalDocumentView), findsNothing);
-        expect(
-          find.byKey(const Key('agree-and-continue-button')),
-          findsOneWidget,
-        );
+        expect(find.byKey(const Key('form-submit-button')), findsOneWidget);
         expect(accepted, 0);
       });
     }
+
+    testWidgets('a document refresh updates the inline change notice', (
+      tester,
+    ) async {
+      final documents = _LegalDocuments();
+      var accepted = 0;
+      await _pump(tester, documents: documents, onAgree: () => accepted++);
+      expect(find.byKey(const Key('legal-agreements-updated')), findsNothing);
+      await tester.tap(find.byKey(const Key('agreement-terms-link')));
+      await tester.pumpAndSettle();
+      documents.updated = true;
+      await tester.tap(find.byKey(const Key('close-disclaimer')));
+      await tester.pumpAndSettle();
+      expect(find.text('Our legal agreements have changed.'), findsOneWidget);
+      expect(accepted, 0);
+    });
 
     testWidgets('both links and the agreement action work with a keyboard', (
       tester,
@@ -250,7 +307,7 @@ void main() {
             textScale: scale,
           );
           expect(tester.takeException(), isNull);
-          final button = find.byKey(const Key('agree-and-continue-button'));
+          final button = find.byKey(const Key('form-submit-button'));
           expect(
             tester.getBottomRight(button).dx,
             lessThanOrEqualTo(size.width),
@@ -261,7 +318,7 @@ void main() {
           );
           expect(find.text('EULA'), findsOneWidget);
           expect(find.text('Terms & Conditions'), findsOneWidget);
-          expect(find.text('Agree and continue'), findsOneWidget);
+          expect(find.text('Create'), findsOneWidget);
         },
       );
     }

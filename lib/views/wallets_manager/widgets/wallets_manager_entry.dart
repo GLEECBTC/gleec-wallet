@@ -8,10 +8,7 @@ import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
-import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
-import 'package:web_dex/shared/widgets/disclaimer/legal_agreement_prompt.dart';
-import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallets_list.dart';
 
 /// The single first screen of wallet setup.
@@ -52,15 +49,9 @@ class WalletsManagerEntry extends StatefulWidget {
 class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
   late final Stream<List<Wallet>> _walletsStream;
 
-  /// Null until the acceptance check resolves. Existing wallets stay accessible
-  /// while new setup actions wait for the current agreement status.
-  bool? _hasAcceptedCurrentTerms;
-  bool _acceptedDuringVisit = false;
-
   @override
   void initState() {
     super.initState();
-    unawaited(_resolveConsent());
     // The stream lives here rather than in `WalletsList` because this screen
     // needs to know whether wallets exist *before* it can choose a layout.
     // It also means the wallets cache is primed on every entry into setup,
@@ -75,29 +66,6 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
     );
   }
 
-  Future<void> _resolveConsent() async {
-    final accepted = await context
-        .read<LegalDocumentsRepository>()
-        .hasAcceptedCurrentTerms();
-    if (mounted) setState(() => _hasAcceptedCurrentTerms = accepted);
-  }
-
-  /// Consent is the act of continuing, so this records and never blocks.
-  void _recordConsent(String surface) {
-    if (_acceptedDuringVisit) return;
-    _acceptedDuringVisit = true;
-    unawaited(
-      context.read<LegalDocumentsRepository>().recordAcceptance(
-        surface: surface,
-      ),
-    );
-  }
-
-  void _agreeAndContinue() {
-    _recordConsent('onboarding');
-    setState(() => _hasAcceptedCurrentTerms = true);
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Wallet>>(
@@ -107,10 +75,6 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
       builder: (context, snapshot) {
         final wallets = snapshot.data ?? const <Wallet>[];
         final hasWallets = wallets.isNotEmpty;
-        // Only a returning user can have accepted an *older* version, so this
-        // never interrupts a genuine first run.
-        final needsReConsent = hasWallets && _hasAcceptedCurrentTerms == false;
-
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -127,26 +91,11 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
               const UiDivider(),
               const SizedBox(height: 8),
             ],
-            if (needsReConsent)
-              LegalAgreementPrompt(onAgree: _agreeAndContinue)
-            else ...[
-              _OnboardingActions(
-                hasWallets: hasWallets,
-                enabled: !hasWallets || _hasAcceptedCurrentTerms != null,
-                onAction: (action) {
-                  _recordConsent('onboarding');
-                  widget.onAction(action);
-                },
-                onHardwareWallet: () {
-                  _recordConsent('onboarding');
-                  widget.onHardwareWallet();
-                },
-              ),
-              if (!_acceptedDuringVisit) ...[
-                const SizedBox(height: 16),
-                const TermsConsentText(),
-              ],
-            ],
+            _OnboardingActions(
+              hasWallets: hasWallets,
+              onAction: widget.onAction,
+              onHardwareWallet: widget.onHardwareWallet,
+            ),
             const SizedBox(height: 12),
             UiUnderlineTextButton(
               key: const Key('onboarding-cancel-button'),
@@ -207,13 +156,11 @@ class _OnboardingHeader extends StatelessWidget {
 class _OnboardingActions extends StatelessWidget {
   const _OnboardingActions({
     required this.hasWallets,
-    required this.enabled,
     required this.onAction,
     required this.onHardwareWallet,
   });
 
   final bool hasWallets;
-  final bool enabled;
   final void Function(WalletsManagerAction) onAction;
   final VoidCallback onHardwareWallet;
 
@@ -231,14 +178,14 @@ class _OnboardingActions extends StatelessWidget {
       // them only to recognise it.
       subtitle: LocaleKeys.onboardingImportSubtitle.tr(),
       backgroundColor: hasWallets ? theme.cardColor : null,
-      onTap: enabled ? () => onAction(WalletsManagerAction.import) : null,
+      onTap: () => onAction(WalletsManagerAction.import),
     );
 
     final hardwareRow = UiListActionRow(
       rowKey: const Key('connect-hardware-wallet-button'),
       title: LocaleKeys.onboardingHardwareTitle.tr(),
       backgroundColor: hasWallets ? theme.cardColor : null,
-      onTap: enabled ? onHardwareWallet : null,
+      onTap: onHardwareWallet,
     );
 
     // With wallets already on the device the list is the dominant element, so
@@ -251,7 +198,7 @@ class _OnboardingActions extends StatelessWidget {
             rowKey: const Key('create-wallet-button'),
             title: LocaleKeys.onboardingCreateWallet.tr(),
             backgroundColor: theme.cardColor,
-            onTap: enabled ? () => onAction(WalletsManagerAction.create) : null,
+            onTap: () => onAction(WalletsManagerAction.create),
           ),
           const SizedBox(height: 8),
           importRow,
@@ -268,9 +215,7 @@ class _OnboardingActions extends StatelessWidget {
           key: const Key('create-wallet-button'),
           height: 56,
           text: LocaleKeys.onboardingCreateWallet.tr(),
-          onPressed: enabled
-              ? () => onAction(WalletsManagerAction.create)
-              : null,
+          onPressed: () => onAction(WalletsManagerAction.create),
         ),
         const SizedBox(height: 16),
         const UiDivider(),
