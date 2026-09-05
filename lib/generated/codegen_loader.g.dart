@@ -165,6 +165,8 @@ abstract class LocaleKeys {
   static const assetNumber = 'assetNumber';
   static const clipBoard = 'clipBoard';
   static const onboardingConsentPrefix = 'onboardingConsentPrefix';
+  static const onboardingAgreeAndContinue = 'onboardingAgreeAndContinue';
+  static const onboardingAgreementNotice = 'onboardingAgreementNotice';
   static const onboardingTitle = 'onboardingTitle';
   static const onboardingSubtitle = 'onboardingSubtitle';
   static const onboardingCreateWallet = 'onboardingCreateWallet';
@@ -276,7 +278,6 @@ abstract class LocaleKeys {
   static const disclaimerAcceptEulaCheckbox = 'disclaimerAcceptEulaCheckbox';
   static const disclaimerAcceptTermsAndConditionsCheckbox =
       'disclaimerAcceptTermsAndConditionsCheckbox';
-  static const disclaimerAcceptDescription = 'disclaimerAcceptDescription';
   static const swapDetailsStepStatusInProcess =
       'swapDetailsStepStatusInProcess';
   static const swapDetailsStepStatusTimeSpent =

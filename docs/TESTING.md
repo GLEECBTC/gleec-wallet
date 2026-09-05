@@ -137,7 +137,10 @@ config.
 `pppaaasssDDD555444@@@` in iguana mode. The seed is a randomly chosen **funded WIF key**
 from `helpers/get_funded_wif.dart` — RICK/MORTY testnet keys, not secrets, not a BIP39
 mnemonic. Because it is not a mnemonic, the helper must confirm the app's custom-seed
-dialog; the EULA and ToS are **one** checkbox (`checkbox-eula-tos`), not two.
+dialog. First-time legal acceptance is tied to the setup action. Returning users
+who need to accept current agreements use `agree-and-continue-button`; opening a
+legal document does not record acceptance. The agreement widget and entry-flow
+regressions are included in `test_units/main.dart`.
 
 ### Web vs native
 

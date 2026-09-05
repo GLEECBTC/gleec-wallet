@@ -10,7 +10,7 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
-import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
+import 'package:web_dex/shared/widgets/disclaimer/legal_agreement_prompt.dart';
 import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallets_list.dart';
 
@@ -52,10 +52,10 @@ class WalletsManagerEntry extends StatefulWidget {
 class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
   late final Stream<List<Wallet>> _walletsStream;
 
-  /// Null until the acceptance check resolves. Treated as "accepted" while
-  /// unknown so a slow storage read never blocks the primary action.
+  /// Null until the acceptance check resolves. Existing wallets stay accessible
+  /// while new setup actions wait for the current agreement status.
   bool? _hasAcceptedCurrentTerms;
-  bool _reConsentTicked = false;
+  bool _acceptedDuringVisit = false;
 
   @override
   void initState() {
@@ -84,6 +84,8 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
 
   /// Consent is the act of continuing, so this records and never blocks.
   void _recordConsent(String surface) {
+    if (_acceptedDuringVisit) return;
+    _acceptedDuringVisit = true;
     unawaited(
       context.read<LegalDocumentsRepository>().recordAcceptance(
         surface: surface,
@@ -91,13 +93,16 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
     );
   }
 
-  bool _actionsEnabled(bool needsReConsent) =>
-      !needsReConsent || _reConsentTicked;
+  void _agreeAndContinue() {
+    _recordConsent('onboarding');
+    setState(() => _hasAcceptedCurrentTerms = true);
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Wallet>>(
-      initialData: const <Wallet>[],
+      initialData:
+          context.read<WalletsRepository>().wallets ?? const <Wallet>[],
       stream: _walletsStream,
       builder: (context, snapshot) {
         final wallets = snapshot.data ?? const <Wallet>[];
@@ -122,30 +127,26 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
               const UiDivider(),
               const SizedBox(height: 8),
             ],
-            _OnboardingActions(
-              hasWallets: hasWallets,
-              enabled: _actionsEnabled(needsReConsent),
-              onAction: (action) {
-                _recordConsent('onboarding');
-                widget.onAction(action);
-              },
-              onHardwareWallet: () {
-                _recordConsent('onboarding');
-                widget.onHardwareWallet();
-              },
-            ),
-            const SizedBox(height: 16),
             if (needsReConsent)
-              // The documents changed under a returning user. Implicit consent
-              // is right for a first run, but silently re-accepting on their
-              // behalf is not - so this one case asks explicitly.
-              EulaTosCheckboxes(
-                isChecked: _reConsentTicked,
-                onCheck: (checked) =>
-                    setState(() => _reConsentTicked = checked),
-              )
-            else
-              const TermsConsentText(),
+              LegalAgreementPrompt(onAgree: _agreeAndContinue)
+            else ...[
+              _OnboardingActions(
+                hasWallets: hasWallets,
+                enabled: !hasWallets || _hasAcceptedCurrentTerms != null,
+                onAction: (action) {
+                  _recordConsent('onboarding');
+                  widget.onAction(action);
+                },
+                onHardwareWallet: () {
+                  _recordConsent('onboarding');
+                  widget.onHardwareWallet();
+                },
+              ),
+              if (!_acceptedDuringVisit) ...[
+                const SizedBox(height: 16),
+                const TermsConsentText(),
+              ],
+            ],
             const SizedBox(height: 12),
             UiUnderlineTextButton(
               key: const Key('onboarding-cancel-button'),

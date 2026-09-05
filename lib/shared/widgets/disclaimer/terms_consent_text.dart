@@ -10,8 +10,7 @@ import 'package:web_dex/shared/widgets/disclaimer/eula.dart';
 
 /// The implicit-consent line: "By continuing you agree to the EULA, Terms".
 ///
-/// This is `EulaTosCheckboxes` without the checkbox. Both documents stay one
-/// tap away - the change is that continuing *is* the acceptance, rather than
+/// Both documents stay one tap away. Continuing is the acceptance, rather than
 /// requiring a separate tick before the primary action becomes usable.
 /// Acceptance is recorded by the caller; see `LegalDocumentsRepository`.
 ///
