@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart' show AssetId;
@@ -60,6 +61,15 @@ class _ZhtlcActivationStatusBarState extends State<ZhtlcActivationStatusBar> {
     final newStatuses = await widget.activationService.activationStatuses;
 
     if (!mounted) {
+      return;
+    }
+
+    // Once per second for the whole time the wallet page is up, and almost
+    // always with an identical map - the common case being no ZHTLC asset at
+    // all, where this is a 1Hz rebuild of a `const SizedBox.shrink()`. Cheap in
+    // frame time, but it is a timer that never rests; skipping the no-op keeps
+    // it honest.
+    if (mapEquals(_cachedStatuses, newStatuses)) {
       return;
     }
 

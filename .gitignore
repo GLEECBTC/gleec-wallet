@@ -75,6 +75,7 @@ android/app/.cxx/
 
 # Python
 venv/
+**/__pycache__/
 
 # FVM Version Cache
 .fvm/
@@ -94,6 +95,18 @@ dist/
 web/kdf/*
 !web/kdf/res/
 
+# Local environment secrets
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+/.lifi/
+
+# Generated integration and export artifacts
+/ios/Flutter/ephemeral/Packages/
+/ios/Flutter/ephemeral/flutter_native_integration.env
+/output/
+
 # AI tool local skill bundles; keep project-scoped .claude/.cursor config trackable.
 /.claude/skills/
 /.cursor/skills/
@@ -101,15 +114,10 @@ web/kdf/*
 /generated_imgs
 /.1code
 
-# Local environment secrets — never commit. `*.env.example` templates stay
-# trackable because this matches the exact filename `.env` only.
-.env
-/.lifi/
-
-# Generated report/document output.
-/output/
-
 # Android release signing secrets — never commit.
 **/*.jks
 **/*.p12
 android/key.properties
+
+# hookify rules are per-developer, not project policy
+.claude/*.local.md

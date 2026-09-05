@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:web_dex/bloc/bitrefill/data/bitrefill_repository.dart';
@@ -11,8 +9,8 @@ part 'bitrefill_state.dart';
 
 class BitrefillBloc extends Bloc<BitrefillEvent, BitrefillState> {
   BitrefillBloc()
-      : _bitrefillRepository = BitrefillRepository(),
-        super(BitrefillInitial()) {
+    : _bitrefillRepository = BitrefillRepository(),
+      super(BitrefillInitial()) {
     on<BitrefillLoadRequested>(_onBitrefillLoadRequested);
     on<BitrefillLaunchRequested>(_onBitrefillLaunchRequested);
     on<BitrefillPaymentIntentReceived>(_onBitrefillPaymentIntentReceived);
@@ -21,11 +19,14 @@ class BitrefillBloc extends Bloc<BitrefillEvent, BitrefillState> {
 
   final BitrefillRepository _bitrefillRepository;
 
-  Future<void> _onBitrefillLoadRequested(
+  void _onBitrefillLoadRequested(
     BitrefillLoadRequested event,
     Emitter<BitrefillState> emit,
-  ) async {
-    emit(const BitrefillLoadInProgress());
+  ) {
+    // URL construction is local and synchronous. Emitting an intermediate
+    // loading state removes the launch button while its pre-launch refund
+    // picker is awaiting the refreshed URL, which can open a stale URL from a
+    // disposed widget.
     final String url = _bitrefillRepository.embeddedBitrefillUrl(
       coinAbbr: event.coin?.abbr,
       refundAddress: event.refundAddress ?? event.coin?.address,

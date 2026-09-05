@@ -66,9 +66,7 @@ class BitrefillInAppBrowserButtonState
 
   Future<void> _openBrowserWindow() async {
     await browser?.openUrlRequest(
-      urlRequest: URLRequest(
-        url: WebUri(widget.url),
-      ),
+      urlRequest: URLRequest(url: WebUri(widget.url)),
     );
   }
 }

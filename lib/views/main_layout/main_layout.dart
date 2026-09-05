@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -8,6 +10,8 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
+import 'package:web_dex/analytics/events/misc_events.dart';
+import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 // TODO(migration): Re-enable once update checker endpoint is migrated
 // import 'package:web_dex/blocs/update_bloc.dart';
@@ -16,8 +20,9 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/router/navigators/main_layout/main_layout_router.dart';
 import 'package:web_dex/router/state/routing_state.dart';
-import 'package:web_dex/services/alpha_version_alert_service/alpha_version_alert_service.dart';
 import 'package:web_dex/services/feedback/feedback_service.dart';
+import 'package:web_dex/services/storage/get_storage.dart';
+import 'package:web_dex/services/storage/storage_persistence_gate.dart';
 import 'package:web_dex/shared/utils/window/window.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile.dart';
 import 'package:web_dex/bloc/coins_manager/coins_manager_bloc.dart';
@@ -33,6 +38,30 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
+  // Asked at sign-in rather than at startup: Chromium grants on engagement
+  // heuristics (so a first-paint ask is a near certain silent no) and Firefox
+  // shows a real prompt (so spending it before the user knows what the app is
+  // wastes the ask). Denials are not sticky, so retrying on later sign-ins is
+  // free.
+  late final StoragePersistenceGate _storagePersistence =
+      StoragePersistenceGate(storage: getStorage());
+
+  Future<void> _requestStoragePersistence() async {
+    final result = await _storagePersistence.maybeRequest();
+    // Null means nothing was asked; reporting it would dilute the rates.
+    if (result == null || !mounted) return;
+    context.read<AnalyticsBloc>().logEvent(
+      StoragePersistenceResultEventData(
+        result: switch (result) {
+          StoragePersistence.alreadyPersistent => 'already_persistent',
+          StoragePersistence.granted => 'granted',
+          StoragePersistence.denied => 'denied',
+          StoragePersistence.unsupported => 'unsupported',
+        },
+      ),
+    );
+  }
+
   @override
   void initState() {
     // TODO: localize
@@ -42,7 +71,6 @@ class _MainLayoutState extends State<MainLayout> {
     final tradingStatusBloc = context.read<TradingStatusBloc>();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await AlphaVersionWarningService().run();
       // TODO(migration): Re-enable once update checker endpoint is migrated
       // await updateBloc.init();
 
@@ -80,6 +108,7 @@ class _MainLayoutState extends State<MainLayout> {
         // Route after login completes (works for both software and hardware wallets)
         if (state.mode == AuthorizeMode.logIn) {
           QuickLoginSwitch.trackUserLoggedIn();
+          unawaited(_requestStoragePersistence());
           routingState.selectedMenu = MainMenuValue.wallet;
           return;
         }

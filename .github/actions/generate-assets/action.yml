@@ -52,6 +52,27 @@ inputs:
     required: false
     default: ""
 
+  TRON_GASLESS_ENABLED:
+    description: "TRON GasFree send rail kill switch (true/false)"
+    required: false
+    default: "false"
+  TRON_GASLESS_RECEIVE_ENABLED:
+    description: "GasFree custody Receive kill switch (true/false)"
+    required: false
+    default: "false"
+  TRON_GASLESS_BASE_URL:
+    description: "TRON GasFree provider base URL embedded in the Flutter web build"
+    required: false
+    default: ""
+  TRON_GASLESS_SERVICE_PROVIDER:
+    description: "TRON GasFree service provider address embedded in the Flutter web build"
+    required: false
+    default: ""
+  TRON_GASLESS_REQUIRED_NETWORK:
+    description: "Optional deployment-policy restriction for the GasFree network path (tron/nile)"
+    required: false
+    default: ""
+
 runs:
   using: "composite"
   steps:
@@ -88,6 +109,12 @@ runs:
         MATOMO_URL: ${{ inputs.MATOMO_URL }}
         MATOMO_SITE_ID: ${{ inputs.MATOMO_SITE_ID }}
         ANALYTICS_DISABLED: ${{ inputs.ANALYTICS_DISABLED }}
+        TRON_GASLESS_ENABLED: ${{ inputs.TRON_GASLESS_ENABLED }}
+        TRON_GASLESS_RECEIVE_ENABLED: ${{ inputs.TRON_GASLESS_RECEIVE_ENABLED }}
+        TRON_GASLESS_BASE_URL: ${{ inputs.TRON_GASLESS_BASE_URL }}
+        TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
+        TRON_GASLESS_REQUIRED_NETWORK: ${{ inputs.TRON_GASLESS_REQUIRED_NETWORK }}
+        TRON_GASLESS_CONFIG_VALIDATOR: ${{ github.action_path }}/../../scripts/validate_tron_gasless_config.sh
       run: |
         echo "Running \`flutter build\` to generate assets for the deployment build"
 
@@ -106,6 +133,35 @@ runs:
         # Add commit hash and build date to build command
         BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"
         BUILD_CMD="$BUILD_CMD --dart-define=BUILD_DATE=$BUILD_DATE"
+
+        # Validate every supplied public endpoint before it can enter a build,
+        # even when its corresponding kill switch is disabled.
+        bash "$TRON_GASLESS_CONFIG_VALIDATOR"
+
+        if [ "$TRON_GASLESS_ENABLED" = "true" ]; then
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=true"
+        else
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=false"
+        fi
+
+        if [ "$TRON_GASLESS_RECEIVE_ENABLED" = "true" ]; then
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true"
+        else
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=false"
+        fi
+
+        if [ -n "$TRON_GASLESS_BASE_URL" ]; then
+          echo "Adding validated TRON GasFree proxy configuration"
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_BASE_URL=$TRON_GASLESS_BASE_URL"
+        else
+          echo "Warning: TRON_GASLESS_BASE_URL is empty; gas-free TRON will be disabled for this build."
+        fi
+
+        if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
+          BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_SERVICE_PROVIDER=$TRON_GASLESS_SERVICE_PROVIDER"
+        else
+          echo "TRON_GASLESS_SERVICE_PROVIDER is empty; GasFree remains disabled."
+        fi
 
         # Check and add the shared Trello board and list IDs if they are available
         HAVE_TRELLO_IDS=false
@@ -213,7 +269,7 @@ runs:
 
         # Run flutter build and capture its output
         flutter pub get --enforce-lockfile
-        echo "Running build command: $BUILD_CMD"
+        echo "Running configured Flutter build"
         set +e  # Don't exit immediately on error
         $BUILD_CMD
         exit_status=$?
@@ -224,4 +280,5 @@ runs:
             echo "Flutter build exited with status $exit_status"
             exit $exit_status
         fi
+
         echo "Done fetching packages and generating assets"

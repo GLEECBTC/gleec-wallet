@@ -8,12 +8,10 @@ import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
 import 'package:web_dex/bloc/cex_market_data/common/update_frequency_backoff_strategy.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_repository.dart';
-import 'package:web_dex/bloc/cex_market_data/sdk_auth_activation_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/text_error.dart';
-import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/kdf_error_display.dart';
 
 part 'portfolio_growth_event.dart';
@@ -162,10 +160,7 @@ class PortfolioGrowthBloc
       // In case most coins are activating on wallet startup, wait for at least
       // 50% of the coins to be enabled before attempting to load the uncached
       // chart.
-      await _sdk.waitForEnabledCoinsToPassThreshold(
-        filteredEventCoins,
-        delay: kActivationPollingInterval,
-      );
+      await filteredEventCoins.waitForActivationThreshold(_sdk);
       // Only remove inactivate/activating coins after an attempt to load the
       // cached chart, as the cached chart may contain inactive coins.
       await _loadChart(

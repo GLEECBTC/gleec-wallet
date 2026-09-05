@@ -10,9 +10,7 @@ class SendCompleteFormFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: isMobile ? double.infinity : withdrawWidth,
-      child: const SendCompleteFormButtons(
-        key: Key('complete-buttons'),
-      ),
+      child: const SendCompleteFormButtons(key: Key('complete-buttons')),
     );
   }
 }

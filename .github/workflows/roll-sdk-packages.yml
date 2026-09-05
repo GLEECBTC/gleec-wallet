@@ -1,4 +1,3 @@
-# filepath: /Users/charl/Code/UTXO/komodo-wallet/.github/workflows/roll-sdk-packages.yml
 name: Roll SDK Packages
 
 # This workflow automates updating SDK package dependencies from the external komodo-defi-sdk-flutter repository

@@ -3,10 +3,11 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart';
+import 'package:web_dex/shared/widgets/notice_banner.dart';
 
 class SendConfirmItem extends StatelessWidget {
   const SendConfirmItem({
-    Key? key,
+    super.key,
     required this.title,
     required this.value,
     this.url = '',
@@ -15,7 +16,7 @@ class SendConfirmItem extends StatelessWidget {
     this.isCopiedValueTruncated = false,
     this.isWarningShown = false,
     this.centerAlign = false,
-  }) : super(key: key);
+  });
 
   final String title;
   final String value;
@@ -29,8 +30,9 @@ class SendConfirmItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          centerAlign ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment: centerAlign
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         SizedBox(
           width: double.infinity,
@@ -38,45 +40,58 @@ class SendConfirmItem extends StatelessWidget {
             title,
             textAlign: centerAlign ? TextAlign.center : TextAlign.start,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.color
-                    ?.withValues(alpha: .6)),
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
         const SizedBox(height: 8),
         SizedBox(
           width: double.infinity,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: centerAlign
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            crossAxisAlignment: centerAlign
-                ? CrossAxisAlignment.center
-                : CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                  child: _ValueText(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final textScale = MediaQuery.textScalerOf(context).scale(1);
+              final valueWidget = _ValueText(
                 value: value,
                 url: url,
                 isCopied: isCopied,
                 isCopiedValueTruncated: isCopiedValueTruncated,
                 centerAlign: centerAlign,
                 isWarningShown: isWarningShown,
-              )),
-              if (usdPrice != null) ...[
-                const SizedBox(height: 10),
-                Flexible(
-                    child: _USDPrice(
-                  usdPrice: usdPrice,
-                  isWarningShown: isWarningShown,
-                )),
-              ],
-            ],
+              );
+              final usdWidget = usdPrice == null
+                  ? null
+                  : _USDPrice(
+                      usdPrice: usdPrice,
+                      isWarningShown: isWarningShown,
+                      centerAlign: centerAlign,
+                    );
+
+              if (usdWidget == null) return valueWidget;
+
+              if (constraints.maxWidth < 320 || textScale > 1.3) {
+                return Column(
+                  crossAxisAlignment: centerAlign
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.start,
+                  children: [valueWidget, const SizedBox(height: 6), usdWidget],
+                );
+              }
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: centerAlign
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(child: valueWidget),
+                  const SizedBox(width: 10),
+                  Flexible(child: usdWidget),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -102,6 +117,10 @@ class _ValueText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final warningColor = NoticeBanner.styleOf(
+      context,
+      NoticeBannerVariant.warning,
+    ).foreground;
     if (url.isNotEmpty) {
       return Hyperlink(
         text: value,
@@ -122,10 +141,11 @@ class _ValueText extends StatelessWidget {
       value,
       textAlign: centerAlign ? TextAlign.center : TextAlign.start,
       style: TextStyle(
-          color: isWarningShown ? Colors.orange[300] : null,
-          fontSize: 14,
-          fontFamily: 'Manrope',
-          fontWeight: FontWeight.w500),
+        color: isWarningShown ? warningColor : null,
+        fontSize: 14,
+        fontFamily: 'Manrope',
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 
@@ -141,19 +161,29 @@ class _ValueText extends StatelessWidget {
 }
 
 class _USDPrice extends StatelessWidget {
-  const _USDPrice({this.usdPrice, required this.isWarningShown});
+  const _USDPrice({
+    this.usdPrice,
+    required this.isWarningShown,
+    required this.centerAlign,
+  });
 
   final double? usdPrice;
   final bool isWarningShown;
+  final bool centerAlign;
 
   @override
   Widget build(BuildContext context) {
+    final warningColor = NoticeBanner.styleOf(
+      context,
+      NoticeBannerVariant.warning,
+    ).foreground;
     return SelectableText(
       '\$${formatAmt(usdPrice ?? 0)}',
+      textAlign: centerAlign ? TextAlign.center : TextAlign.start,
       style: TextStyle(
         fontWeight: FontWeight.w500,
         fontSize: 14,
-        color: isWarningShown ? Colors.orange[300] : null,
+        color: isWarningShown ? warningColor : null,
       ),
     );
   }

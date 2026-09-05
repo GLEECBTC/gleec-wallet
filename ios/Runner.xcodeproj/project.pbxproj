@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
-		49484A33FCF0585DB40EBAD9 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = C74478EE63B90E2A48A7AB3C /* GoogleService-Info.plist */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		8A47D180A1B84E12912B6323 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C0C0C1027A54A2A85585B71 /* SceneDelegate.swift */; };
 		F1D1A3B2C3D4E5F6A7B8C9D1 /* FdMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D1A3B2C3D4E5F6A7B8C9D0 /* FdMonitor.swift */; };
@@ -224,7 +223,6 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
-				49484A33FCF0585DB40EBAD9 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

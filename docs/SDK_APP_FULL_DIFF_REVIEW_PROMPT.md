@@ -36,7 +36,7 @@ The file must be clean Markdown and must be complete before you stop.
 4. Do not stop until `docs/SDK_APP_DIFF_REVIEW_FINDINGS.md` exists and includes a reviewed-files appendix covering every changed file from both diffs.
 5. Treat this as a code review, not an implementation task. Do not make product code changes unless explicitly asked.
 6. Do not revert unrelated local changes. The worktree may already be dirty.
-7. Unit and integration tests in this repo are currently unreliable. Use thorough code review and static analysis instead of relying on tests for validation.
+7. The unit suite passes and gates every PR: run `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` dart-defines (see `docs/TESTING.md`). Code review and static analysis are additional evidence, not a substitute. If a suite is red, name the failing test rather than skipping validation wholesale.
 8. Findings are the primary output. If there are no findings, state that explicitly, but only after proving full coverage.
 
 ## Review Method You Must Follow

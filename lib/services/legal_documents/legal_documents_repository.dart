@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
@@ -16,6 +18,14 @@ class LegalDocumentsRepository {
   }) : _storage = storage ?? getStorage(),
        _assetBundle = assetBundle ?? rootBundle,
        _httpClient = httpClient ?? http.Client();
+
+  static const String _acceptanceKey = 'legal_acceptance_v1';
+
+  /// The two documents the consent line actually names.
+  static const List<LegalDocumentType> _consentDocuments = [
+    LegalDocumentType.eula,
+    LegalDocumentType.termsOfService,
+  ];
 
   static const String _githubOwner = 'GLEECBTC';
   static const String _githubRepo = 'gleec-wallet';
@@ -125,6 +135,65 @@ class LegalDocumentsRepository {
       );
       return null;
     }
+  }
+
+  /// The stored acceptance record, or null if the user has never accepted.
+  Future<LegalAcceptance?> readAcceptance() async {
+    try {
+      final raw = await _storage.read(_acceptanceKey);
+      if (raw is! Map) return null;
+      return LegalAcceptance.fromJson(Map<String, dynamic>.from(raw));
+    } catch (error) {
+      _log.warning('Could not read the legal acceptance record: $error');
+      return null;
+    }
+  }
+
+  /// Records that the user accepted the current documents on [surface].
+  ///
+  /// Fire-and-forget by design: consent is given by the act of continuing, so
+  /// a storage failure must never block the user from reaching their wallet.
+  Future<void> recordAcceptance({required String surface}) async {
+    try {
+      await _storage.write(
+        _acceptanceKey,
+        LegalAcceptance(
+          termsVersion: kCurrentTermsVersion,
+          acceptedAt: DateTime.now(),
+          surface: surface,
+          documentShas: await _currentDocumentShas(),
+        ).toJson(),
+      );
+    } catch (error) {
+      _log.warning('Could not record the legal acceptance: $error');
+    }
+  }
+
+  /// Whether the stored acceptance still covers what the user would agree to
+  /// today. False when there is no record, when [kCurrentTermsVersion] has been
+  /// bumped, or when either document's content has since changed.
+  Future<bool> hasAcceptedCurrentTerms() async {
+    final acceptance = await readAcceptance();
+    if (acceptance == null) return false;
+    if (acceptance.termsVersion < kCurrentTermsVersion) return false;
+
+    final current = await _currentDocumentShas();
+    for (final entry in current.entries) {
+      final accepted = acceptance.documentShas[entry.key];
+      // A document with no SHA on either side is the bundled asset, which
+      // cannot have drifted - only a real remote change invalidates consent.
+      if (accepted != null && accepted != entry.value) return false;
+    }
+    return true;
+  }
+
+  Future<Map<String, String>> _currentDocumentShas() async {
+    final shas = <String, String>{};
+    for (final document in _consentDocuments) {
+      final cached = await _readCachedContent(document);
+      shas[document.cacheKey] = cached?.sha ?? 'bundled';
+    }
+    return shas;
   }
 
   Future<LegalDocumentContent?> _readCachedContent(

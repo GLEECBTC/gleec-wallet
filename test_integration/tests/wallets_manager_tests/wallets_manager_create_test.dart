@@ -25,8 +25,6 @@ Future<void> testCreateWallet(WidgetTester tester) async {
   final Finder passwordConfirmField =
       find.byKey(const Key('create-password-field-confirm'));
   final Finder confirmButton = find.byKey(const Key('confirm-password-button'));
-  final Finder eulaCheckBox = find.byKey(const Key('checkbox-eula'));
-  final Finder tocCheckBox = find.byKey(const Key('checkbox-toc'));
   final Finder authorizedWalletButton =
       find.widgetWithText(AccountSwitcher, walletName);
   final Finder walletsManagerWrapper =
@@ -53,8 +51,6 @@ Future<void> testCreateWallet(WidgetTester tester) async {
   await tester.pumpNFrames(30);
   
   print('🔍 CREATE WALLET: Accepting terms and conditions');
-  await tester.tapAndPump(eulaCheckBox);
-  await tester.tapAndPump(tocCheckBox);
   
   print('🔍 CREATE WALLET: Confirming wallet creation');
   await tester.tapAndPump(confirmButton);

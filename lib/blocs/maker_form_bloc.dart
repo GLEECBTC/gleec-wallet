@@ -100,6 +100,9 @@ class MakerFormBloc implements BlocBase {
   Stream<Coin?> get outSellCoin => _sellCoinCtrl.stream;
   Coin? get sellCoin => _sellCoin;
   set sellCoin(Coin? coin) {
+    // Wallet-only assets (e.g. TRX/TRC-20) are excluded from the DEX pickers;
+    // ignore programmatic/deep-link selections too.
+    if (coin != null && coin.walletOnly) return;
     if (coin?.abbr != sellCoin?.abbr) {
       setSellAmount(null);
       setBuyAmount(null);
@@ -124,6 +127,9 @@ class MakerFormBloc implements BlocBase {
   Stream<Coin?> get outBuyCoin => _buyCoinCtrl.stream;
   Coin? get buyCoin => _buyCoin;
   set buyCoin(Coin? coin) {
+    // Match the sell-side guard: wallet-only/custody assets must not be
+    // introduced through deep links or programmatic quote selection.
+    if (coin != null && coin.walletOnly) return;
     if (coin?.abbr != buyCoin?.abbr) {
       setBuyAmount(null);
       setPriceValue(null);
@@ -248,8 +254,9 @@ class MakerFormBloc implements BlocBase {
     maxSellAmount = null;
     // Only show loading spinner when signed in
     final bool isSignedIn = await kdfSdk.auth.isSignedIn();
-    availableBalanceState =
-        isSignedIn ? AvailableBalanceState.loading : AvailableBalanceState.unavailable;
+    availableBalanceState = isSignedIn
+        ? AvailableBalanceState.loading
+        : AvailableBalanceState.unavailable;
     isMaxActive = false;
 
     await _updateMaxSellAmount();
@@ -526,6 +533,10 @@ class MakerFormBloc implements BlocBase {
   }
 
   Future<TextError?> makeOrder() async {
+    if ((sellCoin?.walletOnly ?? true) || (buyCoin?.walletOnly ?? true)) {
+      return TextError(error: LocaleKeys.dexUnableToStartSwap.tr());
+    }
+
     final Map<String, dynamic>? response = await api.setprice(
       SetPriceRequest(
         base: sellCoin!.abbr,

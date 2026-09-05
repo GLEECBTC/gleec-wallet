@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/analytics/events.dart';
@@ -17,8 +18,6 @@ import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/assets_overview/investment_repository.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/bitrefill/bloc/bitrefill_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/generator.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/mock_transaction_history_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
@@ -64,6 +63,7 @@ import 'package:web_dex/router/parsers/root_route_parser.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/services/platform_web_api/platform_web_api.dart';
+import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
@@ -158,7 +158,14 @@ class AppBlocRoot extends StatelessWidget {
           dispose: (manager) => manager.dispose(),
         ),
         RepositoryProvider(
-          create: (_) => NftsRepo(api: mm2Api.nft, coinsRepo: coinsRepository),
+          create: (context) => NftsRepo(
+            api: mm2Api.nft,
+            coinsRepo: coinsRepository,
+            sdk: komodoDefiSdk,
+            tradingStatusService: RepositoryProvider.of<TradingStatusService>(
+              context,
+            ),
+          ),
         ),
         RepositoryProvider(create: (_) => tradingEntitiesBloc),
         RepositoryProvider(create: (_) => dexRepository),
@@ -174,6 +181,14 @@ class AppBlocRoot extends StatelessWidget {
         RepositoryProvider(create: (_) => myOrdersService),
         RepositoryProvider(
           create: (_) => KmdRewardsBloc(coinsRepository, mm2Api),
+        ),
+        // Expose the portfolio chart repositories so that scoped views (e.g.
+        // the single-coin details page) can spin up their own
+        // PortfolioGrowthBloc/ProfitLossBloc instances that reuse the same
+        // cache, instead of sharing the app-wide whole-portfolio blocs below.
+        RepositoryProvider<ProfitLossRepository>.value(value: profitLossRepo),
+        RepositoryProvider<PortfolioGrowthRepository>.value(
+          value: portfolioGrowthRepo,
         ),
       ],
       child: MultiBlocProvider(
@@ -226,15 +241,6 @@ class AppBlocRoot extends StatelessWidget {
             create: (context) => TakerBloc(
               kdfSdk: komodoDefiSdk,
               dexRepository: dexRepository,
-              coinsRepository: coinsRepository,
-              analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
-            ),
-          ),
-          BlocProvider<BridgeBloc>(
-            create: (context) => BridgeBloc(
-              kdfSdk: komodoDefiSdk,
-              dexRepository: dexRepository,
-              bridgeRepository: BridgeRepository(mm2Api, coinsRepository),
               coinsRepository: coinsRepository,
               analyticsBloc: BlocProvider.of<AnalyticsBloc>(context),
             ),
@@ -326,11 +332,17 @@ class _MyAppViewState extends State<_MyAppView> {
     routingState.selectedMenu = MainMenuValue.defaultMenu();
 
     unawaited(_hideAppLoader());
+    _schedulePrecacheCoinIcons();
 
     // Attempt to restore previously authenticated session
     context.read<AuthBloc>().add(const AuthStateRestoreRequested());
 
-    if (kDebugMode) {
+    // `perfAutoLoginEnabled` is a const dart-define, so a normal build folds
+    // this to `kDebugMode` exactly as before and tree-shakes the rest. It exists
+    // so a *profile* build can reach the post-login activation storm without an
+    // integration test driving the wallet-manager UI - debug frame timings
+    // measure the JIT, not the app. See `docs/TESTING.md` §7.
+    if (kDebugMode || perfAutoLoginEnabled) {
       final walletsRepo = RepositoryProvider.of<WalletsRepository>(context);
       final authBloc = context.read<AuthBloc>();
       initDebugData(authBloc, walletsRepo).ignore();
@@ -357,12 +369,17 @@ class _MyAppViewState extends State<_MyAppView> {
     );
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    _precacheCoinIcons(sdk).ignore();
+  void _schedulePrecacheCoinIcons() {
+    // Deliberately not driven from didChangeDependencies: that fires again on
+    // theme/locale/MediaQuery changes, and the old guard *completed* the
+    // previous operation rather than cancelling it, so a second full pass ran
+    // concurrently with the first. Kick it off once, after the first frame, so
+    // it never competes with initial layout.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+      _precacheCoinIcons(sdk).ignore();
+    });
   }
 
   /// Hides the native app launch loader. Currently only implemented for web.
@@ -394,55 +411,111 @@ class _MyAppViewState extends State<_MyAppView> {
     }
   }
 
-  Completer<void>? _currentPrecacheOperation;
+  /// Number of icons precached concurrently. Keeps the CDN fetches for
+  /// un-bundled icons overlapping instead of strictly serialized, without
+  /// saturating the connection pool that KDF's own RPCs need.
+  static const int _iconPrecacheBatchSize = 8;
 
-  Future<void> _precacheCoinIcons(KomodoDefiSdk sdk) async {
-    if (_currentPrecacheOperation != null &&
-        !_currentPrecacheOperation!.isCompleted) {
-      // completeError throws an uncaught exception, which causes the UI
-      // tests to fail when switching between light and dark theme
-      log('New request to precache icons started.');
-      _currentPrecacheOperation!.complete();
+  Future<void>? _currentPrecacheOperation;
+
+  Future<void> _precacheCoinIcons(KomodoDefiSdk sdk) {
+    final currentPrecacheOperation = _currentPrecacheOperation;
+    if (currentPrecacheOperation != null) {
+      log('Coin icon precache already started, reusing existing operation.');
+      return currentPrecacheOperation;
     }
 
-    _currentPrecacheOperation = Completer<void>();
+    return _currentPrecacheOperation = _runCoinIconPrecache(sdk);
+  }
 
+  /// Moves the signed-in wallet's coins to the front of [assetIds], in place.
+  ///
+  /// Best effort: if the wallet list is not populated yet the original order is
+  /// kept, since this only decides *when* an already-scheduled icon loads.
+  void _prioritiseWalletIcons(List<AssetId> assetIds) {
+    if (!mounted) return;
+
+    final Set<String> walletSymbols;
+    try {
+      walletSymbols = context
+          .read<CoinsBloc>()
+          .state
+          .walletCoins
+          .values
+          .map((coin) => coin.id.symbol.configSymbol.toLowerCase())
+          .toSet();
+    } catch (_) {
+      return;
+    }
+    if (walletSymbols.isEmpty) return;
+
+    bool isWalletCoin(AssetId id) =>
+        walletSymbols.contains(id.symbol.configSymbol.toLowerCase());
+
+    final prioritised = [
+      ...assetIds.where(isWalletCoin),
+      ...assetIds.where((id) => !isWalletCoin(id)),
+    ];
+    assetIds
+      ..clear()
+      ..addAll(prioritised);
+  }
+
+  Future<void> _runCoinIconPrecache(KomodoDefiSdk sdk) async {
     try {
       final stopwatch = Stopwatch()..start();
-      final availableAssetIds = sdk.assets.available.keys.where(
-        (assetId) => !excludedAssetList.contains(assetId.symbol.configSymbol),
-      );
 
-      await for (final assetId in Stream.fromIterable(availableAssetIds)) {
-        // TODO: Test if necessary to complete prematurely with error if build
-        // context is stale. Alternatively, we can check if the context is
-        // not mounted and return early with error.
-        // ignore: use_build_context_synchronously
-        // if (context.findRenderObject() == null) {
-        //   _currentPrecacheOperation!.completeError('Build context is stale.');
-        //   return;
-        // }
+      // Deduplicate by the key AssetIcon actually resolves against, so the
+      // ~800 assets collapse to the number of distinct icons. Materialised
+      // because it is iterated in batches below.
+      //
+      // `coinsCount` below deliberately stays the number of *assets* covered,
+      // not the deduplicated icon count, so the analytics series remains
+      // comparable across this change.
+      final seenSymbols = <String>{};
+      var coveredAssetCount = 0;
+      final assetIdsToPrecache = sdk.assets.available.keys.where((assetId) {
+        final configSymbol = assetId.symbol.configSymbol;
+        if (excludedAssetList.contains(configSymbol)) return false;
+        coveredAssetCount++;
+        return seenSymbols.add(configSymbol.toLowerCase());
+      }).toList();
 
-        // ignore: use_build_context_synchronously
-        await AssetIcon.precacheAssetIcon(
-          context,
-          assetId,
-        ).onError((_, __) => debugPrint('Error precaching coin icon $assetId'));
+      // Precache the wallet's own coins first. The set and `coveredAssetCount`
+      // are unchanged - only the order is - but the icons the user is actually
+      // looking at now land in the first batch or two instead of somewhere in
+      // the ~54 batches that follow, while every batch competes with KDF for
+      // the web main thread.
+      _prioritiseWalletIcons(assetIdsToPrecache);
+
+      for (
+        var i = 0;
+        i < assetIdsToPrecache.length;
+        i += _iconPrecacheBatchSize
+      ) {
+        if (!mounted) return;
+        final batch = assetIdsToPrecache.skip(i).take(_iconPrecacheBatchSize);
+        await Future.wait(
+          batch.map(
+            // ignore: use_build_context_synchronously
+            (assetId) => AssetIcon.precacheAssetIcon(context, assetId).onError(
+              (_, __) => debugPrint('Error precaching coin icon $assetId'),
+            ),
+          ),
+        );
       }
-
-      _currentPrecacheOperation!.complete();
 
       if (!mounted) return;
       context.read<AnalyticsBloc>().logEvent(
         CoinsDataUpdatedEventData(
           updateSource: 'remote',
           updateDurationMs: stopwatch.elapsedMilliseconds,
-          coinsCount: availableAssetIds.length,
+          coinsCount: coveredAssetCount,
         ),
       );
     } catch (e) {
       log('Error precaching coin icons: $e');
-      _currentPrecacheOperation!.completeError(e);
+      rethrow;
     }
   }
 }

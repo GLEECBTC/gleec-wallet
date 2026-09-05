@@ -21,15 +21,19 @@ final class TransactionHistoryState extends Equatable {
         loading = false,
         error = null;
 
+  /// [clearError] is required because [error] is nullable: `error ?? this.error`
+  /// cannot express "drop the previous error". Without it a retry kept
+  /// rendering the failure it was retrying.
   TransactionHistoryState copyWith({
     List<Transaction>? transactions,
     bool? loading,
     BaseError? error,
+    bool clearError = false,
   }) {
     return TransactionHistoryState(
       transactions: transactions ?? this.transactions,
       loading: loading ?? this.loading,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 }

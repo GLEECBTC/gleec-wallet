@@ -1,7 +1,15 @@
+import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
 /// Extension methods for the Transaction class
 extension TransactionExtensions on Transaction {
+  /// Net-zero transfer where every debit is matched by a credit to the same
+  /// wallet (e.g. an EOA→custody consolidation or an HD self-transfer).
+  bool get isInternalTransfer =>
+      balanceChanges.netChange == Decimal.zero &&
+      balanceChanges.spentByMe > Decimal.zero &&
+      balanceChanges.spentByMe == balanceChanges.receivedByMe;
+
   /// Sanitizes a transaction by removing the sender from the recipient list
   /// and sorting recipients if multiple exist.
   /// [walletAddresses] is used to prioritize wallet addresses in the sorted list.

@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/nfts/nft_main_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -27,12 +28,20 @@ class NftTab extends StatelessWidget {
     final TextThemeExtension textTheme = themeData
         .extension<TextThemeExtension>()!;
 
-    return BlocSelector<NftMainBloc, NftMainState, NftBlockchains>(
+    // Records compare structurally, so widening the selector from a bare
+    // NftBlockchains still dedupes rebuilds.
+    return BlocSelector<
+      NftMainBloc,
+      NftMainState,
+      (NftBlockchains, NftChainStatus)
+    >(
       selector: (state) {
-        return state.selectedChain;
+        return (state.selectedChain, state.statusOf(chain));
       },
-      builder: (context, selectedChain) {
+      builder: (context, value) {
+        final (selectedChain, status) = value;
         final bool isSelected = selectedChain == chain;
+        final bool isActive = status == NftChainStatus.active;
         final chainColor = _getChainColor(chain);
         return InkWell(
           key: Key('nft-tab-bnt-$chain'),
@@ -61,7 +70,9 @@ class NftTab extends StatelessWidget {
                   height: 24,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? chainColor : colorScheme.s40,
+                    color: isSelected && isActive
+                        ? chainColor
+                        : colorScheme.s40,
                   ),
                   child: Center(
                     child: SvgPicture.asset(
@@ -70,7 +81,11 @@ class NftTab extends StatelessWidget {
                       height: 16,
                       key: Key('nft-tab-btn-icon-$chain'),
                       colorFilter: ColorFilter.mode(
-                        isSelected ? colorScheme.surf : chainColor,
+                        isSelected && isActive
+                            ? colorScheme.surf
+                            : isActive
+                            ? chainColor
+                            : colorScheme.s50,
                         BlendMode.srcIn,
                       ),
                     ),
@@ -85,10 +100,12 @@ class NftTab extends StatelessWidget {
                       _title,
                       key: Key('nft-tab-btn-text-$chain'),
                       style: textTheme.bodySBold.copyWith(
-                        color: isSelected ? chainColor : colorScheme.s50,
+                        color: isSelected && isActive
+                            ? chainColor
+                            : colorScheme.s50,
                       ),
                     ),
-                    _NftCount(chain: chain),
+                    _NftTabSubtitle(chain: chain, status: status),
                   ],
                 ),
               ],
@@ -130,32 +147,67 @@ class NftTab extends StatelessWidget {
   }
 }
 
-class _NftCount extends StatelessWidget {
-  //ignore: unused_element_parameter
-  const _NftCount({super.key, required this.chain});
+/// The line under the chain name.
+///
+/// Only an active chain that has answered shows a count. Every other state says
+/// what it is rather than going blank, since a blank line reads as "you own
+/// nothing here" about a chain nobody queried.
+class _NftTabSubtitle extends StatelessWidget {
+  const _NftTabSubtitle({required this.chain, required this.status});
 
   final NftBlockchains chain;
+  final NftChainStatus status;
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<NftMainBloc, NftMainState, Map<NftBlockchains, int?>>(
-      selector: (state) {
-        return state.nftCount;
-      },
-      builder: (context, nftCount) {
-        final int? count = nftCount[chain];
-        final ColorSchemeExtension colorScheme = Theme.of(
-          context,
-        ).extension<ColorSchemeExtension>()!;
-        final TextThemeExtension textTheme = Theme.of(
-          context,
-        ).extension<TextThemeExtension>()!;
-        return Text(
-          count != null ? LocaleKeys.nItems.tr(args: [count.toString()]) : '',
-          style: textTheme.bodyXXSBold.copyWith(color: colorScheme.s40),
-          key: Key('ntf-tab-count-$chain'),
-        );
-      },
+    final ColorSchemeExtension colorScheme = Theme.of(
+      context,
+    ).extension<ColorSchemeExtension>()!;
+    final TextThemeExtension textTheme = Theme.of(
+      context,
+    ).extension<TextThemeExtension>()!;
+    final TextStyle style = textTheme.bodyXXSBold.copyWith(
+      color: colorScheme.s40,
     );
+
+    switch (status) {
+      case NftChainStatus.inactive:
+        return Text(
+          LocaleKeys.nftChainNotEnabled.tr(),
+          style: style,
+          key: Key('nft-tab-status-$chain'),
+        );
+      case NftChainStatus.activating:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          key: Key('nft-tab-activating-$chain'),
+          children: [
+            UiSpinner(
+              width: 10,
+              height: 10,
+              strokeWidth: 1.5,
+              color: colorScheme.s40,
+            ),
+            const SizedBox(width: 4),
+            Text(LocaleKeys.nftChainEnabling.tr(), style: style),
+          ],
+        );
+      case NftChainStatus.failed:
+        return Text(
+          LocaleKeys.nftChainEnableFailed.tr(),
+          style: style.copyWith(color: colorScheme.error),
+          key: Key('nft-tab-failed-$chain'),
+        );
+      case NftChainStatus.active:
+        return BlocSelector<NftMainBloc, NftMainState, int?>(
+          selector: (state) => state.nftCount[chain],
+          builder: (context, count) => Text(
+            count != null ? LocaleKeys.nItems.tr(args: [count.toString()]) : '',
+            style: style,
+            // Typo retained: existing tests and tooling target this key.
+            key: Key('ntf-tab-count-$chain'),
+          ),
+        );
+    }
   }
 }

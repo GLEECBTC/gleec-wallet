@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
     show MnemonicFailedReason;
@@ -15,7 +16,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/shared/utils/utils.dart';
-import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
@@ -60,7 +61,6 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isSeedHidden = true;
-  bool _eulaAndTosChecked = false;
   bool _inProgress = false;
   bool _allowCustomSeed = false;
   bool _isHdMode = true;
@@ -73,7 +73,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   bool get _isButtonEnabled {
     final isFormValid = _refreshFormValidationState();
 
-    return _eulaAndTosChecked && !_inProgress && isFormValid;
+    return !_inProgress && isFormValid;
   }
 
   @override
@@ -126,6 +126,10 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
                   children: <Widget>[
                     _buildFields(),
                     const SizedBox(height: 20),
+                    if (_step == WalletSimpleImportSteps.password) ...[
+                      TermsConsentText(actionLabel: LocaleKeys.import.tr()),
+                      const SizedBox(height: 12),
+                    ],
                     UiPrimaryButton(
                       key: const Key('confirm-seed-button'),
                       text: _inProgress
@@ -392,16 +396,6 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         _buildImportFileButton(),
         const SizedBox(height: 15),
         if (_shouldShowCustomSeedToggle) _buildCheckBoxCustomSeed(),
-        const SizedBox(height: 15),
-        EulaTosCheckboxes(
-          key: const Key('import-wallet-eula-checks'),
-          isChecked: _eulaAndTosChecked,
-          onCheck: (isChecked) {
-            setState(() {
-              _eulaAndTosChecked = isChecked;
-            });
-          },
-        ),
       ],
     );
   }
@@ -476,6 +470,9 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     final WalletConfig config = WalletConfig(
       type: _isHdMode ? WalletType.hdwallet : WalletType.iguana,
       activatedCoins: enabledByDefaultCoins,
+      // The user typed every word, which is stronger evidence of holding the
+      // phrase than the confirmation quiz asks for. File import is the case
+      // that must not claim this - see `wallet_import_by_file.dart`.
       hasBackup: true,
       seedPhrase: _seedController.text,
     );
@@ -507,6 +504,10 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-import-seed'),
+      );
       widget.onImport(
         name: _nameController.text.trim(),
         password: _passwordController.text,

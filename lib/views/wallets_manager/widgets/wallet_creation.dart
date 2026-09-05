@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -9,7 +10,7 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
-import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -42,7 +43,6 @@ class _WalletCreationState extends State<WalletCreation> {
     text: '',
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  bool _eulaAndTosChecked = false;
   bool _inProgress = false;
   bool _rememberMe = false;
   bool _arePasswordsValid = false;
@@ -98,9 +98,14 @@ class _WalletCreationState extends State<WalletCreation> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.action == WalletsManagerAction.create
-                      ? LocaleKeys.walletCreationTitle.tr()
-                      : LocaleKeys.walletImportTitle.tr(),
+                  // Keyed on `import` rather than `create` so the neutral
+                  // `none` state - which this widget also renders, including
+                  // for the frame where the dialog is dismissing after a
+                  // successful create - reads as "Create wallet" instead of
+                  // briefly flipping to "Import wallet".
+                  widget.action == WalletsManagerAction.import
+                      ? LocaleKeys.walletImportTitle.tr()
+                      : LocaleKeys.walletCreationTitle.tr(),
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontSize: 18),
@@ -108,16 +113,8 @@ class _WalletCreationState extends State<WalletCreation> {
                 const SizedBox(height: 24),
                 _buildFields(),
                 const SizedBox(height: 22),
-                EulaTosCheckboxes(
-                  key: const Key('create-wallet-eula-checks'),
-                  isChecked: _eulaAndTosChecked,
-                  onCheck: (isChecked) {
-                    setState(() {
-                      _eulaAndTosChecked = isChecked;
-                    });
-                  },
-                ),
-                const SizedBox(height: 32),
+                TermsConsentText(actionLabel: LocaleKeys.create.tr()),
+                const SizedBox(height: 12),
                 UiPrimaryButton(
                   key: const Key('confirm-password-button'),
                   height: 50,
@@ -197,7 +194,6 @@ class _WalletCreationState extends State<WalletCreation> {
   }
 
   void _onCreate() async {
-    if (!_eulaAndTosChecked) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _inProgress = true);
     // Async uniqueness check before proceeding
@@ -225,6 +221,10 @@ class _WalletCreationState extends State<WalletCreation> {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       // Complete autofill session so password managers can save new credentials
       TextInput.finishAutofillContext(shouldSave: true);
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-creation'),
+      );
       widget.onCreate(
         name: _nameController.text.trim(),
         password: _passwordController.text,
@@ -239,9 +239,6 @@ class _WalletCreationState extends State<WalletCreation> {
       _nameController.text,
     );
     final isNameValid = nameError == null;
-    return _eulaAndTosChecked &&
-        !_inProgress &&
-        isNameValid &&
-        _arePasswordsValid;
+    return !_inProgress && isNameValid && _arePasswordsValid;
   }
 }

@@ -8,15 +8,34 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/model/settings/analytics_settings.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/firebase_options.dart';
+import 'firebase_options_placeholders.dart';
 import 'analytics_api.dart';
 import 'analytics_repo.dart';
 
 class FirebaseAnalyticsApi implements AnalyticsApi {
+  FirebaseAnalyticsApi({FirebaseOptions? options}) : _options = options;
+
+  final FirebaseOptions? _options;
   late FirebaseAnalytics _instance;
+
+  /// Completes when initialisation settles, one way or the other.
+  ///
+  /// The `ignore()` below is load-bearing. This completer is completed with an
+  /// error when every retry has been exhausted, and a `Future` completed with
+  /// an error that nothing is listening to becomes an *unhandled* async error -
+  /// raised in whatever happens to be running when the last retry gives up,
+  /// seconds after the call that caused it. In a test run that lands on an
+  /// unrelated test; in the app it reaches the zone error handler as a crash
+  /// with no useful stack.
+  ///
+  /// Callers that care still `await` the future and still see the error. This
+  /// only says that *nobody at all* listening is an acceptable state - which it
+  /// is, because analytics failing must never take anything else down.
   final Completer<void> _initCompleter = Completer<void>();
 
   bool _isInitialized = false;
   bool _isEnabled = false;
+  bool _isUnavailableForBuild = false;
   int _initRetryCount = 0;
   static const int _maxInitRetries = 3;
   static const String _persistedQueueKey = 'firebase_analytics_persisted_queue';
@@ -38,11 +57,16 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
 
   @override
   Future<void> initialize(AnalyticsSettings settings) async {
+    // Claim the error before anything can observe it as unhandled. Harmless
+    // when a real caller also awaits: a future may have many listeners.
+    _initCompleter.future.ignore();
     return _initializeWithRetry(settings);
   }
 
   /// Initialize with retry mechanism
   Future<void> _initializeWithRetry(AnalyticsSettings settings) async {
+    if (_isUnavailableForBuild) return;
+
     try {
       if (kDebugMode) {
         log(
@@ -50,15 +74,6 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
           path: 'analytics -> FirebaseAnalyticsApi -> _initialize',
         );
       }
-
-      // Setup queue persistence timer
-      _queuePersistenceTimer = Timer.periodic(
-        const Duration(minutes: 5),
-        (_) => _persistQueue(),
-      );
-
-      // Load any previously saved events
-      await _loadPersistedQueue();
 
       // Skip unsupported platforms (Linux not supported by Firebase Analytics)
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.linux) {
@@ -68,18 +83,37 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
             path: 'analytics -> FirebaseAnalyticsApi -> _initialize',
           );
         }
-        _isInitialized = false;
-        _isEnabled = false;
-        if (!_initCompleter.isCompleted) {
-          _initCompleter.complete();
-        }
+        await _disableForBuild();
         return;
       }
 
-      // Initialize Firebase
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
+      // A build that never had real Firebase values substituted in. Returning
+      // here rather than letting the placeholders reach Firebase is the point:
+      // on Apple platforms a malformed app ID raises inside the platform
+      // channel, which takes the process down instead of failing this call.
+      final options = _options ?? DefaultFirebaseOptions.currentPlatform;
+      if (isPlaceholderFirebaseOptions(options)) {
+        if (kDebugMode) {
+          log(
+            'Firebase is not configured for this build; marking as '
+            'initialized=false and enabled=false',
+            path: 'analytics -> FirebaseAnalyticsApi -> _initialize',
+          );
+        }
+        await _disableForBuild();
+        return;
+      }
+
+      // Only configured builds can eventually send queued events. Reuse the
+      // timer on retries so dispose can cancel all persistence work.
+      _queuePersistenceTimer ??= Timer.periodic(
+        const Duration(minutes: 5),
+        (_) => _persistQueue(),
       );
+      await _loadPersistedQueue();
+
+      // Initialize Firebase
+      await Firebase.initializeApp(options: options);
       _instance = FirebaseAnalytics.instance;
 
       _isInitialized = true;
@@ -136,6 +170,31 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
     }
   }
 
+  Future<void> _disableForBuild() async {
+    _isUnavailableForBuild = true;
+    _isInitialized = false;
+    _isEnabled = false;
+    _eventQueue.clear();
+
+    // A queue from an earlier installation cannot be sent by this build.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_persistedQueueKey);
+    } catch (e) {
+      if (kDebugMode) {
+        log(
+          'Error clearing unavailable Firebase analytics queue: $e',
+          path: 'analytics -> FirebaseAnalyticsApi -> _disableForBuild',
+          isError: true,
+        );
+      }
+    }
+
+    if (!_initCompleter.isCompleted) {
+      _initCompleter.complete();
+    }
+  }
+
   @override
   Future<void> retryInitialization(AnalyticsSettings settings) async {
     if (!_isInitialized) {
@@ -146,6 +205,8 @@ class FirebaseAnalyticsApi implements AnalyticsApi {
 
   @override
   Future<void> sendEvent(AnalyticsEventData event) async {
+    if (_isUnavailableForBuild) return;
+
     // If not initialized or disabled, enqueue for later
     if (!_isInitialized || !_isEnabled) {
       _eventQueue.add(event);

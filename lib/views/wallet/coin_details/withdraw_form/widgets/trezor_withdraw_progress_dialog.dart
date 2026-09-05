@@ -21,9 +21,7 @@ class TrezorWithdrawProgressDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
         width: 400,
         padding: const EdgeInsets.all(24),
@@ -31,11 +29,7 @@ class TrezorWithdrawProgressDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 24),
-            const UiSpinner(
-              width: 58,
-              height: 58,
-              strokeWidth: 4,
-            ),
+            const UiSpinner(width: 58, height: 58, strokeWidth: 4),
             const SizedBox(height: 48),
             Text(
               LocaleKeys.userActionRequired.tr(),

@@ -4,6 +4,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 enum WithdrawFormStep {
   fill,
   confirm,
+  pending,
   success,
   failed;
 
@@ -15,6 +16,8 @@ enum WithdrawFormStep {
         return LocaleKeys.enterDataToSend.tr();
       case WithdrawFormStep.confirm:
         return LocaleKeys.confirmSending.tr();
+      case WithdrawFormStep.pending:
+        return LocaleKeys.withdrawGaslessPendingTitle.tr();
       case WithdrawFormStep.success:
         return LocaleKeys.transactionComplete.tr();
       case WithdrawFormStep.failed:

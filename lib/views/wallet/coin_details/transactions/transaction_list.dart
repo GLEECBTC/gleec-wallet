@@ -101,24 +101,22 @@ class HistoryListContent extends StatelessWidget {
       children: [
         if (transactions.isNotEmpty && isMobile) const HistoryTitle(),
         if (transactions.isNotEmpty && isMobile) const SizedBox(height: 12),
-        ...transactions.asMap().entries.map(
-          (entry) {
-            final index = entry.key;
-            final transaction = entry.value;
+        ...transactions.asMap().entries.map((entry) {
+          final index = entry.key;
+          final transaction = entry.value;
 
-            return Column(
-              children: [
-                TransactionListRow(
-                  transaction: transaction,
-                  coinAbbr: coinAbbr,
-                  setTransaction: setTransaction,
-                ),
-                if (isMobile && index < transactions.length - 1)
-                  const SizedBox(height: 12),
-              ],
-            );
-          },
-        ).toList(),
+          return Column(
+            children: [
+              TransactionListRow(
+                transaction: transaction,
+                coinAbbr: coinAbbr,
+                setTransaction: setTransaction,
+              ),
+              if (isMobile && index < transactions.length - 1)
+                const SizedBox(height: 12),
+            ],
+          );
+        }).toList(),
         if (isInProgress) const UiSpinnerList(height: 50),
       ],
     );
@@ -126,9 +124,7 @@ class HistoryListContent extends StatelessWidget {
 }
 
 class HistoryTitle extends StatelessWidget {
-  const HistoryTitle({
-    super.key,
-  });
+  const HistoryTitle({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -163,16 +159,16 @@ class _EmptyList extends StatelessWidget {
           Text(
             LocaleKeys.noTransactionsTitle.tr(),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: isMobile ? 14 : 18,
-                  color: theme.custom.noTransactionsTextColor,
-                ),
+              fontSize: isMobile ? 14 : 18,
+              color: theme.custom.noTransactionsTextColor,
+            ),
           ),
           Text(
             LocaleKeys.noTransactionsDescription.tr(),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: isMobile ? 12 : 14,
-                  color: theme.custom.noTransactionsTextColor,
-                ),
+              fontSize: isMobile ? 12 : 14,
+              color: theme.custom.noTransactionsTextColor,
+            ),
           ),
           SizedBox(height: verticalPadding),
         ],

@@ -1,6 +1,21 @@
 {
+  // One hosting config, deployed to a different site depending on which
+  // Firebase project it is deployed against. `.firebaserc` maps the `web`
+  // deploy target per project:
+  //
+  //   komodo-wallet-official -> site walletrc              (CI, push to `dev`)
+  //   komodo-wallet-preview  -> site komodo-wallet-preview (local default)
+  //
+  //   firebase deploy --only hosting:web --project <project>
+  //
+  // `web` names the ROLE ("the wallet web app site for this project"), not a
+  // site. Do not name it after any one site: the target is shared across
+  // projects, so a site-shaped name is wrong everywhere except one place.
+  // `--project` is what selects the site, so always pass it -- a bare
+  // `firebase deploy` uses `.firebaserc`'s default, which is the preview
+  // project on purpose.
   "hosting": {
-    "site": "walletrc",
+    "target": "web",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     // "headers": [
@@ -18,6 +33,30 @@
     //     ]
     //   }
     // ],
+    "headers": [
+      {
+        // Coin icons are a large, rarely-changing set (hundreds of files).
+        // Without this they inherit Firebase's default max-age=3600, so every
+        // repeat visit more than an hour apart re-validates the whole set while
+        // the user is logging in.
+        //
+        // Flutter web assets are not content-hashed, so this is a bounded TTL
+        // rather than `immutable`. Note that AssetIcon's bundled -> CDN ->
+        // fallback chain does NOT rescue a stale icon: it only triggers when an
+        // asset is missing, and a cached-but-outdated file still loads fine.
+        // The TTL is the whole mitigation, so re-arting an existing icon can
+        // take up to 30 days to propagate. Adding an icon under a new filename
+        // is unaffected. If an in-place icon change ever needs to ship fast,
+        // shorten this value or rename the file.
+        "source": "/assets/packages/komodo_defi_framework/assets/coin_icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=2592000"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",

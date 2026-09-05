@@ -14,35 +14,38 @@ class FaucetMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final info = parseSuccessMessage(message);
     final textStyle = TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
-        color: Theme.of(context)
-            .textTheme
-            .bodyMedium
-            ?.color
-            ?.withValues(alpha: 0.6));
+      fontSize: 14,
+      fontWeight: FontWeight.w700,
+      color: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+    );
     return Center(
       child: Container(
-          padding: const EdgeInsets.all(20),
-          width: 324,
-          decoration: BoxDecoration(
-              color: theme.custom.subCardBackgroundColor,
-              borderRadius: BorderRadius.circular(18)),
-          child: SelectableText.rich(
-            TextSpan(
-              text: '${info.message}\n',
-              children: _getLinkText(context, textStyle, info.link),
-            ),
-            textAlign: TextAlign.center,
-            style: textStyle,
-          )),
+        padding: const EdgeInsets.all(20),
+        width: 324,
+        decoration: BoxDecoration(
+          color: theme.custom.subCardBackgroundColor,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: SelectableText.rich(
+          TextSpan(
+            text: '${info.message}\n',
+            children: _getLinkText(context, textStyle, info.link),
+          ),
+          textAlign: TextAlign.center,
+          style: textStyle,
+        ),
+      ),
     );
   }
 
   FaucetSuccessInfo parseSuccessMessage(String message) {
     if (message.contains('Link:')) {
-      final link =
-          message.substring(message.indexOf('<') + 1, message.indexOf('>'));
+      final link = message.substring(
+        message.indexOf('<') + 1,
+        message.indexOf('>'),
+      );
       final mssg = message.substring(0, message.indexOf(' Link'));
 
       return FaucetSuccessInfo(message: mssg, link: link);
@@ -51,7 +54,10 @@ class FaucetMessage extends StatelessWidget {
   }
 
   List<InlineSpan> _getLinkText(
-      BuildContext context, TextStyle textStyle, String? link) {
+    BuildContext context,
+    TextStyle textStyle,
+    String? link,
+  ) {
     if (link == null) {
       return [];
     }
@@ -59,16 +65,14 @@ class FaucetMessage extends StatelessWidget {
       TextSpan(
         text: LocaleKeys.faucetLinkToTransaction.tr(),
         mouseCursor: SystemMouseCursors.click,
-        style: textStyle.copyWith(
-          decoration: TextDecoration.underline,
-        ),
+        style: textStyle.copyWith(decoration: TextDecoration.underline),
         recognizer: TapGestureRecognizer()
           ..onTap = () async {
             await canLaunchUrlString(link)
                 ? await launchUrlString(link)
                 : throw 'Could not launch $link}';
           },
-      )
+      ),
     ];
   }
 }

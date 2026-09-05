@@ -4,4 +4,13 @@
 	branch = main
 	update = checkout
 	fetchRecurseSubmodules = on-demand
-	ignore = dirty
+	# `untracked`, not `dirty`: this submodule is co-developed, not just
+	# consumed, so hiding worktree edits hides real work. `dirty` suppressed
+	# every uncommitted SDK change from the parent's `git status` - including
+	# the KDF pin in app_build/build_config.json - and made the "Fail if the
+	# tree is dirty" gate in kdf-harness-on-pr.yml blind to the two SDK files
+	# it names. `untracked` still shows modified tracked files while keeping
+	# any future build droppings out of the way.
+	# NOTE: .git/config overrides this file. Run `git submodule sync` after
+	# pulling, or the old value keeps winning locally.
+	ignore = untracked
