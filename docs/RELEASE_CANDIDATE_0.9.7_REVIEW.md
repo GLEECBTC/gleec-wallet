@@ -94,6 +94,39 @@ The local-auth code is unchanged by this correction; its 74-test result above re
 
 ## Release boundaries
 
-- The app review changes remain on the local review branch; the SDK fixes are pushed to PR #374. No GitHub merge, release tag, production deployment, or funded transfer is part of this review.
+- The app review branch targets `dev` to feed RC #3525; the SDK fixes and RC preparation are pushed to PR #374 against `main`. No GitHub merge, release tag, production deployment, or funded transfer is part of this review.
 - Native signing/distribution and a deployed RC smoke test remain release checks. The observed GitHub checks on the release PR passed except `Test web-app-linux-profile`; that existing integration failure is not a passing validation result for this patch.
 - Production-hosted wrapper protection reaches shipped native clients only when the updated wrapper and headers are actually deployed. The included deployment verifier checks that separate release action.
+
+## RC package preparation
+
+SDK commit `a7abc2c00a35838c08fb4e4aacc728571f7e731f` prepares
+`komodo_defi_sdk` `0.8.0-rc.1` and `komodo_defi_local_auth` `0.6.0-rc.1`.
+The SDK requires local-auth `^0.6.0-rc.1`. The root and package changelogs now
+identify the RC versions and cover the metadata and history corrections, with
+explicit prerelease installation and migration guidance. The wallet pins this
+published Git commit; its lockfile changes only the two RC package versions.
+
+Validation of this versioned snapshot:
+
+| Check | Result |
+| --- | --- |
+| Offline SDK workspace resolution | Passed |
+| Wallet dependency resolution with enforced lockfile | Passed |
+| Clean package publication dry-runs, SDK and local-auth | Both passed with zero warnings |
+| Full SDK package suite | 874 passed, 1 skipped |
+| Full local-auth package suite | 74 passed |
+| Wallet unit/widget aggregator with all four GasFree defines | 784 passed, 3 skipped |
+
+The publication dry-runs report informational version-gap hints because pub.dev
+has older releases than the repository. They do not upload packages or establish
+that every transitive workspace package is already available on pub.dev.
+Git-pinned wallet testing does not require package publication. Publishable RC
+distribution requires confirming the complete dependency chain and publishing
+local-auth before the SDK.
+
+After SDK PR #374 merges, repin the wallet to its resulting `main` commit if the
+merge changes the tested commit identity (for example, a squash merge), refresh
+the lockfile if needed, and run the app's gates on that pin. Carry the SDK fix
+into `dev` through the normal synchronization. Tags, package uploads, signing,
+and production rollout remain release actions after the reviewed RC is accepted.
