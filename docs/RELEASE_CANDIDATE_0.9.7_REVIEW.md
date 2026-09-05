@@ -7,7 +7,7 @@ Reviewed on 2026-09-05 against [PR #3525](https://github.com/GLEECBTC/gleec-wall
 - Release base: `origin/main`, `07fc5bc5961e258399ad829c8c0784fcb27d4d53`.
 - Review branch starts at `origin/dev`, `e1f7885d18a895ce443464d247349bcc31715522`.
 - [PR #3514](https://github.com/GLEECBTC/gleec-wallet/pull/3514), head `8adb081f305e5e8a78fe5ce6eb36aba74931976e`, is squash-merged locally before the review fixes. This includes the web update changes from #3526.
-- Original SDK release pin: `7dce2687276684c132a1d9e4702c7d5c541eba2a`; initial fixes are committed at `a9e3bde6`, followed by the verified-identity API correction at `51e4b56a7c0712711b0441d4c67d6d3a99332e97`, on SDK branch `fix/release-candidate-review-20260905`.
+- Original SDK release pin: `7dce2687276684c132a1d9e4702c7d5c541eba2a`; initial fixes are committed at `a9e3bde6`, followed by the verified-identity API correction at `51e4b56a7c0712711b0441d4c67d6d3a99332e97` and the Wasm activation race correction at `0c69c1b5d2e68225b8377e6a4099862f133727c3`, on SDK branch `fix/release-candidate-review-20260905`.
 - Scope: the complete app release diff (409 files including #3514), the SDK roll's wallet identity/history/persistence and GasFree paths, native/Firebase configuration, build workflows, checkout scripts, and tests. Independent reviews covered transfers, receive/activation, onboarding, NFT/history, web/fiat, and the SDK, followed by a second review of the fixes.
 
 ## Findings addressed
@@ -72,6 +72,25 @@ Validation of the follow-up with Flutter `3.41.4`:
 | Changed-file formatting and whitespace checks | Passed |
 
 The initial benchmark, script, and release web-build results above predate this follow-up; those checks were not rerun for the metadata API migration.
+
+## Follow-up: activation completion must recheck the session synchronously
+
+[Review comment #3941224671](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/374#discussion_r3941224671) is valid on WebAssembly. Its async-return completion can yield after wallet A passes identity validation. A queued authentication event then switches to wallet B and clears the activation markers, before A's continuation adds its marker to B's session. B's next history request incorrectly skips activation.
+
+The SDK now checks wallet identity, session generation, and disposal synchronously immediately before adding the marker. The authoritative asynchronous identity check remains. Two regressions using ordinary queued microtasks both fail against the previous implementation in Chrome/Wasm (one activation instead of two) and pass with the guard. Native execution alone does not expose this timing gap. CI now runs the complete wallet-race test file in Wasm, with software WebGL enabled only in its isolated test browser.
+
+Validation at SDK commit `0c69c1b5d2e68225b8377e6a4099862f133727c3`, using Flutter `3.41.4`:
+
+| Check | Result |
+| --- | --- |
+| Wallet-history race suite in Chrome/Wasm | 8 passed; both new regressions failed before the fix |
+| Full SDK package suite on the native VM | 874 passed, 1 skipped |
+| App unit/widget aggregator with all four GasFree defines | 784 passed, 3 skipped |
+| Replay harness, excluding benchmark tests | 28 passed, 3 process-tier skips |
+| Analysis of changed SDK Dart files | No errors; 18 existing information diagnostics |
+| Changed-file formatting, whitespace, shell syntax, workflow YAML | Passed |
+
+The local-auth code is unchanged by this correction; its 74-test result above remains the previous validation. The build-generated coin configuration change was restored again. The companion app now pins this SDK commit.
 
 ## Release boundaries
 
