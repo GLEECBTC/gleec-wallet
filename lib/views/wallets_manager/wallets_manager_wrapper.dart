@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/analytics/events/auth_events.dart';
 import 'package:web_dex/analytics/events/user_acquisition_events.dart';
@@ -86,6 +88,15 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) =>
+          LegalAgreementBloc(context.read<LegalDocumentsRepository>())
+            ..add(const LegalAgreementOpened()),
+      child: Builder(builder: _buildRoute),
+    );
+  }
+
+  Widget _buildRoute(BuildContext context) {
     switch (_route) {
       case _WalletsManagerRoute.entry:
         return WalletsManagerEntry(

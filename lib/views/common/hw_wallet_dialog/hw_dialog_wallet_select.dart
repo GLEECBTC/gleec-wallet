@@ -2,6 +2,8 @@ import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
@@ -125,6 +127,8 @@ class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
               ),
             ),
             const SizedBox(height: 24),
+            TermsConsentText(actionLabel: LocaleKeys.continueText.tr()),
+            const SizedBox(height: 12),
             BlocSelector<AuthBloc, AuthBlocState, bool>(
               selector: (state) => state.isLoading,
               builder: (context, inProgress) {
@@ -134,6 +138,9 @@ class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
                   onPressed: _selectedBrand == null || inProgress
                       ? null
                       : () {
+                          context.read<LegalAgreementBloc>().add(
+                            const LegalAgreementSubmitted('wallet-hardware'),
+                          );
                           widget.onSelect(_selectedBrand!);
                         },
                 );

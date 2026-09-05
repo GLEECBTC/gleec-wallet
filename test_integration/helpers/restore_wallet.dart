@@ -22,26 +22,30 @@ Future<void> restoreWalletToTest(WidgetTester tester) async {
   final String testSeed = getFundedWif();
   const String walletName = 'my-wallet';
   const String password = 'pppaaasssDDD555444@@@';
-  final Finder importWalletButton =
-      find.byKey(const Key('import-wallet-button'));
+  final Finder importWalletButton = find.byKey(
+    const Key('import-wallet-button'),
+  );
   final Finder nameField = find.byKey(const Key('name-wallet-field'));
   final Finder passwordField = find.byKey(const Key('create-password-field'));
-  final Finder passwordConfirmField =
-      find.byKey(const Key('create-password-field-confirm'));
+  final Finder passwordConfirmField = find.byKey(
+    const Key('create-password-field-confirm'),
+  );
   final Finder importSeedField = find.byKey(const Key('import-seed-field'));
-  final Finder importConfirmButton =
-      find.byKey(const Key('confirm-seed-button'));
-  // EULA and ToS are one checkbox, not two. This looked for `checkbox-eula`
-  // and `checkbox-toc`, neither of which the widget has ever exposed, so the
-  // helper - and every test that logs in through it - failed at this line.
-  final Finder walletsManagerWrapper =
-      find.byKey(const Key('wallets-manager-wrapper'));
-  final Finder allowCustomSeedCheckbox =
-      find.byKey(const Key('checkbox-custom-seed'));
-  final Finder customSeedDialogInput =
-      find.byKey(const Key('custom-seed-dialog-input'));
-  final Finder customSeedDialogOkButton =
-      find.byKey(const Key('custom-seed-dialog-ok-button'));
+  final Finder importConfirmButton = find.byKey(
+    const Key('confirm-seed-button'),
+  );
+  final Finder walletsManagerWrapper = find.byKey(
+    const Key('wallets-manager-wrapper'),
+  );
+  final Finder allowCustomSeedCheckbox = find.byKey(
+    const Key('checkbox-custom-seed'),
+  );
+  final Finder customSeedDialogInput = find.byKey(
+    const Key('custom-seed-dialog-input'),
+  );
+  final Finder customSeedDialogOkButton = find.byKey(
+    const Key('custom-seed-dialog-ok-button'),
+  );
   const String confirmCustomSeedText = 'I Understand';
 
   await tester.pumpAndSettle();
@@ -60,8 +64,6 @@ Future<void> restoreWalletToTest(WidgetTester tester) async {
   await tester.enterText(nameField, walletName);
   await tester.enterText(importSeedField, testSeed);
   await tester.pump();
-
-  print('🔍 RESTORE WALLET: Accepting terms');
 
   // A custom seed is anything that is NOT a valid BIP39 mnemonic - a WIF key
   // from `getFundedWif()` is exactly that. The app only renders the

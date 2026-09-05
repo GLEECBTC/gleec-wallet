@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -112,8 +113,8 @@ class _WalletCreationState extends State<WalletCreation> {
                 const SizedBox(height: 24),
                 _buildFields(),
                 const SizedBox(height: 22),
-                const TermsConsentText(),
-                const SizedBox(height: 32),
+                TermsConsentText(actionLabel: LocaleKeys.create.tr()),
+                const SizedBox(height: 12),
                 UiPrimaryButton(
                   key: const Key('confirm-password-button'),
                   height: 50,
@@ -220,6 +221,10 @@ class _WalletCreationState extends State<WalletCreation> {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       // Complete autofill session so password managers can save new credentials
       TextInput.finishAutofillContext(shouldSave: true);
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-creation'),
+      );
       widget.onCreate(
         name: _nameController.text.trim(),
         password: _passwordController.text,

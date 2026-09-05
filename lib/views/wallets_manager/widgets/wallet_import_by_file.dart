@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
@@ -185,8 +186,6 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                       },
                     ),
                   const SizedBox(height: 15),
-                  const TermsConsentText(),
-                  const SizedBox(height: 20),
                   QuickLoginSwitch(
                     value: _rememberMe,
                     onChanged: (value) {
@@ -194,6 +193,8 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                     },
                   ),
                   const SizedBox(height: 30),
+                  TermsConsentText(actionLabel: LocaleKeys.import.tr()),
+                  const SizedBox(height: 12),
                   UiPrimaryButton(
                     key: const Key('confirm-password-button'),
                     height: 50,
@@ -330,6 +331,10 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
       }
       // Close autofill context after successfully validating password & before import
       TextInput.finishAutofillContext(shouldSave: false);
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-import-file'),
+      );
       widget.onImport(
         name: name,
         password: _filePasswordController.text,

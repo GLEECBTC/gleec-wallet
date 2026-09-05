@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
     show MnemonicFailedReason;
@@ -125,6 +126,10 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
                   children: <Widget>[
                     _buildFields(),
                     const SizedBox(height: 20),
+                    if (_step == WalletSimpleImportSteps.password) ...[
+                      TermsConsentText(actionLabel: LocaleKeys.import.tr()),
+                      const SizedBox(height: 12),
+                    ],
                     UiPrimaryButton(
                       key: const Key('confirm-seed-button'),
                       text: _inProgress
@@ -391,8 +396,6 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
         _buildImportFileButton(),
         const SizedBox(height: 15),
         if (_shouldShowCustomSeedToggle) _buildCheckBoxCustomSeed(),
-        const SizedBox(height: 15),
-        const TermsConsentText(),
       ],
     );
   }
@@ -501,6 +504,10 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-import-seed'),
+      );
       widget.onImport(
         name: _nameController.text.trim(),
         password: _passwordController.text,
