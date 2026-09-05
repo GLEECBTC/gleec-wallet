@@ -169,3 +169,16 @@ Validation with Flutter `3.41.4`:
 
 No additional SDK change is part of this follow-up. Any further SDK change
 requires explicit approval and must be necessary for this release.
+
+## Synchronization with the updated dev branch
+
+During validation, `dev` advanced to `4744957b4` with PR #3527's inline legal
+acceptance changes. The review branch merges that commit and retains both its
+legal-acceptance coverage and the review's wallet-deletion, import-validation,
+and test-error regressions. The import regression now uses the shared legal
+onboarding test harness. The SDK pin remains `a7abc2c0`.
+
+The combined wallet unit/widget aggregator passes **825 tests, with 3 skipped**,
+using all four GasFree defines. Full analysis reports no errors and the same
+existing diagnostics. Browser and release-build results for this combined
+snapshot are recorded in PR #3528.
