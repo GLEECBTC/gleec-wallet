@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/analytics/firebase_options_placeholders.dart';
+import 'package:xml/xml.dart';
 
 /// Guards the committed Firebase configuration on Apple platforms.
 ///
@@ -65,6 +66,28 @@ void main() {
           isTrue,
           reason: '$path should still hold the placeholder markers',
         );
+
+        final entries = XmlDocument.parse(
+          source,
+        ).findAllElements('dict').single.childElements.toList();
+        final values = <String, String>{
+          for (var index = 0; index < entries.length; index += 2)
+            entries[index].innerText: entries[index + 1].innerText,
+        };
+        for (final key in [
+          'API_KEY',
+          'GCM_SENDER_ID',
+          'BUNDLE_ID',
+          'PROJECT_ID',
+          'STORAGE_BUCKET',
+          'GOOGLE_APP_ID',
+        ]) {
+          expect(
+            values[key],
+            firebaseOptionsPlaceholderMarker,
+            reason: '$path: $key should still be a placeholder',
+          );
+        }
       }
     });
 
@@ -90,13 +113,34 @@ void main() {
 
     test('no Xcode target copies GoogleService-Info.plist into the bundle', () {
       for (final path in _pbxprojPaths) {
+        // Xcode comments are labels only; deleting or renaming one must not
+        // hide a build-file reference that still bundles the plist.
+        final source = _read(
+          path,
+        ).replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
+        final references = RegExp(r'\b([A-Fa-f0-9]{24})\s*=\s*\{([^{}]*)\}')
+            .allMatches(source)
+            .where(
+              (match) =>
+                  RegExp(
+                    r'\bisa\s*=\s*PBXFileReference\s*;',
+                  ).hasMatch(match[2]!) &&
+                  match[2]!.contains('GoogleService-Info.plist'),
+            );
         expect(
-          _read(path),
-          isNot(contains('GoogleService-Info.plist in Resources')),
-          reason:
-              '$path bundles the placeholder plist; FirebaseCore will raise on '
-              'its GOOGLE_APP_ID at launch',
+          references,
+          isNotEmpty,
+          reason: '$path should retain the file reference',
         );
+        for (final reference in references) {
+          expect(
+            RegExp('\\bfileRef\\s*=\\s*${reference[1]}\\s*;').hasMatch(source),
+            isFalse,
+            reason:
+                '$path builds the placeholder plist; FirebaseCore will raise on '
+                'its GOOGLE_APP_ID at launch',
+          );
+        }
       }
     });
 
@@ -142,6 +186,17 @@ void main() {
         ),
         isTrue,
       );
+
+      for (final options in <FirebaseOptions>[
+        real.copyWith(projectId: firebaseOptionsPlaceholderMarker),
+        real.copyWith(messagingSenderId: firebaseOptionsPlaceholderMarker),
+        real.copyWith(authDomain: firebaseOptionsPlaceholderMarker),
+        real.copyWith(storageBucket: firebaseOptionsPlaceholderMarker),
+        real.copyWith(measurementId: firebaseOptionsPlaceholderMarker),
+        real.copyWith(iosBundleId: firebaseOptionsPlaceholderMarker),
+      ]) {
+        expect(isPlaceholderFirebaseOptions(options), isTrue);
+      }
       expect(
         isPlaceholderFirebaseOptions(
           FirebaseOptions(
