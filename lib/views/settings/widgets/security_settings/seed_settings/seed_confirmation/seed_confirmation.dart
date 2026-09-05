@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
@@ -16,8 +17,9 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 class SeedConfirmation extends StatefulWidget {
-  const SeedConfirmation({required this.seedPhrase});
+  const SeedConfirmation({required this.seedPhrase, this.expectedWalletId});
   final String seedPhrase;
+  final WalletId? expectedWalletId;
 
   @override
   State<SeedConfirmation> createState() => _SeedConfirmationState();
@@ -135,6 +137,11 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
   }
 
   void _onConfirmPressed() {
+    final authBloc = context.read<AuthBloc>();
+    if (widget.expectedWalletId != null &&
+        authBloc.state.currentUser?.walletId != widget.expectedWalletId) {
+      return;
+    }
     final String result = _selectedWords.map((w) => w.word).join(' ').trim();
 
     if (result == widget.seedPhrase) {
@@ -143,7 +150,9 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
       // the anchor must be sampled against the state that is still in the flow.
       final backupSeconds = settingsBloc.state.backupElapsed?.inSeconds ?? 0;
       settingsBloc.add(const SeedConfirmedEvent());
-      context.read<AuthBloc>().add(AuthSeedBackupConfirmed());
+      authBloc.add(
+        AuthSeedBackupConfirmed(expectedWalletId: widget.expectedWalletId),
+      );
       final walletType =
           context.read<AuthBloc>().state.currentUser?.wallet.config.type.name ??
           '';

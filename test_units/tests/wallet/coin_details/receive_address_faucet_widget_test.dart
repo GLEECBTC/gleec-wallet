@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
@@ -37,6 +38,7 @@ import 'package:web_dex/shared/constants.dart'
 import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/widgets/copyable_address_dialog.dart';
+import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_common_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/gasless_standard_balance_notice.dart';
@@ -320,7 +322,11 @@ BalanceInfo _balanceOf(String amount) => BalanceInfo(
 const _walletAHash = 'wallet-a-pubkey-hash';
 const _walletBHash = 'wallet-b-pubkey-hash';
 
-KdfUser _softwareUser(String walletName, String pubkeyHash) => KdfUser(
+KdfUser _softwareUser(
+  String walletName,
+  String pubkeyHash, {
+  bool hasBackup = true,
+}) => KdfUser(
   walletId: WalletId.withPubkeyHash(
     walletName,
     const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
@@ -329,7 +335,7 @@ KdfUser _softwareUser(String walletName, String pubkeyHash) => KdfUser(
   isBip39Seed: true,
   // Backed up, so these fixtures exercise the receive surfaces themselves
   // rather than the seed-backup gate. The gate has its own coverage.
-  metadata: const {'has_backup': true},
+  metadata: {'has_backup': hasBackup},
 );
 
 GaslessAccountStatusResponse _gaslessAccountStatus(
@@ -2187,6 +2193,127 @@ void testReceiveAddressFaucetWidgets() {
         expect(qr.address, 'TRegularReceiveAddress000000000001');
         expect(find.text('receiveGaslessBadgeTitle'), findsNothing);
       });
+
+      for (final change in ['none', 'revoked', 'wallet switched']) {
+        testWidgets('GasFree copy rechecks after backup prompt: $change', (
+          tester,
+        ) async {
+          tester.view.physicalSize = const Size(900, 1800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          // The analyzer only recognizes test/, not this CI test_units/ suite.
+          // ignore: invalid_use_of_visible_for_testing_member
+          resetSeedBackupAcknowledgements();
+          // ignore: invalid_use_of_visible_for_testing_member
+          addTearDown(resetSeedBackupAcknowledgements);
+
+          final clipboardWrites = <Object?>[];
+          tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            (call) async {
+              if (call.method == 'Clipboard.setData') {
+                clipboardWrites.add(call.arguments);
+              }
+              return null;
+            },
+          );
+          addTearDown(() {
+            tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+              SystemChannels.platform,
+              null,
+            );
+          });
+
+          final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+          final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+          final pubkey = _trc20Address(
+            address: 'TRegularReceiveAddress000000000001',
+            gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+          );
+          final addressesBloc = _FakeCoinAddressesBloc(
+            CoinAddressesState(
+              addresses: [pubkey],
+              gaslessReceiveStatus: GaslessReceiveStatus.ready,
+              verifiedGasfreeAddress: pubkey.gasfreeAddress,
+              gaslessReceiveWalletPubkeyHash: _walletAHash,
+              gaslessAccountStatus: _gaslessAccountStatus(
+                pubkey.gasfreeAddress!,
+              ),
+              gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
+            ),
+          );
+          final authBloc = _FakeAuthBloc(
+            AuthBlocState.loggedIn(
+              _softwareUser('wallet-a', _walletAHash, hasBackup: false),
+            ),
+          );
+          final settingsBloc = _FakeSettingsBloc();
+          final sdk = _FakeSdk(
+            balances: _FakeBalanceManager(const {}),
+            assetValues: [asset],
+            boundGaslessReceive: true,
+          );
+          addTearDown(addressesBloc.close);
+          addTearDown(authBloc.close);
+          addTearDown(settingsBloc.close);
+
+          await tester.pumpWidget(
+            RepositoryProvider<KomodoDefiSdk>.value(
+              value: sdk,
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider<AuthBloc>.value(value: authBloc),
+                  BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+                  BlocProvider<SettingsBloc>.value(value: settingsBloc),
+                ],
+                child: MaterialApp(
+                  home: Scaffold(
+                    body: AddressCard(
+                      address: pubkey,
+                      coin: asset.toCoin(),
+                      setPageType: (_) {},
+                      variant: AddressDisplayVariant.gasfree,
+                      isSoleGaslessRow: true,
+                      gaslessReceiveEnabled: true,
+                      gaslessReceiveStatus: GaslessReceiveStatus.ready,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          await tester.tap(find.byIcon(Icons.copy));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('seed-backup-gate-notice')),
+            findsOneWidget,
+          );
+          expect(clipboardWrites, isEmpty);
+          if (change == 'revoked') {
+            addressesBloc.actionRevalidationAllowed = false;
+          } else if (change == 'wallet switched') {
+            authBloc.update(
+              AuthBlocState.loggedIn(_softwareUser('wallet-b', _walletBHash)),
+            );
+          }
+
+          await tester.tap(
+            find.byKey(const Key('seed-backup-gate-continue-button')),
+          );
+          await tester.pumpAndSettle();
+          if (change == 'none') {
+            expect(clipboardWrites, [
+              <String, dynamic>{'text': pubkey.gasfreeAddress},
+            ]);
+          } else {
+            expect(clipboardWrites, isEmpty);
+            if (change == 'revoked') {
+              expect(find.text('receiveGaslessPausedNotice'), findsOneWidget);
+            }
+          }
+        });
+      }
 
       testWidgets('GasFree QrButton revalidates at tap time and fails closed', (
         tester,

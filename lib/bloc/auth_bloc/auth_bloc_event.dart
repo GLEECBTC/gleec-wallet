@@ -98,7 +98,11 @@ class AuthLegacyMigrationRequested extends AuthBlocEvent {
 }
 
 class AuthSeedBackupConfirmed extends AuthBlocEvent {
-  const AuthSeedBackupConfirmed();
+  const AuthSeedBackupConfirmed({this.expectedWalletId});
+
+  /// The wallet whose recovery phrase was confirmed. Older settings callers
+  /// default to the authenticated wallet when the event is handled.
+  final WalletId? expectedWalletId;
 }
 
 class AuthWalletDownloadRequested extends AuthBlocEvent {

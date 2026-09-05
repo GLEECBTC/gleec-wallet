@@ -82,6 +82,53 @@ void testUpdateVersionCompare() {
       expect(UpdateBloc.isVersionGreaterThan('0.9.6', '0.9.4'), isTrue);
     });
   });
+
+  group('UpdateBloc.canInstallAnnouncedWebUpdate:', () {
+    bool canInstall({
+      String announced = '0.9.6',
+      String current = '0.9.4',
+      String? deployed = '0.9.6',
+    }) => UpdateBloc.canInstallAnnouncedWebUpdate(
+      announcedVersion: announced,
+      currentVersion: current,
+      deployedVersion: deployed,
+    );
+
+    test('waits until the origin serves the announced release', () {
+      expect(canInstall(deployed: '0.9.5'), isFalse);
+      expect(canInstall(deployed: '0.9.6'), isTrue);
+      expect(canInstall(deployed: '0.9.7'), isTrue);
+    });
+
+    test('requires both an announcement and deployment newer than the app', () {
+      expect(canInstall(deployed: '0.9.4'), isFalse);
+      expect(canInstall(deployed: '0.9.3'), isFalse);
+      expect(canInstall(current: '0.9.6', deployed: '0.9.7'), isFalse);
+      expect(canInstall(current: '0.9.7', deployed: '0.9.8'), isFalse);
+    });
+
+    test('fails closed for unknown or malformed versions', () {
+      expect(canInstall(deployed: null), isFalse);
+      for (final invalid in ['', 'unknown', '1..0', '0.9.8oops']) {
+        expect(canInstall(deployed: invalid), isFalse);
+        expect(canInstall(announced: invalid), isFalse);
+        expect(canInstall(current: invalid), isFalse);
+      }
+    });
+
+    test('uses numeric segments and the existing normalization policy', () {
+      expect(
+        canInstall(announced: '0.10.0', current: '0.9.8', deployed: '0.9.20'),
+        isFalse,
+      );
+      expect(
+        canInstall(announced: '1.0.0', current: '0.9.4', deployed: '1.0'),
+        isTrue,
+      );
+      expect(canInstall(deployed: ' 0.9.6+2 '), isTrue);
+      expect(canInstall(announced: '0.9.6-rc1'), isTrue);
+    });
+  });
 }
 
 /// Covers the download-URL guard that decides whether a native update can be

@@ -14,6 +14,8 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 
 class _EmptyAssetLoader extends AssetLoader {
   const _EmptyAssetLoader();
@@ -281,6 +283,32 @@ void main() {
       expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
       expect(find.byKey(const Key('import-wallet-button')), findsOneWidget);
     });
+
+    testWidgets(
+      'deleting a stored wallet opens deletion and cancels to entry',
+      (tester) async {
+        final wallet = _storedWallet('wallet-a');
+        await _pump(tester, analyticsBloc: analyticsBloc, stored: [wallet]);
+        await tester.pump();
+
+        await tester.tap(find.byIcon(Icons.close));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(WalletDeleting), findsOneWidget);
+        expect(find.byType(WalletLogIn), findsNothing);
+        expect(
+          tester.widget<WalletDeleting>(find.byType(WalletDeleting)).wallet,
+          same(wallet),
+        );
+
+        await tester.tap(find.byIcon(Icons.chevron_left));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(WalletDeleting), findsNothing);
+        expect(find.text('wallet-a'), findsOneWidget);
+        expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
+      },
+    );
 
     testWidgets('a returning user re-consents when the terms have changed', (
       tester,

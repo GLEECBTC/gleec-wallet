@@ -45,6 +45,10 @@ jobs:
         id: test_hosting_deploy_url
         run: .github/scripts/test_hosting_deploy_url.sh
 
+      - name: Test the Bitrefill message bridge
+        id: test_bitrefill_widget
+        run: node --test tool/web/bitrefill_widget.test.mjs
+
       - name: Validate dart code
         id: validate_dart
         run: |

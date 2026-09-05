@@ -950,15 +950,36 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthSeedBackupConfirmed event,
     Emitter<AuthBlocState> emit,
   ) async {
-    // emit the current user again to pull in the updated seed backup status
-    // and make the backup notification banner disappear
-    await _kdfSdk.confirmSeedBackup();
-    emit(
-      AuthBlocState(
-        mode: AuthorizeMode.logIn,
-        currentUser: await _kdfSdk.auth.currentUser,
-      ),
-    );
+    final expectedWalletId =
+        event.expectedWalletId ?? state.currentUser?.walletId;
+    if (expectedWalletId == null ||
+        state.currentUser?.walletId != expectedWalletId) {
+      return;
+    }
+
+    final user = await _kdfSdk.auth.currentUser;
+    if (emit.isDone ||
+        user?.walletId != expectedWalletId ||
+        state.currentUser?.walletId != expectedWalletId) {
+      return;
+    }
+
+    try {
+      // The auth layer checks identity while holding the metadata write lock.
+      // A UI check alone cannot protect a queued write during a wallet switch.
+      await _kdfSdk.confirmSeedBackup(expectedWalletId: expectedWalletId);
+    } on WalletChangedDisconnectException {
+      return;
+    }
+    if (emit.isDone || state.currentUser?.walletId != expectedWalletId) return;
+
+    final updatedUser = await _kdfSdk.auth.currentUser;
+    if (emit.isDone ||
+        updatedUser?.walletId != expectedWalletId ||
+        state.currentUser?.walletId != expectedWalletId) {
+      return;
+    }
+    emit(AuthBlocState(mode: AuthorizeMode.logIn, currentUser: updatedUser));
   }
 
   Future<void> _onWalletDownloadRequested(

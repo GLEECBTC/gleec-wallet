@@ -75,8 +75,9 @@ class AppUpdateService {
           'cb': DateTime.now().millisecondsSinceEpoch.toString(),
         },
       );
-      final http.Response response =
-          await http.get(uri).timeout(const Duration(seconds: 10));
+      final http.Response response = await http
+          .get(uri)
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) {
         log(
           'version.json fetch failed with status ${response.statusCode}',
@@ -86,8 +87,9 @@ class AppUpdateService {
         return null;
       }
 
-      final version = (jsonDecode(response.body)
-          as Map<String, dynamic>)['version'] as String?;
+      final version =
+          (jsonDecode(response.body) as Map<String, dynamic>)['version']
+              as String?;
       return (version == null || version.isEmpty) ? null : version;
     } catch (e, s) {
       log(

@@ -1352,7 +1352,11 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   }
 
   @override
-  Future<void> setOrRemoveActiveUserKeyValue(String key, dynamic value) async {
+  Future<void> setOrRemoveActiveUserKeyValue(
+    String key,
+    dynamic value, {
+    WalletId? expectedWalletId,
+  }) async {
     final currentUser = currentUserValue;
     if (currentUser == null) {
       throw StateError('No active user');

@@ -72,12 +72,18 @@ class SeedShow extends StatelessWidget {
                   children: [
                     const _TitleRow(),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _ShowingSwitcher(),
-                        _CopySeedButton(seed: seedPhrase),
-                      ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          _ShowingSwitcher(),
+                          _CopySeedButton(seed: seedPhrase),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Flexible(child: _SeedPlace(seedPhrase: seedPhrase)),
@@ -278,6 +284,7 @@ class _CopySeedButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.copy,
@@ -285,9 +292,11 @@ class _CopySeedButton extends StatelessWidget {
                 color: theme.currentGlobal.textTheme.bodySmall?.color,
               ),
               const SizedBox(width: 10),
-              Text(
-                LocaleKeys.seedPhraseShowingCopySeed.tr(),
-                style: theme.currentGlobal.textTheme.bodySmall,
+              Flexible(
+                child: Text(
+                  LocaleKeys.seedPhraseShowingCopySeed.tr(),
+                  style: theme.currentGlobal.textTheme.bodySmall,
+                ),
               ),
             ],
           ),
@@ -312,11 +321,13 @@ class _ShowingSwitcher extends StatelessWidget {
           height: 21,
         ),
         const SizedBox(width: 6),
-        SelectableText(
-          LocaleKeys.seedPhraseShowingShowPhrase.tr(),
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
+        Flexible(
+          child: SelectableText(
+            LocaleKeys.seedPhraseShowingShowPhrase.tr(),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+            ),
           ),
         ),
       ],

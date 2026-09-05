@@ -91,6 +91,8 @@ class _ControlledAuth implements KomodoDefiLocalAuth {
   KdfUser user;
   Completer<KdfUser?>? _nextUser;
   int currentUserCalls = 0;
+  int? pauseAtCall;
+  final pausedRead = Completer<void>();
 
   void setUser(KdfUser value) {
     user = value;
@@ -109,6 +111,10 @@ class _ControlledAuth implements KomodoDefiLocalAuth {
   @override
   Future<KdfUser?> get currentUser {
     currentUserCalls += 1;
+    if (currentUserCalls == pauseAtCall) {
+      pauseNextCurrentUser();
+      pausedRead.complete();
+    }
     final pending = _nextUser;
     if (pending != null) {
       return pending.future;
@@ -125,14 +131,32 @@ class _FakePubkeyManager implements PubkeyManager {
 
   final Asset asset;
   List<PubkeyInfo> keys;
+  Object? readError;
+  final watchStarted = Completer<void>();
 
   @override
-  Future<AssetPubkeys> getPubkeys(Asset asset) async => AssetPubkeys(
-    assetId: this.asset.id,
-    keys: keys,
-    availableAddressesCount: keys.length,
-    syncStatus: SyncStatusEnum.success,
-  );
+  Future<void> precachePubkeys(Asset asset) async {}
+
+  @override
+  Stream<AssetPubkeys> watchPubkeys(
+    Asset asset, {
+    bool activateIfNeeded = true,
+  }) {
+    if (!watchStarted.isCompleted) watchStarted.complete();
+    return const Stream<AssetPubkeys>.empty();
+  }
+
+  @override
+  Future<AssetPubkeys> getPubkeys(Asset asset) async {
+    final error = readError;
+    if (error != null) throw error;
+    return AssetPubkeys(
+      assetId: this.asset.id,
+      keys: keys,
+      availableAddressesCount: keys.length,
+      syncStatus: SyncStatusEnum.success,
+    );
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -321,6 +345,138 @@ void testCoinAddressesBlocGaslessRevalidation() {
         ));
       });
     }
+  });
+
+  test(
+    'pubkey read failure ends loading and a later update recovers',
+    () async {
+      final asset = _asset();
+      final address = _pubkey('Original');
+      final pubkeys = _FakePubkeyManager(asset, [address])
+        ..readError = StateError('Address read failed');
+      final bloc = _TestCoinAddressesBloc(
+        _FakeSdk(
+          assets: _FakeAssetManager(asset),
+          auth: _ControlledAuth(_user()),
+          pubkeys: pubkeys,
+        ),
+        asset.id.id,
+        _RecordingAnalyticsBloc(),
+      );
+      addTearDown(bloc.close);
+      bloc.seedReady(
+        CoinAddressesState(
+          status: FormStatus.success,
+          addresses: [address],
+          gaslessReceiveStatus: GaslessReceiveStatus.ready,
+          verifiedGasfreeAddress: address.gasfreeAddress,
+          gaslessReceiveWalletPubkeyHash: _walletHash,
+        ),
+      );
+
+      final failedFuture = bloc.stream
+          .firstWhere((state) => state.errorMessage != null)
+          .timeout(const Duration(seconds: 1));
+      bloc.add(CoinAddressesPubkeysUpdated([address]));
+      final failed = await failedFuture;
+
+      // The panel renders its error only for failure. Leaving submitting here
+      // would show an endless spinner after revoking the stale addresses.
+      expect(failed.status, FormStatus.failure);
+      expect(failed.addresses, isEmpty);
+      expect(failed.verifiedGasfreeAddress, isNull);
+
+      pubkeys.readError = null;
+      final recoveredFuture = bloc.stream
+          .firstWhere((state) => state.status == FormStatus.success)
+          .timeout(const Duration(seconds: 1));
+      bloc.add(CoinAddressesPubkeysUpdated([address]));
+      final recovered = await recoveredFuture;
+      expect(recovered.addresses, [address]);
+      expect(recovered.errorMessage, isNull);
+    },
+  );
+
+  test(
+    'resume completes an interrupted initial address subscription',
+    () async {
+      final asset = _asset();
+      final address = _pubkey('Original');
+      final auth = _ControlledAuth(_user())..pauseNextCurrentUser();
+      final pubkeys = _FakePubkeyManager(asset, [address]);
+      final bloc = _TestCoinAddressesBloc(
+        _FakeSdk(
+          assets: _FakeAssetManager(asset),
+          auth: auth,
+          pubkeys: pubkeys,
+        ),
+        asset.id.id,
+        _RecordingAnalyticsBloc(),
+      );
+      addTearDown(bloc.close);
+
+      final loading = bloc.stream.first.timeout(const Duration(seconds: 1));
+      bloc.add(const CoinAddressesSubscriptionRequested());
+      expect((await loading).status, FormStatus.submitting);
+      bloc.add(const CoinAddressesGaslessReceiveVisibilityChanged(false));
+      await Future<void>.delayed(Duration.zero);
+      auth.releaseCurrentUser();
+      await Future<void>.delayed(Duration.zero);
+      expect(pubkeys.watchStarted.isCompleted, isFalse);
+
+      bloc.add(const CoinAddressesGaslessReceiveVisibilityChanged(true));
+      await pubkeys.watchStarted.future.timeout(const Duration(seconds: 1));
+      expect(bloc.state.status, FormStatus.success);
+      expect(bloc.state.addresses, [address]);
+      expect(bloc.state.errorMessage, isNull);
+    },
+  );
+
+  test('background revocation survives a pending final wallet check', () async {
+    final asset = _asset();
+    final address = _pubkey('Original');
+    // The refresh reads identity before/after pubkeys, then once more before
+    // committing its resolved status. Pause that final asynchronous check.
+    final auth = _ControlledAuth(_user());
+    final pubkeys = _FakePubkeyManager(asset, [address]);
+    final bloc = _TestCoinAddressesBloc(
+      _FakeSdk(assets: _FakeAssetManager(asset), auth: auth, pubkeys: pubkeys),
+      asset.id.id,
+      _RecordingAnalyticsBloc(),
+    );
+    addTearDown(bloc.close);
+    bloc.add(const CoinAddressesSubscriptionRequested());
+    await pubkeys.watchStarted.future.timeout(const Duration(seconds: 1));
+    auth.currentUserCalls = 0;
+    auth.pauseAtCall = 3;
+    bloc.seedReady(
+      CoinAddressesState(
+        status: FormStatus.success,
+        addresses: [address],
+        gaslessReceiveStatus: GaslessReceiveStatus.ready,
+        verifiedGasfreeAddress: address.gasfreeAddress,
+        gaslessReceiveWalletPubkeyHash: _walletHash,
+        gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
+      ),
+    );
+    bloc.add(const CoinAddressesGaslessReceiveRefreshRequested());
+    await auth.pausedRead.future.timeout(const Duration(seconds: 1));
+    final backgrounded = bloc.stream
+        .firstWhere(
+          (state) => state.gaslessReceiveStatus == GaslessReceiveStatus.stale,
+        )
+        .timeout(const Duration(seconds: 1));
+    bloc.add(const CoinAddressesGaslessReceiveVisibilityChanged(false));
+    await backgrounded;
+
+    auth.releaseCurrentUser();
+    await Future<void>.delayed(Duration.zero);
+    expect(bloc.state.gaslessReceiveStatus, GaslessReceiveStatus.stale);
+    expect(
+      bloc.state.gaslessReceiveReason,
+      GaslessReceiveReasonCode.appBackgrounded,
+    );
+    expect(bloc.state.verifiedGasfreeAddress, isNull);
   });
 
   for (final testCase in <(String, List<PubkeyInfo>)>[

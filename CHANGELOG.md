@@ -22,6 +22,11 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 
 ## 🐛 Bug Fixes
 
+- **On-Ramp Checkout URLs Are Validated** ([@CharlVS], #3514) - Only HTTPS checkout URLs on supported provider domains can open in the wallet's payment frame. The deployed wrapper also enforces this for existing native clients, and payment messages are checked at the frame boundary.
+- **Web Updates Reload the Deployed App** ([@CharlVS], #3514, #3526) - Restore update checks, compare deployed versions, and clear obsolete Flutter service-worker caches when applying an update.
+- **Wallet Setup and Receive Recovery** - Restore the saved-wallet Delete action, allow backing out of mobile recovery-phrase backup, and recover Receive after failed or interrupted address loads. Re-enabling a previously hidden coin now restores its active state.
+- **Wallet Switches Keep NFT Requests and History Separate** - Discard NFT activation work belonging to an earlier session and keep transaction history attached to the same wallet during a temporary identity lookup failure.
+- **TRX Funding Guidance During Consolidation** - When a standard TRON address needs TRX for fees, show the funding guidance instead of reporting a connection problem.
 - **Importing a Seed No Longer Silently Signs You Into a Different Wallet** ([@CharlVS], #3509) - Importing a recovery phrase under a wallet name that already existed discarded the phrase and logged you into the existing wallet instead, with no message. It now reports the name conflict, and fails safely if it cannot check.
 - **GLEEC and GRC-20 Transaction History Was Always Empty** ([@CharlVS], #3500) - Neither had a working history source, so the list simply stayed empty rather than reporting a problem. Both are now served from Blockscout.
 - **A Brief Network Drop Could Sign You Out** ([@CharlVS], #3500) - A transient transport failure was treated as an authentication failure and ended the session.
@@ -36,6 +41,10 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **NFT Chain Activation Reported Incorrectly** ([@CharlVS], #3509) - The NFT screen could tell you to enable a chain that was already enabled. Chain activation state now comes from a single source of truth.
 
 ## 💻 Platform-Specific Changes
+
+### Apple Platforms
+
+- **Safe Startup Without Firebase Configuration** ([@CharlVS], #3520) - Remove placeholder Firebase configuration from the native resource bundles and keep Firebase analytics disabled when the build has no valid configuration, preventing startup crashes and accidental use of another project's settings.
 
 ### Native Trading Engine (KDF)
 

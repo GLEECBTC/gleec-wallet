@@ -283,15 +283,21 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
         }
       } on WalletChangedDisconnectException {
         rethrow;
-      } catch (_) {
+      } catch (error) {
         // A source is movable only after the standard withdrawal preview
         // proves its exact derivation can fund the TRON network fee. Do not
         // infer safety from a merely non-zero TRX balance.
+        final needsTrx =
+            error is SdkError &&
+            (error.code == SdkErrorCode.insufficientGas ||
+                error.code == SdkErrorCode.insufficientFeeBalance);
         sources.add(
           _ConsolidationSource(
             pubkey: tokenKey,
             trxSpendable: trxSpendable,
-            availability: _ConsolidationSourceAvailability.preflightUnavailable,
+            availability: needsTrx
+                ? _ConsolidationSourceAvailability.needsTrx
+                : _ConsolidationSourceAvailability.preflightUnavailable,
           ),
         );
       }

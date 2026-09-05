@@ -116,9 +116,11 @@ class UpdateBloc extends BlocBase {
     }
 
     final deployedVersion = await appUpdateService.fetchDeployedWebVersion();
-    final canInstall =
-        deployedVersion != null &&
-        isVersionGreaterThan(deployedVersion, currentVersion);
+    final canInstall = canInstallAnnouncedWebUpdate(
+      announcedVersion: announcedVersion,
+      currentVersion: currentVersion,
+      deployedVersion: deployedVersion,
+    );
 
     if (!canInstall) {
       _gateAnnouncedVersion = announcedVersion;
@@ -126,11 +128,26 @@ class UpdateBloc extends BlocBase {
       log(
         'Update $announcedVersion announced, but this origin serves '
         '${deployedVersion ?? 'an undeterminable version'} while the app runs '
-        '$currentVersion; a reload would install nothing. Suppressing popup.',
+        '$currentVersion; a reload cannot install the announced release. '
+        'Suppressing popup.',
         path: 'update_bloc => _webReloadWouldInstallUpdate',
       );
     }
     return canInstall;
+  }
+
+  /// Whether the origin can deliver the release described by the update popup.
+  /// A partially deployed release must not show the announcement's changelog
+  /// or required-update prompt while a reload still installs an older build.
+  static bool canInstallAnnouncedWebUpdate({
+    required String announcedVersion,
+    required String currentVersion,
+    required String? deployedVersion,
+  }) {
+    return deployedVersion != null &&
+        isVersionGreaterThan(announcedVersion, currentVersion) &&
+        isVersionGreaterThan(deployedVersion, currentVersion) &&
+        !isVersionGreaterThan(announcedVersion, deployedVersion);
   }
 
   Future<void> update(UpdateVersionInfo versionInfo) async {

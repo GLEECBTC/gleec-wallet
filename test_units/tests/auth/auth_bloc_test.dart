@@ -228,6 +228,118 @@ void testAuthBloc() {
     });
   });
 
+  group('AuthBloc seed backup confirmation', () {
+    late _FakeAuth auth;
+    late AuthBloc bloc;
+
+    setUp(() {
+      auth = _FakeAuth();
+      bloc = AuthBloc(
+        _FakeSdk(auth),
+        _FakeWalletsRepository(),
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+      );
+      addTearDown(bloc.close);
+    });
+
+    Future<void> selectUser(KdfUser user) async {
+      auth.userToReturn = user;
+      final selected = bloc.stream.firstWhere(
+        (state) => state.currentUser?.walletId == user.walletId,
+      );
+      bloc.add(AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: user));
+      await selected;
+    }
+
+    test(
+      'a stale confirmation never writes replacement wallet metadata',
+      () async {
+        final original = _user();
+        final replacement = _user(name: 'Wallet 2');
+        await selectUser(replacement);
+        final replacementState = bloc.state;
+
+        bloc.add(AuthSeedBackupConfirmed(expectedWalletId: original.walletId));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(auth.metadataWriteWalletIds, isEmpty);
+        expect(bloc.state, same(replacementState));
+      },
+    );
+
+    test(
+      'an SDK wallet switch before its auth event prevents the write',
+      () async {
+        final original = _user();
+        await selectUser(original);
+        auth.userToReturn = _user(name: 'Wallet 2');
+        final originalState = bloc.state;
+
+        bloc.add(AuthSeedBackupConfirmed(expectedWalletId: original.walletId));
+        await Future<void>.delayed(Duration.zero);
+
+        expect(auth.metadataWriteWalletIds, isEmpty);
+        expect(bloc.state, same(originalState));
+      },
+    );
+
+    test(
+      'confirmation forwards wallet identity and publishes saved metadata',
+      () async {
+        final original = _user();
+        await selectUser(original);
+        auth.onSetKeyValue = (key, value) async {
+          expect(key, 'has_backup');
+          expect(value, isTrue);
+          auth.userToReturn = _user(metadata: const {'has_backup': true});
+        };
+        final confirmed = bloc.stream.firstWhere(
+          (state) => state.currentUser?.metadata['has_backup'] == true,
+        );
+
+        bloc.add(AuthSeedBackupConfirmed(expectedWalletId: original.walletId));
+        await confirmed;
+
+        expect(auth.metadataWriteWalletIds, [original.walletId]);
+      },
+    );
+
+    for (final rejectsStaleWrite in [false, true]) {
+      test(
+        'wallet switch during ${rejectsStaleWrite ? 'rejected' : 'completed'} '
+        'backup write cannot emit stale success',
+        () async {
+          final original = _user();
+          final replacement = _user(name: 'Wallet 2');
+          await selectUser(original);
+          final writeStarted = Completer<void>();
+          final writeGate = Completer<void>();
+          auth.onSetKeyValue = (_, _) async {
+            writeStarted.complete();
+            await writeGate.future;
+            if (rejectsStaleWrite) {
+              throw const WalletChangedDisconnectException('Wallet changed');
+            }
+          };
+
+          bloc.add(
+            AuthSeedBackupConfirmed(expectedWalletId: original.walletId),
+          );
+          await writeStarted.future;
+          await selectUser(replacement);
+          final replacementState = bloc.state;
+          writeGate.complete();
+          await Future<void>.delayed(Duration.zero);
+
+          expect(auth.metadataWriteWalletIds, [original.walletId]);
+          expect(bloc.state, same(replacementState));
+          expect(bloc.state.currentUser?.metadata['has_backup'], isNull);
+        },
+      );
+    }
+  });
+
   group('AuthBloc sign-out', () {
     test('clears state and resets the load timeline', () async {
       final auth = _FakeAuth()..userToReturn = _user();
@@ -308,14 +420,15 @@ Wallet _wallet({bool isLegacy = false}) => Wallet(
   ),
 );
 
-KdfUser _user({JsonMap metadata = const {}}) => KdfUser(
-  walletId: WalletId.fromName(
-    'Wallet 1',
-    const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
-  ),
-  isBip39Seed: true,
-  metadata: metadata,
-);
+KdfUser _user({String name = 'Wallet 1', JsonMap metadata = const {}}) =>
+    KdfUser(
+      walletId: WalletId.fromName(
+        name,
+        const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+      ),
+      isBip39Seed: true,
+      metadata: metadata,
+    );
 
 class _FakeAuth implements KomodoDefiLocalAuth {
   final StreamController<KdfUser?> _watcher =
@@ -328,6 +441,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   int signInCalls = 0;
   int signOutCalls = 0;
   int currentUserReads = 0;
+  final List<WalletId?> metadataWriteWalletIds = [];
   Future<void> Function(String key, dynamic value)? onSetKeyValue;
 
   void emitToWatcher(KdfUser? user) => _watcher.add(user);
@@ -367,7 +481,12 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   }
 
   @override
-  Future<void> setOrRemoveActiveUserKeyValue(String key, dynamic value) async {
+  Future<void> setOrRemoveActiveUserKeyValue(
+    String key,
+    dynamic value, {
+    WalletId? expectedWalletId,
+  }) async {
+    metadataWriteWalletIds.add(expectedWalletId);
     final handler = onSetKeyValue;
     if (handler != null) await handler(key, value);
   }

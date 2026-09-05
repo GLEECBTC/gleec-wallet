@@ -1,6 +1,6 @@
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart' show Asset;
+import 'package:komodo_defi_types/komodo_defi_types.dart' show Asset, WalletId;
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/model/coin.dart';
@@ -137,8 +137,17 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// If no user is currently signed in, the operation will complete but have no effect.
   ///
   /// [hasBackup] - Whether the seed has been backed up. Defaults to `true`.
-  Future<void> confirmSeedBackup({bool hasBackup = true}) async {
-    await auth.setOrRemoveActiveUserKeyValue('has_backup', hasBackup);
+  /// [expectedWalletId] binds a completed backup flow to the wallet whose
+  /// recovery phrase was shown, even if the active wallet changes mid-write.
+  Future<void> confirmSeedBackup({
+    bool hasBackup = true,
+    WalletId? expectedWalletId,
+  }) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      'has_backup',
+      hasBackup,
+      expectedWalletId: expectedWalletId,
+    );
   }
 
   /// Sets the wallet type for the current user.

@@ -284,8 +284,9 @@ abstract class BaseFiatProvider {
     // calls `atob` directly, and `atob` rejects base64url's `-` and `_`.
     // Percent-encoded standard base64 is understood by both the old page and
     // the new one; base64url is understood only by the new one.
-    final encodedUrl =
-        Uri.encodeComponent(base64Encode(utf8.encode(providerUrl)));
+    final encodedUrl = Uri.encodeComponent(
+      base64Encode(utf8.encode(providerUrl)),
+    );
 
     return '${getOriginUrl()}/assets/assets/'
         'web_pages/fiat_widget.html?fiatUrl=$encodedUrl';
