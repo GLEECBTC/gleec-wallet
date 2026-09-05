@@ -134,10 +134,11 @@ config.
 ### The test wallet
 
 `test_integration/helpers/restore_wallet.dart` imports wallet `my-wallet` with password
-`pppaaasssDDD555444@@@` in iguana mode. The seed is a randomly chosen **funded WIF key**
+`Y7!m9pQ2rV4#sT6z` in iguana mode. The seed is a randomly chosen **funded WIF key**
 from `helpers/get_funded_wif.dart` — RICK/MORTY testnet keys, not secrets, not a BIP39
 mnemonic. Because it is not a mnemonic, the helper must confirm the app's custom-seed
-dialog; the EULA and ToS are **one** checkbox (`checkbox-eula-tos`), not two.
+dialog. Continuing through onboarding records acceptance of the displayed EULA
+and Terms; there is no separate checkbox.
 
 ### Web vs native
 
@@ -380,44 +381,40 @@ Current as of the last audit. Each is a real defect, not a caveat.
 > branch: the `pumpUntilDisappear` timeout is now a `timeout` parameter defaulting to 60s
 > (`widget_tester_pump_extension.dart:55`), `clearNativeAppsData()` uses the Gleec bundle
 > ids (`app_data.dart:16-17`), and nothing references `active-coin-item-` any more.
+> On 2026-09-05, test-mode startup was also corrected to preserve the integration
+> binding's error handler and zone. Previously, application error reporting could
+> swallow a test exception and produce a false green run. Regression tests in
+> `test_units/services/initializer/app_error_handling_test.dart` cover framework
+> and asynchronous failures. For older builds, confirm the suite's final marker
+> in the browser log before trusting its reported success.
 
-1. **The integration suite reports green when a test throws.** `app.main()` sets
-   `FlutterError.onError = catchUnhandledExceptions` (`lib/main.dart:65-67`), and that
-   handler **never rethrows when `isTestMode` is true** (`lib/main.dart:186-194`) — which
-   the runner always makes true via `--dart-define=testing_mode=true`. It replaces the
-   handler `testWidgets` installed to record failures, so the throw is printed to the
-   browser console and the run still ends `All tests passed!`. Observed directly: a
-   `misc_tests` run where `testFeedbackForm` died on `Bad state: No element`, never
-   reached `restoreWalletToTest`, never printed its own `END MISC TESTS`, and exited 0.
-   **Do not trust a green integration run** — read the browser console
-   (`chromedriver.log`) and confirm the suite's final marker actually printed.
-2. **Three `test_units/` files are orphaned** and never run anywhere:
+1. **Three `test_units/` files are orphaned** and never run anywhere:
    `tests/wallet/legacy_native_wallet_migration_test.dart`,
    `views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart`,
    `views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart`.
    `testTruncateDecimal()` is also commented out in `test_units/main.dart`.
-3. **The macOS Debug/Profile configuration has no provisioning profile.** A
+2. **The macOS Debug/Profile configuration has no provisioning profile.** A
    `-D macos -m profile` run fails at `No profiles for 'com.GleecDEX.wallet' were found`.
    Only the Release configuration (bundle id `com23.GleecDEX.wallet`, Developer ID
    signing) is set up. Until that is fixed, the native perf target of §7 cannot run
    locally, and web is the only path — with the caveat there that web frame numbers are
    not baseline-worthy.
-4. **`--timeout=600` is inert.** `flutter drive` only arms that timer when `--screenshot`
+3. **`--timeout=600` is inert.** `flutter drive` only arms that timer when `--screenshot`
    is passed, which the runner never does. A hung integration test has no wrapper-level
    cap; only a test's own `Timeout` bounds it.
-5. **`suspended_assets_test` is hardcoded off** (`getTestsList(false)`). The `*.cipig.net`
+4. **`suspended_assets_test` is hardcoded off** (`getTestsList(false)`). The `*.cipig.net`
    URL-blocking machinery is intact but unreachable.
-6. **`nfts_tests` and `no_login_tests` are not in the default list** — `-t` only, so they
+5. **`nfts_tests` and `no_login_tests` are not in the default list** — `-t` only, so they
    run only when someone remembers.
-7. **Integration coverage is disabled** in `ui-tests-on-pr.yml` — Hive and other storage
+6. **Integration coverage is disabled** in `ui-tests-on-pr.yml` — Hive and other storage
    providers need mocking, and `flutter drive` is deprecated upstream.
-8. **`komodo_defi_local_auth` is deliberately ungated** — 57 pass, 1 fails
-   (`trezor_repository_test.dart`). Unresolved: either a stale fixture or a real loss of
-   device-error detail.
-9. **`test/gasless_journal_web_key_discovery_test.dart` is `@TestOn('browser')`** and no
+7. **`komodo_defi_local_auth` is not in the wallet unit gate.** Run its
+   package suite separately. At the approved SDK RC commit `a7abc2c0`, all 74 tests
+   pass, including the previously failing Trezor fixture.
+8. **`test/gasless_journal_web_key_discovery_test.dart` is `@TestOn('browser')`** and no
    workflow runs it: `flutter test --platform chrome test/…`.
-10. **No integration coverage of the GasFree rail** — §3.
-11. **Skyvern is not in CI** — §6.
+9. **No integration coverage of the GasFree rail** — §3.
+10. **Skyvern is not in CI** — §6.
 
 ## 10. See also
 

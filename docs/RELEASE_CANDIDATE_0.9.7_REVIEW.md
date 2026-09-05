@@ -95,7 +95,7 @@ The local-auth code is unchanged by this correction; its 74-test result above re
 ## Release boundaries
 
 - The app review branch targets `dev` to feed RC #3525; the SDK fixes and RC preparation are pushed to PR #374 against `main`. No GitHub merge, release tag, production deployment, or funded transfer is part of this review.
-- Native signing/distribution and a deployed RC smoke test remain release checks. The observed GitHub checks on the release PR passed except `Test web-app-linux-profile`; that existing integration failure is not a passing validation result for this patch.
+- Signed distribution and production rollout remain release actions. At wallet commit `2fdd6b166`, Android, iOS, Linux, macOS, Windows, unit, replay/performance, and preview checks passed. The deployed Firebase preview passed startup/onboarding/cancellation smoke testing. The Chrome integration job failed; Safari reported success but its browser logs showed aborted suites, so neither is accepted as passing integration validation.
 - Production-hosted wrapper protection reaches shipped native clients only when the updated wrapper and headers are actually deployed. The included deployment verifier checks that separate release action.
 
 ## RC package preparation
@@ -130,3 +130,42 @@ merge changes the tested commit identity (for example, a squash merge), refresh
 the lockfile if needed, and run the app's gates on that pin. Carry the SDK fix
 into `dev` through the normal synchronization. Tags, package uploads, signing,
 and production rollout remain release actions after the reviewed RC is accepted.
+
+## Follow-up: wallet import and trustworthy browser checks
+
+The SDK is frozen at the approved `a7abc2c0` commit. This follow-up changes only
+wallet application code, wallet tests, and wallet documentation.
+
+The import password step did not subscribe to password-validity updates, leaving
+the button state stale. It now follows both password fields and resets validity
+when navigating back. A widget regression covers empty, valid, mismatched, and
+corrected confirmation values and fails against the previous implementation.
+
+Browser validation also exposed stale test inputs: the old password contained
+three identical characters in succession and was rejected by the existing app
+and KDF policies. Test fixtures now meet that policy. Wallet-manager tests choose
+the desktop or mobile connection control as appropriate and wait for password
+validation to rebuild the import button. Feedback checks respect whether a
+provider is configured and use the current feedback form.
+
+Test-mode startup now preserves Flutter's test error handler and zone. Production
+startup retains the application's error reporting. Three regression tests cover
+framework errors, asynchronous startup failures, and production error routing.
+With the old invalid password fixture still in place, a real Chrome/profile run
+of `misc_tests` now failed with `TimeoutException: Pump until has timed out` and
+exit code 1, confirming that the aborted test is no longer reported as a pass.
+
+Validation with Flutter `3.41.4`:
+
+- Wallet unit/widget aggregator: **788 passed, 3 skipped**, with all four GasFree defines.
+- Full wallet analysis: no errors; existing warning/information diagnostics remain.
+- Chrome/profile `misc_tests`: passed, including wallet restoration, theme and
+  feedback checks, and navigation; `END MISC TESTS` and successful process exit
+  both confirmed.
+- Chrome/profile `wallets_manager_tests`: passed, including create, logout, and
+  import; `END WALLET MANAGER TESTS` and successful process exit both confirmed.
+- The complete CI browser matrix still needs validation on the pushed follow-up;
+  these two targeted suites do not establish that the other suites pass.
+
+No additional SDK change is part of this follow-up. Any further SDK change
+requires explicit approval and must be necessary for this release.

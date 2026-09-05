@@ -251,7 +251,12 @@ rethrows while `testing_mode=true`. The perf suite now records any flow failure
 into `frame_result.json` under `failures`, because that is the only channel that
 reaches the host.
 
-**Two findings came out of that, both worth acting on independently:**
+**Two findings came out of that:**
+
+Update (2026-09-05): the release review replaced the invalid test-password
+fixtures and fixed test-mode error handling. Browser tests now retain the
+integration binding's failure reporting. The findings below describe the
+original measurement environment.
 
 1. **The documented test password is rejected by the password policy.**
    `pppaaasssDDD555444@@@` (`test_integration/helpers/restore_wallet.dart:24`,

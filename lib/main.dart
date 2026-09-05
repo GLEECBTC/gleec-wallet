@@ -39,6 +39,7 @@ import 'package:web_dex/services/feedback/app_feedback_wrapper.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
 import 'package:web_dex/services/initializer/legacy_app_settings_migration_service.dart';
+import 'package:web_dex/services/initializer/app_error_handling.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -53,7 +54,7 @@ PerformanceMode? get appDemoPerformanceMode =>
     _appDemoPerformanceMode ?? _getPerformanceModeFromUrl();
 
 Future<void> main() async {
-  await runZonedGuarded(() async {
+  Future<void> startApp() async {
     WalletLoadTimeline.instance.markProcessStart();
     usePathUrlStrategy();
     WidgetsFlutterBinding.ensureInitialized();
@@ -63,10 +64,6 @@ Future<void> main() async {
     if (kIsWeb) {
       log(tronGaslessBuildPolicyMarker, path: 'GasFree build policy').ignore();
     }
-
-    FlutterError.onError = (FlutterErrorDetails details) {
-      catchUnhandledExceptions(details.exception, details.stack);
-    };
 
     // Foundational dependencies / setup - everything else builds on these 3.
     // The current focus is migrating mm2Api to the new sdk, so that the sdk
@@ -159,7 +156,13 @@ Future<void> main() async {
         ),
       ),
     );
-  }, catchUnhandledExceptions);
+  }
+
+  await runWithAppErrorHandling(
+    startApp,
+    isTestMode: isTestMode,
+    onError: catchUnhandledExceptions,
+  );
 }
 
 /// iOS file-descriptor monitoring. Bounded so a silent method channel costs a

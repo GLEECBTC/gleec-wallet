@@ -22,6 +22,8 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 
 ## 🐛 Bug Fixes
 
+- **Wallet Import Password Validation Updates Immediately** - Enable import when the password and confirmation are valid, and disable it again when they no longer match.
+
 - **On-Ramp Checkout URLs Are Validated** ([@CharlVS], #3514) - Only HTTPS checkout URLs on supported provider domains can open in the wallet's payment frame. The deployed wrapper also enforces this for existing native clients, and payment messages are checked at the frame boundary.
 - **Web Updates Reload the Deployed App** ([@CharlVS], #3514, #3526) - Restore update checks, compare deployed versions, and clear obsolete Flutter service-worker caches when applying an update.
 - **Wallet Setup and Receive Recovery** - Restore the saved-wallet Delete action, allow backing out of mobile recovery-phrase backup, and recover Receive after failed or interrupted address loads. Re-enabling a previously hidden coin now restores its active state.

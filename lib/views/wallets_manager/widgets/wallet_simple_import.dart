@@ -64,12 +64,16 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   bool _allowCustomSeed = false;
   bool _isHdMode = true;
   bool _rememberMe = false;
+  bool _arePasswordsValid = false;
   List<String> _bip39Words = const [];
   List<String> _seedWordSuggestions = const [];
   int _activeWordStart = -1;
   int _activeWordEnd = -1;
 
   bool get _isButtonEnabled {
+    if (_step == WalletSimpleImportSteps.password) {
+      return !_inProgress && _arePasswordsValid;
+    }
     final isFormValid = _refreshFormValidationState();
 
     return !_inProgress && isFormValid;
@@ -307,6 +311,9 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       children: [
         CreationPasswordFields(
           passwordController: _passwordController,
+          onValidityChanged: (isValid) {
+            setState(() => _arePasswordsValid = isValid);
+          },
           onFieldSubmitted: !_isButtonEnabled
               ? null
               : (text) {
@@ -446,6 +453,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     if (_step == WalletSimpleImportSteps.password) {
       setState(() {
         _step = WalletSimpleImportSteps.nameAndSeed;
+        _arePasswordsValid = false;
       });
       return;
     }

@@ -15,23 +15,30 @@ import '../../helpers/connect_wallet.dart';
 
 Future<void> testCreateWallet(WidgetTester tester) async {
   print('🔍 CREATE WALLET: Starting wallet creation test');
-  
+
   const String walletName = 'my-wallet-name';
-  const String password = 'pppaaasssDDD555444@@@';
-  final Finder createWalletButton =
-      find.byKey(const Key('create-wallet-button'));
+  const String password = 'Y7!m9pQ2rV4#sT6z';
+  final Finder createWalletButton = find.byKey(
+    const Key('create-wallet-button'),
+  );
   final Finder nameField = find.byKey(const Key('name-wallet-field'));
   final Finder passwordField = find.byKey(const Key('create-password-field'));
-  final Finder passwordConfirmField =
-      find.byKey(const Key('create-password-field-confirm'));
+  final Finder passwordConfirmField = find.byKey(
+    const Key('create-password-field-confirm'),
+  );
   final Finder confirmButton = find.byKey(const Key('confirm-password-button'));
-  final Finder authorizedWalletButton =
-      find.widgetWithText(AccountSwitcher, walletName);
-  final Finder walletsManagerWrapper =
-      find.byKey(const Key('wallets-manager-wrapper'));
+  final Finder authorizedWalletButton = find.widgetWithText(
+    AccountSwitcher,
+    walletName,
+  );
+  final Finder walletsManagerWrapper = find.byKey(
+    const Key('wallets-manager-wrapper'),
+  );
 
-  print('🔍 CREATE WALLET: Connecting wallet via mobile interface');
-  await tapOnMobileConnectWallet(tester, WalletType.iguana);
+  print('🔍 CREATE WALLET: Connecting wallet');
+  isMobile
+      ? await tapOnMobileConnectWallet(tester, WalletType.iguana)
+      : await tapOnAppBarConnectWallet(tester, WalletType.iguana);
 
   // New wallet test
   print('🔍 CREATE WALLET: Verifying and tapping create wallet button');
@@ -42,20 +49,20 @@ Future<void> testCreateWallet(WidgetTester tester) async {
   // Wallet creation step
   print('🔍 CREATE WALLET: Starting wallet creation form process');
   expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
-  
+
   print('🔍 CREATE WALLET: Entering wallet details');
   await tester.tapAndPump(nameField);
   await tester.enterText(nameField, walletName);
   await tester.enterText(passwordField, password);
   await tester.enterText(passwordConfirmField, password);
   await tester.pumpNFrames(30);
-  
+
   print('🔍 CREATE WALLET: Accepting terms and conditions');
-  
+
   print('🔍 CREATE WALLET: Confirming wallet creation');
   await tester.tapAndPump(confirmButton);
   await tester.pumpUntilDisappear(walletsManagerWrapper);
-  
+
   if (!isMobile) {
     print('🔍 CREATE WALLET: Verifying wallet creation on desktop');
     expect(authorizedWalletButton, findsOneWidget);
@@ -65,23 +72,19 @@ Future<void> testCreateWallet(WidgetTester tester) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets(
-    'Run Wallet Creation tests:',
-    (WidgetTester tester) async {
-      print('🔍 WALLET TESTS: Starting wallet creation test suite');
-      tester.testTextInput.register();
-      await app.main();
-      await tester.pumpAndSettle();
-      
-      print('🔍 WALLET TESTS: Accepting alpha warning');
-      await acceptAlphaWarning(tester);
-      
-      print('🔍 WALLET TESTS: Running wallet creation test');
-      await testCreateWallet(tester);
-      await tester.pumpAndSettle();
+  testWidgets('Run Wallet Creation tests:', (WidgetTester tester) async {
+    print('🔍 WALLET TESTS: Starting wallet creation test suite');
+    tester.testTextInput.register();
+    await app.main();
+    await tester.pumpAndSettle();
 
-      print('🔍 WALLET TESTS: All wallet creation tests completed');
-    },
-    semanticsEnabled: false,
-  );
+    print('🔍 WALLET TESTS: Accepting alpha warning');
+    await acceptAlphaWarning(tester);
+
+    print('🔍 WALLET TESTS: Running wallet creation test');
+    await testCreateWallet(tester);
+    await tester.pumpAndSettle();
+
+    print('🔍 WALLET TESTS: All wallet creation tests completed');
+  }, semanticsEnabled: false);
 }

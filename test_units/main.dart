@@ -1,5 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'services/initializer/app_error_handling_test.dart'
+    as app_error_handling_test;
+import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
+    as wallet_simple_import_test;
+
 // Suites that only expose `main()`, imported with a prefix so they can be
 // aggregated here. CI runs *only* this file
 // (.github/workflows/unit-tests-on-pr.yml), so a test file that is not
@@ -137,6 +142,8 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  app_error_handling_test.main();
+  wallet_simple_import_test.main();
   group('App update:', () {
     testUpdateVersionCompare();
     testUpdateDownloadUri();
