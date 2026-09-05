@@ -40,9 +40,40 @@ void testUpdateVersionCompare() {
 
     test('treats unparseable input as "no update"', () {
       expect(UpdateBloc.isVersionGreaterThan('', '0.9.7'), isFalse);
-      expect(UpdateBloc.isVersionGreaterThan('not-a-version', '0.9.7'), isFalse);
-      expect(UpdateBloc.isVersionGreaterThan('0.9.8', ''), isTrue);
+      expect(
+        UpdateBloc.isVersionGreaterThan('not-a-version', '0.9.7'),
+        isFalse,
+      );
+      expect(UpdateBloc.isVersionGreaterThan('0.9.8', ''), isFalse);
     });
+
+    test(
+      'rejects malformed segments instead of repairing them into releases',
+      () {
+        for (final version in [
+          'release99.0.0',
+          '0.9.8oops',
+          '1..0',
+          '1.0.',
+          '1. 0.0',
+          '1.0.0-',
+          '1.0.0+',
+          '1.0.0+build!',
+          '999999999999999999999999999999999.0.0',
+        ]) {
+          expect(
+            UpdateBloc.isVersionGreaterThan(version, '0.9.7'),
+            isFalse,
+            reason: 'invalid announced version: $version',
+          );
+          expect(
+            UpdateBloc.isVersionGreaterThan('2.0.0', version),
+            isFalse,
+            reason: 'invalid installed version: $version',
+          );
+        }
+      },
+    );
 
     test('matches the versions in production today', () {
       // The endpoint announces 0.9.6; walletrc serves 0.9.7 and dex.gleec.com
@@ -58,16 +89,17 @@ void testUpdateVersionCompare() {
 void testUpdateDownloadUri() {
   group('UpdateVersionInfo.downloadUri:', () {
     UpdateVersionInfo infoWith(String url) => UpdateVersionInfo(
-          status: UpdateStatus.available,
-          version: '0.9.8',
-          changelog: '',
-          downloadUrl: url,
-        );
+      status: UpdateStatus.available,
+      version: '0.9.8',
+      changelog: '',
+      downloadUrl: url,
+    );
 
     test('accepts http(s) release URLs', () {
       expect(
-        infoWith('https://github.com/GLEECBTC/gleec-wallet/releases/tag/0.9.6')
-            .downloadUri,
+        infoWith(
+          'https://github.com/GLEECBTC/gleec-wallet/releases/tag/0.9.6',
+        ).downloadUri,
         isNotNull,
       );
       expect(infoWith('  https://example.com/a  ').downloadUri, isNotNull);
@@ -78,6 +110,21 @@ void testUpdateDownloadUri() {
       expect(infoWith('   ').downloadUri, isNull);
       expect(infoWith('javascript:alert(1)').downloadUri, isNull);
       expect(infoWith('file:///etc/passwd').downloadUri, isNull);
+    });
+
+    test('rejects hostless and ambiguous download URLs', () {
+      for (final url in [
+        'https:',
+        'https:/release.zip',
+        'https:///release.zip',
+        'https://',
+        'https://user:password@example.com/release.zip',
+        'https://exa mple.com/release.zip',
+        'https://example.com\n.attacker.example/release.zip',
+        r'https://example.com\@attacker.example/release.zip',
+      ]) {
+        expect(infoWith(url).downloadUri, isNull, reason: url);
+      }
     });
   });
 }

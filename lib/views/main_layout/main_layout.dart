@@ -70,8 +70,6 @@ class _MainLayoutState extends State<MainLayout> {
     final tradingStatusBloc = context.read<TradingStatusBloc>();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await updateBloc.init();
-
       if (mounted) {
         try {
           await QuickLoginSwitch.maybeShowRememberedWallet(context);
@@ -86,8 +84,12 @@ class _MainLayoutState extends State<MainLayout> {
       if (tradingEnabled &&
           kShowTradingWarning &&
           !await _hasAgreedNoTrading()) {
-        _showNoTradingWarning().ignore();
+        await _showNoTradingWarning();
       }
+
+      // Let startup dialogs finish before checking the network for updates.
+      // An unavailable update endpoint must not delay remembered-wallet login.
+      if (mounted) unawaited(updateBloc.init());
     });
 
     super.initState();

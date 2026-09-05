@@ -116,7 +116,8 @@ class UpdateBloc extends BlocBase {
     }
 
     final deployedVersion = await appUpdateService.fetchDeployedWebVersion();
-    final canInstall = deployedVersion != null &&
+    final canInstall =
+        deployedVersion != null &&
         isVersionGreaterThan(deployedVersion, currentVersion);
 
     if (!canInstall) {
@@ -166,24 +167,37 @@ class UpdateBloc extends BlocBase {
   /// pre-release suffixes, so `0.9.5-rc1` compares as `0.9.5`. Returns false
   /// for anything it cannot parse, so malformed input can never raise a popup.
   static bool isVersionGreaterThan(String newVersion, String currentVersion) {
-    List<int> parse(String version) {
-      final core = version.trim().split(RegExp(r'[+-]')).first;
-      return core
-          .split('.')
-          .map((s) => int.tryParse(s.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0)
-          .toList();
+    List<int>? parse(String version) {
+      final normalized = version.trim();
+      final pattern = RegExp(
+        r'^[0-9]+(?:\.[0-9]+)*'
+        r'(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?'
+        r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$',
+      );
+      if (!pattern.hasMatch(normalized)) return null;
+
+      final core = normalized.split(RegExp(r'[+-]')).first;
+      final segments = <int>[];
+      for (final segment in core.split('.')) {
+        final value = int.tryParse(segment);
+        if (value == null) return null;
+        segments.add(value);
+      }
+      return segments;
     }
 
     final newSegments = parse(newVersion);
     final currentSegments = parse(currentVersion);
+    if (newSegments == null || currentSegments == null) return false;
     final length = newSegments.length > currentSegments.length
         ? newSegments.length
         : currentSegments.length;
 
     for (var i = 0; i < length; i++) {
       final newSegment = i < newSegments.length ? newSegments[i] : 0;
-      final currentSegment =
-          i < currentSegments.length ? currentSegments[i] : 0;
+      final currentSegment = i < currentSegments.length
+          ? currentSegments[i]
+          : 0;
       if (newSegment != currentSegment) return newSegment > currentSegment;
     }
     return false;
@@ -208,9 +222,15 @@ class UpdateVersionInfo {
   /// not something we are willing to hand to the platform's URL launcher.
   Uri? get downloadUri {
     final url = downloadUrl.trim();
-    if (url.isEmpty) return null;
+    if (url.isEmpty || RegExp(r'[\\\s\u0000-\u001f\u007f]').hasMatch(url)) {
+      return null;
+    }
     final uri = Uri.tryParse(url);
-    if (uri == null || !(uri.isScheme('https') || uri.isScheme('http'))) {
+    if (uri == null ||
+        !(uri.isScheme('https') || uri.isScheme('http')) ||
+        !uri.hasAuthority ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
       return null;
     }
     return uri;

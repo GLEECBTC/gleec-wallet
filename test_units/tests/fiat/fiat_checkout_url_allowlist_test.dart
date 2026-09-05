@@ -75,18 +75,14 @@ void main() {
       // Dart treats the backslash as part of the userinfo; a browser treats it
       // as a path separator, so the two disagree about which host this is.
       expect(
-        isAllowedFiatCheckoutUrl(r'https://attacker.example\@komodo.banxa.com/'),
+        isAllowedFiatCheckoutUrl(
+          r'https://attacker.example\@komodo.banxa.com/',
+        ),
         isFalse,
       );
       // Browsers strip tabs and newlines before parsing; Dart does not.
-      expect(
-        isAllowedFiatCheckoutUrl('https://attacker.example\t/'),
-        isFalse,
-      );
-      expect(
-        isAllowedFiatCheckoutUrl('https://komodo.banxa\n.com/'),
-        isFalse,
-      );
+      expect(isAllowedFiatCheckoutUrl('https://attacker.example\t/'), isFalse);
+      expect(isAllowedFiatCheckoutUrl('https://komodo.banxa\n.com/'), isFalse);
     });
 
     test('rejects empty, relative and unparseable values', () {
@@ -171,7 +167,8 @@ void main() {
       expect(
         _jsStringArray(widgetSource, 'KOMODO_ALLOWED_CHECKOUT_HOSTS'),
         kFiatCheckoutAllowedHosts,
-        reason: 'the deployed asset defends already-shipped clients on its '
+        reason:
+            'the deployed asset defends already-shipped clients on its '
             'own, so its host list has to match this one exactly',
       );
       expect(
@@ -188,7 +185,9 @@ void main() {
       expect(widgetSource, contains('parsed.username || parsed.password'));
       expect(
         widgetSource,
-        contains("document.getElementById('fiat-onramp-iframe').src = approvedUrl;"),
+        contains(
+          "document.getElementById('fiat-onramp-iframe').src = approvedUrl;",
+        ),
       );
       // No base argument: a relative URL must fail rather than resolve against
       // the wallet's own origin.
@@ -213,7 +212,8 @@ void main() {
       expect(
         _wildcardPostMessage.hasMatch(widgetSource),
         isFalse,
-        reason: 'a wildcard target origin hands the provider payload to '
+        reason:
+            'a wildcard target origin hands the provider payload to '
             'whatever origin is listening',
       );
       expect(widgetSource, contains('_komodoIsAllowedMessageOrigin'));
@@ -251,24 +251,36 @@ void main() {
               as Map<String, dynamic>;
     });
 
+    test('allows the wallet origin to use its Trezor WebUSB transport', () {
+      final policy = _headerValue(hostingConfig, '**', 'Permissions-Policy')!;
+      expect(
+        policy.split(',').map((directive) => directive.trim()),
+        contains('usb=(self)'),
+        reason:
+            'KDF calls navigator.usb for Trezor; usb=() disables it '
+            'even after the user has granted device access',
+      );
+    });
+
     test('selects its site by deploy target rather than pinning one', () {
       expect(
         hostingConfig['target'],
         isNotNull,
-        reason: 'a `site` key pins this config to one site, which is what '
+        reason:
+            'a `site` key pins this config to one site, which is what '
             'stops the same headers reaching production and the local '
             'preview project',
       );
       expect(
         hostingConfig.containsKey('site'),
         isFalse,
-        reason: 'firebase-tools rejects a config carrying both `site` and '
+        reason:
+            'firebase-tools rejects a config carrying both `site` and '
             '`target`',
       );
     });
 
-    test('maps that target for production as well as the release candidate',
-        () {
+    test('maps that target for production as well as the release candidate', () {
       final target = hostingConfig['target'] as String;
 
       for (final entry in <String, String>{
@@ -281,7 +293,8 @@ void main() {
         expect(
           (hosting?[target] as List<dynamic>?)?.cast<String>(),
           <String>[entry.value],
-          reason: 'without this mapping `firebase deploy --only '
+          reason:
+              'without this mapping `firebase deploy --only '
               'hosting:$target --project ${entry.key}` cannot resolve a site, '
               'so ${entry.value} cannot be deployed from this config at all',
         );
@@ -311,7 +324,10 @@ void main() {
         contains("frame-ancestors 'self'"),
         reason: 'the wallet must not allow itself to be framed cross-origin',
       );
-      expect(_headerValue(hostingConfig, '**', 'X-Frame-Options'), 'SAMEORIGIN');
+      expect(
+        _headerValue(hostingConfig, '**', 'X-Frame-Options'),
+        'SAMEORIGIN',
+      );
       expect(
         _headerValue(hostingConfig, '**', 'X-Content-Type-Options'),
         'nosniff',
@@ -332,15 +348,17 @@ void main() {
           'Cache-Control',
         ),
         contains('must-revalidate'),
-        reason: 'desktop and mobile fetch the wrapper page at runtime, so a '
+        reason:
+            'desktop and mobile fetch the wrapper page at runtime, so a '
             'cached copy outlives a fix to it',
       );
     });
   });
 }
 
-final RegExp _wildcardPostMessage =
-    RegExp('''postMessage\\([^)]*,\\s*['"]\\*['"]''');
+final RegExp _wildcardPostMessage = RegExp(
+  '''postMessage\\([^)]*,\\s*['"]\\*['"]''',
+);
 
 /// Reads a `var <name> = ['a', 'b'];` array out of the widget's inline script.
 ///
@@ -350,8 +368,9 @@ final RegExp _wildcardPostMessage =
 /// a second declaration, a commented-out entry, a double-quoted entry, or an
 /// element that is not a string literal at all.
 List<String> _jsStringArray(String source, String name) {
-  final declarations =
-      RegExp('$name\\s*=\\s*\\[([^\\]]*)\\]').allMatches(source).toList();
+  final declarations = RegExp(
+    '$name\\s*=\\s*\\[([^\\]]*)\\]',
+  ).allMatches(source).toList();
   expect(
     declarations,
     hasLength(1),
@@ -363,9 +382,10 @@ List<String> _jsStringArray(String source, String name) {
     reason: '$name must be assigned exactly once in $_widgetAssetPath',
   );
   expect(
-    RegExp('$name\\s*\\.\\s*'
-            '(push|pop|shift|unshift|splice|sort|reverse|fill|copyWithin)\\b')
-        .hasMatch(source),
+    RegExp(
+      '$name\\s*\\.\\s*'
+      '(push|pop|shift|unshift|splice|sort|reverse|fill|copyWithin)\\b',
+    ).hasMatch(source),
     isFalse,
     reason: '$name must not be mutated after it is declared',
   );
@@ -420,8 +440,10 @@ Map<String, dynamic> _readJsonWithComments(String path) {
     return jsonDecode(_stripJsonComments(file.readAsStringSync()))
         as Map<String, dynamic>;
   } on FormatException catch (error) {
-    fail('$path did not parse after comments were stripped, so these tests '
-        'could not run: $error');
+    fail(
+      '$path did not parse after comments were stripped, so these tests '
+      'could not run: $error',
+    );
   }
 }
 

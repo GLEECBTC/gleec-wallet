@@ -76,14 +76,15 @@
             "value": "strict-origin-when-cross-origin"
           },
           {
-            // Only features that neither the wallet nor the fiat providers
-            // use. `camera`, `microphone`, `payment`, `encrypted-media` and
+            // USB stays available to the wallet's Trezor transport, but is
+            // not delegated to cross-origin payment frames. `camera`,
+            // `microphone`, `payment`, `encrypted-media` and
             // `midi` are deliberately absent: their default allowlist is
             // `self`, which is exactly what lets the fiat wrapper page
             // delegate them to the provider iframe via its `allow` attribute.
             // Denying them here would break provider KYC.
             "key": "Permissions-Policy",
-            "value": "geolocation=(), usb=(), serial=(), bluetooth=(), idle-detection=()"
+            "value": "geolocation=(), usb=(self), serial=(), bluetooth=(), idle-detection=()"
           }
         ]
       },

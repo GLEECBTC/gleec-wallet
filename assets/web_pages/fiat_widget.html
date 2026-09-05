@@ -216,9 +216,9 @@
     /**
      * Decode the `fiatUrl` parameter.
      *
-     * Current builds send base64url. Desktop and mobile builds already in
-     * users' hands send standard base64, whose `+` has been turned into a
-     * space by URLSearchParams before we see it, so both forms are accepted.
+     * Current builds percent-encode standard base64. Older clients leave `+`
+     * unescaped, so URLSearchParams turns it into a space. Accept that legacy
+     * form and base64url as well.
      *
      * @param {string} value - The raw `fiatUrl` parameter value
      * @returns {string} - The decoded URL
