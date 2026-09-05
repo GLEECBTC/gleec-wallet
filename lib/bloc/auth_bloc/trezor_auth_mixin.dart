@@ -58,6 +58,9 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
           break;
         }
       }
+    } on WalletChangedDisconnectException {
+      _listenToAuthStateChanges();
+      return;
     } catch (e) {
       _log.shout('Trezor authentication failed', e);
       emit(
@@ -158,19 +161,34 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
       );
     }
 
-    await _sdk.setWalletType(WalletType.trezor);
-    await _sdk.confirmSeedBackup(hasBackup: true);
+    final expectedWalletId = authState.user!.walletId;
+    await _sdk.setWalletType(
+      WalletType.trezor,
+      expectedWalletId: expectedWalletId,
+    );
+    await _sdk.confirmSeedBackup(
+      hasBackup: true,
+      expectedWalletId: expectedWalletId,
+    );
     if (authState.user!.wallet.config.activatedCoins.isEmpty) {
       // If no coins are activated, we assume this is the first time
       // the user is setting up their Trezor wallet.
       // Filter out geo-blocked assets from default coins before adding to wallet
       final allowedDefaultCoins = _filterBlockedAssets(enabledByDefaultCoins);
-      await _sdk.addActivatedCoins(allowedDefaultCoins);
+      await _sdk.addActivatedCoins(
+        allowedDefaultCoins,
+        expectedWalletId: expectedWalletId,
+      );
     }
 
     // Refresh the current user to pull in the updated wallet metadata
     // configured above.
     final updatedUser = await _sdk.auth.currentUser;
+    if (updatedUser?.walletId != expectedWalletId) {
+      throw const WalletChangedDisconnectException(
+        'Wallet changed while configuring hardware wallet metadata',
+      );
+    }
     return AuthBlocState.loggedIn(updatedUser!);
   }
 

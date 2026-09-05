@@ -545,14 +545,15 @@ class CoinsRepo {
       suppressActivationBroadcasts(requestedIds);
     }
 
-    final isSignedIn = await _kdfSdk.auth.isSignedIn();
-    if (!isSignedIn) {
+    final originalUser = await _kdfSdk.auth.currentUser;
+    if (originalUser == null) {
       final coinIdList = assets.map((e) => e.id.id).join(', ');
       _log.warning('No wallet signed in. Skipping activation of [$coinIdList]');
       return;
     }
 
-    final walletType = (await _kdfSdk.currentWallet())?.config.type;
+    final expectedWalletId = originalUser.walletId;
+    final walletType = originalUser.wallet.config.type;
     if (walletType == WalletType.trezor) {
       final unsupportedSiaAssets = assets.where(
         (asset) => asset.id.subClass == CoinSubClass.sia,
@@ -614,6 +615,7 @@ class CoinsRepo {
       await _activateZhtlcAssets(
         zhtlcAssets,
         zhtlcAssets.map((asset) => _assetToCoinWithoutAddress(asset)).toList(),
+        expectedWalletId: expectedWalletId,
         notifyListeners: notifyListeners,
         addToWalletMetadata: addToWalletMetadata,
       );
@@ -629,7 +631,10 @@ class CoinsRepo {
       // Ensure the wallet metadata is updated with the assets before activation
       // This is to ensure that the wallet metadata is always in sync with the assets
       // being activated, even if activation fails.
-      await _addAssetsToWalletMetdata(assets.map((asset) => asset.id));
+      await _addAssetsToWalletMetdata(
+        assets.map((asset) => asset.id),
+        expectedWalletId: expectedWalletId,
+      );
     }
 
     Exception? lastActivationException;
@@ -832,10 +837,15 @@ class CoinsRepo {
   ///
   /// This is exposed so callers can batch-write metadata before launching
   /// parallel activations with `addToWalletMetadata: false`.
-  Future<void> addAssetsToWalletMetadata(Iterable<AssetId> assets) =>
-      _addAssetsToWalletMetdata(assets);
+  Future<void> addAssetsToWalletMetadata(
+    Iterable<AssetId> assets, {
+    required WalletId expectedWalletId,
+  }) => _addAssetsToWalletMetdata(assets, expectedWalletId: expectedWalletId);
 
-  Future<void> _addAssetsToWalletMetdata(Iterable<AssetId> assets) async {
+  Future<void> _addAssetsToWalletMetdata(
+    Iterable<AssetId> assets, {
+    required WalletId expectedWalletId,
+  }) async {
     final parentIds = assets
         .where((assetId) => assetId.parentId != null)
         .map((assetId) => assetId.parentId!.id)
@@ -843,7 +853,10 @@ class CoinsRepo {
 
     if (assets.isNotEmpty || parentIds.isNotEmpty) {
       final allIdsToAdd = <String>{...assets.map((e) => e.id), ...parentIds};
-      await _kdfSdk.addActivatedCoins(allIdsToAdd);
+      await _kdfSdk.addActivatedCoins(
+        allIdsToAdd,
+        expectedWalletId: expectedWalletId,
+      );
     }
   }
 
@@ -915,6 +928,9 @@ class CoinsRepo {
     List<Coin> coins, {
     bool notify = true,
   }) async {
+    final originalUser = await _kdfSdk.auth.currentUser;
+    if (originalUser == null) return;
+    final expectedWalletId = originalUser.walletId;
     final allCoinIds = <String>{};
     final allChildCoins = <Coin>[];
 
@@ -937,7 +953,10 @@ class CoinsRepo {
       // Keep metadata in sync so disabled coins do not re-enable on login.
       removeMetadataFuture = () async {
         try {
-          await _kdfSdk.removeActivatedCoins(allCoinIds.toList());
+          await _kdfSdk.removeActivatedCoins(
+            allCoinIds.toList(),
+            expectedWalletId: expectedWalletId,
+          );
         } catch (e, s) {
           _log.warning(
             'Failed to update wallet metadata for deactivated coins',
@@ -1003,10 +1022,19 @@ class CoinsRepo {
   /// real rollback is required.
   Future<void> rollbackPreviewAssets(
     Iterable<Asset> assets, {
+    required WalletId expectedWalletId,
     Set<AssetId> deleteCustomTokens = const {},
     Set<AssetId> removeWalletMetadataAssets = const {},
     bool notifyListeners = false,
   }) async {
+    Future<bool> isOriginalWallet() async {
+      final currentWalletId = (await _kdfSdk.auth.currentUser)?.walletId;
+      return expectedWalletId.pubkeyHash?.trim().isNotEmpty == true &&
+          currentWalletId?.pubkeyHash?.trim().isNotEmpty == true &&
+          currentWalletId == expectedWalletId;
+    }
+
+    if (!await isOriginalWallet()) return;
     final uniqueAssets = Map<AssetId, Asset>.fromEntries(
       assets.map((asset) => MapEntry(asset.id, asset)),
     );
@@ -1022,11 +1050,17 @@ class CoinsRepo {
       });
 
     for (final asset in orderedAssets) {
+      if (!await isOriginalWallet()) {
+        return;
+      }
       await _balanceWatchers[asset.id]?.cancel();
       _balanceWatchers.remove(asset.id);
 
       try {
         if (await isAssetActivated(asset.id, forceRefresh: true)) {
+          if (!await isOriginalWallet()) {
+            return;
+          }
           await _mm2.call(DisableCoinReq(coin: asset.id.id));
         }
       } catch (e, s) {
@@ -1042,7 +1076,10 @@ class CoinsRepo {
       try {
         await _kdfSdk.removeActivatedCoins(
           removeWalletMetadataAssets.map((assetId) => assetId.id).toList(),
+          expectedWalletId: expectedWalletId,
         );
+      } on WalletChangedDisconnectException {
+        return;
       } catch (e, s) {
         _log.warning(
           'Failed to remove preview assets from wallet metadata',
@@ -1053,6 +1090,9 @@ class CoinsRepo {
     }
 
     for (final assetId in deleteCustomTokens) {
+      if (!await isOriginalWallet()) {
+        return;
+      }
       try {
         await _kdfSdk.deleteCustomToken(assetId);
       } catch (e, s) {
@@ -1300,6 +1340,7 @@ class CoinsRepo {
   Future<void> _activateZhtlcAssets(
     List<Asset> assets,
     List<Coin> coins, {
+    required WalletId expectedWalletId,
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
   }) async {
@@ -1307,6 +1348,11 @@ class CoinsRepo {
         .getActivatedAssets();
 
     for (final asset in assets) {
+      if ((await _kdfSdk.auth.currentUser)?.walletId != expectedWalletId) {
+        throw const WalletChangedDisconnectException(
+          'Wallet changed during ZHTLC activation',
+        );
+      }
       final coin = coins.firstWhere((coin) => coin.id == asset.id);
 
       // Check if asset is already activated
@@ -1319,7 +1365,9 @@ class CoinsRepo {
 
         // Add to wallet metadata if requested
         if (addToWalletMetadata) {
-          await _addAssetsToWalletMetdata([asset.id]);
+          await _addAssetsToWalletMetdata([
+            asset.id,
+          ], expectedWalletId: expectedWalletId);
         }
 
         // Broadcast active state for already activated assets
@@ -1356,6 +1404,7 @@ class CoinsRepo {
         await _activateZhtlcAsset(
           asset,
           coin,
+          expectedWalletId: expectedWalletId,
           notifyListeners: notifyListeners,
           addToWalletMetadata: addToWalletMetadata,
         );
@@ -1369,6 +1418,7 @@ class CoinsRepo {
   Future<void> _activateZhtlcAsset(
     Asset asset,
     Coin coin, {
+    required WalletId expectedWalletId,
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
   }) async {
@@ -1382,13 +1432,20 @@ class CoinsRepo {
       // before proceeding with activation, and doesn't broadcast activation status
       // until config parameters are received and (desktop) params files downloaded.
       final result = await _arrrActivationService.activateArrr(asset);
-      result.when(
+      if ((await _kdfSdk.auth.currentUser)?.walletId != expectedWalletId) {
+        throw const WalletChangedDisconnectException(
+          'Wallet changed during ZHTLC activation',
+        );
+      }
+      await result.when<Future<void>>(
         success: (progress) async {
           _log.info('ZHTLC asset activated successfully: ${asset.id.id}');
 
           // Add assets after activation regardless of success or failure
           if (addToWalletMetadata) {
-            await _addAssetsToWalletMetdata([asset.id]);
+            await _addAssetsToWalletMetdata([
+              asset.id,
+            ], expectedWalletId: expectedWalletId);
           }
 
           if (notifyListeners) {
@@ -1423,7 +1480,7 @@ class CoinsRepo {
           }
           _invalidateActivatedAssetsCache();
         },
-        error: (message) {
+        error: (message) async {
           _log.severe(
             'ZHTLC asset activation failed: ${asset.id.id} - $message',
           );
@@ -1443,7 +1500,7 @@ class CoinsRepo {
 
           throw Exception('zcoin activaiton failed: $message');
         },
-        needsConfiguration: (coinId, requiredSettings) {
+        needsConfiguration: (coinId, requiredSettings) async {
           _log.severe(
             'ZHTLC activation should not return needsConfiguration in future-based call',
           );
@@ -1460,6 +1517,8 @@ class CoinsRepo {
           );
         },
       );
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (e, s) {
       _log.severe('Error activating ZHTLC asset ${asset.id.id}', e, s);
 

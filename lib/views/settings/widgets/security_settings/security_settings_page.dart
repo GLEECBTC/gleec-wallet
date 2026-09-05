@@ -47,6 +47,7 @@ class SecuritySettingsPage extends StatefulWidget {
 
 class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   String _seed = '';
+  WalletId? _seedWalletId;
   final Map<Coin, String> _privKeys = {};
 
   /// Private keys fetched from SDK - stored locally for minimal memory exposure.
@@ -75,6 +76,7 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   /// - Any error occurs during private key operations
   void _clearAllSensitiveData() {
     _seed = '';
+    _seedWalletId = null;
     _privKeys.clear();
     _sdkPrivateKeys?.clear();
     _sdkPrivateKeys = null;
@@ -91,11 +93,10 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<SecuritySettingsBloc>(
-      create:
-          (context) => SecuritySettingsBloc(
-            SecuritySettingsState.initialState(),
-            kdfSdk: RepositoryProvider.of<KomodoDefiSdk>(context),
-          ),
+      create: (context) => SecuritySettingsBloc(
+        SecuritySettingsState.initialState(),
+        kdfSdk: RepositoryProvider.of<KomodoDefiSdk>(context),
+      ),
       child: MultiBlocListener(
         listeners: [
           // Listen for step changes to manage sensitive data cleanup
@@ -112,8 +113,8 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
             if (isMobile) {
               return _SecuritySettingsPageMobile(
                 content: content,
-                onBackButtonPressed:
-                    () => _handleBackButton(context, state.step),
+                onBackButtonPressed: () =>
+                    _handleBackButton(context, state.step),
               );
             }
             return content;
@@ -175,7 +176,9 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
         return SeedShow(seedPhrase: _seed, privKeys: _privKeys);
 
       case SecuritySettingsStep.seedConfirm:
-        return SeedConfirmation(seedPhrase: _seed);
+        final walletId = _seedWalletId;
+        if (walletId == null) return const SizedBox.shrink();
+        return SeedConfirmation(seedPhrase: _seed, expectedWalletId: walletId);
 
       case SecuritySettingsStep.seedSuccess:
         _clearAllSensitiveData(); // Clear data after successful seed backup
@@ -203,23 +206,25 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   /// This maintains backward compatibility with the existing seed phrase
   /// backup flow while the private key flow uses the new hybrid approach.
   Future<void> onViewSeedPressed(BuildContext context) async {
-    final SecuritySettingsBloc securitySettingsBloc =
-        context.read<SecuritySettingsBloc>();
+    final securitySettingsBloc = context.read<SecuritySettingsBloc>();
+    final coinsBloc = context.read<CoinsBloc>();
+    final mm2Api = RepositoryProvider.of<Mm2Api>(context);
+    final kdfSdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+    final originalUser = await kdfSdk.auth.currentUser;
+    if (!context.mounted || originalUser == null) return;
+    final expectedWalletId = originalUser.walletId;
 
     final String? pass = await walletPasswordDialog(context);
-    if (pass == null) return;
-
-    // ignore: use_build_context_synchronously
-    final coinsBloc = context.read<CoinsBloc>();
-    // ignore: use_build_context_synchronously
-    final mm2Api = RepositoryProvider.of<Mm2Api>(context);
-    // ignore: use_build_context_synchronously
-    final kdfSdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+    if (pass == null || !mounted) return;
+    if ((await kdfSdk.auth.currentUser)?.walletId != expectedWalletId) return;
 
     final mnemonic = await kdfSdk.auth.getMnemonicPlainText(pass);
-    _seed = mnemonic.plaintextMnemonic ?? '';
+    if (!mounted ||
+        (await kdfSdk.auth.currentUser)?.walletId != expectedWalletId) {
+      return;
+    }
 
-    _privKeys.clear();
+    final privateKeys = <Coin, String>{};
     final parentCoins = coinsBloc.state.walletCoins.values.where(
       (coin) => !coin.id.isChildAsset && coin.id.subClass != CoinSubClass.sia,
     );
@@ -227,11 +232,21 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
       final result = await mm2Api.showPrivKey(
         ShowPrivKeyRequest(coin: coin.abbr),
       );
+      if (!mounted ||
+          (await kdfSdk.auth.currentUser)?.walletId != expectedWalletId) {
+        return;
+      }
       if (result != null) {
-        _privKeys[coin] = result.privKey;
+        privateKeys[coin] = result.privKey;
       }
     }
 
+    if (!mounted) return;
+    _seed = mnemonic.plaintextMnemonic ?? '';
+    _seedWalletId = expectedWalletId;
+    _privKeys
+      ..clear()
+      ..addAll(privateKeys);
     securitySettingsBloc.add(const ShowSeedEvent());
   }
 
@@ -313,10 +328,9 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
     } else {
       // Show error to user
       // Check if failure was due to empty private keys
-      final errorMessage =
-          isEmptyKeys
-              ? LocaleKeys.privateKeysEmptyError.tr()
-              : LocaleKeys.privateKeyRetrievalFailed.tr();
+      final errorMessage = isEmptyKeys
+          ? LocaleKeys.privateKeysEmptyError.tr()
+          : LocaleKeys.privateKeyRetrievalFailed.tr();
       // ignore: use_build_context_synchronously
       _showPrivateKeyError(context, errorMessage);
     }

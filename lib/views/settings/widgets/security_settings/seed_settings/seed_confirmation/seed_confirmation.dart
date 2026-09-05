@@ -17,9 +17,12 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 class SeedConfirmation extends StatefulWidget {
-  const SeedConfirmation({required this.seedPhrase, this.expectedWalletId});
+  const SeedConfirmation({
+    required this.seedPhrase,
+    required this.expectedWalletId,
+  });
   final String seedPhrase;
-  final WalletId? expectedWalletId;
+  final WalletId expectedWalletId;
 
   @override
   State<SeedConfirmation> createState() => _SeedConfirmationState();
@@ -138,8 +141,7 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
 
   void _onConfirmPressed() {
     final authBloc = context.read<AuthBloc>();
-    if (widget.expectedWalletId != null &&
-        authBloc.state.currentUser?.walletId != widget.expectedWalletId) {
+    if (authBloc.state.currentUser?.walletId != widget.expectedWalletId) {
       return;
     }
     final String result = _selectedWords.map((w) => w.word).join(' ').trim();

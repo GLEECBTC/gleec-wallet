@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 // directly - the same reach the coins-bloc suites make into SDK internals.
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/analytics/wallet_load_timeline.dart';
@@ -340,6 +341,184 @@ void testAuthBloc() {
     }
   });
 
+  group('AuthBloc wallet export', () {
+    test(
+      'a stale export request never downloads replacement wallet data',
+      () async {
+        final original = _user();
+        final replacement = _user(name: 'Wallet 2');
+        final auth = _FakeAuth()..userToReturn = replacement;
+        final repository = _FakeWalletsRepository();
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          repository,
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        final selected = bloc.stream.firstWhere(
+          (state) => state.currentUser?.walletId == replacement.walletId,
+        );
+        bloc.add(
+          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
+        );
+        await selected;
+        final replacementState = bloc.state;
+
+        bloc.add(
+          AuthWalletDownloadRequested(
+            password: 'pw',
+            expectedWalletId: original.walletId,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(repository.downloadWalletIds, isEmpty);
+        expect(auth.metadataWriteWalletIds, isEmpty);
+        expect(bloc.state, same(replacementState));
+      },
+    );
+
+    for (final switchWallet in [false, true]) {
+      test(
+        switchWallet
+            ? 'export cannot confirm the replacement wallet backup'
+            : 'export confirms the wallet whose data was downloaded',
+        () async {
+          final original = _user();
+          final replacement = _user(name: 'Wallet 2');
+          final auth = _FakeAuth()..userToReturn = original;
+          final downloadStarted = Completer<void>();
+          final downloadGate = Completer<void>();
+          final repository = _FakeWalletsRepository()
+            ..onDownload = (wallet, password) async {
+              expect(wallet.name, original.walletId.name);
+              expect(password, 'pw');
+              downloadStarted.complete();
+              await downloadGate.future;
+            };
+          final bloc = AuthBloc(
+            _FakeSdk(auth),
+            repository,
+            _FakeSettingsRepository(),
+            _FakeTradingStatusService(),
+          );
+          addTearDown(bloc.close);
+
+          final selected = bloc.stream.firstWhere(
+            (state) => state.currentUser?.walletId == original.walletId,
+          );
+          bloc.add(
+            AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
+          );
+          await selected;
+          bloc.add(
+            AuthWalletDownloadRequested(
+              password: 'pw',
+              expectedWalletId: original.walletId,
+            ),
+          );
+          await downloadStarted.future;
+
+          if (switchWallet) {
+            auth.userToReturn = replacement;
+            final replacementSelected = bloc.stream.firstWhere(
+              (state) => state.currentUser?.walletId == replacement.walletId,
+            );
+            bloc.add(
+              AuthModeChanged(
+                mode: AuthorizeMode.logIn,
+                currentUser: replacement,
+              ),
+            );
+            await replacementSelected;
+          }
+
+          final beforeCompletion = bloc.state;
+          final confirmed = switchWallet
+              ? null
+              : bloc.stream.firstWhere(
+                  (state) => state.currentUser?.metadata['has_backup'] == true,
+                );
+          downloadGate.complete();
+          if (confirmed != null) {
+            await confirmed.timeout(const Duration(seconds: 2));
+          } else {
+            await Future<void>.delayed(Duration.zero);
+          }
+
+          expect(auth.metadataWriteWalletIds, everyElement(original.walletId));
+          expect(repository.downloadWalletIds, [original.walletId]);
+          if (switchWallet) {
+            expect(auth.userToReturn, same(replacement));
+            expect(bloc.state, same(beforeCompletion));
+          } else {
+            expect(auth.metadataWriteWalletIds, [original.walletId]);
+            expect(auth.userToReturn?.metadata['has_backup'], isTrue);
+          }
+        },
+      );
+    }
+  });
+
+  group('AuthBloc background wallet setup', () {
+    for (final restore in [false, true]) {
+      test('${restore ? 'restore' : 'registration'} keeps the original wallet '
+          'identity after a delayed metadata write', () async {
+        final original = _user();
+        final replacement = _user(name: 'Wallet 2');
+        final auth = _FakeAuth()..registeredUser = original;
+        final writeStarted = Completer<void>();
+        final writeGate = Completer<void>();
+        auth.afterMetadataWrite = () async {
+          if (writeStarted.isCompleted) return;
+          writeStarted.complete();
+          await writeGate.future;
+        };
+        final bloc = AuthBloc(
+          _FakeSdk(auth),
+          _FakeWalletsRepository(),
+          _FakeSettingsRepository(),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+        final loggedIn = bloc.stream.firstWhere(
+          (state) => state.currentUser?.walletId == original.walletId,
+        );
+        bloc.add(
+          restore
+              ? AuthRestoreRequested(
+                  wallet: _wallet(),
+                  password: 'pw',
+                  seed: 'a b c',
+                )
+              : AuthRegisterRequested(wallet: _wallet(), password: 'pw'),
+        );
+        await loggedIn.timeout(const Duration(seconds: 2));
+        await writeStarted.future;
+
+        auth.userToReturn = replacement;
+        final replacementSelected = bloc.stream.firstWhere(
+          (state) => state.currentUser?.walletId == replacement.walletId,
+        );
+        bloc.add(
+          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
+        );
+        await replacementSelected;
+        final replacementState = bloc.state;
+        writeGate.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(auth.metadataWriteWalletIds, [
+          original.walletId,
+          original.walletId,
+        ]);
+        expect(auth.userToReturn, same(replacement));
+        expect(bloc.state, same(replacementState));
+      });
+    }
+  });
+
   group('AuthBloc sign-out', () {
     test('clears state and resets the load timeline', () async {
       final auth = _FakeAuth()..userToReturn = _user();
@@ -422,9 +601,10 @@ Wallet _wallet({bool isLegacy = false}) => Wallet(
 
 KdfUser _user({String name = 'Wallet 1', JsonMap metadata = const {}}) =>
     KdfUser(
-      walletId: WalletId.fromName(
+      walletId: WalletId.withPubkeyHash(
         name,
         const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+        'pubkey-$name',
       ),
       isBip39Seed: true,
       metadata: metadata,
@@ -435,16 +615,30 @@ class _FakeAuth implements KomodoDefiLocalAuth {
       StreamController<KdfUser?>.broadcast();
 
   KdfUser? userToReturn;
+  KdfUser? registeredUser;
   Object? errorToThrow;
   Object? signOutError;
   Object? getUsersError;
   int signInCalls = 0;
   int signOutCalls = 0;
   int currentUserReads = 0;
-  final List<WalletId?> metadataWriteWalletIds = [];
+  final List<WalletId> metadataWriteWalletIds = [];
   Future<void> Function(String key, dynamic value)? onSetKeyValue;
+  Future<void> Function()? afterMetadataWrite;
 
   void emitToWatcher(KdfUser? user) => _watcher.add(user);
+
+  @override
+  Future<KdfUser> register({
+    required String walletName,
+    required String password,
+    AuthOptions options = const AuthOptions(
+      derivationMethod: DerivationMethod.hdWallet,
+    ),
+    Mnemonic? mnemonic,
+  }) async {
+    return userToReturn = registeredUser ?? _user();
+  }
 
   @override
   Future<KdfUser> signIn({
@@ -484,11 +678,37 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   Future<void> setOrRemoveActiveUserKeyValue(
     String key,
     dynamic value, {
-    WalletId? expectedWalletId,
+    required WalletId expectedWalletId,
   }) async {
     metadataWriteWalletIds.add(expectedWalletId);
+    _requireCurrentWallet(expectedWalletId);
     final handler = onSetKeyValue;
     if (handler != null) await handler(key, value);
+    _requireCurrentWallet(expectedWalletId);
+    final metadata = Map<String, dynamic>.from(userToReturn!.metadata);
+    value == null ? metadata.remove(key) : metadata[key] = value;
+    userToReturn = userToReturn!.copyWith(metadata: metadata);
+    await afterMetadataWrite?.call();
+  }
+
+  @override
+  Future<void> updateActiveUserKeyValue(
+    String key,
+    dynamic Function(dynamic currentValue) transform, {
+    required WalletId expectedWalletId,
+  }) async {
+    _requireCurrentWallet(expectedWalletId);
+    await setOrRemoveActiveUserKeyValue(
+      key,
+      transform(userToReturn!.metadata[key]),
+      expectedWalletId: expectedWalletId,
+    );
+  }
+
+  void _requireCurrentWallet(WalletId expectedWalletId) {
+    if (userToReturn?.walletId != expectedWalletId) {
+      throw const WalletChangedDisconnectException('Wallet changed');
+    }
   }
 
   @override
@@ -502,6 +722,9 @@ class _FakeSdk implements KomodoDefiSdk {
   final KomodoDefiLocalAuth auth;
 
   @override
+  final AssetManager assets = _FakeAssetManager();
+
+  @override
   void connectStreaming() {}
 
   @override
@@ -512,8 +735,29 @@ class _FakeSdk implements KomodoDefiSdk {
 }
 
 class _FakeWalletsRepository implements WalletsRepository {
+  Future<void> Function(Wallet wallet, String password)? onDownload;
+  final List<WalletId> downloadWalletIds = [];
+
+  @override
+  Future<void> downloadEncryptedWallet(
+    Wallet wallet,
+    String password, {
+    required WalletId expectedWalletId,
+  }) async {
+    downloadWalletIds.add(expectedWalletId);
+    await onDownload?.call(wallet, password);
+  }
+
   @override
   void invalidateCache() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeAssetManager implements AssetManager {
+  @override
+  Set<Asset> findAssetsByConfigId(String assetConfigId) => <Asset>{};
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

@@ -14,11 +14,11 @@ import 'package:web_dex/bloc/custom_token_import/bloc/custom_token_import_event.
 import 'package:web_dex/bloc/custom_token_import/bloc/custom_token_import_state.dart';
 import 'package:web_dex/bloc/custom_token_import/data/custom_token_import_repository.dart';
 import 'package:web_dex/model/coin_type.dart';
-import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 
 class _CustomTokenPreviewSession {
   const _CustomTokenPreviewSession({
+    required this.walletId,
     required this.platformAsset,
     required this.wasPlatformAlreadyActivated,
     required this.wasPlatformAlreadyInWalletMetadata,
@@ -28,6 +28,7 @@ class _CustomTokenPreviewSession {
     this.wasTokenAlreadyKnown = false,
   });
 
+  final WalletId walletId;
   final Asset platformAsset;
   final bool wasPlatformAlreadyActivated;
   final bool wasPlatformAlreadyInWalletMetadata;
@@ -46,6 +47,7 @@ class _CustomTokenPreviewSession {
     bool? wasTokenAlreadyKnown,
   }) {
     return _CustomTokenPreviewSession(
+      walletId: walletId,
       platformAsset: platformAsset ?? this.platformAsset,
       wasPlatformAlreadyActivated:
           wasPlatformAlreadyActivated ?? this.wasPlatformAlreadyActivated,
@@ -135,12 +137,18 @@ class CustomTokenImportBloc
     emit(state.copyWith(formStatus: FormStatus.submitting));
 
     try {
-      final walletCoinIds = (await _sdk.getWalletCoinIds()).toSet();
+      final originalUser = await _sdk.auth.currentUser;
+      if (originalUser == null) throw AuthException.notSignedIn();
+      final walletCoinIds =
+          (originalUser.metadata['activated_coins'] as List<dynamic>? ?? [])
+              .cast<String>()
+              .toSet();
       final platformAsset = _sdk.getSdkAsset(state.network.ticker);
       final wasPlatformAlreadyActivated = await _coinsRepo.isAssetActivated(
         platformAsset.id,
       );
       _previewSession = _CustomTokenPreviewSession(
+        walletId: originalUser.walletId,
         platformAsset: platformAsset,
         wasPlatformAlreadyActivated: wasPlatformAlreadyActivated,
         wasPlatformAlreadyInWalletMetadata: walletCoinIds.contains(
@@ -322,6 +330,7 @@ class CustomTokenImportBloc
     try {
       await _coinsRepo.rollbackPreviewAssets(
         rollbackAssets,
+        expectedWalletId: previewSession.walletId,
         deleteCustomTokens: deleteCustomTokens,
         removeWalletMetadataAssets: removeWalletMetadataAssets,
       );
