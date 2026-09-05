@@ -77,6 +77,12 @@ jobs:
           target: web
           projectId: komodo-wallet-official
 
+      - name: Verify the deployed RC is hardened
+        id: verify_dev_deploy
+        if: github.ref == 'refs/heads/dev'
+        shell: bash
+        run: tool/verify_web_deploy.sh https://walletrc.web.app
+
       - name: Deploy Gleec Wallet Web RC (`main` branch)
         id: deploy_rc
         if: github.ref == 'refs/heads/main'

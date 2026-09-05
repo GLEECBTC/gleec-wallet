@@ -16,6 +16,13 @@
           "komodo-wallet-preview"
         ]
       }
+    },
+    "gleec-wallet-official": {
+      "hosting": {
+        "web": [
+          "gleec-wallet-official"
+        ]
+      }
     }
   }
 }
