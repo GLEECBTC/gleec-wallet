@@ -10,6 +10,9 @@ import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
 import 'shared/widgets/quick_login_switch_test.dart' as quick_login_switch_test;
+import 'tests/analytics/firebase_config_test.dart' as firebase_config_test;
+import 'tests/analytics/firebase_analytics_api_test.dart'
+    as firebase_analytics_api_test;
 import 'tests/analytics_test.dart' as analytics_test;
 import 'tests/custom_token_import/custom_token_import_bloc_test.dart'
     as custom_token_import_bloc_test;
@@ -245,6 +248,8 @@ void main() {
   formatters_test.main();
   quick_login_switch_test.main();
   analytics_test.main();
+  firebase_config_test.main();
+  firebase_analytics_api_test.main();
   custom_token_import_bloc_test.main();
   custom_token_import_repository_test.main();
   fiat_default_preference_test.main();

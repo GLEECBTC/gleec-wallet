@@ -87,7 +87,7 @@ class AnalyticsRepository implements AnalyticsRepo {
   bool get isInitialized => _isInitialized;
 
   @override
-  bool get isEnabled => _isEnabled;
+  bool get isEnabled => _isInitialized && _isEnabled;
 
   /// Registers the AnalyticsRepository instance with GetIt for dependency injection
   static void register(AnalyticsSettings settings) {
