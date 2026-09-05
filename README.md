@@ -36,6 +36,7 @@
 - [Testing (all automated suites)](docs/TESTING.md)
 - [SDK Dependency Management](docs/SDK_DEPENDENCY_MANAGEMENT.md)
 - [Shipping a KDF change to the app](docs/KDF_RELEASE_RUNBOOK.md)
+- [Custom KDF commit builds](docs/CUSTOM_KDF_COMMITS.md)
 - [KDF perf stack descope](docs/KDF_PERF_STACK_DESCOPE.md) — what the shipped build actually contains
 - [Transaction history persistence](docs/TRANSACTION_HISTORY_PERSISTENCE.md)
 - [Gitflow and branching strategy](docs/GITFLOW_BRANCHING.md)
