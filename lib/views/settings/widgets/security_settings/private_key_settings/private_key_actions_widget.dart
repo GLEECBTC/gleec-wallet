@@ -32,14 +32,17 @@ class PrivateKeyActionsWidget extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final buttons = [
-                for (final action in PrivateKeyExportAction.values)
+                for (final action in const [
+                  PrivateKeyExportAction.copy,
+                  PrivateKeyExportAction.download,
+                ])
                   _ActionButton(
                     action: action,
                     enabled: state.canDeliver,
                     busy: state.isDelivering,
                   ),
               ];
-              // Stack below the width where three buttons stop being legible
+              // Stack below the width where the buttons stop being legible
               // side by side; the old Wrap reflowed them into an arbitrary
               // order mixed in with the visibility switch and the filter.
               if (constraints.maxWidth < 480) {
