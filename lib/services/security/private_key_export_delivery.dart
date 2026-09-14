@@ -1,9 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 
-enum PrivateKeyExportAction { copy, download, share }
+enum PrivateKeyExportAction { copy, download }
 
 enum PrivateKeyExportDeliveryOutcome { completed, cancelled, unconfirmed }
 
@@ -20,20 +19,14 @@ class PlatformPrivateKeyExportDelivery implements PrivateKeyExportDelivery {
   PlatformPrivateKeyExportDelivery({
     GuardedFileSaver? fileSaver,
     Future<void> Function(String)? copy,
-    Future<ShareResult> Function(String)? share,
   }) : _fileSaver = fileSaver ?? GuardedFileSaver.fromPlatform(),
-       _copy = copy ?? _copyToClipboard,
-       _share = share ?? _shareText;
+       _copy = copy ?? _copyToClipboard;
 
   final GuardedFileSaver _fileSaver;
   final Future<void> Function(String) _copy;
-  final Future<ShareResult> Function(String) _share;
 
   static Future<void> _copyToClipboard(String text) =>
       Clipboard.setData(ClipboardData(text: text));
-
-  static Future<ShareResult> _shareText(String text) => SharePlus.instance
-      .share(ShareParams(text: text, subject: 'Gleec private keys export'));
 
   @override
   Future<PrivateKeyExportDeliveryOutcome> deliver({
@@ -62,18 +55,6 @@ class PlatformPrivateKeyExportDelivery implements PrivateKeyExportDelivery {
           FileSaveOutcome.cancelled =>
             PrivateKeyExportDeliveryOutcome.cancelled,
           FileSaveOutcome.unconfirmed =>
-            PrivateKeyExportDeliveryOutcome.unconfirmed,
-        };
-      case PrivateKeyExportAction.share:
-        await beforeWrite();
-        beforeCommit();
-        final result = await _share(content.value);
-        return switch (result.status) {
-          ShareResultStatus.success =>
-            PrivateKeyExportDeliveryOutcome.completed,
-          ShareResultStatus.dismissed =>
-            PrivateKeyExportDeliveryOutcome.cancelled,
-          ShareResultStatus.unavailable =>
             PrivateKeyExportDeliveryOutcome.unconfirmed,
         };
     }

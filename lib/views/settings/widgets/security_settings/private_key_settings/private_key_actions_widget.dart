@@ -103,12 +103,10 @@ class _ActionButton extends StatelessWidget {
     final label = switch (action) {
       PrivateKeyExportAction.copy => LocaleKeys.copyDisplayedKeys.tr(),
       PrivateKeyExportAction.download => LocaleKeys.downloadDisplayedKeys.tr(),
-      PrivateKeyExportAction.share => LocaleKeys.shareDisplayedKeys.tr(),
     };
     final icon = switch (action) {
       PrivateKeyExportAction.copy => Icons.copy,
       PrivateKeyExportAction.download => Icons.download,
-      PrivateKeyExportAction.share => Icons.share,
     };
 
     // The spinner belongs inside the control that is working. Appended to the
