@@ -86,19 +86,7 @@ class _ReadyView extends StatelessWidget {
               variant: NoticeBannerVariant.info,
               icon: Icons.fact_check_outlined,
               title: LocaleKeys.privateKeyExportCoverageDetailsTitle.tr(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(LocaleKeys.privateKeyExportCoverageNotice.tr()),
-                  if (state.hasLimitedDisplayedCoverage) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      LocaleKeys.privateKeyExportActiveTronCoverage.tr(),
-                      key: const Key('private-key-export-notice-tron-coverage'),
-                    ),
-                  ],
-                ],
-              ),
+              child: Text(LocaleKeys.privateKeyExportCoverageNotice.tr()),
             ),
             const SizedBox(height: 16),
             const PrivateKeyRevealGate(),

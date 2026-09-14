@@ -14,9 +14,11 @@ import 'package:web_dex/bloc/security_settings/private_key_export_event.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_asset_section.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_flow_listener.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_password_dialog.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_show.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/widgets/private_key_export_key_tile.dart';
 import 'package:web_dex/views/wallet/coin_details/receive/qr_code_address.dart';
 
 import '../../services/security/private_key_export_test_support.dart';
@@ -113,16 +115,19 @@ void testPrivateKeyExportFlow() {
       expect(bloc.state.phase, PrivateKeyExportPhase.ready);
     }
 
-    testWidgets('explains limited coverage and shows no raw key by default', (
+    testWidgets('shows TRON unavailable and no raw key by default', (
       tester,
     ) async {
       await ready(tester);
       expect(
-        find.textContaining('only the currently activated address'),
-        findsWidgets,
+        find.textContaining('TRON and TRC20 tokens is temporarily unavailable'),
+        findsNWidgets(2),
       );
       expect(find.textContaining('addresses 0–10'), findsOneWidget);
-      expect(find.textContaining('still activating'), findsOneWidget);
+      expect(
+        find.textContaining('The key could not be retrieved'),
+        findsOneWidget,
+      );
       expect(find.text(exportKeySentinel), findsNothing);
       // Asserted through the BLoC rather than by casting the button to a
       // concrete widget type: `canDeliver` is what actually gates delivery,
@@ -130,6 +135,35 @@ void testPrivateKeyExportFlow() {
       // into a failing test that said nothing about behaviour.
       expect(bloc.state.canDeliver, isFalse);
       expect(find.byKey(const Key('private-key-export-copy')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('unlocking exposes no key controls for TRON assets', (
+      tester,
+    ) async {
+      await ready(tester);
+      bloc.add(const PrivateKeyExportVisibilityChanged(true));
+      await tester.pumpAndSettle();
+      for (final asset in ['TRX', 'USDT-TRC20']) {
+        final section = find.byWidgetPredicate(
+          (widget) =>
+              widget is PrivateKeyExportAssetSection &&
+              widget.outcome.assetId.id == asset,
+        );
+        expect(section, findsOneWidget);
+        expect(
+          find.descendant(
+            of: section,
+            matching: find.byType(PrivateKeyExportKeyTile),
+          ),
+          findsNothing,
+        );
+        expect(
+          find.descendant(of: section, matching: find.text('Unavailable')),
+          findsOneWidget,
+        );
+      }
+      expect(find.byType(PrivateKeyExportKeyTile), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     });
 

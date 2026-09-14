@@ -97,14 +97,14 @@ void testPrivateKeyExportDelivery() {
     );
 
     test(
-      'versioned document preserves limited coverage and unavailable assets',
+      'document exports supported keys and marks TRON assets unavailable',
       () {
         final content = privateKeyExportDocument(exportTestResult());
         final json = jsonDecode(content.value) as Map<String, dynamic>;
         expect(json['format'], 'gleec-private-key-export');
         expect(json['version'], 1);
         expect(json['complete_for_displayed_assets'], isFalse);
-        expect(json['contains_active_address_only'], isTrue);
+        expect(json, isNot(contains('contains_active_address_only')));
         final assets = json['assets'] as List<dynamic>;
         expect(assets[0]['coverage'], {
           'kind': 'offlineHdRange',
@@ -113,10 +113,15 @@ void testPrivateKeyExportDelivery() {
           'end_index': 10,
           'chain': 'External',
         });
-        expect(assets[1]['coverage']['kind'], 'activeAddressOnly');
-        expect(assets[1]['coverage']['derivation_path'], "m/44'/195'/0'/0/3");
-        expect(assets[2]['unavailable_reason'], 'activationPending');
-        expect(assets[2]['keys'], isEmpty);
+        expect(assets[1]['asset_id']['coin'], 'ETH');
+        expect(assets[1]['keys'], hasLength(1));
+        for (final asset in assets.skip(2).take(2)) {
+          expect(asset['unavailable_reason'], 'unsupportedProtocol');
+          expect(asset['keys'], isEmpty);
+          expect(asset, isNot(contains('coverage')));
+        }
+        expect(assets[4]['unavailable_reason'], 'assetUnavailable');
+        expect(assets[4]['keys'], isEmpty);
         expect(content.value, contains(exportKeySentinel));
         expect(content.toString(), isNot(contains(exportKeySentinel)));
       },

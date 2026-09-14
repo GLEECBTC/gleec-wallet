@@ -19,7 +19,6 @@ SensitiveString privateKeyExportDocument(
       'version': 1,
       'scope': 'requested_assets_and_reported_ranges',
       'complete_for_displayed_assets': displayed.isComplete,
-      'contains_active_address_only': displayed.hasLimitedCoverage,
       'excluded_assets': excludedAssets.map((asset) => asset.id).toList(),
       'assets': displayed.outcomes.map((outcome) => outcome.toJson()).toList(),
     }),

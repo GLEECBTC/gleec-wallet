@@ -15,8 +15,6 @@ String privateKeyExportErrorText(PrivateKeyExportError error) =>
 
 String privateKeyExportCoverageText(PrivateKeyExportCoverage coverage) =>
     switch (coverage.kind) {
-      PrivateKeyExportCoverageKind.activeAddressOnly =>
-        LocaleKeys.privateKeyExportActiveTronCoverage.tr(),
       PrivateKeyExportCoverageKind.legacyWallet =>
         LocaleKeys.privateKeyExportLegacyCoverage.tr(),
       PrivateKeyExportCoverageKind.offlineAccount =>
@@ -43,23 +41,18 @@ String privateKeyExportCoverageText(PrivateKeyExportCoverage coverage) =>
         ),
     };
 
-String privateKeyExportFailureText(PrivateKeyExportFailure failure) =>
-    switch (failure) {
-      PrivateKeyExportFailure.activationPending =>
-        LocaleKeys.privateKeyExportActivationPending.tr(),
-      PrivateKeyExportFailure.activationFailed =>
-        LocaleKeys.privateKeyExportActivationFailed.tr(),
-      PrivateKeyExportFailure.platformNotEnabled =>
-        LocaleKeys.privateKeyExportPlatformInactive.tr(),
-      PrivateKeyExportFailure.requestedCoverageUnavailable =>
-        LocaleKeys.privateKeyExportRangeUnavailable.tr(),
-      PrivateKeyExportFailure.unsupportedProtocol =>
-        LocaleKeys.privateKeyExportUnsupported.tr(),
-      PrivateKeyExportFailure.metadataUnverified ||
-      PrivateKeyExportFailure.invalidPlatform ||
-      PrivateKeyExportFailure.invalidResponse =>
-        LocaleKeys.privateKeyExportUnverified.tr(),
-      PrivateKeyExportFailure.assetUnavailable ||
-      PrivateKeyExportFailure.rpcFailed =>
-        LocaleKeys.privateKeyExportAssetUnavailable.tr(),
-    };
+String privateKeyExportFailureText(
+  PrivateKeyExportFailure failure, {
+  required AssetId assetId,
+}) => switch (failure) {
+  PrivateKeyExportFailure.unsupportedProtocol =>
+    assetId.subClass == CoinSubClass.trx ||
+            assetId.subClass == CoinSubClass.trc20
+        ? LocaleKeys.privateKeyExportTronUnavailable.tr()
+        : LocaleKeys.privateKeyExportUnsupported.tr(),
+  PrivateKeyExportFailure.invalidResponse =>
+    LocaleKeys.privateKeyExportUnverified.tr(),
+  PrivateKeyExportFailure.assetUnavailable ||
+  PrivateKeyExportFailure.rpcFailed =>
+    LocaleKeys.privateKeyExportAssetUnavailable.tr(),
+};

@@ -13,18 +13,26 @@ AssetId exportTestAsset(String id) => AssetId(
   name: id,
   symbol: AssetSymbol(assetConfigId: id),
   chainId: AssetChainId(chainId: 0),
-  derivationPath: "m/44'/0'/0'",
-  subClass: CoinSubClass.utxo,
+  derivationPath: switch (id) {
+    'TRX' || 'USDT-TRC20' => "m/44'/195'/0'",
+    'ETH' => "m/44'/60'/0'",
+    _ => "m/44'/0'/0'",
+  },
+  subClass: switch (id) {
+    'TRX' => CoinSubClass.trx,
+    'USDT-TRC20' => CoinSubClass.trc20,
+    'ETH' => CoinSubClass.erc20,
+    _ => CoinSubClass.utxo,
+  },
 );
 
-PrivateKeyExportResult exportTestResult({bool includeFailure = true}) {
+PrivateKeyExportResult exportTestResult() {
   final btc = exportTestAsset('BTC');
-  final trx = exportTestAsset('TRX');
+  final eth = exportTestAsset('ETH');
   return PrivateKeyExportResult(
     outcomes: [
       PrivateKeyExportOutcome.success(
         assetId: btc,
-        signingAssetId: btc,
         keys: [
           PrivateKey(
             assetId: btc,
@@ -43,29 +51,33 @@ PrivateKeyExportResult exportTestResult({bool includeFailure = true}) {
         ),
       ),
       PrivateKeyExportOutcome.success(
-        assetId: trx,
-        signingAssetId: trx,
+        assetId: eth,
         keys: [
           PrivateKey(
-            assetId: trx,
-            publicKeySecp256k1: 'synthetic-trx-public',
-            publicKeyAddress: 'synthetic-trx-address',
-            privateKey: 'synthetic-trx-private-key',
-            hdInfo: const PrivateKeyHdInfo(derivationPath: "m/44'/195'/0'/0/3"),
+            assetId: eth,
+            publicKeySecp256k1: 'synthetic-eth-public',
+            publicKeyAddress: 'synthetic-eth-address',
+            privateKey: 'synthetic-eth-private-key',
+            hdInfo: const PrivateKeyHdInfo(derivationPath: "m/44'/60'/0'/0/0"),
           ),
         ],
         coverage: const PrivateKeyExportCoverage(
-          kind: PrivateKeyExportCoverageKind.activeAddressOnly,
+          kind: PrivateKeyExportCoverageKind.offlineHdRange,
           accountIndex: 0,
+          startIndex: 0,
+          endIndex: 0,
           chain: 'External',
-          derivationPath: "m/44'/195'/0'/0/3",
         ),
       ),
-      if (includeFailure)
+      for (final asset in ['TRX', 'USDT-TRC20'])
         PrivateKeyExportOutcome.unavailable(
-          assetId: exportTestAsset('UNAVAILABLE'),
-          failure: PrivateKeyExportFailure.activationPending,
+          assetId: exportTestAsset(asset),
+          failure: PrivateKeyExportFailure.unsupportedProtocol,
         ),
+      PrivateKeyExportOutcome.unavailable(
+        assetId: exportTestAsset('UNAVAILABLE'),
+        failure: PrivateKeyExportFailure.assetUnavailable,
+      ),
     ],
   );
 }

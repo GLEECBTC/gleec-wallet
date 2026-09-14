@@ -227,7 +227,7 @@ void testPrivateKeyExportBloc() {
     test(
       'copy contains only displayed assets with explicit coverage',
       () async {
-        await ready(blocked: {exportTestAsset('TRX')});
+        await ready(blocked: {exportTestAsset('ETH')});
         await reveal();
         bloc.add(
           const PrivateKeyExportDeliveryRequested(PrivateKeyExportAction.copy),
@@ -237,10 +237,12 @@ void testPrivateKeyExportBloc() {
             jsonDecode(delivery.delivered!.value) as Map<String, dynamic>;
         expect(json['version'], 1);
         expect(json['complete_for_displayed_assets'], isFalse);
-        expect(json['contains_active_address_only'], isFalse);
+        expect(json, isNot(contains('contains_active_address_only')));
         final assets = json['assets'] as List<dynamic>;
         expect(assets.map((a) => a['asset_id']['coin']), [
           'BTC',
+          'TRX',
+          'USDT-TRC20',
           'UNAVAILABLE',
         ]);
         expect(assets.first['coverage']['end_index'], 10);
@@ -252,15 +254,86 @@ void testPrivateKeyExportBloc() {
     );
 
     test('blocked single-key copy cannot bypass displayed selection', () async {
-      await ready(blocked: {exportTestAsset('TRX')});
+      await ready(blocked: {exportTestAsset('ETH')});
       await reveal();
       bloc.add(
         PrivateKeyExportDeliveryRequested(
           PrivateKeyExportAction.copy,
-          assetId: exportTestAsset('TRX'),
+          assetId: exportTestAsset('ETH'),
           keyIndex: 0,
         ),
       );
+      await flushExportEvents();
+      expect(delivery.calls, 0);
+    });
+
+    for (final assetName in ['TRX', 'USDT-TRC20']) {
+      test('$assetName has no reveal, QR or single-key delivery', () async {
+        await ready();
+        await reveal();
+        final asset = exportTestAsset(assetName);
+        expect(bloc.state.canDeliver, isTrue);
+        expect(bloc.state.keyAt(asset, 0), isNull);
+        bloc
+          ..add(PrivateKeyExportKeyVisibilityToggled(asset, 0))
+          ..add(PrivateKeyExportQrRequested(asset, 0));
+        for (final action in PrivateKeyExportAction.values) {
+          bloc.add(
+            PrivateKeyExportDeliveryRequested(
+              action,
+              assetId: asset,
+              keyIndex: 0,
+            ),
+          );
+        }
+        await flushExportEvents();
+        expect(bloc.state.revealedKeys, isEmpty);
+        expect(bloc.state.qrKey, isNull);
+        expect(delivery.calls, 0);
+      });
+    }
+
+    for (final action in PrivateKeyExportAction.values) {
+      test('${action.name} includes only supported keys', () async {
+        await ready();
+        await reveal();
+        bloc.add(PrivateKeyExportDeliveryRequested(action));
+        await flushExportEvents();
+        final json =
+            jsonDecode(delivery.delivered!.value) as Map<String, dynamic>;
+        final assets = json['assets'] as List<dynamic>;
+        final withKeys = assets.where(
+          (asset) => (asset['keys'] as List).isNotEmpty,
+        );
+        expect(withKeys.map((asset) => asset['asset_id']['coin']), [
+          'BTC',
+          'ETH',
+        ]);
+        for (final asset in assets.where(
+          (asset) => ['TRX', 'USDT-TRC20'].contains(asset['asset_id']['coin']),
+        )) {
+          expect(asset['keys'], isEmpty);
+          expect(asset['unavailable_reason'], 'unsupportedProtocol');
+        }
+      });
+    }
+
+    test('a TRON-only wallet cannot deliver an empty export', () async {
+      service.result = PrivateKeyExportResult(
+        outcomes: exportTestResult().outcomes
+            .where(
+              (outcome) =>
+                  outcome.assetId.subClass == CoinSubClass.trx ||
+                  outcome.assetId.subClass == CoinSubClass.trc20,
+            )
+            .toList(),
+      );
+      await ready();
+      await reveal();
+      expect(bloc.state.canDeliver, isFalse);
+      for (final action in PrivateKeyExportAction.values) {
+        bloc.add(PrivateKeyExportDeliveryRequested(action));
+      }
       await flushExportEvents();
       expect(delivery.calls, 0);
     });
@@ -278,16 +351,20 @@ void testPrivateKeyExportBloc() {
             ),
           ],
         );
-        await ready(blocked: {exportTestAsset('TRX'), nft});
+        await ready(blocked: {exportTestAsset('ETH'), nft});
         expect(bloc.state.displayedOutcomes.map((o) => o.assetId.id), [
           'BTC',
+          'TRX',
+          'USDT-TRC20',
           'UNAVAILABLE',
         ]);
         bloc.add(const PrivateKeyExportBlockedAssetsChanged(true));
         await flushExportEvents();
         expect(bloc.state.displayedOutcomes.map((o) => o.assetId.id), [
           'BTC',
+          'ETH',
           'TRX',
+          'USDT-TRC20',
           'UNAVAILABLE',
         ]);
         await reveal();
@@ -299,7 +376,7 @@ void testPrivateKeyExportBloc() {
             jsonDecode(delivery.delivered!.value) as Map<String, dynamic>;
         expect(
           (json['assets'] as List<dynamic>).map((a) => a['asset_id']['coin']),
-          ['BTC', 'TRX', 'UNAVAILABLE'],
+          ['BTC', 'ETH', 'TRX', 'USDT-TRC20', 'UNAVAILABLE'],
         );
         expect(json['excluded_assets'], ['NFT_ETH']);
       },

@@ -193,7 +193,13 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
 
     final privateKeys = <Coin, String>{};
     final parentCoins = coinsBloc.state.walletCoins.values.where(
-      (coin) => !coin.id.isChildAsset && coin.id.subClass != CoinSubClass.sia,
+      (coin) =>
+          !coin.id.isChildAsset &&
+          coin.id.subClass != CoinSubClass.sia &&
+          // TRON keys must stay unavailable in this legacy seed backup path
+          // until KDF supports exporting them correctly.
+          coin.id.subClass != CoinSubClass.trx &&
+          coin.id.subClass != CoinSubClass.trc20,
     );
     for (final coin in parentCoins) {
       final result = await mm2Api.showPrivKey(

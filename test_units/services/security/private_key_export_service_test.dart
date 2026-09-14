@@ -80,6 +80,20 @@ void testPrivateKeyExportService() {
           SensitiveString(exportPasswordSentinel),
         );
         expect(result.hasKeys, isTrue);
+        expect(
+          result.outcomes
+              .where((outcome) => outcome.isSuccess)
+              .map((outcome) => outcome.assetId.id),
+          ['BTC', 'ETH'],
+        );
+        for (final outcome in result.outcomes.where(
+          (outcome) =>
+              outcome.assetId.subClass == CoinSubClass.trx ||
+              outcome.assetId.subClass == CoinSubClass.trc20,
+        )) {
+          expect(outcome.failure, PrivateKeyExportFailure.unsupportedProtocol);
+          expect(outcome.keys, isEmpty);
+        }
         expect(security.exports, 1);
         expect(result.toJson().toString(), isNot(contains(_mnemonicSentinel)));
         expect('$result $access', isNot(contains(_mnemonicSentinel)));

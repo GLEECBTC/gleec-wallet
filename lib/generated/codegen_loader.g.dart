@@ -1321,8 +1321,6 @@ abstract class LocaleKeys {
       'privateKeyExportSessionChanged';
   static const privateKeyExportCoverageNotice =
       'privateKeyExportCoverageNotice';
-  static const privateKeyExportActiveTronCoverage =
-      'privateKeyExportActiveTronCoverage';
   static const privateKeyExportLegacyCoverage =
       'privateKeyExportLegacyCoverage';
   static const privateKeyExportAccountCoverage =
@@ -1331,15 +1329,9 @@ abstract class LocaleKeys {
   static const privateKeyExportReceiving = 'privateKeyExportReceiving';
   static const privateKeyExportChange = 'privateKeyExportChange';
   static const privateKeyExportUnknownBranch = 'privateKeyExportUnknownBranch';
-  static const privateKeyExportActivationPending =
-      'privateKeyExportActivationPending';
-  static const privateKeyExportActivationFailed =
-      'privateKeyExportActivationFailed';
-  static const privateKeyExportPlatformInactive =
-      'privateKeyExportPlatformInactive';
-  static const privateKeyExportRangeUnavailable =
-      'privateKeyExportRangeUnavailable';
   static const privateKeyExportUnsupported = 'privateKeyExportUnsupported';
+  static const privateKeyExportTronUnavailable =
+      'privateKeyExportTronUnavailable';
   static const privateKeyExportUnverified = 'privateKeyExportUnverified';
   static const privateKeyExportAssetUnavailable =
       'privateKeyExportAssetUnavailable';
@@ -1348,8 +1340,6 @@ abstract class LocaleKeys {
   static const privateKeyExportDeliveryUnconfirmed =
       'privateKeyExportDeliveryUnconfirmed';
   static const privateKeyExportNoAssets = 'privateKeyExportNoAssets';
-  static const privateKeyExportSharedSigningKey =
-      'privateKeyExportSharedSigningKey';
   static const privateKeyExportShowQr = 'privateKeyExportShowQr';
   static const privateKeyExportPublicKey = 'privateKeyExportPublicKey';
   static const privateKeyExportCriticalTitle = 'privateKeyExportCriticalTitle';

@@ -19,6 +19,8 @@ import 'views/settings/private_key_export_password_dialog_test.dart'
     as private_key_export_password_dialog_test;
 import 'views/settings/private_key_export_flow_test.dart'
     as private_key_export_flow_test;
+import 'views/settings/seed_private_key_export_guard_test.dart'
+    as seed_private_key_export_guard_test;
 import 'support/contrast_test.dart' as contrast_test;
 import 'theme/theme_color_roles_test.dart' as theme_color_roles_test;
 import 'shared/widgets/notice_banner_test.dart' as notice_banner_test;
@@ -182,6 +184,7 @@ void main() {
   private_key_export_service_test.main();
   private_key_export_password_dialog_test.main();
   private_key_export_flow_test.main();
+  seed_private_key_export_guard_test.main();
   contrast_test.main();
   theme_color_roles_test.main();
   notice_banner_test.main();

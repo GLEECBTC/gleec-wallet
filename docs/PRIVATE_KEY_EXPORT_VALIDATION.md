@@ -4,9 +4,57 @@ Original review date: 2026-09-09. Toolchain: Flutter 3.41.4 on macOS. All added 
 mnemonics and keys are synthetic. No feedback was submitted to a live provider,
 and no blockchain transaction was broadcast.
 
-## Implementation commits
+## TRON/TRC20 export removal — 2026-09-14
 
-Both repositories use `fix/release-diagnostics-and-key-export`.
+The [SDK RC review](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/382#issuecomment-5662538367)
+supersedes the active-address TRON export design described in the historical
+record below. TRON/TRC20 private-key display and export are now disabled until
+KDF implements `get_private_keys` for TRON. The SDK reports `unsupportedProtocol`
+for structured exports and rejects these protocols in the strict API without
+issuing RPCs. The wallet's legacy seed-backup key collection also excludes them.
+
+The SDK removes the temporary typed RPC wrappers, private-key address derivation,
+HD metadata searches, direct PointyCastle dependency, active-address coverage
+API, separate signing-asset attribution and workaround-specific tests and
+execution wrapper. Ordinary offline
+exports and authentication/session protections remain. Historical test counts
+and independent-review attestations below apply only to their named commits;
+they do not validate the removal or describe the revised suite totals.
+
+The removal uses SDK branch `fix/disable-tron-private-key-export`, based on
+`dev` at `12cda755e7d1b0b77a865623841437aa3648597c`, and the existing wallet
+integration branch `fix/release-diagnostics-and-key-export` (PR #3530).
+The wallet pins SDK cleanup commit `f7b3d606`.
+Fresh validation with Flutter 3.41.4 / Dart 3.11.1:
+
+| Check | Result |
+| --- | --- |
+| Full wallet unit/widget aggregator, all four GasFree defines | 1,087 passed, 3 existing skips |
+| Full SDK package suite | 944 passed, 1 existing skip |
+| RPC methods package suite | 237 passed |
+| Types package suite | 183 passed, 3 existing skips |
+| SDK export regressions | 26 passed, included in the SDK total |
+| Wallet analysis, including vendored packages | No errors; 55 existing warnings and 2,084 infos |
+| SDK package analysis | No errors; 11 existing warnings and 822 infos |
+| Changed Dart formatting and diff whitespace | Passed |
+
+No changed code has an analysis error or warning. The final seed-backup page
+and its regression test additionally pass targeted analysis without findings.
+New tests verify unsupported TRX/TRC20 outcomes without RPC calls in both
+wallet modes, including HD index 777; mixed exports retain supported coins.
+Wallet regressions cover reveal, QR, clipboard, save/share, and the legacy
+seed-backup path. All four legacy/HD and mixed/TRON-only seed tests run through
+the CI aggregator. Their initial scrolling-text timer teardown issue was fixed
+in the test, and the complete aggregator was rerun successfully.
+
+An independent read-only review found no actionable correctness or security
+issues. The test-generated build configuration was restored, preserving the
+KDF and coin pins. No live-node or device test was required to exercise the
+TRON export restriction: the regressions assert that no RPC is issued.
+
+## Original implementation commits
+
+Both repositories used `fix/release-diagnostics-and-key-export`.
 
 | Repository | Reviewed implementation commit | Review base |
 | --- | --- | --- |
@@ -38,13 +86,14 @@ coverage semantics, migration behavior and limitations.
 
 ## Adoption of merged SDK 0.8.0 — 2026-09-11
 
-The app now pins `12cda755e7d1b0b77a865623841437aa3648597c`, the merged
+At this stage the app pinned `12cda755e7d1b0b77a865623841437aa3648597c`, the merged
 [SDK preparation PR #381](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/381).
 [SDK RC PR #382](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/382)
 tracks its promotion from `dev` to `main`. This commit includes the token-only
 TRC20 export and native cross-instance retention fixes from the subsequent
-reviews on SDK #375. TRON export remains limited to its verified active address;
-native export ownership remains scoped to one Dart isolate.
+reviews on SDK #375. At this stage TRON export was limited to its verified
+active address; that behavior is superseded by the September 14 removal.
+Native export ownership remains scoped to one Dart isolate.
 
 `pubspec.lock` records the seven stable package versions: SDK 0.8.0, local-auth
 0.6.0, framework 0.6.0, types 0.6.0, RPC methods 0.7.0, coin updates 2.1.1 and
@@ -137,10 +186,15 @@ The three app skips are the existing `Get formatted USD balance using SDK
 balance`, `getTotal24Change calculates total change`, and `Total fee positive
 test` fixtures. The SDK skip is the existing balance-cache test whose empty-cache
 expectation contradicts automatic reattachment after a wallet change. No new test
-was skipped to make these changes pass. The retained real KDF regression ran
-successfully; it was not skipped in the final SDK aggregate.
+was skipped to make the original changes pass. The former real KDF export
+regression ran successfully in that aggregate; it was removed with the
+workaround on September 14.
 
-### Reproduction commands
+### Reproduction commands for retained suites
+
+The deleted TRON export contract and its environment variable are omitted.
+These commands can validate the current tree, but the historical counts above
+apply only to the original implementation.
 
 Use the pinned toolchain, rather than a different globally selected Flutter:
 
@@ -154,9 +208,7 @@ flutter test --no-pub test_units/main.dart \
   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 
 cd sdk/packages/komodo_defi_sdk
-KDF_HARNESS='' \
-KDF_EXPORT_TEST_BINARY="$(pwd)/../komodo_defi_framework/macos/bin/kdf" \
-  flutter test --no-pub
+KDF_HARNESS='' flutter test --no-pub
 
 cd ../dragon_logs
 flutter test --no-pub test/dragon_logs_test.dart test/log_storage_privacy_test.dart
@@ -171,12 +223,12 @@ KDF_HARNESS_WALLET_TYPE=hd flutter test --no-pub --exclude-tags bench
 KDF_HARNESS_WALLET_TYPE=iguana flutter test --no-pub --exclude-tags bench
 ```
 
-The KDF export wrapper runs against a loopback mock node and temporary wallet
-data. It verifies the activated owner key at HD indices 0 and 7, TRC20/platform
-association, the direct account-balance metadata shape, and the unsupported
-offline TRON contract. Public-vector and mocked SDK tests additionally cover
-invalid scalars, mismatched addresses/paths, inactive and pending platforms,
-mixed failures, concurrency and strict explicit-range behavior.
+The removed KDF export wrapper previously ran against a loopback mock node and
+temporary wallet data. Its active-key derivation and HD metadata checks were
+specific to the superseded workaround. Those checks and the associated scalar,
+address/path and activation tests are no longer part of the retained suites.
+Current regressions require TRON/TRC20 rejection without RPCs while preserving
+supported offline exports, concurrency, strict ranges and session invalidation.
 
 ## Independent security review
 
@@ -221,5 +273,6 @@ tests did run real OPFS, Web Locks and a concurrent worker.
 
 Already downloaded/shared diagnostics cannot be revoked. Old open app tabs can
 still execute old code; updated clients never import their legacy namespace.
-These limits and the intentional, current-address-only TRON coverage must remain
-visible when evaluating release readiness.
+These limits remain relevant when evaluating release readiness. The original
+current-address-only TRON coverage is superseded: TRON/TRC20 private-key export
+is disabled pending KDF `get_private_keys` support.

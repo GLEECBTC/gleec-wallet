@@ -1,12 +1,11 @@
 # Diagnostic privacy and private-key export
 
-This change fixes the diagnostic disclosure and private-key export findings
-reported against the 0.9.7 release candidate. The app and SDK use the matching
-`fix/release-diagnostics-and-key-export` branches. The app branch starts at
-`dev` (`eae57cd734f89270a36bcdf7c604b8cbe49869de`). The SDK branch starts at
-`origin/dev` (`c696117ade94511c1a6a2c17e47583a57f645f53`) and first preserves the
-app's existing descendant security fixes through
-`4d386b0a710fd78aa4e5e0d782eb6d9e49d3e828`.
+This document describes the diagnostic disclosure and private-key export
+remediation for the 0.9.7 release candidate, updated after the September 14
+review to disable TRON/TRC20 private-key export until KDF supports it through
+`get_private_keys`. The SDK's temporary active-key workaround has been removed.
+The original implementation branches, commits and historical validation are
+recorded in [the validation record](PRIVATE_KEY_EXPORT_VALIDATION.md).
 
 The verified wallet Delete fix is preserved. KDF remains
 `3.1.0-beta_f3efd2c`, source `f3efd2ca10420f2982fa127dde84dcc17891f577`.
@@ -23,27 +22,26 @@ their original values. Secret-bearing models have redacted diagnostic strings,
 including when Equatable stringification is enabled.
 
 `SecurityManager.exportPrivateKeys` owns protocol selection. It returns a result
-per requested asset, including its signing asset (the actual TRON platform for
-online token exports), keys, actual coverage and a typed failure when unavailable.
-Offline assets run independently with at most
-two requests in flight, so one unsupported asset cannot erase successful keys.
+per requested asset, including keys, actual coverage and a typed failure when
+unavailable. Offline assets run independently with at most two requests in
+flight, so one unsupported asset cannot erase successful keys.
 Default asset selection remains the SDK session's activated, pending and failed
 assets, with existing app presentation exclusions preserved.
 
-TRON and TRC20 share one `show_priv_key` call per actual signing platform. Both
-the requested asset and its platform must already be activated; pending and
-inactive states are reported without activation. The returned scalar is checked
-against secp256k1 bounds, and its public key and TRON owner address are derived
-with the existing PointyCastle dependency and address codec. Fresh KDF metadata
-must match the owner address and the actual HD address record/path. Public
-metadata searches are bounded (32 account hints, 64 address pages); insufficient
-evidence returns `metadataUnverified` rather than inferred coverage.
+TRON and TRC20 return `unsupportedProtocol` without issuing an RPC. This
+applies to both legacy and HD wallets, regardless of activation state or address
+index. Supported assets in a mixed selection still export independently. The
+strict `getPrivateKeys` API rejects selections containing TRON/TRC20 before
+issuing an RPC. TRON/TRC20 export remains disabled until KDF supports TRON
+through `get_private_keys`.
 
-TRON coverage is always **currently activated address**. It does not represent
-every address in an HD wallet. Offline HD assets retain their actual account,
-chain and inclusive address range. ZHTLC retains its account-level coverage and
-optional viewing-key fields. The existing `getPrivateKeys` API remains strict:
-an explicit account/range request never silently falls back to one TRON key.
+The temporary `show_priv_key` and `account_balance_read` wrappers, scalar and
+address derivation, HD metadata search, and direct SDK PointyCastle dependency
+are removed. The unreleased export API no longer has a TRON opt-in,
+active-address coverage, limited-coverage flag, separate signing-asset field or
+TRON-only failure categories.
+Offline HD assets retain their actual account, chain and inclusive address
+range. ZHTLC retains its account-level coverage and optional viewing-key fields.
 
 Export capabilities belong to one SecurityManager, verified wallet identity and
 source-owned authentication generation. Public authentication transitions revoke
@@ -68,12 +66,15 @@ it on completion, cancellation or error. Browser downloads report an unconfirmed
 outcome because a browser cannot report whether the user saved or cancelled.
 Viewing keys is not recorded as a successful export.
 Private-key delivery does not mark the entire wallet as backed up; the seed
-backup flow remains separate.
+backup flow remains separate. Its legacy private-key collection also excludes
+TRON/TRC20, so it cannot bypass the export restriction.
 
 The `gleec-private-key-export` version 1 document preserves per-key fields and
-adds coverage, signing-platform associations and unavailable outcomes. Its
+adds coverage and unavailable outcomes for each requested asset. Its
 filtered assets and coverage match the screen. Bulk actions refer to **Displayed
-keys**. TRON labels never imply full HD-wallet coverage.
+keys**. TRON/TRC20 outcomes are unavailable and never offer key display, copy,
+QR, share or file export. The active-TRON coverage labels and limited-coverage
+manifest flag have been removed.
 
 ## Diagnostic storage and feedback
 
@@ -112,27 +113,16 @@ namespace recreation, disposal and preservation of wallet files.
 
 SDK tests use synthetic seed, password and private-key sentinels across logging
 flags, errors and fallback paths, and assert that successful operational RPCs
-and intentional exports retain their values. Export tests cover partial failure,
-two-request concurrency, explicit range semantics, invalid scalars, metadata
-mismatch, platform association, activation state and authentication transitions.
+and intentional exports retain their values. Export regressions cover partial
+failure, two-request concurrency, explicit range semantics, authentication
+transitions, and TRON/TRC20 rejection without RPC calls. The tests and local-KDF execution wrapper for the removed active-key
+workaround have been deleted.
 
-The retained bundled-KDF regression is:
-
-```sh
-cd sdk/packages/komodo_defi_sdk
-KDF_EXPORT_TEST_BINARY="$(pwd)/../komodo_defi_framework/macos/bin/kdf" \
-  flutter test --no-pub test/security/tron_export_kdf_contract_test.dart
-```
-
-It starts the pinned binary against a local mock TRON node with synthetic wallet
-data, verifies indices 0 and 7, checks TRC20 signing-platform association and
-confirms that offline TRON export is unsupported. It does not broadcast a
-transaction or use a funded wallet.
-
-An independent read-only security reviewer examined the SDK sources and app
-boundaries. Review identified and drove regressions for actual WASM fallback
-logging, logout invalidation timing, mutable request selection, cross-manager
-capabilities, parent activation states, final delivery checks, browser delivery
+An independent read-only security reviewer examined the original SDK sources
+and app boundaries before the September 14 removal. Review identified and
+drove regressions for actual WASM fallback logging, logout invalidation timing,
+mutable request selection, cross-manager capabilities, parent activation states,
+final delivery checks, browser delivery
 reporting, asset exclusions, stale QR requests and feedback screenshot capture
 timing. Final validation results and reviewed commit identifiers are recorded in
 the [validation record](PRIVATE_KEY_EXPORT_VALIDATION.md).

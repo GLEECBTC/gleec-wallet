@@ -36,7 +36,12 @@ class PrivateKeyExportAssetSection extends StatelessWidget {
               const SizedBox(height: 12),
               NoticeBanner(
                 icon: Icons.error_outline,
-                child: Text(privateKeyExportFailureText(failure)),
+                child: Text(
+                  privateKeyExportFailureText(
+                    failure,
+                    assetId: outcome.assetId,
+                  ),
+                ),
               ),
             ],
             if (outcome.coverage case final coverage?) ...[
@@ -45,17 +50,6 @@ class PrivateKeyExportAssetSection extends StatelessWidget {
                 icon: Icons.account_tree_outlined,
                 label: LocaleKeys.privateKeyExportCoverageLabel.tr(),
                 value: privateKeyExportCoverageText(coverage),
-              ),
-            ],
-            if (outcome.signingAssetId != null &&
-                outcome.signingAssetId != outcome.assetId) ...[
-              const SizedBox(height: 8),
-              _Detail(
-                icon: Icons.key_outlined,
-                label: '',
-                value: LocaleKeys.privateKeyExportSharedSigningKey.tr(
-                  namedArgs: {'asset': outcome.signingAssetId!.id},
-                ),
               ),
             ],
             // Rendered inline rather than behind an ExpansionTile whose only
@@ -181,13 +175,12 @@ class _Detail extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (label.isNotEmpty)
-                  Text(
-                    label,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
+                ),
                 Text(value, style: theme.textTheme.bodyMedium),
               ],
             ),

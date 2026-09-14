@@ -75,12 +75,6 @@ class PrivateKeyExportState extends Equatable {
         const <PrivateKeyExportOutcome>[],
   );
 
-  bool get hasLimitedDisplayedCoverage => displayedOutcomes.any(
-    (outcome) =>
-        outcome.coverage?.kind ==
-        PrivateKeyExportCoverageKind.activeAddressOnly,
-  );
-
   bool get canDeliver =>
       phase == PrivateKeyExportPhase.ready &&
       showKeys &&
