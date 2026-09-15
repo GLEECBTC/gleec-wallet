@@ -17,19 +17,16 @@ enum SecuritySettingsStep {
   seedSuccess,
 
   /// The screen showing the private keys for export.
-  /// Note: Actual private key data is NOT stored in state for security reasons.
+  /// Results live in the dedicated, screen-scoped PrivateKeyExportBloc.
   privateKeyShow,
 
   /// The screen for updating the wallet password.
   passwordUpdate,
 }
 
-/// State for the security settings flow.
-///
-/// **Security Note**: This state intentionally does NOT contain actual private
-/// key data. Private keys are handled directly in the UI layer to minimize
-/// their memory lifetime and exposure. Only authentication status and flow
-/// control state is managed here.
+/// Navigation, seed progress and compatibility flags for security settings.
+/// PrivateKeyExportState owns the current export's short-lived result, with
+/// redacted diagnostics; its service owns password verification and retrieval.
 class SecuritySettingsState extends Equatable {
   const SecuritySettingsState({
     required this.step,
@@ -81,8 +78,8 @@ class SecuritySettingsState extends Equatable {
   /// Whether authentication is currently in progress for private key access.
   final bool isAuthenticating;
 
-  /// Whether authentication for private key access was successful.
-  /// This triggers the UI to fetch private keys from the SDK.
+  /// Legacy sign-in presence signal. This is not password verification and
+  /// does not authorize the dedicated private-key export flow.
   final bool privateKeyAuthenticationSuccess;
 
   /// Any authentication error that occurred during private key access.

@@ -1,50 +1,48 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:web_dex/services/feedback/feedback_formatter.dart';
 import 'package:web_dex/services/feedback/feedback_provider.dart';
-import 'package:web_dex/services/logger/get_logger.dart' as app_logger;
+import 'package:web_dex/services/logger/safe_log_exporter.dart';
 
 class TrelloFeedbackProvider implements FeedbackProvider {
-  final String apiKey;
-  final String token;
-  final String boardId;
-  final String listId;
-
   const TrelloFeedbackProvider({
     required this.apiKey,
     required this.token,
     required this.boardId,
     required this.listId,
-  });
+    http.Client? client,
+  }) : _client = client;
 
-  static bool hasEnvironmentVariables() {
-    final requiredVars = {
-      'TRELLO_API_KEY': const String.fromEnvironment('TRELLO_API_KEY'),
-      'TRELLO_TOKEN': const String.fromEnvironment('TRELLO_TOKEN'),
-      'TRELLO_BOARD_ID': const String.fromEnvironment('TRELLO_BOARD_ID'),
-      'TRELLO_LIST_ID': const String.fromEnvironment('TRELLO_LIST_ID'),
-    };
+  final String apiKey;
+  final String token;
+  final String boardId;
+  final String listId;
+  final http.Client? _client;
 
-    final missing = requiredVars.entries.where((e) => e.value.isEmpty).toList();
-    return missing.isEmpty;
-  }
+  static bool hasEnvironmentVariables() =>
+      const String.fromEnvironment('TRELLO_API_KEY').isNotEmpty &&
+      const String.fromEnvironment('TRELLO_TOKEN').isNotEmpty &&
+      const String.fromEnvironment('TRELLO_BOARD_ID').isNotEmpty &&
+      const String.fromEnvironment('TRELLO_LIST_ID').isNotEmpty;
 
-  static TrelloFeedbackProvider? fromEnvironment() {
-    if (!hasEnvironmentVariables()) return null;
-    return TrelloFeedbackProvider(
-      apiKey: const String.fromEnvironment('TRELLO_API_KEY'),
-      token: const String.fromEnvironment('TRELLO_TOKEN'),
-      boardId: const String.fromEnvironment('TRELLO_BOARD_ID'),
-      listId: const String.fromEnvironment('TRELLO_LIST_ID'),
-    );
-  }
+  static TrelloFeedbackProvider? fromEnvironment() => !hasEnvironmentVariables()
+      ? null
+      : const TrelloFeedbackProvider(
+          apiKey: String.fromEnvironment('TRELLO_API_KEY'),
+          token: String.fromEnvironment('TRELLO_TOKEN'),
+          boardId: String.fromEnvironment('TRELLO_BOARD_ID'),
+          listId: String.fromEnvironment('TRELLO_LIST_ID'),
+        );
 
   @override
-  bool get isAvailable => hasEnvironmentVariables();
+  bool get isAvailable =>
+      apiKey.isNotEmpty &&
+      token.isNotEmpty &&
+      boardId.isNotEmpty &&
+      listId.isNotEmpty;
 
   @override
   Future<void> submitFeedback({
@@ -52,85 +50,95 @@ class TrelloFeedbackProvider implements FeedbackProvider {
     required Uint8List screenshot,
     required String type,
     required Map<String, dynamic> metadata,
+    SafeLogAttachment? diagnostics,
   }) async {
-    // 1) Create card with formatted description
-    final formattedDesc = FeedbackFormatter.createAgentFriendlyDescription(
-      description,
-      type,
-      metadata,
-    );
-
-    final cardResponse = await http.post(
-      Uri.parse('https://api.trello.com/1/cards'),
-      headers: {'Content-Type': 'application/json; charset=utf-8'},
-      body: jsonEncode({
-        'idList': listId,
-        'key': apiKey,
-        'token': token,
-        'name': 'Feedback: $type',
-        'desc': formattedDesc,
-      }),
-    );
-
-    if (cardResponse.statusCode != 200) {
-      throw Exception(
-        'Failed to create Trello card (${cardResponse.statusCode}): ${cardResponse.body}',
-      );
-    }
-
-    final cardId = jsonDecode(cardResponse.body)['id'];
-
-    // 2) Attach screenshot
-    final imgReq = http.MultipartRequest(
-      'POST',
-      Uri.parse('https://api.trello.com/1/cards/$cardId/attachments'),
-    );
-    imgReq.fields.addAll({'key': apiKey, 'token': token});
-    imgReq.files.add(
-      http.MultipartFile.fromBytes(
-        'file',
-        screenshot,
-        filename: 'screenshot.png',
-        contentType: MediaType('image', 'png'),
-      ),
-    );
-    final imgResp = await http.Response.fromStream(await imgReq.send());
-    if (imgResp.statusCode != 200) {
-      throw Exception(
-        'Failed to attach screenshot (${imgResp.statusCode}): ${imgResp.body}',
-      );
-    }
-
-    // 3) Attach logs (<= 9MB) - optional
+    final client = _client ?? http.Client();
     try {
-      final bytes = await app_logger.logger.exportRecentLogsBytes(
-        maxBytes: 9 * 1024 * 1024,
+      final cardResponse = await client.post(
+        Uri.parse('https://api.trello.com/1/cards'),
+        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        body: jsonEncode({
+          'idList': listId,
+          'key': apiKey,
+          'token': token,
+          'name': 'Feedback: $type',
+          'desc': FeedbackFormatter.createAgentFriendlyDescription(
+            description,
+            type,
+            metadata,
+          ),
+        }),
       );
-      if (bytes.isEmpty) return;
-
-      final logsReq = http.MultipartRequest(
-        'POST',
-        Uri.parse('https://api.trello.com/1/cards/$cardId/attachments'),
-      );
-      logsReq.fields.addAll({'key': apiKey, 'token': token});
-      logsReq.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: 'logs.txt',
-          contentType: MediaType('text', 'plain'),
-        ),
-      );
-      final logsResp = await http.Response.fromStream(await logsReq.send());
-      if (logsResp.statusCode != 200) {
-        throw Exception(
-          'Failed to attach logs (${logsResp.statusCode}): ${logsResp.body}',
+      if (cardResponse.statusCode != 200) {
+        throw FeedbackSubmissionException(
+          'create card',
+          cardResponse.statusCode,
         );
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Skipping logs attachment (Trello): $e');
+      final Object? card;
+      try {
+        card = jsonDecode(cardResponse.body);
+      } on FormatException {
+        throw const FeedbackSubmissionException('decode card', 200);
       }
+      final cardId = card is Map<String, dynamic> ? card['id'] : null;
+      if (cardId is! String || !RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(cardId)) {
+        throw const FeedbackSubmissionException('decode card', 200);
+      }
+      final endpoint = Uri.https(
+        'api.trello.com',
+        '/1/cards/$cardId/attachments',
+      );
+      await _attach(
+        client,
+        endpoint,
+        screenshot,
+        'screenshot.png',
+        MediaType('image', 'png'),
+      );
+      if (diagnostics != null && !diagnostics.isEmpty) {
+        try {
+          await _attach(
+            client,
+            endpoint,
+            diagnostics.bytes,
+            diagnostics.fileName,
+            MediaType('text', 'plain'),
+          );
+        } on Object {
+          // The card and screenshot have already succeeded; diagnostics are optional.
+        }
+      }
+    } on FeedbackSubmissionException {
+      rethrow;
+    } on Object {
+      throw const FeedbackSubmissionException('transport', 0);
+    } finally {
+      if (_client == null) client.close();
+    }
+  }
+
+  Future<void> _attach(
+    http.Client client,
+    Uri endpoint,
+    Uint8List bytes,
+    String filename,
+    MediaType contentType,
+  ) async {
+    final request = http.MultipartRequest('POST', endpoint);
+    request.fields.addAll({'key': apiKey, 'token': token});
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: contentType,
+      ),
+    );
+    final response = await client.send(request);
+    await response.stream.drain<void>();
+    if (response.statusCode != 200) {
+      throw FeedbackSubmissionException('attach file', response.statusCode);
     }
   }
 }

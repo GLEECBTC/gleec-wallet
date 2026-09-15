@@ -1197,7 +1197,10 @@ void testWithdrawFormConfirmReceipt() {
         for (final amountText in amountTexts) {
           final text = tester.widget<Text>(find.text(amountText));
           expect(text.style?.color, theme.textTheme.bodyMedium?.color);
-          expect(text.style?.color, isNot(theme.colorScheme.onSurface));
+          // Was `isNot(onSurface)`, which only meant anything while that
+          // role held the canvas colour. The intent is unchanged: an amount
+          // must not be painted with the page background.
+          expect(text.style?.color, isNot(theme.scaffoldBackgroundColor));
         }
         for (final labelText in labelTexts) {
           final text = tester.widget<Text>(find.text(labelText));

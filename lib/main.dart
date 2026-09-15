@@ -224,8 +224,21 @@ PerformanceMode? _getPerformanceModeFromUrl() {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final _sensitivityController = ScreenshotSensitivityController();
+
+  @override
+  void dispose() {
+    _sensitivityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +248,6 @@ class MyApp extends StatelessWidget {
       context,
     );
 
-    final sensitivityController = ScreenshotSensitivityController();
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
@@ -251,11 +263,11 @@ class MyApp extends StatelessWidget {
           },
         ),
       ],
-      child: AppFeedbackWrapper(
-        child: AnalyticsLifecycleHandler(
-          child: WindowCloseHandler(
-            child: ScreenshotSensitivity(
-              controller: sensitivityController,
+      child: ScreenshotSensitivity(
+        controller: _sensitivityController,
+        child: AppFeedbackWrapper(
+          child: AnalyticsLifecycleHandler(
+            child: WindowCloseHandler(
               child: app_bloc_root.AppBlocRoot(
                 storedPrefs: _storedSettings!,
                 komodoDefiSdk: komodoDefiSdk,

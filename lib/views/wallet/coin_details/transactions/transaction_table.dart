@@ -151,7 +151,7 @@ class _ErrorMessage extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),
-              color: theme.currentGlobal.colorScheme.onSurface,
+              color: theme.currentGlobal.scaffoldBackgroundColor,
             ),
             padding: const EdgeInsets.symmetric(vertical: 20),
             margin: const EdgeInsets.fromLTRB(0, 30, 0, 20),

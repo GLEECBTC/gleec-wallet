@@ -20,11 +20,12 @@ class KnownAssetsList extends StatelessWidget {
         final asset = assets[index];
         final Color backgroundColor = index.isEven
             ? Theme.of(context).colorScheme.surface
-            : Theme.of(context).colorScheme.onSurface;
+            : Theme.of(context).scaffoldBackgroundColor;
         return AssetListItem(
-            assetId: asset,
-            backgroundColor: backgroundColor,
-            onTap: (assetId) => onAssetItemTap(assetId));
+          assetId: asset,
+          backgroundColor: backgroundColor,
+          onTap: (assetId) => onAssetItemTap(assetId),
+        );
       },
       separatorBuilder: (BuildContext context, int index) {
         return const SizedBox(height: 8);

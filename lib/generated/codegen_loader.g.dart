@@ -1313,4 +1313,60 @@ abstract class LocaleKeys {
       'sdk_errors.gasless_rejected_before_relay';
   static const sdk_errors_general = 'sdk_errors.general';
   static const sdk_errors = 'sdk_errors';
+  static const copyDisplayedKeys = 'copyDisplayedKeys';
+  static const downloadDisplayedKeys = 'downloadDisplayedKeys';
+  static const shareDisplayedKeys = 'shareDisplayedKeys';
+  static const copyDisplayedKey = 'copyDisplayedKey';
+  static const privateKeyExportSessionChanged =
+      'privateKeyExportSessionChanged';
+  static const privateKeyExportCoverageNotice =
+      'privateKeyExportCoverageNotice';
+  static const privateKeyExportLegacyCoverage =
+      'privateKeyExportLegacyCoverage';
+  static const privateKeyExportAccountCoverage =
+      'privateKeyExportAccountCoverage';
+  static const privateKeyExportHdCoverage = 'privateKeyExportHdCoverage';
+  static const privateKeyExportReceiving = 'privateKeyExportReceiving';
+  static const privateKeyExportChange = 'privateKeyExportChange';
+  static const privateKeyExportUnknownBranch = 'privateKeyExportUnknownBranch';
+  static const privateKeyExportUnsupported = 'privateKeyExportUnsupported';
+  static const privateKeyExportTronUnavailable =
+      'privateKeyExportTronUnavailable';
+  static const privateKeyExportUnverified = 'privateKeyExportUnverified';
+  static const privateKeyExportAssetUnavailable =
+      'privateKeyExportAssetUnavailable';
+  static const privateKeyExportDeliveryFailed =
+      'privateKeyExportDeliveryFailed';
+  static const privateKeyExportDeliveryUnconfirmed =
+      'privateKeyExportDeliveryUnconfirmed';
+  static const privateKeyExportNoAssets = 'privateKeyExportNoAssets';
+  static const privateKeyExportShowQr = 'privateKeyExportShowQr';
+  static const privateKeyExportPublicKey = 'privateKeyExportPublicKey';
+  static const privateKeyExportCriticalTitle = 'privateKeyExportCriticalTitle';
+  static const privateKeyExportSummaryCounts = 'privateKeyExportSummaryCounts';
+  static const privateKeyExportSomeUnavailable =
+      'privateKeyExportSomeUnavailable';
+  static const privateKeyExportCoverageDetailsTitle =
+      'privateKeyExportCoverageDetailsTitle';
+  static const privateKeyExportCoverageLabel = 'privateKeyExportCoverageLabel';
+  static const privateKeyExportRevealGateHint =
+      'privateKeyExportRevealGateHint';
+  static const privateKeyExportRevealGateHintOn =
+      'privateKeyExportRevealGateHintOn';
+  static const privateKeyExportRevealKey = 'privateKeyExportRevealKey';
+  static const privateKeyExportHideKey = 'privateKeyExportHideKey';
+  static const privateKeyExportKeyHidden = 'privateKeyExportKeyHidden';
+  static const privateKeyExportPrivateKeyLabel =
+      'privateKeyExportPrivateKeyLabel';
+  static const privateKeyExportAddressLabel = 'privateKeyExportAddressLabel';
+  static const privateKeyExportDerivationPath =
+      'privateKeyExportDerivationPath';
+  static const privateKeyExportViewingKey = 'privateKeyExportViewingKey';
+  static const privateKeyExportIncludedBadge = 'privateKeyExportIncludedBadge';
+  static const privateKeyExportUnavailableBadge =
+      'privateKeyExportUnavailableBadge';
+  static const privateKeyExportAllFiltered = 'privateKeyExportAllFiltered';
+  static const privateKeyExportLoading = 'privateKeyExportLoading';
+  static const privateKeyExportBulkActionsTitle =
+      'privateKeyExportBulkActionsTitle';
 }

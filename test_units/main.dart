@@ -1,4 +1,29 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'services/file_loader/diagnostic_artifacts_test.dart'
+    as diagnostic_artifacts_test;
+import 'services/file_loader/guarded_file_saver_test.dart'
+    as guarded_file_saver_test;
+import 'services/logger/safe_log_exporter_test.dart' as safe_log_exporter_test;
+import 'services/logger/logger_privacy_test.dart' as logger_privacy_test;
+import 'services/feedback/feedback_diagnostics_test.dart'
+    as feedback_diagnostics_test;
+import 'services/feedback/feedback_screenshot_privacy_test.dart'
+    as feedback_screenshot_privacy_test;
+import 'bloc/security_settings/private_key_export_bloc_test.dart'
+    as private_key_export_bloc_test;
+import 'services/security/private_key_export_delivery_test.dart'
+    as private_key_export_delivery_test;
+import 'services/security/private_key_export_service_test.dart'
+    as private_key_export_service_test;
+import 'views/settings/private_key_export_password_dialog_test.dart'
+    as private_key_export_password_dialog_test;
+import 'views/settings/private_key_export_flow_test.dart'
+    as private_key_export_flow_test;
+import 'views/settings/seed_private_key_export_guard_test.dart'
+    as seed_private_key_export_guard_test;
+import 'support/contrast_test.dart' as contrast_test;
+import 'theme/theme_color_roles_test.dart' as theme_color_roles_test;
+import 'shared/widgets/notice_banner_test.dart' as notice_banner_test;
 import 'bloc/legal_agreement/legal_agreement_bloc_test.dart'
     as legal_agreement_bloc_test;
 import 'views/wallets_manager/widgets/inline_legal_acceptance_test.dart'
@@ -149,6 +174,21 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  diagnostic_artifacts_test.main();
+  guarded_file_saver_test.main();
+  safe_log_exporter_test.main();
+  logger_privacy_test.main();
+  feedback_diagnostics_test.main();
+  feedback_screenshot_privacy_test.main();
+  private_key_export_bloc_test.main();
+  private_key_export_delivery_test.main();
+  private_key_export_service_test.main();
+  private_key_export_password_dialog_test.main();
+  private_key_export_flow_test.main();
+  seed_private_key_export_guard_test.main();
+  contrast_test.main();
+  theme_color_roles_test.main();
+  notice_banner_test.main();
   app_error_handling_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
