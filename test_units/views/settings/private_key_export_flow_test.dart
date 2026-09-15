@@ -31,6 +31,7 @@ void testPrivateKeyExportFlow() {
   TestWidgetsFlutterBinding.ensureInitialized();
   group('Private key export screen lifecycle', () {
     late FakePrivateKeyExportService service;
+    late FakePrivateKeyExportDelivery delivery;
     late PrivateKeyExportBloc bloc;
     late SecuritySettingsBloc navigation;
     var ownsBloc = false;
@@ -49,11 +50,9 @@ void testPrivateKeyExportFlow() {
     }) async {
       ownsBloc = ownExportBloc;
       service = FakePrivateKeyExportService();
+      delivery = FakePrivateKeyExportDelivery();
       if (pending) service.pendingExport = Completer<PrivateKeyExportResult>();
-      bloc = PrivateKeyExportBloc(
-        service: service,
-        delivery: FakePrivateKeyExportDelivery(),
-      );
+      bloc = PrivateKeyExportBloc(service: service, delivery: delivery);
       navigation = SecuritySettingsBloc(
         SecuritySettingsState.initialState(),
         kdfSdk: null,
@@ -137,6 +136,50 @@ void testPrivateKeyExportFlow() {
       expect(find.byKey(const Key('private-key-export-copy')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    for (final width in [390.0, 1024.0]) {
+      testWidgets('copy and download work without sharing at width $width', (
+        tester,
+      ) async {
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        addTearDown(() async {
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.binding.setSurfaceSize(null);
+        });
+        await ready(tester, appTheme: theme.global.light);
+
+        final copy = find.byKey(const Key('private-key-export-copy'));
+        final download = find.byKey(const Key('private-key-export-download'));
+        final share = find.byKey(const Key('private-key-export-share'));
+        expect(copy, findsOneWidget);
+        expect(download, findsOneWidget);
+        expect(share, findsNothing);
+        expect(find.byIcon(Icons.share), findsNothing);
+
+        for (final action in [copy, download]) {
+          await tester.ensureVisible(action);
+          await tester.tap(action, warnIfMissed: false);
+          await tester.pumpAndSettle();
+        }
+        expect(delivery.calls, 0, reason: 'Hidden keys cannot be exported');
+
+        bloc.add(const PrivateKeyExportVisibilityChanged(true));
+        await tester.pumpAndSettle();
+        expect(share, findsNothing);
+        expect(find.byIcon(Icons.share), findsNothing);
+
+        var expectedDeliveries = 0;
+        for (final action in [copy, download]) {
+          await tester.ensureVisible(action);
+          await tester.tap(action);
+          await tester.pumpAndSettle();
+          expect(delivery.calls, ++expectedDeliveries);
+          expect(delivery.delivered!.value, contains(exportKeySentinel));
+          expect(bloc.state.hasExported, isTrue);
+          expect(tester.takeException(), isNull);
+        }
+      });
+    }
 
     testWidgets('unlocking exposes no key controls for TRON assets', (
       tester,
