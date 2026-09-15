@@ -868,6 +868,10 @@ class CoinDetailsBalanceContent extends StatelessWidget {
           key: const Key('coin-details-balance'),
           width: isMobile ? 120 : 132,
           height: isMobile ? 30 : 24,
+          // theme-role-ok: a skeleton bar standing in for the balance text,
+          // painted at 22% of the colour that text would have had. Before
+          // onSurface was restored this rendered black on a dark card, so the
+          // placeholder was invisible.
           decoration: BoxDecoration(
             color: (style?.color ?? themeData.colorScheme.onSurface).withValues(
               alpha: 0.22,

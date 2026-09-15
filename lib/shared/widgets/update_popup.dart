@@ -44,7 +44,7 @@ class UpdatePopUp extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 15),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).scaffoldBackgroundColor,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(

@@ -7,13 +7,6 @@ class ThemeCustomDark extends ThemeExtension<ThemeCustomDark>
   ThemeCustomDark();
 
   @override
-  late final Color suspendedBannerBackgroundColor;
-
-  void initializeThemeDependentColors(ThemeData theme) {
-    suspendedBannerBackgroundColor = theme.colorScheme.onSurface;
-  }
-
-  @override
   ThemeExtension<ThemeCustomDark> copyWith() {
     return this;
   }

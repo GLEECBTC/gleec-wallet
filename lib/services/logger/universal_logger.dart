@@ -1,128 +1,123 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dragon_logs/dragon_logs.dart';
 import 'package:intl/intl.dart';
-import 'package:web_dex/app_config/package_information.dart';
+import 'package:web_dex/services/file_loader/diagnostic_artifacts.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
-import 'package:web_dex/services/logger/log_message.dart';
+import 'package:web_dex/services/logger/diagnostic_log_record.dart';
+import 'package:web_dex/services/logger/diagnostic_log_store.dart';
 import 'package:web_dex/services/logger/logger.dart';
-import 'package:web_dex/services/logger/logger_metadata_mixin.dart';
+import 'package:web_dex/services/logger/safe_log_exporter.dart';
 import 'package:web_dex/services/platform_info/platform_info.dart';
-import 'package:web_dex/shared/utils/utils.dart' as initialised_logger show log;
 
-class UniversalLogger with LoggerMetadataMixin implements LoggerInterface {
-  UniversalLogger({required this.platformInfo});
-
-  bool _isInitialized = false;
-  bool _isBusyInit = false;
+class UniversalLogger implements LoggerInterface, DiagnosticLogSource {
+  UniversalLogger({
+    required this.platformInfo,
+    DiagnosticLogStore? store,
+    Future<void> Function()? purgeLegacyArtifacts,
+    FileLoader? fileLoader,
+    DateTime Function()? now,
+  }) : _store = store ?? const DragonDiagnosticLogStore(),
+       _purgeLegacyArtifacts =
+           purgeLegacyArtifacts ?? purgeLegacyDiagnosticArtifacts,
+       _fileLoader = fileLoader,
+       _now = now ?? DateTime.now;
 
   final PlatformInfo platformInfo;
+  final DiagnosticLogStore _store;
+  final Future<void> Function() _purgeLegacyArtifacts;
+  final FileLoader? _fileLoader;
+  final DateTime Function() _now;
+  late final _exporter = SafeLogExporter(source: this);
+  Future<void>? _initialization;
+  bool _ready = false;
+  bool _disposed = false;
+  Map<String, Object?> _metadata = const {};
 
   @override
-  Future<void> init() async {
-    if (_isInitialized || _isBusyInit) return;
+  Future<void> init() {
+    if (_ready || _disposed) return Future.value();
+    return _initialization ??= _initialize().whenComplete(() {
+      _initialization = null;
+    });
+  }
 
-    final timer = Stopwatch()..start();
-
+  Future<void> _initialize() async {
     try {
-      await DragonLogs.init();
-
-      initialised_logger.log(
-        'Logger initialized in ${timer.elapsedMilliseconds}ms',
-      );
-
-      _isInitialized = true;
-    } catch (e) {
-      // ignore: avoid_print
-      print(
-        'Failed to initialize app logging. Downloaded logs '
-        'may be incomplete.\n${e.toString()}',
-      );
-    } finally {
-      timer.stop();
-      _isBusyInit = false;
+      await _purgeLegacyArtifacts();
+      await _store.initialize();
+      _ready = !_disposed;
+    } on Object {
+      // Logging is optional. Wallet startup proceeds, but exports fail closed.
+      _ready = false;
     }
+  }
+
+  @override
+  Future<void> ensureReady() async {
+    await init();
+    if (!_ready || _disposed) throw const DiagnosticLogsUnavailable();
+  }
+
+  @override
+  void setSessionMetadata(Map<String, Object?> metadata) {
+    _metadata = Map.unmodifiable(metadata);
   }
 
   @override
   Future<void> write(String message, [String? path]) async {
-    // If logger is not initialized, fall back to simple print
-    if (!_isInitialized) {
-      // ignore: avoid_print
-      print('[$path] $message');
-      return;
-    }
-
-    final date = DateTime.now();
-
-    final LogMessage logMessage = LogMessage(
-      path: path,
-      appVersion: packageInformation.packageVersion ?? '',
-      mm2Version: DragonLogs.sessionMetadata?['mm2Version'],
-      appLocale: await localeName(),
-      platform: platformInfo.platform,
-      osLanguage: platformInfo.osLanguage,
-      screenSize: platformInfo.screenSize ?? '',
-      timestamp: date.millisecondsSinceEpoch,
+    // Startup callbacks must never print or enqueue unreviewed pre-init data.
+    await _initialization;
+    if (!_ready || _disposed) return;
+    final record = DiagnosticLogRecord.create(
+      timestamp: _now().millisecondsSinceEpoch,
       message: message,
-      date: date.toString(),
+      source: path,
+      context: _metadata,
     );
-
-    // Convert to JSON but exclude fields which are already set in the session
-    // metadata and non-null.
-    final Map<String, dynamic> json = logMessage.toJson()
-      ..removeWhere(
-        (key, value) =>
-            DragonLogs.sessionMetadata!.containsKey(key) || value == null,
-      );
-
-    return log(json.toString());
+    if (record == null) return;
+    try {
+      await _store.writeRecord(jsonEncode(record.toJson()));
+    } on Object {
+      throw const DiagnosticLogsUnavailable();
+    }
   }
 
   @override
-  Future<void> getLogFile() async {
-    if (!_isInitialized) {
-      // ignore: avoid_print
-      print('Logger not initialized, cannot export log file');
-      return;
-    }
-
-    final String date = DateFormat(
-      'dd.MM.yyyy_HH-mm-ss',
-    ).format(DateTime.now());
-    final String filename = 'komodo_wallet_log_$date';
-
-    await FileLoader.fromPlatform().save(
-      fileName: filename,
-      data: await DragonLogs.exportLogsString(),
-      type: LoadFileType.compressed,
-    );
+  Stream<String> readRecords() async* {
+    await ensureReady();
+    yield* _store.readRecords();
   }
+
+  @override
+  Future<SafeLogAttachment> exportLogs({int? maxBytes}) =>
+      _exporter.export(maxBytes: maxBytes);
 
   @override
   Future<Uint8List> exportRecentLogsBytes({
-    int maxBytes = 9 * 1024 * 1024,
-  }) async {
-    final List<Uint8List> recentChunks = <Uint8List>[];
-    int totalBytes = 0;
+    int maxBytes = SafeLogExporter.feedbackMaxBytes,
+  }) async => (await exportLogs(maxBytes: maxBytes)).bytes;
 
-    await for (final String chunk in DragonLogs.exportLogsStream()) {
-      final Uint8List bytes = Uint8List.fromList(utf8.encode(chunk));
-      recentChunks.add(bytes);
-      totalBytes += bytes.length;
-
-      while (totalBytes > maxBytes && recentChunks.isNotEmpty) {
-        totalBytes -= recentChunks.first.length;
-        recentChunks.removeAt(0);
-      }
+  @override
+  Future<void> getLogFile() async {
+    final attachment = await exportLogs();
+    final date = DateFormat('dd.MM.yyyy_HH-mm-ss').format(_now());
+    try {
+      await (_fileLoader ?? FileLoader.fromPlatform()).save(
+        fileName: 'komodo_wallet_log_$date',
+        data: utf8.decode(attachment.bytes),
+        type: LoadFileType.compressed,
+      );
+    } on Object {
+      throw const DiagnosticLogsUnavailable();
     }
+  }
 
-    final BytesBuilder builder = BytesBuilder(copy: false);
-    for (final Uint8List part in recentChunks) {
-      builder.add(part);
-    }
-    return builder.toBytes();
+  @override
+  Future<void> dispose() async {
+    _disposed = true;
+    _ready = false;
+    await _initialization;
+    await _store.dispose();
   }
 }

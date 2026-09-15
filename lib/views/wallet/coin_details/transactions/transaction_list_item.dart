@@ -96,7 +96,7 @@ class _TransactionListRowState extends State<TransactionListRow> {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: isMobile
-            ? Theme.of(context).colorScheme.onSurface
+            ? Theme.of(context).scaffoldBackgroundColor
             : Colors.transparent,
         borderRadius: borderRadius,
       ),

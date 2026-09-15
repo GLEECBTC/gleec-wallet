@@ -1,5 +1,48 @@
 # Theme semantic color migration plan
 
+> **Status: complete.** Every phase below has landed. This file is kept as the
+> record of what was wrong and why the fix took the shape it did; the ledger's
+> line numbers are from the July 2026 audit and are stale. Re-derive from the
+> audit command if you need the current picture. What is now enforced, rather
+> than merely planned, is `.github/scripts/check_theme_color_roles.sh` in
+> `validate-code-guidelines.yml`, plus the colour-role contract tests in
+> `test_units/theme/theme_color_roles_test.dart`.
+>
+> Four claims in the plan below turned out to be wrong, and are corrected here
+> rather than in place so the original reasoning stays readable:
+>
+> - **The barrier-token work was already done.** `theme.custom.dialogBarrierColor`
+>   existed and `PopupDispatcher.show()` already hardcoded it; the
+>   `barrierColor:` argument was declared and never read. The three call sites
+>   were dead code, not a migration.
+> - **`suspendedBannerBackgroundColor` had no consumers**, and `AppTheme.custom`
+>   returns a freshly constructed, never-initialised instance - so the first
+>   reader of that `late final` would have hit a `LateInitializationError`
+>   rather than a colour. It was deleted rather than rewired.
+> - **The replacement token is `scaffoldBackgroundColor`, not
+>   `colorScheme.surface`.** Once the canvas is a literal, it is by construction
+>   the exact ARGB those sites already painted, so the substitution is provably
+>   invisible. `surface` is a different colour and would have shipped a design
+>   change disguised as a refactor.
+> - **The CI check is bash, not Python.** `.github/scripts/` is entirely bash
+>   with paired `test_*.sh` fixtures.
+>
+> Three defects the plan did not anticipate were found by the contract tests and
+> fixed alongside it:
+>
+> - The light scheme's `secondaryContainer`, `tertiaryContainer`,
+>   `errorContainer` and `primaryContainer` are Material 2 defaults frozen in by
+>   `ColorScheme.copyWith` resolving nullable roles through their getters. They
+>   are pinned and marked FREEZE, awaiting a brand decision.
+> - `fromSeed` generated the dark theme's `onPrimary` and `onError` from the
+>   seed palette, but `primary` and `error` were then hard-overridden to brand
+>   colours - leaving 2.71:1 and 2.91:1 pairs. The withdraw form's primary-CTA
+>   spinner was very nearly invisible in dark mode.
+> - `NoticeBanner` took `Colors.amber.shade900` raw on its fallback path, which
+>   is what the app actually renders because the global themes do not register
+>   `ColorSchemeExtension`. Warning text measured 2.49:1 on its own tint.
+
+
 ## Status and trigger
 
 The legacy Gleec themes use Material's `ColorScheme.onSurface` as the page

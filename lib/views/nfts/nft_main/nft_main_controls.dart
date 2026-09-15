@@ -8,7 +8,6 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/nfts/nft_main_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/dispatchers/popup_dispatcher.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/router/state/routing_state.dart';
@@ -93,7 +92,6 @@ class _NftMainControlsState extends State<NftMainControls> {
 
     return PopupDispatcher(
       borderColor: theme.custom.specificButtonBorderColor,
-      barrierColor: isMobile ? Theme.of(context).colorScheme.onSurface : null,
       barrierDismissible: false,
       width: 320,
       context: scaffoldKey.currentContext ?? context,

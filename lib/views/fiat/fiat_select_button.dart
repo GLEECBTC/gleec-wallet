@@ -67,7 +67,7 @@ class FiatSelectButton extends StatelessWidget {
       style: (Theme.of(context).filledButtonTheme.style ?? const ButtonStyle())
           .copyWith(
             backgroundColor: WidgetStateProperty.all<Color>(
-              Theme.of(context).colorScheme.onSurface,
+              Theme.of(context).scaffoldBackgroundColor,
             ),
             padding: WidgetStateProperty.all<EdgeInsetsGeometry>(
               const EdgeInsets.symmetric(),

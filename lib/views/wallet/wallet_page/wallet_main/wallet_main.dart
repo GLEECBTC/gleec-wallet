@@ -414,7 +414,6 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
     return PopupDispatcher(
       width: 320,
       context: scaffoldKey.currentContext ?? context,
-      barrierColor: isMobile ? Theme.of(context).colorScheme.onSurface : null,
       barrierDismissible: false,
       borderColor: theme.custom.specificButtonBorderColor,
       popupContent: WalletsManagerWrapper(

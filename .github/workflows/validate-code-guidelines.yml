@@ -45,6 +45,15 @@ jobs:
         id: test_hosting_deploy_url
         run: .github/scripts/test_hosting_deploy_url.sh
 
+      # `flutter analyze` runs with --no-fatal-warnings --no-fatal-infos, and a
+      # background painted with a foreground colour role compiles cleanly
+      # either way, so nothing else here would notice it coming back.
+      - name: Check theme colour roles
+        id: check_theme_color_roles
+        run: |
+          .github/scripts/test_check_theme_color_roles.sh
+          .github/scripts/check_theme_color_roles.sh
+
       - name: Test the Bitrefill message bridge
         id: test_bitrefill_widget
         run: node --test tool/web/bitrefill_widget.test.mjs

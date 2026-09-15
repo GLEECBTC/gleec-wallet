@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:app_theme/app_theme.dart';
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart'
@@ -21,7 +20,6 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/coin_type.dart';
 import 'package:web_dex/performance_analytics/performance_analytics.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
-import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/widgets/information_popup.dart';
 
 export 'package:web_dex/shared/utils/extensions/async_extensions.dart';
@@ -299,38 +297,18 @@ Future<void> log(
   bool isError = false,
 }) async {
   final timer = Stopwatch()..start();
-  // todo(yurii & ivan): to finish stacktrace parsing
-  // if (trace != null) {
-  //   final String errorTrace = getInfoFromStackTrace(trace);
-  //   logger.write('$errorTrace: $errorOrUsefulData');
-  // }
-  const isTestEnv = isTestMode || kDebugMode;
-  if (isTestEnv && isError) {
-    // ignore: avoid_print
-    print('path: $path');
-    // ignore: avoid_print
-    print('error: $message');
-    if (trace != null) {
-      // ignore: avoid_print
-      print('trace: $trace');
-    }
-  }
-
   try {
-    await logger.write(message, path);
+    await logger.write(
+      isError ? 'Application operation failed' : message,
+      path,
+    );
 
     // TODO: Add a `.dispose()` method to the logger library and call it before
     // the app is disposed.
 
     performance.logTimeWritingLogs(timer.elapsedMilliseconds);
   } catch (e) {
-    // TODO: replace below with crashlytics reporting or show UI the printed
-    // message in a snackbar/banner.
-    // ignore: avoid_print
-    print(
-      'ERROR: Writing logs failed. Exported log files may be incomplete.'
-      '\nError message: $e',
-    );
+    // Never stringify logger failures: they may retain rejected diagnostic data.
   } finally {
     timer.stop();
   }

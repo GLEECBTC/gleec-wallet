@@ -1,242 +1,144 @@
-import 'dart:convert';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:easy_localization/easy_localization.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
-import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
-import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/bloc/security_settings/private_key_export_bloc.dart';
+import 'package:web_dex/bloc/security_settings/private_key_export_event.dart';
+import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/services/file_loader/file_loader.dart';
-import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/services/security/private_key_export_delivery.dart';
 
-/// A reusable widget that provides copy, download, and share actions for private keys.
+/// Bulk export actions.
 ///
-/// This widget groups all private key actions in a consistent, reusable component
-/// that can be used across different parts of the application.
+/// These were `ActionChip`s - Material's low-emphasis, inline, contextual
+/// control - for what is the highest-consequence operation on the screen.
+/// They are buttons now, and they say why they are disabled instead of
+/// leaving the reader to discover the reveal gate by trial.
 class PrivateKeyActionsWidget extends StatelessWidget {
-  /// Creates a new PrivateKeyActionsWidget.
-  ///
-  /// [privateKeys] Map of asset IDs to their corresponding private keys.
-  /// [showCopy] Whether to show the copy button (default: true).
-  /// [showDownload] Whether to show the download button (default: true).
-  /// [showShare] Whether to show the share button (default: true).
-  const PrivateKeyActionsWidget({
-    super.key,
-    required this.privateKeys,
-    this.showCopy = true,
-    this.showDownload = true,
-    this.showShare = true,
-  });
-
-  /// Private keys organized by asset ID.
-  final Map<AssetId, List<PrivateKey>> privateKeys;
-
-  /// Whether to show the copy button.
-  final bool showCopy;
-
-  /// Whether to show the download button.
-  final bool showDownload;
-
-  /// Whether to show the share button.
-  final bool showShare;
+  const PrivateKeyActionsWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<SecuritySettingsBloc, SecuritySettingsState, bool>(
-      selector: (state) => state.showPrivateKeys,
-      builder: (context, showPrivateKeys) {
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (showShare) _ShareAllPrivateKeysButton(privateKeys: privateKeys),
-            if (showCopy) _CopyAllPrivateKeysButton(privateKeys: privateKeys),
-            if (showDownload)
-              _DownloadAllPrivateKeysButton(privateKeys: privateKeys),
+    final theme = Theme.of(context);
+    return BlocBuilder<PrivateKeyExportBloc, PrivateKeyExportState>(
+      builder: (context, state) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            LocaleKeys.privateKeyExportBulkActionsTitle.tr(),
+            style: theme.textTheme.labelLarge,
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final buttons = [
+                for (final action in const [
+                  PrivateKeyExportAction.copy,
+                  PrivateKeyExportAction.download,
+                ])
+                  _ActionButton(
+                    action: action,
+                    enabled: state.canDeliver,
+                    busy: state.isDelivering,
+                  ),
+              ];
+              // Stack below the width where the buttons stop being legible
+              // side by side; the old Wrap reflowed them into an arbitrary
+              // order mixed in with the visibility switch and the filter.
+              if (constraints.maxWidth < 480) {
+                return Column(
+                  children: [
+                    for (final button in buttons)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: button,
+                      ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  for (var i = 0; i < buttons.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    Expanded(child: buttons[i]),
+                  ],
+                ],
+              );
+            },
+          ),
+          if (!state.canDeliver && !state.isDelivering) ...[
+            const SizedBox(height: 8),
+            Text(
+              LocaleKeys.privateKeyExportRevealGateHint.tr(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
-        );
-      },
-    );
-  }
-
-  /// Converts private keys to JSON string format.
-  static String _privateKeysToJsonString(
-    Map<AssetId, List<PrivateKey>> privateKeys,
-  ) {
-    final jsonData = {
-      for (final assetId in privateKeys.keys)
-        assetId.id: privateKeys[assetId]!.map((key) => key.toJson()).toList(),
-    };
-
-    return const JsonEncoder.withIndent('  ').convert(jsonData);
-  }
-}
-
-/// Button for sharing all private keys.
-class _ShareAllPrivateKeysButton extends StatelessWidget {
-  const _ShareAllPrivateKeysButton({required this.privateKeys});
-  final Map<AssetId, List<PrivateKey>> privateKeys;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocSelector<SecuritySettingsBloc, SecuritySettingsState, bool>(
-      selector: (state) => state.showPrivateKeys,
-      builder: (context, showPrivateKeys) {
-        return _ActionButton(
-          onPressed: showPrivateKeys ? () => _sharePrivateKeys(context) : null,
-          icon: Icons.share,
-          label: LocaleKeys.shareAllKeys.tr(),
-          isEnabled: showPrivateKeys,
-        );
-      },
-    );
-  }
-
-  Future<void> _sharePrivateKeys(BuildContext context) async {
-    final jsonString = PrivateKeyActionsWidget._privateKeysToJsonString(
-      privateKeys,
-    );
-
-    try {
-      await Share.share(jsonString, subject: 'Private Keys Export');
-      // ignore: use_build_context_synchronously
-      context.read<SecuritySettingsBloc>().add(
-        const PrivateKeysDownloadRequestedEvent(),
-      );
-    } catch (e) {
-      _showErrorSnackBar(context, 'Failed to share private keys');
-    }
-  }
-}
-
-/// Button for downloading all private keys to a file.
-class _DownloadAllPrivateKeysButton extends StatelessWidget {
-  const _DownloadAllPrivateKeysButton({required this.privateKeys});
-  final Map<AssetId, List<PrivateKey>> privateKeys;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocSelector<SecuritySettingsBloc, SecuritySettingsState, bool>(
-      selector: (state) => state.showPrivateKeys,
-      builder: (context, showPrivateKeys) {
-        return _ActionButton(
-          onPressed: showPrivateKeys
-              ? () => _downloadPrivateKeys(context)
-              : null,
-          icon: Icons.download,
-          label: LocaleKeys.downloadAllKeys.tr(),
-          isEnabled: showPrivateKeys,
-        );
-      },
-    );
-  }
-
-  Future<void> _downloadPrivateKeys(BuildContext context) async {
-    final jsonString = PrivateKeyActionsWidget._privateKeysToJsonString(
-      privateKeys,
-    );
-    final fileLoader = FileLoader.fromPlatform();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final fileName = 'private_keys_$timestamp';
-
-    try {
-      await fileLoader.save(
-        fileName: fileName,
-        data: jsonString,
-        type: LoadFileType.text,
-      );
-
-      // ignore: use_build_context_synchronously
-      context.read<SecuritySettingsBloc>().add(
-        const PrivateKeysDownloadRequestedEvent(),
-      );
-    } catch (e) {
-      _showErrorSnackBar(context, 'Failed to download private keys');
-    }
-  }
-}
-
-/// Button for copying all private keys to clipboard.
-class _CopyAllPrivateKeysButton extends StatelessWidget {
-  const _CopyAllPrivateKeysButton({required this.privateKeys});
-  final Map<AssetId, List<PrivateKey>> privateKeys;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocSelector<SecuritySettingsBloc, SecuritySettingsState, bool>(
-      selector: (state) => state.showPrivateKeys,
-      builder: (context, showPrivateKeys) {
-        return _ActionButton(
-          onPressed: showPrivateKeys ? () => _copyPrivateKeys(context) : null,
-          icon: Icons.copy,
-          label: LocaleKeys.copyAllKeys.tr(),
-          isEnabled: showPrivateKeys,
-        );
-      },
-    );
-  }
-
-  void _copyPrivateKeys(BuildContext context) async {
-    final jsonString = PrivateKeyActionsWidget._privateKeysToJsonString(
-      privateKeys,
-    );
-    await copyToClipBoard(context, jsonString);
-    context.read<SecuritySettingsBloc>().add(
-      const ShowPrivateKeysCopiedEvent(),
+        ],
+      ),
     );
   }
 }
 
-void _showErrorSnackBar(BuildContext context, String messageText) async {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(messageText),
-      backgroundColor: Theme.of(context).colorScheme.error,
-    ),
-  );
-}
-
-/// Common action button widget with consistent styling.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
-    required this.onPressed,
-    required this.icon,
-    required this.label,
-    required this.isEnabled,
+    required this.action,
+    required this.enabled,
+    required this.busy,
   });
 
-  final VoidCallback? onPressed;
-  final IconData icon;
-  final String label;
-  final bool isEnabled;
+  final PrivateKeyExportAction action;
+  final bool enabled;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
-    return ActionChip(
+    final key = Key('private-key-export-${action.name}');
+    final onPressed = enabled
+        ? () => context.read<PrivateKeyExportBloc>().add(
+            PrivateKeyExportDeliveryRequested(action),
+          )
+        : null;
+    final label = switch (action) {
+      PrivateKeyExportAction.copy => LocaleKeys.copyDisplayedKeys.tr(),
+      PrivateKeyExportAction.download => LocaleKeys.downloadDisplayedKeys.tr(),
+    };
+    final icon = switch (action) {
+      PrivateKeyExportAction.copy => Icons.copy,
+      PrivateKeyExportAction.download => Icons.download,
+    };
+
+    // The spinner belongs inside the control that is working. Appended to the
+    // old Wrap it could reflow onto its own line, detached from whatever it
+    // was reporting on.
+    final child = busy
+        ? const SizedBox.square(
+            dimension: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 8),
+              Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+            ],
+          );
+
+    if (action == PrivateKeyExportAction.copy) {
+      return UiPrimaryButton(
+        key: key,
+        onPressed: onPressed,
+        height: 44,
+        child: child,
+      );
+    }
+    return UiSecondaryButton(
+      key: key,
       onPressed: onPressed,
-      avatar: Icon(
-        icon,
-        size: 16,
-        color: isEnabled
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-      ),
-      label: Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
-      ),
-      backgroundColor: isEnabled
-          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-          : Theme.of(context).colorScheme.surface.withValues(alpha: 0.5),
-      side: BorderSide(
-        color: isEnabled
-            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
-            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-      ),
+      height: 44,
+      child: child,
     );
   }
 }

@@ -188,7 +188,7 @@ class FiatInputsState extends State<FiatInputs> {
         ),
         Card(
           margin: EdgeInsets.zero,
-          color: Theme.of(context).colorScheme.onSurface,
+          color: Theme.of(context).scaffoldBackgroundColor,
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,

@@ -55,7 +55,7 @@ class _WalletsListState extends State<WalletsList> {
     return Container(
       constraints: const BoxConstraints(maxHeight: 220),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.onSurface,
+        color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(18.0),
       ),
       child: DexScrollbar(
