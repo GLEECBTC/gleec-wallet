@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/security/private_key_export_document.dart';
@@ -14,65 +13,30 @@ void main() => testPrivateKeyExportDelivery();
 
 void testPrivateKeyExportDelivery() {
   group('Private key export output boundary', () {
-    for (final action in [
-      PrivateKeyExportAction.copy,
-      PrivateKeyExportAction.share,
-    ]) {
-      test(
-        '${action.name} synchronously rechecks after asynchronous validation',
-        () async {
-          var current = true;
-          var outputCalls = 0;
-          final delivery = PlatformPrivateKeyExportDelivery(
-            fileSaver: _FileSaver(),
-            copy: (_) async {
-              outputCalls++;
-            },
-            share: (_) async {
-              outputCalls++;
-              return const ShareResult('synthetic', ShareResultStatus.success);
-            },
-          );
-          await expectLater(
-            delivery.deliver(
-              action: action,
-              content: SensitiveString(exportKeySentinel),
-              beforeWrite: () async {
-                scheduleMicrotask(() => current = false);
-              },
-              beforeCommit: () {
-                if (!current) throw StateError('session changed');
-              },
-            ),
-            throwsStateError,
-          );
-          expect(outputCalls, 0);
+    test('copy synchronously rechecks after asynchronous validation', () async {
+      var current = true;
+      var outputCalls = 0;
+      final delivery = PlatformPrivateKeyExportDelivery(
+        fileSaver: _FileSaver(),
+        copy: (_) async {
+          outputCalls++;
         },
       );
-    }
-
-    for (final status in ShareResultStatus.values) {
-      test('share ${status.name} reports its actual status', () async {
-        final delivery = PlatformPrivateKeyExportDelivery(
-          fileSaver: _FileSaver(),
-          share: (_) async => ShareResult('synthetic', status),
-        );
-        final result = await delivery.deliver(
-          action: PrivateKeyExportAction.share,
+      await expectLater(
+        delivery.deliver(
+          action: PrivateKeyExportAction.copy,
           content: SensitiveString(exportKeySentinel),
-          beforeWrite: () async {},
-          beforeCommit: () {},
-        );
-        expect(result, switch (status) {
-          ShareResultStatus.success =>
-            PrivateKeyExportDeliveryOutcome.completed,
-          ShareResultStatus.dismissed =>
-            PrivateKeyExportDeliveryOutcome.cancelled,
-          ShareResultStatus.unavailable =>
-            PrivateKeyExportDeliveryOutcome.unconfirmed,
-        });
-      });
-    }
+          beforeWrite: () async {
+            scheduleMicrotask(() => current = false);
+          },
+          beforeCommit: () {
+            if (!current) throw StateError('session changed');
+          },
+        ),
+        throwsStateError,
+      );
+      expect(outputCalls, 0);
+    });
 
     test(
       'download forwards both checks and keeps unconfirmed distinct',

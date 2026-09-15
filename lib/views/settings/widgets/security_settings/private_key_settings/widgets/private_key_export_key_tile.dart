@@ -89,20 +89,22 @@ class PrivateKeyExportKeyTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton.icon(
-                onPressed: showKeys
-                    ? () => bloc.add(
-                        PrivateKeyExportKeyVisibilityToggled(assetId, index),
-                      )
-                    : null,
-                icon: Icon(
-                  revealed ? Icons.visibility_off : Icons.visibility,
-                  size: 18,
-                ),
-                label: Text(
-                  revealed
-                      ? LocaleKeys.privateKeyExportHideKey.tr()
-                      : LocaleKeys.privateKeyExportRevealKey.tr(),
+              Flexible(
+                child: TextButton.icon(
+                  onPressed: showKeys
+                      ? () => bloc.add(
+                          PrivateKeyExportKeyVisibilityToggled(assetId, index),
+                        )
+                      : null,
+                  icon: Icon(
+                    revealed ? Icons.visibility_off : Icons.visibility,
+                    size: 18,
+                  ),
+                  label: Text(
+                    revealed
+                        ? LocaleKeys.privateKeyExportHideKey.tr()
+                        : LocaleKeys.privateKeyExportRevealKey.tr(),
+                  ),
                 ),
               ),
               IconButton(
