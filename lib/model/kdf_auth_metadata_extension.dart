@@ -1,5 +1,4 @@
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart' show Asset, WalletId;
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
@@ -32,7 +31,7 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   Future<List<String>> getWalletCoinIds() async {
     final user = await auth.currentUser;
     if (user == null) return [];
-    return user.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
+    return (await walletAssets.load()).toList();
   }
 
   /// Returns the stored list of wallet assets resolved from configuration IDs.
@@ -108,11 +107,9 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   Future<void> addActivatedCoins(
     Iterable<String> coins, {
     required WalletId expectedWalletId,
+    AuthSessionContext? expectedSession,
   }) async {
-    await auth.updateActiveUserKeyValue('activated_coins', (current) {
-      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
-      return <String>{...existing, ...coins}.toList();
-    }, expectedWalletId: expectedWalletId);
+    await walletAssets.add(coins, expectedWalletId: expectedWalletId);
   }
 
   /// Removes specified coin/asset IDs from the current user's activated coins list.
@@ -127,12 +124,9 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   Future<void> removeActivatedCoins(
     List<String> coins, {
     required WalletId expectedWalletId,
+    AuthSessionContext? expectedSession,
   }) async {
-    await auth.updateActiveUserKeyValue('activated_coins', (current) {
-      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
-      final updated = existing.where((c) => !coins.contains(c)).toList();
-      return updated.isEmpty ? null : updated;
-    }, expectedWalletId: expectedWalletId);
+    await walletAssets.remove(coins, expectedWalletId: expectedWalletId);
   }
 
   /// Sets the seed backup confirmation status for the current user.

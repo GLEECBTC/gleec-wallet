@@ -114,3 +114,11 @@ final class _CoinsActivationCancelled extends CoinsEvent {
   @override
   List<Object> get props => [coinIds, generation];
 }
+
+/// A new host policy answer changes the visible and activatable wallet assets.
+final class _CoinsPolicyChanged extends CoinsEvent {
+  const _CoinsPolicyChanged(this.status);
+  final AppGeoStatus status;
+  @override
+  List<Object> get props => [status];
+}

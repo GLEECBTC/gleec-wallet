@@ -38,7 +38,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     on<NftMainUpdateNftsStarted>(_onStartUpdate);
     on<NftMainUpdateNftsStopped>(_onStopUpdate);
 
-    _authorizationSubscription = _sdk.auth.watchCurrentUser().listen((event) {
+    _authorizationSubscription = _sdk.auth.watchSessionContext().listen((
+      event,
+    ) {
       final isSignedIn = event != null;
       if (isSignedIn) {
         add(const NftMainChainUpdateRequested());
@@ -56,6 +58,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
         .distinct()
         .skip(1)
         .listen((_) => add(const NftMainChainUpdateRequested()));
+    _policySubscription = _sdk.activationPolicy.changes.listen((_) {
+      if (!isClosed) add(const NftMainChainUpdateRequested());
+    });
   }
 
   static final Set<String> _nftParentTickers = NftBlockchains.values
@@ -81,7 +86,8 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
 
   final NftsRepo _repo;
   final KomodoDefiSdk _sdk;
-  late StreamSubscription<KdfUser?> _authorizationSubscription;
+  late StreamSubscription<AuthSessionContext?> _authorizationSubscription;
+  late final StreamSubscription<ActivationPolicySnapshot> _policySubscription;
   late final StreamSubscription<String> _activationSubscription;
   Timer? _updateTimer;
   final _log = Logger('NftMainBloc');
@@ -96,17 +102,40 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   /// the state was reset underneath it.
   int _session = 0;
 
+  Future<AuthSessionContext?> _captureWalletSession() async {
+    try {
+      return await _sdk.auth.captureSessionContext();
+    } on WalletChangedDisconnectException {
+      return null;
+    } on AuthException {
+      return null;
+    }
+  }
+
+  bool _canEmit(
+    Emitter<NftMainState> emit,
+    int session,
+    AuthSessionContext? context,
+  ) =>
+      !emit.isDone &&
+      _session == session &&
+      context != null &&
+      _sdk.auth.isSessionContextCurrent(context);
+
   Future<void> _onTabChanged(
     NftMainTabChanged event,
     Emitter<NftMainState> emit,
   ) async {
-    emit(state.copyWith(selectedChain: () => event.chain));
-    if (!await _sdk.auth.isSignedIn() || !state.isInitialized) {
+    final session = _session;
+    final context = await _captureWalletSession();
+    if (!_canEmit(emit, session, context) || !state.isInitialized) {
       _log.warning(
         'User is not signed in or state is not initialized. Cannot change NFT tab.',
       );
       return;
     }
+
+    emit(state.copyWith(selectedChain: () => event.chain));
 
     // A chain the user has never enabled has nothing to fetch: `getNfts`
     // filters it out and returns []. The tap IS the request to enable it.
@@ -127,6 +156,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     try {
       _log.info('Changing NFT tab to ${event.chain}');
       final List<NftToken> nftList = await _repo.getNfts([event.chain]);
+      if (!_canEmit(emit, session, context)) return;
 
       final (newNftS, newNftCount) = _recalculateNftsForChain(
         nftList,
@@ -141,9 +171,11 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       );
       _log.info('Found ${nftList.length} NFTs for chain ${event.chain}');
     } on BaseError catch (e) {
+      if (!_canEmit(emit, session, context)) return;
       _log.warning('Error changing NFT tab to ${event.chain}: ${e.message}');
       emit(state.copyWith(chainErrors: () => _withChainError(event.chain, e)));
     } catch (e, s) {
+      if (!_canEmit(emit, session, context)) return;
       _log.severe('Unexpected error changing NFT tab', e, s);
       emit(
         state.copyWith(
@@ -169,9 +201,10 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     if (_activationsInFlight.containsKey(chain)) return;
     final session = _session;
     _activationsInFlight[chain] = session;
+    AuthSessionContext? context;
     try {
-      if (!await _sdk.auth.isSignedIn()) return;
-      if (_session != session || emit.isDone) return;
+      context = await _captureWalletSession();
+      if (!_canEmit(emit, session, context)) return;
 
       emit(
         state.copyWith(
@@ -182,14 +215,14 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
 
       _log.info('Activating ${chain.coinAbbr()} for the NFT page');
       await _repo.activateChain(chain);
-      if (_session != session || emit.isDone) return;
+      if (!_canEmit(emit, session, context)) return;
 
       // "No exception" is not proof: activateAssetsSync returns silently when
       // no wallet is signed in. Ask KDF whether the chain actually came up.
       final activated = (await _repo.resolveChains([
         chain,
       ])).activated.contains(chain);
-      if (_session != session || emit.isDone) return;
+      if (!_canEmit(emit, session, context)) return;
 
       if (activated) {
         emit(
@@ -211,11 +244,11 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       }
     } on BaseError catch (e) {
       _log.warning('Failed to enable NFT chain $chain: ${e.message}');
-      if (_session != session || emit.isDone) return;
+      if (!_canEmit(emit, session, context)) return;
       emit(_failChain(chain, e));
     } catch (e, s) {
       _log.severe('Unexpected error enabling NFT chain $chain', e, s);
-      if (_session != session || emit.isDone) return;
+      if (!_canEmit(emit, session, context)) return;
       emit(_failChain(chain, TextError(error: e.toString())));
     } finally {
       if (_activationsInFlight[chain] == session) {
@@ -228,14 +261,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     NftMainChainUpdateRequested event,
     Emitter<NftMainState> emit,
   ) async {
-    if (!await _sdk.auth.isSignedIn()) {
-      _log.warning('User is not signed in. Cannot update NFT chains.');
-      // This guard precedes the try below, so the `finally` does not cover it.
-      // Without this the loading screen, which is reachable again now that it
-      // no longer depends on the chain list, would spin forever.
-      emit(state.copyWith(isInitialized: () => true));
-      return;
-    }
+    final session = _session;
+    final context = await _captureWalletSession();
+    if (!_canEmit(emit, session, context)) return;
 
     // Sampled WITH the chain list rather than after the fetch: an activation
     // that resolves while the fetch runs is re-dispatched by the activation
@@ -245,10 +273,12 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       _log.info('Updating all NFT chains');
 
       final activation = await _repo.resolveChains(NftBlockchains.values);
+      if (!_canEmit(emit, session, context)) return;
       final List<NftBlockchains> activatedChains = activation.activated;
       hold = activatedChains.isEmpty && activation.unresolved.isNotEmpty;
 
-      final results = await _fetchPerChain(activatedChains);
+      final results = await _fetchPerChain(activatedChains, context!, session);
+      if (!_canEmit(emit, session, context)) return;
       final nfts = _groupByChain(results);
       // A chain whose fetch failed must not claim "0 items".
       final countable = [
@@ -276,15 +306,19 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
         'Updated all NFT chains, found $totalNfts NFTs across ${sortedChains.length} chains',
       );
     } on BaseError catch (e) {
+      if (!_canEmit(emit, session, context)) return;
       hold = false;
       _log.warning('Error updating NFT chains: ${e.message}');
       emit(state.copyWith(error: () => e));
     } catch (e, s) {
+      if (!_canEmit(emit, session, context)) return;
       hold = false;
       _log.severe('Unexpected error updating NFT chains', e, s);
       emit(state.copyWith(error: () => TextError(error: e.toString())));
     } finally {
-      emit(state.copyWith(isInitialized: () => state.isInitialized || !hold));
+      if (_canEmit(emit, session, context)) {
+        emit(state.copyWith(isInitialized: () => state.isInitialized || !hold));
+      }
     }
   }
 
@@ -299,7 +333,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     NftMainChainNftsRefreshed event,
     Emitter<NftMainState> emit,
   ) async {
-    if (!await _sdk.auth.isSignedIn() || !state.isInitialized) {
+    final session = _session;
+    final context = await _captureWalletSession();
+    if (!_canEmit(emit, session, context) || !state.isInitialized) {
       return;
     }
 
@@ -309,6 +345,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     try {
       _log.info('Refreshing NFTs for chain ${event.chain}');
       final List<NftToken> nftList = await _repo.getNfts([event.chain]);
+      if (!_canEmit(emit, session, context)) return;
 
       final (newNftS, newNftCount) = _recalculateNftsForChain(
         nftList,
@@ -323,11 +360,13 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
       );
       _log.info('Refreshed ${nftList.length} NFTs for chain ${event.chain}');
     } on BaseError catch (e) {
+      if (!_canEmit(emit, session, context)) return;
       _log.warning(
         'Error refreshing NFTs for chain ${event.chain}: ${e.message}',
       );
       emit(state.copyWith(chainErrors: () => _withChainError(event.chain, e)));
     } catch (e, s) {
+      if (!_canEmit(emit, session, context)) return;
       _log.severe('Unexpected error refreshing NFTs', e, s);
       emit(
         state.copyWith(
@@ -336,8 +375,10 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
         ),
       );
     } finally {
-      final updatingChains = _removeUpdatingChains(event.chain);
-      emit(state.copyWith(updatingChains: () => updatingChains));
+      if (_canEmit(emit, session, context)) {
+        final updatingChains = _removeUpdatingChains(event.chain);
+        emit(state.copyWith(updatingChains: () => updatingChains));
+      }
     }
   }
 
@@ -366,14 +407,28 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   /// throws for the whole `NFT_*` batch - so one flaky chain blanked the page.
   Future<Map<NftBlockchains, (List<NftToken>, BaseError?)>> _fetchPerChain(
     List<NftBlockchains> chains,
+    AuthSessionContext context,
+    int session,
   ) async {
+    void ensureCurrent() {
+      _sdk.auth.ensureSessionContextCurrent(context);
+      if (_session != session) throw const AuthSessionChangedException();
+    }
+
     final entries = await Future.wait(
       chains.map<
         Future<MapEntry<NftBlockchains, (List<NftToken>, BaseError?)>>
       >((chain) async {
         try {
           await retry<void>(
-            () async => _repo.updateNft([chain]),
+            () async {
+              ensureCurrent();
+              await _repo.updateNft([chain]);
+              ensureCurrent();
+            },
+            shouldRetry: (error) =>
+                error is! WalletChangedDisconnectException &&
+                error is! ActivationPolicyException,
             maxAttempts: 3,
             backoffStrategy: ExponentialBackoff(
               initialDelay: const Duration(seconds: 1),
@@ -385,7 +440,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
         }
 
         try {
+          ensureCurrent();
           final tokens = await _repo.getNfts([chain]);
+          ensureCurrent();
           return MapEntry(chain, (tokens, null));
         } on BaseError catch (e) {
           _log.warning('Error fetching NFTs for chain $chain: ${e.message}');
@@ -553,6 +610,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
   Future<void> close() {
     _authorizationSubscription.cancel();
     _activationSubscription.cancel();
+    _policySubscription.cancel();
     _stopUpdate();
     return super.close();
   }

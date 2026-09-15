@@ -96,6 +96,7 @@ class IntegrationTestRunner {
       '--dart-define=testing_mode=true',
       '--dart-define=CI=true',
       '--dart-define=ANALYTICS_DISABLED=true',
+      for (final define in _args.dartDefines) '--dart-define=$define',
       '--driver=test_driver/integration_test.dart',
       '--target=$testsDirectory/$test',
       if (_args.verbose) '-v',
@@ -106,7 +107,7 @@ class IntegrationTestRunner {
       '--${_args.pub ? '' : 'no-'}pub',
       '--${_args.keepRunning ? '' : 'no-'}keep-app-running',
       '--timeout=600',
-    ], runInShell: true);
+    ]);
   }
 
   Future<ProcessResult> _runWebServerTest(String test) async {
@@ -115,6 +116,7 @@ class IntegrationTestRunner {
       '--dart-define=testing_mode=true',
       '--dart-define=CI=true',
       '--dart-define=ANALYTICS_DISABLED=true',
+      for (final define in _args.dartDefines) '--dart-define=$define',
       '--driver=test_driver/integration_test.dart',
       '--target=$testsDirectory/$test',
       if (_args.verbose) '-v',
@@ -132,7 +134,7 @@ class IntegrationTestRunner {
       '--${_args.keepRunning ? '' : 'no-'}keep-app-running',
       '--driver-port=${_args.driverPort}',
       '--timeout=600',
-    ], runInShell: true);
+    ]);
   }
 
   bool _didAnyTestFail(ProcessResult result) {

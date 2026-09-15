@@ -9,7 +9,6 @@ import 'package:web_dex/mm2/mm2_api/mm2_api_nft.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/errors.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/nft/get_nft_list/get_nft_list_res.dart';
-import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/nft.dart';
 import 'package:web_dex/model/text_error.dart';
 
@@ -61,14 +60,18 @@ class NftsRepo {
       .toSet();
 
   Future<void> updateNft(List<NftBlockchains> chains) async {
+    final session = await _sdk.auth.captureSessionContext();
     // Filter to only chains whose parent coins are already activated
     final activatedChains = await getActivatedChains(chains);
     if (activatedChains.isEmpty) {
       _log.info('No NFT chains with activated parent coins');
       return;
     }
+    _sdk.auth.ensureSessionContextCurrent(session);
     await _enableNftAssets(activatedChains);
+    _sdk.auth.ensureSessionContextCurrent(session);
     final json = await _api.updateNftList(activatedChains);
+    _sdk.auth.ensureSessionContextCurrent(session);
     if (json['error'] != null) {
       _log.severe(json['error'] as String);
       throw ApiError(message: json['error'] as String);
@@ -76,14 +79,18 @@ class NftsRepo {
   }
 
   Future<List<NftToken>> getNfts(List<NftBlockchains> chains) async {
+    final session = await _sdk.auth.captureSessionContext();
     // Filter to only chains whose parent coins are already activated
     final activatedChains = await getActivatedChains(chains);
     if (activatedChains.isEmpty) {
       _log.info('No NFT chains with activated parent coins');
       return [];
     }
+    _sdk.auth.ensureSessionContextCurrent(session);
     await _enableNftAssets(activatedChains);
+    _sdk.auth.ensureSessionContextCurrent(session);
     final json = await _api.getNftList(activatedChains);
+    _sdk.auth.ensureSessionContextCurrent(session);
     final jsonError = json['error'] as String?;
     if (jsonError != null) {
       _log.severe(jsonError);
@@ -116,13 +123,17 @@ class NftsRepo {
 
   /// Activates the NFT protocol assets for [chains] through the SDK.
   ///
-  /// `NftActivationService` throws a bare aggregate `Exception`, which no
-  /// `on BaseError` arm can match, so it is converted here.
+  /// Policy and session failures remain typed; protocol failures are mapped
+  /// into the app's localized error presentation.
   Future<void> _enableNftAssets(List<NftBlockchains> chains) async {
     try {
       await _sdk.nftActivation.enableNftChains(
         chains.map((chain) => chain.nftAssetTicker()),
       );
+    } on WalletChangedDisconnectException {
+      rethrow;
+    } on ActivationPolicyException {
+      rethrow;
     } catch (e, s) {
       _log.severe('Failed to activate NFT assets for $chains', e, s);
       throw ApiError(message: LocaleKeys.somethingWrong.tr());
@@ -136,6 +147,7 @@ class NftsRepo {
   /// gate keyed on them would be empty on every first pass and would tell the
   /// user to enable a chain they already enabled.
   Future<NftChainActivation> resolveChains(List<NftBlockchains> chains) async {
+    final session = await _sdk.auth.captureSessionContext();
     final Set<String> enabled;
     final Map<AssetId, AssetActivationState> states;
     final List<String> intended;
@@ -147,7 +159,10 @@ class NftsRepo {
       enabled = await _sdk.assets.getEnabledCoins();
       states = _sdk.activationStates;
       // Intent only. Decides "spinner or placeholder"; never a tab.
-      intended = await _sdk.getWalletCoinIds();
+      intended = (await _sdk.walletAssets.load()).toList();
+      _sdk.auth.ensureSessionContextCurrent(session);
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (e, s) {
       _log.severe('Failed to read NFT chain activation state', e, s);
       throw TransportError(message: LocaleKeys.somethingWrong.tr());
@@ -198,7 +213,7 @@ class NftsRepo {
   ///
   /// A parent the NFT page brings up on its own is session-scoped: it stays out
   /// of the next login's set and out of the wallet coin list. A parent the
-  /// wallet already holds is activated normally - see [_isWalletCoin].
+  /// wallet already holds remains selected and keeps receiving SDK updates.
   Future<void> activateChain(NftBlockchains chain) async {
     final asset = _allowedParentAsset(chain);
     if (asset == null) {
@@ -206,22 +221,15 @@ class NftsRepo {
       _log.warning('Refusing to activate unsupported NFT chain $chain');
       throw ApiError(message: LocaleKeys.somethingWrong.tr());
     }
-    final isWalletCoin = await _isWalletCoin(asset);
     try {
-      await _coinsRepo.activateAssetsSync(
-        [asset],
-        // `false` suppresses the asset's activation broadcasts for the rest of
-        // the session, which keeps a browsed-only chain out of the wallet list.
-        // On a coin the wallet holds it would freeze a real row instead -
-        // reachable whenever a wallet coin's activation failed, which
-        // `resolveChains` reports as inactive and the tab offers to enable.
-        notifyListeners: isWalletCoin,
-        addToWalletMetadata: false,
-        // CoinsRepo's default of 15 is a background budget, ~105s of pure
-        // sleep. Someone is watching this one.
-        maxRetryAttempts: 3,
-        maxRetryDelay: const Duration(seconds: 2),
-      );
+      // Runtime availability is independent of the user's saved wallet list.
+      // This does not mutate selection or suppress another consumer's stream.
+      final result = await _sdk.activateAsset(asset);
+      result.throwIfFailed();
+    } on WalletChangedDisconnectException {
+      rethrow;
+    } on ActivationPolicyException {
+      rethrow;
     } on BaseError {
       rethrow;
     } catch (e, s) {
@@ -229,18 +237,6 @@ class NftsRepo {
       // [_enableNftAssets].
       _log.severe('Failed to activate ${asset.id.id} for $chain', e, s);
       throw ApiError(message: LocaleKeys.somethingWrong.tr());
-    }
-  }
-
-  /// Whether [asset] is already one of the wallet's own coins. Falls back to
-  /// `false` if the read fails, rather than failing an activation the user
-  /// asked for over a bookkeeping question.
-  Future<bool> _isWalletCoin(Asset asset) async {
-    try {
-      return (await _sdk.getWalletCoinIds()).contains(asset.id.id);
-    } catch (e, s) {
-      _log.warning('Could not read wallet coins for ${asset.id.id}', e, s);
-      return false;
     }
   }
 

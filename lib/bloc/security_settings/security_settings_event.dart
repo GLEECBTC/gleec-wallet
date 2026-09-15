@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 
 /// Base class for all security settings events.
@@ -26,7 +27,12 @@ class SeedConfirmEvent extends SecuritySettingsEvent {
 
 /// Event when the user has confirmed they saved their seed phrase.
 class SeedConfirmedEvent extends SecuritySettingsEvent {
-  const SeedConfirmedEvent();
+  const SeedConfirmedEvent({required this.session});
+
+  final AuthSessionContext session;
+
+  @override
+  List<Object> get props => [session];
 }
 
 /// Event to toggle visibility of seed words in the UI.

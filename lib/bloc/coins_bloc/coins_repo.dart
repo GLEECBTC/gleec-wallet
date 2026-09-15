@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' show NetworkImage;
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
     as kdf_rpc;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
     show ExponentialBackoff, retry;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -86,9 +87,23 @@ class CoinsRepo {
       sdkStates: _kdfSdk.watchActivationStates().expand(_coinsFromStates),
       sdkSnapshot: () => _coinsFromStates(_kdfSdk.activationStates),
     );
+    _selectionSubscription = _kdfSdk.walletAssets.changes.listen((_) {
+      _refreshWalletProjection();
+    });
+    _policySubscription = _tradingStatusService.statusStream.listen((_) {
+      _refreshWalletProjection();
+      for (final id in _balanceWatchers.keys.toList()) {
+        if (_tradingStatusService.isAssetBlocked(id)) {
+          unawaited(_balanceWatchers.remove(id)?.cancel());
+        }
+      }
+    });
   }
 
   late final CoinActivationStateBridge _activationBridge;
+  late final StreamSubscription<Set<String>> _selectionSubscription;
+  late final StreamSubscription<dynamic> _policySubscription;
+  final Set<AssetId> _visibleWalletAssets = {};
 
   /// Activation state of every coin, current state first then every change.
   ///
@@ -131,15 +146,42 @@ class CoinsRepo {
         AssetActivationStatus.active => CoinState.active,
         AssetActivationStatus.failed => null,
       };
-      if (coinState == null) continue;
+      if (coinState == null || !_isWalletAsset(state.assetId)) continue;
       final asset = _kdfSdk.assets.available[state.assetId];
       if (asset == null) continue;
       // An SDK-internal activation must not create a row for a geo-blocked
       // asset; CoinsState only filters NFT_* assets.
       if (_tradingStatusService.isAssetBlocked(asset.id)) continue;
+      _visibleWalletAssets.add(asset.id);
       coins.add(_assetToCoinWithoutAddress(asset).copyWith(state: coinState));
     }
     return coins;
+  }
+
+  void _refreshWalletProjection() {
+    for (final id in _visibleWalletAssets.toList()) {
+      if (_isWalletAsset(id) && !_tradingStatusService.isAssetBlocked(id)) {
+        continue;
+      }
+      _visibleWalletAssets.remove(id);
+      final asset = _kdfSdk.assets.available[id];
+      if (asset != null) {
+        _activationBridge.publishAppState(
+          _assetToCoinWithoutAddress(asset).copyWith(state: CoinState.inactive),
+        );
+      }
+    }
+    _activationBridge.republish(_kdfSdk.activationStates.keys);
+  }
+
+  bool _isWalletAsset(AssetId id) {
+    final selection = _kdfSdk.walletAssets.current;
+    if (selection.contains(id.id)) return true;
+    return selection.any(
+      (ticker) => _kdfSdk.assets
+          .findAssetsByConfigId(ticker)
+          .any((asset) => asset.id.parentId == id),
+    );
   }
 
   final KomodoDefiSdk _kdfSdk;
@@ -339,6 +381,7 @@ class CoinsRepo {
     // of the user's session and should be updated on a regular basis.
     _addressCache.clear();
     _balancesCache.clear();
+    _visibleWalletAssets.clear();
     _activationBridge.reset();
 
     // Cancel all balance watchers
@@ -357,6 +400,8 @@ class CoinsRepo {
     }
     _balanceWatchers.clear();
 
+    unawaited(_selectionSubscription.cancel());
+    unawaited(_policySubscription.cancel());
     unawaited(_activationBridge.dispose());
     balanceChanges.close();
   }
@@ -539,9 +584,12 @@ class CoinsRepo {
     Duration maxRetryDelay = const Duration(seconds: 10),
   }) async {
     final generation = _activationGeneration;
+    final session = await _kdfSdk.auth.captureSessionContext();
+    await _kdfSdk.walletAssets.load();
+    _kdfSdk.auth.ensureSessionContextCurrent(session);
     final walletScope = _ActivationWalletScope(
-      readUser: () => _kdfSdk.auth.currentUser,
-      authChanges: _kdfSdk.auth.authStateChanges,
+      auth: _kdfSdk.auth,
+      context: session,
       isSessionCurrent: () =>
           !_isDisposed && generation == _activationGeneration,
     );
@@ -578,7 +626,6 @@ class CoinsRepo {
       return;
     }
 
-    walletScope.observe(originalUser);
     walletScope.check();
     final requestedIds = assets.map((asset) => asset.id).toList();
     if (notifyListeners) {
@@ -587,13 +634,11 @@ class CoinsRepo {
       // an asset that is *already* active - re-enabling a coin from the coins
       // manager would otherwise never produce a row.
       releaseActivationBroadcasts(requestedIds);
-    } else {
-      // A preview or side-effect activation: keep it out of the wallet list.
-      // The caller releases when the user commits to it.
-      suppressActivationBroadcasts(requestedIds);
     }
+    // Temporary consumers do not alter wallet selection or another consumer's
+    // notification policy. SDK snapshots are projected through wallet selection.
 
-    final expectedWalletId = walletScope.walletId!;
+    final expectedWalletId = walletScope.context.walletId;
     final walletType = originalUser.wallet.config.type;
     if (walletType == WalletType.trezor) {
       final unsupportedSiaAssets = assets.where(
@@ -676,9 +721,9 @@ class CoinsRepo {
       // Ensure the wallet metadata is updated with the assets before activation
       // This is to ensure that the wallet metadata is always in sync with the assets
       // being activated, even if activation fails.
-      await _addAssetsToWalletMetdata(
-        assets.map((asset) => asset.id),
-        expectedWalletId: expectedWalletId,
+      await _kdfSdk.walletAssets.add(
+        assets.map((asset) => asset.id.id),
+        expectedSession: walletScope.context,
       );
     }
 
@@ -729,17 +774,17 @@ class CoinsRepo {
               // (deliberately shorter than this one), which fails the attempt
               // and clears the entry so this retry starts fresh. Keep this as
               // the outer backstop.
-              final didActivate = await _kdfSdk
-                  .ensureAssetActivated(asset)
+              final result = await _kdfSdk
+                  .activateAsset(asset)
                   .timeout(_activationAttemptTimeout);
               await walletScope.refresh();
               walletScope.check();
-              if (!didActivate) {
-                throw Exception('Activation failed for ${asset.id.id}');
-              }
+              result.throwIfFailed();
             },
             maxAttempts: maxRetryAttempts,
-            shouldRetry: (error) => error is! WalletChangedDisconnectException,
+            shouldRetry: (error) =>
+                error is! WalletChangedDisconnectException &&
+                error is! ActivationPolicyException,
             backoffStrategy: ExponentialBackoff(
               initialDelay: initialRetryDelay,
               maxDelay: maxRetryDelay,
@@ -759,8 +804,22 @@ class CoinsRepo {
           );
         }
         walletScope.check();
+        if (_tradingStatusService.isAssetBlocked(asset.id)) {
+          throw ActivationPolicyException(
+            asset.id,
+            ActivationPolicyStatus.ready,
+          );
+        }
         _markActiveAndSubscribe(asset, coin, notifyListeners: notifyListeners);
       } on WalletChangedDisconnectException {
+        rethrow;
+      } on ActivationPolicyException {
+        walletScope.check();
+        if (notifyListeners) {
+          // CoinsManager calls this repository directly. Clear its optimistic
+          // activating state so a later ready policy can retry the selection.
+          _broadcastAsset(coin.copyWith(state: CoinState.suspended));
+        }
         rethrow;
       } catch (e, s) {
         await walletScope.refresh();
@@ -1598,51 +1657,27 @@ class CoinsRepo {
   }
 }
 
-/// One activation request, including its retry delays and ZHTLC configuration.
-/// Auth events invalidate it synchronously, including sign-out/sign-in with the
-/// same ID; fresh reads cover a switch whose stream event has not arrived yet.
+/// Keeps app-only lifetime cancellation separate from SDK session ownership.
 class _ActivationWalletScope {
   _ActivationWalletScope({
-    required this.readUser,
-    required Stream<KdfUser?> authChanges,
+    required this.auth,
+    required this.context,
     required this.isSessionCurrent,
-  }) {
-    _subscription = authChanges.listen(observe);
-  }
+  });
 
-  final Future<KdfUser?> Function() readUser;
+  final KomodoDefiLocalAuth auth;
+  final AuthSessionContext context;
   final bool Function() isSessionCurrent;
-  late final StreamSubscription<KdfUser?> _subscription;
-  WalletId? walletId;
-  bool _cancelled = false;
-
-  void observe(KdfUser? user) {
-    final previous = walletId;
-    final next = user?.walletId;
-    if (next == null) {
-      _cancelled = true;
-    } else if (previous == null) {
-      walletId = next;
-    } else if (isSameStableWallet(previous, next)) {
-      walletId = preferEnrichedWalletIdentity(previous, next);
-    } else if (!isDegradedWalletIdentity(previous, next)) {
-      _cancelled = true;
-    }
-  }
 
   void check() {
-    if (_cancelled || !isSessionCurrent()) {
-      throw const WalletChangedDisconnectException(
-        'Wallet changed during asset activation',
-      );
-    }
+    auth.ensureSessionContextCurrent(context);
+    if (!isSessionCurrent()) throw const AuthSessionChangedException();
   }
 
   Future<void> refresh() async {
-    check();
-    observe(await readUser());
+    await auth.captureSessionContext();
     check();
   }
 
-  Future<void> close() => _subscription.cancel();
+  Future<void> close() async {}
 }

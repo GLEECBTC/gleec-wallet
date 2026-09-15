@@ -1,14 +1,8 @@
 # Diagnostic privacy and private-key export
 
-This document describes the diagnostic disclosure and private-key export
-remediation for the 0.9.7 release candidate, updated after the September 14
-review to disable TRON/TRC20 private-key export until KDF supports it through
-`get_private_keys`. The SDK's temporary active-key workaround has been removed.
-The original implementation branches, commits and historical validation are
-recorded in [the validation record](PRIVATE_KEY_EXPORT_VALIDATION.md).
-
-The verified wallet Delete fix is preserved. KDF remains
-`3.1.0-beta_f3efd2c`, source `f3efd2ca10420f2982fa127dde84dcc17891f577`.
+This document defines the maintained diagnostic and private-key export
+boundaries. TRON/TRC20 export remains unavailable until the engine implements
+it through `get_private_keys`.
 
 ## SDK boundary
 
@@ -118,14 +112,9 @@ failure, two-request concurrency, explicit range semantics, authentication
 transitions, and TRON/TRC20 rejection without RPC calls. The tests and local-KDF execution wrapper for the removed active-key
 workaround have been deleted.
 
-An independent read-only security reviewer examined the original SDK sources
-and app boundaries before the September 14 removal. Review identified and
-drove regressions for actual WASM fallback logging, logout invalidation timing,
-mutable request selection, cross-manager capabilities, parent activation states,
-final delivery checks, browser delivery
-reporting, asset exclusions, stale QR requests and feedback screenshot capture
-timing. Final validation results and reviewed commit identifiers are recorded in
-the [validation record](PRIVATE_KEY_EXPORT_VALIDATION.md).
+Keep per-revision validation logs and independent review findings with release
+review artifacts outside this checkout. Run the current test surfaces before
+making platform verification claims; historical results do not validate changes.
 
 ### Limits
 

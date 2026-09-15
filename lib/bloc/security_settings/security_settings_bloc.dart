@@ -44,17 +44,22 @@ class SecuritySettingsBloc
   /// The Komodo DeFi SDK instance for authentication operations.
   /// This is optional to support testing scenarios.
   final KomodoDefiSdk? _kdfSdk;
+  int _backupSaveRevision = 0;
 
   /// Handles resetting the security settings to initial state.
   void _onReset(ResetEvent event, Emitter<SecuritySettingsState> emit) {
+    _backupSaveRevision++;
     emit(SecuritySettingsState.initialState());
   }
 
   /// Handles showing the seed phrase backup screen.
   void _onShowSeed(ShowSeedEvent event, Emitter<SecuritySettingsState> emit) {
+    _backupSaveRevision++;
     final newState = state.copyWith(
       step: SecuritySettingsStep.seedShow,
       showSeedWords: false,
+      isSavingBackup: false,
+      clearBackupSaveError: true,
       // Entering the flow is the honest start of "how long did backing up
       // take" - the confirmation screen alone would omit the reading and
       // writing-down that is most of the work.
@@ -93,11 +98,47 @@ class SecuritySettingsBloc
     SeedConfirmedEvent event,
     Emitter<SecuritySettingsState> emit,
   ) async {
-    final newState = state.copyWith(
-      step: SecuritySettingsStep.seedSuccess,
-      showSeedWords: false,
-    );
-    emit(newState);
+    if (state.isSavingBackup) return;
+    final sdk = _kdfSdk;
+    if (sdk == null) return;
+    final revision = ++_backupSaveRevision;
+    emit(state.copyWith(isSavingBackup: true, clearBackupSaveError: true));
+    try {
+      await sdk.auth.updateMetadataForSession(event.session, {
+        'has_backup': true,
+      });
+      if (emit.isDone || revision != _backupSaveRevision) return;
+      sdk.auth.ensureSessionContextCurrent(event.session);
+      emit(
+        state.copyWith(
+          step: SecuritySettingsStep.seedSuccess,
+          showSeedWords: false,
+          isSavingBackup: false,
+        ),
+      );
+    } on AuthSessionChangedException {
+      if (!emit.isDone && revision == _backupSaveRevision) {
+        emit(SecuritySettingsState.initialState());
+      }
+    } on AuthIdentityUnavailableException {
+      if (!emit.isDone && revision == _backupSaveRevision) {
+        emit(
+          state.copyWith(
+            isSavingBackup: false,
+            backupSaveError: SeedBackupSaveError.identityUnavailable,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!emit.isDone && revision == _backupSaveRevision) {
+        emit(
+          state.copyWith(
+            isSavingBackup: false,
+            backupSaveError: SeedBackupSaveError.persistenceFailed,
+          ),
+        );
+      }
+    }
   }
 
   /// Handles seed phrase being copied to clipboard.

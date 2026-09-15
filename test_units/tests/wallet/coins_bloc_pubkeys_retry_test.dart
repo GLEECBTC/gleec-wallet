@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
+import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
 import 'package:web_dex/model/coin.dart';
 
 Map<String, dynamic> _utxoConfig({String coin = 'KMD'}) => {
@@ -177,6 +178,16 @@ class _FakeCoinsRepo implements CoinsRepo {
 }
 
 class _FakeTradingStatusService implements TradingStatusService {
+  @override
+  Stream<AppGeoStatus> get statusStream => const Stream.empty();
+  @override
+  bool get isActivationReady => true;
+  @override
+  Map<String, T> filterAllowedAssetsMap<T>(
+    Map<String, T> assets,
+    AssetId Function(T) id,
+  ) => assets;
+
   @override
   Future<void> get initialStatusReady async {}
 

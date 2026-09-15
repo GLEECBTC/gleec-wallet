@@ -16,6 +16,7 @@ import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 import 'package:web_dex/views/wallets_manager/widgets/hardware_wallets_manager.dart';
@@ -70,14 +71,28 @@ class _FakeLegalDocumentsRepository implements LegalDocumentsRepository {
   final List<String> recordedSurfaces = [];
 
   @override
-  Future<bool> hasAcceptedCurrentTerms() async => acceptanceCheck ?? accepted;
+  Stream<void> get changes => const Stream.empty();
+
+  @override
+  Future<void> refreshConsentDocuments() async {}
+
+  @override
+  Future<LegalConsentSnapshot> loadConsentSnapshot() async =>
+      LegalConsentSnapshot(documents: {}, documentShas: {});
+
+  @override
+  Future<bool> hasAcceptedCurrentTerms({
+    LegalConsentSnapshot? snapshot,
+  }) async => acceptanceCheck ?? accepted;
 
   @override
   Future<LegalAcceptance?> readAcceptance() async => null;
 
   @override
-  Future<void> recordAcceptance({required String surface}) async =>
-      recordedSurfaces.add(surface);
+  Future<void> recordAcceptance({
+    required String surface,
+    LegalConsentSnapshot? snapshot,
+  }) async => recordedSurfaces.add(surface);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

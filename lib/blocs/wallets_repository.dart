@@ -253,7 +253,16 @@ class WalletsRepository {
     }
   }
 
-  Future<void> deleteWallet(Wallet wallet, {required String password}) async {
+  Future<WalletDeletionReview?> prepareWalletDeletion(Wallet wallet) async =>
+      wallet.isLegacyWallet || wallet.isNativeLegacyWallet
+      ? null
+      : _kdfSdk.walletDeletion.prepare(wallet.name);
+
+  Future<WalletDeletionResult> deleteWallet(
+    Wallet wallet, {
+    required String password,
+    WalletDeletionReview? acknowledgedReview,
+  }) async {
     log(
       'Deleting a wallet ${wallet.id}',
       path: 'wallet_bloc => deleteWallet',
@@ -280,7 +289,7 @@ class WalletsRepository {
         );
         _emitCachedWalletsIfAvailable();
       }
-      return;
+      return const WalletDeletionResult(WalletDeletionStatus.deleted);
     }
 
     if (wallet.isLegacyWallet) {
@@ -294,17 +303,22 @@ class WalletsRepository {
             candidate.legacySource?.kind == wallet.legacySource?.kind,
       );
       _emitCachedWalletsIfAvailable();
-      return;
+      return const WalletDeletionResult(WalletDeletionStatus.deleted);
     }
 
     try {
-      await _kdfSdk.auth.deleteWallet(
-        walletName: wallet.name,
+      if (acknowledgedReview == null ||
+          acknowledgedReview.walletId.name != wallet.name) {
+        throw const WalletDeletionReviewRequiredException();
+      }
+      final result = await _kdfSdk.walletDeletion.delete(
+        acknowledgedReview: acknowledgedReview,
         password: password,
       );
+      if (result.status != WalletDeletionStatus.deleted) return result;
       _cachedWallets?.removeWhere((w) => w.name == wallet.name);
       _emitCachedWalletsIfAvailable();
-      return;
+      return result;
     } catch (e) {
       log(
         'Failed to delete wallet: $e',

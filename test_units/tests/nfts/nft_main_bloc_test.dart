@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../helpers/runtime_auth_fixture.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 // `KomodoDefiSdk.auth` is typed as the concrete `KomodoDefiLocalAuth`, which
 // the SDK barrel does not re-export, so faking it means importing the package
@@ -423,6 +425,76 @@ void testNftMainBloc() {
     });
   });
 
+  group('NftMainBloc session isolation', () {
+    final events = <String, NftMainEvent>{
+      'full update': const NftMainChainUpdateRequested(),
+      'tab change': const NftMainTabChanged(NftBlockchains.eth),
+      'refresh': const NftMainChainNftsRefreshed(NftBlockchains.eth),
+    };
+    for (final entry in events.entries) {
+      for (final fail in [false, true]) {
+        test(
+          '${entry.key} discards late ${fail ? 'failure' : 'success'} after reset',
+          () async {
+            final repo = _FakeNftsRepo()
+              ..activatedChains = [NftBlockchains.eth];
+            final bloc = NftMainBloc(repo: repo, sdk: _FakeSdk(_FakeAuth()));
+            addTearDown(bloc.close);
+            bloc.add(const NftMainChainUpdateRequested());
+            await bloc.stream.firstWhere((state) => state.isInitialized);
+            final started = Completer<void>();
+            final result = Completer<List<NftToken>>();
+            repo.onGetNfts = (_) {
+              if (!started.isCompleted) started.complete();
+              return result.future;
+            };
+            bloc.add(entry.value);
+            await started.future;
+            bloc.add(const NftMainResetRequested());
+            await bloc.stream.firstWhere(
+              (state) => state == NftMainState.initial(),
+            );
+            if (fail) {
+              result.completeError(ApiError(message: 'old wallet failure'));
+            } else {
+              result.complete([_token(NftBlockchains.eth)]);
+            }
+            await Future<void>.delayed(Duration.zero);
+            expect(bloc.state, NftMainState.initial());
+          },
+        );
+      }
+      test(
+        '${entry.key} does not start a fetch after reset during auth',
+        () async {
+          final auth = _FakeAuth();
+          final repo = _FakeNftsRepo()..activatedChains = [NftBlockchains.eth];
+          final bloc = NftMainBloc(repo: repo, sdk: _FakeSdk(auth));
+          addTearDown(bloc.close);
+          bloc.add(const NftMainChainUpdateRequested());
+          await bloc.stream.firstWhere((state) => state.isInitialized);
+          final gate = Completer<bool>();
+          auth.signInCheck = gate.future;
+          var fetches = 0;
+          repo.onGetNfts = (_) async {
+            fetches++;
+            return [];
+          };
+          bloc.add(entry.value);
+          await Future<void>.delayed(Duration.zero);
+          bloc.add(const NftMainResetRequested());
+          await bloc.stream.firstWhere(
+            (state) => state == NftMainState.initial(),
+          );
+          gate.complete(true);
+          await Future<void>.delayed(Duration.zero);
+          expect(fetches, 0);
+          expect(bloc.state, NftMainState.initial());
+        },
+      );
+    }
+  });
+
   group('NftMainBloc reactivity', () {
     test('an activation-state change recomputes the chain list', () async {
       final repo = _FakeNftsRepo()..activatedChains = [];
@@ -506,6 +578,7 @@ class _FakeNftsRepo implements NftsRepo {
   List<NftBlockchains> unresolvedChains = [];
   List<NftToken> nftsToReturn = [];
   Object? errorToThrow;
+  Future<List<NftToken>> Function(List<NftBlockchains>)? onGetNfts;
 
   /// Every activateChain call, in order. Assert the length for dedupe tests.
   final List<NftBlockchains> activateCalls = [];
@@ -542,6 +615,7 @@ class _FakeNftsRepo implements NftsRepo {
 
   @override
   Future<List<NftToken>> getNfts(List<NftBlockchains> chains) async {
+    if (onGetNfts != null) return onGetNfts!(chains);
     if (errorToThrow != null) throw errorToThrow!;
     // The real repo passes `chains` to get_nft_list, so a response only ever
     // carries the chains that were asked for. Returning everything regardless
@@ -558,8 +632,19 @@ class _FakeNftsRepo implements NftsRepo {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _FakeAuth implements KomodoDefiLocalAuth {
+class _FakeAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
   Future<bool>? signInCheck;
+  @override
+  Future<KdfUser?> get currentUser async {
+    if (!(await isSignedIn())) return null;
+    return KdfUser(
+      walletId: WalletId.fromName(
+        'NFT wallet',
+        const AuthOptions(derivationMethod: DerivationMethod.iguana),
+      ),
+      isBip39Seed: true,
+    );
+  }
 
   @override
   Future<bool> isSignedIn() => signInCheck ?? Future.value(true);
@@ -584,6 +669,9 @@ class _FakeSdk implements KomodoDefiSdk {
   @override
   final KomodoDefiLocalAuth auth;
 
+  @override
+  final ActivationPolicy activationPolicy = ActivationPolicy();
+
   final Stream<Map<AssetId, AssetActivationState>> _activationStates;
 
   @override
@@ -593,3 +681,5 @@ class _FakeSdk implements KomodoDefiSdk {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+void main() => testNftMainBloc();
