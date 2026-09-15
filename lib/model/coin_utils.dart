@@ -255,7 +255,7 @@ bool isParentCoin(CoinType type, String symbol) {
     case CoinType.hrc20:
       return symbol == 'ONE';
     case CoinType.plg20:
-      return symbol == 'MATIC';
+      return symbol == 'POL';
     case CoinType.mvr20:
       return symbol == 'MOVR';
     case CoinType.krc20:

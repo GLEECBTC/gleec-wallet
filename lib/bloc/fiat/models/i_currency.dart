@@ -128,6 +128,13 @@ class CryptoCurrency extends ICurrency {
       return symbol;
     }
 
+    // The Polygon platform coin is POL in our coins configuration. Banxa
+    // already reports it as POL; older provider data still says MATIC. Both
+    // have to resolve to the ticker the SDK can look up.
+    if (chainType == CoinType.plg20 && (symbol == 'POL' || symbol == 'MATIC')) {
+      return 'POL';
+    }
+
     // TODO: look into a better way to do this when migrating to the SDK
     // Providers return "ETH" with chain type "ERC20", resultning in abbr of
     // "ETH-ERC20", which is not how it is stored in our coins configuration
@@ -142,7 +149,6 @@ class CryptoCurrency extends ICurrency {
         (chainType == CoinType.ftm20 && symbol == 'FTM') ||
         (chainType == CoinType.arb20 && symbol == 'ARB') ||
         (chainType == CoinType.hrc20 && symbol == 'ONE') ||
-        (chainType == CoinType.plg20 && symbol == 'MATIC') ||
         (chainType == CoinType.mvr20 && symbol == 'MOVR') ||
         (chainType == CoinType.krc20 && symbol == 'KCS')) {
       return symbol;

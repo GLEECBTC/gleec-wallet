@@ -156,7 +156,7 @@ const Set<String> excludedAssetList = {
   'NFT_AVAX',
   'NFT_BNB',
   'NFT_FTM',
-  'NFT_MATIC',
+  'NFT_POL',
 };
 
 /// Some coins returned by the Banxa API are returning errors when attempting

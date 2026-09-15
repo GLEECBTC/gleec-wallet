@@ -56,7 +56,7 @@ class NftsRepo {
   final KomodoDefiSdk _sdk;
   final TradingStatusService _tradingStatusService;
 
-  static final Set<String> _parentTickers = NftBlockchains.values
+  static final Set<String> _parentTickers = NftBlockchains.supportedValues
       .map((chain) => chain.coinAbbr())
       .toSet();
 
@@ -191,10 +191,10 @@ class NftsRepo {
   /// Enables the PARENT coin behind [chain] so its NFTs become fetchable.
   ///
   /// Deliberately NOT reachable from [getNfts]/[updateNft]. Those run on a 60s
-  /// timer across `NftBlockchains.values`, so activating from inside them would
-  /// restore the eager all-chain activation removed in 7953dffe. Only an
-  /// explicit user gesture reaches this; the `NFT_*` asset is still activated
-  /// lazily by [_enableNftAssets] once the parent is up.
+  /// timer across `NftBlockchains.supportedValues`, so activating from inside
+  /// them would restore the eager all-chain activation removed in 7953dffe.
+  /// Only an explicit user gesture reaches this; the `NFT_*` asset is still
+  /// activated lazily by [_enableNftAssets] once the parent is up.
   ///
   /// A parent the NFT page brings up on its own is session-scoped: it stays out
   /// of the next login's set and out of the wallet coin list. A parent the

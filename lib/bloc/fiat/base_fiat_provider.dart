@@ -132,6 +132,8 @@ abstract class BaseFiatProvider {
       case CoinType.hrc20:
         return 'HARMONY';
       case CoinType.plg20:
+        // Banxa (`blockchains[].code`) and Ramp (`chain`) both still name the
+        // Polygon network MATIC even though the coin itself is now POL.
         return 'MATIC';
       case CoinType.mvr20:
         return 'MOVR';
@@ -249,6 +251,7 @@ abstract class BaseFiatProvider {
       case 'HARMONY':
         return CoinType.hrc20;
       case 'MATIC':
+      case 'POL':
         return CoinType.plg20;
       case 'MOVR':
         return CoinType.mvr20;

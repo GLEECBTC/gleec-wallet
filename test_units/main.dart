@@ -35,6 +35,7 @@ import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
 import 'tests/nfts/nft_main_bloc_test.dart' as nft_main_bloc_test;
 import 'tests/nfts/nft_main_repo_test.dart' as nft_main_repo_test;
+import 'tests/nfts/nft_supported_chains_test.dart' as nft_supported_chains_test;
 import 'tests/nfts/nft_tabs_widget_test.dart' as nft_tabs_widget_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
@@ -252,6 +253,7 @@ void main() {
   testWalletOperationIdentity();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();
+  nft_supported_chains_test.testNftSupportedChains();
   nft_tabs_widget_test.testNftTabsWidget();
   testCoinsBlocActivationRecovery();
   testCoinsBlocPubkeysRetry();

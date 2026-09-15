@@ -34,7 +34,7 @@ double? getTotal24Change(Iterable<Coin>? coins, KomodoDefiSdk sdk) {
       final balance = coin.lastKnownBalance(sdk)?.spendable.toDouble() ?? 0;
       if (balance == 0) return prev;
 
-      // Last known USD price is failing for FTM, MATIC, so use fallback price
+      // Last known USD price is failing for FTM, POL, so use fallback price
       // embedded in the coin object for now until backup/fallback price
       // providers are copied over to the SDK
       final coinPrice =
