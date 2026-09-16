@@ -57,7 +57,13 @@ Future<void> testCexPrices(WidgetTester tester) async {
     searchField: searchCoinsField,
   );
 
-  expect(hasKmdBep20, isTrue);
+  expect(
+    hasKmdBep20,
+    isTrue,
+    reason:
+        'KMD-BEP20 must reach the wallet list after being added; it did '
+        'not appear, so its activation never completed',
+  );
 
   // Prices on the current wallet list use TrendPercentageText. The old
   // fiat-price key belongs to coin details, which this test has not opened.

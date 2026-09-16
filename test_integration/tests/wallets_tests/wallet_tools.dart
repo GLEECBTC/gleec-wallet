@@ -140,6 +140,7 @@ Future<bool> filterAsset(
   required Finder assetScrollView,
   required String text,
   required Finder searchField,
+  Duration timeout = const Duration(seconds: 60),
 }) async {
   print('🔍 FILTER ASSET: Starting filter with text: $text');
 
@@ -147,21 +148,33 @@ Future<bool> filterAsset(
   print('🔍 FILTER ASSET: Entered filter text');
   await tester.pumpAndSettle();
 
-  try {
-    await tester.dragUntilVisibleNamed(
-      asset,
-      assetScrollView,
-      const Offset(0, -50),
-      description: 'the "$text" row in the filtered wallet list',
-    );
-    expect(asset, findsOneWidget);
-  } on TestFailure {
-    print('🔍 FILTER ASSET: Asset not found after filtering');
-    await pause(msg: '**Error** filterAsset([$asset, $text])');
-    return false;
+  // An asset added moments ago only joins the wallet list once its activation
+  // completes, which outlasts a scroll on a cold CI network. Retry until the
+  // row appears rather than reading the list once and calling it absent.
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    try {
+      await tester.dragUntilVisibleNamed(
+        asset,
+        assetScrollView,
+        const Offset(0, -50),
+        description: 'the "$text" row in the filtered wallet list',
+      );
+      expect(asset, findsOneWidget);
+      print('🔍 FILTER ASSET: Successfully filtered asset');
+      return true;
+    } on TestFailure {
+      if (!DateTime.now().isBefore(deadline)) {
+        print(
+          '🔍 FILTER ASSET: Asset not found after filtering for '
+          '${timeout.inSeconds}s',
+        );
+        await pause(msg: '**Error** filterAsset([$asset, $text])');
+        return false;
+      }
+      await tester.pumpNFrames(10);
+    }
   }
-  print('🔍 FILTER ASSET: Successfully filtered asset');
-  return true;
 }
 
 Future<void> enterText(
