@@ -122,6 +122,13 @@ Future<void> addAsset(
   print('🔍 ADD ASSET: Scrolled to make asset visible');
   await tester.tapAndPump(asset);
   print('🔍 ADD ASSET: Tapped on asset');
+  // Unlike removal, adding never checked that the tap landed, so a mistargeted
+  // row looked identical to a coin that failed to activate later on.
+  expect(
+    _assetIsSelected(tester, asset),
+    isTrue,
+    reason: 'Tapping the "$search" row must select it for activation',
+  );
 
   try {
     expect(switchButton, findsOneWidget);
