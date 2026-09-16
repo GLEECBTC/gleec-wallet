@@ -24,7 +24,12 @@ Future<void> removeAsset(
   final searchField = find.byKey(const Key('coins-manager-search-field'));
   expect(list, findsOneWidget);
   await enterText(tester, finder: searchField, text: search);
-  await tester.dragUntilVisible(asset, list, const Offset(0, -50));
+  await tester.dragUntilVisibleNamed(
+    asset,
+    list,
+    const Offset(0, -50),
+    description: 'the "$search" row being removed from the coins manager',
+  );
   expect(asset, findsOneWidget);
   expect(
     _assetIsSelected(tester, asset),
@@ -108,7 +113,12 @@ Future<void> addAsset(
   await enterText(tester, finder: searchCoinsField, text: search);
   print('🔍 ADD ASSET: Entered search text: $search');
 
-  await tester.dragUntilVisible(asset, list, const Offset(-250, 0));
+  await tester.dragUntilVisibleNamed(
+    asset,
+    list,
+    const Offset(-250, 0),
+    description: 'the "$search" row being added in the coins manager',
+  );
   print('🔍 ADD ASSET: Scrolled to make asset visible');
   await tester.tapAndPump(asset);
   print('🔍 ADD ASSET: Tapped on asset');
@@ -138,7 +148,12 @@ Future<bool> filterAsset(
   await tester.pumpAndSettle();
 
   try {
-    await tester.dragUntilVisible(asset, assetScrollView, const Offset(0, -50));
+    await tester.dragUntilVisibleNamed(
+      asset,
+      assetScrollView,
+      const Offset(0, -50),
+      description: 'the "$text" row in the filtered wallet list',
+    );
     expect(asset, findsOneWidget);
   } on TestFailure {
     print('🔍 FILTER ASSET: Asset not found after filtering');

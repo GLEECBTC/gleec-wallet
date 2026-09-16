@@ -26,23 +26,41 @@ void walletsWidgetTests(
   return testWidgets(
     'Run wallet tests:',
     (WidgetTester tester) async {
-      await reportingFailure(binding, 'wallets', () async {
+      // Each stage reports under its own key so a failure names the phase it
+      // came from: the suite is a single test case, and a minified web stack
+      // trace cannot distinguish them.
+      await reportingFailure(binding, 'startup', () async {
         tester.testTextInput.register();
         await app.main();
         await tester.pumpAndSettle();
-
         await acceptAlphaWarning(tester);
-        await restoreWalletToTest(tester);
-        await testCoinIcons(tester);
-        await testActivateCoins(tester);
-        await testCexPrices(tester);
-        await testWithdraw(tester);
-        await testFilters(tester);
-
-        // Disabled until the bitrefill feature is re-enabled
-        // await tester.pumpAndSettle();
-        // await testBitrefillIntegration(tester);
       });
+      await reportingFailure(
+        binding,
+        'restore_wallet',
+        () => restoreWalletToTest(tester),
+      );
+      await reportingFailure(
+        binding,
+        'coin_icons',
+        () => testCoinIcons(tester),
+      );
+      await reportingFailure(
+        binding,
+        'activate_coins',
+        () => testActivateCoins(tester),
+      );
+      await reportingFailure(
+        binding,
+        'cex_prices',
+        () => testCexPrices(tester),
+      );
+      await reportingFailure(binding, 'withdraw', () => testWithdraw(tester));
+      await reportingFailure(binding, 'filters', () => testFilters(tester));
+
+      // Disabled until the bitrefill feature is re-enabled
+      // await tester.pumpAndSettle();
+      // await testBitrefillIntegration(tester);
     },
     semanticsEnabled: false,
     skip: skip,
