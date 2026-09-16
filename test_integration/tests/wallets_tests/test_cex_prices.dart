@@ -55,6 +55,11 @@ Future<void> testCexPrices(WidgetTester tester) async {
     asset: kmdBep20CoinActive,
     text: kmdBep20ByTicker,
     searchField: searchCoinsField,
+    // Enabling a coin activates it through CoinsRepo.activateCoinsSync, which
+    // retries 15 times with a backoff capped at 10s - about two minutes in the
+    // worst case - and the row only joins the list once that settles. Allow
+    // the whole budget so a slow CI activation is not read as a missing coin.
+    timeout: const Duration(minutes: 3),
   );
 
   expect(
