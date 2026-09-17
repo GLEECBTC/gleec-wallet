@@ -144,7 +144,6 @@ Future<void> testMakerOrder(WidgetTester tester) async {
 
 Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   final walletTab = find.byKeyName('main-menu-wallet');
-  final coinsList = find.byKey(const Key('wallet-page-coins-list'));
   final docItem = find.byKeyName('coins-manager-list-item-doc');
   final docCoinActive = find.byKeyName('coin-list-item-doc');
   final docCoinBalance = find.byKeyName('coin-balance-asset-doc');
@@ -188,11 +187,10 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   await tester.tap(walletTab);
   await tester.pumpAndSettle();
 
-  await tester.dragUntilVisible(
-    coinsList,
-    walletPageScrollView,
-    const Offset(0, -50),
-  );
+  // The wallet list scrolls straight to the MARTY row. An earlier scroll to
+  // `wallet-page-coins-list` was dropped: that key belongs to KnownAssetsList,
+  // which nothing renders any more, so the drag could only ever exhaust its
+  // iterations and throw.
   await tester.dragUntilVisibleWithin(
     martyCoinActive,
     walletPageScrollView,
