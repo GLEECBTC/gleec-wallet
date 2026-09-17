@@ -188,9 +188,8 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   // The wallet list scrolls straight to the MARTY row. An earlier scroll to
-  // `wallet-page-coins-list` was dropped: that key belongs to KnownAssetsList,
-  // which nothing renders any more, so the drag could only ever exhaust its
-  // iterations and throw.
+  // `wallet-page-coins-list` was dropped along with the widget that owned that
+  // key, so the drag could only ever exhaust its iterations and throw.
   await tester.dragUntilVisibleWithin(
     martyCoinActive,
     walletPageScrollView,
