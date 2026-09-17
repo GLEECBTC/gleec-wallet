@@ -96,11 +96,18 @@ jobs:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHROME_EXECUTABLE: ${{ matrix.browser == 'chrome' && steps.setup_chrome.outputs.chrome-path || '' }}
         run: |
+          # Runners hold no geo policy credential and cannot reach the policy
+          # service, so the lookup fails and the activation gate defers every
+          # asset: a coin enabled by a test never activates and never reaches
+          # the wallet list. These suites exercise wallet flows, not region
+          # blocking. This define lives only in this integration-test build -
+          # release builds keep the gate and are unaffected.
           dart run_integration_tests.dart \
             -d ${{ matrix.display }} \
             -b ${{ matrix.resolution }} \
             -n ${{ matrix.browser }} \
-            -m ${{ matrix.mode }}
+            -m ${{ matrix.mode }} \
+            --dart-define GEO_BLOCK=disabled
 
       # Post-test steps (upload logs, coverage, and failure check)
       - name: Upload driver logs
