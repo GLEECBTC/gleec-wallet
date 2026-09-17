@@ -49,7 +49,14 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   final Finder makeOrderConfirmButton =
       find.byKey(const Key('make-order-confirm-button'));
   final Finder orderListItem = find.byType(OrderItem);
-  final Finder orderUuidWidget = find.byKey(const Key('maker-order-uuid'));
+  // The details page renders the id through CopiedText under a `uuid-<id>`
+  // key, so match that prefix. The old fixed `maker-order-uuid` key is not
+  // built by anything any more.
+  final Finder orderUuidWidget = find.byWidgetPredicate(
+    (widget) =>
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value.startsWith('uuid-'),
+  );
 
   await useFaucetIfBalanceInsufficient(tester);
 
@@ -136,10 +143,15 @@ Future<void> testMakerOrder(WidgetTester tester) async {
 
   // Find order UUID on maker order details page
   expect(orderUuidWidget, findsOneWidget);
-  truncatedUuid = (orderUuidWidget.evaluate().single.widget as Text).data;
+  final uuidKey =
+      orderUuidWidget.evaluate().single.widget.key! as ValueKey<String>;
+  truncatedUuid = uuidKey.value.substring('uuid-'.length);
   print('🔍 MAKER ORDER: Found order UUID: $truncatedUuid');
-  expect(truncatedUuid != null, isTrue);
-  expect(truncatedUuid?.isNotEmpty, isTrue);
+  expect(
+    truncatedUuid,
+    isNotEmpty,
+    reason: 'The order details page must render the order id',
+  );
 }
 
 Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
