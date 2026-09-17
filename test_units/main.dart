@@ -58,6 +58,8 @@ import 'tests/fiat/fiat_default_preference_test.dart'
 import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
+import 'tests/wallet/activated_coin_id_migration_test.dart'
+    as activated_coin_id_migration_test;
 import 'tests/nfts/nft_main_bloc_test.dart' as nft_main_bloc_test;
 import 'tests/nfts/nft_main_repo_test.dart' as nft_main_repo_test;
 import 'tests/nfts/nft_supported_chains_test.dart' as nft_supported_chains_test;
@@ -291,6 +293,7 @@ void main() {
   testCoinActivationStateBridge();
   testAuthBloc();
   testWalletOperationIdentity();
+  activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();
   nft_supported_chains_test.testNftSupportedChains();

@@ -8,6 +8,32 @@ import 'package:web_dex/model/wallet.dart';
 
 final Logger _walletMetadataLog = Logger('KdfAuthMetadataExtension');
 
+/// Config IDs that upstream renamed, mapped to their current spelling.
+///
+/// `activated_coins` stores raw config IDs, and a stored ID that no longer
+/// names an asset is silently skipped — so without this a wallet that held
+/// Polygon before the MATIC -> POL rename would simply lose the row. The
+/// coins themselves are unaffected: POL keeps chain 137 and derivation path
+/// m/44'/60', so the funds are at the same address either way.
+const Map<String, String> _renamedCoinIds = {
+  'MATIC': 'POL',
+  'MATICTEST': 'POLTEST',
+  'NFT_MATIC': 'NFT_POL',
+};
+
+/// Rewrites renamed config IDs and drops the duplicates a rename can create,
+/// preserving order so the wallet list does not reshuffle.
+///
+/// Public so `test_units` can pin the mapping directly; not intended for use
+/// outside this file (`@visibleForTesting` does not recognise `test_units/`).
+List<String> canonicalActivatedCoinIds(Iterable<String> ids) {
+  final seen = <String>{};
+  return [
+    for (final id in ids)
+      if (seen.add(_renamedCoinIds[id] ?? id)) _renamedCoinIds[id] ?? id,
+  ];
+}
+
 extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// Checks if a wallet with the specified ID exists in the system.
   ///
@@ -32,7 +58,9 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   Future<List<String>> getWalletCoinIds() async {
     final user = await auth.currentUser;
     if (user == null) return [];
-    return user.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
+    return canonicalActivatedCoinIds(
+      user.metadata.valueOrNull<List<String>>('activated_coins') ?? const [],
+    );
   }
 
   /// Returns the stored list of wallet assets resolved from configuration IDs.
@@ -110,8 +138,13 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     required WalletId expectedWalletId,
   }) async {
     await auth.updateActiveUserKeyValue('activated_coins', (current) {
-      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
-      return <String>{...existing, ...coins}.toList();
+      final existing = canonicalActivatedCoinIds(
+        (current as List<dynamic>?)?.cast<String>() ?? const [],
+      );
+      return <String>{
+        ...existing,
+        ...canonicalActivatedCoinIds(coins),
+      }.toList();
     }, expectedWalletId: expectedWalletId);
   }
 
@@ -129,8 +162,11 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     required WalletId expectedWalletId,
   }) async {
     await auth.updateActiveUserKeyValue('activated_coins', (current) {
-      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
-      final updated = existing.where((c) => !coins.contains(c)).toList();
+      final existing = canonicalActivatedCoinIds(
+        (current as List<dynamic>?)?.cast<String>() ?? const [],
+      );
+      final removing = canonicalActivatedCoinIds(coins).toSet();
+      final updated = existing.where((c) => !removing.contains(c)).toList();
       return updated.isEmpty ? null : updated;
     }, expectedWalletId: expectedWalletId);
   }
