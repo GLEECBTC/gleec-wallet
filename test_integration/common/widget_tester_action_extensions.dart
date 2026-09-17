@@ -63,6 +63,35 @@ extension WidgetTesterActionExtensions on WidgetTester {
     }
   }
 
+  /// [dragUntilVisibleNamed] that keeps retrying until [timeout] passes.
+  ///
+  /// A row backed by an asset only joins its list once that asset's activation
+  /// settles, which outlasts a single scroll on a cold CI network. Retrying
+  /// distinguishes a slow activation from an absent row.
+  Future<void> dragUntilVisibleWithin(
+    Finder finder,
+    Finder view,
+    Offset moveStep, {
+    required String description,
+    Duration timeout = const Duration(minutes: 3),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      try {
+        await dragUntilVisibleNamed(
+          finder,
+          view,
+          moveStep,
+          description: description,
+        );
+        return;
+      } on TestFailure {
+        if (!DateTime.now().isBefore(deadline)) rethrow;
+        await pumpNFrames(10);
+      }
+    }
+  }
+
   Future<bool> isWidgetVisible(Finder finder) async {
     try {
       await pumpAndSettle();

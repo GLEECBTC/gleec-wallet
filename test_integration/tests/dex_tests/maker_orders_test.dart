@@ -162,10 +162,11 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   await addAsset(tester, asset: martyItem, search: 'MARTY');
   print('🔍 Added marty asset');
 
-  await tester.dragUntilVisible(
+  await tester.dragUntilVisibleWithin(
     docCoinActive,
     walletPageScrollView,
     const Offset(0, -50),
+    description: 'the DOC row in the wallet list',
   );
   await tester.pumpAndSettle();
   print('🔍 dragged until doc coin item visible');
@@ -192,11 +193,13 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
     walletPageScrollView,
     const Offset(0, -50),
   );
-  await tester.dragUntilVisible(
+  await tester.dragUntilVisibleWithin(
     martyCoinActive,
     walletPageScrollView,
     const Offset(0, -50),
+    description: 'the MARTY row in the wallet list',
   );
+  print('🔍 dragged until marty coin item visible');
   final martyText = martyCoinBalance.evaluate().single.widget as AutoScrollText;
   final String? martyBalanceStr = martyText.text.split(' ').firstOrNull;
   print('🔍 marty balance str: $martyBalanceStr');
