@@ -156,6 +156,10 @@ const Set<String> excludedAssetList = {
   'NFT_AVAX',
   'NFT_BNB',
   'NFT_FTM',
+  // Both spellings: the coins config carries NFT_MATIC before the
+  // MATIC -> POL rename and NFT_POL after it, and an entry for a coin
+  // that does not exist is inert.
+  'NFT_MATIC',
   'NFT_POL',
 };
 

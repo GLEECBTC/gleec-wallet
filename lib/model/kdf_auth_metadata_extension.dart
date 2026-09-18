@@ -21,18 +21,27 @@ const Map<String, String> _renamedCoinIds = {
   'NFT_MATIC': 'NFT_POL',
 };
 
-/// Rewrites renamed config IDs and drops the duplicates a rename can create,
-/// preserving order so the wallet list does not reshuffle.
+/// The config IDs to try for a stored activated coin, in priority order.
+///
+/// The stored ID is tried first and the rename is only a fallback, so this
+/// resolves whether or not the bundled coins config has picked up the rename
+/// yet. Rewriting unconditionally breaks the other direction: against a
+/// pre-rename config, `MATIC` -> `POL` turns a resolvable ID into an
+/// unresolvable one and drops the row it was meant to preserve.
 ///
 /// Public so `test_units` can pin the mapping directly; not intended for use
 /// outside this file (`@visibleForTesting` does not recognise `test_units/`).
-List<String> canonicalActivatedCoinIds(Iterable<String> ids) {
-  final seen = <String>{};
-  return [
-    for (final id in ids)
-      if (seen.add(_renamedCoinIds[id] ?? id)) _renamedCoinIds[id] ?? id,
-  ];
-}
+List<String> activatedCoinIdCandidates(String storedId) => [
+  storedId,
+  if (_renamedCoinIds.containsKey(storedId)) _renamedCoinIds[storedId]!,
+];
+
+/// Stored IDs that a removal of [coinId] must also clear, so a wallet holding
+/// the pre-rename spelling is not left with an entry the UI cannot remove.
+List<String> legacyActivatedCoinIds(String coinId) => [
+  for (final entry in _renamedCoinIds.entries)
+    if (entry.value == coinId) entry.key,
+];
 
 extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// Checks if a wallet with the specified ID exists in the system.
@@ -58,9 +67,7 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   Future<List<String>> getWalletCoinIds() async {
     final user = await auth.currentUser;
     if (user == null) return [];
-    return canonicalActivatedCoinIds(
-      user.metadata.valueOrNull<List<String>>('activated_coins') ?? const [],
-    );
+    return user.metadata.valueOrNull<List<String>>('activated_coins') ?? [];
   }
 
   /// Returns the stored list of wallet assets resolved from configuration IDs.
@@ -79,7 +86,11 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     final walletAssets = <Asset>[];
 
     for (final coinId in coinIds) {
-      final matchingAssets = assets.findAssetsByConfigId(coinId);
+      var matchingAssets = <Asset>{};
+      for (final candidate in activatedCoinIdCandidates(coinId)) {
+        matchingAssets = assets.findAssetsByConfigId(candidate);
+        if (matchingAssets.isNotEmpty) break;
+      }
       if (matchingAssets.isEmpty) {
         missingCoinIds.add(coinId);
         continue;
@@ -138,13 +149,8 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     required WalletId expectedWalletId,
   }) async {
     await auth.updateActiveUserKeyValue('activated_coins', (current) {
-      final existing = canonicalActivatedCoinIds(
-        (current as List<dynamic>?)?.cast<String>() ?? const [],
-      );
-      return <String>{
-        ...existing,
-        ...canonicalActivatedCoinIds(coins),
-      }.toList();
+      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
+      return <String>{...existing, ...coins}.toList();
     }, expectedWalletId: expectedWalletId);
   }
 
@@ -162,10 +168,10 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     required WalletId expectedWalletId,
   }) async {
     await auth.updateActiveUserKeyValue('activated_coins', (current) {
-      final existing = canonicalActivatedCoinIds(
-        (current as List<dynamic>?)?.cast<String>() ?? const [],
-      );
-      final removing = canonicalActivatedCoinIds(coins).toSet();
+      final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
+      final removing = {
+        for (final coin in coins) ...[coin, ...legacyActivatedCoinIds(coin)],
+      };
       final updated = existing.where((c) => !removing.contains(c)).toList();
       return updated.isEmpty ? null : updated;
     }, expectedWalletId: expectedWalletId);

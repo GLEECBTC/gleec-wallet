@@ -255,7 +255,9 @@ bool isParentCoin(CoinType type, String symbol) {
     case CoinType.hrc20:
       return symbol == 'ONE';
     case CoinType.plg20:
-      return symbol == 'POL';
+      // Either spelling of the Polygon platform coin, so the label is right
+      // against a coins config from before or after the MATIC -> POL rename.
+      return symbol == 'POL' || symbol == 'MATIC';
     case CoinType.mvr20:
       return symbol == 'MOVR';
     case CoinType.krc20:
