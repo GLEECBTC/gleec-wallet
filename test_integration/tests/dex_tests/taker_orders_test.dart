@@ -226,6 +226,11 @@ Future<void> _selectSellCoin(
   print('🔍 SELL CONFIG: Entered search text: $sellCoin');
   await tester.pumpNFrames(10);
 
+  // Same activation race as the maker form's selector. Deliberately not applied
+  // to the buy side: that row comes from the orderbook, so its absence is a
+  // missing counterparty rather than a slow local activation, and waiting there
+  // would only hide the real gap behind a timeout.
+  await tester.pumpUntilVisible(sellCoinItem);
   await tester.tapAndPump(sellCoinItem);
   print('🔍 SELL CONFIG: Selected coin');
 

@@ -11,6 +11,7 @@ import 'package:web_dex/views/dex/entities_list/orders/order_item.dart';
 import '../../common/pause.dart';
 import '../../common/widget_tester_action_extensions.dart';
 import '../../common/widget_tester_find_extension.dart';
+import '../../common/widget_tester_pump_extension.dart';
 import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 import '../wallets_tests/wallet_tools.dart';
@@ -74,6 +75,11 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   await enterText(tester, finder: sellCoinSearchField, text: sellCoin);
   print('🔍 MAKER ORDER: Searching for sell coin: $sellCoin');
 
+  // The row only joins the list once the coin's activation settles, which on a
+  // slower runner outlasts the search. Without this the tap resolves an empty
+  // finder and the suite reports `Bad state: No element` against a coin the
+  // add-asset flow did enable.
+  await tester.pumpUntilVisible(sellCoinItem);
   await tester.tapAndPump(sellCoinItem);
   print('🔍 MAKER ORDER: Selected sell coin');
 
@@ -87,6 +93,7 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   await enterText(tester, finder: buyCoinSearchField, text: buyCoin);
   print('🔍 MAKER ORDER: Searching for buy coin: $buyCoin');
 
+  await tester.pumpUntilVisible(buyCoinItem);
   await tester.tapAndPump(buyCoinItem);
   print('🔍 MAKER ORDER: Selected buy coin');
 
