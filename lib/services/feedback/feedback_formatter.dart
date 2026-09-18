@@ -1,4 +1,5 @@
 import 'package:web_dex/shared/utils/extensions/string_extensions.dart';
+import 'package:web_dex/services/feedback/feedback_metadata.dart';
 
 /// Utility class for formatting feedback descriptions in an agent-friendly way
 class FeedbackFormatter {
@@ -24,7 +25,7 @@ class FeedbackFormatter {
     final buildInfo = <String, dynamic>{};
     final walletInfo = <String, dynamic>{};
 
-    for (final entry in metadata.entries) {
+    for (final entry in sanitizeFeedbackMetadata(metadata).entries) {
       switch (entry.key) {
         case 'contactMethod':
         case 'contactDetails':
@@ -50,7 +51,8 @@ class FeedbackFormatter {
         case 'coinsLatestCommit':
           buildInfo[entry.key] = entry.value;
           break;
-        case 'wallet':
+        case 'walletIsHd':
+        case 'walletIsBip39':
           walletInfo[entry.key] = entry.value;
           break;
         default:

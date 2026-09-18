@@ -20,9 +20,7 @@ Future<void> testActivateCoins(WidgetTester tester) async {
   const String dogeByName = 'gecoi';
   const String kmdBep20ByTicker = 'KMD';
 
-  final Finder totalAmount = find.byKey(
-    const Key('overview-total-balance'),
-  );
+  final Finder totalAmount = find.byKey(const Key('overview-current-value'));
   final Finder ethCoinItem = find.byKey(
     const Key('coins-manager-list-item-eth'),
   );
@@ -68,9 +66,7 @@ Future<void> testActivateCoins(WidgetTester tester) async {
 Future<void> _testNoneExistCoin(WidgetTester tester) async {
   print('🔍 NON-EXISTENT COIN: Starting test');
 
-  final Finder addAssetsButton = find.byKey(
-    const Key('add-assets-button'),
-  );
+  final Finder addAssetsButton = find.byKey(const Key('add-assets-button'));
   final Finder searchCoinsField = find.byKey(
     const Key('coins-manager-search-field'),
   );

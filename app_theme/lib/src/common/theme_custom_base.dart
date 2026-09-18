@@ -60,7 +60,6 @@ abstract class ThemeCustomBase {
     required this.mainMenuSelectedItemColor,
     required this.searchFieldMobile,
     required this.swapButtonColor,
-    required this.suspendedBannerBackgroundColor,
     required this.bridgeFormHeader,
     required this.fiatAmountColor,
     required this.tradingFormDetailsLabel,
@@ -132,7 +131,6 @@ abstract class ThemeCustomBase {
   final Color searchFieldMobile;
   final Color walletEditButtonsBackgroundColor;
   final Color swapButtonColor;
-  final Color suspendedBannerBackgroundColor;
 
   final TextStyle bridgeFormHeader;
   final Color fiatAmountColor;
@@ -155,7 +153,7 @@ class TradingDetailsTheme {
     ],
     this.swapFailedStatusColors = const [
       Color.fromRGBO(229, 33, 103, 0.6),
-      Color.fromRGBO(226, 22, 169, 0.6)
+      Color.fromRGBO(226, 22, 169, 0.6),
     ],
     this.swapStepTimerColor = const Color.fromRGBO(162, 175, 187, 1),
     this.swapStepCircleNormalColor = const Color.fromRGBO(137, 147, 236, 1),
@@ -178,8 +176,12 @@ class TradingDetailsTheme {
 
 class CoinsManagerTheme {
   const CoinsManagerTheme({
-    this.searchFieldMobileBackgroundColor =
-        const Color.fromRGBO(242, 242, 242, 1),
+    this.searchFieldMobileBackgroundColor = const Color.fromRGBO(
+      242,
+      242,
+      242,
+      1,
+    ),
     this.filtersPopupShadow = const BoxShadow(
       offset: Offset(0, 0),
       blurRadius: 13,
@@ -204,16 +206,24 @@ class DexPageTheme {
     this.makerLabelColor = const Color.fromRGBO(106, 77, 227, 1),
     this.successfulSwapStatusColor = const Color.fromRGBO(73, 212, 162, 1),
     this.failedSwapStatusColor = const Color.fromRGBO(229, 33, 103, 1),
-    this.successfulSwapStatusBackgroundColor =
-        const Color.fromRGBO(73, 212, 162, 0.12),
+    this.successfulSwapStatusBackgroundColor = const Color.fromRGBO(
+      73,
+      212,
+      162,
+      0.12,
+    ),
     this.activeOrderFormTabColor = const Color.fromRGBO(89, 107, 231, 1),
     this.inactiveOrderFormTabColor = const Color.fromRGBO(206, 210, 247, 1),
     this.takerLabel = const Color.fromRGBO(47, 179, 239, 1),
     this.makerLabel = const Color.fromRGBO(106, 77, 227, 1),
     this.successfulSwapStatus = const Color.fromRGBO(73, 212, 162, 1),
     this.failedSwapStatus = const Color.fromRGBO(229, 33, 103, 1),
-    this.successfulSwapStatusBackground =
-        const Color.fromRGBO(73, 212, 162, 0.12),
+    this.successfulSwapStatusBackground = const Color.fromRGBO(
+      73,
+      212,
+      162,
+      0.12,
+    ),
     this.activeOrderFormTab = const Color.fromRGBO(89, 107, 231, 1),
     this.inactiveOrderFormTab = const Color.fromRGBO(206, 210, 247, 1),
     this.formPlateGradient = const LinearGradient(

@@ -7,11 +7,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class BitrefillButtonView extends StatelessWidget {
-  const BitrefillButtonView({
-    super.key,
-    required this.onPressed,
-    this.tooltip,
-  });
+  const BitrefillButtonView({super.key, required this.onPressed, this.tooltip});
 
   final void Function()? onPressed;
   final String? tooltip;
@@ -23,12 +19,12 @@ class BitrefillButtonView extends StatelessWidget {
       height: isMobile ? 52 : 40,
       prefix: Container(
         padding: const EdgeInsets.only(right: 14),
-        child: SvgPicture.asset(
-          '$assetsPath/others/bitrefill_logo.svg',
-        ),
+        child: SvgPicture.asset('$assetsPath/others/bitrefill_logo.svg'),
       ),
-      textStyle: themeData.textTheme.labelLarge
-          ?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+      textStyle: themeData.textTheme.labelLarge?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
       backgroundColor: themeData.colorScheme.tertiary,
       onPressed: onPressed,
       text: LocaleKeys.spend.tr(),

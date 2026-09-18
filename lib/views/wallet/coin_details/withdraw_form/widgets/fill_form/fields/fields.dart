@@ -434,10 +434,11 @@ class SuccessPage extends StatelessWidget {
               LocaleKeys.successPageBodySmall.tr(),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            SelectableText(
-              state.result!.txHash,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            if (state.result!.txHash?.isNotEmpty ?? false)
+              SelectableText(
+                state.result!.txHash!,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),

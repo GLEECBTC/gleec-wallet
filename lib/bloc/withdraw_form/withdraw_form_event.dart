@@ -34,6 +34,19 @@ class WithdrawFormCustomFeeChanged extends WithdrawFormEvent {
   const WithdrawFormCustomFeeChanged(this.fee);
 }
 
+/// Toggles the gas-free (gasless) rail for a TRC20 withdrawal.
+class WithdrawFormGaslessToggled extends WithdrawFormEvent {
+  final bool isEnabled;
+  const WithdrawFormGaslessToggled(this.isEnabled);
+}
+
+/// Requests a (cached) `gasless::account_status` snapshot for the asset.
+/// [force] bypasses the TTL cache, e.g. for a user-initiated retry.
+class WithdrawFormGaslessStatusRequested extends WithdrawFormEvent {
+  final bool force;
+  const WithdrawFormGaslessStatusRequested({this.force = false});
+}
+
 class WithdrawFormFeePriorityChanged extends WithdrawFormEvent {
   final WithdrawalFeeLevel? priority;
   const WithdrawFormFeePriorityChanged(this.priority);
@@ -50,6 +63,38 @@ class WithdrawFormPreviewSubmitted extends WithdrawFormEvent {
 
 class WithdrawFormSubmitted extends WithdrawFormEvent {
   const WithdrawFormSubmitted();
+}
+
+/// Resumes status reconciliation for an already-accepted GasFree relay.
+class WithdrawFormGaslessTraceCheckRequested extends WithdrawFormEvent {
+  const WithdrawFormGaslessTraceCheckRequested();
+}
+
+/// Restores any unresolved wallet-scoped GasFree relay for this asset.
+///
+/// This is deliberately independent of the new-transfer feature switch: a
+/// kill switch may stop new custody activity, but it must never hide or forget
+/// a transfer that the relay has already accepted.
+class WithdrawFormPendingGaslessLoadRequested extends WithdrawFormEvent {
+  const WithdrawFormPendingGaslessLoadRequested();
+}
+
+/// Leaves an unresolved GasFree transfer visible in the encrypted journal
+/// while returning the form to an explicit Standard TRON withdrawal.
+///
+/// This never marks the unresolved relay retryable and never removes its
+/// wallet-local journal or provider trace identity.
+class WithdrawFormPendingUseStandardRequested extends WithdrawFormEvent {
+  const WithdrawFormPendingUseStandardRequested();
+}
+
+/// Clears only the untraced journal record explicitly acknowledged in the UI.
+///
+/// The identity ties the acknowledgement to the displayed transfer. This does
+/// not cancel a relay request or establish that a repeat payment is safe.
+class WithdrawFormGaslessDiscardConfirmed extends WithdrawFormEvent {
+  final String journalId;
+  const WithdrawFormGaslessDiscardConfirmed(this.journalId);
 }
 
 class WithdrawFormTronPreviewTicked extends WithdrawFormEvent {

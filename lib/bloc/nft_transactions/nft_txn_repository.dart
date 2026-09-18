@@ -1,4 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api_nft.dart';
@@ -21,10 +22,11 @@ class NftTxnRepository {
   Future<NftTxsResponse> getNftTransactions([
     List<NftBlockchains>? chains,
   ]) async {
-    final List<String> allChains =
-        (chains ?? NftBlockchains.values).map((e) => e.toApiRequest()).toList();
+    final List<String> allChains = (chains ?? NftBlockchains.supportedValues)
+        .map((e) => e.toApiRequest())
+        .toList();
     await getUsdPricesOfCoins(
-      (chains ?? NftBlockchains.values).map((e) => e.coinAbbr()),
+      (chains ?? NftBlockchains.supportedValues).map((e) => e.coinAbbr()),
     );
     final request = NftTransactionsRequest(
       chains: allChains,
@@ -98,7 +100,11 @@ class NftTxnRepository {
   Future<void> getUsdPricesOfCoins(Iterable<String> coinAbbr) async {
     final coins = _coinsRepo.getKnownCoins();
     for (final abbr in coinAbbr) {
-      final coin = coins.firstWhere((c) => c.abbr == abbr);
+      // Total lookup: a ticker absent from the catalogue (FTM is, in the
+      // bundled config) used to throw StateError and take the whole
+      // transactions page down with it.
+      final coin = coins.firstWhereOrNull((c) => c.abbr == abbr);
+      if (coin == null) continue;
       _abbrToUsdPrices[abbr] = coin.usdPrice?.price?.toDouble();
     }
   }

@@ -47,7 +47,12 @@ extension WidgetTesterPumpExtension on WidgetTester {
 
   Future<void> pumpUntilDisappear(
     Finder finder, {
-    Duration timeout = const Duration(seconds: 30),
+    // 60s to match `pumpUntil` above. At 30s this could not cover its own
+    // callers: `restoreWalletToTest` ends by waiting for the wallet-manager
+    // modal to disappear, and on web that wait spans a cold KDF start - measured
+    // at ~45s - so the helper threw while sign-in was still legitimately in
+    // progress. The import completed; only the wait did not.
+    Duration timeout = const Duration(seconds: 60),
   }) async {
     bool timerDone = false;
     final timer = Timer(

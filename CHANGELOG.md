@@ -1,3 +1,84 @@
+# Gleec Wallet v0.9.7 Release Notes
+
+This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a fresh HD sign-in, makes transaction history survive a restart, and reworks wallet setup so the create-or-import decision, the terms you agree to, and the prompt to save your recovery phrase all happen where they belong. It gives every supported NFT chain its own tab that enables the chain on tap, and rolls the native trading engine to the `3.1.0-beta` line, which reprices EVM swap gas under the Amsterdam/Bogota fork rules and is visible in DEX fee estimates.
+
+## 🚀 New Features
+
+- **TRON Gas-Free Sends & Receives** ([@CharlVS], #3500) - Send and receive TRC-20 tokens on TRON without holding TRX for gas, using the custody-address model and the GasFree relay. Includes the send and receive flows, address handling, and the supporting transaction history.
+- **Transaction History Survives a Restart** ([@CharlVS], #3500) - Transaction history is now cached on disk between sessions. A coin's details page renders the history it already knows on a cold start instead of waiting for the first network round trip, and the walk that follows becomes a refresh rather than a cold fetch. On by default; retention is deliberately unbounded.
+- **An NFT Tab for Every Supported Chain** ([@CharlVS], #3523) - The NFT page now shows a tab for every catalogue chain available in your region rather than only the chains already enabled, and tapping an un-enabled one activates it. A tab reports **Not enabled**, a spinner, or **Couldn't enable** instead of a count, so a chain nobody has queried can never read as "you own nothing here". Browsing a chain is session-scoped: it does not add the coin to your wallet or to the next sign-in's set.
+
+## ⚡ Performance Enhancements
+
+- **Faster Fresh HD Sign-In** ([@CharlVS], #3500) - A fresh HD sign-in spent most of its time inside the trading engine walking an HD address gap one address at a time. The wallet now asks for a gap of 3 - or 1 on a newly generated wallet's first sign-in - rather than accepting the engine's default of 20, and skips the redundant post-activation address scan. Measured against the engine this build ships, single-coin HD activation falls from 46.9s at gap 20 to roughly 13.1s at gap 3 and 9.1s at gap 1: about **3.6× from the client alone**. Hardware wallets deliberately keep the full gap of 20, and TRX is unaffected as it sends no gap limit.
+- **First Paint No Longer Waits on Activation** ([@CharlVS], #3500) - Balances and transaction history render from local storage at launch instead of blocking on activation, and the identity RPCs issued on every sign-in were cut. This holds regardless of the trading engine's own scan speed.
+
+## 🎨 UI/UX Improvements
+
+- **Reworked Wallet Setup Screen** ([@CharlVS], #3509) - Wallet setup is now a single screen instead of a wallet-type router followed by an unlabelled pair of buttons. Creating a wallet is the prominent action, while restoring one stays a full-width, clearly-labelled option rather than an equally-weighted button - described by what you actually hold ("I already have a recovery phrase") instead of asking you to classify yourself. Two permanently-disabled wallet-type rows were removed, and cancelling now behaves consistently at every step.
+- **Recovery Phrase Prompt Before You Receive Funds** ([@CharlVS], #3509) - A wallet whose recovery phrase has never been shown now warns you before revealing an address you could be paid at, with the option to save the phrase there and then. The prompt also offers a way out for anyone who meant to restore an existing wallet and ended up creating a new one. Previously this check guarded only the NFT receive screen while every other receive path was unguarded.
+- **Terms Acceptance Is Recorded on Submission** ([@CharlVS], #3509, #3527, #3529) - The EULA and Terms are linked beside the Create, final Import, Log in, and hardware Continue actions, with compact spacing around the inline notice. Submitting records the versions accepted; changed terms appear inline on those same forms. Opening a form or legal document does not record acceptance. Previously acceptance was a checkbox on every form that was never recorded anywhere.
+- **Navigation Cleanup** ([@CharlVS], #3509) - Enable NFTs outside native mobile, remove the Bridge page, and drop the "New" badges from NFTs and Buy / Sell.
+
+## 🐛 Bug Fixes
+
+- **Wallet Import Password Validation Updates Immediately** ([@CharlVS], #3528) - Fixed stale button state: import becomes available when the password and confirmation are valid, and becomes unavailable again when they no longer match.
+- **On-Ramp Checkout URLs Are Validated** ([@CharlVS], #3514) - Only HTTPS checkout URLs on supported provider domains can open in the wallet's payment frame. The deployed wrapper also enforces this for existing native clients, and payment messages are checked at the frame boundary.
+- **Web Updates Reload the Deployed App** ([@CharlVS], #3514, #3526, #3528) - Restored update checks and cleared obsolete Flutter service-worker caches when applying an update. The popup now waits until the site can serve the announced release, so a partially deployed update cannot offer a release that reloading would not install.
+- **Wallet Setup and Receive Recovery** ([@CharlVS], #3528) - Restored the saved-wallet Delete action, allowed backing out of mobile recovery-phrase backup, and recovered Receive after failed or interrupted address loads. Re-enabling a previously hidden coin now restores its active state.
+- **Wallet Switches Keep NFT Requests and History Separate** ([@CharlVS], #3528) - Discarded NFT activation work belonging to an earlier session and kept transaction history attached to the same wallet during a temporary identity lookup failure.
+- **Backup and Setup Stay Bound to the Original Wallet** ([@CharlVS], #3528) - Rejected delayed backup confirmations, exports, setup writes, and rollback work after switching wallets. A temporary identity lookup failure cannot approve a different wallet recreated under the same name.
+- **Bitrefill Payment Messages Come From the Active Checkout** ([@CharlVS], #3528) - Rejected payment messages unless both the provider origin and the active checkout frame match; malformed and unrelated messages are ignored.
+- **TRX Funding Guidance During Consolidation** ([@CharlVS], #3528) - Fixed fee-shortage handling so a standard TRON address that needs TRX receives funding guidance instead of a connection-error message.
+- **Importing a Seed No Longer Silently Signs You Into a Different Wallet** ([@CharlVS], #3509) - Importing a recovery phrase under a wallet name that already existed discarded the phrase and logged you into the existing wallet instead, with no message. It now reports the name conflict, and fails safely if it cannot check.
+- **GLEEC and GRC-20 Transaction History Was Always Empty** ([@CharlVS], #3500) - Neither had a working history source, so the list simply stayed empty rather than reporting a problem. Both are now served from Blockscout.
+- **A Brief Network Drop Could Sign You Out** ([@CharlVS], #3500) - A transient transport failure was treated as an authentication failure and ended the session.
+- **Deleting a Wallet Left Its Cached Data Behind** ([@CharlVS], #3500) - Deleting a wallet cleared its secure storage but left every cache keyed by that wallet in place: derived addresses, activation preferences, the enabled asset list, and - now that history persists - its transaction history. These are purged when the deletion succeeds.
+- **Balances Could Briefly Show the Wrong Wallet's Data** ([@CharlVS], #3500) - Cached public keys were read before the check that detects an undelivered wallet switch and clears that cache, so a balance could be painted from the previous wallet.
+- **Coin Details Could Chart Another Asset's Value** ([@CharlVS], #3500) - The coin details page reused whole-portfolio chart state, so a single coin's page could plot figures belonging to the portfolio rather than that coin. Chart providers are now scoped to the asset being viewed.
+- **Activation Could Hang Forever on a Silent Progress Stream** ([@CharlVS], #3500) - A stream that never emitted and never closed suspended before the caller received its future, so the deadline fired while the caller kept waiting.
+- **Activation Timeout Fired Mid-Login and Issued Duplicate Requests** ([@CharlVS], #3500) - A flat 60-second deadline fired during every fresh HD login, and the retry started a second concurrent activation. Timeouts are now protocol-aware.
+- **Login Form No Longer Reads the Clipboard** ([@CharlVS], #3500) - The password field auto-filled from the system clipboard. Removed.
+- **Enabling an NFT Chain Could Silence a Coin You Already Hold** ([@CharlVS], #3523) - Enabling a chain from the NFT page suppressed that asset's activation broadcasts for the rest of the session. That is right for a chain the NFT page brings up on its own and wrong for a held coin whose activation had failed: its wallet row then stayed silent until the next sign-in.
+- **The NFT Retry Button Spun Forever** ([@CharlVS], #3523) - Every NFT failure screen shipped a permanently-spinning Retry button, from an inverted spinner condition no caller could get right.
+- **NFT Chain Activation Reported Incorrectly** ([@CharlVS], #3509) - The NFT screen could tell you to enable a chain that was already enabled. Chain activation state now comes from a single source of truth.
+
+## 💻 Platform-Specific Changes
+
+### Apple Platforms
+
+- **Safe Startup Without Firebase Configuration** ([@CharlVS], #3520) - Remove placeholder Firebase configuration from the native resource bundles and keep Firebase analytics disabled when the build has no valid configuration, preventing startup crashes and accidental use of another project's settings.
+
+### Native Trading Engine (KDF)
+
+- **Rolled to `3.1.0-beta` (`f3efd2c`)** ([@CharlVS], #3500) - The engine moves to the `main` release line, which carries the merged gas-free support this release depends on.
+- **EVM Swap Gas Limits Roughly Double** ([@CharlVS], #3500) - The engine reprices EVM swap gas for the Amsterdam/Bogota fork rules. A DEX fee estimate for an ETH pair goes 165,000 → 280,000 gas, and for an ERC-20/GRC-20 pair 300,000 → 540,000. The same figures back the pre-trade balance check, so a wallet holding *just* enough platform coin to cover the old estimate will now report insufficient funds. This is correct under the new fork rules - the old limits would have under-funded the transaction - but it is a visible change to fee previews rather than a regression.
+- **Priority Fee Estimates Move** ([@CharlVS], #3500) - The simple EIP-1559 estimator now reads the pending block's base fee rather than the oldest entry in its window, so priority-fee estimates shift.
+
+### SDK (komodo-defi-sdk-flutter)
+
+- **SDK Release Line and Wallet-Identity RC** ([SDK#360](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/360), [SDK#367](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/367), [SDK#374](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/374); wallet #3528) - The submodule pins SDK `main` at [`4d386b0a`](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/commit/4d386b0a710fd78aa4e5e0d782eb6d9e49d3e828), including the `0.7.0` release fixes and the merged `0.8.0-rc.1` wallet-identity hotfix candidate, with local-auth `0.6.0-rc.1`. Metadata writes require the verified identity captured when work starts, and the app's callers are migrated. History keeps one wallet context across cached and live results, preserves streams during temporary identity failures, and rechecks the session before recording activation, including on WebAssembly. These are Git-pinned prerelease package versions; the trading engine artefact is unchanged at `f3efd2c`.
+- **KDF Downloads Restricted to Official Mirrors** ([SDK#373](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/373)) - Two third-party hosts were dropped from the trading-engine download sources, leaving only Gleec's own build host and the upstream mirror.
+
+## 🔧 Technical Improvements
+
+- **Integration Tests Preserve Flutter Error Reporting** ([@CharlVS], #3528) - Fixed test-mode startup so framework and asynchronous failures reach the test runner. Updated wallet import fixtures and navigation checks prevent aborted browser suites from being mistaken for successful validation.
+- **Onboarding Funnel Instrumentation** ([@CharlVS], #3509) - Per-step onboarding analytics now actually fire, so drop-off can be located to a step and new users can be distinguished from returning ones. The event definitions existed but had never been emitted.
+- **Persistent Web Storage** ([@CharlVS], #3509) - Ask the browser not to evict wallet storage, requested after sign-in with backoff. Note this does not lift Safari's 7-day cap on script-writable storage, which is not exempted by this API.
+- **Wallet-Load Measurement Harness** ([@CharlVS], #3500) - A test harness running a real SDK with only the RPC backend faked, so authentication, activation, public keys, balances and storage are exercised as production code. A replay tier gates every pull request and a real-engine tier runs nightly. 18 test files that existed but had never been registered now run, and the real failures they surfaced are fixed.
+- **Alpha Testing Notice Removed** ([@CharlVS], #3509) - The alpha-testing disclaimer shown on launch has been removed; the risk disclosure lives in the EULA and Terms. This also stops the notice from silently re-enabling analytics for users who had turned them off.
+- **KDF Performance Stack Descoped** ([@CharlVS], #3500) - Three engine-side performance changes - a concurrent HD gap scan, concurrent EVM RPCs with connection pooling, and EVM/TRON rate-limit backoff - are not in this build. What each would add, and the regressions accepted without them, are recorded in [`docs/KDF_PERF_STACK_DESCOPE.md`](docs/KDF_PERF_STACK_DESCOPE.md). The client-side half of that work does ship, and is what the performance section above measures.
+- **Web Deploys Use the Site the CLI Actually Published To** ([@CharlVS], #3518) - The deploy workflow treated its Firebase deploy target as though it were a site ID. The two names only coincided in the one project previews run against, and #3500 made them diverge, so a preview link could point at a site the build never reached. The workflow now reads the resolved site out of the Firebase CLI's own output, and the target is renamed from `walletrc` to `web`.
+
+## 📚 Documentation
+
+- **Measurement Captures Lifted Out of the Repository** ([@CharlVS], #3516) - Retire the spent KDF measurement documents and their raw capture data, and correct the ones that no longer describe the shipped build - roughly 15,000 lines removed. The wallet-load performance report was deleted outright: its headline figure was measured against the descoped engine stack and is false for what ships here.
+- **Contributor Docs Point at a Branch That Exists** ([@CharlVS], #3519) - The contribution and branching guides told contributors to branch from, sync with, and open pull requests against `master`, which this repository does not have. 11 references corrected to `main`.
+
+**Full Changelog**: [0.9.6...0.9.7](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.6...0.9.7)
+
+---
+
 # Gleec Wallet v0.9.6 Release Notes
 
 This release completes Google Play readiness for the mobile release line and reworks the wallet coin list so live market data sits alongside holdings. It rolls the SDK submodule forward to the `0.6.0` release line plus the Android 16 KB page-size compatibility fix required for the newest Android devices, and switches macOS signing to Gleec-BTC's own Apple identity.

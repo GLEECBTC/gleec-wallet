@@ -61,7 +61,7 @@ Future<Finder> _activateMarty(WidgetTester tester) async {
 
   final Finder coinsList = find.byKeyName('wallet-page-scroll-view');
   final Finder martyCoinItem = find.byKeyName('coins-manager-list-item-marty');
-  final Finder martyCoinActive = find.byKeyName('active-coin-item-marty');
+  final Finder martyCoinActive = find.byKeyName('coin-list-item-marty');
   final Finder coinBalance = find.byKeyName('coin-details-balance');
 
   await addAsset(tester, asset: martyCoinItem, search: 'marty');

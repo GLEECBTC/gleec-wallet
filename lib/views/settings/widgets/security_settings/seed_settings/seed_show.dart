@@ -72,12 +72,18 @@ class SeedShow extends StatelessWidget {
                   children: [
                     const _TitleRow(),
                     const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _ShowingSwitcher(),
-                        _CopySeedButton(seed: seedPhrase),
-                      ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 12,
+                        runSpacing: 8,
+                        children: [
+                          _ShowingSwitcher(),
+                          _CopySeedButton(seed: seedPhrase),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 16),
                     Flexible(child: _SeedPlace(seedPhrase: seedPhrase)),
@@ -128,7 +134,7 @@ class _PrivateKeysList extends StatelessWidget {
             final key = privKeys[coin]!;
 
             return Card(
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).scaffoldBackgroundColor,
               margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -278,6 +284,7 @@ class _CopySeedButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 Icons.copy,
@@ -285,9 +292,11 @@ class _CopySeedButton extends StatelessWidget {
                 color: theme.currentGlobal.textTheme.bodySmall?.color,
               ),
               const SizedBox(width: 10),
-              Text(
-                LocaleKeys.seedPhraseShowingCopySeed.tr(),
-                style: theme.currentGlobal.textTheme.bodySmall,
+              Flexible(
+                child: Text(
+                  LocaleKeys.seedPhraseShowingCopySeed.tr(),
+                  style: theme.currentGlobal.textTheme.bodySmall,
+                ),
               ),
             ],
           ),
@@ -312,11 +321,13 @@ class _ShowingSwitcher extends StatelessWidget {
           height: 21,
         ),
         const SizedBox(width: 6),
-        SelectableText(
-          LocaleKeys.seedPhraseShowingShowPhrase.tr(),
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w500,
-            fontSize: 12,
+        Flexible(
+          child: SelectableText(
+            LocaleKeys.seedPhraseShowingShowPhrase.tr(),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+            ),
           ),
         ),
       ],
@@ -483,11 +494,16 @@ class _SeedPhraseConfirmButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bloc = context.read<SecuritySettingsBloc>();
-    final isCustom = !context
-        .read<KomodoDefiSdk>()
-        .mnemonicValidator
-        .validateBip39(seedPhrase);
-    if (isCustom) return const SizedBox.shrink();
+
+    // Gated on word count, not on BIP39 validity. The confirmation quiz just
+    // splits on whitespace and compares the reassembled string, so it works on
+    // any multi-word phrase. Requiring BIP39 left custom-seed users with no
+    // route to mark their seed backed up at all except downloading the wallet
+    // file - which also meant the receive-time backup gate could never be
+    // satisfied for them. Only a single-token passphrase degenerates into
+    // "select the one word", so that case still falls back to the file route.
+    final wordCount = seedPhrase.trim().split(RegExp(r'\s+')).length;
+    if (wordCount < 2) return const SizedBox.shrink();
 
     void onPressed() => bloc.add(const SeedConfirmEvent());
     final text = LocaleKeys.seedPhraseShowingSavedPhraseButton.tr();

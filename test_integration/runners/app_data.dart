@@ -2,10 +2,20 @@
 
 import 'dart:io';
 
-//app data path for mac and linux
-const String macAppData = '/Library/Containers/com.komodo.wallet';
-const String linuxAppData = '/.local/share/com.komodo.KomodoWallet';
-const String windowsAppData = r'\AppData\Roaming\com.komodo';
+// App data paths, per platform.
+//
+// These were the upstream Komodo Wallet identifiers, which this app does not
+// use: native integration runs were therefore never isolated, and on a machine
+// that also has Komodo Wallet installed the macOS branch pointed at *that*
+// app's container - deleting another application's data, or failing with
+// `Operation not permitted` because the path is SIP-protected.
+//
+// Sources of record: `macos/Runner.xcodeproj` PRODUCT_BUNDLE_IDENTIFIER,
+// `linux/CMakeLists.txt:11` APPLICATION_ID, and `windows/runner/Runner.rc`
+// CompanyName/ProductName (path_provider joins them as <company>\<product>).
+const String macAppData = '/Library/Containers/com.GleecDEX.wallet';
+const String linuxAppData = '/.local/share/com.gleec.GleecDEX';
+const String windowsAppData = r'\AppData\Roaming\GLEEC\Gleec DEX';
 
 Future<void> clearNativeAppsData() async {
   if (Platform.isWindows) {

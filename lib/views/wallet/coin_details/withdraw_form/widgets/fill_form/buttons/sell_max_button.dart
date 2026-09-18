@@ -19,15 +19,16 @@ class _SellMaxButtonState extends State<SellMaxButton> {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, state) {
         final fontWeight = _hasFocus ? FontWeight.w900 : FontWeight.w500;
-        final color =
-            state.isMaxAmount ? Theme.of(context).colorScheme.primary : null;
+        final color = state.isMaxAmount
+            ? Theme.of(context).colorScheme.primary
+            : null;
         return InkWell(
           onFocusChange: (value) => setState(() {
             _hasFocus = value;
           }),
-          onTap: () => context
-              .read<WithdrawFormBloc>()
-              .add(WithdrawFormMaxAmountEnabled(!state.isMaxAmount)),
+          onTap: () => context.read<WithdrawFormBloc>().add(
+            WithdrawFormMaxAmountEnabled(!state.isMaxAmount),
+          ),
           borderRadius: BorderRadius.circular(7),
           child: Container(
             width: 46,
@@ -37,10 +38,10 @@ class _SellMaxButtonState extends State<SellMaxButton> {
             child: Text(
               LocaleKeys.max.tr().toLowerCase(),
               style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                    fontSize: 12,
-                    fontWeight: fontWeight,
-                    color: color,
-                  ),
+                fontSize: 12,
+                fontWeight: fontWeight,
+                color: color,
+              ),
             ),
           ),
         );

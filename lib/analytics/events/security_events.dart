@@ -11,6 +11,8 @@ class BackupCompletedEventData extends AnalyticsEventData {
     required this.hdType,
   });
 
+  /// Seconds from entering the backup flow to completing it. 0 means the
+  /// anchor was missing, not that the backup was instant.
   final int backupTime;
   final String method;
   final String hdType;

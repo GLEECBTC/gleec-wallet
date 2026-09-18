@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:app_theme/app_theme.dart';
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart'
@@ -21,7 +20,6 @@ import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/coin_type.dart';
 import 'package:web_dex/performance_analytics/performance_analytics.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
-import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/widgets/information_popup.dart';
 
 export 'package:web_dex/shared/utils/extensions/async_extensions.dart';
@@ -32,49 +30,69 @@ export 'package:web_dex/shared/utils/prominent_colors.dart';
 
 // TODO: Refactor this (and all its references) to remove the context dependency
 // and/or make it optional, and then use the global `scaffoldKey` instead.
-Future<void> copyToClipBoard(
+/// Returns whether the clipboard accepted [payload]. Feedback rendering does
+/// not change a successful clipboard result.
+Future<bool> copyToClipBoard(
   BuildContext context,
   String payload, [
   String? message,
 ]) async {
-  if (!context.mounted) return;
+  if (!context.mounted) return false;
   final themeData = Theme.of(context);
 
   try {
     await Clipboard.setData(ClipboardData(text: payload));
-
-    if (!context.mounted) return;
-    final scaffoldMessenger =
-        ScaffoldMessenger.maybeOf(context) ??
-        ScaffoldMessenger.of(scaffoldKey.currentContext!);
-    scaffoldMessenger.showSnackBar(
-      SnackBar(
-        width: isMobile ? null : 400.0,
-        content: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.check_circle,
-              color: themeData.colorScheme.onPrimaryContainer,
-            ),
-            const SizedBox(width: 12.0),
-            Text(message ?? LocaleKeys.clipBoard.tr()),
-          ],
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   } catch (e) {
     log('Error copyToClipBoard: $e', isError: true);
-    if (!context.mounted) return; // Show error feedback using SnackBar
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Failed to copy to clipboard'),
-        backgroundColor: themeData.colorScheme.error,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    if (context.mounted) {
+      try {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: const Text('Failed to copy to clipboard'),
+            backgroundColor: themeData.colorScheme.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } catch (feedbackError) {
+        log(
+          'Error showing copyToClipBoard failure feedback: $feedbackError',
+          isError: true,
+        );
+      }
+    }
+    return false;
   }
+
+  if (context.mounted) {
+    try {
+      final scaffoldMessenger =
+          ScaffoldMessenger.maybeOf(context) ??
+          ScaffoldMessenger.of(scaffoldKey.currentContext!);
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          width: isMobile ? null : 400.0,
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle,
+                color: themeData.colorScheme.onPrimaryContainer,
+              ),
+              const SizedBox(width: 12.0),
+              Text(message ?? LocaleKeys.clipBoard.tr()),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // Copying succeeded; a missing feedback surface must not turn that
+      // operation into a reported clipboard failure.
+      log('Error showing copyToClipBoard feedback: $e', isError: true);
+    }
+  }
+
+  return true;
 }
 
 /// Converts a double value [dv] to a string representation with specified decimal places [fractions].
@@ -279,38 +297,18 @@ Future<void> log(
   bool isError = false,
 }) async {
   final timer = Stopwatch()..start();
-  // todo(yurii & ivan): to finish stacktrace parsing
-  // if (trace != null) {
-  //   final String errorTrace = getInfoFromStackTrace(trace);
-  //   logger.write('$errorTrace: $errorOrUsefulData');
-  // }
-  const isTestEnv = isTestMode || kDebugMode;
-  if (isTestEnv && isError) {
-    // ignore: avoid_print
-    print('path: $path');
-    // ignore: avoid_print
-    print('error: $message');
-    if (trace != null) {
-      // ignore: avoid_print
-      print('trace: $trace');
-    }
-  }
-
   try {
-    await logger.write(message, path);
+    await logger.write(
+      isError ? 'Application operation failed' : message,
+      path,
+    );
 
     // TODO: Add a `.dispose()` method to the logger library and call it before
     // the app is disposed.
 
     performance.logTimeWritingLogs(timer.elapsedMilliseconds);
   } catch (e) {
-    // TODO: replace below with crashlytics reporting or show UI the printed
-    // message in a snackbar/banner.
-    // ignore: avoid_print
-    print(
-      'ERROR: Writing logs failed. Exported log files may be incomplete.'
-      '\nError message: $e',
-    );
+    // Never stringify logger failures: they may retain rejected diagnostic data.
   } finally {
     timer.stop();
   }

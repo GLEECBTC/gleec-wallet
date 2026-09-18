@@ -5,7 +5,12 @@ import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show AuthException, AuthExceptionType, CoinSubClass;
+    show
+        AuthException,
+        AuthExceptionType,
+        CoinSubClass,
+        WalletId,
+        WalletChangedDisconnectException;
 import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -494,6 +499,7 @@ class WalletsRepository {
   }
 
   Future<LegacySpecialCaseImportResult> importPreparedLegacySpecialCases({
+    required WalletId expectedWalletId,
     required PreparedLegacyMigration migration,
     required Iterable<String> baseActivatedCoinIds,
   }) async {
@@ -548,7 +554,10 @@ class WalletsRepository {
         _legacyPendingZhtlcAssetsExtrasKey: pendingZhtlcAssets,
     };
     if (legacyWalletExtras.isNotEmpty) {
-      await _kdfSdk.setLegacyWalletExtras(legacyWalletExtras);
+      await _kdfSdk.setLegacyWalletExtras(
+        legacyWalletExtras,
+        expectedWalletId: expectedWalletId,
+      );
     }
 
     return LegacySpecialCaseImportResult(
@@ -653,11 +662,28 @@ class WalletsRepository {
   }
 
   @Deprecated('Use the KomodoDefiSdk.auth.getMnemonicEncrypted method instead.')
-  Future<void> downloadEncryptedWallet(Wallet wallet, String password) async {
+  Future<void> downloadEncryptedWallet(
+    Wallet wallet,
+    String password, {
+    required WalletId expectedWalletId,
+  }) async {
+    Future<void> ensureOriginalWallet() async {
+      final currentWalletId = (await _kdfSdk.auth.currentUser)?.walletId;
+      if (expectedWalletId.pubkeyHash?.trim().isNotEmpty != true ||
+          currentWalletId?.pubkeyHash?.trim().isNotEmpty != true ||
+          currentWalletId != expectedWalletId) {
+        throw const WalletChangedDisconnectException(
+          'Wallet changed or identity unavailable while preparing wallet export',
+        );
+      }
+    }
+
     try {
+      await ensureOriginalWallet();
       Wallet workingWallet = wallet.copy();
       if (wallet.config.seedPhrase.isEmpty) {
         final mnemonic = await _kdfSdk.auth.getMnemonicPlainText(password);
+        await ensureOriginalWallet();
         final String encryptedSeed = await _encryptionTool.encryptData(
           password,
           mnemonic.plaintextMnemonic ?? '',
@@ -672,11 +698,14 @@ class WalletsRepository {
         data,
       );
       final String sanitizedFileName = _sanitizeFileName(workingWallet.name);
+      await ensureOriginalWallet();
       await _fileLoader.save(
         fileName: sanitizedFileName,
         data: encryptedData,
         type: LoadFileType.text,
       );
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (e) {
       throw Exception('Failed to download encrypted wallet: $e');
     }

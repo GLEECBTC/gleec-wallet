@@ -57,7 +57,7 @@ class InProgressItem extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).scaffoldBackgroundColor,
             ),
             child: isMobile
                 ? _InProgressItemMobile(
@@ -281,7 +281,7 @@ class _InProgressItemMobile extends StatelessWidget {
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
-            color: Theme.of(context).colorScheme.onSurface,
+            color: Theme.of(context).scaffoldBackgroundColor,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.max,

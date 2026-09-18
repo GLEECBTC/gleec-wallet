@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-import 'package:web_dex/common/app_assets.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
@@ -72,10 +71,21 @@ class _SeedActionButtons extends StatelessWidget {
         const SizedBox(height: 8),
         UiUnderlineTextButton(
           onPressed: () async {
+            final expectedWalletId = authBloc.state.currentUser?.walletId;
+            if (expectedWalletId == null) return;
             final String? password = await walletPasswordDialog(context);
             if (password == null) return;
 
-            authBloc.add(AuthWalletDownloadRequested(password: password));
+            if (!context.mounted ||
+                authBloc.state.currentUser?.walletId != expectedWalletId) {
+              return;
+            }
+            authBloc.add(
+              AuthWalletDownloadRequested(
+                password: password,
+                expectedWalletId: expectedWalletId,
+              ),
+            );
           },
           width: width,
           height: height,

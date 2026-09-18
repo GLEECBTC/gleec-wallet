@@ -17,9 +17,7 @@ class SendConfirmFormError extends StatelessWidget {
           child: Text(
             sendError?.message ?? 'Unknown error',
             textAlign: TextAlign.left,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-            ),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         );
       },

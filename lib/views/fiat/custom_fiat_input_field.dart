@@ -62,7 +62,7 @@ class _CustomFiatInputFieldState extends State<CustomFiatInputField> {
     final InputDecoration inputDecoration = InputDecoration(
       label: widget.label,
       labelStyle: inputStyle,
-      fillColor: Theme.of(context).colorScheme.onSurface,
+      fillColor: Theme.of(context).scaffoldBackgroundColor,
       floatingLabelStyle: Theme.of(
         context,
       ).inputDecorationTheme.floatingLabelStyle,

@@ -1,0 +1,188 @@
+# Real-KDF smoke, nightly. Informational, never gating.
+#
+# Spawns the actual ~120 MB KDF binary and talks to live electrum servers, so
+# it depends on third-party uptime and on a funded seed. Neither belongs in a
+# per-PR gate; both are worth knowing about once a day.
+name: KDF harness nightly (real KDF)
+run-name: Nightly real-KDF smoke 🌙
+
+on:
+  schedule:
+    # 03:20 UTC. Off the hour on purpose - the top of the hour is when every
+    # other scheduled job on GitHub's shared runners fires.
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  process_tier:
+    # Guards the scheduled intent even under workflow_dispatch's absence of one.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    # Never `continue-on-error: false` into a required check. This job reports;
+    # it does not block anything.
+    continue-on-error: true
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Real KDF smoke
+        id: process_tier
+        working-directory: sdk/packages/komodo_defi_harness
+        timeout-minutes: 30
+        env:
+          # The opt-in switch. Gating is on this and NOT on binary-existence:
+          # generate-assets above runs the build transformer, so the binary is
+          # present in every job that uses it, and an existence check would fail
+          # to skip in workflows that have no timeout budget for a real KDF.
+          # `flutter test` re-runs the asset build transformer, which reads the
+          # coins repo over the GitHub API. Unauthenticated it shares the
+          # runner's IP rate budget and fails with `403 rate limit exceeded`.
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KDF_HARNESS: "1"
+          # Skips cleanly when unset, which is the correct behaviour on a fork
+          # or before the secret is configured. Never echoed: the harness wraps
+          # it in `Secret` and redacts it from the captured log stream.
+          KDF_TEST_SEED: ${{ secrets.KDF_TEST_SEED }}
+        # `-j 1`: KDF's RPC port is fixed at 7783 (generateWithDefaults defaults
+        # it and the auth path never overrides it), so concurrent test files
+        # would each spawn a binary and race for the same port.
+        run: flutter test --tags process -j 1
+
+      # Deliberately no artifact upload. The harness workspace contains a real
+      # wallet database derived from KDF_TEST_SEED; the numbers belong in the
+      # job log, and nothing here is worth the risk of making "upload the run
+      # directory" the habit.
+      - name: Report
+        if: always()
+        env:
+          # Only whether the secret exists, never its value.
+          HAS_SEED: ${{ secrets.KDF_TEST_SEED != '' }}
+          OUTCOME: ${{ steps.process_tier.outcome }}
+        run: |
+          # This job is `continue-on-error`, so it can never go red. Without a
+          # summary, "the seed expired and nothing has run for months" and "the
+          # tier passed" are the same green tick. Say which one it was.
+          {
+            echo "## KDF harness - process tier"
+            if [ "$HAS_SEED" != "true" ]; then
+              echo
+              echo ":warning: **Skipped - \`KDF_TEST_SEED\` is not set.**"
+              echo "No real KDF ran. This is expected on forks; on this repo it"
+              echo "means the secret is missing or expired and the nightly has"
+              echo "been measuring nothing."
+            elif [ "$OUTCOME" = "success" ]; then
+              echo
+              echo ":white_check_mark: Ran against a real KDF. Timings are in the"
+              echo "step log (\`PROCESS TIER\` lines)."
+            else
+              echo
+              echo ":x: **Ran and failed** (outcome: \`$OUTCOME\`)."
+              echo "This job does not gate merges, so nobody is blocked - but the"
+              echo "real-KDF path is broken and wants a look."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # A single-node EVM coin, activated for real, on HD.
+  #
+  # This job exists because of a specific hole. The process tier above
+  # exercises KMD - a UTXO coin - so an EVM change that broke activation
+  # outright passed every gate this repo has: sdk 631, harness replay 22,
+  # process tier 4, bench within 1.9%, app 528, full app CI 8/8. GLEEC failed
+  # 100% of HD activations that entire time, on every login, because it is in
+  # `enabledByDefaultCoins`.
+  #
+  # Two properties are load-bearing and neither is incidental:
+  #
+  #   * **HD, not iguana.** iguana derives one address and activates GLEEC
+  #     fine even when broken; HD fans a ~21-wide gap scan out and is what
+  #     actually pressures the endpoint. An iguana gate would have stayed
+  #     green throughout.
+  #   * **A single-node coin.** The failure mode is "every node refused", and
+  #     on a chain with four nodes that needs four simultaneous outages. On a
+  #     chain with one it needs one refused request.
+  single_node_evm:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Reports rather than blocks, like the tier above: it talks to a live
+    # third-party endpoint, and a gate that goes red when someone else's
+    # server has a bad night trains people to ignore it.
+    continue-on-error: true
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Activate GLEEC (single-node EVM, HD)
+        id: gleec
+        timeout-minutes: 15
+        env:
+          KDF_TEST_SEED: ${{ secrets.KDF_TEST_SEED }}
+          # Names which endpoint refused what, so a red run says whether the
+          # cause was rate limiting or the node being down.
+          #
+          # INERT against the currently pinned KDF (main, f3efd2c): the
+          # telemetry module that reads it lives in the unmerged perf stack
+          # (kdf-internal PR #19/#20). Kept set so it starts working again the
+          # moment the pin carries that stack; until then a red run gives no
+          # per-endpoint attribution. See docs/KDF_PERF_STACK_DESCOPE.md.
+          KDF_EVM_RPC_TRACE: "1"
+        run: |
+          if [ -z "$KDF_TEST_SEED" ]; then
+            echo "KDF_TEST_SEED is not set; skipping." >&2
+            exit 0
+          fi
+          # `generate-assets` has already fetched the KDF binary, which the
+          # probe discovers on its own. The exit code is the assertion: the
+          # probe returns non-zero if any activation step failed.
+          python3 tool/kdf_latency_probe.py --quick --coin-list GLEEC --p2p
+
+      - name: Report
+        if: always()
+        env:
+          HAS_SEED: ${{ secrets.KDF_TEST_SEED != '' }}
+          OUTCOME: ${{ steps.gleec.outcome }}
+        run: |
+          {
+            echo "## Single-node EVM activation (GLEEC, HD)"
+            if [ "$HAS_SEED" != "true" ]; then
+              echo
+              echo ":warning: **Skipped - \`KDF_TEST_SEED\` is not set.**"
+            elif [ "$OUTCOME" = "success" ]; then
+              echo
+              echo ":white_check_mark: GLEEC activated on HD against its one node."
+            else
+              echo
+              echo ":x: **GLEEC did not activate** (outcome: \`$OUTCOME\`)."
+              echo "This is on every login - GLEEC is in \`enabledByDefaultCoins\`."
+              echo "Read the activation error in the step log above."
+              echo "Per-endpoint attribution (\`evm_rpc_failover\`,"
+              echo "\`evm_rpc_backoff\`, \`evm_rpc_exhausted\`) is **not**"
+              echo "available on the pinned KDF: that telemetry lives in"
+              echo "kdf-internal PR #19/#20, still unmerged. GLEEC has one node,"
+              echo "so on this pin a rate-limited response and a dead node look"
+              echo "the same. See docs/KDF_PERF_STACK_DESCOPE.md."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

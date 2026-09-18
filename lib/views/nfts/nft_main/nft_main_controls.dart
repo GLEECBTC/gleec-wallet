@@ -8,7 +8,6 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/nfts/nft_main_bloc.dart';
-import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/dispatchers/popup_dispatcher.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/router/state/routing_state.dart';
@@ -16,7 +15,13 @@ import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dar
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
 class NftMainControls extends StatefulWidget {
-  const NftMainControls({super.key});
+  const NftMainControls({super.key, this.canReceive = true});
+
+  /// Whether "Receive NFT" can be offered. Receiving starts NftReceiveBloc on
+  /// the selected chain, which fetches pubkeys for that chain's parent coin -
+  /// something an un-enabled chain does not have. "Transactions" is chain
+  /// independent, so the row itself stays.
+  final bool canReceive;
 
   @override
   State<NftMainControls> createState() => _NftMainControlsState();
@@ -51,7 +56,7 @@ class _NftMainControlsState extends State<NftMainControls> {
             angle: math.pi / 4,
             child: Icon(Icons.arrow_forward, color: colorScheme.primary),
           ),
-          onPressed: _onReceiveNft,
+          onPressed: widget.canReceive ? _onReceiveNft : null,
           textStyle: textTheme.bodySBold.copyWith(color: colorScheme.primary),
         ),
         const Spacer(),
@@ -87,12 +92,13 @@ class _NftMainControlsState extends State<NftMainControls> {
 
     return PopupDispatcher(
       borderColor: theme.custom.specificButtonBorderColor,
-      barrierColor: isMobile ? Theme.of(context).colorScheme.onSurface : null,
       barrierDismissible: false,
       width: 320,
       context: scaffoldKey.currentContext ?? context,
       popupContent: WalletsManagerWrapper(
-        eventType: WalletsManagerEventType.header,
+        // Was `header`, which mislabelled every NFT-initiated login in analytics.
+        eventType: WalletsManagerEventType.nft,
+        onCancel: () => _popupDispatcher?.close(),
         onSuccess: (_) async {
           nftBloc.add(const NftMainChainUpdateRequested());
           _popupDispatcher?.close();

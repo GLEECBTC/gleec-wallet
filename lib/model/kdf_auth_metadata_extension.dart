@@ -1,12 +1,47 @@
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart' show Asset;
+import 'package:komodo_defi_types/komodo_defi_types.dart' show Asset, WalletId;
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/wallet.dart';
 
 final Logger _walletMetadataLog = Logger('KdfAuthMetadataExtension');
+
+/// Config IDs that upstream renamed, mapped to their current spelling.
+///
+/// `activated_coins` stores raw config IDs, and a stored ID that no longer
+/// names an asset is silently skipped — so without this a wallet that held
+/// Polygon before the MATIC -> POL rename would simply lose the row. The
+/// coins themselves are unaffected: POL keeps chain 137 and derivation path
+/// m/44'/60', so the funds are at the same address either way.
+const Map<String, String> _renamedCoinIds = {
+  'MATIC': 'POL',
+  'MATICTEST': 'POLTEST',
+  'NFT_MATIC': 'NFT_POL',
+};
+
+/// The config IDs to try for a stored activated coin, in priority order.
+///
+/// The stored ID is tried first and the rename is only a fallback, so this
+/// resolves whether or not the bundled coins config has picked up the rename
+/// yet. Rewriting unconditionally breaks the other direction: against a
+/// pre-rename config, `MATIC` -> `POL` turns a resolvable ID into an
+/// unresolvable one and drops the row it was meant to preserve.
+///
+/// Public so `test_units` can pin the mapping directly; not intended for use
+/// outside this file (`@visibleForTesting` does not recognise `test_units/`).
+List<String> activatedCoinIdCandidates(String storedId) => [
+  storedId,
+  if (_renamedCoinIds.containsKey(storedId)) _renamedCoinIds[storedId]!,
+];
+
+/// Stored IDs that a removal of [coinId] must also clear, so a wallet holding
+/// the pre-rename spelling is not left with an entry the UI cannot remove.
+List<String> legacyActivatedCoinIds(String coinId) => [
+  for (final entry in _renamedCoinIds.entries)
+    if (entry.value == coinId) entry.key,
+];
 
 extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// Checks if a wallet with the specified ID exists in the system.
@@ -51,7 +86,11 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     final walletAssets = <Asset>[];
 
     for (final coinId in coinIds) {
-      final matchingAssets = assets.findAssetsByConfigId(coinId);
+      var matchingAssets = <Asset>{};
+      for (final candidate in activatedCoinIdCandidates(coinId)) {
+        matchingAssets = assets.findAssetsByConfigId(candidate);
+        if (matchingAssets.isNotEmpty) break;
+      }
       if (matchingAssets.isEmpty) {
         missingCoinIds.add(coinId);
         continue;
@@ -105,11 +144,14 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// If no user is currently signed in, the operation will throw.
   ///
   /// [coins] - An iterable of coin/asset configuration IDs to add.
-  Future<void> addActivatedCoins(Iterable<String> coins) async {
+  Future<void> addActivatedCoins(
+    Iterable<String> coins, {
+    required WalletId expectedWalletId,
+  }) async {
     await auth.updateActiveUserKeyValue('activated_coins', (current) {
       final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
       return <String>{...existing, ...coins}.toList();
-    });
+    }, expectedWalletId: expectedWalletId);
   }
 
   /// Removes specified coin/asset IDs from the current user's activated coins list.
@@ -121,12 +163,18 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// If no user is currently signed in, the operation will throw.
   ///
   /// [coins] - A list of coin/asset configuration IDs to remove.
-  Future<void> removeActivatedCoins(List<String> coins) async {
+  Future<void> removeActivatedCoins(
+    List<String> coins, {
+    required WalletId expectedWalletId,
+  }) async {
     await auth.updateActiveUserKeyValue('activated_coins', (current) {
       final existing = (current as List<dynamic>?)?.cast<String>() ?? [];
-      final updated = existing.where((c) => !coins.contains(c)).toList();
+      final removing = {
+        for (final coin in coins) ...[coin, ...legacyActivatedCoinIds(coin)],
+      };
+      final updated = existing.where((c) => !removing.contains(c)).toList();
       return updated.isEmpty ? null : updated;
-    });
+    }, expectedWalletId: expectedWalletId);
   }
 
   /// Sets the seed backup confirmation status for the current user.
@@ -134,11 +182,20 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// This method stores whether the user has confirmed backing up their seed phrase.
   /// This is typically used to track wallet security compliance.
   ///
-  /// If no user is currently signed in, the operation will complete but have no effect.
+  /// The write fails if the original wallet is no longer authenticated.
   ///
   /// [hasBackup] - Whether the seed has been backed up. Defaults to `true`.
-  Future<void> confirmSeedBackup({bool hasBackup = true}) async {
-    await auth.setOrRemoveActiveUserKeyValue('has_backup', hasBackup);
+  /// [expectedWalletId] binds a completed backup flow to the wallet whose
+  /// recovery phrase was shown, even if the active wallet changes mid-write.
+  Future<void> confirmSeedBackup({
+    bool hasBackup = true,
+    required WalletId expectedWalletId,
+  }) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      'has_backup',
+      hasBackup,
+      expectedWalletId: expectedWalletId,
+    );
   }
 
   /// Sets the wallet type for the current user.
@@ -146,31 +203,46 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// This method stores the wallet type in user metadata, which can be used
   /// to determine wallet-specific behavior and features.
   ///
-  /// If no user is currently signed in, the operation will complete but have no effect.
+  /// The write fails if the original wallet is no longer authenticated.
   ///
   /// [type] - The wallet type to set for the current user.
-  Future<void> setWalletType(WalletType type) async {
-    await auth.setOrRemoveActiveUserKeyValue('type', type.name);
+  Future<void> setWalletType(
+    WalletType type, {
+    required WalletId expectedWalletId,
+  }) async {
+    await auth.setOrRemoveActiveUserKeyValue(
+      'type',
+      type.name,
+      expectedWalletId: expectedWalletId,
+    );
   }
 
   /// Sets the wallet provenance for the current user.
   ///
   /// Stored values are used by wallet selection UIs to show quick metadata
   /// tags (generated/imported).
-  Future<void> setWalletProvenance(WalletProvenance provenance) async {
+  Future<void> setWalletProvenance(
+    WalletProvenance provenance, {
+    required WalletId expectedWalletId,
+  }) async {
     await auth.setOrRemoveActiveUserKeyValue(
       'wallet_provenance',
       provenance.name,
+      expectedWalletId: expectedWalletId,
     );
   }
 
   /// Sets the wallet creation timestamp for the current user.
   ///
   /// Stored as milliseconds since epoch.
-  Future<void> setWalletCreatedAt(DateTime createdAt) async {
+  Future<void> setWalletCreatedAt(
+    DateTime createdAt, {
+    required WalletId expectedWalletId,
+  }) async {
     await auth.setOrRemoveActiveUserKeyValue(
       'wallet_created_at',
       createdAt.millisecondsSinceEpoch,
+      expectedWalletId: expectedWalletId,
     );
   }
 
@@ -181,6 +253,7 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
   /// attempts to roll back the keys that were already written (best-effort)
   /// before rethrowing so callers can decide how to recover.
   Future<void> setMigratedLegacySource({
+    required WalletId expectedWalletId,
     required LegacyWalletSource source,
     required LegacyMigrationCleanupStatus cleanupStatus,
   }) async {
@@ -189,22 +262,28 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
       await auth.setOrRemoveActiveUserKeyValue(
         legacySourceKindMetadataKey,
         source.kind.name,
+        expectedWalletId: expectedWalletId,
       );
       writtenKeys.add(legacySourceKindMetadataKey);
 
       await auth.setOrRemoveActiveUserKeyValue(
         legacySourceWalletIdMetadataKey,
         source.originalWalletId,
+        expectedWalletId: expectedWalletId,
       );
       writtenKeys.add(legacySourceWalletIdMetadataKey);
 
       await auth.setOrRemoveActiveUserKeyValue(
         legacySourceWalletNameMetadataKey,
         source.originalWalletName,
+        expectedWalletId: expectedWalletId,
       );
       writtenKeys.add(legacySourceWalletNameMetadataKey);
 
-      await setLegacyCleanupStatus(cleanupStatus);
+      await setLegacyCleanupStatus(
+        cleanupStatus,
+        expectedWalletId: expectedWalletId,
+      );
       writtenKeys.add(legacyCleanupStatusMetadataKey);
     } catch (error, stackTrace) {
       _walletMetadataLog.shout(
@@ -217,7 +296,11 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
 
       for (final key in writtenKeys) {
         try {
-          await auth.setOrRemoveActiveUserKeyValue(key, null);
+          await auth.setOrRemoveActiveUserKeyValue(
+            key,
+            null,
+            expectedWalletId: expectedWalletId,
+          );
         } catch (rollbackError) {
           _walletMetadataLog.warning(
             'Rollback of metadata key "$key" failed: $rollbackError',
@@ -231,19 +314,25 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
 
   /// Updates only the legacy cleanup status metadata on the current user.
   Future<void> setLegacyCleanupStatus(
-    LegacyMigrationCleanupStatus cleanupStatus,
-  ) async {
+    LegacyMigrationCleanupStatus cleanupStatus, {
+    required WalletId expectedWalletId,
+  }) async {
     await auth.setOrRemoveActiveUserKeyValue(
       legacyCleanupStatusMetadataKey,
       cleanupStatus.name,
+      expectedWalletId: expectedWalletId,
     );
   }
 
   /// Stores hidden legacy wallet extras metadata on the current user.
-  Future<void> setLegacyWalletExtras(Map<String, dynamic> extras) async {
+  Future<void> setLegacyWalletExtras(
+    Map<String, dynamic> extras, {
+    required WalletId expectedWalletId,
+  }) async {
     await auth.setOrRemoveActiveUserKeyValue(
       legacyWalletExtrasMetadataKey,
       extras.isEmpty ? null : extras,
+      expectedWalletId: expectedWalletId,
     );
   }
 }

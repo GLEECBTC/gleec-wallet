@@ -13,10 +13,6 @@ Future<void> dexPage(WidgetTester tester, {ScreenType? type}) async {
   return await _go('main-menu-dex', tester);
 }
 
-Future<void> bridgePage(WidgetTester tester, {ScreenType? type}) async {
-  return await _go('main-menu-bridge', tester);
-}
-
 Future<void> nftsPage(WidgetTester tester, {ScreenType? type}) async {
   return await _go('main-menu-nft', tester);
 }

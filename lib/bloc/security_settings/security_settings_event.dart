@@ -45,22 +45,13 @@ class PasswordUpdateEvent extends SecuritySettingsEvent {
   const PasswordUpdateEvent();
 }
 
-/// Event to authenticate user for private key access.
-///
-/// **Security Note**: This event does NOT contain the actual password.
-/// Authentication is handled through the existing wallet password dialog,
-/// and this event only triggers the authentication process in the BLoC.
-/// Actual private key retrieval happens in the UI layer after authentication
-/// succeeds to minimize sensitive data exposure.
+/// Legacy sign-in presence check for compatibility navigation.
+/// The current export BLoC independently verifies the password and session.
 class AuthenticateForPrivateKeysEvent extends SecuritySettingsEvent {
   const AuthenticateForPrivateKeysEvent();
 }
 
-/// Event to show the private keys screen.
-///
-/// **Security Note**: This event does NOT contain private key data.
-/// It only controls the UI flow. The actual private keys are fetched
-/// and stored in the UI layer for minimal memory exposure.
+/// Selects the export result screen. The export BLoC retains the result.
 class ShowPrivateKeysEvent extends SecuritySettingsEvent {
   const ShowPrivateKeysEvent();
 }
@@ -68,7 +59,7 @@ class ShowPrivateKeysEvent extends SecuritySettingsEvent {
 /// Event to toggle visibility of private keys in the UI.
 ///
 /// **Security Note**: This only controls UI visibility state.
-/// The actual private key data remains in the UI layer.
+/// This legacy visibility flag is not used by the current export flow.
 class ShowPrivateKeysWordsEvent extends SecuritySettingsEvent {
   const ShowPrivateKeysWordsEvent(this.isShow);
   final bool isShow;

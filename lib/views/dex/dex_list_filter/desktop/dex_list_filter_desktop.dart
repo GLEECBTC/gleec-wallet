@@ -49,7 +49,7 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Theme.of(context).colorScheme.onSurface,
+        color: Theme.of(context).scaffoldBackgroundColor,
       ),
       child: SizedBox(
         width: double.infinity,
@@ -64,7 +64,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
               children: [
                 ConstrainedBox(
                   constraints: const BoxConstraints.tightFor(
-                      width: 130, height: _itemHeight),
+                    width: 130,
+                    height: _itemHeight,
+                  ),
                   child: DexListFilterCoinDesktop(
                     label: LocaleKeys.buyAsset.tr(),
                     coinAbbr: _filterData.buyCoin,
@@ -81,7 +83,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ),
                 ConstrainedBox(
                   constraints: const BoxConstraints.tightFor(
-                      width: 130, height: _itemHeight),
+                    width: 130,
+                    height: _itemHeight,
+                  ),
                   child: DexListFilterCoinDesktop(
                     label: LocaleKeys.sellAsset.tr(),
                     coinAbbr: _filterData.sellCoin,
@@ -98,7 +102,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ),
                 ConstrainedBox(
                   constraints: const BoxConstraints(
-                      maxWidth: 113, maxHeight: _itemHeight),
+                    maxWidth: 113,
+                    maxHeight: _itemHeight,
+                  ),
                   child: UiDatePicker(
                     formatter: DateFormat('dd.MM.yyyy').format,
                     date: _filterData.startDate,
@@ -114,7 +120,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                 ),
                 ConstrainedBox(
                   constraints: const BoxConstraints(
-                      maxWidth: 113, maxHeight: _itemHeight),
+                    maxWidth: 113,
+                    maxHeight: _itemHeight,
+                  ),
                   child: UiDatePicker(
                     formatter: DateFormat('dd.MM.yyyy').format,
                     date: _filterData.endDate,
@@ -192,8 +200,9 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
                     : newThemeDark,
                 child: Builder(
                   builder: (context) {
-                    final ext =
-                        Theme.of(context).extension<ColorSchemeExtension>();
+                    final ext = Theme.of(
+                      context,
+                    ).extension<ColorSchemeExtension>();
                     return UIChip(
                       showIcon: false,
                       title: LocaleKeys.clearFilter.tr(),
@@ -221,10 +230,10 @@ class _DexListFilterDesktopState extends State<DexListFilterDesktop> {
   void _applyFiltersData() => widget.onApplyFilter(_filterData);
 
   void _reset() => setState(() {
-        _filterData = TradingEntitiesFilter();
-      });
+    _filterData = TradingEntitiesFilter();
+  });
 
   void _update() => setState(() {
-        _filterData = TradingEntitiesFilter.from(widget.filterData);
-      });
+    _filterData = TradingEntitiesFilter.from(widget.filterData);
+  });
 }

@@ -10,24 +10,52 @@ import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 
 // TODO! Integrate this widget directly to the SDK and make it subscribe to
 // the balance changes of the coin.
-class CoinBalance extends StatelessWidget {
+class CoinBalance extends StatefulWidget {
   const CoinBalance({super.key, required this.coin, this.isVertical = false});
 
   final Coin coin;
   final bool isVertical;
 
   @override
+  State<CoinBalance> createState() => _CoinBalanceState();
+}
+
+class _CoinBalanceState extends State<CoinBalance> {
+  /// Held for the lifetime of the widget rather than created in [build].
+  ///
+  /// Every `watchBalance` call returns a new stream. Creating one in [build]
+  /// makes [StreamBuilder] unsubscribe and resubscribe on every rebuild, which
+  /// flaps the SDK's per-asset broadcast controller 1->0->1 and re-runs its
+  /// `onCancel`/`onListen` hooks - tearing down and restarting the KDF balance
+  /// watcher (an IndexedDB read plus several RPCs) each time.
+  late Stream<BalanceInfo> _balanceStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceStream = context.sdk.balances.watchBalance(widget.coin.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant CoinBalance oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coin.id != widget.coin.id) {
+      _balanceStream = context.sdk.balances.watchBalance(widget.coin.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final coin = widget.coin;
+    final isVertical = widget.isVertical;
     final baseFont = Theme.of(context).textTheme.bodySmall;
     final balanceStyle = baseFont?.copyWith(fontWeight: FontWeight.w500);
     final hideBalances = context.select(
       (SettingsBloc bloc) => bloc.state.hideBalances,
     );
 
-    final balanceStream = context.sdk.balances.watchBalance(coin.id);
-
     return StreamBuilder<BalanceInfo>(
-      stream: balanceStream,
+      stream: _balanceStream,
       builder: (context, snapshot) {
         final balance = snapshot.data?.spendable.toDouble();
         final balanceText = hideBalances

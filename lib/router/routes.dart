@@ -1,6 +1,5 @@
 import 'package:web_dex/model/first_uri_segment.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
-import 'package:web_dex/router/state/bridge_section_state.dart';
 import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/router/state/fiat_state.dart';
 import 'package:web_dex/router/state/market_maker_bot_state.dart';
@@ -80,17 +79,6 @@ class DexRoutePath implements AppRoutePath {
   final String toCurrency;
   final String toAmount;
   final String orderType;
-}
-
-class BridgeRoutePath implements AppRoutePath {
-  BridgeRoutePath.bridge() : location = '/${firstUriSegment.bridge}', uuid = '';
-  BridgeRoutePath.swapDetails(this.action, this.uuid)
-    : location = '/${firstUriSegment.bridge}/trading_details/$uuid';
-
-  @override
-  final String location;
-  final String uuid;
-  BridgeAction action = BridgeAction.none;
 }
 
 class NftRoutePath implements AppRoutePath {

@@ -32,10 +32,10 @@ class KmdRewardInfoHeader extends StatelessWidget {
         SelectableText(
           rewardText,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isThereReward ? theme.custom.increaseColor : null,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+            color: isThereReward ? theme.custom.increaseColor : null,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 6),
         if (isThereReward)
@@ -43,19 +43,16 @@ class KmdRewardInfoHeader extends StatelessWidget {
             children: [
               SelectableText(
                 '\$${cutTrailingZeros(formatAmt(totalRewardUsd ?? 0))}',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Colors.grey,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(color: Colors.grey),
               ),
               const SizedBox(width: 6),
               CustomTooltip(
                 maxWidth: 250,
                 padding: const EdgeInsets.all(12),
                 tooltip: _buildTooltip(context),
-                child: const Icon(
-                  Icons.info_outline,
-                  size: 24,
-                ),
+                child: const Icon(Icons.info_outline, size: 24),
               ),
             ],
           ),

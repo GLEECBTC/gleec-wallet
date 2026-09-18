@@ -226,7 +226,7 @@ class PortfolioGrowthRepository {
     // constant value of 1.0
     if (baseCoinId.toLowerCase() == fiatCoinId.toLowerCase()) {
       _log.fine('Using constant price for fiat coin: $baseCoinId');
-      ohlcData = Map.fromIterable(
+      ohlcData = Map.fromEntries(
         CoinOhlc.fromConstantPrice(
           startAt: startAt,
           endAt: endAt,

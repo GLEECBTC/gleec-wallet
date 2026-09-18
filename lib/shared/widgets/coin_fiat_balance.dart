@@ -9,7 +9,7 @@ import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
-class CoinFiatBalance extends StatelessWidget {
+class CoinFiatBalance extends StatefulWidget {
   const CoinFiatBalance(
     this.coin, {
     super.key,
@@ -24,11 +24,37 @@ class CoinFiatBalance extends StatelessWidget {
   final bool isAutoScrollEnabled;
 
   @override
+  State<CoinFiatBalance> createState() => _CoinFiatBalanceState();
+}
+
+class _CoinFiatBalanceState extends State<CoinFiatBalance> {
+  /// Held for the widget's lifetime - see [CoinBalance] for why creating this
+  /// in [build] restarts the SDK balance watcher on every rebuild.
+  late Stream<BalanceInfo> _balanceStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceStream = context.sdk.balances.watchBalance(widget.coin.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant CoinFiatBalance oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coin.id != widget.coin.id) {
+      _balanceStream = context.sdk.balances.watchBalance(widget.coin.id);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final coin = widget.coin;
+    final style = widget.style;
+    final isSelectable = widget.isSelectable;
+    final isAutoScrollEnabled = widget.isAutoScrollEnabled;
     final hideBalances = context.select(
       (SettingsBloc bloc) => bloc.state.hideBalances,
     );
-    final balanceStream = context.sdk.balances.watchBalance(coin.id);
 
     final TextStyle mergedStyle = const TextStyle(
       fontSize: 12,
@@ -52,7 +78,7 @@ class CoinFiatBalance extends StatelessWidget {
       selector: (state) => state.getPriceForAsset(coin.id)?.price?.toDouble(),
       builder: (context, price) {
         return StreamBuilder<BalanceInfo>(
-          stream: balanceStream,
+          stream: _balanceStream,
           builder: (context, snapshot) {
             final balance = snapshot.data?.spendable.toDouble();
             if (balance == null || price == null) {

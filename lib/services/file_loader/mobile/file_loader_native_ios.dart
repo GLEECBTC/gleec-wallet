@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/diagnostic_artifacts_native.dart';
 import 'package:web_dex/shared/utils/zip.dart';
 
 class FileLoaderNativeIOS implements FileLoader {
@@ -48,8 +49,9 @@ class FileLoaderNativeIOS implements FileLoader {
     required String data,
   }) async {
     final directory = await getApplicationDocumentsDirectory();
-    final String suggestedName =
-        path.extension(fileName).isEmpty ? '$fileName.txt' : fileName;
+    final String suggestedName = path.extension(fileName).isEmpty
+        ? '$fileName.txt'
+        : fileName;
     final filePath = path.join(directory.path, suggestedName);
     final File file = File(filePath);
     await file.writeAsString(data);
@@ -57,11 +59,7 @@ class FileLoaderNativeIOS implements FileLoader {
     await SharePlus.instance.share(
       ShareParams(
         files: [
-          XFile(
-            file.path,
-            name: '$fileName.txt',
-            mimeType: 'text/plain',
-          )
+          XFile(file.path, name: '$fileName.txt', mimeType: 'text/plain'),
         ],
         sharePositionOrigin: _getSharePositionOrigin(),
       ),
@@ -73,8 +71,9 @@ class FileLoaderNativeIOS implements FileLoader {
     required String data,
   }) async {
     final directory = await getApplicationDocumentsDirectory();
-    final String suggestedName =
-        path.extension(fileName).isEmpty ? '$fileName.json' : fileName;
+    final String suggestedName = path.extension(fileName).isEmpty
+        ? '$fileName.json'
+        : fileName;
     final filePath = path.join(directory.path, suggestedName);
 
     String prettyData = data;
@@ -93,27 +92,38 @@ class FileLoaderNativeIOS implements FileLoader {
     required String fileName,
     required String data,
   }) async {
-    final directory = await getApplicationDocumentsDirectory();
+    final isDiagnostic = fileName.startsWith('komodo_wallet_log_');
+    final directory = isDiagnostic
+        ? await diagnosticShareDirectory()
+        : await getApplicationDocumentsDirectory();
     final filePath = path.join(directory.path, '$fileName.zip');
 
-    final compressedBytes =
-        createZipOfSingleFile(fileName: fileName, fileContent: data);
+    final compressedBytes = createZipOfSingleFile(
+      fileName: fileName,
+      fileContent: data,
+    );
 
     final File compressedFile = File(filePath);
     await compressedFile.writeAsBytes(compressedBytes);
 
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [
-          XFile(
-            compressedFile.path,
-            name: '$fileName.zip',
-            mimeType: 'application/zip',
-          )
-        ],
-        sharePositionOrigin: _getSharePositionOrigin(),
-      ),
-    );
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile(
+              compressedFile.path,
+              name: '$fileName.zip',
+              mimeType: 'application/zip',
+            ),
+          ],
+          sharePositionOrigin: _getSharePositionOrigin(),
+        ),
+      );
+    } finally {
+      if (isDiagnostic && await compressedFile.exists()) {
+        await compressedFile.delete();
+      }
+    }
   }
 
   @override

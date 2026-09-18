@@ -42,19 +42,25 @@ import UIKit
   private func handleFdMonitorMethodCall(call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "start":
-      let intervalSeconds: TimeInterval
-      if let args = call.arguments as? [String: Any],
-         let interval = args["intervalSeconds"] as? Double {
-        intervalSeconds = interval
-      } else {
-        intervalSeconds = 60.0
-      }
-      FdMonitor.shared.start(intervalSeconds: intervalSeconds)
-      result(["success": true, "message": "FD Monitor started with interval: \(intervalSeconds)s"])
+      let args = call.arguments as? [String: Any]
+      let intervalSeconds = (args?["intervalSeconds"] as? Double) ?? 60.0
+      let sampleIntervalSeconds = (args?["sampleIntervalSeconds"] as? Double) ?? 0
+      FdMonitor.shared.start(
+        intervalSeconds: intervalSeconds,
+        sampleIntervalSeconds: sampleIntervalSeconds
+      )
+      result([
+        "success": true,
+        "message": "FD Monitor started with interval: \(intervalSeconds)s, sampling: \(sampleIntervalSeconds)s",
+      ])
 
     case "stop":
       FdMonitor.shared.stop()
       result(["success": true, "message": "FD Monitor stopped"])
+
+    case "resetPeak":
+      FdMonitor.shared.resetPeak()
+      result(["success": true, "message": "FD peak watermark reset"])
 
     case "getCurrentCount":
       let count = FdMonitor.shared.getCurrentCount()

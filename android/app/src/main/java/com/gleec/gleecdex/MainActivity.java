@@ -24,6 +24,7 @@ import io.flutter.plugin.common.MethodChannel;
 
 
 public class MainActivity extends FlutterActivity {
+    private SensitiveExportChannel sensitiveExports;
     private boolean isSafBytes = false;
     private MethodChannel.Result safResult;
     private String safData;
@@ -77,6 +78,9 @@ public class MainActivity extends FlutterActivity {
         // MRC: Needed so the custom SAF implementation doesn't break the file_picker plugin
         super.onActivityResult(requestCode, resultCode, resultData);
 
+        if (sensitiveExports != null &&
+                sensitiveExports.onActivityResult(requestCode, resultCode, resultData)) return;
+
         if (requestCode == CREATE_SAF_FILE
                 && resultCode == Activity.RESULT_OK) {
             Log.i(TAG_CREATE_SAF_FILE, "File picker finished");
@@ -122,5 +126,13 @@ public class MainActivity extends FlutterActivity {
     public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
         setupSaf(flutterEngine);
+        sensitiveExports = new SensitiveExportChannel(
+                this, flutterEngine.getDartExecutor().getBinaryMessenger());
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (sensitiveExports != null) sensitiveExports.dispose();
+        super.onDestroy();
     }
 }

@@ -6,6 +6,19 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# Must match the values the build workflows compile with (see
+# firebase-hosting-merge.yml and desktop-builds.yml). Non-secret: the same
+# values are hardcoded there.
+#
+# Without these, `tronGaslessServiceProvider` falls back to its empty default
+# (lib/shared/constants.dart), every GasFree provider-identity check fails
+# closed, and ~36 gas-free tests never reach the state they await. They then
+# hang rather than fail, because an unbounded `bloc.stream.firstWhere` has no
+# deadline - which wedged the whole runner and made this job time out.
+env:
+  TRON_GASLESS_MAINNET_BASE_URL: "https://quicknode.gleec.com/gasfree/tron"
+  TRON_GASLESS_MAINNET_SERVICE_PROVIDER: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+
 jobs:
   unit_tests:
     runs-on: ubuntu-latest
@@ -38,8 +51,14 @@ jobs:
         timeout-minutes: 15
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
+          TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
         run: |
-          flutter test test_units/main.dart
+          flutter test test_units/main.dart \
+            --dart-define=TRON_GASLESS_ENABLED=true \
+            --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+            --dart-define=TRON_GASLESS_BASE_URL="$TRON_GASLESS_BASE_URL" \
+            --dart-define=TRON_GASLESS_SERVICE_PROVIDER="$TRON_GASLESS_SERVICE_PROVIDER"
 
       - name: Generate unit test coverage report
         id: unit_test_coverage
@@ -47,3 +66,10 @@ jobs:
         uses: ./.github/actions/code-coverage
         with:
           test_file: "test_units/main.dart"
+          # The coverage run is a second `flutter test`; without the same
+          # defines it reproduces the wedge this job was timing out on.
+          dart_defines: >-
+            --dart-define=TRON_GASLESS_ENABLED=true
+            --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true
+            --dart-define=TRON_GASLESS_BASE_URL=${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
+            --dart-define=TRON_GASLESS_SERVICE_PROVIDER=${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}

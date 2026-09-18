@@ -187,6 +187,7 @@ class _FakeCoinsRepo implements CoinsRepo {
     List<Asset> assets, {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
+    bool useSharedActivationCache = false,
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
@@ -219,6 +220,7 @@ class _FakeCoinsRepo implements CoinsRepo {
   @override
   Future<void> rollbackPreviewAssets(
     Iterable<Asset> assets, {
+    required WalletId expectedWalletId,
     Set<AssetId> deleteCustomTokens = const {},
     Set<AssetId> removeWalletMetadataAssets = const {},
     bool notifyListeners = false,

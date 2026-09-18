@@ -15,6 +15,7 @@ import 'package:logging/logging.dart';
 import 'package:web_dex/app_config/app_config.dart'
     show excludedAssetList, kDebugElectrumLogs;
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
+import 'package:web_dex/bloc/coins_bloc/coin_activation_state_bridge.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart'
     show TradingStatusService;
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -34,6 +35,34 @@ import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 
+/// Ceiling on a single coin's balance read during the fallback balance sweep.
+///
+/// The sweep is consumed by a `droppable()` bloc handler via `emit.forEach`, so
+/// it must always terminate: see [CoinsRepo.updateIguanaBalances].
+const Duration _balanceRefreshPerCoinTimeout = Duration(seconds: 20);
+
+/// How many coin balances the fallback sweep reads at once.
+///
+/// Small on purpose: on web every one of these is an RPC into a KDF instance
+/// that shares the browser's main thread with the UI, so the goal is to stop
+/// the sweep being a strict sum of per-coin latencies without turning it into
+/// a burst that starves activation.
+const int _balanceRefreshConcurrency = 4;
+
+/// Ceiling on a single activation attempt.
+///
+/// Generous: a cold UTXO activation legitimately takes tens of seconds, and a
+/// cold EVM one was measured at up to 346s. This exists only so an attempt that
+/// will *never* return becomes a retryable failure - see
+/// [CoinsRepo.activateAssetsSync].
+///
+/// Must stay **above** `SharedActivationCoordinator.evmActivationTimeout`
+/// (8 min). The coordinator has to fire first so it can clear its pending
+/// entry; if this fires first the retry re-joins the still-pending completer
+/// instead of starting fresh, which is the wedge the coordinator's deadline
+/// exists to break.
+const Duration _activationAttemptTimeout = Duration(minutes: 10);
+
 /// Exception used to indicate that ZHTLC activation was cancelled by the user.
 class ZhtlcActivationCancelled implements Exception {
   ZhtlcActivationCancelled(this.coinId);
@@ -52,20 +81,74 @@ class CoinsRepo {
        _mm2 = mm2,
        _tradingStatusService = tradingStatusService,
        _arrrActivationService = arrrActivationService {
-    enabledAssetsChanges = StreamController<Coin>.broadcast(
-      onListen: () => _enabledAssetListenerCount += 1,
-      onCancel: () => _enabledAssetListenerCount -= 1,
+    balanceChanges = StreamController<Coin>.broadcast();
+    _activationBridge = CoinActivationStateBridge(
+      sdkStates: _kdfSdk.watchActivationStates().expand(_coinsFromStates),
+      sdkSnapshot: () => _coinsFromStates(_kdfSdk.activationStates),
     );
-    balanceChanges = StreamController<Coin>.broadcast(
-      onListen: () => _balanceListenerCount += 1,
-      onCancel: () => _balanceListenerCount -= 1,
-    );
+  }
+
+  late final CoinActivationStateBridge _activationBridge;
+
+  /// Activation state of every coin, current state first then every change.
+  ///
+  /// Replaces the old `enabledAssetsChanges` controller. See
+  /// [CoinActivationStateBridge] for why the SDK stream alone is not enough.
+  Stream<Coin> watchCoinActivationState() => _activationBridge.watch();
+
+  /// Re-emits the SDK's current activation state for [assetIds].
+  ///
+  /// Needed because the SDK emits nothing for an asset that is *already*
+  /// active, so re-enabling a locally-disabled coin would otherwise produce no
+  /// row. See [CoinActivationStateBridge.release].
+  void republishActivationState(Iterable<AssetId> assetIds) =>
+      _activationBridge.republish(assetIds);
+
+  /// Stops SDK activation events for [assetIds] reaching the UI.
+  void suppressActivationBroadcasts(Iterable<AssetId> assetIds) =>
+      _activationBridge.suppress(assetIds);
+
+  /// Lifts suppression for [assetIds] and republishes their current state.
+  void releaseActivationBroadcasts(Iterable<AssetId> assetIds) =>
+      _activationBridge.release(assetIds);
+
+  /// Maps an SDK activation-state snapshot to app [Coin]s.
+  ///
+  /// Only `activating` and `active` cross the boundary:
+  ///
+  /// * SDK `failed` is *per attempt*, while this repo owns the retry envelope
+  ///   and publishes its own terminal `suspended` once the budget is spent.
+  ///   Forwarding it would evict and re-add the row on every retry, because
+  ///   `CoinsBloc._onWalletCoinUpdated` removes suspended rows.
+  /// * "absent" is not `inactive` for this app: `deactivateCoinsSync`
+  ///   deliberately leaves the coin enabled in KDF, so the app - not the SDK -
+  ///   owns leaving the wallet.
+  Iterable<Coin> _coinsFromStates(Map<AssetId, AssetActivationState> states) {
+    final coins = <Coin>[];
+    for (final state in states.values) {
+      final coinState = switch (state.status) {
+        AssetActivationStatus.activating => CoinState.activating,
+        AssetActivationStatus.active => CoinState.active,
+        AssetActivationStatus.failed => null,
+      };
+      if (coinState == null) continue;
+      final asset = _kdfSdk.assets.available[state.assetId];
+      if (asset == null) continue;
+      // An SDK-internal activation must not create a row for a geo-blocked
+      // asset; CoinsState only filters NFT_* assets.
+      if (_tradingStatusService.isAssetBlocked(asset.id)) continue;
+      coins.add(_assetToCoinWithoutAddress(asset).copyWith(state: coinState));
+    }
+    return coins;
   }
 
   final KomodoDefiSdk _kdfSdk;
   final MM2 _mm2;
   final TradingStatusService _tradingStatusService;
   final ArrrActivationService _arrrActivationService;
+
+  int _activationGeneration = 0;
+  bool _isDisposed = false;
 
   final _log = Logger('CoinsRepo');
   static const _unsupportedTrezorSiaMessage =
@@ -103,38 +186,56 @@ class CoinsRepo {
     return _kdfSdk.balances.countMissingWatchersForAssets(activeAssetIds);
   }
 
-  /// Hack used to broadcast activated/deactivated coins to the CoinsBloc to
-  /// update the status of the coins in the UI layer. This is needed as there
-  /// are direct references to [CoinsRepo] that activate/deactivate coins
-  /// without the [CoinsBloc] being aware of the changes (e.g. [CoinsManagerBloc]).
-  late final StreamController<Coin> enabledAssetsChanges;
-  // why could they not implement this in streamcontroller or a wrapper :(
-  int _enabledAssetListenerCount = 0;
-  bool get _enabledAssetsHasListeners => _enabledAssetListenerCount > 0;
-  void _broadcastAsset(Coin coin) {
-    if (_enabledAssetsHasListeners) {
-      enabledAssetsChanges.add(coin);
-    } else {
-      _log.warning(
-        'No listeners for enabledAssetsChanges stream. '
-        'Skipping broadcast for ${coin.id.id}',
-      );
+  /// Active wallet coins whose live balance updates are broken on either side.
+  ///
+  /// There are two independent registries and each is blind to the other's
+  /// failures, so checking only one hides half the outages:
+  ///
+  /// * the SDK's `_activeWatchers` - the KDF subscription behind the per-asset
+  ///   broadcast controller;
+  /// * this repo's [_balanceWatchers] - the subscription that turns those
+  ///   emissions into `balanceChanges` events for [CoinsBloc].
+  ///
+  /// Either can be absent while the other looks healthy: this repo may never
+  /// have subscribed for an asset whose activation broadcast was lost, and the
+  /// SDK's watcher start can be still retrying (or have given up) behind a
+  /// controller that has listeners.
+  ///
+  /// A detector, not a repair: what it feeds is the health log and the
+  /// activation reconcile. Restarting an SDK-side watcher is the SDK's job -
+  /// see [ensureBalanceWatchers] for why this repo does not reach across.
+  int countAssetsNeedingBalanceRepair(Map<String, Coin> walletCoins) {
+    var count = 0;
+    for (final coin in walletCoins.values) {
+      if (!coin.isActive) continue;
+      if (_balanceWatchers.containsKey(coin.id) &&
+          _kdfSdk.balances.hasActiveWatcher(coin.id)) {
+        continue;
+      }
+      count++;
     }
+    return count;
   }
+
+  /// Publishes a coin state the SDK cannot know about.
+  ///
+  /// No longer the channel by which the UI learns a coin finished activating -
+  /// that is the SDK's activation-state stream now. What is left here is the
+  /// app's own vocabulary: a coin this app refuses to activate, a terminal
+  /// verdict over the app's retry budget, a local deactivation, and the
+  /// ZHTLC configuration/cancellation outcomes.
+  ///
+  /// The bridge retains the last state per asset and replays it, so a
+  /// listener-less moment is no longer lossy and needs no drop guard.
+  void _broadcastAsset(Coin coin) => _activationBridge.publishAppState(coin);
 
   /// Stream to broadcast real-time balance changes for coins
   late final StreamController<Coin> balanceChanges;
-  int _balanceListenerCount = 0;
-  bool get _balancesHasListeners => _balanceListenerCount > 0;
+
+  /// Balance updates are transient by nature - there is nothing to replay and
+  /// a listener-less moment is not a defect.
   void _broadcastBalanceChange(Coin coin) {
-    if (_balancesHasListeners) {
-      balanceChanges.add(coin);
-    } else {
-      _log.fine(
-        'No listeners for balanceChanges stream. '
-        'Skipping broadcast for ${coin.id.id}',
-      );
-    }
+    if (!balanceChanges.isClosed) balanceChanges.add(coin);
   }
 
   Future<BalanceInfo?> balance(AssetId id) => _kdfSdk.balances.getBalance(id);
@@ -171,35 +272,74 @@ class CoinsRepo {
             _broadcastBalanceChange(_assetToCoinWithoutAddress(asset));
           },
           onError: (Object error, StackTrace stackTrace) {
+            // Report only. `watchBalance` forwards its transient failures - an
+            // auth read that lands before the session is observable, a wallet
+            // switch recycling the per-asset controller - and then reconnects
+            // on its own. Cancelling here (which `cancelOnError: true` used to
+            // do) meant this subscription missed the recovery it was told about
+            // and the asset silently fell back to the 3-minute poll for the
+            // rest of the session.
             _log.warning(
-              'Balance watcher failed for ${assetId.id}; fallback polling will cover this asset',
+              'Balance watcher error for ${assetId.id}; the SDK stream will '
+              'reconnect',
               error,
               stackTrace,
             );
-            final current = _balanceWatchers[assetId];
-            if (watcher != null && identical(current, watcher)) {
-              _balanceWatchers.remove(assetId);
-            }
           },
           onDone: () {
-            _log.info(
-              'Balance watcher ended for ${assetId.id}; fallback polling will cover this asset',
-            );
+            // Only reachable once the SDK's balance manager is disposed - the
+            // stream does not end on a wallet change. Nothing will reconnect
+            // this, so drop the bookkeeping entry.
+            _log.info('Balance watcher ended for ${assetId.id}');
             final current = _balanceWatchers[assetId];
             if (watcher != null && identical(current, watcher)) {
               _balanceWatchers.remove(assetId);
             }
           },
-          cancelOnError: true,
         );
     _balanceWatchers[assetId] = watcher;
   }
 
+  /// (Re)subscribes balance watchers for [assetIds] that this repo has none for.
+  ///
+  /// A backstop for an asset that was activated without
+  /// [_subscribeToBalanceUpdates] ever running for it - an activation broadcast
+  /// delivered while nothing was listening, or a subscription dropped when the
+  /// SDK's balance manager was disposed and rebuilt.
+  ///
+  /// Deliberately keyed on this repo's registry alone. A missing watcher on the
+  /// *SDK* side is the SDK's to restart: it retries the start with its own
+  /// backoff and stops when an asset proves un-startable, and re-listening here
+  /// would only churn a live subscription without changing that outcome.
+  ///
+  /// Returns the number of watchers started.
+  int ensureBalanceWatchers(Iterable<AssetId> assetIds) {
+    var started = 0;
+    for (final assetId in assetIds) {
+      if (_balanceWatchers.containsKey(assetId)) continue;
+      final asset = _kdfSdk.assets.available[assetId];
+      if (asset == null) {
+        _log.warning('Cannot start balance watcher: no asset for $assetId');
+        continue;
+      }
+      _subscribeToBalanceUpdates(asset);
+      // That is a no-op for a geo-blocked asset, so the registry - not the
+      // call - is what "started" means here.
+      if (_balanceWatchers.containsKey(assetId)) started += 1;
+    }
+    if (started > 0) {
+      _log.info('Restarted $started missing balance watcher(s)');
+    }
+    return started;
+  }
+
   void flushCache() {
+    _activationGeneration++;
     // Intentionally avoid flushing the prices cache - prices are independent
     // of the user's session and should be updated on a regular basis.
     _addressCache.clear();
     _balancesCache.clear();
+    _activationBridge.reset();
 
     // Cancel all balance watchers
     for (final subscription in _balanceWatchers.values) {
@@ -210,12 +350,14 @@ class CoinsRepo {
   }
 
   void dispose() {
+    _isDisposed = true;
+    _activationGeneration++;
     for (final subscription in _balanceWatchers.values) {
       subscription.cancel();
     }
     _balanceWatchers.clear();
 
-    enabledAssetsChanges.close();
+    unawaited(_activationBridge.dispose());
     balanceChanges.close();
   }
 
@@ -236,6 +378,13 @@ class CoinsRepo {
   void _invalidateActivatedAssetsCache() {
     _kdfSdk.activatedAssetsCache.invalidate();
   }
+
+  /// Invalidates the SDK's activated-assets cache.
+  ///
+  /// For callers that pass `useSharedActivationCache: true` to
+  /// [activateAssetsSync] and therefore own the cache lifecycle across a whole
+  /// batch of activations.
+  void invalidateActivatedAssetsCache() => _invalidateActivatedAssetsCache();
 
   /// Returns all known coins, optionally filtering out excluded assets.
   /// If [excludeExcludedAssets] is true, coins whose id is in
@@ -371,22 +520,81 @@ class CoinsRepo {
   /// - `Exception`: If activation fails after all retry attempts
   ///
   /// **Note:** Assets are added to wallet metadata even if activation fails.
+  /// [useSharedActivationCache] is for callers that activate many assets
+  /// concurrently and have already forced one activated-assets refresh
+  /// themselves (see [CoinsBloc] login fan-out). It skips this call's own
+  /// forced refresh and trailing cache invalidation, which would otherwise run
+  /// once per asset: [ActivatedAssetsCache.invalidate] nulls the in-flight
+  /// completer, so N concurrent forced refreshes do *not* coalesce - they
+  /// become N real `get_enabled_coins` round trips, each rebuilding the
+  /// ~800-entry asset map, and the per-call invalidation disables the cache
+  /// TTL for every other consumer for the whole window.
   Future<void> activateAssetsSync(
     List<Asset> assets, {
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
+    bool useSharedActivationCache = false,
     int maxRetryAttempts = 15,
     Duration initialRetryDelay = const Duration(milliseconds: 500),
     Duration maxRetryDelay = const Duration(seconds: 10),
   }) async {
-    final isSignedIn = await _kdfSdk.auth.isSignedIn();
-    if (!isSignedIn) {
+    final generation = _activationGeneration;
+    final walletScope = _ActivationWalletScope(
+      readUser: () => _kdfSdk.auth.currentUser,
+      authChanges: _kdfSdk.auth.authStateChanges,
+      isSessionCurrent: () =>
+          !_isDisposed && generation == _activationGeneration,
+    );
+    try {
+      await _activateAssetsForWallet(
+        assets,
+        walletScope: walletScope,
+        notifyListeners: notifyListeners,
+        addToWalletMetadata: addToWalletMetadata,
+        useSharedActivationCache: useSharedActivationCache,
+        maxRetryAttempts: maxRetryAttempts,
+        initialRetryDelay: initialRetryDelay,
+        maxRetryDelay: maxRetryDelay,
+      );
+    } finally {
+      await walletScope.close();
+    }
+  }
+
+  Future<void> _activateAssetsForWallet(
+    List<Asset> assets, {
+    required _ActivationWalletScope walletScope,
+    required bool notifyListeners,
+    required bool addToWalletMetadata,
+    required bool useSharedActivationCache,
+    required int maxRetryAttempts,
+    required Duration initialRetryDelay,
+    required Duration maxRetryDelay,
+  }) async {
+    final originalUser = await _kdfSdk.auth.currentUser;
+    if (originalUser == null) {
       final coinIdList = assets.map((e) => e.id.id).join(', ');
       _log.warning('No wallet signed in. Skipping activation of [$coinIdList]');
       return;
     }
 
-    final walletType = (await _kdfSdk.currentWallet())?.config.type;
+    walletScope.observe(originalUser);
+    walletScope.check();
+    final requestedIds = assets.map((asset) => asset.id).toList();
+    if (notifyListeners) {
+      // The user is asking for these coins, so undo any local deactivation.
+      // Release republishes, which matters because the SDK emits nothing for
+      // an asset that is *already* active - re-enabling a coin from the coins
+      // manager would otherwise never produce a row.
+      releaseActivationBroadcasts(requestedIds);
+    } else {
+      // A preview or side-effect activation: keep it out of the wallet list.
+      // The caller releases when the user commits to it.
+      suppressActivationBroadcasts(requestedIds);
+    }
+
+    final expectedWalletId = walletScope.walletId!;
+    final walletType = originalUser.wallet.config.type;
     if (walletType == WalletType.trezor) {
       final unsupportedSiaAssets = assets.where(
         (asset) => asset.id.subClass == CoinSubClass.sia,
@@ -448,9 +656,13 @@ class CoinsRepo {
       await _activateZhtlcAssets(
         zhtlcAssets,
         zhtlcAssets.map((asset) => _assetToCoinWithoutAddress(asset)).toList(),
+        expectedWalletId: expectedWalletId,
+        walletScope: walletScope,
         notifyListeners: notifyListeners,
         addToWalletMetadata: addToWalletMetadata,
       );
+      await walletScope.refresh();
+      walletScope.check();
     }
 
     // Continue with regular asset processing for non-ZHTLC assets
@@ -459,25 +671,37 @@ class CoinsRepo {
     // Update assets list to only include regular assets for remaining processing
     assets = regularAssets;
 
+    walletScope.check();
     if (addToWalletMetadata) {
       // Ensure the wallet metadata is updated with the assets before activation
       // This is to ensure that the wallet metadata is always in sync with the assets
       // being activated, even if activation fails.
-      await _addAssetsToWalletMetdata(assets.map((asset) => asset.id));
+      await _addAssetsToWalletMetdata(
+        assets.map((asset) => asset.id),
+        expectedWalletId: expectedWalletId,
+      );
     }
 
+    walletScope.check();
     Exception? lastActivationException;
 
     for (final asset in assets) {
+      walletScope.check();
       final coin = _assetToCoinWithoutAddress(asset);
       try {
         // Force-refresh activation state here to avoid racing on stale cache
-        // reads before attempting a coordinated activation.
+        // reads before attempting a coordinated activation. When the caller
+        // owns the refresh (useSharedActivationCache) it has just forced one
+        // immediately before this call, so the read is already fresh and
+        // SharedActivationCoordinator re-checks isAssetActive before
+        // activating anyway.
         final isAlreadyActivated = await isAssetActivated(
           asset.id,
-          forceRefresh: true,
+          forceRefresh: !useSharedActivationCache,
         );
 
+        await walletScope.refresh();
+        walletScope.check();
         if (isAlreadyActivated) {
           _log.info(
             'Asset ${asset.id.id} is already activated. Skipping activation.',
@@ -490,12 +714,32 @@ class CoinsRepo {
           // Use retry with exponential backoff for activation
           await retry<void>(
             () async {
-              final didActivate = await _kdfSdk.ensureAssetActivated(asset);
+              await walletScope.refresh();
+              walletScope.check();
+              // Per-attempt bound. `retry` can only re-fire an attempt that
+              // *terminates*; an activation that hangs pins the asset on
+              // `activating` forever and, on the login path, stalls the
+              // `Future.wait` over the whole fan-out with it.
+              //
+              // This timeout alone did NOT make that retryable: Dart timeouts
+              // do not cancel, so the SDK's pending-activation entry survived
+              // and the next attempt re-joined the same wedged future - four
+              // attempts, one attempt's worth of work, ~6 minutes of waiting.
+              // The real bound is SharedActivationCoordinator's own deadline
+              // (deliberately shorter than this one), which fails the attempt
+              // and clears the entry so this retry starts fresh. Keep this as
+              // the outer backstop.
+              final didActivate = await _kdfSdk
+                  .ensureAssetActivated(asset)
+                  .timeout(_activationAttemptTimeout);
+              await walletScope.refresh();
+              walletScope.check();
               if (!didActivate) {
                 throw Exception('Activation failed for ${asset.id.id}');
               }
             },
             maxAttempts: maxRetryAttempts,
+            shouldRetry: (error) => error is! WalletChangedDisconnectException,
             backoffStrategy: ExponentialBackoff(
               initialDelay: initialRetryDelay,
               maxDelay: maxRetryDelay,
@@ -514,31 +758,13 @@ class CoinsRepo {
             'SubClass: ${asset.id.subClass}',
           );
         }
-        if (notifyListeners) {
-          _broadcastAsset(coin.copyWith(state: CoinState.active));
-          if (coin.id.parentId != null) {
-            final parentCoin = _assetToCoinWithoutAddress(
-              _kdfSdk.assets.available[coin.id.parentId]!,
-            );
-            _broadcastAsset(parentCoin.copyWith(state: CoinState.active));
-          }
-        }
-        _subscribeToBalanceUpdates(asset);
-        if (kDebugElectrumLogs) {
-          _log.info(
-            '[ACTIVATION] Subscribed to balance updates for ${asset.id.id}',
-          );
-        }
-        if (coin.id.parentId != null) {
-          final parentAsset = _kdfSdk.assets.available[coin.id.parentId];
-          if (parentAsset == null) {
-            _log.warning('Parent asset not found: ${coin.id.parentId}');
-          } else {
-            _subscribeToBalanceUpdates(parentAsset);
-          }
-        }
+        walletScope.check();
+        _markActiveAndSubscribe(asset, coin, notifyListeners: notifyListeners);
+      } on WalletChangedDisconnectException {
+        rethrow;
       } catch (e, s) {
-        lastActivationException = e is Exception ? e : Exception(e.toString());
+        await walletScope.refresh();
+        walletScope.check();
         _log.shout(
           'Error activating asset after retries: ${asset.id.id}',
           e,
@@ -558,8 +784,49 @@ class CoinsRepo {
           }
         }
 
-        if (notifyListeners) {
-          _broadcastAsset(asset.toCoin().copyWith(state: CoinState.suspended));
+        // A platform coin (e.g. TRX) can be activated as a side-effect of a
+        // child token activation racing this standalone attempt. A late/transient
+        // failure here must not evict a coin that KDF actually has active, so
+        // verify against KDF before suspending. Otherwise a suspended broadcast
+        // lands after the child's "active" broadcast and removes the platform
+        // from the wallet, leaving it without balance streaming.
+        if (PlatformTuner.isIOS) await walletScope.refresh();
+        walletScope.check();
+        var isActuallyActive = false;
+        try {
+          isActuallyActive = await isAssetActivated(
+            asset.id,
+            forceRefresh: true,
+          );
+        } catch (recheckError, recheckStack) {
+          _log.warning(
+            'Failed to re-check activation for ${asset.id.id} after error',
+            recheckError,
+            recheckStack,
+          );
+        }
+
+        await walletScope.refresh();
+        walletScope.check();
+        if (isActuallyActive) {
+          _log.info(
+            '${asset.id.id} is active in KDF despite an activation error; '
+            'marking active instead of suspended.',
+          );
+          _markActiveAndSubscribe(
+            asset,
+            coin,
+            notifyListeners: notifyListeners,
+          );
+        } else {
+          lastActivationException = e is Exception
+              ? e
+              : Exception(e.toString());
+          if (notifyListeners) {
+            _broadcastAsset(
+              asset.toCoin().copyWith(state: CoinState.suspended),
+            );
+          }
         }
       } finally {
         // Register outside of the try-catch to ensure icon is available even
@@ -573,8 +840,12 @@ class CoinsRepo {
       }
     }
 
-    // Invalidate the activated assets cache once after processing all assets
-    _invalidateActivatedAssetsCache();
+    // Invalidate the activated assets cache once after processing all assets.
+    // Skipped when the caller owns the cache lifecycle - it invalidates once
+    // after its whole fan-out completes rather than once per asset.
+    if (!useSharedActivationCache) {
+      _invalidateActivatedAssetsCache();
+    }
 
     // Rethrow the last activation exception if there was one
     if (lastActivationException != null) {
@@ -582,14 +853,62 @@ class CoinsRepo {
     }
   }
 
+  /// Broadcasts [coin] (and its parent platform coin, if any) as active and
+  /// subscribes both to balance updates.
+  ///
+  /// Used both on the activation success path and on the failure path when the
+  /// coin is found to be active in KDF anyway (e.g. a platform coin enabled as a
+  /// side-effect of a child token activation racing a standalone attempt).
+  void _markActiveAndSubscribe(
+    Asset asset,
+    Coin coin, {
+    required bool notifyListeners,
+  }) {
+    final parentId = coin.id.parentId;
+    final parentAsset = parentId != null
+        ? _kdfSdk.assets.available[parentId]
+        : null;
+
+    if (notifyListeners) {
+      _broadcastAsset(coin.copyWith(state: CoinState.active));
+      if (parentAsset != null) {
+        _broadcastAsset(
+          _assetToCoinWithoutAddress(
+            parentAsset,
+          ).copyWith(state: CoinState.active),
+        );
+      }
+    }
+
+    _subscribeToBalanceUpdates(asset);
+    if (kDebugElectrumLogs) {
+      _log.info(
+        '[ACTIVATION] Subscribed to balance updates for ${asset.id.id}',
+      );
+    }
+
+    if (parentId != null) {
+      if (parentAsset == null) {
+        _log.warning('Parent asset not found: $parentId');
+      } else {
+        _subscribeToBalanceUpdates(parentAsset);
+      }
+    }
+  }
+
   /// Adds the given assets (and their parent coins) to wallet metadata.
   ///
   /// This is exposed so callers can batch-write metadata before launching
   /// parallel activations with `addToWalletMetadata: false`.
-  Future<void> addAssetsToWalletMetadata(Iterable<AssetId> assets) =>
-      _addAssetsToWalletMetdata(assets);
+  Future<void> addAssetsToWalletMetadata(
+    Iterable<AssetId> assets, {
+    required WalletId expectedWalletId,
+  }) => _addAssetsToWalletMetdata(assets, expectedWalletId: expectedWalletId);
 
-  Future<void> _addAssetsToWalletMetdata(Iterable<AssetId> assets) async {
+  Future<void> _addAssetsToWalletMetdata(
+    Iterable<AssetId> assets, {
+    required WalletId expectedWalletId,
+  }) async {
     final parentIds = assets
         .where((assetId) => assetId.parentId != null)
         .map((assetId) => assetId.parentId!.id)
@@ -597,7 +916,10 @@ class CoinsRepo {
 
     if (assets.isNotEmpty || parentIds.isNotEmpty) {
       final allIdsToAdd = <String>{...assets.map((e) => e.id), ...parentIds};
-      await _kdfSdk.addActivatedCoins(allIdsToAdd);
+      await _kdfSdk.addActivatedCoins(
+        allIdsToAdd,
+        expectedWalletId: expectedWalletId,
+      );
     }
   }
 
@@ -669,6 +991,9 @@ class CoinsRepo {
     List<Coin> coins, {
     bool notify = true,
   }) async {
+    final originalUser = await _kdfSdk.auth.currentUser;
+    if (originalUser == null) return;
+    final expectedWalletId = originalUser.walletId;
     final allCoinIds = <String>{};
     final allChildCoins = <Coin>[];
 
@@ -691,7 +1016,10 @@ class CoinsRepo {
       // Keep metadata in sync so disabled coins do not re-enable on login.
       removeMetadataFuture = () async {
         try {
-          await _kdfSdk.removeActivatedCoins(allCoinIds.toList());
+          await _kdfSdk.removeActivatedCoins(
+            allCoinIds.toList(),
+            expectedWalletId: expectedWalletId,
+          );
         } catch (e, s) {
           _log.warning(
             'Failed to update wallet metadata for deactivated coins',
@@ -717,6 +1045,15 @@ class CoinsRepo {
     // Skip the deactivation step for now, as it results in "NoSuchCoin" errors
     // when trying to re-enable the coin later in the same session.
     // TODO: Revisit this and create an issue on KDF to track the problem.
+    //
+    // Because the coin stays enabled in KDF, the SDK keeps reporting it active
+    // and would put the row straight back. Suppress it until the user asks for
+    // it again - `activateAssetsSync` releases the suppression.
+    suppressActivationBroadcasts([
+      ...coins.map((coin) => coin.id),
+      ...allChildCoins.map((child) => child.id),
+    ]);
+
     final deactivationTasks = [
       ...coins.map((coin) async {
         // await _disableCoin(coin.id.id);
@@ -748,10 +1085,19 @@ class CoinsRepo {
   /// real rollback is required.
   Future<void> rollbackPreviewAssets(
     Iterable<Asset> assets, {
+    required WalletId expectedWalletId,
     Set<AssetId> deleteCustomTokens = const {},
     Set<AssetId> removeWalletMetadataAssets = const {},
     bool notifyListeners = false,
   }) async {
+    Future<bool> isOriginalWallet() async {
+      final currentWalletId = (await _kdfSdk.auth.currentUser)?.walletId;
+      return expectedWalletId.pubkeyHash?.trim().isNotEmpty == true &&
+          currentWalletId?.pubkeyHash?.trim().isNotEmpty == true &&
+          currentWalletId == expectedWalletId;
+    }
+
+    if (!await isOriginalWallet()) return;
     final uniqueAssets = Map<AssetId, Asset>.fromEntries(
       assets.map((asset) => MapEntry(asset.id, asset)),
     );
@@ -767,11 +1113,17 @@ class CoinsRepo {
       });
 
     for (final asset in orderedAssets) {
+      if (!await isOriginalWallet()) {
+        return;
+      }
       await _balanceWatchers[asset.id]?.cancel();
       _balanceWatchers.remove(asset.id);
 
       try {
         if (await isAssetActivated(asset.id, forceRefresh: true)) {
+          if (!await isOriginalWallet()) {
+            return;
+          }
           await _mm2.call(DisableCoinReq(coin: asset.id.id));
         }
       } catch (e, s) {
@@ -787,7 +1139,10 @@ class CoinsRepo {
       try {
         await _kdfSdk.removeActivatedCoins(
           removeWalletMetadataAssets.map((assetId) => assetId.id).toList(),
+          expectedWalletId: expectedWalletId,
         );
+      } on WalletChangedDisconnectException {
+        return;
       } catch (e, s) {
         _log.warning(
           'Failed to remove preview assets from wallet metadata',
@@ -798,6 +1153,9 @@ class CoinsRepo {
     }
 
     for (final assetId in deleteCustomTokens) {
+      if (!await isOriginalWallet()) {
+        return;
+      }
       try {
         await _kdfSdk.deleteCustomToken(assetId);
       } catch (e, s) {
@@ -935,48 +1293,75 @@ class CoinsRepo {
         .where((coin) => coin.isActive)
         .toList();
 
-    // Get balances from the SDK for all active coins
-    for (final coin in coins) {
-      try {
-        // Use the SDK's balance manager to get the current balance
-        final balanceInfo = await _kdfSdk.balances.getBalance(coin.id);
-
-        // Convert to double for compatibility with existing code
-        final newBalance = balanceInfo.total.toDouble();
-        final newSpendable = balanceInfo.spendable.toDouble();
-
-        // Get the current cached values
-        final cachedBalance = _balancesCache[coin.id.id]?.balance;
-        final cachedSpendable = _balancesCache[coin.id.id]?.spendable;
-
-        // Check if balance has changed
-        final balanceChanged =
-            cachedBalance == null || newBalance != cachedBalance;
-        final spendableChanged =
-            cachedSpendable == null || newSpendable != cachedSpendable;
-
-        // Only yield if there's a change
-        if (balanceChanged || spendableChanged) {
-          // Update the cache
-          _balancesCache[coin.id.id] = (
-            balance: newBalance,
-            spendable: newSpendable,
-          );
-
-          final updatedCoin = coin.copyWith(sendableBalance: newSpendable);
-
-          // Broadcast the updated balance so non-streaming assets still emit
-          // real-time change events through the same path as streaming assets.
-          _broadcastBalanceChange(updatedCoin);
-
-          // Yield updated coin with new balance
-          // We still set both the deprecated fields and rely on the SDK
-          // for future access to maintain backward compatibility
-          yield updatedCoin;
-        }
-      } catch (e, s) {
-        _log.warning('Failed to update balance for ${coin.id}', e, s);
+    // Fetch in bounded-concurrency waves rather than strictly one at a time.
+    //
+    // Sequentially, the sweep's wall clock was the *sum* of every coin's read,
+    // and with [_balanceRefreshPerCoinTimeout] at 20s a handful of slow coins
+    // could hold it for minutes - while this is the only thing that populates
+    // `lastKnown` for coins whose balance watcher has not emitted, and
+    // therefore what the overview total and the wallet-list sort order wait on.
+    //
+    // The cap keeps the fan-out from competing with activation for the same
+    // single-threaded KDF instance; per-wave `Future.wait` keeps the stream
+    // incremental (rows update as each wave lands) and, because every read is
+    // individually bounded and every error is swallowed per coin, guarantees
+    // this stream still terminates - which the `droppable()` + `emit.forEach`
+    // consumer in [CoinsBloc._onCoinsRefreshed] depends on.
+    for (var i = 0; i < coins.length; i += _balanceRefreshConcurrency) {
+      final wave = coins.skip(i).take(_balanceRefreshConcurrency);
+      final updated = await Future.wait(wave.map(_refreshCoinBalance));
+      for (final coin in updated) {
+        if (coin != null) yield coin;
       }
+    }
+  }
+
+  /// Reads one coin's balance, updating the cache and broadcasting a change.
+  ///
+  /// Returns the updated coin when its balance actually moved, else null.
+  /// Never throws: a single unreadable coin must not end the sweep.
+  Future<Coin?> _refreshCoinBalance(Coin coin) async {
+    try {
+      // Bounded per coin. getBalance ultimately awaits getPubkeys, which has
+      // no timeout of its own.
+      final balanceInfo = await _kdfSdk.balances
+          .getBalance(coin.id)
+          .timeout(_balanceRefreshPerCoinTimeout);
+
+      // Convert to double for compatibility with existing code
+      final newBalance = balanceInfo.total.toDouble();
+      final newSpendable = balanceInfo.spendable.toDouble();
+
+      // Get the current cached values
+      final cachedBalance = _balancesCache[coin.id.id]?.balance;
+      final cachedSpendable = _balancesCache[coin.id.id]?.spendable;
+
+      // Check if balance has changed
+      final balanceChanged =
+          cachedBalance == null || newBalance != cachedBalance;
+      final spendableChanged =
+          cachedSpendable == null || newSpendable != cachedSpendable;
+
+      if (!balanceChanged && !spendableChanged) return null;
+
+      // Update the cache. Keyed per coin, so concurrent waves cannot collide.
+      _balancesCache[coin.id.id] = (
+        balance: newBalance,
+        spendable: newSpendable,
+      );
+
+      final updatedCoin = coin.copyWith(sendableBalance: newSpendable);
+
+      // Broadcast the updated balance so non-streaming assets still emit
+      // real-time change events through the same path as streaming assets.
+      _broadcastBalanceChange(updatedCoin);
+
+      // We still set both the deprecated fields and rely on the SDK
+      // for future access to maintain backward compatibility
+      return updatedCoin;
+    } catch (e, s) {
+      _log.warning('Failed to update balance for ${coin.id}', e, s);
+      return null;
     }
   }
 
@@ -1018,6 +1403,8 @@ class CoinsRepo {
   Future<void> _activateZhtlcAssets(
     List<Asset> assets,
     List<Coin> coins, {
+    required WalletId expectedWalletId,
+    required _ActivationWalletScope walletScope,
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
   }) async {
@@ -1025,6 +1412,8 @@ class CoinsRepo {
         .getActivatedAssets();
 
     for (final asset in assets) {
+      await walletScope.refresh();
+      walletScope.check();
       final coin = coins.firstWhere((coin) => coin.id == asset.id);
 
       // Check if asset is already activated
@@ -1037,9 +1426,13 @@ class CoinsRepo {
 
         // Add to wallet metadata if requested
         if (addToWalletMetadata) {
-          await _addAssetsToWalletMetdata([asset.id]);
+          await _addAssetsToWalletMetdata([
+            asset.id,
+          ], expectedWalletId: expectedWalletId);
         }
 
+        await walletScope.refresh();
+        walletScope.check();
         // Broadcast active state for already activated assets
         if (notifyListeners) {
           _broadcastAsset(coin.copyWith(state: CoinState.active));
@@ -1074,6 +1467,8 @@ class CoinsRepo {
         await _activateZhtlcAsset(
           asset,
           coin,
+          expectedWalletId: expectedWalletId,
+          walletScope: walletScope,
           notifyListeners: notifyListeners,
           addToWalletMetadata: addToWalletMetadata,
         );
@@ -1087,6 +1482,8 @@ class CoinsRepo {
   Future<void> _activateZhtlcAsset(
     Asset asset,
     Coin coin, {
+    required WalletId expectedWalletId,
+    required _ActivationWalletScope walletScope,
     bool notifyListeners = true,
     bool addToWalletMetadata = true,
   }) async {
@@ -1100,15 +1497,21 @@ class CoinsRepo {
       // before proceeding with activation, and doesn't broadcast activation status
       // until config parameters are received and (desktop) params files downloaded.
       final result = await _arrrActivationService.activateArrr(asset);
-      result.when(
+      await walletScope.refresh();
+      walletScope.check();
+      await result.when<Future<void>>(
         success: (progress) async {
           _log.info('ZHTLC asset activated successfully: ${asset.id.id}');
 
           // Add assets after activation regardless of success or failure
           if (addToWalletMetadata) {
-            await _addAssetsToWalletMetdata([asset.id]);
+            await _addAssetsToWalletMetdata([
+              asset.id,
+            ], expectedWalletId: expectedWalletId);
           }
 
+          await walletScope.refresh();
+          walletScope.check();
           if (notifyListeners) {
             _broadcastAsset(coin.copyWith(state: CoinState.activating));
           }
@@ -1141,7 +1544,7 @@ class CoinsRepo {
           }
           _invalidateActivatedAssetsCache();
         },
-        error: (message) {
+        error: (message) async {
           _log.severe(
             'ZHTLC asset activation failed: ${asset.id.id} - $message',
           );
@@ -1161,7 +1564,7 @@ class CoinsRepo {
 
           throw Exception('zcoin activaiton failed: $message');
         },
-        needsConfiguration: (coinId, requiredSettings) {
+        needsConfiguration: (coinId, requiredSettings) async {
           _log.severe(
             'ZHTLC activation should not return needsConfiguration in future-based call',
           );
@@ -1178,7 +1581,11 @@ class CoinsRepo {
           );
         },
       );
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (e, s) {
+      await walletScope.refresh();
+      walletScope.check();
       _log.severe('Error activating ZHTLC asset ${asset.id.id}', e, s);
 
       // Broadcast suspended state if requested
@@ -1189,4 +1596,53 @@ class CoinsRepo {
       rethrow;
     }
   }
+}
+
+/// One activation request, including its retry delays and ZHTLC configuration.
+/// Auth events invalidate it synchronously, including sign-out/sign-in with the
+/// same ID; fresh reads cover a switch whose stream event has not arrived yet.
+class _ActivationWalletScope {
+  _ActivationWalletScope({
+    required this.readUser,
+    required Stream<KdfUser?> authChanges,
+    required this.isSessionCurrent,
+  }) {
+    _subscription = authChanges.listen(observe);
+  }
+
+  final Future<KdfUser?> Function() readUser;
+  final bool Function() isSessionCurrent;
+  late final StreamSubscription<KdfUser?> _subscription;
+  WalletId? walletId;
+  bool _cancelled = false;
+
+  void observe(KdfUser? user) {
+    final previous = walletId;
+    final next = user?.walletId;
+    if (next == null) {
+      _cancelled = true;
+    } else if (previous == null) {
+      walletId = next;
+    } else if (isSameStableWallet(previous, next)) {
+      walletId = preferEnrichedWalletIdentity(previous, next);
+    } else if (!isDegradedWalletIdentity(previous, next)) {
+      _cancelled = true;
+    }
+  }
+
+  void check() {
+    if (_cancelled || !isSessionCurrent()) {
+      throw const WalletChangedDisconnectException(
+        'Wallet changed during asset activation',
+      );
+    }
+  }
+
+  Future<void> refresh() async {
+    check();
+    observe(await readUser());
+    check();
+  }
+
+  Future<void> close() => _subscription.cancel();
 }

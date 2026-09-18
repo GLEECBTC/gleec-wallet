@@ -1,107 +1,129 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:feedback/feedback.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-
+import 'package:web_dex/services/feedback/feedback_metadata.dart';
 import 'package:web_dex/services/feedback/feedback_provider.dart';
 import 'package:web_dex/services/feedback/providers/cloudflare_feedback_provider.dart';
 import 'package:web_dex/services/feedback/providers/debug_console_feedback_provider.dart';
 import 'package:web_dex/services/feedback/providers/trello_feedback_provider.dart';
+import 'package:web_dex/services/logger/get_logger.dart' as app_logger;
+import 'package:web_dex/services/logger/safe_log_exporter.dart';
 
 export 'feedback_ui_extension.dart';
 
-/// Service that handles user feedback submission
+/// Coordinates optional diagnostics before passing a complete submission to a
+/// transport. Providers never reach back into application log storage.
 class FeedbackService {
+  const FeedbackService({
+    required this.provider,
+    this.loadMetadata = collectFeedbackMetadata,
+    this.loadDiagnostics = exportFeedbackDiagnostics,
+    this.diagnosticsTimeout = const Duration(seconds: 3),
+  });
+
   final FeedbackProvider provider;
+  final Future<Map<String, dynamic>> Function() loadMetadata;
+  final Future<SafeLogAttachment> Function() loadDiagnostics;
+  final Duration diagnosticsTimeout;
 
-  const FeedbackService({required this.provider});
-
-  /// Creates a FeedbackService instance with the first available provider.
   static FeedbackService? create() {
     final provider = [
-      // Try Cloudflare provider first (our default)
       CloudflareFeedbackProvider.fromEnvironment(),
       TrelloFeedbackProvider.fromEnvironment(),
-      // Use debug console provider as fallback in debug mode
       if (kDebugMode) DebugConsoleFeedbackProvider(),
     ].firstWhereOrNull((provider) => provider != null && provider.isAvailable);
-
     return provider != null ? FeedbackService(provider: provider) : null;
   }
 
-  /// Returns true if feedback functionality is available
   bool get isAvailable => provider.isAvailable;
 
-  /// Submits user feedback to the configured provider
-  ///
-  /// Returns true if feedback was submitted successfully, false otherwise
   Future<bool> handleFeedback(UserFeedback feedback) async {
-    final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-
-    final buildMode = kReleaseMode
-        ? 'release'
-        : kDebugMode
-        ? 'debug'
-        : (kProfileMode ? 'profile' : 'unknown');
-
-    // Extract contact information from the extras if provided
-    String? contactMethod;
-    String? contactDetails;
-    String? feedbackType;
-
-    if (feedback.extra != null && feedback.extra is JsonMap) {
-      final extras = feedback.extra!;
-      contactMethod = extras.valueOrNull<String>('contact_method');
-      contactDetails = extras.valueOrNull<String>('contact_details');
-      feedbackType = extras.valueOrNull<String>('feedback_type');
+    var metadata = <String, dynamic>{};
+    SafeLogAttachment? diagnostics;
+    try {
+      metadata = sanitizeFeedbackMetadata(
+        await loadMetadata().timeout(diagnosticsTimeout),
+      );
+    } on Object {
+      // Diagnostic availability must not prevent an ordinary feedback report.
     }
-
-    final sdk = GetIt.I<KomodoDefiSdk>();
-
-    final Map<String, dynamic> metadata = {
-      if (contactMethod != null) 'contactMethod': contactMethod,
-      if (contactDetails != null) 'contactDetails': contactDetails,
-      'platform': kIsWeb ? 'web' : 'native',
-      'commitHash': const String.fromEnvironment(
-        'COMMIT_HASH',
-        defaultValue: 'unknown',
-      ),
-      // We don't want to expose the base URI for native builds as this could
-      // contain personal information.
-      'baseUrl': kIsWeb ? Uri.base.toString() : null,
-      'targetPlatform': defaultTargetPlatform.name,
-      ...packageInfo.data,
-      'mode': buildMode,
-      'timestamp': DateTime.now().toIso8601String(),
-      'wallet':
-          (await GetIt.I<KomodoDefiSdk>().auth.currentUser)?.toJson() ?? 'None',
-
-      'coinsCurrentCommit': await sdk.assets.currentCoinsCommit,
-      'coinsLatestCommit': await sdk.assets.latestCoinsCommit,
-    };
-
+    try {
+      diagnostics = await loadDiagnostics().timeout(diagnosticsTimeout);
+    } on Object {
+      // In particular, a pending/failed legacy cleanup never permits raw logs.
+    }
+    metadata.addAll(submittedFeedbackContact(feedback.extra));
+    final type = feedback.extra?['feedback_type'];
     try {
       await provider.submitFeedback(
         description: feedback.text,
         screenshot: feedback.screenshot,
-        type: feedbackType ?? LocaleKeys.feedbackDefaultType.tr(),
+        type: type is String ? type : LocaleKeys.feedbackDefaultType.tr(),
         metadata: metadata,
+        diagnostics: diagnostics,
       );
       return true;
-    } catch (e) {
-      final altAvailable = provider is TrelloFeedbackProvider
-          ? CloudflareFeedbackProvider.fromEnvironment().isAvailable
-          : provider is CloudflareFeedbackProvider
-          ? TrelloFeedbackProvider.hasEnvironmentVariables()
-          : true;
-      if (kDebugMode && !altAvailable) {
-        debugPrint('Failed to submit feedback: $e');
-      }
+    } on Object {
       return false;
     }
   }
+}
+
+Future<SafeLogAttachment> exportFeedbackDiagnostics() =>
+    app_logger.logger.exportLogs(maxBytes: SafeLogExporter.feedbackMaxBytes);
+
+Future<Map<String, dynamic>> collectFeedbackMetadata() async {
+  final metadata = <String, dynamic>{
+    'platform': kIsWeb ? 'web' : 'native',
+    'targetPlatform': defaultTargetPlatform.name,
+    'commitHash': const String.fromEnvironment(
+      'COMMIT_HASH',
+      defaultValue: 'unknown',
+    ),
+    'mode': kReleaseMode
+        ? 'release'
+        : kDebugMode
+        ? 'debug'
+        : 'profile',
+    'timestamp': DateTime.now().toUtc().toIso8601String(),
+  };
+  try {
+    final package = await PackageInfo.fromPlatform();
+    metadata.addAll({
+      'appName': package.appName,
+      'packageName': package.packageName,
+      'version': package.version,
+      'buildNumber': package.buildNumber,
+    });
+  } on Object {
+    // Optional platform details only.
+  }
+  if (GetIt.I.isRegistered<KomodoDefiSdk>()) {
+    final sdk = GetIt.I<KomodoDefiSdk>();
+    try {
+      final user = await sdk.auth.currentUser.timeout(
+        const Duration(seconds: 2),
+      );
+      if (user != null) {
+        metadata['walletIsHd'] = user.isHd;
+        metadata['walletIsBip39'] = user.isBip39Seed;
+      }
+    } on Object {
+      // No wallet identifiers or arbitrary user metadata are exported.
+    }
+    try {
+      metadata['coinsCurrentCommit'] = await sdk.assets.currentCoinsCommit
+          .timeout(const Duration(seconds: 2));
+      metadata['coinsLatestCommit'] = await sdk.assets.latestCoinsCommit
+          .timeout(const Duration(seconds: 2));
+    } on Object {
+      // A catalogue lookup must not be required to submit feedback.
+    }
+  }
+  return sanitizeFeedbackMetadata(metadata);
 }

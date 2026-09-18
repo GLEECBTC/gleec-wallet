@@ -101,8 +101,8 @@ Since app behavior in mobile browser on physical device may differ from its beha
 
 At the time of writing used branch [gen-recoverable-swap](https://github.com/GLEECBTC/komodo-defi-framework/pull/1428)
 
-1. Setup atomicDex-API, [see](https://github.com/GLEECBTC/komodo-defi-framework/tree/dev#building-from-source)
-2. Setup dev environment, [see](https://github.com/GLEECBTC/komodo-defi-framework/blob/dev/docs/DEV_ENVIRONMENT.md#running-native-tests)
+1. Setup atomicDex-API, [see](https://github.com/KomodoPlatform/komodo-defi-framework/tree/dev#building-from-source)
+2. Setup dev environment, [see](https://github.com/KomodoPlatform/komodo-defi-framework/blob/dev/docs/DEV_ENVIRONMENT.md#running-native-tests)
 3. Run command below
 
    ```bash

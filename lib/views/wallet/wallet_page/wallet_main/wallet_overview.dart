@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/analytics/events.dart';
 import 'package:web_dex/analytics/events/portfolio_events.dart';
+import 'package:web_dex/analytics/wallet_load_timeline.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/assets_overview/bloc/asset_overview_bloc.dart';
 import 'package:web_dex/bloc/cex_market_data/portfolio_growth/portfolio_growth_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
@@ -75,11 +78,32 @@ class _WalletOverviewState extends State<WalletOverview> {
         // Calculate the total balance from the SDK balances and market data
         // interfaces rather than the PortfolioGrowthBloc - limited coin
         // coverage and dependent on OHLC API request limits.
-        final double? totalBalance = computeWalletTotalUsd(
+        final walletTotal = computeWalletTotalUsdDetailed(
           coins: state.walletCoins.values,
           coinsState: state,
           sdk: context.sdk,
         );
+        final double? totalBalance = walletTotal.totalUsd;
+
+        // The first frame in which the user can actually see their money.
+        // `takeElapsedMs` returns non-null exactly once per session, so this
+        // needs no latch of its own and cannot double-report across rebuilds.
+        if (totalBalance != null) {
+          final elapsedMs = WalletLoadTimeline.instance.takeElapsedMs();
+          if (elapsedMs != null) {
+            context.read<AnalyticsBloc>().logEvent(
+              TimeToFirstBalanceEventData(
+                timeToFirstBalanceMs: elapsedMs,
+                assetCount: walletTotal.assetCount,
+                pricedAssetCount: walletTotal.pricedAssetCount,
+                walletType:
+                    context.read<AuthBloc>().state.currentUser?.isHd ?? false
+                    ? 'hd'
+                    : 'iguana',
+              ),
+            );
+          }
+        }
 
         if (!_logged && stateWithData != null && totalBalance != null) {
           context.read<AnalyticsBloc>().logEvent(

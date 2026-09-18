@@ -84,7 +84,7 @@ class NftTransactionsBloc extends Bloc<NftTxnEvent, NftTxnState> {
     if (!_isLoggedIn) return;
     emitter(state.copyWith(status: NftTxnStatus.loading));
     try {
-      await _nftsRepository.updateNft(NftBlockchains.values);
+      await _nftsRepository.updateNft(NftBlockchains.supportedValues);
       final response = await _nftTxnRepository.getNftTransactions();
       final transactions = response.transactions
         ..sort((a, b) => a.blockTimestamp.isAfter(b.blockTimestamp) ? -1 : 1);

@@ -3,6 +3,7 @@ import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/trading_status/disallowed_feature.dart';
 import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'trading_status_service.dart';
 
 part 'trading_status_event.dart';

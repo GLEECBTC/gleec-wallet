@@ -1,23 +1,62 @@
 {
   "hosting": {
-    "site": "walletrc",
+    "target": "web",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    // "headers": [
-    //   {
-    //     "source": "**",
-    //     "headers": [
-    //       {
-    //         "key": "Cross-Origin-Embedder-Policy",
-    //         "value": "credentialless"
-    //       },
-    //       {
-    //         "key": "Cross-Origin-Opener-Policy",
-    //         "value": "same-origin"
-    //       }
-    //     ]
-    //   }
-    // ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'self'"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "geolocation=(), usb=(self), serial=(), bluetooth=(), idle-detection=()"
+          }
+        ]
+      },
+      {
+        "source": "/@(index.html|flutter_bootstrap.js|flutter.js|main.dart.js|flutter_service_worker.js|version.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/assets/packages/komodo_defi_framework/assets/coin_icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=2592000"
+          }
+        ]
+      },
+      {
+        "source": "/assets/assets/web_pages/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      }
+    ],
     "rewrites": [
       {
         "source": "**",

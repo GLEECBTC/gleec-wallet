@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KDF web latency probe</title>
+<style>
+  :root { color-scheme: dark light; }
+  body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         margin: 2rem auto; max-width: 62rem; padding: 0 1rem; }
+  h1 { font-size: 1.25rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { text-align: left; padding: .3rem .6rem; border-bottom: 1px solid #8884; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  pre { background: #8881; padding: .75rem; overflow-x: auto; border-radius: 4px; }
+  .warn { border-left: 3px solid #e5a; padding-left: .75rem; }
+  button { font: inherit; padding: .4rem .8rem; margin-right: .5rem; }
+  #log { max-height: 14rem; overflow-y: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>KDF web latency probe</h1>
+
+<p class="warn">
+  This starts a <strong>real KDF</strong> (WebAssembly) in this tab and it talks
+  to <strong>real electrum and EVM RPC servers</strong>. Use a throwaway seed.
+  The seed is held in <code>sessionStorage</code> for the duration of the run
+  and cleared at the end; it is never written to disk or sent anywhere except
+  into the local KDF instance.
+</p>
+
+<p>
+  No Flutter and no Dart are involved. This page imports the same
+  <code>kdflib_bootstrapper.js</code> the app imports and calls
+  <code>mm2_main</code> / <code>mm2_rpc</code> directly &mdash; the browser
+  mirror of <code>tool/kdf_latency_probe.py</code>.
+</p>
+
+<p>
+  <button id="run">Run</button>
+  <button id="copy" disabled>Copy JSON</button>
+  <button id="reset">Reset</button>
+  <span id="status"></span>
+</p>
+
+<div id="report"></div>
+<pre id="log" hidden></pre>
+
+<script type="module">
+// The bootstrapper sets window.kdf and kicks off init_wasm() on import.
+// MUST be /kdf/res/... - the copy at /kdf/kdf/res/ has a broken relative
+// import (it resolves to a path one level too deep).
+import kdf from "/kdf/res/kdflib_bootstrapper.js";
+
+// ---------------------------------------------------------------------------
+// Constants mirrored from the SDK so the RPC *pattern* matches, not just the
+// RPC set. hd_multi_address_strategy.dart / utxo_activation_strategy.dart.
+// ---------------------------------------------------------------------------
+const ACTIVATION_POLL_MS = 500;
+const ACTIVATION_TIMEOUT_MS = 180_000;
+const SCAN_POLL_MS = 250;
+const SCAN_TIMEOUT_MS = 20_000;   // the ceiling the SDK gives up at
+const BALANCE_POLL_MS = 100;
+const BALANCE_TIMEOUT_MS = 60_000;
+
+const RPC_PASSWORD = "Probe1!Rpc2Secret"; // must not contain "password"
+const WALLET_PASSWORD = "Probe1!Wallet2";
+
+const COINS_URL =
+  "/assets/packages/komodo_defi_framework/assets/config/coins_config.json";
+
+// One scenario per page load. A full reload is the only way to guarantee a
+// genuinely cold wasm instance, which is what makes these numbers comparable
+// to the native probe's fresh-dbdir-per-row.
+// `kind` picks the activation call: "utxo" goes through task::enable_utxo,
+// "evm" through the synchronous enable_eth_with_tokens. Defaults to "utxo" so
+// the original rows are unchanged.
+//
+// The EVM rows exist because a rate-limited single-node chain fails
+// *differently* on web than on native, and native cannot see it. A browser
+// reaching such an endpoint gets an opaque `fetch` rejection rather than a
+// readable 429 - the refusal comes from Cloudflare's edge with no
+// Access-Control-Allow-Origin - so any fix keyed on reading the status is dead
+// code here. GLEEC is the case: one node, chain 11169, in the app's default
+// coin set, and it failed 100% of native HD activations before the retry that
+// these rows exist to verify.
+const SCENARIOS = [
+  { label: "HD, 1 coin (KMD), gap 20", walletType: "hd",  coins: ["KMD"], gapLimit: 20 },
+  { label: "iguana, 1 coin (KMD)",     walletType: "iguana", coins: ["KMD"], gapLimit: 0 },
+  { label: "HD, 1 coin, do_not_scan",  walletType: "hd",  coins: ["KMD"], gapLimit: 20,
+    scanPolicy: "do_not_scan" },
+  // Single-node EVM, HD. The regression case.
+  { label: "HD, GLEEC (single-node EVM)", walletType: "hd", kind: "evm",
+    coins: ["GLEEC"], gapLimit: 20 },
+  // Multi-node EVM with tokens, mirroring the native ETH+2tok row so the two
+  // tiers stay comparable.
+  { label: "HD, ETH + 2 ERC-20", walletType: "hd", kind: "evm",
+    coins: ["ETH"], tokens: { ETH: ["USDT-ERC20", "USDC-ERC20"] }, gapLimit: 20 },
+];
+
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+function log(line) {
+  logEl.hidden = false;
+  logEl.textContent += line + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Long tasks. This is the one thing the native probe cannot measure and the
+// entire reason web is worth measuring separately: on web KDF is WASM on the
+// main thread with the UI, so blocking time is a first-class symptom.
+// ---------------------------------------------------------------------------
+let longTaskMs = 0;
+let longTaskCount = 0;
+try {
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      longTaskMs += entry.duration;
+      longTaskCount += 1;
+    }
+  }).observe({ entryTypes: ["longtask"] });
+} catch {
+  log("longtask observer unavailable in this browser");
+}
+const takeLongTasks = () => {
+  const out = { ms: Math.round(longTaskMs), count: longTaskCount };
+  longTaskMs = 0; longTaskCount = 0;
+  return out;
+};
+
+// ---------------------------------------------------------------------------
+// RPC
+// ---------------------------------------------------------------------------
+const rpcCounts = {};
+const rpcSeconds = {};
+
+async function rpc(method, params, mmrpc, extra) {
+  // userpass goes in every payload, exactly as with the native HTTP transport.
+  const payload = { userpass: RPC_PASSWORD, method, ...(extra || {}) };
+  if (mmrpc) payload.mmrpc = mmrpc;
+  if (params !== undefined) payload.params = params;
+  const t0 = performance.now();
+  const response = await kdf.mm2_rpc(payload);
+  const dt = (performance.now() - t0) / 1000;
+  rpcCounts[method] = (rpcCounts[method] || 0) + 1;
+  rpcSeconds[method] = (rpcSeconds[method] || 0) + dt;
+  return response;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function startKdf(coins, seed, walletType) {
+  const conf = {
+    mm2: 1,
+    allow_weak_password: false,
+    rpc_password: RPC_PASSWORD,
+    netid: 6133,
+    gui: "kdf-web-probe",
+    wallet_name: `probe-${walletType}`,
+    wallet_password: WALLET_PASSWORD,
+    passphrase: seed,
+    rpc_local_only: true,
+    allow_registrations: true,
+    enable_hd: walletType === "hd",
+    https: false,
+    coins,
+    // Deliberately omitted on web:
+    //  * dbdir / userhome - not valid on web, KDF uses IndexedDB.
+    //  * event_streaming_configuration - the wasm does
+    //    `new SharedWorker(worker_path)` and a 404 there fails the start.
+    //  * seednodes - would conflict with disable_p2p.
+    disable_p2p: true,
+  };
+  const t0 = performance.now();
+  await kdf.mm2_main({ conf, log_level: kdf.LogLevel.Info }, (lvl, line) => {
+    if (lvl <= 2) log(`[kdf] ${line}`);
+  });
+  // mm2_main_status is synchronous and returns a MainStatus enum value.
+  while (kdf.mm2_main_status() !== kdf.MainStatus.RpcIsUp) {
+    await sleep(100);
+    if (performance.now() - t0 > 60_000) throw new Error("KDF RPC never came up");
+  }
+  return (performance.now() - t0) / 1000;
+}
+
+function utxoParams(coin, gapLimit, scanPolicy, hd) {
+  const params = {
+    mode: {
+      rpc: "Electrum",
+      rpc_data: {
+        servers: (coin.electrum || []).map((s) =>
+          s.protocol ? { url: s.url, protocol: s.protocol } : { url: s.url }
+        ),
+      },
+    },
+    tx_history: true,
+  };
+  if (hd) {
+    params.scan_policy = scanPolicy;
+    params.gap_limit = gapLimit;
+    params.min_addresses_number = 1;
+  }
+  return params;
+}
+
+async function activateUtxo(steps, ticker, coin, gapLimit, scanPolicy, hd) {
+  const t0 = performance.now();
+  const init = await rpc(
+    "task::enable_utxo::init",
+    { ticker, activation_params: utxoParams(coin, gapLimit, scanPolicy, hd) },
+    "2.0"
+  );
+  const taskId = init?.result?.task_id;
+  if (taskId === undefined) throw new Error(`enable_utxo::init failed: ${JSON.stringify(init)}`);
+  let polls = 0, timedOut = false, failed = false, detail = "";
+  for (;;) {
+    const status = await rpc(
+      "task::enable_utxo::status",
+      { task_id: taskId, forget_if_finished: false },
+      "2.0"
+    );
+    polls += 1;
+    const state = status?.result?.status;
+    if (state === "Ok") break;
+    if (state === "Error") {
+      // A failed activation returns fast, so recording it as a completed step
+      // makes an error look like a speedup. Mirrors kdf_latency_probe.py.
+      failed = true;
+      detail = JSON.stringify(status?.result?.details ?? status).slice(0, 200);
+      break;
+    }
+    if (performance.now() - t0 > ACTIVATION_TIMEOUT_MS) { timedOut = true; break; }
+    await sleep(ACTIVATION_POLL_MS);
+  }
+  steps.push({ name: `activate:${ticker}`, seconds: (performance.now() - t0) / 1000,
+               polls, timed_out: timedOut, failed, detail });
+  if (failed) throw new Error(`activate:${ticker} failed: ${detail}`);
+}
+
+// `EvmNode.toJson()` - url plus komodo_proxy, and nothing else. The config's
+// `ws_url` is deliberately dropped: `EvmNode` has no such field, so the SDK
+// never sends it and neither does the native probe. For a single-node chain
+// this is what makes the node list genuinely one entry long, with no websocket
+// sibling to fall back to.
+function evmNodes(coin) {
+  return (coin.nodes || []).map((node) => ({
+    url: node.url,
+    komodo_proxy: Boolean(node.komodo_proxy ?? node.gui_auth ?? false),
+  }));
+}
+
+// Mirrors `_activate_eth_with_tokens` in kdf_latency_probe.py field for field.
+// Any divergence would make the two tiers incomparable, which is the whole
+// reason this page exists.
+function evmParams(platform, coin, tokens) {
+  const params = {
+    ticker: platform,
+    nodes: evmNodes(coin),
+    // `required_confirmations` here is TokensRequest's hardcoded 3, NOT the
+    // token's own config value.
+    erc20_tokens_requests: (tokens || []).map((ticker) => ({ ticker, required_confirmations: 3 })),
+    priv_key_policy: { type: "ContextPrivKey" },
+    requires_notarization: Boolean(coin.requires_notarization),
+    tx_history: true,
+    get_balances: true,
+  };
+  if (coin.required_confirmations !== undefined && coin.required_confirmations !== null) {
+    params.required_confirmations = coin.required_confirmations;
+  }
+  // TRX has no swap contracts in its params object.
+  if (coin.type !== "TRX") {
+    for (const key of ["swap_contract_address", "fallback_swap_contract"]) {
+      if (coin[key]) params[key] = coin[key];
+    }
+  }
+  return params;
+}
+
+// Unlike the UTXO path this is synchronous: one call, no task id, nothing to
+// poll. A failure therefore returns *fast*, which is why it is recorded as a
+// failed step rather than left to look like a quick success - the native probe
+// had exactly that bug and reported a 1.1s hard failure as a timing.
+async function activateEvm(steps, platform, coin, tokens) {
+  const t0 = performance.now();
+  const response = await rpc("enable_eth_with_tokens", evmParams(platform, coin, tokens), "2.0");
+
+  const failed = Boolean(response?.error);
+  const detail = failed
+    ? String(response.error).slice(0, 200)
+    : `${(tokens || []).length} token(s), block ${response?.result?.current_block}`;
+
+  steps.push({
+    name: `activate:${platform}` + ((tokens || []).length ? `+${tokens.length}tok` : ""),
+    seconds: (performance.now() - t0) / 1000,
+    polls: 1,
+    timed_out: false,
+    failed,
+    detail,
+  });
+  if (failed) throw new Error(`activate:${platform} failed: ${detail}`);
+}
+
+async function hdScan(steps, ticker) {
+  const t0 = performance.now();
+  const init = await rpc(
+    "task::scan_for_new_addresses::init",
+    { coin: ticker, account_index: 0, gap_limit: 20 },
+    "2.0"
+  );
+  const taskId = init?.result?.task_id;
+  let polls = 0, timedOut = false, detail = "";
+  if (taskId === undefined) {
+    detail = JSON.stringify(init).slice(0, 160);
+  } else {
+    for (;;) {
+      const status = await rpc(
+        "task::scan_for_new_addresses::status",
+        { task_id: taskId, forget_if_finished: false },
+        "2.0"
+      );
+      polls += 1;
+      const state = status?.result?.status;
+      if (state === "Ok" || state === "Error") { detail = state; break; }
+      if (performance.now() - t0 > SCAN_TIMEOUT_MS) {
+        timedOut = true; detail = "TIMED OUT at the SDK's 20s ceiling"; break;
+      }
+      await sleep(SCAN_POLL_MS);
+    }
+  }
+  steps.push({ name: `scan_for_new_addresses:${ticker}`,
+               seconds: (performance.now() - t0) / 1000, polls, timed_out: timedOut, detail });
+}
+
+async function hdAccountBalance(steps, ticker) {
+  const t0 = performance.now();
+  const init = await rpc("task::account_balance::init",
+                         { coin: ticker, account_index: 0 }, "2.0");
+  const taskId = init?.result?.task_id;
+  if (taskId === undefined) throw new Error(`account_balance::init failed: ${JSON.stringify(init)}`);
+  let polls = 0, timedOut = false, addresses = 0;
+  for (;;) {
+    const status = await rpc("task::account_balance::status",
+                             { task_id: taskId, forget_if_finished: false }, "2.0");
+    polls += 1;
+    const payload = status?.result;
+    if (payload?.status === "Ok") { addresses = (payload.details?.addresses || []).length; break; }
+    if (payload?.status === "Error") break;
+    if (performance.now() - t0 > BALANCE_TIMEOUT_MS) { timedOut = true; break; }
+    await sleep(BALANCE_POLL_MS);
+  }
+  steps.push({ name: `account_balance:${ticker}`, seconds: (performance.now() - t0) / 1000,
+               polls, timed_out: timedOut, detail: `${addresses} addresses` });
+  return addresses;
+}
+
+async function iguanaBalance(steps, ticker) {
+  const t0 = performance.now();
+  // my_balance is legacy: `coin` sits at the top level, not inside params.
+  const response = await rpc("my_balance", undefined, undefined, { coin: ticker });
+  steps.push({ name: `my_balance:${ticker}`, seconds: (performance.now() - t0) / 1000,
+               polls: 1, timed_out: false, detail: response?.balance ?? response?.error ?? "" });
+  return response?.address ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Fresh state. Native gets a new dbdir per row; the browser equivalent is
+// deleting KDF's IndexedDB databases. Without this every row after the first
+// is a warm start and the comparison is meaningless.
+// ---------------------------------------------------------------------------
+async function wipeIndexedDb() {
+  if (!indexedDB.databases) { log("indexedDB.databases() unavailable; cannot guarantee a cold start"); return; }
+  const dbs = await indexedDB.databases();
+  for (const { name } of dbs) {
+    if (!name) continue;
+    await new Promise((resolve) => {
+      const request = indexedDB.deleteDatabase(name);
+      request.onsuccess = request.onerror = request.onblocked = () => resolve();
+    });
+  }
+  log(`cleared ${dbs.length} IndexedDB database(s)`);
+}
+
+// ---------------------------------------------------------------------------
+// Scenario driver
+// ---------------------------------------------------------------------------
+async function runScenario(scenario, coinsIndex, seed) {
+  const steps = [];
+  for (const k of Object.keys(rpcCounts)) delete rpcCounts[k];
+  for (const k of Object.keys(rpcSeconds)) delete rpcSeconds[k];
+  takeLongTasks();
+
+  const t0 = performance.now();
+  const hd = scenario.walletType === "hd";
+  const scanPolicy = scenario.scanPolicy || "scan_if_new_wallet";
+
+  // Tokens need their own config entries in the `coins` array KDF boots with,
+  // or enable_eth_with_tokens rejects the request before any node is touched.
+  const tokensOf = (ticker) => (scenario.tokens || {})[ticker] || [];
+  const wanted = scenario.coins.flatMap((ticker) => [ticker, ...tokensOf(ticker)]);
+  const coins = wanted.map((t) => coinsIndex[t]).filter(Boolean);
+  if (coins.length !== wanted.length) {
+    const missing = wanted.filter((t) => !coinsIndex[t]);
+    return { name: scenario.label, error: `coin missing from config: ${missing.join(", ")}` };
+  }
+
+  const bootSeconds = await startKdf(coins, seed, scenario.walletType);
+  steps.push({ name: "kdf_boot", seconds: bootSeconds, polls: 0, timed_out: false, detail: "wasm init + mm2_main" });
+
+  for (const ticker of scenario.coins) {
+    if (scenario.kind === "evm") {
+      await activateEvm(steps, ticker, coinsIndex[ticker], tokensOf(ticker));
+    } else {
+      await activateUtxo(steps, ticker, coinsIndex[ticker], scenario.gapLimit, scanPolicy, hd);
+    }
+  }
+
+  const first = scenario.coins[0];
+  let addresses = 0;
+  if (hd) { await hdScan(steps, first); addresses = await hdAccountBalance(steps, first); }
+  else { addresses = await iguanaBalance(steps, first); }
+
+  const longTasks = takeLongTasks();
+  try { await kdf.mm2_stop(); } catch { /* best effort */ }
+
+  return {
+    name: scenario.label,
+    wallet_type: scenario.walletType,
+    coins: scenario.coins,
+    gap_limit: scenario.gapLimit,
+    scan_policy: hd ? scanPolicy : "n/a",
+    steps,
+    rpc_counts: { ...rpcCounts },
+    rpc_seconds: { ...rpcSeconds },
+    total_seconds: (performance.now() - t0) / 1000,
+    addresses_returned: addresses,
+    long_task_ms: longTasks.ms,
+    long_task_count: longTasks.count,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration: one scenario per page load, advancing via reload.
+// ---------------------------------------------------------------------------
+const KEY_RESULTS = "kdfProbeResults";
+const KEY_SEED = "kdfProbeSeed";
+
+function loadResults() {
+  try { return JSON.parse(sessionStorage.getItem(KEY_RESULTS) || "[]"); }
+  catch { return []; }
+}
+
+function render(results, done) {
+  const rows = results.map((r) => {
+    if (r.error) return `<tr><td>${r.name}</td><td colspan="6">ERROR: ${r.error}</td></tr>`;
+    const sum = (p) => r.steps.filter((s) => s.name.startsWith(p))
+                              .reduce((a, s) => a + s.seconds, 0);
+    return `<tr>
+      <td>${r.name}</td>
+      <td class="n">${r.total_seconds.toFixed(1)}s</td>
+      <td class="n">${sum("activate:").toFixed(1)}s</td>
+      <td class="n">${sum("scan_for_new_addresses").toFixed(1)}s</td>
+      <td class="n">${(sum("account_balance") + sum("my_balance")).toFixed(1)}s</td>
+      <td class="n">${r.long_task_ms}ms</td>
+      <td class="n">${r.long_task_count}</td>
+    </tr>`;
+  }).join("");
+  $("report").innerHTML = `
+    <table>
+      <thead><tr><th>scenario</th><th class="n">total</th><th class="n">activate</th>
+      <th class="n">scan</th><th class="n">balance</th><th class="n">long tasks</th>
+      <th class="n">count</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${done ? "<p><strong>Run complete.</strong> Results POSTed to the probe server if it is listening.</p>" : ""}
+  `;
+  $("copy").disabled = results.length === 0;
+}
+
+async function main() {
+  const params = new URLSearchParams(location.search);
+  const index = Number(params.get("scenario") ?? "-1");
+  const results = loadResults();
+  render(results, false);
+
+  if (index < 0) { $("status").textContent = "idle"; return; }
+  if (index >= SCENARIOS.length) {
+    sessionStorage.removeItem(KEY_SEED);
+    render(results, true);
+    $("status").textContent = "done";
+    try {
+      await fetch("/probe-result", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          meta: { agent: navigator.userAgent, href: location.href,
+                  hardware_concurrency: navigator.hardwareConcurrency },
+          results,
+        }),
+      });
+      $("status").textContent = "done - results POSTed";
+    } catch { $("status").textContent = "done - no probe server; use Copy JSON"; }
+    return;
+  }
+
+  const seed = sessionStorage.getItem(KEY_SEED);
+  if (!seed) { $("status").textContent = "no seed; press Run"; return; }
+
+  $("status").textContent = `running ${index + 1}/${SCENARIOS.length}: ${SCENARIOS[index].label}`;
+  await wipeIndexedDb();
+  await kdf.init_wasm();
+  const coinsIndex = await (await fetch(COINS_URL)).json();
+
+  let result;
+  try { result = await runScenario(SCENARIOS[index], coinsIndex, seed); }
+  catch (error) { result = { name: SCENARIOS[index].label, error: String(error) }; }
+
+  results.push(result);
+  sessionStorage.setItem(KEY_RESULTS, JSON.stringify(results));
+  location.search = `?scenario=${index + 1}`;
+}
+
+$("run").addEventListener("click", () => {
+  const seed = prompt("Throwaway BIP39 seed phrase (never stored on disk):");
+  if (!seed) return;
+  sessionStorage.setItem(KEY_SEED, seed.trim());
+  sessionStorage.setItem(KEY_RESULTS, "[]");
+  location.search = "?scenario=0";
+});
+$("reset").addEventListener("click", () => {
+  sessionStorage.clear();
+  location.search = "";
+});
+$("copy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(JSON.stringify(loadResults(), null, 2));
+  $("status").textContent = "copied";
+});
+
+main().catch((error) => { $("status").textContent = String(error); log(String(error)); });
+</script>
+</body>
+</html>

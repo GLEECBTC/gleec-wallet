@@ -8,6 +8,10 @@ on:
   release:
     types: [created]
 
+env:
+  TRON_GASLESS_MAINNET_BASE_URL: "https://quicknode.gleec.com/gasfree/tron"
+  TRON_GASLESS_MAINNET_SERVICE_PROVIDER: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+
 jobs:
   build_mobile:
     name: Build Mobile (${{ matrix.platform }})
@@ -88,6 +92,11 @@ jobs:
           MATOMO_URL: ${{ secrets.MATOMO_URL }}
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
           BUILD_COMMAND: ${{ matrix.build_command }}
+          TRON_GASLESS_ENABLED: "true"
+          TRON_GASLESS_RECEIVE_ENABLED: "true"
+          TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
+          TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
+          TRON_GASLESS_REQUIRED_NETWORK: "tron"
 
       - name: Compute short commit SHA
         id: vars
