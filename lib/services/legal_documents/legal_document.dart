@@ -72,3 +72,18 @@ class LegalDocumentContent {
   final String? sha;
   final DateTime? fetchedAt;
 }
+
+/// The exact documents named by one form's consent notice.
+///
+/// Both the document links and acceptance use this immutable snapshot so a
+/// background refresh cannot change the meaning of an already submitted form.
+class LegalConsentSnapshot {
+  LegalConsentSnapshot({
+    required Map<LegalDocumentType, LegalDocumentContent> documents,
+    required Map<String, String> documentShas,
+  }) : documents = Map.unmodifiable(documents),
+       documentShas = Map.unmodifiable(documentShas);
+
+  final Map<LegalDocumentType, LegalDocumentContent> documents;
+  final Map<String, String> documentShas;
+}

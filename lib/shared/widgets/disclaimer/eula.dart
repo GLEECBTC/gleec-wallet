@@ -6,8 +6,9 @@ import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
 
 class Eula extends StatelessWidget {
-  const Eula({super.key, required this.onClose});
+  const Eula({super.key, required this.onClose, this.content});
   final VoidCallback onClose;
+  final LegalDocumentContent? content;
 
   @override
   Widget build(BuildContext context) {
@@ -15,8 +16,9 @@ class Eula extends StatelessWidget {
       children: <Widget>[
         SizedBox(
           height: MediaQuery.of(context).size.height * 2 / 3,
-          child: const LegalDocumentView(
+          child: LegalDocumentView(
             document: LegalDocumentType.eula,
+            content: content,
             scrollable: true,
           ),
         ),

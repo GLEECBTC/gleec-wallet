@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -53,6 +56,38 @@ class _FakeAnalyticsBloc extends Cubit<AnalyticsState>
 }
 
 class _FakeAuth implements KomodoDefiLocalAuth {
+  _FakeAuth(this.bloc) {
+    sessions.observe(bloc.state.currentUser);
+    subscription = bloc.stream.listen(
+      (state) => sessions.observe(state.currentUser),
+    );
+    addTearDown(subscription.cancel);
+    addTearDown(sessions.dispose);
+  }
+  final _FakeAuthBloc bloc;
+  final sessions = AuthSessionTracker();
+  late final StreamSubscription<AuthBlocState> subscription;
+  @override
+  Future<AuthSessionContext> captureSessionContext() async {
+    sessions.observe(bloc.state.currentUser);
+    return sessions.current ?? (throw const AuthSessionChangedException());
+  }
+
+  @override
+  bool isSessionContextCurrent(AuthSessionContext context) =>
+      sessions.isCurrent(context);
+
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!isSessionContextCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  @override
+  Stream<AuthSessionContext?> watchSessionContext() => sessions.changes;
+  @override
+  Future<KdfUser?> get currentUser async => bloc.state.currentUser;
   @override
   Future<Mnemonic> getMnemonicPlainText(String password) async =>
       Mnemonic.plaintext('single-token-test-seed');
@@ -67,8 +102,9 @@ class _CustomSeedValidator extends MnemonicValidator {
 }
 
 class _FakeSdk implements KomodoDefiSdk {
+  _FakeSdk(_FakeAuthBloc bloc) : auth = _FakeAuth(bloc);
   @override
-  final KomodoDefiLocalAuth auth = _FakeAuth();
+  final KomodoDefiLocalAuth auth;
 
   @override
   final MnemonicValidator mnemonicValidator = _CustomSeedValidator();
@@ -103,6 +139,7 @@ Future<List<bool>> _pumpGate(
   final previousScreenSize = Size(screenWidth, screenHeight);
   final results = <bool>[];
   final analyticsBloc = _FakeAnalyticsBloc();
+  final sdk = _FakeSdk(authBloc);
   addTearDown(analyticsBloc.close);
 
   await tester.pumpWidget(
@@ -115,7 +152,7 @@ Future<List<bool>> _pumpGate(
       assetLoader: const _EmptyAssetLoader(),
       child: Builder(
         builder: (context) => RepositoryProvider<KomodoDefiSdk>.value(
-          value: _FakeSdk(),
+          value: sdk,
           child: MultiBlocProvider(
             providers: [
               BlocProvider<AuthBloc>.value(value: authBloc),

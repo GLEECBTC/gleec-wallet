@@ -1,7 +1,5 @@
 // ignore_for_file: avoid_print
 
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -18,9 +16,18 @@ import '../../helpers/restore_wallet.dart';
 Future<void> testTakerOrder(WidgetTester tester) async {
   print('🔍 TAKER ORDER: Starting taker order test');
 
-  final String sellCoin = Random().nextDouble() > 0.5 ? 'DOC' : 'MARTY';
+  // Pinned rather than picked at random, because this runs in the same app
+  // instance and on the same wallet as the maker test before it, whose order
+  // sells DOC for MARTY and is never cancelled. Drawing MARTY here means
+  // buying DOC, and the only DOC on offer is that order - so
+  // `TakerValidator._checkTradeWithSelf` matches the wallet's own address,
+  // rejects the form, and the confirmation page never renders. Selling DOC
+  // seeks MARTY instead, which the resident order does not supply, so the
+  // test can only match a genuine external maker. The swap-timeout message
+  // below has always named this direction.
+  const String sellCoin = 'DOC';
   const String sellAmount = '0.01';
-  final String buyCoin = sellCoin == 'DOC' ? 'MARTY' : 'DOC';
+  const String buyCoin = 'MARTY';
   print('🔍 TAKER ORDER: Selected sell coin: $sellCoin, buy coin: $buyCoin');
 
   await _openTakerOrderForm(tester);
@@ -219,6 +226,11 @@ Future<void> _selectSellCoin(
   print('🔍 SELL CONFIG: Entered search text: $sellCoin');
   await tester.pumpNFrames(10);
 
+  // Same activation race as the maker form's selector. Deliberately not applied
+  // to the buy side: that row comes from the orderbook, so its absence is a
+  // missing counterparty rather than a slow local activation, and waiting there
+  // would only hide the real gap behind a timeout.
+  await tester.pumpUntilVisible(sellCoinItem);
   await tester.tapAndPump(sellCoinItem);
   print('🔍 SELL CONFIG: Selected coin');
 

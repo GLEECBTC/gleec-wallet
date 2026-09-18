@@ -154,6 +154,27 @@ pre-submission reservation. It is never sent to KDF. Accepted entries are
 reconciled by trace ID. Migrated records without a trace remain
 `submissionOutcomeUnknown` and non-resubmittable until resolved manually.
 
+## Wallet deletion and local recovery
+
+Use `sdk.walletDeletion.prepare(name)` to obtain an immutable warning snapshot,
+then pass that snapshot to `delete(acknowledgedReview: ..., password: ...)`.
+The SDK rechecks the wallet catalog entry and pending requests inside the
+catalog transaction while holding a wallet-scoped lease. Additional requests
+or a changed uncertainty warning require confirmation again; a replaced target
+requires returning to wallet selection. An active submission returns retryable
+busy until its local outcome has been recorded, without waiting for settlement.
+Browser clients coordinate through actual Web Locks.
+
+Confirmed deletion attempts independent wallet-cache cleanup and preserves
+unresolved encrypted recovery records and their discovery metadata. Cache I/O
+failures are logged and may retain encrypted history; they do not undo deletion
+of the wallet. Deletion does not cancel a
+transfer. Recovery requires re-importing the same identity on the same device
+and storage; it is not a cloud backup. Journal inspection failure produces an
+explicit uncertainty warning and preserves records. The target need not be
+signed in. The legacy raw SDK auth deletion entry point requires the review
+permit installed by SDK bootstrap.
+
 ## Application gates
 
 The existing build and remote Receive switches remain kill switches. They do

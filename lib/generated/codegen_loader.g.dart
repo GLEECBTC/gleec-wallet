@@ -1369,4 +1369,13 @@ abstract class LocaleKeys {
   static const privateKeyExportLoading = 'privateKeyExportLoading';
   static const privateKeyExportBulkActionsTitle =
       'privateKeyExportBulkActionsTitle';
+  static const walletDeletionRecoveryWarning = 'walletDeletionRecoveryWarning';
+  static const walletDeletionRecoveryUnavailable =
+      'walletDeletionRecoveryUnavailable';
+  static const walletDeletionReviewFailed = 'walletDeletionReviewFailed';
+  static const walletDeletionSubmissionBusy = 'walletDeletionSubmissionBusy';
+  static const walletDeletionReviewChanged = 'walletDeletionReviewChanged';
+  static const walletDeletionTargetChanged = 'walletDeletionTargetChanged';
+  static const seedBackupIdentityUnavailable = 'seedBackupIdentityUnavailable';
+  static const seedBackupSaveFailed = 'seedBackupSaveFailed';
 }

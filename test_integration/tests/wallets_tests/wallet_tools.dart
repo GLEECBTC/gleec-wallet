@@ -1,9 +1,13 @@
 // ignore_for_file: avoid_print
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../common/goto.dart' as goto;
+import '../../helpers/open_coins_manager.dart';
 import '../../common/pause.dart';
 import '../../common/widget_tester_action_extensions.dart';
 import '../../common/widget_tester_pump_extension.dart';
@@ -13,58 +17,62 @@ Future<void> removeAsset(
   required Finder asset,
   required String search,
 }) async {
-  print('🔍 REMOVE ASSET: Starting remove asset flow');
-
-  final Finder removeAssetsButton = find.byKey(
-    const Key('remove-assets-button'),
-  );
-  final Finder list = find.byKey(
-    const Key('coins-manager-list'),
-  );
-  final Finder switchButton = find.byKey(
-    const Key('back-button'),
-  );
-  final Finder searchCoinsField = find.byKey(
-    const Key('coins-manager-search-field'),
-  );
-
   await goto.walletPage(tester);
-  print('🔍 REMOVE ASSET: Navigated to wallet page');
-
-  await tester.tapAndPump(removeAssetsButton);
-  print('🔍 REMOVE ASSET: Tapped remove assets button');
+  // The current manager uses one list for both adding and removing assets.
+  await openAddAssetsView(tester);
+  final list = find.byKey(const Key('coins-manager-list'));
+  final searchField = find.byKey(const Key('coins-manager-search-field'));
   expect(list, findsOneWidget);
-
-  try {
-    expect(searchCoinsField, findsOneWidget);
-  } on TestFailure {
-    print('**Error** addAsset() no searchCoinsField');
-  }
-
-  await enterText(tester, finder: searchCoinsField, text: search);
-  print('🔍 REMOVE ASSET: Entered search text: $search');
-
-  try {
-    expect(asset, findsOneWidget);
-  } on TestFailure {
-    print('🔍 REMOVE ASSET: Asset not found initially, attempting to scroll');
-    print('**Error** removeAsset([$asset])');
-    await tester.dragUntilVisible(asset, list, const Offset(0, -5));
-    await tester.pumpAndSettle();
-  }
+  await enterText(tester, finder: searchField, text: search);
+  await tester.dragUntilVisibleNamed(
+    asset,
+    list,
+    const Offset(0, -50),
+    description: 'the "$search" row being removed from the coins manager',
+  );
+  expect(asset, findsOneWidget);
+  expect(
+    _assetIsSelected(tester, asset),
+    isTrue,
+    reason: 'The asset must be selected before testing removal',
+  );
 
   await tester.tapAndPump(asset);
-  print('🔍 REMOVE ASSET: Tapped on asset');
-
-  try {
-    expect(switchButton, findsOneWidget);
-  } on TestFailure {
-    print('🔍 REMOVE ASSET: Switch button not found');
-    print('**Error** removeAsset(): switchButton: $switchButton');
+  // Parent assets and open orders use the same explicit Disable confirmation
+  // as ordinary users. An active-swap refusal must leave the toggle selected
+  // and fail the assertion below; this helper never bypasses the trading gate.
+  for (var confirmation = 0; confirmation < 2; confirmation++) {
+    final dialog = find.byType(AlertDialog);
+    if (dialog.evaluate().isEmpty) break;
+    final disable = find.descendant(
+      of: dialog,
+      matching: find.widgetWithText(TextButton, LocaleKeys.disable.tr()),
+    );
+    expect(disable, findsOneWidget);
+    await tester.tapAndPump(disable);
   }
-  await tester.tapAndPump(switchButton);
-  print('🔍 REMOVE ASSET: Tapped switch button');
-  await pause(sec: 5);
+
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (_assetIsSelected(tester, asset) && DateTime.now().isBefore(deadline)) {
+    await tester.pumpNFrames(10);
+  }
+  expect(
+    _assetIsSelected(tester, asset),
+    isFalse,
+    reason: 'Removing the asset must clear its selection toggle',
+  );
+  await tester.tapAndPump(find.byKey(const Key('back-button')));
+}
+
+bool _assetIsSelected(WidgetTester tester, Finder asset) {
+  final toggle = find.descendant(of: asset, matching: find.byType(UiSwitcher));
+  if (toggle.evaluate().isNotEmpty) {
+    expect(toggle, findsOneWidget);
+    return tester.widget<UiSwitcher>(toggle).value;
+  }
+  final checkbox = find.descendant(of: asset, matching: find.byType(Checkbox));
+  expect(checkbox, findsOneWidget);
+  return tester.widget<Checkbox>(checkbox).value!;
 }
 
 Future<void> addAsset(
@@ -74,18 +82,12 @@ Future<void> addAsset(
 }) async {
   print('🔍 ADD ASSET: Starting add asset flow');
 
-  final Finder list = find.byKey(
-    const Key('coins-manager-list'),
-  );
-  final Finder addAssetsButton = find.byKey(
-    const Key('add-assets-button'),
-  );
+  final Finder list = find.byKey(const Key('coins-manager-list'));
+  final Finder addAssetsButton = find.byKey(const Key('add-assets-button'));
   final Finder searchCoinsField = find.byKey(
     const Key('coins-manager-search-field'),
   );
-  final Finder switchButton = find.byKey(
-    const Key('back-button'),
-  );
+  final Finder switchButton = find.byKey(const Key('back-button'));
 
   await goto.walletPage(tester);
   print('🔍 ADD ASSET: Navigated to wallet page');
@@ -111,14 +113,22 @@ Future<void> addAsset(
   await enterText(tester, finder: searchCoinsField, text: search);
   print('🔍 ADD ASSET: Entered search text: $search');
 
-  await tester.dragUntilVisible(
+  await tester.dragUntilVisibleNamed(
     asset,
     list,
     const Offset(-250, 0),
+    description: 'the "$search" row being added in the coins manager',
   );
   print('🔍 ADD ASSET: Scrolled to make asset visible');
   await tester.tapAndPump(asset);
   print('🔍 ADD ASSET: Tapped on asset');
+  // Unlike removal, adding never checked that the tap landed, so a mistargeted
+  // row looked identical to a coin that failed to activate later on.
+  expect(
+    _assetIsSelected(tester, asset),
+    isTrue,
+    reason: 'Tapping the "$search" row must select it for activation',
+  );
 
   try {
     expect(switchButton, findsOneWidget);
@@ -137,6 +147,7 @@ Future<bool> filterAsset(
   required Finder assetScrollView,
   required String text,
   required Finder searchField,
+  Duration timeout = const Duration(seconds: 60),
 }) async {
   print('🔍 FILTER ASSET: Starting filter with text: $text');
 
@@ -144,16 +155,33 @@ Future<bool> filterAsset(
   print('🔍 FILTER ASSET: Entered filter text');
   await tester.pumpAndSettle();
 
-  try {
-    await tester.dragUntilVisible(asset, assetScrollView, const Offset(0, -50));
-    expect(asset, findsOneWidget);
-  } on TestFailure {
-    print('🔍 FILTER ASSET: Asset not found after filtering');
-    await pause(msg: '**Error** filterAsset([$asset, $text])');
-    return false;
+  // An asset added moments ago only joins the wallet list once its activation
+  // completes, which outlasts a scroll on a cold CI network. Retry until the
+  // row appears rather than reading the list once and calling it absent.
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    try {
+      await tester.dragUntilVisibleNamed(
+        asset,
+        assetScrollView,
+        const Offset(0, -50),
+        description: 'the "$text" row in the filtered wallet list',
+      );
+      expect(asset, findsOneWidget);
+      print('🔍 FILTER ASSET: Successfully filtered asset');
+      return true;
+    } on TestFailure {
+      if (!DateTime.now().isBefore(deadline)) {
+        print(
+          '🔍 FILTER ASSET: Asset not found after filtering for '
+          '${timeout.inSeconds}s',
+        );
+        await pause(msg: '**Error** filterAsset([$asset, $text])');
+        return false;
+      }
+      await tester.pumpNFrames(10);
+    }
   }
-  print('🔍 FILTER ASSET: Successfully filtered asset');
-  return true;
 }
 
 Future<void> enterText(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,7 +32,7 @@ import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/s
 /// notice, and writing `has_backup` instead would be worse: three other
 /// surfaces (the global banner, the desktop menu indicator and the settings
 /// label) read that flag as proof the user holds their words.
-final Set<WalletId> _acknowledgedThisSession = <WalletId>{};
+final Set<AuthSessionContext> _acknowledgedThisSession = <AuthSessionContext>{};
 
 @visibleForTesting
 void resetSeedBackupAcknowledgements() => _acknowledgedThisSession.clear();
@@ -38,11 +40,8 @@ void resetSeedBackupAcknowledgements() => _acknowledgedThisSession.clear();
 /// Ensures the user has been warned before an address they could fund is
 /// revealed. Returns true when the caller may proceed.
 ///
-/// Reads the wallet from [AuthBloc] rather than `sdk.currentWallet()` on
-/// purpose: `wallet_provenance` is written by an unawaited post-login
-/// finalizer and is still absent while the first activation burst runs, which
-/// is exactly the window this gate fires in. `AuthBloc` carries the optimistic
-/// value, and the "these are new words" copy depends on it being right.
+/// Reads the authenticated user published by the SDK through [AuthBloc].
+/// Initial creation metadata is persisted before that user is published.
 ///
 /// There is deliberately no fail-open branch for a missing [AuthBloc]. It is
 /// provided above `MaterialApp.router`, so it is an ancestor of every route and
@@ -60,8 +59,18 @@ Future<bool> ensureSeedBackedUp(
   if (!seedBackupGateRequired(wallet: wallet, isTestCoin: isTestCoin)) {
     return true;
   }
+  final sdk = context.read<KomodoDefiSdk>();
+  final AuthSessionContext session;
+  try {
+    session = await sdk.auth.captureSessionContext();
+  } on AuthSessionChangedException {
+    return false;
+  }
+  if (!context.mounted || !sdk.auth.isSessionContextCurrent(session)) {
+    return false;
+  }
   final walletId = user!.walletId;
-  if (_acknowledgedThisSession.contains(walletId)) return true;
+  if (_acknowledgedThisSession.contains(session)) return true;
 
   final proceed = await AppDialog.show<bool>(
     context: context,
@@ -70,6 +79,8 @@ Future<bool> ensureSeedBackedUp(
     child: _SeedBackupGateDialog(
       wallet: wallet!,
       walletId: walletId,
+      session: session,
+      sdk: sdk,
       reason: reason,
       // Passed in rather than read off the dialog's own context: AppDialog
       // pushes onto the root navigator, which is not guaranteed to sit under
@@ -78,19 +89,23 @@ Future<bool> ensureSeedBackedUp(
     ),
   );
 
-  return proceed == true && authBloc.state.currentUser?.walletId == walletId;
+  return proceed == true && sdk.auth.isSessionContextCurrent(session);
 }
 
 class _SeedBackupGateDialog extends StatefulWidget {
   const _SeedBackupGateDialog({
     required this.wallet,
     required this.walletId,
+    required this.session,
+    required this.sdk,
     required this.reason,
     required this.authBloc,
   });
 
   final Wallet wallet;
   final WalletId walletId;
+  final AuthSessionContext session;
+  final KomodoDefiSdk sdk;
   final SeedBackupGateReason reason;
   final AuthBloc authBloc;
 
@@ -105,13 +120,23 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
   String _seed = '';
   bool _backingUp = false;
   bool _closing = false;
+  StreamSubscription<AuthSessionContext?>? _sessionSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionSubscription = widget.sdk.auth.watchSessionContext().listen((_) {
+      if (!_isCurrentWallet) _close(false);
+    });
+  }
 
   bool get _isCurrentWallet =>
-      widget.authBloc.state.currentUser?.walletId == widget.walletId;
+      widget.sdk.auth.isSessionContextCurrent(widget.session);
 
   @override
   void dispose() {
     _seed = '';
+    _sessionSubscription?.cancel();
     super.dispose();
   }
 
@@ -149,13 +174,13 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
   }
 
   void _continueAnyway() {
-    if (widget.authBloc.state.currentUser?.walletId != widget.walletId) {
+    if (!_isCurrentWallet) {
       _close(false);
       return;
     }
     // A reused display name must not inherit a different wallet's warning.
     if (widget.walletId.hasFullIdentity) {
-      _acknowledgedThisSession.add(widget.walletId);
+      _acknowledgedThisSession.add(widget.session);
     }
     _close(true);
   }
@@ -183,7 +208,7 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
     return BlocListener<AuthBloc, AuthBlocState>(
       bloc: widget.authBloc,
       listener: (context, state) {
-        if (state.currentUser?.walletId != widget.walletId) _close(false);
+        if (!_isCurrentWallet) _close(false);
       },
       child: Builder(
         builder: (context) {
@@ -226,7 +251,7 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
                   case SecuritySettingsStep.seedConfirm:
                     content = SeedConfirmation(
                       seedPhrase: _seed,
-                      expectedWalletId: widget.walletId,
+                      session: widget.session,
                     );
                     break;
                   case SecuritySettingsStep.seedSuccess:

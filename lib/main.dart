@@ -86,14 +86,12 @@ Future<void> main() async {
     );
 
     final tradingStatusRepository = TradingStatusRepository(komodoDefiSdk);
-    final tradingStatusService = TradingStatusService(tradingStatusRepository);
-    // Deliberately not awaited: this is a geo-lookup over the network, and
-    // nothing between here and the first frame depends on its answer.
-    // `initialize()` sets `_isInitialized` synchronously before its first
-    // await, so the `currentStatus`/`isTradingEnabled` asserts stay satisfied,
-    // and the cached status starts restrictive - identical to what the failure
-    // path sets. `CoinsBloc` already waits on `initialStatusReady` with its own
-    // timeout and re-emits the catalogue when the real status lands.
+    final tradingStatusService = TradingStatusService(
+      tradingStatusRepository,
+      activationPolicy: komodoDefiSdk.activationPolicy,
+    );
+    // Keep startup responsive while the SDK's loading policy defers activation.
+    // Consumers observe policy changes and resume eligible work after lookup.
     unawaited(
       tradingStatusService.initialize().catchError((
         Object error,
@@ -231,11 +229,36 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   final _sensitivityController = ScreenshotSensitivityController();
+  LegalDocumentsRepository? _legalDocuments;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repository = context.read<LegalDocumentsRepository>();
+    if (!identical(repository, _legalDocuments)) {
+      _legalDocuments = repository;
+      unawaited(repository.refreshConsentDocuments());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_legalDocuments?.refreshConsentDocuments());
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sensitivityController.dispose();
     super.dispose();
   }

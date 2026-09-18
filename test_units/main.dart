@@ -123,6 +123,15 @@ import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
 import 'tests/wallet/coins_repo_activation_wallet_race_test.dart';
 import 'tests/services/legal_acceptance_test.dart';
+import 'tests/services/legal_refresh_test.dart' as legal_refresh_test;
+import 'bloc/trading_status/trading_status_service_test.dart'
+    as trading_status_service_test;
+import 'bloc/trading_status/trading_status_disabled_policy_test.dart'
+    as trading_status_disabled_policy_test;
+import 'views/wallets_manager/widgets/wallet_deleting_test.dart'
+    as wallet_deleting_test;
+import 'tests/wallet/legacy_native_wallet_migration_test.dart'
+    as legacy_native_wallet_migration_test;
 import 'tests/services/storage_persistence_gate_test.dart';
 import 'tests/wallet/seed_backup_policy_test.dart';
 import 'views/common/seed_backup_gate_test.dart';
@@ -305,6 +314,11 @@ void main() {
   testCoinSortOrder();
   testCoinsBlocBalanceEmit();
   testLegalAcceptance();
+  legal_refresh_test.main();
+  trading_status_service_test.main();
+  trading_status_disabled_policy_test.main();
+  wallet_deleting_test.main();
+  legacy_native_wallet_migration_test.main();
   testStoragePersistenceGate();
   testSeedBackupPolicy();
   testSeedBackupGate();

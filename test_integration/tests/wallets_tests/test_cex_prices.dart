@@ -1,13 +1,14 @@
 // ignore_for_file: avoid_print
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/main.dart' as app;
 
 import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
 import '../../common/widget_tester_find_extension.dart';
+import '../../common/widget_tester_pump_extension.dart';
 import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 import 'wallet_tools.dart';
@@ -19,15 +20,9 @@ Future<void> testCexPrices(WidgetTester tester) async {
 
   final Finder totalAmount = find.byKey(const Key('overview-current-value'));
 
-  // re-enable with coin details click
-  // final Finder coinDetailsReturnButton = find.byKey(
-  //   const Key('back-button'),
-  // );
   final Finder kmdBep20CoinActive = find.byKey(
     const Key('coin-list-item-kmd-bep20'),
   );
-  final Finder kmdBep20Price = find.byKey(const Key('fiat-price-kmd-bep20'));
-  final Finder list = find.byKey(const Key('wallet-page-coins-list'));
   final Finder page = find.byKey(const Key('wallet-page'));
   final Finder kmdBep20Item = find.byKey(
     const Key('coins-manager-list-item-kmd-bep20'),
@@ -51,12 +46,7 @@ Future<void> testCexPrices(WidgetTester tester) async {
   await addAsset(tester, asset: kmdBep20Item, search: kmdBep20ByTicker);
   print('🔍 CEX PRICES: Added KMD-BEP20 asset');
 
-  try {
-    expect(list, findsOneWidget);
-  } on TestFailure {
-    print('🔍 CEX PRICES: List not found');
-    print('**Error** testCexPrices() list: $list');
-  }
+  expect(coinsList, findsOneWidget);
 
   print('🔍 CEX PRICES: Starting KMD-BEP20 price check');
   final hasKmdBep20 = await filterAsset(
@@ -65,34 +55,45 @@ Future<void> testCexPrices(WidgetTester tester) async {
     asset: kmdBep20CoinActive,
     text: kmdBep20ByTicker,
     searchField: searchCoinsField,
+    // Enabling a coin activates it through CoinsRepo.activateCoinsSync, which
+    // retries 15 times with a backoff capped at 10s - about two minutes in the
+    // worst case - and the row only joins the list once that settles. Allow
+    // the whole budget so a slow CI activation is not read as a missing coin.
+    timeout: const Duration(minutes: 3),
   );
 
-  if (hasKmdBep20) {
-    await tester.dragUntilVisible(
-      kmdBep20CoinActive,
-      coinsList,
-      const Offset(0, -50),
-    );
+  expect(
+    hasKmdBep20,
+    isTrue,
+    reason:
+        'KMD-BEP20 must reach the wallet list after being added; it did '
+        'not appear, so its activation never completed',
+  );
 
-    // TODO: re-enable. Widget is found, but not tappable, despite being visible
-    // await tester.tapAndPump(kmdBep20CoinActive);
-
-    final Text text = kmdBep20Price.evaluate().single.widget as Text;
-    final String? priceStr = text.data;
-    final double? priceDouble = double.tryParse(priceStr ?? '');
-    print('🔍 CEX PRICES: KMD-BEP20 price found: $priceStr');
-    expect(priceDouble != null && priceDouble > 0, true);
-
-    // re-enable along with the coin tap above
-    // await tester.tapAndPump(coinDetailsReturnButton);
-  } else {
-    print('🔍 CEX PRICES: KMD-BEP20 not found in list');
+  // Prices on the current wallet list use TrendPercentageText. The old
+  // fiat-price key belongs to coin details, which this test has not opened.
+  final price = find.descendant(
+    of: kmdBep20CoinActive,
+    matching: find.byType(TrendPercentageText),
+  );
+  expect(price, findsOneWidget);
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while ((tester.widget<TrendPercentageText>(price).value ?? 0) <= 0 &&
+      DateTime.now().isBefore(deadline)) {
+    await tester.pumpNFrames(10);
   }
-
-  // Check DOC cex price (does not exist)
-  // TODO: re-enable this after the doc/marty changes have been decided on
-  // await tester.tapAndPump(tester, docCoinActive);
-  // expect(docPrice, findsNothing);
+  expect(
+    tester.widget<TrendPercentageText>(price).value,
+    greaterThan(0),
+    reason: 'KMD-BEP20 must show an available positive market price',
+  );
+  await tester.pumpAndSettle();
+  expect(
+    find.descendant(of: price, matching: find.textContaining(r'$')),
+    findsOneWidget,
+    reason: 'The market price must be rendered in the wallet row',
+  );
+  print('🔍 CEX PRICES: KMD-BEP20 wallet row displays a positive USD price');
 
   await goto.walletPage(tester);
 

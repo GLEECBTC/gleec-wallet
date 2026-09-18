@@ -22,6 +22,7 @@ import 'package:web_dex/views/settings/widgets/security_settings/security_settin
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_show.dart';
 
 import '../../tests/utils/test_util.dart';
+import '../../helpers/runtime_auth_fixture.dart';
 
 const _seed = 'synthetic recovery phrase';
 
@@ -192,7 +193,9 @@ class _SeedValidator extends MnemonicValidator {
   bool validateBip39(String input) => false;
 }
 
-class _Auth extends Fake implements KomodoDefiLocalAuth {
+class _Auth extends Fake
+    with RuntimeAuthFixture
+    implements KomodoDefiLocalAuth {
   _Auth(this.user);
 
   final KdfUser user;

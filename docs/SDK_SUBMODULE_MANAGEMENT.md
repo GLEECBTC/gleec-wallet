@@ -224,3 +224,23 @@ Do not run `git submodule update --remote` in CI, as that would advance the subm
 - [PROJECT_SETUP.md](PROJECT_SETUP.md) - Initial project setup including submodule initialization
 - [CLONE_REPOSITORY.md](CLONE_REPOSITORY.md) - Repository cloning instructions
 - [SDK_DEPENDENCY_MANAGEMENT.md](SDK_DEPENDENCY_MANAGEMENT.md) - General dependency management guidelines
+
+## Consuming a KDF engine artifact
+
+The SDK's `packages/komodo_defi_framework/app_build/build_config.json` selects
+the engine artifact. Engine builds and publication belong to their source/build
+repositories. To consume an already published artifact:
+
+1. Read its manifest and confirm the intended source commit and branch.
+2. Update `api.api_commit_hash`, `api.branch`, the platform ZIP checksums and
+   `api.source_urls` together. Each supported platform needs a matching artifact.
+3. Keep `bundled_coins_repo_commit` unchanged unless coin definitions are part of
+   the intended change. Asset transformers can rewrite this independent pin.
+4. Build with the pinned Flutter version. Confirm the native binary's `--version`
+   and the Wasm artifact's embedded version identify the intended commit.
+5. Run [TESTING.md](TESTING.md): SDK suites, both replay modes, the benchmark
+   comparison, browser regressions and the wallet unit/integration suites.
+
+Rollback restores the previous complete artifact reference and rebuilds. Do not
+mix a commit from one manifest with checksums from another. Keep captured
+validation results and build-publication logs outside the release tree.

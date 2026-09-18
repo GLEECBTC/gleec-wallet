@@ -16,9 +16,11 @@ class LegalDocumentsRepository {
     BaseStorage? storage,
     AssetBundle? assetBundle,
     http.Client? httpClient,
+    DateTime Function()? clock,
   }) : _storage = storage ?? getStorage(),
        _assetBundle = assetBundle ?? rootBundle,
-       _httpClient = httpClient ?? http.Client();
+       _httpClient = httpClient ?? http.Client(),
+       _clock = clock ?? DateTime.now;
 
   static const String _acceptanceKey = 'legal_acceptance_v1';
 
@@ -36,11 +38,62 @@ class LegalDocumentsRepository {
   final AssetBundle _assetBundle;
   final http.Client _httpClient;
   final Logger _log = Logger('LegalDocumentsRepository');
+  final DateTime Function() _clock;
+  final _changes = StreamController<void>.broadcast();
+  final _refreshes = <LegalDocumentType, Future<LegalDocumentContent?>>{};
+  final _nextRefresh = <LegalDocumentType, DateTime>{};
+  Future<LegalConsentSnapshot>? _snapshot;
+  bool _disposed = false;
+
+  Stream<void> get changes => _changes.stream;
+
+  Future<LegalConsentSnapshot> loadConsentSnapshot() => _snapshot ??=
+      _loadConsentSnapshot().onError((Object error, StackTrace stackTrace) {
+        _snapshot = null;
+        Error.throwWithStackTrace(error, stackTrace);
+      });
+
+  Future<LegalConsentSnapshot> _loadConsentSnapshot() async {
+    final contents = await Future.wait(
+      _consentDocuments.map(loadPreferredContent),
+    );
+    return LegalConsentSnapshot(
+      documents: {
+        for (var i = 0; i < _consentDocuments.length; i++)
+          _consentDocuments[i]: contents[i],
+      },
+      documentShas: {
+        for (var i = 0; i < _consentDocuments.length; i++)
+          _consentDocuments[i].cacheKey: _contentSha(contents[i].markdown),
+      },
+    );
+  }
+
+  /// Startup, resume and form entry share the same throttled refresh.
+  Future<void> refreshConsentDocuments() async {
+    if (_disposed) return;
+    try {
+      // Capture the locally available text before remote work starts.
+      await loadConsentSnapshot();
+      await Future.wait(
+        _consentDocuments.map(
+          (document) => refreshFromRemote(document, force: false),
+        ),
+      );
+    } catch (error, stackTrace) {
+      _log.warning('Could not refresh consent documents', error, stackTrace);
+    }
+  }
 
   Future<LegalDocumentContent> loadPreferredContent(
     LegalDocumentType document,
   ) async {
-    final cached = await _readCachedContent(document);
+    LegalDocumentContent? cached;
+    try {
+      cached = await _readCachedContent(document);
+    } catch (error) {
+      _log.warning('Could not load cached ${document.cacheKey}: $error');
+    }
     if (cached != null) {
       return cached;
     }
@@ -53,9 +106,28 @@ class LegalDocumentsRepository {
   }
 
   Future<LegalDocumentContent?> refreshFromRemote(
+    LegalDocumentType document, {
+    bool force = true,
+  }) {
+    if (_disposed) return Future.value();
+    final pending = _refreshes[document];
+    if (pending != null) return pending;
+    final next = _nextRefresh[document];
+    if (!force && next != null && _clock().isBefore(next)) {
+      return Future.value();
+    }
+    final refresh = _refreshFromRemote(document).whenComplete(() {
+      _refreshes.remove(document);
+    });
+    _refreshes[document] = refresh;
+    return refresh;
+  }
+
+  Future<LegalDocumentContent?> _refreshFromRemote(
     LegalDocumentType document,
   ) async {
-    final cached = await _readCachedContent(document);
+    // Failure paths keep local text and wait at least a minute before retrying.
+    _nextRefresh[document] = _clock().add(const Duration(minutes: 1));
     final uri = Uri.https(
       'api.github.com',
       '/repos/$_githubOwner/$_githubRepo/contents/${document.githubPath}',
@@ -63,6 +135,7 @@ class LegalDocumentsRepository {
     );
 
     try {
+      final cached = await _readCachedContent(document);
       final response = await _httpClient
           .get(
             uri,
@@ -100,17 +173,27 @@ class LegalDocumentsRepository {
         return null;
       }
 
-      final fetchedAt = DateTime.now();
+      if (_disposed) return null;
+      final fetchedAt = _clock();
       final hasChanged =
           cached?.markdown != markdown || (sha != null && cached?.sha != sha);
 
       if (hasChanged) {
-        await _storage.write(document.cacheKey, <String, dynamic>{
-          'markdown': markdown,
-          'sha': sha,
-          'fetchedAt': fetchedAt.toIso8601String(),
-        });
+        final persisted = await _storage.write(
+          document.cacheKey,
+          <String, dynamic>{
+            'markdown': markdown,
+            'sha': sha,
+            'fetchedAt': fetchedAt.toIso8601String(),
+          },
+        );
+        if (!persisted) throw StateError('Legal document cache write failed');
+        if (_disposed) return null;
+        _snapshot = null;
+        _changes.add(null);
       }
+
+      _nextRefresh[document] = _clock().add(const Duration(minutes: 15));
 
       if (!hasChanged) {
         return null;
@@ -154,15 +237,18 @@ class LegalDocumentsRepository {
   ///
   /// Fire-and-forget by design: consent is given by the act of continuing, so
   /// a storage failure must never block the user from reaching their wallet.
-  Future<void> recordAcceptance({required String surface}) async {
+  Future<void> recordAcceptance({
+    required String surface,
+    LegalConsentSnapshot? snapshot,
+  }) async {
     try {
       await _storage.write(
         _acceptanceKey,
         LegalAcceptance(
           termsVersion: kCurrentTermsVersion,
-          acceptedAt: DateTime.now(),
+          acceptedAt: _clock(),
           surface: surface,
-          documentShas: await _currentDocumentShas(),
+          documentShas: snapshot?.documentShas ?? await _currentDocumentShas(),
         ).toJson(),
       );
     } catch (error) {
@@ -173,12 +259,12 @@ class LegalDocumentsRepository {
   /// Whether the stored acceptance still covers what the user would agree to
   /// today. False when there is no record, when [kCurrentTermsVersion] has been
   /// bumped, or when either document's content has since changed.
-  Future<bool> hasAcceptedCurrentTerms() async {
+  Future<bool> hasAcceptedCurrentTerms({LegalConsentSnapshot? snapshot}) async {
     final acceptance = await readAcceptance();
     if (acceptance == null) return false;
     if (acceptance.termsVersion < kCurrentTermsVersion) return false;
 
-    final current = await _currentDocumentShas();
+    final current = snapshot?.documentShas ?? await _currentDocumentShas();
     for (final entry in current.entries) {
       var accepted = acceptance.documentShas[entry.key];
       // Legacy records without a document identity retain their version-only
@@ -242,6 +328,8 @@ class LegalDocumentsRepository {
   }
 
   void dispose() {
+    _disposed = true;
+    unawaited(_changes.close());
     _httpClient.close();
   }
 }

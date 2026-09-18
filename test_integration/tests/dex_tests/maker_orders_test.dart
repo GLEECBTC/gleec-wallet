@@ -11,6 +11,7 @@ import 'package:web_dex/views/dex/entities_list/orders/order_item.dart';
 import '../../common/pause.dart';
 import '../../common/widget_tester_action_extensions.dart';
 import '../../common/widget_tester_find_extension.dart';
+import '../../common/widget_tester_pump_extension.dart';
 import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 import '../wallets_tests/wallet_tools.dart';
@@ -49,7 +50,14 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   final Finder makeOrderConfirmButton =
       find.byKey(const Key('make-order-confirm-button'));
   final Finder orderListItem = find.byType(OrderItem);
-  final Finder orderUuidWidget = find.byKey(const Key('maker-order-uuid'));
+  // The details page renders the id through CopiedText under a `uuid-<id>`
+  // key, so match that prefix. The old fixed `maker-order-uuid` key is not
+  // built by anything any more.
+  final Finder orderUuidWidget = find.byWidgetPredicate(
+    (widget) =>
+        widget.key is ValueKey<String> &&
+        (widget.key! as ValueKey<String>).value.startsWith('uuid-'),
+  );
 
   await useFaucetIfBalanceInsufficient(tester);
 
@@ -67,6 +75,11 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   await enterText(tester, finder: sellCoinSearchField, text: sellCoin);
   print('🔍 MAKER ORDER: Searching for sell coin: $sellCoin');
 
+  // The row only joins the list once the coin's activation settles, which on a
+  // slower runner outlasts the search. Without this the tap resolves an empty
+  // finder and the suite reports `Bad state: No element` against a coin the
+  // add-asset flow did enable.
+  await tester.pumpUntilVisible(sellCoinItem);
   await tester.tapAndPump(sellCoinItem);
   print('🔍 MAKER ORDER: Selected sell coin');
 
@@ -80,6 +93,7 @@ Future<void> testMakerOrder(WidgetTester tester) async {
   await enterText(tester, finder: buyCoinSearchField, text: buyCoin);
   print('🔍 MAKER ORDER: Searching for buy coin: $buyCoin');
 
+  await tester.pumpUntilVisible(buyCoinItem);
   await tester.tapAndPump(buyCoinItem);
   print('🔍 MAKER ORDER: Selected buy coin');
 
@@ -136,15 +150,19 @@ Future<void> testMakerOrder(WidgetTester tester) async {
 
   // Find order UUID on maker order details page
   expect(orderUuidWidget, findsOneWidget);
-  truncatedUuid = (orderUuidWidget.evaluate().single.widget as Text).data;
+  final uuidKey =
+      orderUuidWidget.evaluate().single.widget.key! as ValueKey<String>;
+  truncatedUuid = uuidKey.value.substring('uuid-'.length);
   print('🔍 MAKER ORDER: Found order UUID: $truncatedUuid');
-  expect(truncatedUuid != null, isTrue);
-  expect(truncatedUuid?.isNotEmpty, isTrue);
+  expect(
+    truncatedUuid,
+    isNotEmpty,
+    reason: 'The order details page must render the order id',
+  );
 }
 
 Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   final walletTab = find.byKeyName('main-menu-wallet');
-  final coinsList = find.byKey(const Key('wallet-page-coins-list'));
   final docItem = find.byKeyName('coins-manager-list-item-doc');
   final docCoinActive = find.byKeyName('coin-list-item-doc');
   final docCoinBalance = find.byKeyName('coin-balance-asset-doc');
@@ -162,10 +180,11 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   await addAsset(tester, asset: martyItem, search: 'MARTY');
   print('🔍 Added marty asset');
 
-  await tester.dragUntilVisible(
+  await tester.dragUntilVisibleWithin(
     docCoinActive,
     walletPageScrollView,
     const Offset(0, -50),
+    description: 'the DOC row in the wallet list',
   );
   await tester.pumpAndSettle();
   print('🔍 dragged until doc coin item visible');
@@ -187,16 +206,16 @@ Future<void> useFaucetIfBalanceInsufficient(WidgetTester tester) async {
   await tester.tap(walletTab);
   await tester.pumpAndSettle();
 
-  await tester.dragUntilVisible(
-    coinsList,
-    walletPageScrollView,
-    const Offset(0, -50),
-  );
-  await tester.dragUntilVisible(
+  // The wallet list scrolls straight to the MARTY row. An earlier scroll to
+  // `wallet-page-coins-list` was dropped along with the widget that owned that
+  // key, so the drag could only ever exhaust its iterations and throw.
+  await tester.dragUntilVisibleWithin(
     martyCoinActive,
     walletPageScrollView,
     const Offset(0, -50),
+    description: 'the MARTY row in the wallet list',
   );
+  print('🔍 dragged until marty coin item visible');
   final martyText = martyCoinBalance.evaluate().single.widget as AutoScrollText;
   final String? martyBalanceStr = martyText.text.split(' ').firstOrNull;
   print('🔍 marty balance str: $martyBalanceStr');

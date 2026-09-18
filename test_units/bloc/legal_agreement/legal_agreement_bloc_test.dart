@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 
 class _Repository extends Fake implements LegalDocumentsRepository {
@@ -14,7 +15,19 @@ class _Repository extends Fake implements LegalDocumentsRepository {
   final write = Completer<void>();
 
   @override
-  Future<bool> hasAcceptedCurrentTerms() async => lookup ?? current;
+  Stream<void> get changes => const Stream.empty();
+
+  @override
+  Future<void> refreshConsentDocuments() async {}
+
+  @override
+  Future<LegalConsentSnapshot> loadConsentSnapshot() async =>
+      LegalConsentSnapshot(documents: {}, documentShas: {});
+
+  @override
+  Future<bool> hasAcceptedCurrentTerms({
+    LegalConsentSnapshot? snapshot,
+  }) async => lookup ?? current;
 
   @override
   Future<LegalAcceptance?> readAcceptance() async => previous
@@ -27,7 +40,10 @@ class _Repository extends Fake implements LegalDocumentsRepository {
       : null;
 
   @override
-  Future<void> recordAcceptance({required String surface}) {
+  Future<void> recordAcceptance({
+    required String surface,
+    LegalConsentSnapshot? snapshot,
+  }) {
     submissions.add(surface);
     return write.future;
   }

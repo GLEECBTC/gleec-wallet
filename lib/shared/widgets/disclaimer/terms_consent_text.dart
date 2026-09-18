@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/shared/widgets/disclaimer/disclaimer.dart';
 import 'package:web_dex/shared/widgets/disclaimer/eula.dart';
@@ -115,13 +116,20 @@ class _AgreementNotice extends StatelessWidget {
     BuildContext context, {
     required bool isEula,
   }) async {
+    final snapshot = context.read<LegalAgreementBloc>().presentedSnapshot;
     await AppDialog.showWithCallback<void>(
       context: context,
       useRootNavigator: false,
       width: 640,
       childBuilder: (closeDialog) => isEula
-          ? Eula(onClose: closeDialog)
-          : Disclaimer(onClose: closeDialog),
+          ? Eula(
+              onClose: closeDialog,
+              content: snapshot?.documents[LegalDocumentType.eula],
+            )
+          : Disclaimer(
+              onClose: closeDialog,
+              content: snapshot?.documents[LegalDocumentType.termsOfService],
+            ),
     );
     // A document may have refreshed while it was open.
     if (context.mounted) {

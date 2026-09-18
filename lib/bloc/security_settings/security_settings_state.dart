@@ -24,6 +24,8 @@ enum SecuritySettingsStep {
   passwordUpdate,
 }
 
+enum SeedBackupSaveError { identityUnavailable, persistenceFailed }
+
 /// Navigation, seed progress and compatibility flags for security settings.
 /// PrivateKeyExportState owns the current export's short-lived result, with
 /// redacted diagnostics; its service owns password verification and retrieval.
@@ -41,6 +43,8 @@ class SecuritySettingsState extends Equatable {
     this.unbanResult,
     this.unbanError,
     this.backupStartedAt,
+    this.isSavingBackup = false,
+    this.backupSaveError,
   });
 
   factory SecuritySettingsState.initialState() {
@@ -100,6 +104,8 @@ class SecuritySettingsState extends Equatable {
   /// hardcoded to 0 and so measured nothing. Null outside a backup flow, which
   /// is why the event falls back to 0 rather than inventing a duration.
   final DateTime? backupStartedAt;
+  final bool isSavingBackup;
+  final SeedBackupSaveError? backupSaveError;
 
   /// How long the current backup flow has been open, or null outside one.
   Duration? get backupElapsed => backupStartedAt == null
@@ -120,6 +126,8 @@ class SecuritySettingsState extends Equatable {
     unbanResult,
     unbanError,
     backupStartedAt,
+    isSavingBackup,
+    backupSaveError,
   ];
 
   /// Creates a copy of this state with the given fields replaced with new values.
@@ -139,8 +147,15 @@ class SecuritySettingsState extends Equatable {
     bool clearUnbanError = false,
     DateTime? backupStartedAt,
     bool clearBackupStartedAt = false,
+    bool? isSavingBackup,
+    SeedBackupSaveError? backupSaveError,
+    bool clearBackupSaveError = false,
   }) {
     return SecuritySettingsState(
+      isSavingBackup: isSavingBackup ?? this.isSavingBackup,
+      backupSaveError: clearBackupSaveError
+          ? null
+          : backupSaveError ?? this.backupSaveError,
       step: step ?? this.step,
       showSeedWords: showSeedWords ?? this.showSeedWords,
       isSeedSaved: isSeedSaved ?? this.isSeedSaved,

@@ -32,7 +32,19 @@ class _LegalDocuments extends Fake implements LegalDocumentsRepository {
   final List<LegalDocumentType> opened = [];
 
   @override
-  Future<bool> hasAcceptedCurrentTerms() async => !updated;
+  Stream<void> get changes => const Stream.empty();
+
+  @override
+  Future<void> refreshConsentDocuments() async {}
+
+  @override
+  Future<LegalConsentSnapshot> loadConsentSnapshot() async =>
+      LegalConsentSnapshot(documents: {}, documentShas: {});
+
+  @override
+  Future<bool> hasAcceptedCurrentTerms({
+    LegalConsentSnapshot? snapshot,
+  }) async => !updated;
 
   @override
   Future<LegalAcceptance?> readAcceptance() async => LegalAcceptance(
@@ -55,8 +67,9 @@ class _LegalDocuments extends Fake implements LegalDocumentsRepository {
 
   @override
   Future<LegalDocumentContent?> refreshFromRemote(
-    LegalDocumentType document,
-  ) async => null;
+    LegalDocumentType document, {
+    bool force = true,
+  }) async => null;
 }
 
 Future<void> _pump(
