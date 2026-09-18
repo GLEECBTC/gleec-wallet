@@ -4,9 +4,12 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 
 import 'private_key_monospace.dart';
 
-/// The private key itself: the one value on this screen that must never be
-/// shown by accident, and the one that was previously rendered with no label
-/// at all.
+/// A secret on this screen that must never be shown by accident.
+///
+/// Used for the private key itself, and for a shielded asset's viewing key -
+/// which cannot spend, but decrypts the whole incoming and outgoing note
+/// history of the account, so revealing it destroys exactly the confidentiality
+/// the user holds a shielded asset for.
 ///
 /// While hidden it renders a fixed-length run of bullets as plain [Text]. The
 /// masking is at the *content* level rather than the style level, so the key
@@ -19,11 +22,15 @@ class PrivateKeySecretField extends StatelessWidget {
   const PrivateKeySecretField({
     required this.privateKey,
     required this.revealed,
+    this.label,
     super.key,
   });
 
   final String privateKey;
   final bool revealed;
+
+  /// Defaults to the private-key label when omitted.
+  final String? label;
 
   static const _maskLength = 44;
 
@@ -43,7 +50,7 @@ class PrivateKeySecretField extends StatelessWidget {
           Row(
             children: [
               Text(
-                LocaleKeys.privateKeyExportPrivateKeyLabel.tr(),
+                label ?? LocaleKeys.privateKeyExportPrivateKeyLabel.tr(),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
