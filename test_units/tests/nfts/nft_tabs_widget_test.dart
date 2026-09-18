@@ -67,11 +67,12 @@ void testNftTabsWidget() {
       await pumpTabs(tester);
 
       expect(find.byKey(const Key('nft-tab-eth')), findsOneWidget);
-      expect(find.byKey(const Key('nft-tab-polygon')), findsOneWidget);
       expect(find.byKey(const Key('nft-tab-bsc')), findsOneWidget);
       expect(find.byKey(const Key('nft-tab-avalanche')), findsOneWidget);
       // FTM is absent from the coins config, so Fantom must never be offered.
       expect(find.byKey(const Key('nft-tab-fantom')), findsNothing);
+      // Polygon is withheld while KDF still hardcodes the MATIC tickers.
+      expect(find.byKey(const Key('nft-tab-polygon')), findsNothing);
     });
 
     testWidgets('an un-enabled chain says so instead of claiming 0 items', (
@@ -82,9 +83,9 @@ void testNftTabsWidget() {
 
       // `$chain` interpolates NftBlockchains' overridden toString.
       expect(find.byKey(const Key('ntf-tab-count-ETH')), findsOneWidget);
-      expect(find.byKey(const Key('nft-tab-status-Polygon')), findsOneWidget);
+      expect(find.byKey(const Key('nft-tab-status-Avalanche')), findsOneWidget);
       // Why nftCount stays null for a chain that was never queried.
-      expect(find.byKey(const Key('ntf-tab-count-Polygon')), findsNothing);
+      expect(find.byKey(const Key('ntf-tab-count-Avalanche')), findsNothing);
     });
 
     testWidgets('an enabling chain shows a spinner, not a count', (
@@ -93,20 +94,22 @@ void testNftTabsWidget() {
       await initialise(tester);
       await tester.runAsync(() async {
         repo.activationGate = Completer<void>();
-        bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+        bloc.add(
+          const NftMainChainActivationRequested(NftBlockchains.avalanche),
+        );
         await bloc.stream.firstWhere(
           (s) =>
-              s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+              s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
         );
       });
 
       await pumpTabs(tester);
 
       expect(
-        find.byKey(const Key('nft-tab-activating-Polygon')),
+        find.byKey(const Key('nft-tab-activating-Avalanche')),
         findsOneWidget,
       );
-      expect(find.byKey(const Key('ntf-tab-count-Polygon')), findsNothing);
+      expect(find.byKey(const Key('ntf-tab-count-Avalanche')), findsNothing);
       repo.activationGate!.complete();
     });
 
@@ -114,20 +117,20 @@ void testNftTabsWidget() {
       await initialise(tester);
       await pumpTabs(tester);
 
-      await tester.tap(find.byKey(const Key('nft-tab-polygon')));
+      await tester.tap(find.byKey(const Key('nft-tab-avalanche')));
       await tester.pump();
       // The bloc was built in setUp, so its handlers run in the real zone that
       // a FakeAsync pump never advances. runAsync is what lets them finish.
       await tester.runAsync(() async {
         await bloc.stream.firstWhere(
-          (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.active,
+          (s) => s.statusOf(NftBlockchains.avalanche) == NftChainStatus.active,
         );
       });
       // Flushes the tab's 300ms ensureVisible animation, which would otherwise
       // leave a pending timer at teardown.
       await tester.pumpAndSettle();
 
-      expect(repo.activateCalls, [NftBlockchains.polygon]);
+      expect(repo.activateCalls, [NftBlockchains.avalanche]);
     });
   });
 }
@@ -136,7 +139,6 @@ class _FakeNftsRepo implements NftsRepo {
   /// Mirrors the bundled coins config, where FTM is absent.
   List<NftBlockchains> supportedChains = const [
     NftBlockchains.eth,
-    NftBlockchains.polygon,
     NftBlockchains.bsc,
     NftBlockchains.avalanche,
   ];

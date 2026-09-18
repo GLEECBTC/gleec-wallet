@@ -124,7 +124,7 @@ void testNftMainRepo() {
     });
 
     test('caller order is preserved', () async {
-      final repo = build(enabled: {'ETH', 'BNB', 'MATIC'});
+      final repo = build(enabled: {'ETH', 'BNB', 'POL'});
 
       final result = await repo.resolveChains([
         NftBlockchains.bsc,
@@ -214,10 +214,10 @@ void testNftMainRepo() {
 
       await repo.activateChain(NftBlockchains.polygon);
 
-      // The PARENT gates the tab; NFT_MATIC is activated later, in the fetch.
-      expect(sdk.activateCalls.single.id.id, 'MATIC');
+      // The PARENT gates the tab; NFT_POL is activated later, in the fetch.
+      expect(sdk.activateCalls.single.id.id, 'POL');
       // Pins the product decision so it cannot be silently flipped: browsing an
-      // NFT tab must not add MATIC to the wallet or to the next login's set.
+      // NFT tab must not add POL to the wallet or to the next login's set.
       expect(coinsRepo.activateCalls, isEmpty);
       expect(await sdk.walletAssets.load(), isEmpty);
     });
@@ -227,13 +227,13 @@ void testNftMainRepo() {
       // for the whole session. On a coin the wallet owns that freezes a real
       // row - reachable whenever a wallet coin's activation failed, because
       // resolveChains reports that as inactive and the tab offers to enable it.
-      final repo = build(walletCoins: ['MATIC']);
+      final repo = build(walletCoins: ['POL']);
 
       await repo.activateChain(NftBlockchains.polygon);
 
       expect(coinsRepo.activateCalls, isEmpty);
-      expect(sdk.activateCalls.single.id.id, 'MATIC');
-      expect(await sdk.walletAssets.load(), {'MATIC'});
+      expect(sdk.activateCalls.single.id.id, 'POL');
+      expect(await sdk.walletAssets.load(), {'POL'});
     });
 
     test('a chain absent from the catalogue never reaches CoinsRepo', () async {
@@ -336,7 +336,7 @@ Asset _asset(String ticker, String name, int chainId) => Asset.fromJson({
 final _catalogue = <Asset>[
   _asset('ETH', 'Ethereum', 1),
   _asset('BNB', 'Binance Coin', 56),
-  _asset('MATIC', 'Polygon', 137),
+  _asset('POL', 'Polygon', 137),
   _asset('AVAX', 'Avalanche', 43114),
   // FTM deliberately absent, mirroring the bundled coins config.
 ];

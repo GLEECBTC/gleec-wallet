@@ -138,7 +138,7 @@ class _NftTxnMobileFiltersState extends State<NftTxnMobileFilters> {
                     gridDelegate: gridDelete,
                     itemBuilder: (context, index) {
                       final NftBlockchains blockchain =
-                          NftBlockchains.values[index];
+                          NftBlockchains.supportedValues[index];
                       final chainColor = _getChainColor(blockchain);
                       return NftTxnMobileFilterCard(
                         onTap: () {
@@ -156,7 +156,7 @@ class _NftTxnMobileFiltersState extends State<NftTxnMobileFilters> {
                             '$assetsPath/blockchain_icons/svg/32px/${blockchain.toApiRequest().toLowerCase()}.svg',
                       );
                     },
-                    itemCount: NftBlockchains.values.length,
+                    itemCount: NftBlockchains.supportedValues.length,
                   ),
                   const SizedBox(height: 20),
                   Text(LocaleKeys.date.tr(), style: textScheme?.bodyM),

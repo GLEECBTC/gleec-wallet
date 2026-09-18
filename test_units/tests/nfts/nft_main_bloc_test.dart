@@ -67,7 +67,7 @@ void testNftMainBloc() {
     test('tabs sort by count, ties fall back to chain order', () async {
       repo.activatedChains = [
         NftBlockchains.eth,
-        NftBlockchains.polygon,
+        NftBlockchains.avalanche,
         NftBlockchains.bsc,
       ];
       repo.nftsToReturn = [
@@ -80,11 +80,11 @@ void testNftMainBloc() {
       expect(state.sortedChains, [
         NftBlockchains.bsc,
         NftBlockchains.eth,
-        NftBlockchains.polygon,
+        NftBlockchains.avalanche,
       ]);
       expect(state.nftCount, {
         NftBlockchains.eth: 0,
-        NftBlockchains.polygon: 0,
+        NftBlockchains.avalanche: 0,
         NftBlockchains.bsc: 2,
       });
     });
@@ -93,7 +93,7 @@ void testNftMainBloc() {
       repo.activatedChains = [
         NftBlockchains.bsc,
         NftBlockchains.eth,
-        NftBlockchains.polygon,
+        NftBlockchains.avalanche,
       ];
       repo.nftsToReturn = [];
 
@@ -101,8 +101,8 @@ void testNftMainBloc() {
 
       expect(state.sortedChains, [
         NftBlockchains.eth,
-        NftBlockchains.polygon,
         NftBlockchains.bsc,
+        NftBlockchains.avalanche,
       ]);
     });
 
@@ -179,16 +179,15 @@ void testNftMainBloc() {
 
       final state = await runUpdate();
 
-      // A fresh wallet has only ETH enabled, but all four chains must be
-      // reachable.
+      // A fresh wallet has only ETH enabled, but every offered chain must
+      // be reachable.
       expect(state.availableChains, [
         NftBlockchains.eth,
-        NftBlockchains.polygon,
         NftBlockchains.bsc,
         NftBlockchains.avalanche,
       ]);
       expect(state.statusOf(NftBlockchains.eth), NftChainStatus.active);
-      expect(state.statusOf(NftBlockchains.polygon), NftChainStatus.inactive);
+      expect(state.statusOf(NftBlockchains.avalanche), NftChainStatus.inactive);
     });
 
     test('an unsupported chain never earns a tab', () async {
@@ -208,7 +207,7 @@ void testNftMainBloc() {
 
       // `null` is what makes the tab render "Not enabled". A 0 would claim the
       // user owns nothing on a chain that was never queried.
-      expect(state.nftCount[NftBlockchains.polygon], isNull);
+      expect(state.nftCount[NftBlockchains.avalanche], isNull);
       expect(state.nftCount[NftBlockchains.eth], 0);
     });
   });
@@ -233,26 +232,27 @@ void testNftMainBloc() {
     test('selecting an inactive tab enables that chain', () async {
       await initialise();
 
-      bloc.add(const NftMainTabChanged(NftBlockchains.polygon));
+      bloc.add(const NftMainTabChanged(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.active,
+        (s) => s.statusOf(NftBlockchains.avalanche) == NftChainStatus.active,
       );
 
-      expect(repo.activateCalls, [NftBlockchains.polygon]);
-      expect(bloc.state.selectedChain, NftBlockchains.polygon);
+      expect(repo.activateCalls, [NftBlockchains.avalanche]);
+      expect(bloc.state.selectedChain, NftBlockchains.avalanche);
     });
 
     test('the tab spins while the chain comes up', () async {
       await initialise();
       repo.activationGate = Completer<void>();
 
-      bloc.add(const NftMainTabChanged(NftBlockchains.polygon));
+      bloc.add(const NftMainTabChanged(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+        (s) =>
+            s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
       );
 
       expect(
-        bloc.state.statusOf(NftBlockchains.polygon),
+        bloc.state.statusOf(NftBlockchains.avalanche),
         NftChainStatus.activating,
       );
       repo.activationGate!.complete();
@@ -262,15 +262,16 @@ void testNftMainBloc() {
       await initialise();
       repo.activationGate = Completer<void>();
 
-      bloc.add(const NftMainTabChanged(NftBlockchains.polygon));
+      bloc.add(const NftMainTabChanged(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+        (s) =>
+            s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
       );
-      bloc.add(const NftMainTabChanged(NftBlockchains.polygon));
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainTabChanged(NftBlockchains.avalanche));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await Future<void>.delayed(Duration.zero);
 
-      expect(repo.activateCalls, [NftBlockchains.polygon]);
+      expect(repo.activateCalls, [NftBlockchains.avalanche]);
       repo.activationGate!.complete();
     });
 
@@ -278,9 +279,10 @@ void testNftMainBloc() {
       await initialise();
       repo.activationGate = Completer<void>();
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+        (s) =>
+            s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
       );
 
       // The 60s timer lands while the spinner is up. Recomputing from
@@ -291,7 +293,7 @@ void testNftMainBloc() {
       await bloc.stream.firstWhere((s) => s.nfts.isNotEmpty);
 
       expect(
-        bloc.state.statusOf(NftBlockchains.polygon),
+        bloc.state.statusOf(NftBlockchains.avalanche),
         NftChainStatus.activating,
       );
       repo.activationGate!.complete();
@@ -301,60 +303,61 @@ void testNftMainBloc() {
       await initialise();
       repo.activationErrorToThrow = ApiError(message: 'network down');
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.failed,
+        (s) => s.statusOf(NftBlockchains.avalanche) == NftChainStatus.failed,
       );
 
-      expect(bloc.state.chainErrors[NftBlockchains.polygon], isNotNull);
+      expect(bloc.state.chainErrors[NftBlockchains.avalanche], isNotNull);
       expect(bloc.state.statusOf(NftBlockchains.eth), NftChainStatus.active);
       // Never the page-level error: that would hide the working ETH tab.
       expect(bloc.state.error, isNull);
-      expect(bloc.state.nftCount[NftBlockchains.polygon], isNull);
+      expect(bloc.state.nftCount[NftBlockchains.avalanche], isNull);
     });
 
     test('re-selecting a failed tab does not silently retry', () async {
       await initialise();
       repo.activationErrorToThrow = ApiError(message: 'network down');
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.failed,
+        (s) => s.statusOf(NftBlockchains.avalanche) == NftChainStatus.failed,
       );
 
       // Selecting a tab is navigation; retrying a network call is a separate,
       // labelled decision that the panel offers.
-      bloc.add(const NftMainTabChanged(NftBlockchains.polygon));
+      bloc.add(const NftMainTabChanged(NftBlockchains.avalanche));
       await Future<void>.delayed(Duration.zero);
 
-      expect(repo.activateCalls, [NftBlockchains.polygon]);
+      expect(repo.activateCalls, [NftBlockchains.avalanche]);
     });
 
     test('a failed chain enabled elsewhere recovers', () async {
       await initialise();
       repo.activationErrorToThrow = ApiError(message: 'network down');
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.failed,
+        (s) => s.statusOf(NftBlockchains.avalanche) == NftChainStatus.failed,
       );
 
-      // The user gives up and enables MATIC from the coins manager instead.
-      repo.activatedChains = [NftBlockchains.eth, NftBlockchains.polygon];
+      // The user gives up and enables POL from the coins manager instead.
+      repo.activatedChains = [NftBlockchains.eth, NftBlockchains.avalanche];
       bloc.add(const NftMainChainUpdateRequested());
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.active,
+        (s) => s.statusOf(NftBlockchains.avalanche) == NftChainStatus.active,
       );
 
-      expect(bloc.state.chainErrors[NftBlockchains.polygon], isNull);
+      expect(bloc.state.chainErrors[NftBlockchains.avalanche], isNull);
     });
 
     test('logging out mid-activation discards the result', () async {
       await initialise();
       repo.activationGate = Completer<void>();
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+        (s) =>
+            s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
       );
 
       bloc.add(const NftMainResetRequested());
@@ -372,7 +375,7 @@ void testNftMainBloc() {
       final authGate = Completer<bool>();
       auth.signInCheck = authGate.future;
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await Future<void>.delayed(Duration.zero);
       bloc.add(const NftMainResetRequested());
       await bloc.stream.firstWhere((s) => s.availableChains.isEmpty);
@@ -392,17 +395,19 @@ void testNftMainBloc() {
           ? oldActivation.future
           : newActivation.future;
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+        (s) =>
+            s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
       );
       bloc.add(const NftMainResetRequested());
       await bloc.stream.firstWhere((s) => s.availableChains.isEmpty);
       await initialise();
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await bloc.stream.firstWhere(
-        (s) => s.statusOf(NftBlockchains.polygon) == NftChainStatus.activating,
+        (s) =>
+            s.statusOf(NftBlockchains.avalanche) == NftChainStatus.activating,
       );
       oldActivation.complete();
       await Future<void>.delayed(Duration.zero);
@@ -412,9 +417,9 @@ void testNftMainBloc() {
       repo.nftsToReturn = [_token(NftBlockchains.eth)];
       bloc.add(const NftMainChainUpdateRequested());
       await bloc.stream.firstWhere((s) => s.nfts.isNotEmpty);
-      final statusAfterRefresh = bloc.state.statusOf(NftBlockchains.polygon);
+      final statusAfterRefresh = bloc.state.statusOf(NftBlockchains.avalanche);
 
-      bloc.add(const NftMainChainActivationRequested(NftBlockchains.polygon));
+      bloc.add(const NftMainChainActivationRequested(NftBlockchains.avalanche));
       await Future<void>.delayed(Duration.zero);
       final activationCount = repo.activateCalls.length;
       newActivation.complete();
@@ -570,7 +575,6 @@ class _FakeNftsRepo implements NftsRepo {
   /// geo filtering are the repo's job and are pinned in nft_main_repo_test.
   List<NftBlockchains> supportedChains = const [
     NftBlockchains.eth,
-    NftBlockchains.polygon,
     NftBlockchains.bsc,
     NftBlockchains.avalanche,
   ];

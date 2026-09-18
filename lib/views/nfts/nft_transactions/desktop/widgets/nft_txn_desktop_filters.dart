@@ -137,7 +137,7 @@ class _NftTxnDesktopFiltersState extends State<NftTxnDesktopFilters> {
                 const SizedBox(width: 8),
                 MultiSelectDropdownButton<NftBlockchains>(
                   title: 'Blockchain',
-                  items: NftBlockchains.values,
+                  items: NftBlockchains.supportedValues,
                   displayItem: (p0) => p0.toString(),
                   selectedItems: state.filters.blockchain,
                   onChanged: (value) {
