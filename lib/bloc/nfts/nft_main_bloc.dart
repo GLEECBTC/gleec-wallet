@@ -58,7 +58,7 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
         .listen((_) => add(const NftMainChainUpdateRequested()));
   }
 
-  static final Set<String> _nftParentTickers = NftBlockchains.values
+  static final Set<String> _nftParentTickers = NftBlockchains.supportedValues
       .map((chain) => chain.coinAbbr())
       .toSet();
 
@@ -244,7 +244,9 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     try {
       _log.info('Updating all NFT chains');
 
-      final activation = await _repo.resolveChains(NftBlockchains.values);
+      final activation = await _repo.resolveChains(
+        NftBlockchains.supportedValues,
+      );
       final List<NftBlockchains> activatedChains = activation.activated;
       hold = activatedChains.isEmpty && activation.unresolved.isNotEmpty;
 
@@ -481,9 +483,10 @@ class NftMainBloc extends Bloc<NftMainEvent, NftMainState> {
     // Only a chain that answered a `get_nft_list` earns a count - zero NFTs
     // included. A chain nobody enabled is absent entirely, which is what makes
     // its tab say "not enabled" rather than "0 items".
-    // Iterate the enum rather than countableChains so insertion order stays
-    // tied to the declaration order NftBlockchains documents as significant.
-    for (final NftBlockchains chain in NftBlockchains.values) {
+    // Iterate the supported chains rather than countableChains so insertion
+    // order stays tied to the declaration order NftBlockchains documents as
+    // significant.
+    for (final NftBlockchains chain in NftBlockchains.supportedValues) {
       if (countableChains.contains(chain)) {
         countMap[chain] = nfts[chain]?.length ?? 0;
       }

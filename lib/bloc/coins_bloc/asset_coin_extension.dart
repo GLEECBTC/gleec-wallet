@@ -104,7 +104,7 @@ extension CoinTypeExtension on CoinSubClass {
         return CoinType.ubiq;
       case CoinSubClass.bep20:
         return CoinType.bep20;
-      case CoinSubClass.matic:
+      case CoinSubClass.polygon:
         return CoinType.plg20;
       case CoinSubClass.utxo:
         return CoinType.utxo;
@@ -138,7 +138,7 @@ extension CoinTypeExtension on CoinSubClass {
       case CoinSubClass.avx20:
       case CoinSubClass.bep20:
       case CoinSubClass.ftm20:
-      case CoinSubClass.matic:
+      case CoinSubClass.polygon:
       case CoinSubClass.hrc20:
       case CoinSubClass.arbitrum:
       case CoinSubClass.moonriver:
@@ -202,7 +202,7 @@ extension CoinSubClassExtension on CoinType {
       case CoinType.bep20:
         return CoinSubClass.bep20;
       case CoinType.plg20:
-        return CoinSubClass.matic;
+        return CoinSubClass.polygon;
       case CoinType.utxo:
         return CoinSubClass.utxo;
       case CoinType.sbch:

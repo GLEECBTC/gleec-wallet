@@ -22,10 +22,11 @@ class NftTxnRepository {
   Future<NftTxsResponse> getNftTransactions([
     List<NftBlockchains>? chains,
   ]) async {
-    final List<String> allChains =
-        (chains ?? NftBlockchains.values).map((e) => e.toApiRequest()).toList();
+    final List<String> allChains = (chains ?? NftBlockchains.supportedValues)
+        .map((e) => e.toApiRequest())
+        .toList();
     await getUsdPricesOfCoins(
-      (chains ?? NftBlockchains.values).map((e) => e.coinAbbr()),
+      (chains ?? NftBlockchains.supportedValues).map((e) => e.coinAbbr()),
     );
     final request = NftTransactionsRequest(
       chains: allChains,
