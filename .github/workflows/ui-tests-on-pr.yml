@@ -131,7 +131,10 @@ jobs:
         run: |
           set -euo pipefail
           : > counterparty.log
-          nohup dart run tool/dex_counterparty.dart \
+          # Invoked the way run_integration_tests.dart already is in this
+          # workflow - a direct file run rather than `dart run`, which resolves
+          # the package and can re-enter pub on a lockfile-enforced checkout.
+          nohup dart tool/dex_counterparty.dart \
             --kdf "${{ steps.counterparty_binary.outputs.path }}" \
             --slot 0 \
             --rpc-port 7791 \
@@ -183,6 +186,7 @@ jobs:
         if: always()
         run: |
           pkill -f dex_counterparty.dart || true
+          pkill -f '\.counterparty/kdf' || true
           # Give it a moment to cancel its orders rather than leaving them on
           # the book for the next run to trip over.
           sleep 5

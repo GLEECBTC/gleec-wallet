@@ -55,9 +55,36 @@ Future<void> main(List<String> args) async {
   final options = _Options.parse(args);
   final log = _Log('counterparty');
 
-  final coinsConfig = _readJsonMap(options.coinsConfigPath);
-  final coinsList = _readJsonList(options.coinsPath);
-  final seedNodes = _seedNodesFor(options.seedNodesPath);
+  // Each of these reads a file the build produced. A missing or unexpected one
+  // used to throw straight out of `main`, which exits with a stack trace and no
+  // indication of which path was at fault - and, from CI, with the process
+  // simply gone.
+  final Map<String, dynamic> coinsConfig;
+  final List<dynamic> coinsList;
+  final List<String> seedNodes;
+  try {
+    coinsConfig = _readJsonMap(options.coinsConfigPath);
+    coinsList = _readJsonList(options.coinsPath);
+    seedNodes = _seedNodesFor(options.seedNodesPath);
+  } on Object catch (error) {
+    log
+      ..line('FAILED: could not read the generated coin configuration: $error')
+      ..line('  coins:        ${options.coinsPath}')
+      ..line('  coins config: ${options.coinsConfigPath}')
+      ..line('  seed nodes:   ${options.seedNodesPath}');
+    for (final path in [
+      options.coinsPath,
+      options.coinsConfigPath,
+      options.seedNodesPath,
+    ]) {
+      final file = File(path);
+      log.line(
+        '  $path exists=${file.existsSync()} '
+        'size=${file.existsSync() ? file.lengthSync() : 0}',
+      );
+    }
+    exit(1);
+  }
   log.line('coins=${coinsList.length} seednodes=${seedNodes.length}');
 
   final rpcPassword = _generateRpcPassword();
@@ -86,24 +113,54 @@ Future<void> main(List<String> args) async {
   final coinsFile = File('${dbDir.path}/kdf_coins.json');
   await coinsFile.writeAsString(jsonEncode(coinsList), flush: true);
 
-  log.line('starting kdf on port ${options.rpcPort}');
-  final process = await Process.start(
-    options.kdfPath,
-    [jsonEncode(startParams)],
-    environment: {...Platform.environment, 'MM_COINS_PATH': coinsFile.path},
+  // Checked before spawning so a missing or non-executable binary says so,
+  // instead of surfacing as an opaque ProcessException out of Process.start.
+  final binary = File(options.kdfPath);
+  if (!binary.existsSync()) {
+    log.line('FAILED: no KDF binary at ${options.kdfPath}');
+    exit(1);
+  }
+  final stat = binary.statSync();
+  log.line(
+    'kdf binary ${options.kdfPath} (${stat.size} bytes, ${stat.modeString()})',
   );
 
-  // KDF's own output carries the startup config, which holds the passphrase.
-  // Only lines that cannot contain it are forwarded.
+  log.line('starting kdf on port ${options.rpcPort}');
+  final Process process;
+  try {
+    process = await Process.start(
+      options.kdfPath,
+      [jsonEncode(startParams)],
+      environment: {...Platform.environment, 'MM_COINS_PATH': coinsFile.path},
+    );
+  } on Object catch (error) {
+    // Previously this threw straight out of main, which exits without a
+    // message anyone can act on and without removing the temporary wallet
+    // directory.
+    log.line('FAILED: could not start the KDF binary: $error');
+    await dbDir.delete(recursive: true).catchError((Object _) => dbDir);
+    exit(1);
+  }
+
+  // KDF's own output carries the startup config, which holds the passphrase, so
+  // a line is forwarded only with the password redacted out of it.
   unawaited(
     process.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .forEach((line) {
-          if (line.toLowerCase().contains('error')) log.line('kdf: $line');
+          final lowered = line.toLowerCase();
+          if (lowered.contains('error') || lowered.contains('panic')) {
+            log.line('kdf: ${line.replaceAll(rpcPassword, '<rpc-password>')}');
+          }
         }),
   );
   unawaited(process.stdout.drain<void>());
+  // An exit before the RPC answers is the difference between "KDF is slow" and
+  // "KDF is gone", and the startup timeout alone cannot tell them apart.
+  unawaited(
+    process.exitCode.then((code) => log.line('kdf exited with code $code')),
+  );
 
   final rpc = _Rpc(
     Uri.parse('http://127.0.0.1:${options.rpcPort}'),
