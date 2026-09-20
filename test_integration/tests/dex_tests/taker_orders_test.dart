@@ -37,13 +37,17 @@ Future<void> testTakerOrder(WidgetTester tester) async {
   print('🔍 TAKER ORDER: Form completed and order submitted');
 
   print('🔍 TAKER ORDER: Waiting for swap completion (max 15 minutes)');
-  await tester.pumpAndSettle().timeout(
-    const Duration(minutes: 15),
-    onTimeout: () {
-      print('❌ TAKER ORDER: Swap timeout - exceeded 15 minutes');
-      throw Exception(
-          'Test error: DOC->MARTY taker Swap took more than 15 minutes');
-    },
+  // Waits for the success marker rather than for the tree to go quiet. The
+  // fifteen-minute budget here never applied before: `pumpAndSettle` carries
+  // its own ten-minute default and raises `pumpAndSettle timed out` from the
+  // inside, so the outer timeout could not be reached - and a swap in progress
+  // animates continuously, so the settle it was waiting for was never coming
+  // either. The failure that produced was a bare `pumpAndSettle timed out`
+  // naming no stage.
+  await tester.pumpUntilFound(
+    find.byKey(const Key('swap-status-success')),
+    timeout: const Duration(minutes: 15),
+    describeTarget: 'the DOC->MARTY swap to reach success',
   );
 
   await _expectSwapSuccess(tester);

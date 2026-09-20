@@ -14,6 +14,38 @@ extension WidgetTesterPumpExtension on WidgetTester {
     }
   }
 
+  /// Pumps frames until [finder] matches, without ever waiting for idle.
+  ///
+  /// [pumpUntilVisible] calls `pumpAndSettle` on each turn, which is right
+  /// while the app is quiet between actions and wrong while something on
+  /// screen is animating: `pumpAndSettle` only returns once the tree stops
+  /// scheduling frames, and it gives up with `pumpAndSettle timed out` after
+  /// its own ten-minute default.
+  ///
+  /// A swap in progress animates continuously, so it never goes idle and that
+  /// default fires first - no matter what deadline the caller wrapped around
+  /// it. This advances one frame at a time instead and only asks whether the
+  /// target is there yet, so the deadline the caller asked for is the deadline
+  /// that applies.
+  Future<void> pumpUntilFound(
+    Finder finder, {
+    required Duration timeout,
+    Duration interval = const Duration(milliseconds: 250),
+    String? describeTarget,
+  }) async {
+    final endTime = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(endTime)) {
+      await pump(interval);
+      if (any(finder)) return;
+    }
+
+    throw TimeoutException(
+      'Timed out after ${timeout.inMinutes}m waiting for '
+      '${describeTarget ?? finder.toString()}',
+    );
+  }
+
   Future<void> pumpUntilVisible(
     Finder finder, {
     Duration timeout = const Duration(seconds: 60),
