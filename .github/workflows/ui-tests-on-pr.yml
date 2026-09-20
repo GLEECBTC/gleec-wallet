@@ -10,7 +10,13 @@ jobs:
   ui_tests:
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # Raised from 45. With a counterparty on the book the taker no longer fails
+    # on a missing row in seconds - it performs a real atomic swap, which the
+    # test allows fifteen minutes for, and only then do misc_tests and
+    # fiat_onramp_tests run at all. Those two sit behind dex_tests in a
+    # sequential runner that throws out of the loop on failure, so they have
+    # not executed on any branch since 2026-08-12 and their cost is unmeasured.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
 
