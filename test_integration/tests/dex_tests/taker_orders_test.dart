@@ -1,5 +1,7 @@
 // ignore_for_file: avoid_print
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -44,17 +46,48 @@ Future<void> testTakerOrder(WidgetTester tester) async {
   // animates continuously, so the settle it was waiting for was never coming
   // either. The failure that produced was a bare `pumpAndSettle timed out`
   // naming no stage.
-  await tester.pumpUntilFound(
-    find.byKey(const Key('swap-status-success')),
-    timeout: const Duration(minutes: 15),
-    describeTarget: 'the DOC->MARTY swap to reach success',
-  );
+  try {
+    await tester.pumpUntilFound(
+      find.byKey(const Key('swap-status-success')),
+      timeout: const Duration(minutes: 15),
+      describeTarget: 'the DOC->MARTY swap to reach success',
+    );
+  } on TimeoutException {
+    // Say how far the swap actually got. A swap that stalls after the taker
+    // fee and one that never started look identical from the outside, and the
+    // difference decides whether the next move is the test or the testnet.
+    _printSwapProgress(tester);
+    rethrow;
+  }
 
   await _expectSwapSuccess(tester);
   print('🔍 TAKER ORDER: Swap completed successfully');
 
   await _testSwapHistoryTable(tester);
   print('🔍 TAKER ORDER: History verification completed');
+}
+
+/// Reports which swap steps have rendered, for a swap that did not finish.
+void _printSwapProgress(WidgetTester tester) {
+  const steps = [
+    'TakerFeeSent',
+    'MakerPaymentReceived',
+    'MakerPaymentValidatedAndConfirmed',
+    'TakerPaymentSent',
+    'TakerPaymentSpent',
+    'MakerPaymentSpent',
+  ];
+  final reached = steps
+      .where(
+        (step) => tester.any(find.byKey(Key('swap-details-step-$step'))),
+      )
+      .toList();
+  print(
+    '❌ TAKER ORDER: swap did not reach success. '
+    'Steps rendered: ${reached.isEmpty ? 'none' : reached.join(', ')}',
+  );
+  final failed = tester.any(find.byKey(const Key('swap-status-failed')));
+  print('❌ TAKER ORDER: swap-status-failed rendered: $failed');
 }
 
 Finder _infiniteBidFinder() {
