@@ -88,6 +88,7 @@ Future<void> main(List<String> args) async {
   log.line('coins=${coinsList.length} seednodes=${seedNodes.length}');
 
   final rpcPassword = _generateRpcPassword();
+  final passphrase = getCounterpartyWif(options.slot);
   final dbDir = await Directory.systemTemp.createTemp('dex_counterparty_');
 
   final startParams = <String, dynamic>{
@@ -96,14 +97,19 @@ Future<void> main(List<String> args) async {
     'rpc_password': rpcPassword,
     'netid': _netId,
     'gui': 'gleec-wallet-dex-counterparty',
-    'passphrase': getCounterpartyWif(options.slot),
+    'passphrase': passphrase,
     'dbdir': dbDir.path,
     'rpcport': options.rpcPort,
     'rpcip': '127.0.0.1',
     'rpc_local_only': true,
     'allow_registrations': true,
     'https': false,
-    'coins': coinsList,
+    // Deliberately NOT 'coins': the list goes to the child through
+    // MM_COINS_PATH below, exactly as KdfOperationsLocalExecutable does it and
+    // for the reason it gives - a single argv string is capped, and on Linux
+    // that cap is MAX_ARG_STRLEN, 32 pages, 131072 bytes. Compact-encoded this
+    // list is ~282 KB, so passing it here made execve fail with E2BIG on every
+    // Linux run while macOS, whose limit is a 1 MiB total, started fine.
     // Left on deliberately. The whole point is that the order leaves this node
     // and reaches the browser's own KDF the way a stranger's order would.
     'disable_p2p': false,
@@ -134,10 +140,12 @@ Future<void> main(List<String> args) async {
       environment: {...Platform.environment, 'MM_COINS_PATH': coinsFile.path},
     );
   } on Object catch (error) {
-    // Previously this threw straight out of main, which exits without a
-    // message anyone can act on and without removing the temporary wallet
-    // directory.
-    log.line('FAILED: could not start the KDF binary: $error');
+    // Rendered without argv. ProcessException.toString() appends the whole
+    // command line, and that argv element carries the wallet passphrase.
+    final detail = error is ProcessException
+        ? '${error.message} (errno ${error.errorCode})'
+        : '$error';
+    log.line('FAILED: could not start the KDF binary: $detail');
     await dbDir.delete(recursive: true).catchError((Object _) => dbDir);
     exit(1);
   }
@@ -145,15 +153,16 @@ Future<void> main(List<String> args) async {
   // KDF's own output carries the startup config, which holds the passphrase, so
   // a line is forwarded only with the password redacted out of it.
   unawaited(
-    process.stderr
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())
-        .forEach((line) {
-          final lowered = line.toLowerCase();
-          if (lowered.contains('error') || lowered.contains('panic')) {
-            log.line('kdf: ${line.replaceAll(rpcPassword, '<rpc-password>')}');
-          }
-        }),
+    process.stderr.transform(utf8.decoder).transform(const LineSplitter()).forEach((
+      line,
+    ) {
+      final lowered = line.toLowerCase();
+      if (lowered.contains('error') || lowered.contains('panic')) {
+        log.line(
+          'kdf: ${line.replaceAll(rpcPassword, '<rpc-password>').replaceAll(passphrase, '<passphrase>')}',
+        );
+      }
+    }),
   );
   unawaited(process.stdout.drain<void>());
   // An exit before the RPC answers is the difference between "KDF is slow" and
@@ -165,6 +174,7 @@ Future<void> main(List<String> args) async {
   final rpc = _Rpc(
     Uri.parse('http://127.0.0.1:${options.rpcPort}'),
     rpcPassword,
+    passphrase,
     log,
   );
 
@@ -306,10 +316,11 @@ Future<void> _waitUntilOnBook(_Rpc rpc, _Log log, Duration timeout) async {
 }
 
 class _Rpc {
-  _Rpc(this.endpoint, this._password, this._log);
+  _Rpc(this.endpoint, this._password, this._passphrase, this._log);
 
   final Uri endpoint;
   final String _password;
+  final String _passphrase;
   final _Log _log;
   final HttpClient _client = HttpClient();
 
@@ -353,8 +364,15 @@ class _Rpc {
     throw TimeoutException('KDF RPC did not become ready within $timeout');
   }
 
-  /// Keeps the wallet passphrase out of anything this process prints.
-  String _redact(String text) => text.replaceAll(_password, '<rpc-password>');
+  /// Keeps the RPC password and the wallet passphrase out of what is printed.
+  ///
+  /// The passphrase matters because this log is read from a public CI job and
+  /// uploaded as an artifact. Today's wallets are the public test ones in
+  /// `get_funded_wif.dart`, so nothing secret is at stake - but the redaction
+  /// has to be real before anyone points this at a wallet that is.
+  String _redact(String text) => text
+      .replaceAll(_password, '<rpc-password>')
+      .replaceAll(_passphrase, '<passphrase>');
 }
 
 class _Log {

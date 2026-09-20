@@ -21,6 +21,10 @@ jobs:
             os: ubuntu-latest
             browser: chrome
             kdf_artifact: linux-x86-64
+            kdf_platform: linux
+            # A reserved wallet of its own: the two legs run at the same time and
+            # would otherwise place orders from one wallet and spend one balance.
+            counterparty_slot: 0
             display: "headless"
             resolution: "1600,1024"
             mode: profile
@@ -33,6 +37,8 @@ jobs:
             os: macos-latest
             browser: safari
             kdf_artifact: mac-universal
+            kdf_platform: macos
+            counterparty_slot: 1
             display: "headless" # has no affect with safaridriver
             resolution: "1600,1024" # has no affect with safaridriver
             mode: release
@@ -102,26 +108,31 @@ jobs:
         id: counterparty_binary
         run: |
           set -euo pipefail
-          COMMIT=$(python3 -c "import json;print(json.load(open('sdk/packages/komodo_defi_framework/app_build/build_config.json'))['api']['api_commit_hash'])")
+          CONFIG=sdk/packages/komodo_defi_framework/app_build/build_config.json
+          COMMIT=$(jq -er '.api.api_commit_hash' "$CONFIG")
+          # The digest comes from the repository, not from the server that
+          # serves the artefact. A checksum published beside its own zip proves
+          # only that the transfer was intact, which TLS already gives us -
+          # anyone who can replace one can replace the other. build_config.json
+          # already pins the accepted digests, and sdk-integration-preview.yml
+          # verifies against them the same way.
+          EXPECTED=$(jq -er '.api.platforms["${{ matrix.kdf_platform }}"].valid_zip_sha256_checksums[0]' "$CONFIG")
           SHORT=${COMMIT:0:7}
           NAME="kdf_${SHORT}-${{ matrix.kdf_artifact }}.zip"
           URL="https://devbuilds.gleec.com/main/${NAME}"
           echo "Fetching ${NAME}"
           mkdir -p .counterparty
           curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}" "${URL}"
-          curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}.sha256" "${URL}.sha256"
-          # The published checksum names the path it was generated from, so
-          # compare the digests rather than running `sha256sum -c` on it.
-          EXPECTED=$(awk '{print $1}' ".counterparty/${NAME}.sha256")
           if command -v sha256sum >/dev/null; then
             ACTUAL=$(sha256sum ".counterparty/${NAME}" | awk '{print $1}')
           else
             ACTUAL=$(shasum -a 256 ".counterparty/${NAME}" | awk '{print $1}')
           fi
           if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-            echo "Checksum mismatch for ${NAME}: expected ${EXPECTED}, got ${ACTUAL}"
+            echo "Refusing ${NAME}: build_config.json pins ${EXPECTED}, downloaded ${ACTUAL}"
             exit 1
           fi
+          echo "Digest matches the pin in ${CONFIG}"
           unzip -o -q ".counterparty/${NAME}" -d .counterparty
           chmod +x .counterparty/kdf
           echo "path=$(pwd)/.counterparty/kdf" >> "$GITHUB_OUTPUT"
@@ -136,8 +147,8 @@ jobs:
           # the package and can re-enter pub on a lockfile-enforced checkout.
           nohup dart tool/dex_counterparty.dart \
             --kdf "${{ steps.counterparty_binary.outputs.path }}" \
-            --slot 0 \
-            --rpc-port 7791 \
+            --slot ${{ matrix.counterparty_slot }} \
+            --rpc-port 779${{ matrix.counterparty_slot }} \
             >> counterparty.log 2>&1 &
           CP_PID=$!
           echo "pid=${CP_PID}" >> "$GITHUB_OUTPUT"
