@@ -17,12 +17,16 @@ class GroupedListView<T> extends StatelessWidget {
     required this.items,
     required this.onSelect,
     required this.maxHeight,
+    required this.itemKeyPrefix,
     super.key,
   });
 
   final List<T> items;
   final void Function(T) onSelect;
   final double maxHeight;
+
+  /// Names the table, for each row's widget key. See [CoinsTableItem].
+  final String itemKeyPrefix;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +63,7 @@ class GroupedListView<T> extends StatelessWidget {
                       childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
                       initiallyExpanded: false,
                       title: CoinsTableItem<T>(
+                        itemKeyPrefix: itemKeyPrefix,
                         data: group.value.first,
                         coin: _createHeaderCoinData(context, group.value),
                         onSelect: onSelect,
@@ -98,6 +103,7 @@ class GroupedListView<T> extends StatelessWidget {
     return Padding(
       padding: padding,
       child: CoinsTableItem<T>(
+        itemKeyPrefix: itemKeyPrefix,
         data: item,
         coin: getCoin(context, item),
         onSelect: onSelect,

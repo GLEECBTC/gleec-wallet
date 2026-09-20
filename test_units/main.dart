@@ -64,6 +64,8 @@ import 'tests/nfts/nft_main_bloc_test.dart' as nft_main_bloc_test;
 import 'tests/nfts/nft_main_repo_test.dart' as nft_main_repo_test;
 import 'tests/nfts/nft_supported_chains_test.dart' as nft_supported_chains_test;
 import 'tests/nfts/nft_tabs_widget_test.dart' as nft_tabs_widget_test;
+import 'tests/views/dex/simple/form/tables/coins_table_item_key_test.dart'
+    as coins_table_item_key_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
@@ -343,6 +345,7 @@ void main() {
   tron_fiat_mapping_test.main();
   tron_gasless_provider_config_test.main();
   table_utils_test.main();
+  coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();
   gasless_recovery_banner_scope_test.main();

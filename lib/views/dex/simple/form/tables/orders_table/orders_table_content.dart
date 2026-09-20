@@ -67,6 +67,7 @@ class OrdersTableContent extends StatelessWidget {
             }
 
             return GroupedListView<BestOrder>(
+              itemKeyPrefix: 'BestOrder',
               items: orders,
               onSelect: onSelect,
               maxHeight: maxHeight,
