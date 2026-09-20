@@ -20,6 +20,7 @@ jobs:
           - name: web-app-linux-profile
             os: ubuntu-latest
             browser: chrome
+            kdf_artifact: linux-x86-64
             display: "headless"
             resolution: "1600,1024"
             mode: profile
@@ -31,6 +32,7 @@ jobs:
           - name: web-app-macos
             os: macos-latest
             browser: safari
+            kdf_artifact: mac-universal
             display: "headless" # has no affect with safaridriver
             resolution: "1600,1024" # has no affect with safaridriver
             mode: release
@@ -88,6 +90,74 @@ jobs:
         id: validate_build
         uses: ./.github/actions/validate-build
 
+      # The taker half of dex_tests buys MARTY, and nothing on the testnet sells
+      # it. The maker half's own order is the only other one in the book, and it
+      # belongs to the same wallet on the same node, so the self-trade guard
+      # refuses it - which is why these jobs have been red on every branch since
+      # 2026-08-12. This starts a second KDF on a reserved funded wallet so a
+      # real order exists to take. It is the same KDF build the app ships,
+      # pinned by build_config.json, and the order reaches the app over p2p
+      # rather than being stubbed.
+      - name: Fetch the KDF binary for the counterparty
+        id: counterparty_binary
+        run: |
+          set -euo pipefail
+          COMMIT=$(python3 -c "import json;print(json.load(open('sdk/packages/komodo_defi_framework/app_build/build_config.json'))['api']['api_commit_hash'])")
+          SHORT=${COMMIT:0:7}
+          NAME="kdf_${SHORT}-${{ matrix.kdf_artifact }}.zip"
+          URL="https://devbuilds.gleec.com/main/${NAME}"
+          echo "Fetching ${NAME}"
+          mkdir -p .counterparty
+          curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}" "${URL}"
+          curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}.sha256" "${URL}.sha256"
+          # The published checksum names the path it was generated from, so
+          # compare the digests rather than running `sha256sum -c` on it.
+          EXPECTED=$(awk '{print $1}' ".counterparty/${NAME}.sha256")
+          if command -v sha256sum >/dev/null; then
+            ACTUAL=$(sha256sum ".counterparty/${NAME}" | awk '{print $1}')
+          else
+            ACTUAL=$(shasum -a 256 ".counterparty/${NAME}" | awk '{print $1}')
+          fi
+          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
+            echo "Checksum mismatch for ${NAME}: expected ${EXPECTED}, got ${ACTUAL}"
+            exit 1
+          fi
+          unzip -o -q ".counterparty/${NAME}" -d .counterparty
+          chmod +x .counterparty/kdf
+          echo "path=$(pwd)/.counterparty/kdf" >> "$GITHUB_OUTPUT"
+
+      - name: Start the DEX counterparty
+        id: counterparty
+        run: |
+          set -euo pipefail
+          : > counterparty.log
+          nohup dart run tool/dex_counterparty.dart \
+            --kdf "${{ steps.counterparty_binary.outputs.path }}" \
+            --slot 0 \
+            --rpc-port 7791 \
+            >> counterparty.log 2>&1 &
+          CP_PID=$!
+          echo "pid=${CP_PID}" >> "$GITHUB_OUTPUT"
+          # Waits for the order to be readable on its own book, not merely for
+          # setprice to be accepted. An order that never reaches the book leaves
+          # the suite waiting on a row that is not coming.
+          for i in $(seq 1 60); do
+            if grep -q DEX_COUNTERPARTY_READY counterparty.log; then
+              echo "Counterparty ready after $((i * 10))s"
+              cat counterparty.log
+              exit 0
+            fi
+            if ! kill -0 "${CP_PID}" 2>/dev/null; then
+              echo "Counterparty exited before it was ready"
+              cat counterparty.log
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Counterparty did not become ready within 10 minutes"
+          cat counterparty.log
+          exit 1
+
       # Run integration tests
       - name: Test air_dex ${{ matrix.browser }}
         id: integration_tests
@@ -108,6 +178,16 @@ jobs:
             -n ${{ matrix.browser }} \
             -m ${{ matrix.mode }} \
             --dart-define GEO_BLOCK=disabled
+
+      - name: Stop the DEX counterparty
+        if: always()
+        run: |
+          pkill -f dex_counterparty.dart || true
+          # Give it a moment to cancel its orders rather than leaving them on
+          # the book for the next run to trip over.
+          sleep 5
+          echo '--- counterparty log ---'
+          cat counterparty.log || true
 
       # Post-test steps (upload logs, coverage, and failure check)
       - name: Upload driver logs

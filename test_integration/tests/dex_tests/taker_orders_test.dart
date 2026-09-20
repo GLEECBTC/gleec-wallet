@@ -226,10 +226,9 @@ Future<void> _selectSellCoin(
   print('🔍 SELL CONFIG: Entered search text: $sellCoin');
   await tester.pumpNFrames(10);
 
-  // Same activation race as the maker form's selector. Deliberately not applied
-  // to the buy side: that row comes from the orderbook, so its absence is a
-  // missing counterparty rather than a slow local activation, and waiting there
-  // would only hide the real gap behind a timeout.
+  // Same activation race as the maker form's selector. The buy side waits too
+  // now, but for a different reason and with a different message: there, the
+  // wait covers p2p propagation of the counterparty's order.
   await tester.pumpUntilVisible(sellCoinItem);
   await tester.tapAndPump(sellCoinItem);
   print('🔍 SELL CONFIG: Selected coin');
@@ -259,6 +258,22 @@ Future<void> _selectBuyCoin(WidgetTester tester,
   print('🔍 BUY CONFIG: Entered search text: $buyCoin');
   await tester.pumpNFrames(10);
 
+  // This row comes from the orderbook, so its absence means nobody is offering
+  // $buyCoin - not that activation is slow. `tool/dex_counterparty.dart` puts
+  // that order there, and the workflow does not start these suites until it
+  // reports the order on its own book. Waiting here covers the gap between
+  // that and the order reaching this node over p2p, and names which of the two
+  // failed instead of reporting `Bad state: No element` against a row that was
+  // never going to exist.
+  try {
+    await tester.pumpUntilVisible(buyCoinItem);
+  } on Exception {
+    throw StateError(
+      'No $buyCoin offer reached the orderbook. Either the DEX counterparty '
+      'did not start, or its order has not propagated to this node. Check the '
+      'counterparty log in the job output.',
+    );
+  }
   await tester.tapAndPump(buyCoinItem);
   print('🔍 BUY CONFIG: Selected coin');
 

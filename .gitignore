@@ -121,3 +121,7 @@ android/key.properties
 
 # hookify rules are per-developer, not project policy
 .claude/*.local.md
+
+# KDF binary fetched for the DEX counterparty in CI
+.counterparty/
+counterparty.log
