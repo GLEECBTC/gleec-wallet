@@ -183,6 +183,7 @@ Future<void> main(List<String> args) async {
     if (cleanedUp) return;
     cleanedUp = true;
     log.line('stopping ($why)');
+    await _reportSwaps(rpc, log);
     try {
       await rpc
           .call({
@@ -250,6 +251,40 @@ Future<void> main(List<String> args) async {
   // Idle. The suite kills this process when it is done with the order.
   await ProcessSignal.sigterm.watch().first;
   await cleanUp('signalled');
+}
+
+/// Reports any swap this node took part in, before it shuts down.
+///
+/// The taker side can only say that the swap did not reach success. This side
+/// knows whether the order was taken at all and which event it stopped on,
+/// which is the difference between "nobody matched us" and "we matched and the
+/// swap stalled" - and those have opposite fixes.
+Future<void> _reportSwaps(_Rpc rpc, _Log log) async {
+  try {
+    final response = await rpc
+        .call({'method': 'my_recent_swaps', 'limit': 10})
+        .timeout(const Duration(seconds: 15));
+    final swaps = ((response['result'] as Map?)?['swaps'] as List?) ?? [];
+    if (swaps.isEmpty) {
+      log.line('no swaps: the order was never taken');
+      return;
+    }
+    log.line('took part in ${swaps.length} swap(s)');
+    for (final entry in swaps) {
+      final swap = entry as Map<String, dynamic>;
+      final events = (swap['events'] as List? ?? [])
+          .map((e) => ((e as Map)['event'] as Map?)?['type'])
+          .whereType<String>()
+          .toList();
+      log.line(
+        '  uuid=${swap['uuid']} type=${swap['type']} '
+        'pair=${swap['my_coin']}/${swap['other_coin']}',
+      );
+      log.line('  events: ${events.join(' -> ')}');
+    }
+  } on Object catch (error) {
+    log.line('could not read swaps: $error');
+  }
 }
 
 Future<void> _activate(
