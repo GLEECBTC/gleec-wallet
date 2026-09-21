@@ -114,15 +114,26 @@ Future<void> _testPaymentMethodSelection(WidgetTester tester) async {
   final Finder banxaPaymentMethodFinder =
       find.byKey(const Key('fiat-payment-method-banxa-0'));
 
+  // Both providers are reached through fiat-ramps.gleec.com, and neither
+  // renders a method when the proxy's credentials are rejected. That failure
+  // arrives here as an absent widget and says nothing about its cause, which
+  // is worth naming: it is the difference between a broken form and a lapsed
+  // API key, and only one of them is fixed in this repository.
+  const credentialHint =
+      'If the form itself loaded, check the provider credentials on '
+      'fiat-ramps.gleec.com - a rejected key returns no quotes, so no payment '
+      'method renders. Ramp answers INVALID_HOST_API_KEY and Banxa answers '
+      '401 when that happens.';
+
   expect(
     rampPaymentMethodFinder,
     findsOneWidget,
-    reason: 'Ramp payment method not found',
+    reason: 'Ramp payment method not found. $credentialHint',
   );
   expect(
     banxaPaymentMethodFinder,
     findsOneWidget,
-    reason: 'Banxa payment method not found',
+    reason: 'Banxa payment method not found. $credentialHint',
   );
   print('🔍 FIAT FORM TEST: Verified Ramp and Banxa payment methods');
 
