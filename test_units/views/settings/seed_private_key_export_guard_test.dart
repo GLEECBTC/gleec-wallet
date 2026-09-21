@@ -149,9 +149,6 @@ void main() {
           expectedCoins.map((coin) => 'synthetic-$coin-key'),
         );
         expect(tester.takeException(), isNull);
-        // Coin labels defer their first scroll; drain that delay after disposal.
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 3));
       });
     }
   }

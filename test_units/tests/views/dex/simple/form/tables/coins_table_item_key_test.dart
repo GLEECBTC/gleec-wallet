@@ -56,7 +56,6 @@ void main() {
       // Two different type arguments, one prefix: exactly one key spelling, and
       // both rows carry it.
       expect(find.byKey(const Key('Shared-table-item-DOC')), findsNWidgets(2));
-      await _drainCoinNameTimer(tester);
     });
 
     testWidgets('spells the prefix the caller gave it', (tester) async {
@@ -75,7 +74,6 @@ void main() {
       );
 
       expect(find.byKey(const Key('Coin-table-item-DOC')), findsOneWidget);
-      await _drainCoinNameTimer(tester);
     });
 
     testWidgets('a group header carries no row key', (tester) async {
@@ -95,24 +93,12 @@ void main() {
       );
 
       expect(find.byKey(const Key('Coin-table-item-DOC')), findsNothing);
-      await _drainCoinNameTimer(tester);
     });
   });
 }
 
 class _OtherRowType {
   const _OtherRowType();
-}
-
-/// Tears the tree down and lets the coin name's scroll timer expire.
-///
-/// `AutoScrollText` waits two seconds before it starts scrolling and only
-/// disposes its controller, so the delay it is sitting on outlives the widget
-/// and trips the binding's pending-timer check. Once the delay elapses the
-/// widget is unmounted and the animation loop exits instead of re-arming.
-Future<void> _drainCoinNameTimer(WidgetTester tester) async {
-  await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pump(const Duration(seconds: 3));
 }
 
 Widget _host(Widget child) => MaterialApp(
