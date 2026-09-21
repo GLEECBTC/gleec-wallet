@@ -33,17 +33,37 @@ extension WidgetTesterPumpExtension on WidgetTester {
     Duration interval = const Duration(milliseconds: 250),
     String? describeTarget,
   }) async {
-    final endTime = DateTime.now().add(timeout);
-
-    while (DateTime.now().isBefore(endTime)) {
-      await pump(interval);
-      if (any(finder)) return;
+    if (await pumpUntilFoundOrMissing(
+      finder,
+      timeout: timeout,
+      interval: interval,
+    )) {
+      return;
     }
 
     throw TimeoutException(
       'Timed out after ${timeout.inMinutes}m waiting for '
       '${describeTarget ?? finder.toString()}',
     );
+  }
+
+  /// As [pumpUntilFound], but reports absence instead of throwing.
+  ///
+  /// For waits whose target may legitimately not arrive, where the caller has
+  /// a better answer than a timeout.
+  Future<bool> pumpUntilFoundOrMissing(
+    Finder finder, {
+    required Duration timeout,
+    Duration interval = const Duration(milliseconds: 250),
+  }) async {
+    final endTime = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(endTime)) {
+      await pump(interval);
+      if (any(finder)) return true;
+    }
+
+    return false;
   }
 
   Future<void> pumpUntilVisible(
