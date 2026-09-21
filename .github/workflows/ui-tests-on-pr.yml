@@ -10,7 +10,13 @@ jobs:
   ui_tests:
     name: Test ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # Raised from 45. With a counterparty on the book the taker no longer fails
+    # on a missing row in seconds - it performs a real atomic swap, which the
+    # test allows fifteen minutes for, and only then do misc_tests and
+    # fiat_onramp_tests run at all. Those two sit behind dex_tests in a
+    # sequential runner that throws out of the loop on failure, so they have
+    # not executed on any branch since 2026-08-12 and their cost is unmeasured.
+    timeout-minutes: 75
     strategy:
       fail-fast: false
 
@@ -20,6 +26,11 @@ jobs:
           - name: web-app-linux-profile
             os: ubuntu-latest
             browser: chrome
+            kdf_artifact: linux-x86-64
+            kdf_platform: linux
+            # A reserved wallet of its own: the two legs run at the same time and
+            # would otherwise place orders from one wallet and spend one balance.
+            counterparty_slot: 0
             display: "headless"
             resolution: "1600,1024"
             mode: profile
@@ -31,6 +42,9 @@ jobs:
           - name: web-app-macos
             os: macos-latest
             browser: safari
+            kdf_artifact: mac-universal
+            kdf_platform: macos
+            counterparty_slot: 1
             display: "headless" # has no affect with safaridriver
             resolution: "1600,1024" # has no affect with safaridriver
             mode: release
@@ -88,6 +102,82 @@ jobs:
         id: validate_build
         uses: ./.github/actions/validate-build
 
+      # The taker half of dex_tests buys MARTY, and nothing on the testnet sells
+      # it. The maker half's own order is the only other one in the book, and it
+      # belongs to the same wallet on the same node, so the self-trade guard
+      # refuses it - which is why these jobs have been red on every branch since
+      # 2026-08-12. This starts a second KDF on a reserved funded wallet so a
+      # real order exists to take. It is the same KDF build the app ships,
+      # pinned by build_config.json, and the order reaches the app over p2p
+      # rather than being stubbed.
+      - name: Fetch the KDF binary for the counterparty
+        id: counterparty_binary
+        run: |
+          set -euo pipefail
+          CONFIG=sdk/packages/komodo_defi_framework/app_build/build_config.json
+          COMMIT=$(jq -er '.api.api_commit_hash' "$CONFIG")
+          # The digest comes from the repository, not from the server that
+          # serves the artefact. A checksum published beside its own zip proves
+          # only that the transfer was intact, which TLS already gives us -
+          # anyone who can replace one can replace the other. build_config.json
+          # already pins the accepted digests, and sdk-integration-preview.yml
+          # verifies against them the same way.
+          EXPECTED=$(jq -er '.api.platforms["${{ matrix.kdf_platform }}"].valid_zip_sha256_checksums[0]' "$CONFIG")
+          SHORT=${COMMIT:0:7}
+          NAME="kdf_${SHORT}-${{ matrix.kdf_artifact }}.zip"
+          URL="https://devbuilds.gleec.com/main/${NAME}"
+          echo "Fetching ${NAME}"
+          mkdir -p .counterparty
+          curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}" "${URL}"
+          if command -v sha256sum >/dev/null; then
+            ACTUAL=$(sha256sum ".counterparty/${NAME}" | awk '{print $1}')
+          else
+            ACTUAL=$(shasum -a 256 ".counterparty/${NAME}" | awk '{print $1}')
+          fi
+          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
+            echo "Refusing ${NAME}: build_config.json pins ${EXPECTED}, downloaded ${ACTUAL}"
+            exit 1
+          fi
+          echo "Digest matches the pin in ${CONFIG}"
+          unzip -o -q ".counterparty/${NAME}" -d .counterparty
+          chmod +x .counterparty/kdf
+          echo "path=$(pwd)/.counterparty/kdf" >> "$GITHUB_OUTPUT"
+
+      - name: Start the DEX counterparty
+        id: counterparty
+        run: |
+          set -euo pipefail
+          : > counterparty.log
+          # Invoked the way run_integration_tests.dart already is in this
+          # workflow - a direct file run rather than `dart run`, which resolves
+          # the package and can re-enter pub on a lockfile-enforced checkout.
+          nohup dart tool/dex_counterparty.dart \
+            --kdf "${{ steps.counterparty_binary.outputs.path }}" \
+            --slot ${{ matrix.counterparty_slot }} \
+            --rpc-port 779${{ matrix.counterparty_slot }} \
+            >> counterparty.log 2>&1 &
+          CP_PID=$!
+          echo "pid=${CP_PID}" >> "$GITHUB_OUTPUT"
+          # Waits for the order to be readable on its own book, not merely for
+          # setprice to be accepted. An order that never reaches the book leaves
+          # the suite waiting on a row that is not coming.
+          for i in $(seq 1 60); do
+            if grep -q DEX_COUNTERPARTY_READY counterparty.log; then
+              echo "Counterparty ready after $((i * 10))s"
+              cat counterparty.log
+              exit 0
+            fi
+            if ! kill -0 "${CP_PID}" 2>/dev/null; then
+              echo "Counterparty exited before it was ready"
+              cat counterparty.log
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Counterparty did not become ready within 10 minutes"
+          cat counterparty.log
+          exit 1
+
       # Run integration tests
       - name: Test air_dex ${{ matrix.browser }}
         id: integration_tests
@@ -96,11 +186,29 @@ jobs:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHROME_EXECUTABLE: ${{ matrix.browser == 'chrome' && steps.setup_chrome.outputs.chrome-path || '' }}
         run: |
+          # Runners hold no geo policy credential and cannot reach the policy
+          # service, so the lookup fails and the activation gate defers every
+          # asset: a coin enabled by a test never activates and never reaches
+          # the wallet list. These suites exercise wallet flows, not region
+          # blocking. This define lives only in this integration-test build -
+          # release builds keep the gate and are unaffected.
           dart run_integration_tests.dart \
             -d ${{ matrix.display }} \
             -b ${{ matrix.resolution }} \
             -n ${{ matrix.browser }} \
-            -m ${{ matrix.mode }}
+            -m ${{ matrix.mode }} \
+            --dart-define GEO_BLOCK=disabled
+
+      - name: Stop the DEX counterparty
+        if: always()
+        run: |
+          pkill -f dex_counterparty.dart || true
+          pkill -f '\.counterparty/kdf' || true
+          # Give it a moment to cancel its orders rather than leaving them on
+          # the book for the next run to trip over.
+          sleep 5
+          echo '--- counterparty log ---'
+          cat counterparty.log || true
 
       # Post-test steps (upload logs, coverage, and failure check)
       - name: Upload driver logs

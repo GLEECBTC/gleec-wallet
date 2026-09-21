@@ -6,6 +6,7 @@ import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/security/private_key_export_service.dart';
 
 const exportKeySentinel = 'synthetic-private-key-export-sentinel';
+const exportViewingKeySentinel = 'synthetic-viewing-key-export-sentinel';
 const exportPasswordSentinel = 'synthetic-password-export-sentinel';
 
 AssetId exportTestAsset(String id) => AssetId(
@@ -39,6 +40,7 @@ PrivateKeyExportResult exportTestResult() {
             publicKeySecp256k1: 'synthetic-public-key',
             publicKeyAddress: 'synthetic-address',
             privateKey: exportKeySentinel,
+            viewingKey: exportViewingKeySentinel,
             hdInfo: const PrivateKeyHdInfo(derivationPath: "m/44'/0'/0'/0/0"),
           ),
         ],

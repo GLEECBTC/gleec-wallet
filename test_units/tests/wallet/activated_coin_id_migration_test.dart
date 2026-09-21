@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 
 /// Pins the rename handling for `activated_coins`.
@@ -38,4 +40,87 @@ void testActivatedCoinIdMigration() {
       expect(legacyActivatedCoinIds('AAVE-PLG20'), isEmpty);
     });
   });
+
+  group('removeActivatedCoins', () {
+    // `activated_coins` is stored as raw config IDs, and the SDK's selection
+    // store removes exactly the IDs it is handed - it knows nothing about the
+    // rename. So the expansion has to happen here, at the caller. Without it a
+    // wallet that stored `MATIC` keeps a row the UI can no longer name, and
+    // therefore can no longer remove.
+    late _RecordingWalletAssets assets;
+    late _FakeSdk sdk;
+
+    const walletId = WalletId(
+      name: 'wallet',
+      pubkeyHash: 'wallet-hash',
+      authOptions: AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+    );
+
+    setUp(() {
+      assets = _RecordingWalletAssets();
+      sdk = _FakeSdk(assets);
+    });
+
+    test('also clears the spelling the ID replaced', () async {
+      await sdk.removeActivatedCoins(['POL'], expectedWalletId: walletId);
+
+      expect(assets.removed, ['POL', 'MATIC']);
+    });
+
+    test('expands every renamed ID in one call', () async {
+      await sdk.removeActivatedCoins([
+        'POL',
+        'NFT_POL',
+      ], expectedWalletId: walletId);
+
+      expect(assets.removed, ['POL', 'MATIC', 'NFT_POL', 'NFT_MATIC']);
+    });
+
+    test(
+      'passes an ID that never replaced anything through untouched',
+      () async {
+        await sdk.removeActivatedCoins([
+          'BTC',
+          'POL',
+        ], expectedWalletId: walletId);
+
+        expect(assets.removed, ['BTC', 'POL', 'MATIC']);
+      },
+    );
+
+    test('forwards the wallet the caller bound the write to', () async {
+      await sdk.removeActivatedCoins(['BTC'], expectedWalletId: walletId);
+
+      expect(assets.expectedWalletId, walletId);
+    });
+  });
+}
+
+/// Records what [KdfAuthMetadataExtension.removeActivatedCoins] delegates.
+class _RecordingWalletAssets implements WalletAssetSelection {
+  final List<String> removed = [];
+  WalletId? expectedWalletId;
+
+  @override
+  Future<void> remove(
+    Iterable<String> ids, {
+    WalletId? expectedWalletId,
+    AuthSessionContext? expectedSession,
+  }) async {
+    removed.addAll(ids);
+    this.expectedWalletId = expectedWalletId;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeSdk implements KomodoDefiSdk {
+  _FakeSdk(this.walletAssets);
+
+  @override
+  final WalletAssetSelection walletAssets;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

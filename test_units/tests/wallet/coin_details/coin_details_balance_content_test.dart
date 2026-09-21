@@ -51,9 +51,6 @@ void testCoinDetailsBalanceContent() {
         expect(find.byKey(const Key('coin-details-balance')), findsOneWidget);
         expect(find.byKey(_refreshingKey), findsNothing);
         expect(find.text('fiat-probe'), findsNothing);
-
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 12));
       },
     );
 
@@ -68,9 +65,6 @@ void testCoinDetailsBalanceContent() {
         expect(find.text('5'), findsOneWidget);
         expect(find.byKey(_refreshingKey), findsOneWidget);
         expect(find.text('fiat-probe'), findsOneWidget);
-
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 12));
       },
     );
 
@@ -82,9 +76,6 @@ void testCoinDetailsBalanceContent() {
       expect(find.text('5'), findsOneWidget);
       expect(find.byKey(_refreshingKey), findsNothing);
       expect(find.text('fiat-probe'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 12));
     });
   });
 }

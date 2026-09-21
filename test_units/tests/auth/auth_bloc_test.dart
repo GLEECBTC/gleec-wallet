@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 // the SDK barrel does not re-export, so faking it means importing the package
 // directly - the same reach the coins-bloc suites make into SDK internals.
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
@@ -12,19 +13,16 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/analytics/wallet_load_timeline.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
+import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
+import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
+import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/model/wallet.dart';
 
-/// `AuthBloc` had no test at all, which is how `_onLogIn` stayed the one auth
-/// path that never got the optimistic emit its three siblings have.
-///
-/// These pin the properties that make the optimistic path safe: `loggedIn` is
-/// emitted before metadata work, the wallet the user sees is the one KDF
-/// returned, a failure still produces a typed error, and the watcher cannot
-/// overwrite the optimistic user while the finalizer is still running.
+/// Auth operations publish SDK-owned metadata and preserve typed failures.
 void testAuthBloc() {
   group('AuthBloc sign-in', () {
     late _FakeAuth auth;
@@ -156,7 +154,7 @@ void testAuthBloc() {
       expect(auth.signInCalls, 0);
     });
 
-    test('a watcher emission does not drop optimistic metadata', () async {
+    test('the SDK watcher remains authoritative for metadata', () async {
       auth.userToReturn = _user(
         metadata: const {'type': 'hdwallet', 'has_backup': true},
       );
@@ -172,7 +170,7 @@ void testAuthBloc() {
       auth.emitToWatcher(_user(metadata: const {}));
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(bloc.state.currentUser?.metadata['has_backup'], true);
+      expect(bloc.state.currentUser?.metadata['has_backup'], isNull);
     });
   });
 
@@ -461,62 +459,189 @@ void testAuthBloc() {
     }
   });
 
-  group('AuthBloc background wallet setup', () {
-    for (final restore in [false, true]) {
-      test('${restore ? 'restore' : 'registration'} keeps the original wallet '
-          'identity after a delayed metadata write', () async {
-        final original = _user();
-        final replacement = _user(name: 'Wallet 2');
-        final auth = _FakeAuth()..registeredUser = original;
-        final writeStarted = Completer<void>();
-        final writeGate = Completer<void>();
-        auth.afterMetadataWrite = () async {
-          if (writeStarted.isCompleted) return;
-          writeStarted.complete();
-          await writeGate.future;
-        };
-        final bloc = AuthBloc(
-          _FakeSdk(auth),
-          _FakeWalletsRepository(),
-          _FakeSettingsRepository(),
-          _FakeTradingStatusService(),
-        );
-        addTearDown(bloc.close);
-        final loggedIn = bloc.stream.firstWhere(
-          (state) => state.currentUser?.walletId == original.walletId,
-        );
-        bloc.add(
-          restore
-              ? AuthRestoreRequested(
-                  wallet: _wallet(),
-                  password: 'pw',
-                  seed: 'a b c',
-                )
-              : AuthRegisterRequested(wallet: _wallet(), password: 'pw'),
-        );
-        await loggedIn.timeout(const Duration(seconds: 2));
-        await writeStarted.future;
-
-        auth.userToReturn = replacement;
-        final replacementSelected = bloc.stream.firstWhere(
-          (state) => state.currentUser?.walletId == replacement.walletId,
-        );
-        bloc.add(
-          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
-        );
-        await replacementSelected;
-        final replacementState = bloc.state;
-        writeGate.complete();
-        await Future<void>.delayed(Duration.zero);
-
-        expect(auth.metadataWriteWalletIds, [
-          original.walletId,
-          original.walletId,
-        ]);
-        expect(auth.userToReturn, same(replacement));
-        expect(bloc.state, same(replacementState));
-      });
+  group('AuthBloc wallet creation', () {
+    for (final flow in ['register', 'restore', 'import']) {
+      AuthBlocEvent event() => switch (flow) {
+        'register' => AuthRegisterRequested(wallet: _wallet(), password: 'pw'),
+        'restore' => AuthRestoreRequested(
+          wallet: _wallet(),
+          password: 'pw',
+          seed: 'a b c',
+        ),
+        _ => AuthImportRequested(
+          wallet: _wallet(),
+          password: 'pw',
+          seed: 'a b c',
+        ),
+      };
+      test(
+        '$flow waits for initial metadata persistence before login',
+        () async {
+          final auth = _FakeAuth();
+          final started = Completer<void>();
+          final saved = Completer<void>();
+          auth.onRegister = () async {
+            started.complete();
+            await saved.future;
+          };
+          final bloc = AuthBloc(
+            _FakeSdk(auth),
+            _FakeWalletsRepository(),
+            _FakeSettingsRepository(),
+            _FakeTradingStatusService(),
+          );
+          addTearDown(bloc.close);
+          bloc.add(event());
+          await started.future;
+          expect(bloc.state.isLoading, isTrue);
+          expect(bloc.state.currentUser, isNull);
+          // An app resume while creation is saving cannot publish partial state.
+          bloc.add(AuthStateRestoreRequested());
+          await Future<void>.delayed(Duration.zero);
+          expect(bloc.state.currentUser, isNull);
+          final loggedIn = bloc.stream.firstWhere(
+            (state) => state.currentUser != null,
+          );
+          saved.complete();
+          final state = await loggedIn.timeout(const Duration(seconds: 2));
+          expect(state.currentUser!.metadata, containsPair('type', 'hdwallet'));
+          expect(
+            state.currentUser!.metadata,
+            containsPair(
+              'wallet_provenance',
+              flow == 'register' ? 'generated' : 'imported',
+            ),
+          );
+          expect(
+            state.currentUser!.metadata,
+            containsPair('has_backup', flow != 'register'),
+          );
+          expect(
+            state.currentUser!.metadata['activated_coins'],
+            isA<List<String>>(),
+          );
+          expect(auth.metadataWriteWalletIds, isEmpty);
+        },
+      );
+      test(
+        '$flow preserves the SDK collision error without signing in',
+        () async {
+          final auth = _FakeAuth()..userToReturn = _user();
+          final bloc = AuthBloc(
+            _FakeSdk(auth),
+            _FakeWalletsRepository(),
+            _FakeSettingsRepository(),
+            _FakeTradingStatusService(),
+          );
+          addTearDown(bloc.close);
+          final error = bloc.stream.firstWhere((state) => state.isError);
+          bloc.add(event());
+          expect(
+            (await error).authError!.type,
+            AuthExceptionType.walletAlreadyExists,
+          );
+          expect(auth.signInCalls, 0);
+        },
+      );
     }
+  });
+
+  group('SecuritySettingsBloc backup persistence', () {
+    late _FakeAuth auth;
+    late SecuritySettingsBloc bloc;
+    setUp(() {
+      auth = _FakeAuth()..userToReturn = _user();
+      bloc = SecuritySettingsBloc(
+        SecuritySettingsState.initialState().copyWith(
+          step: SecuritySettingsStep.seedConfirm,
+        ),
+        kdfSdk: _FakeSdk(auth),
+      );
+      addTearDown(bloc.close);
+    });
+    test(
+      'success waits for saved metadata and ignores repeated submit',
+      () async {
+        final started = Completer<void>();
+        final saved = Completer<void>();
+        auth.onSessionUpdate = () async {
+          started.complete();
+          await saved.future;
+        };
+        final session = await auth.captureSessionContext();
+        bloc.add(SeedConfirmedEvent(session: session));
+        await started.future;
+        expect(bloc.state.step, SecuritySettingsStep.seedConfirm);
+        expect(bloc.state.isSavingBackup, isTrue);
+        bloc.add(SeedConfirmedEvent(session: session));
+        await Future<void>.delayed(Duration.zero);
+        final success = bloc.stream.firstWhere(
+          (state) => state.step == SecuritySettingsStep.seedSuccess,
+        );
+        saved.complete();
+        await success;
+        expect(auth.sessionUpdates, 1);
+        expect(auth.userToReturn!.metadata['has_backup'], isTrue);
+      },
+    );
+    test(
+      'unavailable identity retains confirmation state and supports retry',
+      () async {
+        auth.onSessionUpdate = () async {
+          throw const AuthIdentityUnavailableException();
+        };
+        final session = await auth.captureSessionContext();
+        final unavailable = bloc.stream.firstWhere(
+          (state) => state.backupSaveError != null,
+        );
+        bloc.add(SeedConfirmedEvent(session: session));
+        final state = await unavailable;
+        expect(state.step, SecuritySettingsStep.seedConfirm);
+        expect(state.backupSaveError, SeedBackupSaveError.identityUnavailable);
+        expect(state.isSavingBackup, isFalse);
+        auth.onSessionUpdate = null;
+        final success = bloc.stream.firstWhere(
+          (state) => state.step == SecuritySettingsStep.seedSuccess,
+        );
+        bloc.add(SeedConfirmedEvent(session: session));
+        await success;
+        expect(bloc.state.backupSaveError, isNull);
+      },
+    );
+    test('same-wallet reauthentication clears stale confirmation', () async {
+      final started = Completer<void>();
+      final saved = Completer<void>();
+      auth.onSessionUpdate = () async {
+        started.complete();
+        await saved.future;
+      };
+      final session = await auth.captureSessionContext();
+      bloc.add(SeedConfirmedEvent(session: session));
+      await started.future;
+      auth.sessions.invalidate();
+      auth.sessions.observe(auth.userToReturn);
+      final cleared = bloc.stream.firstWhere((state) => !state.isSavingBackup);
+      saved.complete();
+      await cleared;
+      expect(bloc.state.step, SecuritySettingsState.initialState().step);
+      expect(auth.userToReturn!.metadata['has_backup'], isNull);
+    });
+    test('reset during a pending save cannot publish success', () async {
+      final started = Completer<void>();
+      final saved = Completer<void>();
+      auth.onSessionUpdate = () async {
+        started.complete();
+        await saved.future;
+      };
+      bloc.add(SeedConfirmedEvent(session: await auth.captureSessionContext()));
+      await started.future;
+      final reset = bloc.stream.firstWhere((state) => !state.isSavingBackup);
+      bloc.add(ResetEvent());
+      await reset;
+      saved.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.step, SecuritySettingsState.initialState().step);
+    });
   });
 
   group('AuthBloc sign-out', () {
@@ -614,7 +739,51 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   final StreamController<KdfUser?> _watcher =
       StreamController<KdfUser?>.broadcast();
 
-  KdfUser? userToReturn;
+  final sessions = AuthSessionTracker();
+  KdfUser? _userToReturn;
+  KdfUser? get userToReturn => _userToReturn;
+  set userToReturn(KdfUser? value) {
+    _userToReturn = value;
+    sessions.observe(value);
+  }
+
+  Future<void> Function()? onRegister;
+  Future<void> Function()? onSessionUpdate;
+  int sessionUpdates = 0;
+
+  @override
+  Future<AuthSessionContext> captureSessionContext() async =>
+      sessions.current ?? (throw const AuthSessionChangedException());
+  @override
+  bool isSessionContextCurrent(AuthSessionContext context) =>
+      sessions.isCurrent(context);
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!isSessionContextCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  @override
+  Stream<AuthSessionContext?> watchSessionContext() => sessions.changes;
+  @override
+  Future<KdfUser> updateMetadataForSession(
+    AuthSessionContext context,
+    Map<String, dynamic> updates,
+  ) async {
+    ensureSessionContextCurrent(context);
+    sessionUpdates++;
+    await onSessionUpdate?.call();
+    for (final entry in updates.entries) {
+      await onSetKeyValue?.call(entry.key, entry.value);
+    }
+    ensureSessionContextCurrent(context);
+    userToReturn = userToReturn!.copyWith(
+      metadata: {...userToReturn!.metadata, ...updates},
+    );
+    return userToReturn!;
+  }
+
   KdfUser? registeredUser;
   Object? errorToThrow;
   Object? signOutError;
@@ -626,7 +795,10 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   Future<void> Function(String key, dynamic value)? onSetKeyValue;
   Future<void> Function()? afterMetadataWrite;
 
-  void emitToWatcher(KdfUser? user) => _watcher.add(user);
+  void emitToWatcher(KdfUser? user) {
+    userToReturn = user;
+    _watcher.add(user);
+  }
 
   @override
   Future<KdfUser> register({
@@ -636,8 +808,20 @@ class _FakeAuth implements KomodoDefiLocalAuth {
       derivationMethod: DerivationMethod.hdWallet,
     ),
     Mnemonic? mnemonic,
+    Map<String, dynamic> initialMetadata = const {},
   }) async {
-    return userToReturn = registeredUser ?? _user();
+    if (getUsersError != null) throw getUsersError!;
+    if (userToReturn?.walletId.name == walletName) {
+      throw AuthException(
+        'Wallet already exists',
+        type: AuthExceptionType.walletAlreadyExists,
+      );
+    }
+    sessions.invalidate();
+    await onRegister?.call();
+    return userToReturn = (registeredUser ?? _user()).copyWith(
+      metadata: initialMetadata,
+    );
   }
 
   @override
@@ -656,7 +840,9 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   @override
   Future<void> signOut() async {
     signOutCalls++;
+    sessions.invalidate();
     if (signOutError != null) throw signOutError!;
+    userToReturn = null;
   }
 
   @override

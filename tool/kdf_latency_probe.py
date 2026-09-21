@@ -1524,7 +1524,7 @@ def main() -> int:
             "with p2p off the whole RPC service goes down. The non-panicking "
             "try_fetch_from_mm_arc landed in ed8de236b / d2c16fc29, which is "
             "kdf-internal PR #18 and still unmerged - see "
-            "docs/KDF_PERF_STACK_DESCOPE.md. Also needed for anything that "
+            "docs/WALLET_LOAD_MEASUREMENT.md. Also needed for anything that "
             "actually uses the network - swaps, peer health, proxy-signed "
             "gas-free relays."
         ),

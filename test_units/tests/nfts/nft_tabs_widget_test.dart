@@ -15,6 +15,10 @@ import 'package:web_dex/bloc/nfts/nft_main_repo.dart';
 import 'package:web_dex/model/nft.dart';
 import 'package:web_dex/views/nfts/nft_tabs/nft_tabs.dart';
 
+import '../../helpers/runtime_auth_fixture.dart';
+
+void main() => testNftTabsWidget();
+
 /// Renders the tab strip the reported bug was about: a fresh wallet showed only
 /// "Ethereum" because a chain had to be activated before it could be a tab.
 ///
@@ -172,7 +176,16 @@ class _FakeNftsRepo implements NftsRepo {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _FakeAuth implements KomodoDefiLocalAuth {
+class _FakeAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
+  @override
+  Future<KdfUser?> get currentUser async => KdfUser(
+    walletId: WalletId.fromName(
+      'NFT widget wallet',
+      const AuthOptions(derivationMethod: DerivationMethod.iguana),
+    ),
+    isBip39Seed: true,
+  );
+
   @override
   Future<bool> isSignedIn() async => true;
 
@@ -190,6 +203,9 @@ class _FakeSdk implements KomodoDefiSdk {
 
   @override
   final KomodoDefiLocalAuth auth;
+
+  @override
+  final ActivationPolicy activationPolicy = ActivationPolicy();
 
   @override
   Stream<Map<AssetId, AssetActivationState>> watchActivationStates() =>

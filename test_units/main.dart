@@ -23,6 +23,7 @@ import 'views/settings/seed_private_key_export_guard_test.dart'
     as seed_private_key_export_guard_test;
 import 'support/contrast_test.dart' as contrast_test;
 import 'theme/theme_color_roles_test.dart' as theme_color_roles_test;
+import 'shared/widgets/auto_scroll_text_test.dart' as auto_scroll_text_test;
 import 'shared/widgets/notice_banner_test.dart' as notice_banner_test;
 import 'bloc/legal_agreement/legal_agreement_bloc_test.dart'
     as legal_agreement_bloc_test;
@@ -64,6 +65,8 @@ import 'tests/nfts/nft_main_bloc_test.dart' as nft_main_bloc_test;
 import 'tests/nfts/nft_main_repo_test.dart' as nft_main_repo_test;
 import 'tests/nfts/nft_supported_chains_test.dart' as nft_supported_chains_test;
 import 'tests/nfts/nft_tabs_widget_test.dart' as nft_tabs_widget_test;
+import 'tests/views/dex/simple/form/tables/coins_table_item_key_test.dart'
+    as coins_table_item_key_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
@@ -123,6 +126,15 @@ import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
 import 'tests/wallet/coins_repo_activation_wallet_race_test.dart';
 import 'tests/services/legal_acceptance_test.dart';
+import 'tests/services/legal_refresh_test.dart' as legal_refresh_test;
+import 'bloc/trading_status/trading_status_service_test.dart'
+    as trading_status_service_test;
+import 'bloc/trading_status/trading_status_disabled_policy_test.dart'
+    as trading_status_disabled_policy_test;
+import 'views/wallets_manager/widgets/wallet_deleting_test.dart'
+    as wallet_deleting_test;
+import 'tests/wallet/legacy_native_wallet_migration_test.dart'
+    as legacy_native_wallet_migration_test;
 import 'tests/services/storage_persistence_gate_test.dart';
 import 'tests/wallet/seed_backup_policy_test.dart';
 import 'views/common/seed_backup_gate_test.dart';
@@ -191,6 +203,7 @@ void main() {
   contrast_test.main();
   theme_color_roles_test.main();
   notice_banner_test.main();
+  auto_scroll_text_test.main();
   app_error_handling_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
@@ -305,6 +318,11 @@ void main() {
   testCoinSortOrder();
   testCoinsBlocBalanceEmit();
   testLegalAcceptance();
+  legal_refresh_test.main();
+  trading_status_service_test.main();
+  trading_status_disabled_policy_test.main();
+  wallet_deleting_test.main();
+  legacy_native_wallet_migration_test.main();
   testStoragePersistenceGate();
   testSeedBackupPolicy();
   testSeedBackupGate();
@@ -329,6 +347,7 @@ void main() {
   tron_fiat_mapping_test.main();
   tron_gasless_provider_config_test.main();
   table_utils_test.main();
+  coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();
   gasless_recovery_banner_scope_test.main();

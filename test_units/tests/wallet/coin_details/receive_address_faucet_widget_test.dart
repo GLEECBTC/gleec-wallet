@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
     show QuoteCurrency, Stablecoin;
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
     show
         AssetIdFaucetExtension,
@@ -46,6 +47,7 @@ import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 
 import 'coin_addresses_bloc_gasless_revalidation_test.dart';
+import '../../../helpers/runtime_auth_fixture.dart';
 
 class _FakeCoinAddressesBloc extends Cubit<CoinAddressesState>
     implements CoinAddressesBloc {
@@ -127,8 +129,10 @@ class _FakeSdk implements KomodoDefiSdk {
     required this.balances,
     MarketDataManager? marketData,
     Iterable<Asset> assetValues = const <Asset>[],
+    KomodoDefiLocalAuth? auth,
     this.boundGaslessReceive = false,
-  }) : marketData = marketData ?? _FakeMarketDataManager(),
+  }) : auth = auth ?? _ReceiveAuth(null),
+       marketData = marketData ?? _FakeMarketDataManager(),
        assets = _FakeAssetManager(assetValues);
 
   @override
@@ -140,10 +144,29 @@ class _FakeSdk implements KomodoDefiSdk {
   @override
   final AssetManager assets;
 
+  @override
+  final KomodoDefiLocalAuth auth;
+
   final bool boundGaslessReceive;
 
   @override
   bool canReceiveGasless(Asset asset) => boundGaslessReceive;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ReceiveAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
+  _ReceiveAuth(this.bloc);
+
+  final AuthBloc? bloc;
+
+  @override
+  Future<KdfUser?> get currentUser async => bloc?.state.currentUser;
+
+  @override
+  Stream<KdfUser?> get authStateChanges =>
+      bloc?.stream.map((state) => state.currentUser) ?? const Stream.empty();
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -2252,6 +2275,7 @@ void testReceiveAddressFaucetWidgets() {
             balances: _FakeBalanceManager(const {}),
             assetValues: [asset],
             boundGaslessReceive: true,
+            auth: _ReceiveAuth(authBloc),
           );
           addTearDown(addressesBloc.close);
           addTearDown(authBloc.close);
@@ -2296,6 +2320,13 @@ void testReceiveAddressFaucetWidgets() {
             authBloc.update(
               AuthBlocState.loggedIn(_softwareUser('wallet-b', _walletBHash)),
             );
+            await tester.pumpAndSettle();
+            expect(
+              find.byKey(const Key('seed-backup-gate-notice')),
+              findsNothing,
+            );
+            expect(clipboardWrites, isEmpty);
+            return;
           }
 
           await tester.tap(

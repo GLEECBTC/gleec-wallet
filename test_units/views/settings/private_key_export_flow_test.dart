@@ -210,6 +210,36 @@ void testPrivateKeyExportFlow() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a shielded viewing key stays behind the reveal gate', (
+      tester,
+    ) async {
+      // A viewing key cannot spend, so it is easy to file with the public
+      // fields. It still decrypts the account's whole note history, which is
+      // the confidentiality a shielded asset exists to provide - so it belongs
+      // behind the same two-stage gate as the spending key, not beside the
+      // address and public key.
+      await ready(tester);
+      expect(find.text(exportViewingKeySentinel), findsNothing);
+
+      // Master switch alone must not be enough; the per-key eye is stage two.
+      bloc.add(const PrivateKeyExportVisibilityChanged(true));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(exportViewingKeySentinel),
+        findsNothing,
+        reason: 'the master switch alone must not reveal the viewing key',
+      );
+
+      bloc.add(PrivateKeyExportKeyVisibilityToggled(exportTestAsset('BTC'), 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.text(exportViewingKeySentinel),
+        findsOneWidget,
+        reason: 'both stages passed, so the viewing key is shown',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
       'authentication epoch removes an open QR and displayed results',
       (tester) async {

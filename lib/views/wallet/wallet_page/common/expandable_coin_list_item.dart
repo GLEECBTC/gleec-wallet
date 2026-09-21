@@ -4,6 +4,7 @@ import 'package:app_theme/src/dark/theme_custom_dark.dart';
 import 'package:app_theme/src/light/theme_custom_light.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
@@ -94,7 +95,6 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
                   coin: widget.coin,
                   isSwapAddress: pubkey == sortedAddresses.first,
                   onTap: widget.onTap,
-                  onCopy: () => copyToClipBoard(context, pubkey.address),
                   hideBalances: hideBalances,
                 ),
               )
@@ -434,7 +434,6 @@ class _AddressRow extends StatelessWidget {
   final bool isSwapAddress;
   final bool hideBalances;
   final VoidCallback? onTap;
-  final VoidCallback? onCopy;
 
   const _AddressRow({
     required this.pubkey,
@@ -442,7 +441,6 @@ class _AddressRow extends StatelessWidget {
     required this.isSwapAddress,
     required this.hideBalances,
     required this.onTap,
-    this.onCopy,
   });
 
   @override
@@ -468,11 +466,11 @@ class _AddressRow extends StatelessWidget {
             const SizedBox(width: 8),
             Material(
               color: Colors.transparent,
-              child: IconButton(
-                iconSize: 16,
-                icon: const Icon(Icons.copy),
-                onPressed: onCopy,
-                visualDensity: VisualDensity.compact,
+              child: AddressCopyButton(
+                address: pubkey.address,
+                coinAbbr: coin.abbr,
+                gateOnSeedBackup: true,
+                isTestCoin: coin.isTestCoin,
               ),
             ),
             if (isSwapAddress) ...[

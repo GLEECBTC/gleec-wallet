@@ -1,3 +1,4 @@
+import '../../helpers/runtime_auth_fixture.dart';
 import 'package:flutter_test/flutter_test.dart';
 // `KomodoDefiSdk.auth` and `.assets` are typed as concrete classes the SDK
 // barrel does not re-export, so faking them means importing directly.
@@ -189,6 +190,7 @@ void testNftMainRepo() {
 
   group('NftsRepo.activateChain', () {
     late _FakeCoinsRepo coinsRepo;
+    late _FakeSdk sdk;
     late _FakeTradingStatusService tradingStatus;
 
     NftsRepo build({List<String> walletCoins = const []}) {
@@ -197,7 +199,7 @@ void testNftMainRepo() {
       return NftsRepo(
         api: _FakeMm2ApiNft(),
         coinsRepo: coinsRepo,
-        sdk: _FakeSdk(
+        sdk: sdk = _FakeSdk(
           auth: _FakeAuth(walletCoins),
           assets: _FakeAssetManager({for (final a in _catalogue) a.id: a}),
           nftActivation: _FakeNftActivation(),
@@ -213,14 +215,11 @@ void testNftMainRepo() {
       await repo.activateChain(NftBlockchains.polygon);
 
       // The PARENT gates the tab; NFT_POL is activated later, in the fetch.
-      expect(coinsRepo.activateCalls.single.single.id.id, 'POL');
+      expect(sdk.activateCalls.single.id.id, 'POL');
       // Pins the product decision so it cannot be silently flipped: browsing an
       // NFT tab must not add POL to the wallet or to the next login's set.
-      expect(coinsRepo.lastAddToWalletMetadata, isFalse);
-      expect(coinsRepo.lastNotifyListeners, isFalse);
-      // A user is watching, so this must not inherit the 15-attempt background
-      // fan-out budget.
-      expect(coinsRepo.lastMaxRetryAttempts, 3);
+      expect(coinsRepo.activateCalls, isEmpty);
+      expect(await sdk.walletAssets.load(), isEmpty);
     });
 
     test('a parent the wallet already holds keeps its coin-list row', () async {
@@ -232,9 +231,9 @@ void testNftMainRepo() {
 
       await repo.activateChain(NftBlockchains.polygon);
 
-      expect(coinsRepo.lastNotifyListeners, isTrue);
-      // Still never re-added to metadata: it is already there.
-      expect(coinsRepo.lastAddToWalletMetadata, isFalse);
+      expect(coinsRepo.activateCalls, isEmpty);
+      expect(sdk.activateCalls.single.id.id, 'POL');
+      expect(await sdk.walletAssets.load(), {'POL'});
     });
 
     test('a chain absent from the catalogue never reaches CoinsRepo', () async {
@@ -260,7 +259,7 @@ void testNftMainRepo() {
 
     test('a bare activation failure becomes a typed ApiError', () async {
       final repo = build();
-      coinsRepo.errorToThrow = Exception('activation exhausted');
+      sdk.activationError = Exception('activation exhausted');
 
       // CoinsRepo throws a bare Exception, which no `on BaseError` arm in the
       // bloc could match.
@@ -356,6 +355,21 @@ class _FakeSdk implements KomodoDefiSdk {
   final KomodoDefiLocalAuth auth;
 
   @override
+  late final WalletAssetSelection walletAssets = WalletAssetSelection(auth);
+
+  final List<Asset> activateCalls = [];
+  Object? activationError;
+  @override
+  Future<ActivationResult> activateAsset(
+    Asset asset, {
+    Duration? timeout,
+  }) async {
+    activateCalls.add(asset);
+    if (activationError != null) throw activationError!;
+    return ActivationResult.success(asset.id);
+  }
+
+  @override
   final AssetManager assets;
 
   @override
@@ -417,7 +431,7 @@ class _FakeTradingStatusService implements TradingStatusService {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _FakeAuth implements KomodoDefiLocalAuth {
+class _FakeAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
   _FakeAuth(this._intended);
 
   final List<String> _intended;
@@ -473,3 +487,5 @@ class _FakeMm2ApiNft implements Mm2ApiNft {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+void main() => testNftMainRepo();

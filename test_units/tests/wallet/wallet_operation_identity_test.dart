@@ -5,6 +5,7 @@ import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
+import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/mm2/mm2.dart';
@@ -15,6 +16,10 @@ import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/services/arrr_activation/arrr_config.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+
+import '../../helpers/runtime_auth_fixture.dart';
+
+void main() => testWalletOperationIdentity();
 
 void testWalletOperationIdentity() {
   group('Wallet operation identity', () {
@@ -47,6 +52,7 @@ void testWalletOperationIdentity() {
       addTearDown(() async {
         await subscription.cancel();
         repo.dispose();
+        await sdk.walletAssets.dispose();
       });
     });
 
@@ -185,7 +191,7 @@ KdfUser _user(String name) => KdfUser(
   isBip39Seed: true,
 );
 
-class _FakeAuth implements KomodoDefiLocalAuth {
+class _FakeAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
   _FakeAuth(this.user);
 
   KdfUser user;
@@ -198,6 +204,19 @@ class _FakeAuth implements KomodoDefiLocalAuth {
 
   @override
   Stream<KdfUser?> get authStateChanges => const Stream.empty();
+
+  @override
+  Future<KdfUser> updateMetadataForSession(
+    AuthSessionContext session,
+    Map<String, dynamic> updates,
+  ) async {
+    metadataWriteWalletIds.add(session.walletId);
+    await beforeMetadataWrite?.call();
+    await captureSessionContext();
+    ensureSessionContextCurrent(session);
+    user = user.copyWith(metadata: {...user.metadata, ...updates});
+    return user;
+  }
 
   @override
   Future<void> updateActiveUserKeyValue(
@@ -224,10 +243,13 @@ class _FakeAuth implements KomodoDefiLocalAuth {
 }
 
 class _FakeSdk implements KomodoDefiSdk {
-  _FakeSdk(this.auth);
+  _FakeSdk(this.auth) : walletAssets = WalletAssetSelection(auth);
 
   @override
   final KomodoDefiLocalAuth auth;
+
+  @override
+  final WalletAssetSelection walletAssets;
 
   @override
   final ActivatedAssetsCache activatedAssetsCache =
@@ -292,6 +314,12 @@ class _UnusedMm2Api implements Mm2Api {
 }
 
 class _UnusedTradingStatusService implements TradingStatusService {
+  @override
+  Stream<AppGeoStatus> get statusStream => const Stream.empty();
+
+  @override
+  bool isAssetBlocked(AssetId asset) => false;
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -40,9 +40,11 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   final Finder addAssetsButton = find.byKey(const Key('add-assets-button'));
   final Finder removeAssetsButton =
       find.byKey(const Key('remove-assets-button'));
-  final coinsList = find.byKey(const Key('wallet-page-coins-list'));
-  final Finder coinListItemKmd =
-      find.byKey(const Key('wallet-coin-list-item-kmd'));
+  final Finder walletPageScrollView =
+      find.byKey(const Key('wallet-page-scroll-view'));
+  // Logged out, the assets tab renders AssetsList in its grouped view, which
+  // keys each row by bare ticker.
+  final Finder coinListItemKmd = find.byKey(const Key('KMD'));
 
   await tester.tap(walletMenuButton);
   await tester.pumpAndSettle();
@@ -52,7 +54,7 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   expect(removeAssetsButton, findsNothing);
   await tester.dragUntilVisible(
     coinListItemKmd,
-    coinsList,
+    walletPageScrollView,
     const Offset(0, -15),
   );
   await tester.pumpAndSettle();

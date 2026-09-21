@@ -48,15 +48,29 @@ Future<void> initializeLogger(Mm2Api mm2Api) async {
   Logger.root.onRecord.listen(_logToUniversalLogger);
 }
 
+/// Writes a diagnostic record where the current platform can actually show it.
+///
+/// `developer.log` is a no-op once compiled to JavaScript, so on web this sink
+/// silently discarded every record and the debug and integration builds that
+/// asked for debug output got none at all. Only [_logToUniversalLogger] calls
+/// this, and only in debug or test mode, so the console write stays out of
+/// release builds.
+void _writeDebugOutput(String message) {
+  if (kIsWeb) {
+    // ignore: avoid_print
+    print('[app.diagnostics] $message');
+    return;
+  }
+  developer.log(message, name: 'app.diagnostics');
+}
+
 Future<void> _logToUniversalLogger(LogRecord record) async {
   final timer = Stopwatch()..start();
   try {
     await forwardDiagnosticRecord(
       record,
       logger,
-      debugOutput: isTestMode || kDebugMode
-          ? (message) => developer.log(message, name: 'app.diagnostics')
-          : null,
+      debugOutput: isTestMode || kDebugMode ? _writeDebugOutput : null,
     );
     performance.logTimeWritingLogs(timer.elapsedMilliseconds);
   } on Object {

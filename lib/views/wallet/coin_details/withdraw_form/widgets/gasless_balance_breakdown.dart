@@ -112,9 +112,6 @@ class _BalanceMetric extends StatelessWidget {
           Text(
             '$amount $symbol',
             softWrap: true,
-            // The legacy app theme uses ColorScheme.onSurface as the scaffold
-            // background. Inherit the text foreground until the semantic
-            // migration in docs/THEME_SEMANTIC_COLOR_MIGRATION_PLAN.md.
             style: theme.textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w700,
               fontFeatures: const [FontFeature.tabularFigures()],

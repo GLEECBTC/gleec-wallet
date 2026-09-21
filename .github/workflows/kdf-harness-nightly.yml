@@ -147,7 +147,7 @@ jobs:
           # telemetry module that reads it lives in the unmerged perf stack
           # (kdf-internal PR #19/#20). Kept set so it starts working again the
           # moment the pin carries that stack; until then a red run gives no
-          # per-endpoint attribution. See docs/KDF_PERF_STACK_DESCOPE.md.
+          # per-endpoint attribution. See docs/WALLET_LOAD_MEASUREMENT.md.
           KDF_EVM_RPC_TRACE: "1"
         run: |
           if [ -z "$KDF_TEST_SEED" ]; then
@@ -183,6 +183,6 @@ jobs:
               echo "available on the pinned KDF: that telemetry lives in"
               echo "kdf-internal PR #19/#20, still unmerged. GLEEC has one node,"
               echo "so on this pin a rate-limited response and a dead node look"
-              echo "the same. See docs/KDF_PERF_STACK_DESCOPE.md."
+              echo "the same. See docs/WALLET_LOAD_MEASUREMENT.md."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

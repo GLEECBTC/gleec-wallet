@@ -1202,5 +1202,13 @@
   "privateKeyExportUnavailableBadge": "Unavailable",
   "privateKeyExportAllFiltered": "All assets are hidden by your current filter.",
   "privateKeyExportLoading": "Preparing your keys…",
-  "privateKeyExportBulkActionsTitle": "Export all displayed keys"
+  "privateKeyExportBulkActionsTitle": "Export all displayed keys",
+  "walletDeletionRecoveryWarning": "Deleting this wallet does not cancel transfers already submitted. Recovery records remain encrypted on this device and can be recovered when the same wallet is imported again. A transfer may still complete after deletion.",
+  "walletDeletionRecoveryUnavailable": "We could not check this wallet’s pending transfers.",
+  "walletDeletionReviewFailed": "Could not review this wallet for deletion. Please retry.",
+  "walletDeletionSubmissionBusy": "A transfer is still being submitted. Please retry deletion shortly.",
+  "walletDeletionReviewChanged": "Pending transfer details changed. Review the updated warning, then confirm deletion again.",
+  "walletDeletionTargetChanged": "This wallet changed or was replaced. Return to the wallet list before deleting it.",
+  "seedBackupIdentityUnavailable": "Wallet verification is temporarily unavailable. Please try again.",
+  "seedBackupSaveFailed": "Could not save backup confirmation. Please try again."
 }

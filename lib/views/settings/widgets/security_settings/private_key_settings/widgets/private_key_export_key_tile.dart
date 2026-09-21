@@ -76,11 +76,19 @@ class PrivateKeyExportKeyTile extends StatelessWidget {
           // Serialized into the export file but never rendered before now,
           // which left shielded-asset holders looking at a key that is not
           // the one they need.
-          if (privateKey.viewingKey case final String viewingKey)
-            PrivateKeyField(
+          //
+          // Behind the same two-stage gate as the spending key, not beside the
+          // public fields above it. A viewing key cannot spend, but it decrypts
+          // the account's entire note history, so showing it while the reveal
+          // switch is still off would break the promise that screen makes.
+          if (privateKey.viewingKey case final String viewingKey) ...[
+            PrivateKeySecretField(
+              privateKey: viewingKey,
+              revealed: showKeys && revealed,
               label: LocaleKeys.privateKeyExportViewingKey.tr(),
-              value: viewingKey,
             ),
+            const SizedBox(height: 8),
+          ],
           PrivateKeySecretField(
             privateKey: privateKey.privateKey,
             revealed: showKeys && revealed,

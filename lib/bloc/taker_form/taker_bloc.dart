@@ -201,12 +201,37 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
 
     final bool isValid = await _validator.validate();
 
+    if (!isValid) {
+      // The form stays on [TakerStep.form], so the confirmation page simply
+      // never renders. Without this the only evidence is its absence - which
+      // is what made the integration failure unreadable: the driver log showed
+      // a finder matching zero widgets and nothing about why the form said no.
+      _log.warning(
+        'Taker form submission rejected: ${_describeErrors(_validator.raisedErrors)}',
+      );
+    }
+
     emit(
       state.copyWith(
         inProgress: () => false,
         step: () => isValid ? TakerStep.confirm : TakerStep.form,
       ),
     );
+  }
+
+  /// Renders [errors] for a log line, keeping any technical detail attached.
+  ///
+  /// An empty list is itself worth reporting: it means validation rejected the
+  /// form without raising anything the UI could show.
+  String _describeErrors(List<DexFormError> errors) {
+    if (errors.isEmpty) return 'no error was raised';
+    return errors
+        .map(
+          (e) => e.technicalDetails == null
+              ? e.error
+              : '${e.error} (${e.technicalDetails})',
+        )
+        .join('; ');
   }
 
   void _onAmountButtonClick(

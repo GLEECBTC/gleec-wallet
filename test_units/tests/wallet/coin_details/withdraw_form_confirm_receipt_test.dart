@@ -690,9 +690,6 @@ void testWithdrawFormConfirmReceipt() {
         expect(find.textContaining('1.5 USDT'), findsWidgets);
         // GasFree fee presentation does not apply a local threshold.
         expect(find.text('withdrawHighFee'), findsNothing);
-
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 3));
       },
     );
 
@@ -714,9 +711,6 @@ void testWithdrawFormConfirmReceipt() {
       await tester.pumpWidget(_wrap(WithdrawPreviewDetails(state: state)));
 
       expect(find.text('withdrawHighFee'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('non-gasless preview keeps the existing summary', (
@@ -744,9 +738,6 @@ void testWithdrawFormConfirmReceipt() {
         findsNothing,
       );
       expect(find.textContaining('1 KMD'), findsWidgets);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
   });
 
@@ -790,9 +781,6 @@ void testWithdrawFormConfirmReceipt() {
         expect(find.text('76543210'), findsOneWidget);
         expect(find.text('withdrawGaslessTraceId'), findsOneWidget);
         expect(find.textContaining('1.25 USDT'), findsWidgets);
-
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 3));
       },
     );
 
@@ -819,9 +807,6 @@ void testWithdrawFormConfirmReceipt() {
       expect(find.text('withdrawGaslessFinalFee'), findsNothing);
       expect(find.text('withdrawGaslessMaxFee'), findsOneWidget);
       expect(find.text('withdrawGaslessTransferFee'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('standard receipt keeps the awaiting-confirmations chip', (
@@ -855,9 +840,6 @@ void testWithdrawFormConfirmReceipt() {
         find.byKey(const Key('withdraw-receipt-total-deducted')),
         findsNothing,
       );
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('zero-net wallet-internal move shows the moved amount, not 0', (
@@ -884,9 +866,6 @@ void testWithdrawFormConfirmReceipt() {
 
       expect(find.textContaining('10 KMD'), findsWidgets);
       expect(find.text('0 KMD'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
   });
 
@@ -991,12 +970,6 @@ void testWithdrawFormConfirmReceipt() {
       expect(find.text('withdrawGaslessAcceptanceUnknownTitle'), findsNothing);
       expect(find.textContaining('trace-responsive-pending'), findsOneWidget);
       expect(tester.takeException(), isNull);
-
-      // AssetAmountWithFiat internally owns a delayed auto-scroll check even
-      // when scrolling is disabled. Dispose every surface and advance past
-      // that delay so the test leaves no framework timers behind.
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     }
 
     testWidgets(
@@ -1064,9 +1037,6 @@ void testWithdrawFormConfirmReceipt() {
         find.byKey(const Key('gasless-pending-static-progress')),
         findsOneWidget,
       );
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
   });
 

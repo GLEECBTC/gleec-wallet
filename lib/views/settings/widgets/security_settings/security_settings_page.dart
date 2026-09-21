@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
@@ -44,20 +46,23 @@ class SecuritySettingsPage extends StatefulWidget {
 
 class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
   String _seed = '';
-  WalletId? _seedWalletId;
+  AuthSessionContext? _seedSession;
+  StreamSubscription<AuthSessionContext?>? _seedSessionSubscription;
+  SecuritySettingsBloc? _seedFlowBloc;
   final Map<Coin, String> _privKeys = {};
 
   @override
   void dispose() {
     // Ensure sensitive data is cleared when widget is disposed
     _clearAllSensitiveData();
+    _seedSessionSubscription?.cancel();
     super.dispose();
   }
 
   /// Drops the legacy seed flow's references when its screen is left.
   void _clearAllSensitiveData() {
     _seed = '';
-    _seedWalletId = null;
+    _seedSession = null;
     _privKeys.clear();
   }
 
@@ -152,9 +157,9 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
         return SeedShow(seedPhrase: _seed, privKeys: _privKeys);
 
       case SecuritySettingsStep.seedConfirm:
-        final walletId = _seedWalletId;
-        if (walletId == null) return const SizedBox.shrink();
-        return SeedConfirmation(seedPhrase: _seed, expectedWalletId: walletId);
+        final session = _seedSession;
+        if (session == null) return const SizedBox.shrink();
+        return SeedConfirmation(seedPhrase: _seed, session: session);
 
       case SecuritySettingsStep.seedSuccess:
         _clearAllSensitiveData(); // Clear data after successful seed backup
@@ -177,17 +182,20 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
     final coinsBloc = context.read<CoinsBloc>();
     final mm2Api = RepositoryProvider.of<Mm2Api>(context);
     final kdfSdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-    final originalUser = await kdfSdk.auth.currentUser;
-    if (!context.mounted || originalUser == null) return;
-    final expectedWalletId = originalUser.walletId;
+    final AuthSessionContext session;
+    try {
+      session = await kdfSdk.auth.captureSessionContext();
+    } on AuthSessionChangedException {
+      return;
+    }
+    if (!context.mounted) return;
 
     final String? pass = await walletPasswordDialog(context);
     if (pass == null || !mounted) return;
-    if ((await kdfSdk.auth.currentUser)?.walletId != expectedWalletId) return;
+    if (!kdfSdk.auth.isSessionContextCurrent(session)) return;
 
     final mnemonic = await kdfSdk.auth.getMnemonicPlainText(pass);
-    if (!mounted ||
-        (await kdfSdk.auth.currentUser)?.walletId != expectedWalletId) {
+    if (!mounted || !kdfSdk.auth.isSessionContextCurrent(session)) {
       return;
     }
 
@@ -205,8 +213,7 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
       final result = await mm2Api.showPrivKey(
         ShowPrivKeyRequest(coin: coin.abbr),
       );
-      if (!mounted ||
-          (await kdfSdk.auth.currentUser)?.walletId != expectedWalletId) {
+      if (!mounted || !kdfSdk.auth.isSessionContextCurrent(session)) {
         return;
       }
       if (result != null) {
@@ -214,9 +221,19 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
       }
     }
 
-    if (!mounted) return;
+    await _seedSessionSubscription?.cancel();
+    if (!mounted || !kdfSdk.auth.isSessionContextCurrent(session)) return;
     _seed = mnemonic.plaintextMnemonic ?? '';
-    _seedWalletId = expectedWalletId;
+    _seedSession = session;
+    _seedFlowBloc = securitySettingsBloc;
+    _seedSessionSubscription = kdfSdk.auth.watchSessionContext().listen((_) {
+      final original = _seedSession;
+      if (original != null && !kdfSdk.auth.isSessionContextCurrent(original)) {
+        _clearAllSensitiveData();
+        final bloc = _seedFlowBloc;
+        if (bloc != null && !bloc.isClosed) bloc.add(const ResetEvent());
+      }
+    });
     _privKeys
       ..clear()
       ..addAll(privateKeys);

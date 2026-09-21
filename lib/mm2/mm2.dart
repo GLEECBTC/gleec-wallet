@@ -28,6 +28,9 @@ final class MM2 {
   MM2() {
     _kdfSdk = KomodoDefiSdk(
       config: KomodoDefiSdkConfig(
+        initialActivationPolicy: ActivationPolicySnapshot(
+          status: ActivationPolicyStatus.loading,
+        ),
         // Syncing pre-activation coin states is not yet implemented,
         // so we disable it for now.
         // TODO: sync pre-activation of coins (show activating coins in list)

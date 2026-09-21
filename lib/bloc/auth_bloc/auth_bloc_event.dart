@@ -11,6 +11,16 @@ class AuthModeChanged extends AuthBlocEvent {
   final KdfUser? currentUser;
 }
 
+/// A watcher result is only applicable to the auth flow that subscribed.
+class _AuthUserObserved extends AuthModeChanged {
+  const _AuthUserObserved({
+    required super.mode,
+    required super.currentUser,
+    required this.revision,
+  });
+  final int revision;
+}
+
 class AuthStateClearRequested extends AuthBlocEvent {
   const AuthStateClearRequested();
 }
@@ -55,12 +65,7 @@ class AuthRestoreRequested extends AuthBlocEvent {
 
 /// A user-initiated seed import.
 ///
-/// Split from [AuthRestoreRequested] because the two want opposite behaviour on
-/// a wallet-name collision. Restore falls back to signing into the existing
-/// wallet, which is what the debug auto-login path relies on. For a real
-/// import that fallback is destructive to intent: the seed the user just typed
-/// is discarded and they are signed into a *different* wallet, with only a log
-/// line to say so. This event fails loudly instead.
+/// Creation and restoration all reject wallet-name collisions in the SDK.
 class AuthImportRequested extends AuthBlocEvent {
   const AuthImportRequested({
     required this.wallet,
