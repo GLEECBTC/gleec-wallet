@@ -143,7 +143,8 @@ jobs:
           # Names which endpoint refused what, so a red run says whether the
           # cause was rate limiting or the node being down.
           #
-          # INERT against the currently pinned KDF (main, f3efd2c): the
+          # INERT against the currently pinned KDF (feat/lifi-integration,
+          # 4872ef2): the
           # telemetry module that reads it lives in the unmerged perf stack
           # (kdf-internal PR #19/#20). Kept set so it starts working again the
           # moment the pin carries that stack; until then a red run gives no

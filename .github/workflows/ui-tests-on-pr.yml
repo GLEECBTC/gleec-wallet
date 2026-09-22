@@ -125,7 +125,12 @@ jobs:
           EXPECTED=$(jq -er '.api.platforms["${{ matrix.kdf_platform }}"].valid_zip_sha256_checksums[0]' "$CONFIG")
           SHORT=${COMMIT:0:7}
           NAME="kdf_${SHORT}-${{ matrix.kdf_artifact }}.zip"
-          URL="https://devbuilds.gleec.com/main/${NAME}"
+          # The mirror is laid out by branch, with `/` replaced by `-` - the same
+          # slug `dev_builds_artefact_downloader.dart` and `update_api_config.dart`
+          # build. Deriving it from the manifest instead of hardcoding `main`
+          # keeps this step working when the pin moves to a feature branch.
+          BRANCH=$(jq -er '.api.branch' "$CONFIG")
+          URL="https://devbuilds.gleec.com/${BRANCH//\//-}/${NAME}"
           echo "Fetching ${NAME}"
           mkdir -p .counterparty
           curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}" "${URL}"
