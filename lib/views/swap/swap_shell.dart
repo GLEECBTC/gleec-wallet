@@ -96,25 +96,30 @@ class _SwapShellState extends State<SwapShell> {
   @override
   Widget build(BuildContext context) {
     return Column(
+      key: const Key('swap-shell'),
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: SegmentedButton<SwapDestination>(
             key: const Key('swap-destination-switcher'),
+            // The keys sit on the labels because [ButtonSegment] takes none,
+            // and the integration suite has to be able to address a single
+            // destination: the trading interface it asserts against is only
+            // mounted once Advanced is selected.
             segments: const [
               ButtonSegment(
                 value: SwapDestination.swap,
-                label: Text('Swap'),
+                label: Text('Swap', key: Key('swap-destination-swap')),
                 icon: Icon(Icons.swap_calls),
               ),
               ButtonSegment(
                 value: SwapDestination.activity,
-                label: Text('Activity'),
+                label: Text('Activity', key: Key('swap-destination-activity')),
                 icon: Icon(Icons.history),
               ),
               ButtonSegment(
                 value: SwapDestination.advanced,
-                label: Text('Advanced'),
+                label: Text('Advanced', key: Key('swap-destination-advanced')),
                 icon: Icon(Icons.candlestick_chart),
               ),
             ],

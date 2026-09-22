@@ -61,6 +61,31 @@ void main() {
     expect(find.text('Advanced'), findsOneWidget);
   });
 
+  testWidgets('keeps the keys the integration suite navigates by', (
+    tester,
+  ) async {
+    await pump(tester);
+
+    // The UI suite reaches the trading interface by tapping these, and cannot
+    // reach it any other way. Losing one turns every DEX assertion into a
+    // missing-widget failure a long way from the cause.
+    expect(find.byKey(const Key('swap-shell')), findsOneWidget);
+    expect(find.byKey(const Key('swap-destination-swap')), findsOneWidget);
+    expect(find.byKey(const Key('swap-destination-activity')), findsOneWidget);
+    expect(find.byKey(const Key('swap-destination-advanced')), findsOneWidget);
+
+    // The keys sit on the labels rather than on the segments, which take
+    // none, so a tap has to reach the segment through them. Asserting they
+    // exist would not catch a label that stopped being tappable.
+    await tester.tap(find.byKey(const Key('swap-destination-advanced')));
+    await tester.pumpAndSettle();
+    expect(find.text('body:advanced'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('swap-destination-swap')));
+    await tester.pumpAndSettle();
+    expect(find.text('body:swap'), findsOneWidget);
+  });
+
   testWidgets('can be opened directly on a destination', (tester) async {
     await pump(tester, initial: SwapDestination.advanced);
 

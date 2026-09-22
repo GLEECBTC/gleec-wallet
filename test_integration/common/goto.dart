@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/common/screen_type.dart';
 
@@ -9,8 +10,38 @@ Future<void> walletPage(WidgetTester tester, {ScreenType? type}) async {
   return await _go('main-menu-wallet', tester);
 }
 
-Future<void> dexPage(WidgetTester tester, {ScreenType? type}) async {
+/// Opens the Swap surface on its default destination, the swap form.
+Future<void> swapPage(WidgetTester tester, {ScreenType? type}) async {
   return await _go('main-menu-dex', tester);
+}
+
+/// Opens the full trading interface.
+///
+/// The Swap menu entry lands on the swap form, and the shell builds only the
+/// selected destination, so the orderbook, the maker form and the bot are not
+/// in the tree until Advanced is chosen. Tapping the menu entry alone is no
+/// longer enough to reach them.
+Future<void> dexPage(WidgetTester tester, {ScreenType? type}) async {
+  await _go('main-menu-dex', tester);
+  await advancedSwapDestination(tester);
+}
+
+/// Switches the Swap surface to the destination that hosts the trading UI.
+///
+/// Safe to call when Advanced is already selected: the segmented button
+/// ignores a tap on the current selection.
+Future<void> advancedSwapDestination(WidgetTester tester) =>
+    _swapDestination('advanced', tester);
+
+/// Switches the Swap surface back to the swap form.
+Future<void> swapFormDestination(WidgetTester tester) =>
+    _swapDestination('swap', tester);
+
+Future<void> _swapDestination(String name, WidgetTester tester) async {
+  final Finder finder = find.byKey(Key('swap-destination-$name'));
+  expect(finder, findsOneWidget, reason: 'goto.dart _swapDestination($name)');
+  await tester.tapAndPump(finder);
+  await tester.pumpNFrames(60);
 }
 
 Future<void> nftsPage(WidgetTester tester, {ScreenType? type}) async {
