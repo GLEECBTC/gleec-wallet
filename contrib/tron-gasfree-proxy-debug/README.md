@@ -3,7 +3,8 @@
 A self-contained Docker stack to reproduce and debug the **`401`** the wallet
 gets on gas-free (`komodo_proxy`) calls to `https://quicknode.gleec.com/gasfree/...`.
 
-Full root-cause write-up: [`docs/TRON_GASFREE_PROXY_401.md`](../../docs/TRON_GASFREE_PROXY_401.md).
+Full root-cause write-up: retired with the rest of the staged GasFree docs; the
+surviving contract is [`docs/TRON_GASFREE_KDF_PRODUCTION_SPEC.md`](../../docs/TRON_GASFREE_KDF_PRODUCTION_SPEC.md).
 
 ## TL;DR of the bug
 
