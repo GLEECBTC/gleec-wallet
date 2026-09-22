@@ -39,6 +39,7 @@ import 'package:web_dex/services/feedback/app_feedback_wrapper.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
 import 'package:web_dex/services/initializer/legacy_app_settings_migration_service.dart';
+import 'package:web_dex/services/initializer/app_error_handling.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -53,7 +54,7 @@ PerformanceMode? get appDemoPerformanceMode =>
     _appDemoPerformanceMode ?? _getPerformanceModeFromUrl();
 
 Future<void> main() async {
-  await runZonedGuarded(() async {
+  Future<void> startApp() async {
     WalletLoadTimeline.instance.markProcessStart();
     usePathUrlStrategy();
     WidgetsFlutterBinding.ensureInitialized();
@@ -63,10 +64,6 @@ Future<void> main() async {
     if (kIsWeb) {
       log(tronGaslessBuildPolicyMarker, path: 'GasFree build policy').ignore();
     }
-
-    FlutterError.onError = (FlutterErrorDetails details) {
-      catchUnhandledExceptions(details.exception, details.stack);
-    };
 
     // Foundational dependencies / setup - everything else builds on these 3.
     // The current focus is migrating mm2Api to the new sdk, so that the sdk
@@ -89,14 +86,12 @@ Future<void> main() async {
     );
 
     final tradingStatusRepository = TradingStatusRepository(komodoDefiSdk);
-    final tradingStatusService = TradingStatusService(tradingStatusRepository);
-    // Deliberately not awaited: this is a geo-lookup over the network, and
-    // nothing between here and the first frame depends on its answer.
-    // `initialize()` sets `_isInitialized` synchronously before its first
-    // await, so the `currentStatus`/`isTradingEnabled` asserts stay satisfied,
-    // and the cached status starts restrictive - identical to what the failure
-    // path sets. `CoinsBloc` already waits on `initialStatusReady` with its own
-    // timeout and re-emits the catalogue when the real status lands.
+    final tradingStatusService = TradingStatusService(
+      tradingStatusRepository,
+      activationPolicy: komodoDefiSdk.activationPolicy,
+    );
+    // Keep startup responsive while the SDK's loading policy defers activation.
+    // Consumers observe policy changes and resume eligible work after lookup.
     unawaited(
       tradingStatusService.initialize().catchError((
         Object error,
@@ -159,7 +154,13 @@ Future<void> main() async {
         ),
       ),
     );
-  }, catchUnhandledExceptions);
+  }
+
+  await runWithAppErrorHandling(
+    startApp,
+    isTestMode: isTestMode,
+    onError: catchUnhandledExceptions,
+  );
 }
 
 /// iOS file-descriptor monitoring. Bounded so a silent method channel costs a
@@ -221,8 +222,46 @@ PerformanceMode? _getPerformanceModeFromUrl() {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _sensitivityController = ScreenshotSensitivityController();
+  LegalDocumentsRepository? _legalDocuments;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repository = context.read<LegalDocumentsRepository>();
+    if (!identical(repository, _legalDocuments)) {
+      _legalDocuments = repository;
+      unawaited(repository.refreshConsentDocuments());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_legalDocuments?.refreshConsentDocuments());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sensitivityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -232,7 +271,6 @@ class MyApp extends StatelessWidget {
       context,
     );
 
-    final sensitivityController = ScreenshotSensitivityController();
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
@@ -248,11 +286,11 @@ class MyApp extends StatelessWidget {
           },
         ),
       ],
-      child: AppFeedbackWrapper(
-        child: AnalyticsLifecycleHandler(
-          child: WindowCloseHandler(
-            child: ScreenshotSensitivity(
-              controller: sensitivityController,
+      child: ScreenshotSensitivity(
+        controller: _sensitivityController,
+        child: AppFeedbackWrapper(
+          child: AnalyticsLifecycleHandler(
+            child: WindowCloseHandler(
               child: app_bloc_root.AppBlocRoot(
                 storedPrefs: _storedSettings!,
                 komodoDefiSdk: komodoDefiSdk,

@@ -100,3 +100,25 @@ class CoinsPubkeysRequested extends CoinsEvent {
   @override
   List<Object> get props => [coinId];
 }
+
+/// Internal completion of an activation whose wallet could not be verified.
+final class _CoinsActivationCancelled extends CoinsEvent {
+  const _CoinsActivationCancelled({
+    required this.coinIds,
+    required this.generation,
+  });
+
+  final Set<String> coinIds;
+  final int generation;
+
+  @override
+  List<Object> get props => [coinIds, generation];
+}
+
+/// A new host policy answer changes the visible and activatable wallet assets.
+final class _CoinsPolicyChanged extends CoinsEvent {
+  const _CoinsPolicyChanged(this.status);
+  final AppGeoStatus status;
+  @override
+  List<Object> get props => [status];
+}

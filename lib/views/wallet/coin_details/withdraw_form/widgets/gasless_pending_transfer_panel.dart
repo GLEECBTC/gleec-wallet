@@ -19,6 +19,8 @@ class GaslessPendingTransferPanel extends StatelessWidget {
     this.standardLabel,
     this.onUseStandard,
     this.traceId,
+    this.recoveryAction,
+    this.errorMessage,
     super.key,
   });
 
@@ -30,6 +32,8 @@ class GaslessPendingTransferPanel extends StatelessWidget {
   final String traceLabel;
   final String? standardLabel;
   final String? traceId;
+  final Widget? recoveryAction;
+  final String? errorMessage;
   final bool isChecking;
   final VoidCallback? onContinueChecking;
   final VoidCallback? onUseStandard;
@@ -97,6 +101,17 @@ class GaslessPendingTransferPanel extends StatelessWidget {
               ),
             ),
           ],
+          if (errorMessage != null) ...[
+            const SizedBox(height: 20),
+            Text(
+              errorMessage!,
+              key: const Key('withdraw-gasless-pending-error'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
           const SizedBox(height: 28),
           // Only a provider trace can be reconciled. A wallet-local journal
           // entry without a trace remains outcome-unknown and non-retryable.
@@ -130,6 +145,10 @@ class GaslessPendingTransferPanel extends StatelessWidget {
             icon: const Icon(Icons.receipt_long_outlined),
             label: Text(activityLabel, textAlign: TextAlign.center),
           ),
+          if (recoveryAction != null) ...[
+            const SizedBox(height: 8),
+            recoveryAction!,
+          ],
           const SizedBox(height: 8),
           TextButton(
             onPressed: onSupport,

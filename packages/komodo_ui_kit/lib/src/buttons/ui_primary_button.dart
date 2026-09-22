@@ -1,4 +1,3 @@
-import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/src/buttons/ui_base_button.dart';
 
@@ -88,9 +87,14 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
   }
 
   Color get _foregroundColor {
+    // White, not `colorScheme.onPrimary`: the background here can be any
+    // caller-supplied colour, not just `primary`, so the only thing this
+    // branch knows is that it is dark. It previously reached across into the
+    // *light* theme's `onSurface` for a near-white, which only worked while
+    // that role held a background value.
     return ThemeData.estimateBrightnessForColor(_backgroundColor) ==
             Brightness.dark
-        ? theme.global.light.colorScheme.onSurface
+        ? Colors.white
         : Theme.of(context).colorScheme.secondary;
   }
 

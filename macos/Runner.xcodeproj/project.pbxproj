@@ -27,7 +27,6 @@
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
 		66C55A35351894218870ED96 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CD053C180435D048EF8BEC30 /* Pods_Runner.framework */; };
-		CE34F2E95A5E72AAE9A202B0 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BC509CF635E02824A671F07F /* GoogleService-Info.plist */; };
 		D60A10D52711A1B300EB58E3 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D60A10D42711A1B300EB58E3 /* CoreFoundation.framework */; platformFilter = maccatalyst; };
 		D60A10D72711A1D000EB58E3 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D60A10D62711A1D000EB58E3 /* SystemConfiguration.framework */; platformFilter = maccatalyst; };
 		D6B034F02711A360007FC221 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = D6B034EF2711A360007FC221 /* libz.tbd */; };
@@ -280,7 +279,6 @@
 			files = (
 				33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */,
 				33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */,
-				CE34F2E95A5E72AAE9A202B0 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

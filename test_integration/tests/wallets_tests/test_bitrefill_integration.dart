@@ -17,9 +17,7 @@ Future<void> testBitrefillIntegration(WidgetTester tester) async {
 
   const String ltcSearchTerm = 'litecoin';
 
-  final Finder totalAmount = find.byKey(
-    const Key('overview-total-balance'),
-  );
+  final Finder totalAmount = find.byKey(const Key('overview-current-value'));
   final Finder ltcActiveCoinItem = find.byKey(
     const Key('coin-list-item-ltc-segwit'),
   );
@@ -53,20 +51,16 @@ Future<void> testBitrefillIntegration(WidgetTester tester) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets(
-    'Run bitrefill integration tests:',
-    (WidgetTester tester) async {
-      tester.testTextInput.register();
-      await app.main();
-      await tester.pumpAndSettle();
-      print('ACCEPT ALPHA WARNING');
-      await acceptAlphaWarning(tester);
-      await restoreWalletToTest(tester);
-      await testBitrefillIntegration(tester);
-      await tester.pumpAndSettle();
+  testWidgets('Run bitrefill integration tests:', (WidgetTester tester) async {
+    tester.testTextInput.register();
+    await app.main();
+    await tester.pumpAndSettle();
+    print('ACCEPT ALPHA WARNING');
+    await acceptAlphaWarning(tester);
+    await restoreWalletToTest(tester);
+    await testBitrefillIntegration(tester);
+    await tester.pumpAndSettle();
 
-      print('END BITREFILL INTEGRATION TESTS');
-    },
-    semanticsEnabled: false,
-  );
+    print('END BITREFILL INTEGRATION TESTS');
+  }, semanticsEnabled: false);
 }

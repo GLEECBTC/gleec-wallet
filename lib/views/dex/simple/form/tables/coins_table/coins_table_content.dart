@@ -40,6 +40,7 @@ class CoinsTableContent extends StatelessWidget {
             if (coins.isEmpty) return const NothingFound();
 
             return GroupedListView<Coin>(
+              itemKeyPrefix: 'Coin',
               items: coins,
               onSelect: onSelect,
               maxHeight: maxHeight,

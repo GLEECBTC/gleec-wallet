@@ -65,7 +65,7 @@ class _List extends StatelessWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16.0),
                     ),
-                    color: Theme.of(context).colorScheme.onSurface,
+                    color: Theme.of(context).scaffoldBackgroundColor,
                     child: HistoryListContent(
                       transactions: transactions,
                       coinAbbr: coinAbbr,

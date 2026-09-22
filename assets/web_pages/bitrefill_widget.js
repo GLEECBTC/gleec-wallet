@@ -49,15 +49,36 @@ function getBitrefillUrlFromParameters() {
  * @param {MessageEvent} bitrefillEvent 
  */
 function onBitrefillMessage(bitrefillEvent) {
-    const data = JSON.parse(bitrefillEvent.data);
-    const strData = JSON.stringify(data);
-    const {
-        event,
-        invoiceId,
-        paymentUri
-    } = data;
+    // Bitrefill documents this exact sender origin. Bind it to the checkout
+    // iframe too, so another window cannot inject a payment request into this
+    // wallet merely by posting a message to the wrapper.
+    // https://www.bitrefill.com/playground/
+    const iframe = document.getElementById('bitrefill-iframe');
+    if (!iframe || !iframe.contentWindow
+        || bitrefillEvent.origin !== 'https://embed.bitrefill.com'
+        || bitrefillEvent.source !== iframe.contentWindow) {
+        return;
+    }
 
-    switch (event) {
+    let data;
+    let strData;
+    try {
+        // The live embed sends JSON strings; the public integration example
+        // also documents object messages. Accept both wire representations.
+        data = typeof bitrefillEvent.data === 'string'
+            ? JSON.parse(bitrefillEvent.data)
+            : bitrefillEvent.data;
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            return;
+        }
+        strData = JSON.stringify(data);
+    } catch (_) {
+        // Ignore malformed messages without sending a non-JSON console error
+        // through the native webview's payment-event bridge.
+        return;
+    }
+
+    switch (data.event) {
         case 'invoice_created':
             postMessageToParent(strData);
             showEmailWarningBanner();
@@ -82,7 +103,10 @@ function postMessageToParent(message) {
 
     // universal_url opener 
     if (window.opener) {
-        return window.opener.postMessage(message, "*");
+        // The opener is always the wallet app, which serves this page,
+        // so pin the target origin rather than broadcasting the
+        // invoice with "*".
+        return window.opener.postMessage(message, window.location.origin);
     }
 
     // desktop_webview_window - https://github.com/MixinNetwork/flutter-plugins/blob/main/packages/desktop_webview_window/example/test_web_pages/test.html

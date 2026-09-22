@@ -1,6 +1,8 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
@@ -16,8 +18,9 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 class SeedConfirmation extends StatefulWidget {
-  const SeedConfirmation({required this.seedPhrase});
+  const SeedConfirmation({required this.seedPhrase, required this.session});
   final String seedPhrase;
+  final AuthSessionContext session;
 
   @override
   State<SeedConfirmation> createState() => _SeedConfirmationState();
@@ -42,80 +45,111 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
   @override
   Widget build(BuildContext context) {
     final scrollController = ScrollController();
-    return ScreenshotSensitive(
-      child: DexScrollbar(
-        isMobile: isMobile,
-        scrollController: scrollController,
-        child: SingleChildScrollView(
-          controller: scrollController,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (!isMobile)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: SeedBackButton(() {
-                    context.read<AnalyticsBloc>().add(
-                      AnalyticsBackupSkippedEvent(
-                        stageSkipped: 'seed_confirm',
-                        hdType:
-                            context
-                                .read<AuthBloc>()
-                                .state
-                                .currentUser
-                                ?.wallet
-                                .config
-                                .type
-                                .name ??
-                            '',
+    final saving = context.select(
+      (SecuritySettingsBloc bloc) => bloc.state.isSavingBackup,
+    );
+    final saveError = context.select(
+      (SecuritySettingsBloc bloc) => bloc.state.backupSaveError,
+    );
+    return BlocListener<SecuritySettingsBloc, SecuritySettingsState>(
+      listenWhen: (previous, current) =>
+          previous.step != current.step &&
+          current.step == SecuritySettingsStep.seedSuccess,
+      listener: (context, state) {
+        context.read<AnalyticsBloc>().add(
+          AnalyticsBackupCompletedEvent(
+            backupTime: state.backupElapsed?.inSeconds ?? 0,
+            method: 'manual',
+            hdType: widget.session.walletId.isHd
+                ? WalletType.hdwallet.name
+                : WalletType.iguana.name,
+          ),
+        );
+      },
+      child: ScreenshotSensitive(
+        child: DexScrollbar(
+          isMobile: isMobile,
+          scrollController: scrollController,
+          child: SingleChildScrollView(
+            controller: scrollController,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                if (!isMobile)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: SeedBackButton(() {
+                      context.read<AnalyticsBloc>().add(
+                        AnalyticsBackupSkippedEvent(
+                          stageSkipped: 'seed_confirm',
+                          hdType:
+                              context
+                                  .read<AuthBloc>()
+                                  .state
+                                  .currentUser
+                                  ?.wallet
+                                  .config
+                                  .type
+                                  .name ??
+                              '',
+                        ),
+                      );
+                      context.read<SecuritySettingsBloc>().add(
+                        const ShowSeedEvent(),
+                      );
+                    }),
+                  ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(right: 10),
+                        child: _Title(),
                       ),
-                    );
-                    context.read<SecuritySettingsBloc>().add(
-                      const ShowSeedEvent(),
-                    );
-                  }),
-                ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(right: 10),
-                      child: _Title(),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: _SelectedWordsField(
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: _SelectedWordsField(
+                          selectedWords: _selectedWords,
+                          confirmationError: _confirmationError,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _JumbledSeedWords(
+                        words: _jumbledWords,
                         selectedWords: _selectedWords,
-                        confirmationError: _confirmationError,
+                        onWordPressed: _onWordPressed,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _JumbledSeedWords(
-                      words: _jumbledWords,
-                      selectedWords: _selectedWords,
-                      onWordPressed: _onWordPressed,
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: _ControlButtons(
-                        onConfirmPressed: _isReadyForCheck
-                            ? () => _onConfirmPressed()
-                            : null,
-                        onClearPressed: _clear,
+                      const SizedBox(height: 24),
+                      if (saveError != null)
+                        Text(
+                          saveError == SeedBackupSaveError.identityUnavailable
+                              ? LocaleKeys.seedBackupIdentityUnavailable.tr()
+                              : LocaleKeys.seedBackupSaveFailed.tr(),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: _ControlButtons(
+                          onConfirmPressed: _isReadyForCheck && !saving
+                              ? () => _onConfirmPressed()
+                              : null,
+                          onClearPressed: saving ? null : _clear,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -138,21 +172,8 @@ class _SeedConfirmationState extends State<SeedConfirmation> {
     final String result = _selectedWords.map((w) => w.word).join(' ').trim();
 
     if (result == widget.seedPhrase) {
-      final settingsBloc = context.read<SecuritySettingsBloc>();
-      // Read before dispatching: `SeedConfirmedEvent` advances the step, and
-      // the anchor must be sampled against the state that is still in the flow.
-      final backupSeconds = settingsBloc.state.backupElapsed?.inSeconds ?? 0;
-      settingsBloc.add(const SeedConfirmedEvent());
-      context.read<AuthBloc>().add(AuthSeedBackupConfirmed());
-      final walletType =
-          context.read<AuthBloc>().state.currentUser?.wallet.config.type.name ??
-          '';
-      context.read<AnalyticsBloc>().add(
-        AnalyticsBackupCompletedEvent(
-          backupTime: backupSeconds,
-          method: 'manual',
-          hdType: walletType,
-        ),
+      context.read<SecuritySettingsBloc>().add(
+        SeedConfirmedEvent(session: widget.session),
       );
       return;
     }
@@ -305,7 +326,7 @@ class _ControlButtons extends StatelessWidget {
     required this.onClearPressed,
     required this.onConfirmPressed,
   });
-  final VoidCallback onClearPressed;
+  final VoidCallback? onClearPressed;
   final VoidCallback? onConfirmPressed;
 
   @override

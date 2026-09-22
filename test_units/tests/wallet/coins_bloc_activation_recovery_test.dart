@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import '../../helpers/runtime_auth_fixture.dart';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
@@ -10,6 +13,7 @@ import 'package:web_dex/bloc/coins_bloc/coin_activation_state_bridge.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
+import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
 import 'package:web_dex/model/coin.dart';
 
 Map<String, dynamic> _utxoConfig({String coin = 'KMD'}) => {
@@ -178,8 +182,125 @@ void testCoinsBlocActivationRecovery() {
       },
       timeout: const Timeout(Duration(seconds: 30)),
     );
+
+    test(
+      'name-only login activates saved coins without rewriting selection',
+      () async {
+        final user = _user('Original').copyWith(
+          walletId: WalletId.fromName(
+            'Original',
+            const AuthOptions(derivationMethod: DerivationMethod.iguana),
+          ),
+        );
+        final auth = _FakeAuth(user);
+        final repo = _FakeCoinsRepo()
+          ..catalogue = {asset.id.id: _coin(asset, CoinState.inactive)};
+        final sdk = _FakeSdk(
+          assets: _FakeAssetManager({asset.id: asset}),
+          pubkeys: _FakePubkeyManager(),
+          auth: auth,
+        );
+        final bloc = CoinsBloc(sdk, repo, _FakeTradingStatusService());
+        addTearDown(bloc.close);
+        addTearDown(sdk.walletAssets.dispose);
+        bloc.add(CoinsSessionStarted(user));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.activateCalls.single.single.id, asset.id);
+        expect(auth.metadataWrites, 0);
+        expect(await sdk.walletAssets.load(), {'KMD'});
+      },
+    );
+
+    test('policy recovery resumes saved coins without another login', () async {
+      final auth = _FakeAuth(_user('Original'));
+      final repo = _FakeCoinsRepo()
+        ..catalogue = {asset.id.id: _coin(asset, CoinState.inactive)};
+      final policy = _FakeTradingStatusService()..ready = false;
+      final sdk = _FakeSdk(
+        assets: _FakeAssetManager({asset.id: asset}),
+        pubkeys: _FakePubkeyManager(),
+        auth: auth,
+      );
+      final bloc = CoinsBloc(sdk, repo, policy);
+      addTearDown(bloc.close);
+      addTearDown(sdk.walletAssets.dispose);
+      addTearDown(policy.changes.close);
+      bloc.add(CoinsSessionStarted(auth.user!));
+      await bloc.stream.firstWhere(
+        (state) => state.coins[asset.id.id]?.isSuspended ?? false,
+      );
+      expect(repo.activateCalls, isEmpty);
+      policy.ready = true;
+      policy.changes.add(const AppGeoStatus());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repo.activateCalls.single.single.id, asset.id);
+      expect(await sdk.walletAssets.load(), {'KMD'});
+    });
+
+    test(
+      'closing during activation cannot queue a late balance refresh',
+      () async {
+        final completion = Completer<void>();
+        final repo = _FakeCoinsRepo()..activationCompletion = completion.future;
+        final auth = _FakeAuth(_user('Original'));
+        final sdk = _FakeSdk(
+          assets: _FakeAssetManager({asset.id: asset}),
+          pubkeys: _FakePubkeyManager(),
+          auth: auth,
+        );
+        final bloc = CoinsBloc(sdk, repo, _FakeTradingStatusService());
+        addTearDown(sdk.walletAssets.dispose);
+        bloc.add(CoinsActivated([asset.id.id]));
+        await Future<void>.delayed(Duration.zero);
+        expect(repo.activateCalls, hasLength(1));
+        final closing = bloc.close();
+        completion.complete();
+        await closing;
+        await Future<void>.delayed(Duration.zero);
+      },
+    );
+
+    test('manual selection waits for policy and resumes when ready', () async {
+      final auth = _FakeAuth(_user('Original').copyWith(metadata: const {}));
+      final repo = _FakeCoinsRepo()
+        ..catalogue = {asset.id.id: _coin(asset, CoinState.inactive)};
+      final policy = _FakeTradingStatusService()..ready = false;
+      final sdk = _FakeSdk(
+        assets: _FakeAssetManager({asset.id: asset}),
+        pubkeys: _FakePubkeyManager(),
+        auth: auth,
+      );
+      final bloc = CoinsBloc(sdk, repo, policy);
+      addTearDown(bloc.close);
+      addTearDown(sdk.walletAssets.dispose);
+      addTearDown(policy.changes.close);
+      bloc.add(CoinsActivated([asset.id.id]));
+      await bloc.stream.firstWhere(
+        (state) => state.coins[asset.id.id]?.isSuspended ?? false,
+      );
+      expect(repo.activateCalls, isEmpty);
+      expect(sdk.walletAssets.current, {asset.id.id});
+      expect(auth.metadataWrites, 1);
+      policy.ready = true;
+      policy.changes.add(const AppGeoStatus());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repo.activateCalls.single.single.id, asset.id);
+      expect(auth.metadataWrites, 1);
+    });
   });
 }
+
+KdfUser _user(String name) => KdfUser(
+  walletId: WalletId.withPubkeyHash(
+    name,
+    const AuthOptions(derivationMethod: DerivationMethod.iguana),
+    'pubkey-$name',
+  ),
+  isBip39Seed: true,
+  metadata: const {
+    'activated_coins': ['KMD'],
+  },
+);
 
 void main() {
   testCoinsBlocActivationRecovery();
@@ -210,11 +331,19 @@ class _FakeAssetManager implements AssetManager {
   Asset? fromId(AssetId id) => _assets[id];
 
   @override
+  Set<Asset> findAssetsByConfigId(String ticker) =>
+      _assets.values.where((asset) => asset.id.id == ticker).toSet();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakeSdk implements KomodoDefiSdk {
-  _FakeSdk({required this.assets, required this.pubkeys});
+  _FakeSdk({
+    required this.assets,
+    required this.pubkeys,
+    KomodoDefiLocalAuth? auth,
+  }) : auth = auth ?? _FakeAuth(null);
 
   @override
   final AssetManager assets;
@@ -223,11 +352,57 @@ class _FakeSdk implements KomodoDefiSdk {
   final PubkeyManager pubkeys;
 
   @override
+  final KomodoDefiLocalAuth auth;
+  @override
+  late final WalletAssetSelection walletAssets = WalletAssetSelection(auth);
+
+  @override
+  Future<bool> waitForEnabledAssetsToPassThreshold(
+    Iterable<AssetId> assetIds, {
+    double threshold = 0.5,
+    Duration timeout = const Duration(seconds: 30),
+  }) async => false;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakeCoinsRepo implements CoinsRepo {
   final List<List<AssetId>> ensureBalanceWatchersCalls = <List<AssetId>>[];
+  Map<String, Coin> catalogue = {};
+  Future<void> Function(WalletId expectedWalletId)? writeMetadata;
+  final List<List<Asset>> activateCalls = [];
+  Future<void>? activationCompletion;
+
+  @override
+  void flushCache() {}
+
+  @override
+  Future<void> addAssetsToWalletMetadata(
+    Iterable<AssetId> assets, {
+    required WalletId expectedWalletId,
+  }) async => writeMetadata?.call(expectedWalletId);
+
+  @override
+  Future<void> activateAssetsSync(
+    List<Asset> assets, {
+    bool notifyListeners = true,
+    bool addToWalletMetadata = true,
+    bool useSharedActivationCache = false,
+    int maxRetryAttempts = 15,
+    Duration initialRetryDelay = const Duration(milliseconds: 500),
+    Duration maxRetryDelay = const Duration(seconds: 10),
+  }) async {
+    activateCalls.add(assets);
+    await activationCompletion;
+  }
+
+  @override
+  void invalidateActivatedAssetsCache() {}
+
+  @override
+  Stream<Coin> updateIguanaBalances(Map<String, Coin> walletCoins) =>
+      const Stream.empty();
 
   /// Backed by the real bridge, so the fake has the same retain-and-replay
   /// behaviour as [CoinsRepo] rather than a bare broadcast controller that
@@ -252,7 +427,7 @@ class _FakeCoinsRepo implements CoinsRepo {
 
   @override
   Map<String, Coin> getKnownCoinsMap({bool excludeExcludedAssets = false}) =>
-      <String, Coin>{};
+      catalogue;
 
   @override
   Future<Set<AssetId>> getActivatedAssetIds({
@@ -270,6 +445,18 @@ class _FakeCoinsRepo implements CoinsRepo {
 }
 
 class _FakeTradingStatusService implements TradingStatusService {
+  final changes = StreamController<AppGeoStatus>.broadcast();
+  bool ready = true;
+  @override
+  Stream<AppGeoStatus> get statusStream => changes.stream;
+  @override
+  bool get isActivationReady => ready;
+  @override
+  Map<String, T> filterAllowedAssetsMap<T>(
+    Map<String, T> assets,
+    AssetId Function(T) id,
+  ) => assets;
+
   _FakeTradingStatusService({Future<void>? initialStatusReady})
     : _initialStatusReady = initialStatusReady ?? Future<void>.value();
 
@@ -277,6 +464,35 @@ class _FakeTradingStatusService implements TradingStatusService {
 
   @override
   Future<void> get initialStatusReady => _initialStatusReady;
+
+  @override
+  bool isAssetBlocked(AssetId assetId) => false;
+
+  @override
+  List<Asset> filterAllowedAssets(List<Asset> assets) => assets;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
+  _FakeAuth(this.user);
+
+  KdfUser? user;
+  int metadataWrites = 0;
+
+  @override
+  Future<KdfUser?> get currentUser async => user;
+
+  @override
+  Future<KdfUser> updateMetadataForSession(
+    AuthSessionContext session,
+    Map<String, dynamic> updates,
+  ) async {
+    ensureSessionContextCurrent(session);
+    metadataWrites++;
+    return user = user!.copyWith(metadata: {...user!.metadata, ...updates});
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

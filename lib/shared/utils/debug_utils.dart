@@ -12,8 +12,9 @@ Future<void> initDebugData(
   WalletsRepository walletsRepository,
 ) async {
   try {
-    final String testWalletStr =
-        await rootBundle.loadString('assets/debug_data.json');
+    final String testWalletStr = await rootBundle.loadString(
+      'assets/debug_data.json',
+    );
     final Map<String, dynamic> debugDataJson = jsonDecode(testWalletStr);
     final Map<String, dynamic>? newWalletJson = debugDataJson['wallet'];
     if (newWalletJson == null) {
@@ -31,11 +32,19 @@ Future<void> initDebugData(
       }
 
       authBloc.add(
-        AuthRestoreRequested(
-          seed: newWalletJson['seed'],
-          wallet: debugWallet,
-          password: newWalletJson["password"],
-        ),
+        walletsRepository.wallets?.any(
+                  (wallet) => wallet.name == debugWallet.name,
+                ) ==
+                true
+            ? AuthSignInRequested(
+                wallet: debugWallet,
+                password: newWalletJson['password'],
+              )
+            : AuthRestoreRequested(
+                seed: newWalletJson['seed'],
+                wallet: debugWallet,
+                password: newWalletJson['password'],
+              ),
       );
     }
   } catch (e) {
@@ -49,13 +58,15 @@ Future<Wallet?> _createDebugWallet(
   bool hasBackup = false,
 }) async {
   final wallets = walletsBloc.wallets;
-  final Wallet? existedDebugWallet =
-      wallets?.firstWhereOrNull((w) => w.name == walletJson['name']);
+  final Wallet? existedDebugWallet = wallets?.firstWhereOrNull(
+    (w) => w.name == walletJson['name'],
+  );
   if (existedDebugWallet != null) return existedDebugWallet;
 
   final String name = walletJson['name'];
-  final List<String> activatedCoins =
-      List<String>.from(walletJson['activated_coins'] ?? <String>[]);
+  final List<String> activatedCoins = List<String>.from(
+    walletJson['activated_coins'] ?? <String>[],
+  );
 
   return Wallet(
     id: const Uuid().v1(),

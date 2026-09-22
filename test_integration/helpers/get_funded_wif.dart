@@ -1,18 +1,53 @@
 import 'dart:math';
 
-String getFundedWif() {
-  final List<String> addresses = _fileJson.keys.toList();
-  final String randomAddress = addresses[Random().nextInt(addresses.length)];
-  final Map<String, dynamic> randomAddressData = _fileJson[randomAddress];
+/// Wallets held back from [getFundedWif] for the DEX counterparty.
+///
+/// The taker test buys MARTY, so somebody other than the app has to be selling
+/// it: a node on the same seed is the app's own order, which the self-trade
+/// guard rejects. `tool/dex_counterparty.dart` runs a second KDF on one of
+/// these wallets, and reserving them here is what keeps the app from drawing
+/// the counterparty's wallet and trading with itself again by accident.
+const int reservedCounterpartyWallets = 4;
 
-  return randomAddressData['private_key'];
+/// A funded wallet for the app under test, drawn at random.
+///
+/// Never returns a wallet reserved for a counterparty.
+String getFundedWif() {
+  final addresses = _selectableAddresses;
+  final address = addresses[Random().nextInt(addresses.length)];
+
+  return _fileJson[address]['private_key'] as String;
+}
+
+/// The wallet a counterparty in [slot] trades from, counted from the end.
+///
+/// Fixed rather than random: two processes drawing at random from the same
+/// thousand wallets collide eventually, and a collision here looks exactly
+/// like the self-trade the counterparty exists to avoid.
+String getCounterpartyWif(int slot) {
+  if (slot < 0 || slot >= reservedCounterpartyWallets) {
+    throw ArgumentError.value(
+      slot,
+      'slot',
+      'must be below $reservedCounterpartyWallets',
+    );
+  }
+  final addresses = _fileJson.keys.toList();
+
+  return _fileJson[addresses[addresses.length - 1 - slot]]['private_key']
+      as String;
 }
 
 String getRandomAddress() {
-  final List<String> addresses = _fileJson.keys.toList();
-  final String randomAddress = addresses[Random().nextInt(addresses.length)];
+  final addresses = _selectableAddresses;
 
-  return randomAddress;
+  return addresses[Random().nextInt(addresses.length)];
+}
+
+List<String> get _selectableAddresses {
+  final addresses = _fileJson.keys.toList();
+
+  return addresses.sublist(0, addresses.length - reservedCounterpartyWallets);
 }
 
 final _fileJson = <String, dynamic>{

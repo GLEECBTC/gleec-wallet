@@ -57,6 +57,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   Timer? _tronPreviewTimer;
   int _gaslessTraceCheckGeneration = 0;
   int _gaslessStatusRequestGeneration = 0;
+  bool _isDiscardingGaslessTransfer = false;
 
   WithdrawFormBloc({
     required Asset asset,
@@ -104,6 +105,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     on<WithdrawFormAmountChanged>(_onAmountChanged);
     on<WithdrawFormSourceChanged>(_onSourceChanged);
     on<WithdrawFormMaxAmountEnabled>(_onMaxAmountEnabled);
+    on<WithdrawFormGaslessDiscardConfirmed>(
+      _onGaslessDiscardConfirmed,
+      transformer: droppable(),
+    );
     on<WithdrawFormCustomFeeEnabled>(_onCustomFeeEnabled);
     on<WithdrawFormCustomFeeChanged>(_onFeeChanged);
     on<WithdrawFormGaslessToggled>(_onGaslessToggled);
@@ -1533,13 +1538,25 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       // authority for the signed amount and fee.
       if (state.useGasless && state.step == WithdrawFormStep.fill) {
         if (state.isMaxAmount) {
-          add(const WithdrawFormMaxAmountEnabled(true));
+          // Refresh the display directly. Re-dispatching the user's Max
+          // action requests status again and loops for every non-ready
+          // response, because only a ready snapshot satisfies the TTL cache.
+          emit(
+            state.copyWith(
+              amount: state.gaslessMaxWithdrawable?.toString() ?? '',
+              amountError: () => null,
+              previewError: () => null,
+            ),
+          );
         } else {
           final currentAmount = Decimal.tryParse(
             normalizeDecimalString(state.amount),
           );
           if (currentAmount != null && currentAmount > Decimal.zero) {
-            add(WithdrawFormAmountChanged(state.amount));
+            // Finish revalidation before the caller evaluates the refreshed
+            // availability. A queued amount event can otherwise erase the
+            // preview guard's error after it has already blocked the send.
+            _onAmountChanged(WithdrawFormAmountChanged(state.amount), emit);
           }
         }
       }
@@ -2021,6 +2038,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (!_canRecoverGaslessAsset(state.asset)) return;
+    if (_isDiscardingGaslessTransfer) return;
 
     emit(state.copyWith(gaslessPendingStoreReady: false));
     try {
@@ -2075,7 +2093,18 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         // Standard preview/submission is intentionally allowed while the
         // journal loads. Preserve that operation, but retain the discovered
         // unresolved relay so GasFree remains blocked on the next reset.
-        emit(recoveredState);
+        final canReconcile =
+            state.step == WithdrawFormStep.pending &&
+            !state.isSending &&
+            pending.traceId?.trim().isNotEmpty == true;
+        emit(
+          recoveredState.copyWith(
+            transactionError: canReconcile ? () => null : null,
+          ),
+        );
+        if (canReconcile) {
+          add(const WithdrawFormGaslessTraceCheckRequested());
+        }
         return;
       }
 
@@ -2309,11 +2338,85 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     }
   }
 
+  Future<void> _onGaslessDiscardConfirmed(
+    WithdrawFormGaslessDiscardConfirmed event,
+    Emitter<WithdrawFormState> emit,
+  ) async {
+    if (!state.canDiscardGaslessTransfer ||
+        state.isSending ||
+        state.gaslessJournalId != event.journalId) {
+      return;
+    }
+
+    _isDiscardingGaslessTransfer = true;
+    emit(state.copyWith(isSending: true, transactionError: () => null));
+    try {
+      final removed = await _sdk.withdrawals.discardPendingGaslessTransfer(
+        event.journalId,
+      );
+      if (emit.isDone) return;
+      if (!removed) {
+        throw StateError('GasFree journal removal was not confirmed');
+      }
+
+      // An acknowledgement is scoped to one record, never to another transfer
+      // that a concurrent recovery refresh might have discovered.
+      if (state.gaslessJournalId != event.journalId ||
+          state.gaslessTraceId?.trim().isNotEmpty == true) {
+        emit(state.copyWith(isSending: false));
+        add(const WithdrawFormPendingGaslessLoadRequested());
+        return;
+      }
+      emit(
+        state.copyWith(
+          isSending: false,
+          gaslessPendingStoreReady: false,
+          gaslessJournalId: () => null,
+          gaslessTraceId: () => null,
+          gaslessTransferState: () => null,
+          gaslessTraceState: () => null,
+          gaslessSubmittedAt: () => null,
+          gaslessStatusMessage: () => null,
+          transactionError: () => null,
+        ),
+      );
+      _isDiscardingGaslessTransfer = false;
+      // Start a fresh form and inspect the remaining journal before allowing
+      // another GasFree preview. Clearing a local record never resubmits it.
+      _onReset(const WithdrawFormReset(), emit);
+      add(const WithdrawFormPendingGaslessLoadRequested());
+    } catch (error) {
+      if (emit.isDone) return;
+      _logger.warning(
+        'Unable to clear GasFree recovery record (${error.runtimeType})',
+      );
+      emit(
+        state.copyWith(
+          isSending: false,
+          transactionError: () => TextError(
+            error: LocaleKeys.withdrawGaslessClearRecoveryFailed.tr(),
+          ),
+        ),
+      );
+      final source = error is SdkError ? error.source : error;
+      if (source is GaslessTransferException &&
+          source.code == GaslessTransferErrorCode.capabilityNotReady) {
+        // A relay trace may have arrived since the confirmation was opened.
+        // Load the authoritative record so recovery can follow that trace
+        // instead of repeatedly offering a discard the SDK must refuse.
+        add(const WithdrawFormPendingGaslessLoadRequested());
+      }
+    } finally {
+      _isDiscardingGaslessTransfer = false;
+    }
+  }
+
   void _onPendingUseStandardRequested(
     WithdrawFormPendingUseStandardRequested event,
     Emitter<WithdrawFormState> emit,
   ) {
-    if (state.step != WithdrawFormStep.pending ||
+    if (_isDiscardingGaslessTransfer ||
+        state.step != WithdrawFormStep.pending ||
         !state.hasUnresolvedGaslessTransfer) {
       return;
     }
@@ -2692,6 +2795,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   void _onReset(WithdrawFormReset event, Emitter<WithdrawFormState> emit) {
+    if (_isDiscardingGaslessTransfer) return;
     _cancelTronPreviewTimer();
     final hasUnresolvedGaslessTransfer = state.hasUnresolvedGaslessTransfer;
     final resetToGasless =

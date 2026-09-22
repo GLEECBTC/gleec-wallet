@@ -25,6 +25,9 @@ class _OrderCancelButtonState extends State<OrderCancelButton> {
 
   @override
   Widget build(BuildContext context) {
+    final canCancel = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    ).canCancelOrder(widget.order.uuid);
     return UiLightButton(
       text: LocaleKeys.cancel.tr(),
       width: 80,
@@ -36,26 +39,33 @@ class _OrderCancelButtonState extends State<OrderCancelButton> {
         width: 1.0,
       ),
       textStyle: const TextStyle(fontSize: 12),
-      onPressed: _isCancelling
+      onPressed: _isCancelling || !canCancel
           ? null
-          : () => onCancel(widget.order), //isCancelling ? null : onCancel,
+          : () => onCancel(widget.order),
     );
   }
 
   Future<void> onCancel(MyOrder order) async {
+    final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
+      context,
+    );
+    // Re-check rather than trusting the enabled state we were built with: the
+    // order may have filled or been cancelled elsewhere since the last frame.
+    if (_isCancelling || !tradingEntitiesBloc.canCancelOrder(order.uuid)) {
+      return;
+    }
     setState(() {
       _isCancelling = true;
     });
-    final tradingEntitiesBloc =
-        RepositoryProvider.of<TradingEntitiesBloc>(context);
     final String? error = await tradingEntitiesBloc.cancelOrder(order.uuid);
+    if (!mounted) return;
     setState(() {
       _isCancelling = false;
     });
     if (error != null) {
       // TODO(Francois): move to bloc / data layer?
       log(
-        'Error order cancellation: ${error.toString()}',
+        'Error order cancellation: $error',
         path: 'order_item => _onCancel',
         isError: true,
       );

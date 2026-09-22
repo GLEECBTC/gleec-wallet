@@ -2,7 +2,7 @@
 #
 # Repeatable web frame-jank benchmark for the post-login activation storm.
 #
-# Every entry in the change ledger in docs/WEB_JANK_MEASUREMENT_REPORT.md is
+# Repeatable frame measurement in docs/WALLET_LOAD_MEASUREMENT.md is
 # produced by this script, so that "before" and "after" are the same
 # measurement and not two similar-looking ones.
 #

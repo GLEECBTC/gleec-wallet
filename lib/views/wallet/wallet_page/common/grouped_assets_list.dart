@@ -40,9 +40,6 @@ class GroupedAssetsList extends StatelessWidget {
         final ticker = groupedAssets.keys.elementAt(index);
         final assetGroup = groupedAssets[ticker]!;
 
-        // final Color backgroundColor = index.isEven
-        //     ? Theme.of(context).colorScheme.surface
-        //     : Theme.of(context).colorScheme.onSurface;
         final backgroundColor = Theme.of(context).cardTheme.color!;
 
         return GroupedAssetTickerItem(

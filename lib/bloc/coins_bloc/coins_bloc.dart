@@ -10,6 +10,7 @@ import 'package:logging/logging.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_service.dart';
+import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
 import 'package:web_dex/model/cex_price.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/analytics/frame_timing_recorder.dart';
@@ -47,23 +48,8 @@ const Duration _defaultActivationMaxRetryDelay = Duration(seconds: 10);
 const int _pubkeyFetchAttempts = 3;
 const Duration _pubkeyFetchRetryDelay = Duration(seconds: 2);
 
-/// How long [_onCoinsStarted] waits for the geo/trading status before
-/// populating the coin catalogue anyway. [TradingStatusService.initialize]
-/// completes its completer on both the success and the failure path, but the
-/// underlying `fetchStatus()` has no timeout of its own, so a black-holed
-/// endpoint would otherwise block startup indefinitely.
-const Duration _initialTradingStatusTimeout = Duration(seconds: 10);
-
-/// Activation coverage at which the initial balance sweep is worth running.
 const double _initialBalanceCoverage = 0.8;
-
-/// How long to wait for that coverage before sweeping anyway.
 const Duration _initialBalanceCoverageTimeout = Duration(minutes: 1);
-
-/// Ceiling on a single SDK call made on the login critical path.
-///
-/// Applies to reads whose only failure mode would otherwise be an unbounded
-/// hang that strands every coin in `activating`.
 const Duration _loginPathRpcTimeout = Duration(seconds: 30);
 
 /// Responsible for coin activation, deactivation, syncing, and fiat price
@@ -80,6 +66,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     on<CoinsPricesUpdated>(_onPricesUpdated, transformer: droppable());
     on<CoinsSessionStarted>(_onLogin, transformer: restartable());
     on<CoinsSessionEnded>(_onLogout, transformer: restartable());
+    on<_CoinsActivationCancelled>(_onActivationCancelled);
+    on<_CoinsPolicyChanged>(_onPolicyChanged, transformer: sequential());
     on<CoinsWalletCoinUpdated>(_onWalletCoinUpdated, transformer: sequential());
     on<CoinsBalanceChanged>(_onBalanceChanged, transformer: droppable());
     on<CoinsWalletRepairRequested>(
@@ -97,6 +85,9 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // there is no reason for a plain stream subscription to lag the producer
     // it exists to observe.
     _listenToRepoBroadcasts();
+    _policySubscription = _tradingStatusService.statusStream.listen((status) {
+      if (!isClosed) add(_CoinsPolicyChanged(status));
+    });
   }
 
   final KomodoDefiSdk _kdfSdk;
@@ -107,9 +98,12 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
   StreamSubscription<Coin>? _enabledCoinsSubscription;
   StreamSubscription<Coin>? _balanceChangesSubscription;
+  late final StreamSubscription<AppGeoStatus> _policySubscription;
   Timer? _updateBalancesTimer;
   Timer? _updatePricesTimer;
   bool _isInitialActivationInProgress = false;
+  int _walletSessionGeneration = 0;
+  WalletId? _sessionWalletId;
 
   /// Coins with an in-flight [CoinsPubkeysRequested], so repeated broadcasts
   /// for the same coin collapse into a single SDK fetch.
@@ -121,8 +115,12 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
 
   @override
   Future<void> close() async {
+    // Invalidate pending session work before closing either stream. Bloc's
+    // event stream can close before isClosed reports the state stream closed.
+    _walletSessionGeneration++;
     await _enabledCoinsSubscription?.cancel();
     await _balanceChangesSubscription?.cancel();
+    await _policySubscription.cancel();
     _updateBalancesTimer?.cancel();
     _updatePricesTimer?.cancel();
 
@@ -210,32 +208,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsStarted event,
     Emitter<CoinsState> emit,
   ) async {
-    // Best-effort wait for the initial trading status before populating the
-    // coins list, so geo-blocked assets are not briefly shown before filtering
-    // applies. Cosmetic, and deliberately not a guarantee: the wait is bounded
-    // because a hung or slow geo endpoint must not hold the whole catalogue
-    // hostage. On timeout the catalogue is populated unfiltered - asset-level
-    // filtering keys off AppGeoStatus.disallowedAssets, which defaults to empty
-    // (only disallowedFeatures defaults restrictive), and nothing here re-emits
-    // when the real status lands, so blocked assets stay visible for the
-    // session. Accepted: a stalled bouncer stranding the whole wallet is the
-    // worse failure.
-    //
-    // Populate first, filter second (the UX improvement the comment above used
-    // to describe as a TODO).
-    //
-    // This ordering is now load-bearing rather than defensive: `main()` no
-    // longer awaits `TradingStatusService.initialize()` before `runApp`, so the
-    // geo call is genuinely in flight when this handler runs and
-    // `initialStatusReady` is genuinely not yet satisfied. Everything
-    // downstream - the catalogue emit that clears `WalletOverview`'s
-    // empty-state spinner, and the `CoinsSessionStarted` dispatch that starts
-    // the whole activation fan-out - would otherwise sit behind a geo call that
-    // none of it depends on.
-    //
-    // The window between the two emissions can show a geo-blocked asset in the
-    // catalogue list. That was already true for the whole session on the
-    // timeout path, so this narrows the exposure rather than widening it.
+    // Cached catalogue is available immediately. Activation remains gated by
+    // the SDK policy, and subsequent policy snapshots update this projection.
     emit(state.copyWith(coins: _coinsRepo.getKnownCoinsMap()));
 
     final existingUser = await _kdfSdk.auth.currentUser;
@@ -253,21 +227,48 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       }
       add(CoinsPricesUpdated());
     });
+  }
 
-    // Still inside the handler, so `emit` remains valid.
+  Future<void> _onPolicyChanged(
+    _CoinsPolicyChanged event,
+    Emitter<CoinsState> emit,
+  ) async {
+    final known = _coinsRepo.getKnownCoinsMap();
+    final allowedWallet = _tradingStatusService.filterAllowedAssetsMap(
+      state.walletCoins,
+      (coin) => coin.id,
+    );
+    emit(
+      state.copyWith(
+        coins: {
+          for (final entry in known.entries)
+            entry.key: state.coins[entry.key] ?? entry.value,
+        },
+        walletCoins: allowedWallet,
+        pubkeys: {
+          for (final entry in state.pubkeys.entries)
+            if (known.containsKey(entry.key)) entry.key: entry.value,
+        },
+      ),
+    );
+    if (event.status.lookupStatus != ActivationPolicyStatus.ready) return;
+    final generation = _walletSessionGeneration;
     try {
-      await _tradingStatusService.initialStatusReady.timeout(
-        _initialTradingStatusTimeout,
-      );
-      if (!isClosed) {
-        emit(state.copyWith(coins: _coinsRepo.getKnownCoinsMap()));
-      }
-    } on TimeoutException {
-      _log.warning(
-        'Trading status not ready after '
-        '${_initialTradingStatusTimeout.inSeconds}s; leaving the catalogue '
-        'unfiltered',
-      );
+      final selected = await _kdfSdk.walletAssets.load();
+      if (isClosed || generation != _walletSessionGeneration) return;
+      final pending = selected
+          .where(
+            (id) =>
+                known.containsKey(id) &&
+                !(state.walletCoins[id]?.isActive ?? false) &&
+                !(state.walletCoins[id]?.isActivating ?? false),
+          )
+          .toList();
+      if (pending.isNotEmpty) add(CoinsActivated(pending));
+    } on AuthException {
+      // A policy result can arrive before any wallet has signed in.
+    } on WalletChangedDisconnectException {
+      // The next session performs its own activation.
     }
   }
 
@@ -520,11 +521,18 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsActivated event,
     Emitter<CoinsState> emit,
   ) async {
+    final generation = _walletSessionGeneration;
+    final user = await _kdfSdk.auth.currentUser;
+    if (user == null || emit.isDone || generation != _walletSessionGeneration) {
+      return;
+    }
     // Start off by emitting the newly activated coins so that they all appear
     // in the list at once, rather than one at a time as they are activated
     emit(_prePopulateListWithActivatingCoins(event.coinIds));
-    await _activateCoins(event.coinIds, emit);
-
+    await _activateCoins(event.coinIds, emit, expectedWalletId: user.walletId);
+    if (isClosed || emit.isDone || generation != _walletSessionGeneration) {
+      return;
+    }
     add(CoinsBalancesRefreshed());
   }
 
@@ -658,7 +666,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // cancelling the first. An actual wallet switch still falls through and
     // flushes, which is correct.
     if (_isInitialActivationInProgress &&
-        _activatingWalletId == signedInWallet.id) {
+        _activatingWalletId == signedInWallet.id &&
+        _sessionWalletId == event.signedInUser.walletId) {
       _log.info(
         'Ignoring duplicate CoinsSessionStarted for ${signedInWallet.id}: '
         'initial activation already in progress',
@@ -666,6 +675,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       return;
     }
 
+    final generation = ++_walletSessionGeneration;
+    _sessionWalletId = event.signedInUser.walletId;
     _isInitialActivationInProgress = true;
     _activatingWalletId = signedInWallet.id;
     try {
@@ -709,6 +720,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
       final activationFuture = _activateCoins(
         allowedCoins,
         emit,
+        expectedWalletId: event.signedInUser.walletId,
         isInitialLogin: true,
       );
       unawaited(() async {
@@ -721,7 +733,7 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
           // A logout followed by a fresh sign-in can complete this detached
           // future after the *next* login has claimed the flags; clearing them
           // blindly would let a duplicate event restart that new session's load.
-          if (_activatingWalletId == signedInWallet.id) {
+          if (generation == _walletSessionGeneration) {
             _isInitialActivationInProgress = false;
             _activatingWalletId = null;
           }
@@ -738,6 +750,8 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     CoinsSessionEnded event,
     Emitter<CoinsState> emit,
   ) async {
+    _walletSessionGeneration++;
+    _sessionWalletId = null;
     _resetInitialActivationState();
     add(CoinsBalanceMonitoringStopped());
 
@@ -834,13 +848,27 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
   Future<void> _activateCoins(
     Iterable<String> coins,
     Emitter<CoinsState> emit, {
+    required WalletId expectedWalletId,
     bool isInitialLogin = false,
   }) async {
+    final generation = _walletSessionGeneration;
+    void cancelPendingActivation() {
+      if (isClosed) return;
+      add(
+        _CoinsActivationCancelled(
+          coinIds: coins.toSet(),
+          generation: generation,
+        ),
+      );
+    }
+
     if (coins.isEmpty) {
       _log.warning('No coins to activate');
       return;
     }
-
+    final session = await _kdfSdk.auth.captureSessionContext();
+    await _kdfSdk.walletAssets.load();
+    _kdfSdk.auth.ensureSessionContextCurrent(session);
     // Filter out assets that are not available in the SDK. This is to avoid activation
     // activation loops for assets not supported by the SDK.this may happen if the wallet
     // has assets that were removed from the SDK or the config has unsupported default
@@ -851,11 +879,27 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     final availableAssets = coins
         .map((coin) => _kdfSdk.assets.findAssetsByConfigId(coin))
         .where((assetsSet) => assetsSet.isNotEmpty)
-        .map((assetsSet) => assetsSet.first);
+        .map((assetsSet) => assetsSet.first)
+        .toList();
+
+    // Retain explicit wallet intent while activation is waiting for policy.
+    // Restoring an existing selection never rewrites metadata.
+    if (!isInitialLogin) {
+      await _kdfSdk.walletAssets.add(
+        availableAssets.map((asset) => asset.id.id),
+        expectedWalletId: expectedWalletId,
+        expectedSession: session,
+      );
+      _kdfSdk.auth.ensureSessionContextCurrent(session);
+    }
+    if (!_tradingStatusService.isActivationReady) {
+      cancelPendingActivation();
+      return;
+    }
 
     // Filter out blocked assets
     var coinsToActivate = _tradingStatusService.filterAllowedAssets(
-      availableAssets.toList(),
+      availableAssets,
     );
 
     // During initial login auto-activation, skip ZHTLC assets that would
@@ -863,27 +907,6 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     if (_isInitialActivationInProgress) {
       coinsToActivate = await _filterAssetsForInitialActivation(
         coinsToActivate,
-      );
-    }
-
-    // Batch-write all asset IDs to wallet metadata in a single call before
-    // launching parallel activations. This avoids N concurrent read-modify-write
-    // cycles on the same metadata key which caused last-write-wins data loss.
-    // Bounded, and failure-tolerant. This is a single serialised gate in front
-    // of the entire fan-out, so an unbounded hang here means no coin activates
-    // at all. Failing open is safe: the write is idempotent, activateAssetsSync
-    // re-attempts it per asset when addToWalletMetadata is true, and the worst
-    // case is that a coin is not remembered for the next session.
-    try {
-      await _coinsRepo
-          .addAssetsToWalletMetadata(coinsToActivate.map((asset) => asset.id))
-          .timeout(_loginPathRpcTimeout);
-    } catch (e, s) {
-      _log.warning(
-        'Failed to write activated coins to wallet metadata; continuing with '
-        'activation',
-        e,
-        s,
       );
     }
 
@@ -909,12 +932,14 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     }
 
     // The repo defaults (15 attempts, 500ms -> 10s exponential) are ~105s of
-    // pure sleep per asset, during which the coin holds CoinState.activating
-    // with no balance watcher. On login that presents as "the wallet never
-    // loads" rather than as an error, so bound it there. A coin that exhausts
-    // the budget flips to suspended sooner and is recovered by the 3-minute
-    // CoinsBalanceMonitoringStarted sweep and by the SDK balance watcher's own
-    // _ensureAssetActivated.
+    // pure sleep per asset. Login uses a bounded budget; policy recovery and
+    // explicit requests resume suspended assets without relying on balances.
+    if (!_kdfSdk.auth.isSessionContextCurrent(session) ||
+        generation != _walletSessionGeneration ||
+        !_tradingStatusService.isActivationReady) {
+      cancelPendingActivation();
+      return;
+    }
     final enableFutures = coinsToActivate
         .map(
           (asset) => _coinsRepo.activateAssetsSync(
@@ -942,6 +967,10 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
     // coins are activated.
     try {
       await Future.wait(enableFutures);
+    } on WalletChangedDisconnectException {
+      cancelPendingActivation();
+    } on ActivationPolicyException {
+      cancelPendingActivation();
     } finally {
       if (isInitialLogin) {
         frameSpanEnd(_activationStormSpan);
@@ -951,6 +980,31 @@ class CoinsBloc extends Bloc<CoinsEvent, CoinsState> {
         _coinsRepo.invalidateActivatedAssetsCache();
       }
     }
+  }
+
+  void _onActivationCancelled(
+    _CoinsActivationCancelled event,
+    Emitter<CoinsState> emit,
+  ) {
+    if (event.generation != _walletSessionGeneration) {
+      return;
+    }
+
+    // A temporarily unverifiable identity also cancels activation. Leave an
+    // actionable failure state without applying an old cancellation to a new
+    // login, or replacing an asset that has already become active.
+    Map<String, Coin> suspendPending(Map<String, Coin> coins) => {
+      for (final entry in coins.entries)
+        entry.key: event.coinIds.contains(entry.key) && entry.value.isActivating
+            ? entry.value.copyWith(state: CoinState.suspended)
+            : entry.value,
+    };
+    emit(
+      state.copyWith(
+        coins: suspendPending(state.coins),
+        walletCoins: suspendPending(state.walletCoins),
+      ),
+    );
   }
 
   /// Filters assets for initial auto-activation on login.

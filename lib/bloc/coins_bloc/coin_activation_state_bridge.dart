@@ -104,7 +104,10 @@ class CoinActivationStateBridge {
     if (wanted.isEmpty) return;
     for (final coin in _sdkSnapshot()) {
       if (!wanted.contains(coin.id)) continue;
-      _publish(coin);
+      // The UI may have removed the coin without publishing an inactive
+      // state (deactivateCoinsSync with notify: false). An explicit replay
+      // must reach that UI even when the retained SDK state is unchanged.
+      _publish(coin, force: true);
     }
   }
 
@@ -127,8 +130,8 @@ class CoinActivationStateBridge {
     _publish(coin);
   }
 
-  void _publish(Coin coin) {
-    if (_lastKnown[coin.id] == coin) return;
+  void _publish(Coin coin, {bool force = false}) {
+    if (!force && _lastKnown[coin.id] == coin) return;
     _lastKnown[coin.id] = coin;
     if (!_controller.isClosed) _controller.add(coin);
   }

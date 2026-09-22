@@ -1,5 +1,6 @@
 import 'package:rational/rational.dart';
 import 'package:web_dex/model/my_orders/matches.dart';
+import 'package:web_dex/model/my_orders/order_model_validation.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class MakerOrder {
@@ -17,30 +18,44 @@ class MakerOrder {
     required this.uuid,
   });
 
+  /// Throws [FormatException] on a malformed payload.
   factory MakerOrder.fromJson(Map<String, dynamic> json) {
-    final Rational maxBaseVol = fract2rat(json['max_base_vol_fraction']) ??
-        Rational.parse(json['max_base_vol'] ?? '0');
-    final Rational price = fract2rat(json['price_fraction']) ??
-        Rational.parse(json['price'] ?? '0');
-    final Rational availableAmount =
-        fract2rat(json['available_amount_fraction']) ??
-            Rational.parse(json['available_amount'] ?? '0');
-
     return MakerOrder(
-      base: json['base'] ?? '',
-      createdAt: json['created_at'] ?? 0,
-      availableAmount: availableAmount,
-      cancellable: json['cancellable'] ?? false,
-      matches: Map<String, dynamic>.from(json['matches'] ?? <String, dynamic>{})
-          .map((dynamic k, dynamic v) =>
-              MapEntry<String, Matches>(k, Matches.fromJson(v))),
-      maxBaseVol: maxBaseVol,
-      minBaseVol: json['min_base_vol'] ?? '',
-      price: price,
-      rel: json['rel'] ?? '',
-      startedSwaps: List<String>.from(
-          (json['started_swaps'] ?? <String>[]).map<dynamic>((dynamic x) => x)),
-      uuid: json['uuid'] ?? '',
+      base: orderAssetSymbol(json['base'], 'base'),
+      createdAt: orderNonNegativeInt(json['created_at'] ?? 0, 'created_at'),
+      // A fully matched maker order legitimately has nothing left available.
+      availableAmount: orderRational(
+        json['available_amount_fraction'],
+        json['available_amount'],
+        'available_amount',
+        allowZero: true,
+      ),
+      cancellable: orderBool(json['cancellable'] ?? false, 'cancellable'),
+      matches:
+          boundedOrderMap(json['matches'] ?? <String, dynamic>{}, 'matches')
+              .map(
+        (String k, dynamic v) => MapEntry<String, Matches>(
+          k,
+          Matches.fromJson(orderStringMap(v, 'matches entry')),
+        ),
+      ),
+      maxBaseVol: orderRational(
+        json['max_base_vol_fraction'],
+        json['max_base_vol'],
+        'max_base_vol',
+      ),
+      minBaseVol: orderBoundedText(
+        json['min_base_vol'] ?? '',
+        'min_base_vol',
+        maximum: maximumOrderNumericLength,
+      ),
+      price: orderRational(json['price_fraction'], json['price'], 'price'),
+      rel: orderAssetSymbol(json['rel'], 'rel'),
+      startedSwaps: boundedOrderList(
+        json['started_swaps'] ?? <String>[],
+        'started_swaps',
+      ).map((dynamic x) => orderUuid(x, 'started_swaps entry')).toList(),
+      uuid: orderUuid(json['uuid'], 'uuid'),
     );
   }
 

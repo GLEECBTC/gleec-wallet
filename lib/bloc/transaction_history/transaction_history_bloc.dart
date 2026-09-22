@@ -52,6 +52,18 @@ class TransactionHistoryBloc
     return super.close();
   }
 
+  /// Adds [event] unless this bloc has already closed.
+  ///
+  /// Every caller runs after an await or from the history subscription, so the
+  /// page can be disposed between work starting and its result arriving - and
+  /// a buffered stream event still reaches the listener after [close] has
+  /// cancelled it. `add` then throws `Cannot add new events after calling
+  /// close`, which surfaces as a crash rather than the no-op it should be.
+  void _addIfOpen(TransactionHistoryEvent event) {
+    if (isClosed) return;
+    add(event);
+  }
+
   Future<void> _onSubscribe(
     TransactionHistorySubscribe event,
     Emitter<TransactionHistoryState> emit,
@@ -87,7 +99,7 @@ class TransactionHistoryBloc
     try {
       await _historySubscription?.cancel();
 
-      add(const TransactionHistoryStartedLoading());
+      _addIfOpen(const TransactionHistoryStartedLoading());
       final asset = _sdk.assets.available[event.coin.id];
       if (asset == null) {
         throw Exception('Asset ${event.coin.id} not found in known coins list');
@@ -108,10 +120,12 @@ class TransactionHistoryBloc
           .watchTransactionHistoryMerged(asset)
           .listen(
             (transactions) {
-              add(TransactionHistoryUpdated(transactions: transactions));
+              _addIfOpen(
+                TransactionHistoryUpdated(transactions: transactions),
+              );
             },
             onError: (error) {
-              add(
+              _addIfOpen(
                 TransactionHistoryFailure(
                   error: TextError(error: _errorMessageFrom(error)),
                 ),
@@ -128,7 +142,7 @@ class TransactionHistoryBloc
         trace: s,
       );
 
-      add(
+      _addIfOpen(
         TransactionHistoryFailure(
           error: TextError(error: _errorMessageFrom(e)),
         ),

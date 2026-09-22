@@ -264,6 +264,16 @@ class WithdrawFormState extends Equatable {
   bool get hasUnresolvedGaslessTransfer =>
       gaslessTransferState?.isUnresolved == true;
 
+  /// Only an unresolved, untraced journal can be explicitly cleared. A
+  /// provider trace must instead be reconciled to an authoritative outcome.
+  bool get canDiscardGaslessTransfer =>
+      step == WithdrawFormStep.pending &&
+      gaslessPendingStoreHealthy &&
+      gaslessPendingStoreReady &&
+      gaslessTransferState == GaslessTransferState.submittedUnknown &&
+      gaslessJournalId?.trim().isNotEmpty == true &&
+      gaslessTraceId?.trim().isNotEmpty != true;
+
   bool get canRetryGaslessTransfer =>
       gaslessTransferState == null || gaslessTransferState!.canRetrySafely;
 

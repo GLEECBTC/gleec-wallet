@@ -14,6 +14,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "sdk/**"
+      - ".github/scripts/**"
       - ".github/workflows/sdk-unit-tests-on-pr.yml"
 
 jobs:
@@ -46,6 +47,23 @@ jobs:
           # here.
           KDF_HARNESS: ""
         run: flutter test
+
+      # The build transformer owns the KDF artifact manifest policy, and its
+      # suite asserts against the real build_config.json. It sits outside the
+      # komodo_defi_sdk step above, so an artifact roll that left the manifest
+      # inconsistent went green here for weeks. No network: these are parsing,
+      # URL-construction and filesystem tests.
+      - name: Test komodo_wallet_build_transformer
+        working-directory: sdk/packages/komodo_wallet_build_transformer
+        timeout-minutes: 10
+        run: flutter test
+
+      # Same manifest, wallet-side gate: the preview-deploy provenance check
+      # reads the approved KDF release out of build_config.json, so a roll has
+      # to keep the two consistent.
+      - name: Test the GasFree preview provenance gate
+        timeout-minutes: 5
+        run: .github/scripts/test_verify_gasfree_preview_provenance.sh
 
       # komodo_defi_local_auth is deliberately NOT gated yet.
       #

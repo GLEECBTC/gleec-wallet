@@ -33,6 +33,68 @@ enum AuthFlow {
   final String value;
 }
 
+/// A step in the wallet-setup funnel.
+///
+/// [index] is a stable property of the slug, **not** a position in the user's
+/// actual path. Assign an index once, never renumber it, and leave a permanent
+/// gap when a step is deleted. That is the whole reason the funnel stays
+/// comparable across a redesign: a step that disappears shows up as a gap
+/// rather than silently shifting every step after it. Values are spaced by 10
+/// so a step can be inserted without touching its neighbours.
+///
+/// Several steps deliberately share an index. [createForm], [importSeedEntry]
+/// and [importFileUnlock] are the same *depth* and are mutually exclusive; the
+/// `flow` parameter is what tells them apart.
+enum OnboardingStep {
+  /// The wallet manager opened. Permanent funnel anchor - this is the event
+  /// that means "the user saw the setup surface", which `onboarding_start`
+  /// does not (that one means "the user committed to a branch").
+  walletManagerOpened('wallet_manager_opened', 0),
+
+  /// The wallet-type router screen.
+  ///
+  /// Retired by the merged entry screen, which leaves index 10 permanently
+  /// unused. That gap is the point: it is the evidence the screen was dropped.
+  walletTypeSelect('wallet_type_select', 10),
+
+  /// The create-or-import decision.
+  setupActionSelect('setup_action_select', 20),
+
+  createForm('create_form', 30),
+  importSeedEntry('import_seed_entry', 30),
+  importFileUnlock('import_file_unlock', 30),
+
+  importPassword('import_password', 40),
+
+  /// Credentials submitted; waiting on KDF.
+  authSubmitted('auth_submitted', 50);
+
+  const OnboardingStep(this.slug, this.stepIndex);
+
+  final String slug;
+
+  /// Named `stepIndex` rather than `index` because every Dart enum already
+  /// declares `index` as its declaration ordinal, which is exactly the
+  /// position-in-the-list meaning this value must not have.
+  final int stepIndex;
+}
+
+/// Which branch of wallet setup the user is in.
+///
+/// Deliberately not [AuthFlow]: steps 0-20 happen before the branch exists, and
+/// [AuthFlow] has no value meaning "not decided yet".
+enum OnboardingFlowKind {
+  undecided('undecided'),
+  create('create'),
+  importSeed('import_seed'),
+  importFile('import_file'),
+  hardware('hardware');
+
+  const OnboardingFlowKind(this.value);
+
+  final String value;
+}
+
 /// Why the user is no longer signed in.
 enum LogoutReason {
   /// The user chose to log out.
@@ -123,16 +185,35 @@ class AuthLogoutEventData extends AnalyticsEventData {
 /// `onboarding_start` and `wallet_created` exist, with nothing in between, so a
 /// drop-off could be located only to "somewhere in onboarding". [step] is a
 /// stable slug, and [stepIndex] keeps ordering answerable when steps change.
+///
+/// Note this is **not** the same milestone as `onboarding_start`: that one
+/// fires when the user commits to create-or-import, whereas
+/// `onboarding_step_viewed` with `step_index: 0` is the screen-entry event.
+/// Keeping both in one series is what makes entry-to-branch drop-off a
+/// single-series computation instead of a join across two event names.
 class OnboardingStepViewedEventData extends AnalyticsEventData {
   const OnboardingStepViewedEventData({
     required this.step,
     required this.stepIndex,
     required this.flow,
+    required this.entryPoint,
+    this.existingWalletCount,
   });
 
   final String step;
   final int stepIndex;
   final String flow;
+
+  /// Which surface the user opened setup from (`header`, `dex`, `nft`, ...).
+  /// Without it the funnel cannot be segmented by entry point at all.
+  final String entryPoint;
+
+  /// Wallets already stored on this device. `0` means a genuine first run.
+  ///
+  /// This is the only way to separate new users from returning ones, and the
+  /// create-vs-import question is only answerable conditional on that. Null
+  /// when the wallets cache has not resolved yet, rather than guessing `0`.
+  final int? existingWalletCount;
 
   @override
   String get name => 'onboarding_step_viewed';
@@ -142,6 +223,9 @@ class OnboardingStepViewedEventData extends AnalyticsEventData {
     'step': step,
     'step_index': stepIndex,
     'flow': flow,
+    'entry_point': entryPoint,
+    if (existingWalletCount != null)
+      'existing_wallet_count': existingWalletCount!,
   };
 }
 
@@ -151,11 +235,15 @@ class OnboardingStepCompletedEventData extends AnalyticsEventData {
     required this.step,
     required this.stepIndex,
     required this.flow,
+    required this.entryPoint,
+    this.existingWalletCount,
   });
 
   final String step;
   final int stepIndex;
   final String flow;
+  final String entryPoint;
+  final int? existingWalletCount;
 
   @override
   String get name => 'onboarding_step_completed';
@@ -165,20 +253,33 @@ class OnboardingStepCompletedEventData extends AnalyticsEventData {
     'step': step,
     'step_index': stepIndex,
     'flow': flow,
+    'entry_point': entryPoint,
+    if (existingWalletCount != null)
+      'existing_wallet_count': existingWalletCount!,
   };
 }
 
 /// The user left a setup step without completing it.
+///
+/// Abandonment is detected from widget disposal, which does **not** run on a
+/// web tab close or an app kill. Treat these counts as a lower bound: the true
+/// drop-off is `viewed` minus `completed` per `(step, step_index)`. What this
+/// event adds over that subtraction is the distinction between a deliberate
+/// back-out and a user who simply vanished.
 class OnboardingStepAbandonedEventData extends AnalyticsEventData {
   const OnboardingStepAbandonedEventData({
     required this.step,
     required this.stepIndex,
     required this.flow,
+    required this.entryPoint,
+    this.existingWalletCount,
   });
 
   final String step;
   final int stepIndex;
   final String flow;
+  final String entryPoint;
+  final int? existingWalletCount;
 
   @override
   String get name => 'onboarding_step_abandoned';
@@ -188,6 +289,9 @@ class OnboardingStepAbandonedEventData extends AnalyticsEventData {
     'step': step,
     'step_index': stepIndex,
     'flow': flow,
+    'entry_point': entryPoint,
+    if (existingWalletCount != null)
+      'existing_wallet_count': existingWalletCount!,
   };
 }
 

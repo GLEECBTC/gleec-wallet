@@ -1,10 +1,12 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_cex_market_data/komodo_cex_market_data.dart'
     show QuoteCurrency, Stablecoin;
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
     show
         AssetIdFaucetExtension,
@@ -37,6 +39,7 @@ import 'package:web_dex/shared/constants.dart'
 import 'package:web_dex/shared/gasless/tron_gasless_receive_reason.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/widgets/copyable_address_dialog.dart';
+import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_details_common_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/gasless_standard_balance_notice.dart';
@@ -44,6 +47,7 @@ import 'package:web_dex/views/wallet/coin_details/faucet/faucet_button.dart';
 import 'package:web_dex/views/wallet/common/address_copy_button.dart';
 
 import 'coin_addresses_bloc_gasless_revalidation_test.dart';
+import '../../../helpers/runtime_auth_fixture.dart';
 
 class _FakeCoinAddressesBloc extends Cubit<CoinAddressesState>
     implements CoinAddressesBloc {
@@ -125,8 +129,10 @@ class _FakeSdk implements KomodoDefiSdk {
     required this.balances,
     MarketDataManager? marketData,
     Iterable<Asset> assetValues = const <Asset>[],
+    KomodoDefiLocalAuth? auth,
     this.boundGaslessReceive = false,
-  }) : marketData = marketData ?? _FakeMarketDataManager(),
+  }) : auth = auth ?? _ReceiveAuth(null),
+       marketData = marketData ?? _FakeMarketDataManager(),
        assets = _FakeAssetManager(assetValues);
 
   @override
@@ -138,10 +144,29 @@ class _FakeSdk implements KomodoDefiSdk {
   @override
   final AssetManager assets;
 
+  @override
+  final KomodoDefiLocalAuth auth;
+
   final bool boundGaslessReceive;
 
   @override
   bool canReceiveGasless(Asset asset) => boundGaslessReceive;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ReceiveAuth with RuntimeAuthFixture implements KomodoDefiLocalAuth {
+  _ReceiveAuth(this.bloc);
+
+  final AuthBloc? bloc;
+
+  @override
+  Future<KdfUser?> get currentUser async => bloc?.state.currentUser;
+
+  @override
+  Stream<KdfUser?> get authStateChanges =>
+      bloc?.stream.map((state) => state.currentUser) ?? const Stream.empty();
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -320,13 +345,20 @@ BalanceInfo _balanceOf(String amount) => BalanceInfo(
 const _walletAHash = 'wallet-a-pubkey-hash';
 const _walletBHash = 'wallet-b-pubkey-hash';
 
-KdfUser _softwareUser(String walletName, String pubkeyHash) => KdfUser(
+KdfUser _softwareUser(
+  String walletName,
+  String pubkeyHash, {
+  bool hasBackup = true,
+}) => KdfUser(
   walletId: WalletId.withPubkeyHash(
     walletName,
     const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
     pubkeyHash,
   ),
   isBip39Seed: true,
+  // Backed up, so these fixtures exercise the receive surfaces themselves
+  // rather than the seed-backup gate. The gate has its own coverage.
+  metadata: {'has_backup': hasBackup},
 );
 
 GaslessAccountStatusResponse _gaslessAccountStatus(
@@ -2157,13 +2189,21 @@ void testReceiveAddressFaucetWidgets() {
           gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
         );
 
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_softwareUser('wallet-a', _walletAHash)),
+        );
+        addTearDown(authBloc.close);
+
         await tester.pumpWidget(
           MaterialApp(
-            home: Scaffold(
-              body: QrButton(
-                coin: usdt.toCoin(),
-                address: pubkey,
-                variant: AddressDisplayVariant.standard,
+            home: BlocProvider<AuthBloc>.value(
+              value: authBloc,
+              child: Scaffold(
+                body: QrButton(
+                  coin: usdt.toCoin(),
+                  address: pubkey,
+                  variant: AddressDisplayVariant.standard,
+                ),
               ),
             ),
           ),
@@ -2176,6 +2216,135 @@ void testReceiveAddressFaucetWidgets() {
         expect(qr.address, 'TRegularReceiveAddress000000000001');
         expect(find.text('receiveGaslessBadgeTitle'), findsNothing);
       });
+
+      for (final change in ['none', 'revoked', 'wallet switched']) {
+        testWidgets('GasFree copy rechecks after backup prompt: $change', (
+          tester,
+        ) async {
+          tester.view.physicalSize = const Size(900, 1800);
+          tester.view.devicePixelRatio = 1.0;
+          addTearDown(tester.view.reset);
+          // The analyzer only recognizes test/, not this CI test_units/ suite.
+          // ignore: invalid_use_of_visible_for_testing_member
+          resetSeedBackupAcknowledgements();
+          // ignore: invalid_use_of_visible_for_testing_member
+          addTearDown(resetSeedBackupAcknowledgements);
+
+          final clipboardWrites = <Object?>[];
+          tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            (call) async {
+              if (call.method == 'Clipboard.setData') {
+                clipboardWrites.add(call.arguments);
+              }
+              return null;
+            },
+          );
+          addTearDown(() {
+            tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+              SystemChannels.platform,
+              null,
+            );
+          });
+
+          final parent = Asset.fromJson(_trxConfig(), knownIds: const {});
+          final asset = Asset.fromJson(_trc20Config(), knownIds: {parent.id});
+          final pubkey = _trc20Address(
+            address: 'TRegularReceiveAddress000000000001',
+            gasfreeAddress: 'TGasFreeReceiveAddress000000000001',
+          );
+          final addressesBloc = _FakeCoinAddressesBloc(
+            CoinAddressesState(
+              addresses: [pubkey],
+              gaslessReceiveStatus: GaslessReceiveStatus.ready,
+              verifiedGasfreeAddress: pubkey.gasfreeAddress,
+              gaslessReceiveWalletPubkeyHash: _walletAHash,
+              gaslessAccountStatus: _gaslessAccountStatus(
+                pubkey.gasfreeAddress!,
+              ),
+              gaslessAccountStatusObservedAt: DateTime.now().toUtc(),
+            ),
+          );
+          final authBloc = _FakeAuthBloc(
+            AuthBlocState.loggedIn(
+              _softwareUser('wallet-a', _walletAHash, hasBackup: false),
+            ),
+          );
+          final settingsBloc = _FakeSettingsBloc();
+          final sdk = _FakeSdk(
+            balances: _FakeBalanceManager(const {}),
+            assetValues: [asset],
+            boundGaslessReceive: true,
+            auth: _ReceiveAuth(authBloc),
+          );
+          addTearDown(addressesBloc.close);
+          addTearDown(authBloc.close);
+          addTearDown(settingsBloc.close);
+
+          await tester.pumpWidget(
+            RepositoryProvider<KomodoDefiSdk>.value(
+              value: sdk,
+              child: MultiBlocProvider(
+                providers: [
+                  BlocProvider<AuthBloc>.value(value: authBloc),
+                  BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+                  BlocProvider<SettingsBloc>.value(value: settingsBloc),
+                ],
+                child: MaterialApp(
+                  home: Scaffold(
+                    body: AddressCard(
+                      address: pubkey,
+                      coin: asset.toCoin(),
+                      setPageType: (_) {},
+                      variant: AddressDisplayVariant.gasfree,
+                      isSoleGaslessRow: true,
+                      gaslessReceiveEnabled: true,
+                      gaslessReceiveStatus: GaslessReceiveStatus.ready,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+
+          await tester.tap(find.byIcon(Icons.copy));
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('seed-backup-gate-notice')),
+            findsOneWidget,
+          );
+          expect(clipboardWrites, isEmpty);
+          if (change == 'revoked') {
+            addressesBloc.actionRevalidationAllowed = false;
+          } else if (change == 'wallet switched') {
+            authBloc.update(
+              AuthBlocState.loggedIn(_softwareUser('wallet-b', _walletBHash)),
+            );
+            await tester.pumpAndSettle();
+            expect(
+              find.byKey(const Key('seed-backup-gate-notice')),
+              findsNothing,
+            );
+            expect(clipboardWrites, isEmpty);
+            return;
+          }
+
+          await tester.tap(
+            find.byKey(const Key('seed-backup-gate-continue-button')),
+          );
+          await tester.pumpAndSettle();
+          if (change == 'none') {
+            expect(clipboardWrites, [
+              <String, dynamic>{'text': pubkey.gasfreeAddress},
+            ]);
+          } else {
+            expect(clipboardWrites, isEmpty);
+            if (change == 'revoked') {
+              expect(find.text('receiveGaslessPausedNotice'), findsOneWidget);
+            }
+          }
+        });
+      }
 
       testWidgets('GasFree QrButton revalidates at tap time and fails closed', (
         tester,

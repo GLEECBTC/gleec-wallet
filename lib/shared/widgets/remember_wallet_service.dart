@@ -101,6 +101,9 @@ class RememberWalletService {
         // Keep default useRootNavigator (true) to avoid navigation stack corruption
         childBuilder: (closeDialog) => WalletsManagerWrapper(
           eventType: WalletsManagerEventType.header,
+          // Without this, cancelling the remembered-wallet prompt dropped the
+          // user into the wallet manager instead of dismissing the dialog.
+          onCancel: closeDialog,
           selectedWallet: wallet,
           rememberMe: true,
           onSuccess: (wallet) => closeDialog(),

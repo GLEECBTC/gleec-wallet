@@ -26,19 +26,12 @@ import 'frame_capture.dart';
 ///
 /// With `--dart-define=PERF_AUTO_LOGIN=true` the app restores a wallet from
 /// `assets/debug_data.json` during startup and this flow only measures. That is
-/// strongly preferred to driving the wallet-manager UI, for three reasons found
-/// the hard way:
-///
-/// * [measureFramesUntil] switches the binding to `benchmarkLive`, under which
-///   `pump()` requests are ignored so the driving loop cannot manufacture the
-///   frames it is counting - but `restoreWalletToTest` needs those pumps
-///   honoured. The two cannot share a window.
-/// * The password `restoreWalletToTest` uses, `pppaaasssDDD555444@@@`, is
-///   rejected by the password policy (`ppp`/`aaa`/`sss`) both by KDF at wallet
-///   init and by `lib/shared/utils/validators.dart`.
-/// * On web `print` goes to the browser console, which `flutter drive` does not
-///   forward, and `catchUnhandledExceptions` does not rethrow while
-///   `testing_mode=true`, so a failure in the UI drive is completely silent.
+/// preferred to driving the wallet-manager UI: [measureFramesUntil] switches
+/// the binding to `benchmarkLive`, under which `pump()` requests are ignored
+/// so the driving loop cannot manufacture the frames it is counting.
+/// `restoreWalletToTest` needs those pumps honoured, so the two cannot share
+/// a window. The UI helper uses a policy-compliant password, and test-mode
+/// startup preserves Flutter's failure reporting.
 ///
 /// The UI-driven path is kept for a build without the define.
 Future<List<FrameStats>> testLoginActivation(

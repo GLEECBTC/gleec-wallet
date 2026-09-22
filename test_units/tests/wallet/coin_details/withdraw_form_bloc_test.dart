@@ -331,12 +331,13 @@ GaslessAccountStatusResponse _gaslessStatus({
 
 PendingGaslessTransfer _pendingGaslessTransfer({
   String? traceId = 'trace-pending',
+  String journalId = 'journal-pending',
   GaslessTransferState state = GaslessTransferState.submittedUnknown,
 }) {
   final now = DateTime.utc(2026, 7, 10, 12);
   return PendingGaslessTransfer(
     traceId: traceId,
-    journalId: 'journal-pending',
+    journalId: journalId,
     assetId: 'USDT-TRC20',
     network: '728126428',
     sourceAddress: 'source-address',
@@ -591,6 +592,15 @@ class _FakeWithdrawalManager implements WithdrawalManager {
   int executeCallCount = 0;
   int pendingListCallCount = 0;
   int pendingResumeCallCount = 0;
+  final discardedJournalIds = <String>[];
+  Future<bool> Function(String journalId)? discardPendingGaslessTransferHandler;
+
+  @override
+  Future<bool> discardPendingGaslessTransfer(String journalId) async {
+    discardedJournalIds.add(journalId);
+    return discardPendingGaslessTransferHandler?.call(journalId) ?? false;
+  }
+
   final List<WithdrawParameters> previewRequests = <WithdrawParameters>[];
 
   /// Stub for `gasless::account_status`. When null the call throws, which the
@@ -1716,6 +1726,305 @@ void testWithdrawFormBloc() {
         expect(pending.transactionError, isNull);
       },
     );
+
+    group('acknowledged GasFree journal clearing', () {
+      test(
+        'clears only after persistence and permits a fresh reviewed payment',
+        () async {
+          final asset = _trc20Asset();
+          final pending = _pendingGaslessTransfer(traceId: null);
+          final removal = Completer<bool>();
+          var records = [pending];
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (params) async => _tronGaslessPreview(
+              txHash: 'new-payment-preview',
+              toAddress: params.toAddress,
+              timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            ),
+            listPendingGaslessTransfersHandler: () async => records,
+          )..discardPendingGaslessTransferHandler = (_) => removal.future;
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          addTearDown(() async {
+            if (!removal.isCompleted) removal.complete(false);
+            await bloc.close();
+          });
+          await bloc.stream.firstWhereBounded(
+            (s) => s.canDiscardGaslessTransfer,
+          );
+          await _awaitSourceSelection(bloc);
+
+          bloc.add(WithdrawFormGaslessDiscardConfirmed(pending.journalId));
+          await bloc.stream.firstWhereBounded((s) => s.isSending);
+          bloc
+            ..add(WithdrawFormGaslessDiscardConfirmed(pending.journalId))
+            ..add(const WithdrawFormReset())
+            ..add(const WithdrawFormPendingUseStandardRequested());
+          await _flush();
+          expect(withdrawals.discardedJournalIds, [pending.journalId]);
+          expect(bloc.state.step, WithdrawFormStep.pending);
+          expect(bloc.state.gaslessJournalId, pending.journalId);
+          expect(bloc.state.canRetryGaslessTransfer, isFalse);
+          expect(bloc.state.isSending, isTrue);
+          expect(withdrawals.previewCallCount, 0);
+          expect(withdrawals.executeCallCount, 0);
+
+          records = [];
+          removal.complete(true);
+          await bloc.stream.firstWhereBounded(
+            (s) =>
+                s.step == WithdrawFormStep.fill &&
+                s.gaslessPendingStoreReady &&
+                s.gaslessAvailability == GaslessAvailability.ready,
+          );
+          expect(bloc.state.gaslessJournalId, isNull);
+          expect(bloc.state.gaslessTransferState, isNull);
+          expect(bloc.state.recipientAddress, isEmpty);
+          expect(bloc.state.amount, '0');
+          expect(withdrawals.pendingListCallCount, 2);
+          expect(withdrawals.previewCallCount, 0);
+          expect(withdrawals.executeCallCount, 0);
+
+          await _primeFillState(bloc, recipient: 'new-recipient', amount: '1');
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          await bloc.stream.firstWhereBounded(
+            (s) => s.step == WithdrawFormStep.confirm,
+          );
+          expect(withdrawals.previewRequests.single.toAddress, 'new-recipient');
+          expect(withdrawals.executeCallCount, 0);
+        },
+      );
+
+      test(
+        'closing the form during discard cannot restore or submit a payment',
+        () async {
+          final asset = _trc20Asset();
+          final pending = _pendingGaslessTransfer(traceId: null);
+          final removal = Completer<bool>();
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async =>
+                throw StateError('Must not submit'),
+            listPendingGaslessTransfersHandler: () async => [pending],
+          )..discardPendingGaslessTransferHandler = (_) => removal.future;
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          addTearDown(() async {
+            if (!removal.isCompleted) removal.complete(false);
+            await bloc.close();
+          });
+          await bloc.stream.firstWhereBounded(
+            (s) => s.canDiscardGaslessTransfer,
+          );
+          bloc.add(WithdrawFormGaslessDiscardConfirmed(pending.journalId));
+          await bloc.stream.firstWhereBounded((s) => s.isSending);
+          await bloc.close();
+          removal.complete(true);
+          await _flush();
+          expect(bloc.isClosed, isTrue);
+          expect(withdrawals.pendingListCallCount, 1);
+          expect(withdrawals.previewCallCount, 0);
+          expect(withdrawals.executeCallCount, 0);
+        },
+      );
+
+      for (final failure in ['not removed', 'storage failure']) {
+        test(
+          '$failure retains the unknown transfer and exposes a retryable clear error',
+          () async {
+            final asset = _trc20Asset();
+            final pending = _pendingGaslessTransfer(traceId: null);
+            final withdrawals =
+                _FakeWithdrawalManager(
+                    previewWithdrawalHandler: (_) async =>
+                        throw StateError('Must remain blocked'),
+                    listPendingGaslessTransfersHandler: () async => [pending],
+                  )
+                  ..discardPendingGaslessTransferHandler = (_) async {
+                    if (failure == 'not removed') return false;
+                    throw StateError('Encrypted write failed');
+                  };
+            final bloc = _buildTrc20Bloc(
+              asset: asset,
+              withdrawals: withdrawals,
+            );
+            addTearDown(bloc.close);
+            await bloc.stream.firstWhereBounded(
+              (s) => s.canDiscardGaslessTransfer,
+            );
+
+            bloc.add(WithdrawFormGaslessDiscardConfirmed(pending.journalId));
+            await bloc.stream.firstWhereBounded(
+              (s) => s.transactionError != null,
+            );
+            expect(
+              bloc.state.transactionError!.message,
+              'withdrawGaslessClearRecoveryFailed',
+            );
+            expect(bloc.state.step, WithdrawFormStep.pending);
+            expect(bloc.state.gaslessJournalId, pending.journalId);
+            expect(
+              bloc.state.gaslessTransferState,
+              GaslessTransferState.submittedUnknown,
+            );
+            expect(bloc.state.canRetryGaslessTransfer, isFalse);
+            expect(bloc.state.canDiscardGaslessTransfer, isTrue);
+            expect(bloc.state.isSending, isFalse);
+            expect(withdrawals.previewCallCount, 0);
+            expect(withdrawals.executeCallCount, 0);
+          },
+        );
+      }
+
+      test(
+        'a newly attached trace is reloaded and reconciled after discard refusal',
+        () async {
+          final asset = _trc20Asset();
+          final pending = _pendingGaslessTransfer(traceId: null);
+          final traced = _pendingGaslessTransfer(
+            traceId: 'trace-attached-after-dialog',
+            state: GaslessTransferState.submittedPending,
+          );
+          var record = pending;
+          final withdrawals =
+              _FakeWithdrawalManager(
+                  previewWithdrawalHandler: (_) async =>
+                      throw StateError('Must not submit'),
+                  listPendingGaslessTransfersHandler: () async => [record],
+                  resumePendingGaslessTransferHandler: (traceId) {
+                    expect(traceId, traced.traceId);
+                    return Stream.value(
+                      const WithdrawalProgress(
+                        status: WithdrawalStatus.inProgress,
+                        message: 'Confirming the existing transfer',
+                        gaslessState: GaslessTraceState.onChain,
+                        gaslessTransferState: GaslessTransferState.confirming,
+                      ),
+                    );
+                  },
+                )
+                ..discardPendingGaslessTransferHandler = (_) async {
+                  record = traced;
+                  throw GaslessTransferException(
+                    kind: GaslessTransferErrorKind.capabilityNotReady,
+                    code: GaslessTransferErrorCode.capabilityNotReady,
+                    stage: GaslessTransferStage.recovery,
+                    message: 'The record now has a relay trace',
+                    retryable: false,
+                    terminal: false,
+                  );
+                };
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          addTearDown(bloc.close);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.canDiscardGaslessTransfer,
+          );
+          bloc.add(WithdrawFormGaslessDiscardConfirmed(pending.journalId));
+          await bloc.stream.firstWhereBounded(
+            (s) =>
+                s.gaslessTransferState == GaslessTransferState.confirming &&
+                !s.isSending,
+          );
+          expect(bloc.state.step, WithdrawFormStep.pending);
+          expect(bloc.state.gaslessJournalId, pending.journalId);
+          expect(bloc.state.gaslessTraceId, traced.traceId);
+          expect(bloc.state.canDiscardGaslessTransfer, isFalse);
+          expect(bloc.state.canRetryGaslessTransfer, isFalse);
+          expect(bloc.state.transactionError, isNull);
+          expect(withdrawals.pendingListCallCount, 2);
+          expect(withdrawals.pendingResumeCallCount, 1);
+          expect(withdrawals.previewCallCount, 0);
+          expect(withdrawals.executeCallCount, 0);
+        },
+      );
+
+      test('ignores a stale acknowledgement and an accepted trace', () async {
+        for (final traceId in [null, 'accepted-trace']) {
+          final asset = _trc20Asset();
+          final pending = _pendingGaslessTransfer(traceId: traceId);
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => throw StateError('Unused'),
+            listPendingGaslessTransfersHandler: () async => [pending],
+          );
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.step == WithdrawFormStep.pending && !s.isSending,
+          );
+          bloc.add(
+            WithdrawFormGaslessDiscardConfirmed(
+              traceId == null ? 'different-journal' : pending.journalId,
+            ),
+          );
+          await _flush();
+          expect(withdrawals.discardedJournalIds, isEmpty);
+          expect(bloc.state.gaslessJournalId, pending.journalId);
+          expect(bloc.state.canRetryGaslessTransfer, isFalse);
+          await bloc.close();
+        }
+      });
+
+      test(
+        'reloads another unresolved journal before allowing GasFree',
+        () async {
+          final asset = _trc20Asset();
+          final pending = _pendingGaslessTransfer(traceId: null);
+          final remaining = _pendingGaslessTransfer(
+            traceId: null,
+            journalId: 'other-journal',
+          );
+          var records = [pending];
+          final withdrawals =
+              _FakeWithdrawalManager(
+                  previewWithdrawalHandler: (_) async =>
+                      throw StateError('Must remain blocked'),
+                  listPendingGaslessTransfersHandler: () async => records,
+                )
+                ..discardPendingGaslessTransferHandler = (_) async {
+                  records = [remaining];
+                  return true;
+                };
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          addTearDown(bloc.close);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.canDiscardGaslessTransfer,
+          );
+          bloc.add(WithdrawFormGaslessDiscardConfirmed(pending.journalId));
+          await bloc.stream.firstWhereBounded(
+            (s) => s.gaslessJournalId == remaining.journalId,
+          );
+          expect(bloc.state.step, WithdrawFormStep.pending);
+          expect(bloc.state.canRetryGaslessTransfer, isFalse);
+          expect(withdrawals.discardedJournalIds, [pending.journalId]);
+          expect(withdrawals.previewCallCount, 0);
+        },
+      );
+
+      test(
+        'a failed journal recheck keeps new GasFree payments blocked',
+        () async {
+          final asset = _trc20Asset();
+          final pending = _pendingGaslessTransfer(traceId: null);
+          var removed = false;
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async =>
+                throw StateError('Must remain blocked'),
+            listPendingGaslessTransfersHandler: () async {
+              if (removed) throw const FormatException('Unreadable journal');
+              return [pending];
+            },
+          )..discardPendingGaslessTransferHandler = (_) async => removed = true;
+          final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
+          addTearDown(bloc.close);
+          await bloc.stream.firstWhereBounded(
+            (s) => s.canDiscardGaslessTransfer,
+          );
+          bloc.add(WithdrawFormGaslessDiscardConfirmed(pending.journalId));
+          await bloc.stream.firstWhereBounded(
+            (s) => !s.gaslessPendingStoreHealthy,
+          );
+          expect(bloc.state.useGasless, isFalse);
+          expect(bloc.state.isGaslessEnabled, isFalse);
+          expect(withdrawals.previewCallCount, 0);
+        },
+      );
+    });
 
     test(
       'restart restores and reconciles an accepted trace while new sends are disabled',
@@ -3882,9 +4191,18 @@ void testWithdrawFormBloc() {
         );
         expect(pending.isGaslessSendBlocked, isTrue);
         expect(pending.gaslessMaxWithdrawable, isNull);
+        expect(pending.previewError, isNull);
 
         await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
+        final guarded = bloc.stream.firstWhereBounded(
+          (state) =>
+              state.gaslessQuoteFailure?.failureClass ==
+              GaslessQuoteFailureClass.transferPending,
+        );
         bloc.add(const WithdrawFormPreviewSubmitted());
+        await guarded;
+        // Automatic amount revalidation must not later erase the guard's
+        // truthful pending-transfer explanation on either VM or Wasm.
         await _flush();
 
         expect(withdrawals.previewCallCount, 0);
@@ -3892,7 +4210,20 @@ void testWithdrawFormBloc() {
           bloc.state.gaslessAvailability,
           GaslessAvailability.pendingTransfer,
         );
-        expect(bloc.state.previewError, isNull);
+        expect(
+          bloc.state.previewError?.message,
+          'withdrawGaslessPendingTransfer',
+        );
+        expect(
+          bloc.state.gaslessQuoteFailure,
+          const GaslessQuoteFailure(
+            failureClass: GaslessQuoteFailureClass.transferPending,
+            retryable: false,
+          ),
+        );
+        expect(bloc.state.preview, isNull);
+        expect(bloc.state.isSending, isFalse);
+        expect(bloc.state.step, WithdrawFormStep.fill);
       });
 
       test('typed unsupported status never exposes send fees', () async {
@@ -4111,11 +4442,68 @@ void testWithdrawFormBloc() {
         expect(cleared.amountError, isNull);
       });
 
+      for (final availability in [
+        GaslessAccountAvailability.providerUnreachable,
+        GaslessAccountAvailability.pendingTransfer,
+        GaslessAccountAvailability.tokenUnsupported,
+      ]) {
+        test(
+          'Max settles after $availability and explicit retry recovers',
+          () async {
+            final asset = _trc20Asset();
+            var responseAvailability = availability;
+            final withdrawals =
+                _FakeWithdrawalManager(
+                    previewWithdrawalHandler: (_) async => throw StateError(
+                      'Max selection must not submit a preview',
+                    ),
+                  )
+                  ..gaslessAccountStatusHandler = (_) async {
+                    // Yield so the original feedback loop fails an assertion rather
+                    // than starving the test runner's event queue indefinitely.
+                    await Future<void>.delayed(const Duration(milliseconds: 2));
+                    return _gaslessStatus(availability: responseAvailability);
+                  };
+            final bloc = _buildTrc20Bloc(
+              asset: asset,
+              withdrawals: withdrawals,
+            );
+            addTearDown(bloc.close);
+            await bloc.stream.firstWhereBounded(
+              (s) =>
+                  s.gaslessAccountStatus?.availability == availability &&
+                  !s.isGaslessStatusLoading,
+            );
+            await _awaitSourceSelection(bloc);
+            final callsBeforeMax = withdrawals.gaslessStatusCallCount;
+
+            bloc.add(const WithdrawFormMaxAmountEnabled(true));
+            await bloc.stream.firstWhereBounded((s) => s.isMaxAmount);
+            await Future<void>.delayed(const Duration(milliseconds: 60));
+
+            expect(withdrawals.gaslessStatusCallCount, callsBeforeMax + 1);
+            expect(bloc.state.isGaslessStatusLoading, isFalse);
+            expect(bloc.state.isGaslessSendBlocked, isTrue);
+            expect(bloc.state.amount, isEmpty);
+            expect(withdrawals.previewCallCount, 0);
+
+            responseAvailability = GaslessAccountAvailability.available;
+            bloc.add(const WithdrawFormGaslessStatusRequested(force: true));
+            await bloc.stream.firstWhereBounded((s) => s.amount == '99');
+            expect(bloc.state.isMaxAmount, isTrue);
+            expect(bloc.state.isGaslessSendBlocked, isFalse);
+            expect(withdrawals.gaslessStatusCallCount, callsBeforeMax + 2);
+          },
+        );
+      }
+
       test(
         'provider unavailable blocks preview honestly and self-heals',
         () async {
           final asset = _trc20Asset();
-          var providerUp = false;
+          int? recoveryCall;
+          final recoveryResponse = Completer<GaslessAccountStatusResponse>();
+          final recoveryRequested = Completer<void>();
           final withdrawals = _FakeWithdrawalManager(
             previewWithdrawalHandler: (_) async => _tronGaslessPreview(
               txHash: 'unused',
@@ -4123,19 +4511,31 @@ void testWithdrawFormBloc() {
               timestamp: 1,
             ),
           );
-          withdrawals.gaslessAccountStatusHandler = (_) async => _gaslessStatus(
-            availability: providerUp
-                ? GaslessAccountAvailability.available
-                : GaslessAccountAvailability.providerUnreachable,
-          );
+          withdrawals.gaslessAccountStatusHandler = (_) async {
+            if (withdrawals.gaslessStatusCallCount == recoveryCall) {
+              recoveryRequested.complete();
+              return recoveryResponse.future;
+            }
+            return _gaslessStatus(
+              availability: GaslessAccountAvailability.providerUnreachable,
+            );
+          };
           final bloc = _buildTrc20Bloc(asset: asset, withdrawals: withdrawals);
-          addTearDown(bloc.close);
+          addTearDown(() async {
+            if (!recoveryResponse.isCompleted) {
+              recoveryResponse.complete(_gaslessStatus());
+            }
+            await bloc.close();
+          });
 
           await bloc.stream.firstWhereBounded(
             (s) => s.isGaslessProviderUnavailable,
           );
           await _primeFillState(bloc, recipient: 'recipient-1', amount: '1');
           final callsBeforePreview = withdrawals.gaslessStatusCallCount;
+          // Preview first refreshes its guard; the following request is the
+          // automatic recovery check whose response we control explicitly.
+          recoveryCall = callsBeforePreview + 2;
 
           bloc.add(const WithdrawFormPreviewSubmitted());
           final blocked = await bloc.stream.firstWhereBounded(
@@ -4155,16 +4555,17 @@ void testWithdrawFormBloc() {
           );
           expect(withdrawals.previewCallCount, 0);
 
-          // The block force-refreshes the status; with the provider back the
-          // guard lifts without user action.
-          providerUp = true;
-          await bloc.stream.firstWhereBounded(
-            (s) => !s.isGaslessProviderUnavailable,
+          // The block force-refreshes status. Wait for that actual request,
+          // then return a recovered provider without another user action.
+          await recoveryRequested.future.timeout(const Duration(seconds: 10));
+          final ready = bloc.stream.firstWhereBounded(
+            (s) => s.gaslessAvailability == GaslessAvailability.ready,
           );
-          expect(
-            withdrawals.gaslessStatusCallCount,
-            greaterThan(callsBeforePreview),
-          );
+          recoveryResponse.complete(_gaslessStatus());
+          await ready;
+          expect(bloc.state.isGaslessSendBlocked, isFalse);
+          expect(withdrawals.gaslessStatusCallCount, callsBeforePreview + 2);
+          expect(withdrawals.previewCallCount, 0);
         },
       );
 

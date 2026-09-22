@@ -43,10 +43,11 @@ class UiDatePicker extends StatelessWidget {
             return Theme(
               data: ThemeData(
                 useMaterial3: false,
-                dialogTheme: themeData.dialogTheme
-                    .copyWith(backgroundColor: themeData.colorScheme.onSurface),
+                dialogTheme: themeData.dialogTheme.copyWith(
+                  backgroundColor: themeData.scaffoldBackgroundColor,
+                ),
                 colorScheme: themeData.colorScheme.copyWith(
-                  surface: themeData.colorScheme.onSurface,
+                  surface: themeData.scaffoldBackgroundColor,
                   onSurface: themeData.textTheme.bodyMedium?.color,
                 ),
               ),
@@ -65,8 +66,9 @@ class UiDatePicker extends StatelessWidget {
             final ext = Theme.of(context).extension<ColorSchemeExtension>();
             return isMobileAlternative
                 ? _AlternativeMobileCard(
-                    title:
-                        selectedTime != null ? formatter(selectedTime) : text,
+                    title: selectedTime != null
+                        ? formatter(selectedTime)
+                        : text,
                     selectedCardColor: ext?.primary,
                     selectedTextColor: ext?.surf,
                     unselectedCardColor: ext?.surfCont,
@@ -74,8 +76,9 @@ class UiDatePicker extends StatelessWidget {
                     isSelected: selectedTime != null,
                   )
                 : UIChip(
-                    title:
-                        selectedTime != null ? formatter(selectedTime) : text,
+                    title: selectedTime != null
+                        ? formatter(selectedTime)
+                        : text,
                     colorScheme: UIChipColorScheme(
                       emptyContainerColor: ext?.surfCont,
                       emptyTextColor: ext?.s70,
@@ -128,9 +131,9 @@ class _AlternativeMobileCard extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: isSelected ? selectedTextColor : unselectedTextColor,
-                  fontWeight: FontWeight.w500,
-                ),
+              color: isSelected ? selectedTextColor : unselectedTextColor,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

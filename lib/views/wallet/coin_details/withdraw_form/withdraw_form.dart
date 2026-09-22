@@ -33,6 +33,7 @@ import 'package:web_dex/shared/widgets/notice_banner.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fields.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/fill_form/fields/fill_form_memo.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_clear_recovery_action.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_pending_transfer_panel.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/trezor_withdraw_progress_dialog.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/withdraw_form_header.dart';
@@ -2887,6 +2888,23 @@ class WithdrawFormPendingSection extends StatelessWidget {
           traceLabel: LocaleKeys.withdrawGaslessTraceId.tr(),
           traceId: state.gaslessTraceId,
           isChecking: state.isSending,
+          errorMessage: state.transactionError?.error,
+          recoveryAction: state.canDiscardGaslessTransfer
+              ? GaslessClearRecoveryAction(
+                  recipientAddress: state.recipientAddress,
+                  amount:
+                      state.authorizedRecipientAmount?.toString() ??
+                      state.amount,
+                  assetName: '${state.asset.id.name} (${state.asset.id.id})',
+                  submittedAt: state.gaslessSubmittedAt,
+                  isBusy: state.isSending,
+                  onConfirmed: () => context.read<WithdrawFormBloc>().add(
+                    WithdrawFormGaslessDiscardConfirmed(
+                      state.gaslessJournalId!,
+                    ),
+                  ),
+                )
+              : null,
           onContinueChecking: hasAcceptedTrace
               ? () => context.read<WithdrawFormBloc>().add(
                   const WithdrawFormGaslessTraceCheckRequested(),

@@ -220,6 +220,7 @@ class _FakeCoinsRepo implements CoinsRepo {
   @override
   Future<void> rollbackPreviewAssets(
     Iterable<Asset> assets, {
+    required WalletId expectedWalletId,
     Set<AssetId> deleteCustomTokens = const {},
     Set<AssetId> removeWalletMetadataAssets = const {},
     bool notifyListeners = false,

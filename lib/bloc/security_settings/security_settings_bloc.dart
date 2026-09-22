@@ -6,15 +6,10 @@ import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 
-/// BLoC for managing security settings flow and authentication.
-///
-/// **Security Architecture**: This BLoC follows a hybrid approach for maximum security:
-/// - **Non-sensitive operations** (authentication, loading states, navigation) are managed here
-/// - **Sensitive data** (actual private keys) are handled directly in the UI layer
-/// - This minimizes the lifetime and scope of sensitive data in memory
-///
-/// The BLoC authenticates users and manages the flow, but never stores private keys.
-/// Private key retrieval and storage happens in the UI layer after authentication succeeds.
+/// Owns security settings navigation, seed backup progress and unbanning.
+/// Private-key authorization, results and delivery belong to the screen-scoped
+/// PrivateKeyExportBloc and its injected service. Legacy export flags below are
+/// retained for compatibility; they do not authorize the current export flow.
 class SecuritySettingsBloc
     extends Bloc<SecuritySettingsEvent, SecuritySettingsState> {
   /// Creates a new SecuritySettingsBloc.
@@ -49,17 +44,22 @@ class SecuritySettingsBloc
   /// The Komodo DeFi SDK instance for authentication operations.
   /// This is optional to support testing scenarios.
   final KomodoDefiSdk? _kdfSdk;
+  int _backupSaveRevision = 0;
 
   /// Handles resetting the security settings to initial state.
   void _onReset(ResetEvent event, Emitter<SecuritySettingsState> emit) {
+    _backupSaveRevision++;
     emit(SecuritySettingsState.initialState());
   }
 
   /// Handles showing the seed phrase backup screen.
   void _onShowSeed(ShowSeedEvent event, Emitter<SecuritySettingsState> emit) {
+    _backupSaveRevision++;
     final newState = state.copyWith(
       step: SecuritySettingsStep.seedShow,
       showSeedWords: false,
+      isSavingBackup: false,
+      clearBackupSaveError: true,
       // Entering the flow is the honest start of "how long did backing up
       // take" - the confirmation screen alone would omit the reading and
       // writing-down that is most of the work.
@@ -98,11 +98,47 @@ class SecuritySettingsBloc
     SeedConfirmedEvent event,
     Emitter<SecuritySettingsState> emit,
   ) async {
-    final newState = state.copyWith(
-      step: SecuritySettingsStep.seedSuccess,
-      showSeedWords: false,
-    );
-    emit(newState);
+    if (state.isSavingBackup) return;
+    final sdk = _kdfSdk;
+    if (sdk == null) return;
+    final revision = ++_backupSaveRevision;
+    emit(state.copyWith(isSavingBackup: true, clearBackupSaveError: true));
+    try {
+      await sdk.auth.updateMetadataForSession(event.session, {
+        'has_backup': true,
+      });
+      if (emit.isDone || revision != _backupSaveRevision) return;
+      sdk.auth.ensureSessionContextCurrent(event.session);
+      emit(
+        state.copyWith(
+          step: SecuritySettingsStep.seedSuccess,
+          showSeedWords: false,
+          isSavingBackup: false,
+        ),
+      );
+    } on AuthSessionChangedException {
+      if (!emit.isDone && revision == _backupSaveRevision) {
+        emit(SecuritySettingsState.initialState());
+      }
+    } on AuthIdentityUnavailableException {
+      if (!emit.isDone && revision == _backupSaveRevision) {
+        emit(
+          state.copyWith(
+            isSavingBackup: false,
+            backupSaveError: SeedBackupSaveError.identityUnavailable,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!emit.isDone && revision == _backupSaveRevision) {
+        emit(
+          state.copyWith(
+            isSavingBackup: false,
+            backupSaveError: SeedBackupSaveError.persistenceFailed,
+          ),
+        );
+      }
+    }
   }
 
   /// Handles seed phrase being copied to clipboard.
@@ -125,15 +161,9 @@ class SecuritySettingsBloc
     emit(newState);
   }
 
-  /// Handles authentication for private key access.
-  ///
-  /// **Security Note**: This method only validates that a user is authenticated.
-  /// It does NOT store or handle actual private keys. After successful
-  /// authentication, the UI layer is responsible for fetching and managing
-  /// private keys directly to minimize their memory exposure.
-  ///
-  /// The authentication success state triggers the UI to safely retrieve
-  /// private keys using the SecurityManager.
+  /// Legacy sign-in presence check retained for compatibility navigation.
+  /// This does not validate a password or authorize private-key extraction.
+  /// The current export flow uses PrivateKeyExportBloc's password boundary.
   Future<void> _onAuthenticateForPrivateKeys(
     AuthenticateForPrivateKeysEvent event,
     Emitter<SecuritySettingsState> emit,
@@ -157,7 +187,7 @@ class SecuritySettingsBloc
         return;
       }
 
-      // Authentication successful - signal UI to fetch private keys
+      // Preserve the legacy navigation signal; this grants no export access.
       emit(
         state.copyWith(
           isAuthenticating: false,
@@ -168,7 +198,7 @@ class SecuritySettingsBloc
       emit(
         state.copyWith(
           isAuthenticating: false,
-          authError: 'Authentication failed: ${e.toString()}',
+          authError: 'Authentication failed',
         ),
       );
     }
@@ -176,8 +206,7 @@ class SecuritySettingsBloc
 
   /// Handles showing the private keys screen.
   ///
-  /// **Security Note**: This only manages UI flow state. Actual private
-  /// key data is handled in the UI layer for security reasons.
+  /// The export BLoC owns results; this event only selects the result screen.
   void _onShowPrivateKeys(
     ShowPrivateKeysEvent event,
     Emitter<SecuritySettingsState> emit,
@@ -195,7 +224,7 @@ class SecuritySettingsBloc
   /// Handles toggling private key visibility in the UI.
   ///
   /// **Security Note**: This only controls UI visibility state.
-  /// The actual private key data remains in the UI layer.
+  /// This compatibility flag does not control the current export BLoC.
   Future<void> _onShowPrivateKeysWords(
     ShowPrivateKeysWordsEvent event,
     Emitter<SecuritySettingsState> emit,

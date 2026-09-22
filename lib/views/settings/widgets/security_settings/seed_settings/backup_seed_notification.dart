@@ -52,13 +52,11 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 17,
-                vertical: 15,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 15),
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.all(Radius.circular(18)),
-                color: customization.backgroundColor ??
+                color:
+                    customization.backgroundColor ??
                     Theme.of(context).colorScheme.surface,
               ),
               child: customization.isBelowButton
@@ -127,15 +125,18 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
     }
     return CustomizationBackupNotificationData(
       titleStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
+        fontWeight: FontWeight.w700,
+        fontSize: 16,
+      ),
       descriptionStyle: Theme.of(context).textTheme.bodyLarge!.copyWith(
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+        fontWeight: FontWeight.w500,
+        fontSize: 14,
+      ),
       line: BackupNotificationLineStyle(
-          width: 8, height: 45, color: theme.custom.warningColor),
+        width: 8,
+        height: 45,
+        color: theme.custom.warningColor,
+      ),
     );
   }
 }
@@ -149,14 +150,15 @@ class _BackupButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return UiPrimaryButton(
       text: LocaleKeys.backupSeedNotificationButton.tr(),
-      backgroundColor: customization.buttonBackgroundColor ??
+      backgroundColor:
+          customization.buttonBackgroundColor ??
           theme.custom.simpleButtonBackgroundColor,
       width: 85,
       height: 28,
-      textStyle: Theme.of(context)
-          .textTheme
-          .labelLarge
-          ?.copyWith(fontSize: 12, color: customization.buttonTextColor),
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+        fontSize: 12,
+        color: customization.buttonTextColor,
+      ),
       onPressed: routingState.settingsState.openSecurity,
     );
   }
@@ -175,9 +177,7 @@ class _Line extends StatelessWidget {
       margin: const EdgeInsets.only(right: 20),
       decoration: BoxDecoration(
         color: line.color,
-        borderRadius: const BorderRadius.all(
-          Radius.circular(18),
-        ),
+        borderRadius: const BorderRadius.all(Radius.circular(18)),
       ),
     );
   }
@@ -213,38 +213,4 @@ class CustomizationBackupNotificationData {
   final Color? buttonBackgroundColor;
   final Color? buttonTextColor;
   final BackupNotificationLineStyle line;
-}
-
-class BackupNotification extends StatelessWidget {
-  const BackupNotification();
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
-          color: Theme.of(context)
-              .textTheme
-              .bodyLarge
-              ?.color
-              ?.withValues(alpha: 0.7),
-          fontWeight: FontWeight.w600,
-        );
-    return BackupSeedNotification(
-      title: LocaleKeys.coinAddressDetailsNotificationTitle.tr(),
-      description: LocaleKeys.coinAddressDetailsNotificationDescription.tr(),
-      customizationNotification: CustomizationBackupNotificationData(
-        titleStyle:
-            Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 20),
-        descriptionStyle: textStyle,
-        line: BackupNotificationLineStyle(
-          color: theme.custom.warningColor,
-          width: 15,
-          height: 96,
-        ),
-        buttonBackgroundColor: Theme.of(context).colorScheme.primary,
-        buttonTextColor: Colors.white,
-        isBelowButton: true,
-      ),
-      hideOnMobile: false,
-    );
-  }
 }

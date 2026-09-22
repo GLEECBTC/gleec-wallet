@@ -24,6 +24,8 @@ import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
+import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/bitrefill/bitrefill_button.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/coin_addresses.dart';
 import 'package:web_dex/views/wallet/coin_details/coin_details_info/contract_address_button.dart';
@@ -482,6 +484,16 @@ class CoinDetailsReceiveButton extends StatelessWidget {
   final BuildContext context;
 
   Future<void> _handleReceive(BuildContext context) async {
+    // Warn before the address picker rather than after a selection. The gate
+    // inside showPubkeyReceiveDialog still backs up its other call sites, and
+    // the per-session acknowledgement means asking here does not double-prompt.
+    final mayReveal = await ensureSeedBackedUp(
+      context,
+      reason: SeedBackupGateReason.receiveAddress,
+      isTestCoin: coin.isTestCoin,
+    );
+    if (!mayReveal || !context.mounted) return;
+
     // Get coin addresses bloc from the parent widget
     final addressesBloc = context.read<CoinAddressesBloc>();
     final addressesState = addressesBloc.state;

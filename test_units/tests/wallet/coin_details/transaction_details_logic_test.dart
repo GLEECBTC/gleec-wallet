@@ -1,15 +1,9 @@
 import 'package:decimal/decimal.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/wallet/coin_details/transactions/transaction_details.dart';
 
 import 'coin_details_test_harness.dart';
-
-Future<void> _disposeAnimatedWidgets(WidgetTester tester) async {
-  await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pump(const Duration(seconds: 3));
-}
 
 void testTransactionDetailsLogic() {
   group('TransactionDetails logic', () {
@@ -35,7 +29,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.text('3'), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets(
@@ -60,7 +53,6 @@ void testTransactionDetailsLogic() {
         );
 
         expect(find.text('0'), findsOneWidget);
-        await _disposeAnimatedWidgets(tester);
       },
     );
 
@@ -86,7 +78,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.text(LocaleKeys.inProgress), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('block height label returns unknown when block is zero', (
@@ -107,7 +98,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.text(LocaleKeys.unknown), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('balance change formats plus sign for incoming', (
@@ -131,7 +121,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.textContaining('+'), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('balance change formats minus sign for outgoing', (
@@ -155,7 +144,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.textContaining('-'), findsWidgets);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('balance change renders fiat amount from resolver', (
@@ -176,7 +164,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.textContaining(r'($0'), findsWidgets);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('fee section renders em dash when fee is absent', (
@@ -197,7 +184,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.text('—'), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('memo section hides when empty', (tester) async {
@@ -216,7 +202,6 @@ void testTransactionDetailsLogic() {
       );
 
       expect(find.text('${LocaleKeys.memo}: '), findsNothing);
-      await _disposeAnimatedWidgets(tester);
     });
   });
 }

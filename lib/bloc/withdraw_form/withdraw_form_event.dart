@@ -88,6 +88,15 @@ class WithdrawFormPendingUseStandardRequested extends WithdrawFormEvent {
   const WithdrawFormPendingUseStandardRequested();
 }
 
+/// Clears only the untraced journal record explicitly acknowledged in the UI.
+///
+/// The identity ties the acknowledgement to the displayed transfer. This does
+/// not cancel a relay request or establish that a repeat payment is safe.
+class WithdrawFormGaslessDiscardConfirmed extends WithdrawFormEvent {
+  final String journalId;
+  const WithdrawFormGaslessDiscardConfirmed(this.journalId);
+}
+
 class WithdrawFormTronPreviewTicked extends WithdrawFormEvent {
   const WithdrawFormTronPreviewTicked();
 }

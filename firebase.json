@@ -1,43 +1,58 @@
 {
   "hosting": {
-    "target": "walletrc",
+    "target": "web",
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    // "headers": [
-    //   {
-    //     "source": "**",
-    //     "headers": [
-    //       {
-    //         "key": "Cross-Origin-Embedder-Policy",
-    //         "value": "credentialless"
-    //       },
-    //       {
-    //         "key": "Cross-Origin-Opener-Policy",
-    //         "value": "same-origin"
-    //       }
-    //     ]
-    //   }
-    // ],
     "headers": [
       {
-        // Coin icons are a large, rarely-changing set (hundreds of files).
-        // Without this they inherit Firebase's default max-age=3600, so every
-        // repeat visit more than an hour apart re-validates the whole set while
-        // the user is logging in.
-        //
-        // Flutter web assets are not content-hashed, so this is a bounded TTL
-        // rather than `immutable`. Note that AssetIcon's bundled -> CDN ->
-        // fallback chain does NOT rescue a stale icon: it only triggers when an
-        // asset is missing, and a cached-but-outdated file still loads fine.
-        // The TTL is the whole mitigation, so re-arting an existing icon can
-        // take up to 30 days to propagate. Adding an icon under a new filename
-        // is unaffected. If an in-place icon change ever needs to ship fast,
-        // shorten this value or rename the file.
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'self'"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "SAMEORIGIN"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "geolocation=(), usb=(self), serial=(), bluetooth=(), idle-detection=()"
+          }
+        ]
+      },
+      {
+        "source": "/@(index.html|flutter_bootstrap.js|flutter.js|main.dart.js|flutter_service_worker.js|version.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/assets/packages/komodo_defi_framework/assets/coin_icons/**",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "public, max-age=2592000"
+          }
+        ]
+      },
+      {
+        "source": "/assets/assets/web_pages/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
           }
         ]
       }

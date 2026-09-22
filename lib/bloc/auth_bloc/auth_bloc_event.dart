@@ -11,6 +11,16 @@ class AuthModeChanged extends AuthBlocEvent {
   final KdfUser? currentUser;
 }
 
+/// A watcher result is only applicable to the auth flow that subscribed.
+class _AuthUserObserved extends AuthModeChanged {
+  const _AuthUserObserved({
+    required super.mode,
+    required super.currentUser,
+    required this.revision,
+  });
+  final int revision;
+}
+
 class AuthStateClearRequested extends AuthBlocEvent {
   const AuthStateClearRequested();
 }
@@ -53,6 +63,21 @@ class AuthRestoreRequested extends AuthBlocEvent {
   final LegacyWalletSecrets? legacyNativeSecrets;
 }
 
+/// A user-initiated seed import.
+///
+/// Creation and restoration all reject wallet-name collisions in the SDK.
+class AuthImportRequested extends AuthBlocEvent {
+  const AuthImportRequested({
+    required this.wallet,
+    required this.password,
+    required this.seed,
+  });
+
+  final Wallet wallet;
+  final String password;
+  final String seed;
+}
+
 class AuthLegacyMigrationRequested extends AuthBlocEvent {
   const AuthLegacyMigrationRequested({
     required this.sourceWallet,
@@ -78,12 +103,19 @@ class AuthLegacyMigrationRequested extends AuthBlocEvent {
 }
 
 class AuthSeedBackupConfirmed extends AuthBlocEvent {
-  const AuthSeedBackupConfirmed();
+  const AuthSeedBackupConfirmed({required this.expectedWalletId});
+
+  /// The wallet whose recovery phrase was confirmed.
+  final WalletId expectedWalletId;
 }
 
 class AuthWalletDownloadRequested extends AuthBlocEvent {
-  const AuthWalletDownloadRequested({required this.password});
+  const AuthWalletDownloadRequested({
+    required this.password,
+    required this.expectedWalletId,
+  });
   final String password;
+  final WalletId expectedWalletId;
 }
 
 /// Dispatched to restore authentication state after the SDK has been

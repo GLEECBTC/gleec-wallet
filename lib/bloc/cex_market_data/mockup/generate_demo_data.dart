@@ -71,10 +71,10 @@ class DemoDataGenerator {
     AssetId(
       chainId: AssetChainId(chainId: 137),
       derivationPath: '',
-      id: 'MATIC',
+      id: 'POL',
       name: 'Polygon',
-      subClass: CoinSubClass.matic,
-      symbol: AssetSymbol(assetConfigId: 'MATIC'),
+      subClass: CoinSubClass.polygon,
+      symbol: AssetSymbol(assetConfigId: 'POL'),
     ),
     AssetId(
       chainId: AssetChainId(chainId: 43114),

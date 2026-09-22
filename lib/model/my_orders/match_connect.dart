@@ -1,3 +1,5 @@
+import 'package:web_dex/model/my_orders/order_model_validation.dart';
+
 class MatchConnect {
   MatchConnect({
     required this.destPubKey,
@@ -7,12 +9,23 @@ class MatchConnect {
     required this.takerOrderUuid,
   });
 
+  /// Throws [FormatException] on a malformed payload.
   factory MatchConnect.fromJson(Map<String, dynamic> json) => MatchConnect(
-        destPubKey: json['dest_pub_key'] ?? '',
-        makerOrderUuid: json['maker_order_uuid'] ?? '',
-        method: json['method'] ?? '',
-        senderPubkey: json['sender_pubkey'] ?? '',
-        takerOrderUuid: json['taker_order_uuid'] ?? '',
+        destPubKey:
+            orderBoundedText(json['dest_pub_key'] ?? '', 'dest_pub_key'),
+        makerOrderUuid: orderUuid(
+          json['maker_order_uuid'],
+          'maker_order_uuid',
+          allowEmpty: true,
+        ),
+        method: orderBoundedText(json['method'] ?? '', 'method'),
+        senderPubkey:
+            orderBoundedText(json['sender_pubkey'] ?? '', 'sender_pubkey'),
+        takerOrderUuid: orderUuid(
+          json['taker_order_uuid'],
+          'taker_order_uuid',
+          allowEmpty: true,
+        ),
       );
 
   String destPubKey;

@@ -320,7 +320,7 @@ class KdfCustomTokenImportRepository implements ICustomTokenImportRepository {
         return 'avalanche'; // https://api.coingecko.com/api/v3/coins/avalanche/contract/0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E
       case CoinSubClass.moonriver:
         return 'moonriver'; // https://api.coingecko.com/api/v3/coins/moonriver/contract/0x0caE51e1032e8461f4806e26332c030E34De3aDb
-      case CoinSubClass.matic:
+      case CoinSubClass.polygon:
         return 'polygon-pos'; // https://api.coingecko.com/api/v3/coins/polygon-pos/contract/0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32
       case CoinSubClass.krc20:
         return 'kcc'; // https://api.coingecko.com/api/v3/coins/kcc/contract/0x0039f574ee5cc39bdd162e9a88e3eb1f111baf48

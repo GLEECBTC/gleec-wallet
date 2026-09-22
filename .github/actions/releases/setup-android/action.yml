@@ -34,6 +34,8 @@ runs:
     - name: Setup Android SDK
       id: setup_android_sdk
       uses: android-actions/setup-android@v3
+      with:
+        packages: platform-tools
 
     # "Fixes firebase build error when no valid google-services.json is present"
     - name: Comment out Google Play Services import

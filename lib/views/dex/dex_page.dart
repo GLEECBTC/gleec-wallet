@@ -59,6 +59,7 @@ class _DexPageState extends State<DexPage> {
               myOrdersService,
               SettingsRepository(),
               coinsRepository,
+              RepositoryProvider.of<KomodoDefiSdk>(context),
             ),
           )..add(const ListenToOrdersRequested()),
         ),

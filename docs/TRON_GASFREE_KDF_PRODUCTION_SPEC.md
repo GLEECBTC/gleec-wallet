@@ -10,7 +10,7 @@ KDF documentation: `d175558a6c5d33a4f7ce4843227f0b54cc3dbc9b`
 
 This document defines the contract consumed by Gleec Wallet and the nested
 Komodo DeFi Flutter SDK. Historical V0/V1/V2 rollout proposals are retained in
-`docs/archive/gasfree/`; they are not runtime specifications.
+git history at `ca0212a1b31b` under `docs/archive/gasfree/`; they are historical hand-off notes, not runtime specifications.
 
 ## Product invariants
 
@@ -154,6 +154,27 @@ pre-submission reservation. It is never sent to KDF. Accepted entries are
 reconciled by trace ID. Migrated records without a trace remain
 `submissionOutcomeUnknown` and non-resubmittable until resolved manually.
 
+## Wallet deletion and local recovery
+
+Use `sdk.walletDeletion.prepare(name)` to obtain an immutable warning snapshot,
+then pass that snapshot to `delete(acknowledgedReview: ..., password: ...)`.
+The SDK rechecks the wallet catalog entry and pending requests inside the
+catalog transaction while holding a wallet-scoped lease. Additional requests
+or a changed uncertainty warning require confirmation again; a replaced target
+requires returning to wallet selection. An active submission returns retryable
+busy until its local outcome has been recorded, without waiting for settlement.
+Browser clients coordinate through actual Web Locks.
+
+Confirmed deletion attempts independent wallet-cache cleanup and preserves
+unresolved encrypted recovery records and their discovery metadata. Cache I/O
+failures are logged and may retain encrypted history; they do not undo deletion
+of the wallet. Deletion does not cancel a
+transfer. Recovery requires re-importing the same identity on the same device
+and storage; it is not a cloud backup. Journal inspection failure produces an
+explicit uncertainty warning and preserves records. The target need not be
+signed in. The legacy raw SDK auth deletion entry point requires the review
+permit installed by SDK bootstrap.
+
 ## Application gates
 
 The existing build and remote Receive switches remain kill switches. They do
@@ -185,3 +206,23 @@ activation and read-only account status are not suppressed by the SDK.
   streaming, restart recovery, provider outage, remote Receive revocation,
   Standard access, and external custody deposit refresh.
 - A real mainnet transfer requires separate explicit authorization.
+
+## Removed compatibility mechanisms
+
+Folded in from the retired `TRON_GASFREE_KDF_HANDOVER.md`. The handover's own
+pin and SHA-256 digests are dead - following them rolls the wallet backwards
+off KDF `main` - but this section is a durable statement of what was taken out
+and must not be reintroduced.
+
+- `gasless::configure` and restart fallback invocation;
+- `provider_available`, `reason_code`, and explicit/legacy status branching;
+- V0/V1/bound receive-evidence generations;
+- request-ID, fingerprint, expected-authorization, and bound-response echoes;
+- regex-derived relay lifecycle states and raw error-copy display;
+- local maximum/fee authority and native-fallback notices;
+- direct provider/custody balance access and TronGrid finality checks.
+
+The local encrypted pre-submit reservation, unknown-outcome lockout, provider
+pin, action-time QR/copy check, Standard recovery, wallet/session guards, and
+custody history refresh are permanent safeguards, not compatibility
+workarounds.

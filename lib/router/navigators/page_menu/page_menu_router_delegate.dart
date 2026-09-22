@@ -3,7 +3,6 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/router/routes.dart';
 import 'package:web_dex/router/state/routing_state.dart';
-import 'package:web_dex/views/bridge/bridge_page.dart';
 import 'package:web_dex/views/dex/dex_page.dart';
 import 'package:web_dex/views/fiat/fiat_page.dart';
 import 'package:web_dex/views/market_maker_bot/market_maker_bot_page.dart';
@@ -30,8 +29,6 @@ class PageMenuRouterDelegate extends RouterDelegate<AppRoutePath>
         return isMobile ? const FiatPage() : empty;
       case MainMenuValue.dex:
         return isMobile ? const DexPage() : empty;
-      case MainMenuValue.bridge:
-        return isMobile ? const BridgePage() : empty;
       case MainMenuValue.marketMakerBot:
         return isMobile ? const MarketMakerBotPage() : empty;
       case MainMenuValue.nft:

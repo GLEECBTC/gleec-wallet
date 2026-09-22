@@ -1,15 +1,25 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:app_theme/app_theme.dart';
 import 'package:decimal/decimal.dart';
+import 'package:easy_localization/easy_localization.dart';
+// Reset the package-global translations so other tests can assert raw keys.
+// ignore: implementation_imports
+import 'package:easy_localization/src/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
+import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart' show WalletType;
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_clear_recovery_action.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_pending_transfer_panel.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_complete_form/send_complete_form_buttons.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/send_confirm_form/send_confirm_buttons.dart';
@@ -150,6 +160,11 @@ class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
     implements WithdrawFormBloc {
   _FakeWithdrawFormBloc(super.initialState);
 
+  final events = <WithdrawFormEvent>[];
+
+  @override
+  void add(WithdrawFormEvent event) => events.add(event);
+
   void update(WithdrawFormState state) => emit(state);
 
   @override
@@ -173,13 +188,33 @@ Widget _wrap(Widget child) {
   );
 }
 
-Future<void> _pumpNarrowLargeText(WidgetTester tester, Widget child) async {
+class _EnglishAssetLoader extends AssetLoader {
+  const _EnglishAssetLoader();
+
+  @override
+  Future<Map<String, dynamic>> load(String path, Locale locale) async =>
+      jsonDecode(File('$path/en.json').readAsStringSync())
+          as Map<String, dynamic>;
+}
+
+Future<void> _pumpNarrowLargeText(
+  WidgetTester tester,
+  Widget child, {
+  bool useEnglishTranslations = false,
+}) async {
   tester.view.physicalSize = const Size(320, 568);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
-  await tester.pumpWidget(
-    MaterialApp(
+  Widget surface = Builder(
+    builder: (context) => MaterialApp(
+      locale: useEnglishTranslations ? context.locale : null,
+      supportedLocales: useEnglishTranslations
+          ? context.supportedLocales
+          : const [Locale('en', 'US')],
+      localizationsDelegates: useEnglishTranslations
+          ? context.localizationDelegates
+          : null,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(
           context,
@@ -194,6 +229,23 @@ Future<void> _pumpNarrowLargeText(WidgetTester tester, Widget child) async {
       ),
     ),
   );
+  if (useEnglishTranslations) {
+    // The analyzer does not recognize this repository's test_units directory.
+    // ignore: invalid_use_of_visible_for_testing_member
+    SharedPreferences.setMockInitialValues({});
+    await EasyLocalization.ensureInitialized();
+    addTearDown(() => Localization.load(const Locale('en')));
+    surface = EasyLocalization(
+      supportedLocales: const [Locale('en')],
+      fallbackLocale: const Locale('en'),
+      startLocale: const Locale('en'),
+      saveLocale: false,
+      path: 'assets/translations',
+      assetLoader: const _EnglishAssetLoader(),
+      child: surface,
+    );
+  }
+  await tester.pumpWidget(surface);
   await tester.pump();
 }
 
@@ -317,6 +369,7 @@ WithdrawFormState _gaslessUnresolvedState({required bool submittedUnknown}) =>
       amount: '10',
       isGaslessFeatureConfigured: true,
       isGaslessEnabled: true,
+      gaslessPendingStoreReady: true,
       gaslessAvailability: GaslessAvailability.pendingTransfer,
       gaslessTransferState: submittedUnknown
           ? GaslessTransferState.submittedUnknown
@@ -327,6 +380,283 @@ WithdrawFormState _gaslessUnresolvedState({required bool submittedUnknown}) =>
     );
 
 void testWithdrawFormConfirmReceipt() {
+  group('Unknown GasFree transfer recovery acknowledgement', () {
+    const openKey = Key('withdraw-gasless-clear-recovery');
+    const confirmKey = Key('withdraw-gasless-clear-recovery-confirm');
+    const acknowledgementKey = Key(
+      'withdraw-gasless-clear-recovery-acknowledgement',
+    );
+
+    Future<void> pumpPending(
+      WidgetTester tester,
+      _FakeWithdrawFormBloc bloc,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          BlocProvider<WithdrawFormBloc>.value(
+            value: bloc,
+            child: WithdrawFormPendingSection(onViewActivity: _noop),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<void> openDialog(WidgetTester tester) async {
+      await tester.ensureVisible(find.byKey(openKey));
+      await tester.tap(find.byKey(openKey));
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets(
+      'review details and acknowledge before clearing; cancel sends no event',
+      (tester) async {
+        final bloc = _FakeWithdrawFormBloc(
+          _gaslessUnresolvedState(submittedUnknown: true),
+        );
+        addTearDown(bloc.close);
+        await pumpPending(tester, bloc);
+        await openDialog(tester);
+
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.text('TRecipientAddress'), findsOneWidget);
+        expect(find.text('10'), findsOneWidget);
+        expect(find.textContaining('USDT-TRC20'), findsOneWidget);
+        expect(
+          find.text('withdrawGaslessClearRecoverySubmittedAt'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('withdrawGaslessClearRecoveryWarning'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('withdrawGaslessClearRecoveryAcknowledgement'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('journal-responsive-pending'), findsNothing);
+        expect(
+          tester.widget<FilledButton>(find.byKey(confirmKey)).onPressed,
+          isNull,
+        );
+
+        await tester.ensureVisible(find.byKey(confirmKey));
+        await tester.tap(find.byKey(confirmKey));
+        expect(bloc.events, isEmpty);
+        expect(find.byType(AlertDialog), findsOneWidget);
+
+        await tester.ensureVisible(find.byKey(acknowledgementKey));
+        await tester.tap(find.byKey(acknowledgementKey));
+        await tester.pump();
+        expect(
+          tester.widget<FilledButton>(find.byKey(confirmKey)).onPressed,
+          isNotNull,
+        );
+        await tester.tap(find.byKey(acknowledgementKey));
+        await tester.pump();
+        expect(
+          tester.widget<FilledButton>(find.byKey(confirmKey)).onPressed,
+          isNull,
+        );
+
+        final cancel = find.byKey(
+          const Key('withdraw-gasless-clear-recovery-cancel'),
+        );
+        await tester.ensureVisible(cancel);
+        await tester.tap(cancel);
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(bloc.events, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'confirmation sends the journal identity of the reviewed transfer',
+      (tester) async {
+        final bloc = _FakeWithdrawFormBloc(
+          _gaslessUnresolvedState(submittedUnknown: true),
+        );
+        addTearDown(bloc.close);
+        await pumpPending(tester, bloc);
+        await openDialog(tester);
+
+        // A background state update must not change the record the user reviews.
+        // The BLoC revalidates this captured identity before persistence.
+        bloc.update(
+          bloc.state.copyWith(
+            gaslessJournalId: () => 'different-journal',
+            recipientAddress: 'TDifferentRecipient',
+            amount: '20',
+          ),
+        );
+        await tester.pump();
+        expect(find.text('TRecipientAddress'), findsOneWidget);
+        expect(find.text('TDifferentRecipient'), findsNothing);
+
+        await tester.ensureVisible(find.byKey(acknowledgementKey));
+        await tester.tap(find.byKey(acknowledgementKey));
+        await tester.pump();
+        await tester.ensureVisible(find.byKey(confirmKey));
+        await tester.tap(find.byKey(confirmKey));
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(bloc.events, hasLength(1));
+        expect(
+          bloc.events.single,
+          isA<WithdrawFormGaslessDiscardConfirmed>().having(
+            (event) => event.journalId,
+            'journal identity',
+            'journal-responsive-pending',
+          ),
+        );
+      },
+    );
+
+    testWidgets('Max recovery shows the signed recipient amount', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _gaslessUnresolvedState(submittedUnknown: true).copyWith(
+          amount: '',
+          isMaxAmount: true,
+          authorizedRecipientAmount: () => Decimal.parse('9.25'),
+        ),
+      );
+      addTearDown(bloc.close);
+      await pumpPending(tester, bloc);
+      await openDialog(tester);
+      expect(find.text('9.25'), findsOneWidget);
+
+      // Dismissing the modal without confirmation must preserve the journal.
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(bloc.events, isEmpty);
+    });
+
+    testWidgets('busy recovery cannot open the acknowledgement dialog', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _gaslessUnresolvedState(
+          submittedUnknown: true,
+        ).copyWith(isSending: true),
+      );
+      addTearDown(bloc.close);
+      await pumpPending(tester, bloc);
+      expect(find.byKey(openKey), findsOneWidget);
+      expect(tester.widget<TextButton>(find.byKey(openKey)).onPressed, isNull);
+      await tester.ensureVisible(find.byKey(openKey));
+      await tester.tap(find.byKey(openKey));
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(bloc.events, isEmpty);
+    });
+
+    testWidgets('accepted traces and missing journals have no clear action', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _gaslessUnresolvedState(submittedUnknown: false),
+      );
+      addTearDown(bloc.close);
+      await pumpPending(tester, bloc);
+      expect(find.byKey(openKey), findsNothing);
+
+      bloc.update(
+        _gaslessUnresolvedState(
+          submittedUnknown: true,
+        ).copyWith(gaslessJournalId: () => null),
+      );
+      await tester.pump();
+      expect(find.byKey(openKey), findsNothing);
+      expect(bloc.events, isEmpty);
+    });
+
+    testWidgets('a failed clear displays its user-facing error in pending', (
+      tester,
+    ) async {
+      final bloc = _FakeWithdrawFormBloc(
+        _gaslessUnresolvedState(submittedUnknown: true).copyWith(
+          transactionError: () => TextError(
+            error: 'The recovery record could not be cleared. Try again.',
+            technicalDetails: 'private-storage-detail',
+          ),
+        ),
+      );
+      addTearDown(bloc.close);
+      await pumpPending(tester, bloc);
+      expect(
+        find.text('The recovery record could not be cleared. Try again.'),
+        findsOneWidget,
+      );
+      expect(find.text('private-storage-detail'), findsNothing);
+      expect(find.byKey(openKey), findsOneWidget);
+    });
+
+    testWidgets(
+      'acknowledgement remains usable on a narrow screen at 200% text',
+      (tester) async {
+        var confirmations = 0;
+        await _pumpNarrowLargeText(
+          tester,
+          GaslessClearRecoveryAction(
+            recipientAddress: 'TRecipientAddressWithLongUnbrokenCharacters',
+            amount: '123456789.123456',
+            assetName: 'Tether (USDT-TRC20)',
+            isBusy: false,
+            onConfirmed: () => confirmations++,
+          ),
+          useEnglishTranslations: true,
+        );
+        await tester.pumpAndSettle();
+        await openDialog(tester);
+        expect(
+          find.text(
+            'This transfer may still complete. Clearing its local recovery '
+            'record does not cancel the transfer or prove it is safe to send '
+            "again. Check the recipient's balance and transaction history "
+            'before considering another payment.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text(
+            'I understand that the outcome is still unknown and sending '
+            'again could pay the recipient twice.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.text("Clear this transfer's recovery record?"),
+          findsOneWidget,
+        );
+        expect(find.text('withdrawGaslessClearRecoveryWarning'), findsNothing);
+        expect(find.text('Submitted'), findsNothing);
+        final acknowledgementBox = find.descendant(
+          of: find.byKey(acknowledgementKey),
+          matching: find.byType(Checkbox),
+        );
+        await tester.ensureVisible(acknowledgementBox);
+        await tester.pump();
+        expect(acknowledgementBox.hitTestable(), findsOneWidget);
+        await tester.tap(acknowledgementBox);
+        await tester.pump();
+        expect(tester.widget<Checkbox>(acknowledgementBox).value, isTrue);
+        expect(
+          tester.widget<FilledButton>(find.byKey(confirmKey)).onPressed,
+          isNotNull,
+        );
+        await tester.ensureVisible(find.byKey(confirmKey));
+        await tester.tap(find.byKey(confirmKey));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(confirmations, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  });
+
   group('WithdrawPreviewDetails (confirm summary)', () {
     testWidgets(
       'gas-free preview headlines the recipient amount, not amount+fee',
@@ -360,9 +690,6 @@ void testWithdrawFormConfirmReceipt() {
         expect(find.textContaining('1.5 USDT'), findsWidgets);
         // GasFree fee presentation does not apply a local threshold.
         expect(find.text('withdrawHighFee'), findsNothing);
-
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 3));
       },
     );
 
@@ -384,9 +711,6 @@ void testWithdrawFormConfirmReceipt() {
       await tester.pumpWidget(_wrap(WithdrawPreviewDetails(state: state)));
 
       expect(find.text('withdrawHighFee'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('non-gasless preview keeps the existing summary', (
@@ -414,9 +738,6 @@ void testWithdrawFormConfirmReceipt() {
         findsNothing,
       );
       expect(find.textContaining('1 KMD'), findsWidgets);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
   });
 
@@ -460,9 +781,6 @@ void testWithdrawFormConfirmReceipt() {
         expect(find.text('76543210'), findsOneWidget);
         expect(find.text('withdrawGaslessTraceId'), findsOneWidget);
         expect(find.textContaining('1.25 USDT'), findsWidgets);
-
-        await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pump(const Duration(seconds: 3));
       },
     );
 
@@ -489,9 +807,6 @@ void testWithdrawFormConfirmReceipt() {
       expect(find.text('withdrawGaslessFinalFee'), findsNothing);
       expect(find.text('withdrawGaslessMaxFee'), findsOneWidget);
       expect(find.text('withdrawGaslessTransferFee'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('standard receipt keeps the awaiting-confirmations chip', (
@@ -525,9 +840,6 @@ void testWithdrawFormConfirmReceipt() {
         find.byKey(const Key('withdraw-receipt-total-deducted')),
         findsNothing,
       );
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('zero-net wallet-internal move shows the moved amount, not 0', (
@@ -554,9 +866,6 @@ void testWithdrawFormConfirmReceipt() {
 
       expect(find.textContaining('10 KMD'), findsWidgets);
       expect(find.text('0 KMD'), findsNothing);
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
   });
 
@@ -661,12 +970,6 @@ void testWithdrawFormConfirmReceipt() {
       expect(find.text('withdrawGaslessAcceptanceUnknownTitle'), findsNothing);
       expect(find.textContaining('trace-responsive-pending'), findsOneWidget);
       expect(tester.takeException(), isNull);
-
-      // AssetAmountWithFiat internally owns a delayed auto-scroll check even
-      // when scrolling is disabled. Dispose every surface and advance past
-      // that delay so the test leaves no framework timers behind.
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     }
 
     testWidgets(
@@ -734,9 +1037,6 @@ void testWithdrawFormConfirmReceipt() {
         find.byKey(const Key('gasless-pending-static-progress')),
         findsOneWidget,
       );
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump(const Duration(seconds: 3));
     });
   });
 
@@ -867,7 +1167,10 @@ void testWithdrawFormConfirmReceipt() {
         for (final amountText in amountTexts) {
           final text = tester.widget<Text>(find.text(amountText));
           expect(text.style?.color, theme.textTheme.bodyMedium?.color);
-          expect(text.style?.color, isNot(theme.colorScheme.onSurface));
+          // Was `isNot(onSurface)`, which only meant anything while that
+          // role held the canvas colour. The intent is unchanged: an amount
+          // must not be painted with the page background.
+          expect(text.style?.color, isNot(theme.scaffoldBackgroundColor));
         }
         for (final labelText in labelTexts) {
           final text = tester.widget<Text>(find.text(labelText));

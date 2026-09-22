@@ -1,6 +1,7 @@
 import 'package:rational/rational.dart';
 import 'package:web_dex/model/my_orders/match_request.dart';
 import 'package:web_dex/model/my_orders/matches.dart';
+import 'package:web_dex/model/my_orders/order_model_validation.dart';
 
 class TakerOrder {
   TakerOrder({
@@ -10,18 +11,22 @@ class TakerOrder {
     required this.request,
   });
 
+  /// Throws [FormatException] on a malformed payload.
   factory TakerOrder.fromJson(Map<String, dynamic> json) {
     return TakerOrder(
-      createdAt: json['created_at'] ?? 0,
-      cancellable: json['cancellable'] ?? false,
+      createdAt: orderNonNegativeInt(json['created_at'] ?? 0, 'created_at'),
+      cancellable: orderBool(json['cancellable'] ?? false, 'cancellable'),
       matches: json['matches'] == null
           ? null
-          : Map<String, dynamic>.from(json['matches']).map(
-              (String k, dynamic v) =>
-                  MapEntry<String, Matches>(k, Matches.fromJson(v))),
+          : boundedOrderMap(json['matches'], 'matches').map(
+              (String k, dynamic v) => MapEntry<String, Matches>(
+                k,
+                Matches.fromJson(orderStringMap(v, 'matches entry')),
+              ),
+            ),
       request: json['request'] == null
           ? MatchRequest(baseAmount: Rational.zero, relAmount: Rational.zero)
-          : MatchRequest.fromJson(json['request']),
+          : MatchRequest.fromJson(orderStringMap(json['request'], 'request')),
     );
   }
 

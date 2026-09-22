@@ -102,7 +102,7 @@ class DesktopMenuDesktopItem extends StatelessWidget {
   Color _getBackgroundColor(BuildContext context) {
     return enabled && isSelected
         ? theme.custom.selectedMenuBackgroundColor
-        : Theme.of(context).colorScheme.onSurface;
+        : Theme.of(context).scaffoldBackgroundColor;
   }
 }
 

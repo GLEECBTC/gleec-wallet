@@ -17,7 +17,7 @@
 
 ## 4. Create a new branch
 
-- Create a new local branch from the `dev` branch (`master` for hotfixes), name it according to [branch naming conventions](GITFLOW_BRANCHING.md#branch-naming-conventions)
+- Create a new local branch from the `dev` branch (`main` for hotfixes), name it according to [branch naming conventions](GITFLOW_BRANCHING.md#branch-naming-conventions)
 
 ## 5. Work on the issue
 
@@ -30,7 +30,7 @@
 
 ## 6. Before creating or updating a PR (checklist)
 
-- [ ] Sync your work branch with the latest changes from the target branch (`dev` or `master`), resolve merge conflicts if any
+- [ ] Sync your work branch with the latest changes from the target branch (`dev` or `main`), resolve merge conflicts if any
 - [ ] (Re)read original issue and comments, make sure that changes are solving the issue or adding the feature
 - [ ] Run the unit suite locally — `flutter test test_units/main.dart` **with the four GasFree dart-defines** ([TESTING.md](TESTING.md#2-unit-and-widget-tests)). This is the gating CI job; without the defines it hangs rather than fails
 - [ ] Run [integration tests](TESTING.md#3-integration--gui-tests) locally
@@ -47,7 +47,7 @@
 ## 7. Create a PR (checklist)
 
 - [ ] Sync your work branch with the latest changes from the target branch (again :), push it to the remote
-- [ ] Make sure that you're opening a PR from your work branch to the proper target branch (`dev` or `master`)
+- [ ] Make sure that you're opening a PR from your work branch to the proper target branch (`dev` or `main`)
 - [ ] Provide a clear and concise title for your PR
   - [ ] Avoid using generic titles like "Fix" or "Update"
   - [ ] Avoid using the issue number in the title
@@ -66,7 +66,7 @@
 - Once your PR is created, you should maintain it until it's merged
 - Check the PR on daily basis for comments, changes requests, questions, etc.
 - Address any comments or questions from the code review, or from QA testing
-- Make sure that your PR is up to date with the target branch (`dev` or `master`), resolve merge conflicts proactively
+- Make sure that your PR is up to date with the target branch (`dev` or `main`), resolve merge conflicts proactively
 - After merging, delete your work branch
 
 ## 9. 🎉 Celebrate

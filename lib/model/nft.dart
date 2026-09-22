@@ -158,6 +158,20 @@ enum NftBlockchains {
   avalanche,
   fantom;
 
+  /// Chains the app offers NFT support for, in display order.
+  ///
+  /// Polygon is withheld: KDF hardcodes `Chain::Polygon` to the `MATIC` and
+  /// `NFT_MATIC` tickers in `mm2src/coins/nft/nft_structs.rs`, so after the
+  /// MATIC -> POL coins config rename neither ticker resolves — `POL` is
+  /// rejected as an unsupported chain type and `NFT_MATIC` no longer names a
+  /// coin. Drop the exclusion once KDF accepts `POL` / `NFT_POL`.
+  static const List<NftBlockchains> supportedValues = [
+    NftBlockchains.eth,
+    NftBlockchains.bsc,
+    NftBlockchains.avalanche,
+    NftBlockchains.fantom,
+  ];
+
   @override
   String toString() {
     switch (this) {
@@ -232,7 +246,7 @@ enum NftBlockchains {
       case NftBlockchains.avalanche:
         return 'AVAX';
       case NftBlockchains.polygon:
-        return 'MATIC';
+        return 'POL';
       case NftBlockchains.fantom:
         return 'FTM';
     }
@@ -247,7 +261,7 @@ enum NftBlockchains {
       case NftBlockchains.avalanche:
         return 'NFT_AVAX';
       case NftBlockchains.polygon:
-        return 'NFT_MATIC';
+        return 'NFT_POL';
       case NftBlockchains.fantom:
         return 'NFT_FTM';
     }

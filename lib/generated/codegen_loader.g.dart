@@ -164,6 +164,17 @@ abstract class LocaleKeys {
   static const seedPhrase = 'seedPhrase';
   static const assetNumber = 'assetNumber';
   static const clipBoard = 'clipBoard';
+  static const onboardingConsentPrefix = 'onboardingConsentPrefix';
+  static const onboardingAgreementsUpdated = 'onboardingAgreementsUpdated';
+  static const onboardingAgreementNotice = 'onboardingAgreementNotice';
+  static const onboardingTitle = 'onboardingTitle';
+  static const onboardingSubtitle = 'onboardingSubtitle';
+  static const onboardingCreateWallet = 'onboardingCreateWallet';
+  static const onboardingImportTitle = 'onboardingImportTitle';
+  static const onboardingImportSubtitle = 'onboardingImportSubtitle';
+  static const onboardingHardwareTitle = 'onboardingHardwareTitle';
+  static const onboardingReturningTitle = 'onboardingReturningTitle';
+  static const onboardingReturningSubtitle = 'onboardingReturningSubtitle';
   static const walletsManagerCreateWalletButton =
       'walletsManagerCreateWalletButton';
   static const walletsManagerImportWalletButton =
@@ -258,12 +269,15 @@ abstract class LocaleKeys {
   static const swapRecoverButtonErrorMessage = 'swapRecoverButtonErrorMessage';
   static const swapRecoverButtonSuccessMessage =
       'swapRecoverButtonSuccessMessage';
+  static const swapRecoverButtonSubmittingMessage =
+      'swapRecoverButtonSubmittingMessage';
+  static const swapRecoverButtonUncertainMessage =
+      'swapRecoverButtonUncertainMessage';
   static const swapProgressStatusFailed = 'swapProgressStatusFailed';
   static const swapDetailsStepStatusFailed = 'swapDetailsStepStatusFailed';
   static const disclaimerAcceptEulaCheckbox = 'disclaimerAcceptEulaCheckbox';
   static const disclaimerAcceptTermsAndConditionsCheckbox =
       'disclaimerAcceptTermsAndConditionsCheckbox';
-  static const disclaimerAcceptDescription = 'disclaimerAcceptDescription';
   static const swapDetailsStepStatusInProcess =
       'swapDetailsStepStatusInProcess';
   static const swapDetailsStepStatusTimeSpent =
@@ -495,9 +509,14 @@ abstract class LocaleKeys {
   static const customFeeHigherAmount = 'customFeeHigherAmount';
   static const noSenderAddress = 'noSenderAddress';
   static const confirmOnTrezor = 'confirmOnTrezor';
-  static const alphaVersionWarningTitle = 'alphaVersionWarningTitle';
-  static const alphaVersionWarningDescription =
-      'alphaVersionWarningDescription';
+  static const walletImportNameTaken = 'walletImportNameTaken';
+  static const seedBackupGateTitle = 'seedBackupGateTitle';
+  static const seedBackupGateGeneratedBody = 'seedBackupGateGeneratedBody';
+  static const seedBackupGateBody = 'seedBackupGateBody';
+  static const seedBackupGateBackUpNow = 'seedBackupGateBackUpNow';
+  static const seedBackupGateImportInstead = 'seedBackupGateImportInstead';
+  static const seedBackupGateContinueAnyway = 'seedBackupGateContinueAnyway';
+  static const seedBackupGateShowAddress = 'seedBackupGateShowAddress';
   static const sendToAnalytics = 'sendToAnalytics';
   static const backToWallet = 'backToWallet';
   static const backToDex = 'backToDex';
@@ -698,6 +717,18 @@ abstract class LocaleKeys {
       'withdrawGaslessSupportDiagnosticsAction';
   static const withdrawGaslessStorageUnavailable =
       'withdrawGaslessStorageUnavailable';
+  static const withdrawGaslessClearRecoveryAction =
+      'withdrawGaslessClearRecoveryAction';
+  static const withdrawGaslessClearRecoveryTitle =
+      'withdrawGaslessClearRecoveryTitle';
+  static const withdrawGaslessClearRecoveryWarning =
+      'withdrawGaslessClearRecoveryWarning';
+  static const withdrawGaslessClearRecoveryAcknowledgement =
+      'withdrawGaslessClearRecoveryAcknowledgement';
+  static const withdrawGaslessClearRecoverySubmittedAt =
+      'withdrawGaslessClearRecoverySubmittedAt';
+  static const withdrawGaslessClearRecoveryFailed =
+      'withdrawGaslessClearRecoveryFailed';
   static const gaslessConsolidationTitle = 'gaslessConsolidationTitle';
   static const gaslessConsolidationBody = 'gaslessConsolidationBody';
   static const gaslessConsolidationFeeNotice = 'gaslessConsolidationFeeNotice';
@@ -901,6 +932,17 @@ abstract class LocaleKeys {
   static const tokensAmount = 'tokensAmount';
   static const noCollectibles = 'noCollectibles';
   static const tryReceiveNft = 'tryReceiveNft';
+  static const nftChainNotEnabled = 'nftChainNotEnabled';
+  static const nftChainEnabling = 'nftChainEnabling';
+  static const nftChainEnableFailed = 'nftChainEnableFailed';
+  static const nftEnableChainTitle = 'nftEnableChainTitle';
+  static const nftEnableChainBody = 'nftEnableChainBody';
+  static const nftEnableChainAction = 'nftEnableChainAction';
+  static const nftEnablingChainTitle = 'nftEnablingChainTitle';
+  static const nftEnablingChainBody = 'nftEnablingChainBody';
+  static const nftEnableChainFailedTitle = 'nftEnableChainFailedTitle';
+  static const nftEnableChainFailedBody = 'nftEnableChainFailedBody';
+  static const nftNoNetworksAvailable = 'nftNoNetworksAvailable';
   static const networkFee = 'networkFee';
   static const titleUnknown = 'titleUnknown';
   static const maxCount = 'maxCount';
@@ -1271,4 +1313,69 @@ abstract class LocaleKeys {
       'sdk_errors.gasless_rejected_before_relay';
   static const sdk_errors_general = 'sdk_errors.general';
   static const sdk_errors = 'sdk_errors';
+  static const copyDisplayedKeys = 'copyDisplayedKeys';
+  static const downloadDisplayedKeys = 'downloadDisplayedKeys';
+  static const shareDisplayedKeys = 'shareDisplayedKeys';
+  static const copyDisplayedKey = 'copyDisplayedKey';
+  static const privateKeyExportSessionChanged =
+      'privateKeyExportSessionChanged';
+  static const privateKeyExportCoverageNotice =
+      'privateKeyExportCoverageNotice';
+  static const privateKeyExportLegacyCoverage =
+      'privateKeyExportLegacyCoverage';
+  static const privateKeyExportAccountCoverage =
+      'privateKeyExportAccountCoverage';
+  static const privateKeyExportHdCoverage = 'privateKeyExportHdCoverage';
+  static const privateKeyExportReceiving = 'privateKeyExportReceiving';
+  static const privateKeyExportChange = 'privateKeyExportChange';
+  static const privateKeyExportUnknownBranch = 'privateKeyExportUnknownBranch';
+  static const privateKeyExportUnsupported = 'privateKeyExportUnsupported';
+  static const privateKeyExportTronUnavailable =
+      'privateKeyExportTronUnavailable';
+  static const privateKeyExportUnverified = 'privateKeyExportUnverified';
+  static const privateKeyExportAssetUnavailable =
+      'privateKeyExportAssetUnavailable';
+  static const privateKeyExportDeliveryFailed =
+      'privateKeyExportDeliveryFailed';
+  static const privateKeyExportDeliveryUnconfirmed =
+      'privateKeyExportDeliveryUnconfirmed';
+  static const privateKeyExportNoAssets = 'privateKeyExportNoAssets';
+  static const privateKeyExportShowQr = 'privateKeyExportShowQr';
+  static const privateKeyExportPublicKey = 'privateKeyExportPublicKey';
+  static const privateKeyExportCriticalTitle = 'privateKeyExportCriticalTitle';
+  static const privateKeyExportSummaryCounts = 'privateKeyExportSummaryCounts';
+  static const privateKeyExportSomeUnavailable =
+      'privateKeyExportSomeUnavailable';
+  static const privateKeyExportCoverageDetailsTitle =
+      'privateKeyExportCoverageDetailsTitle';
+  static const privateKeyExportCoverageLabel = 'privateKeyExportCoverageLabel';
+  static const privateKeyExportRevealGateHint =
+      'privateKeyExportRevealGateHint';
+  static const privateKeyExportRevealGateHintOn =
+      'privateKeyExportRevealGateHintOn';
+  static const privateKeyExportRevealKey = 'privateKeyExportRevealKey';
+  static const privateKeyExportHideKey = 'privateKeyExportHideKey';
+  static const privateKeyExportKeyHidden = 'privateKeyExportKeyHidden';
+  static const privateKeyExportPrivateKeyLabel =
+      'privateKeyExportPrivateKeyLabel';
+  static const privateKeyExportAddressLabel = 'privateKeyExportAddressLabel';
+  static const privateKeyExportDerivationPath =
+      'privateKeyExportDerivationPath';
+  static const privateKeyExportViewingKey = 'privateKeyExportViewingKey';
+  static const privateKeyExportIncludedBadge = 'privateKeyExportIncludedBadge';
+  static const privateKeyExportUnavailableBadge =
+      'privateKeyExportUnavailableBadge';
+  static const privateKeyExportAllFiltered = 'privateKeyExportAllFiltered';
+  static const privateKeyExportLoading = 'privateKeyExportLoading';
+  static const privateKeyExportBulkActionsTitle =
+      'privateKeyExportBulkActionsTitle';
+  static const walletDeletionRecoveryWarning = 'walletDeletionRecoveryWarning';
+  static const walletDeletionRecoveryUnavailable =
+      'walletDeletionRecoveryUnavailable';
+  static const walletDeletionReviewFailed = 'walletDeletionReviewFailed';
+  static const walletDeletionSubmissionBusy = 'walletDeletionSubmissionBusy';
+  static const walletDeletionReviewChanged = 'walletDeletionReviewChanged';
+  static const walletDeletionTargetChanged = 'walletDeletionTargetChanged';
+  static const seedBackupIdentityUnavailable = 'seedBackupIdentityUnavailable';
+  static const seedBackupSaveFailed = 'seedBackupSaveFailed';
 }

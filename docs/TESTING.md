@@ -64,7 +64,7 @@ and a CI timeout, not a red test. The values are non-secret; the source of recor
 ### The aggregator trap
 
 CI runs *only* `test_units/main.dart`. **A test file not reachable from it never runs,
-anywhere, and nothing reports that.** Adding a test means adding an import there. Three
+anywhere, and nothing reports that.** Adding a test means adding an import there. Two
 files are orphaned today — see §9.
 
 ### Coverage
@@ -76,88 +76,13 @@ Change the defines in one place and you must change them in both.
 
 ## 3. Integration / GUI tests
 
-`dart run_integration_tests.dart` wraps `flutter drive`. It starts and stops the browser
-driver itself, so no manual `chromedriver` step is needed for Chrome.
+`dart run_integration_tests.dart` wraps `flutter drive` and manages the browser
+driver. See [Integration and GUI testing](TESTING_INTEGRATION.md) for runner flags,
+compile-time definitions, suite selection, test-wallet setup and run recipes.
 
-### Flags
-
-| Flag | Short | Default | Allowed | Notes |
-|---|---|---|---|---|
-| `--help` | `-h` | — | — | prints usage, exits 0 |
-| `--verbose` | `-v` | false | — | passes `-v` to `flutter drive` |
-| `--testToRun` | `-t` | `''` | path under `test_integration/tests/` | **replaces** the whole default list |
-| `--browserDimension` | `-b` | `1024,1400` | `H,W` | rewritten to `HxW`. Web only |
-| `--displayMode` | `-d` | `no-headless` | `headless`, `no-headless` | local default opens a visible browser. Web only |
-| `--device` | `-D` | `web-server` | `web-server`, `chrome`, `linux`, `macos`, `windows`, `ios`, `android` | anything but `web-server` takes the native path |
-| `--runMode` | `-m` | `profile` | `release`, `debug`, `profile` | `profile` also emits `--profile-memory=memory_profile.json` |
-| `--browser-name` | `-n` | `chrome` | `chrome`, `safari`, `firefox` | `CHROME_EXECUTABLE` pins the Chrome binary |
-| `--driver-port` | `-p` | `4444` | — | web only |
-| `--pub` | — | false | — | `flutter pub get` before each group |
-| `--concurrent` | `-c` | false | — | not recommended with the current build steps |
-| `--keep-running` | `-k` | false | — | maps to `--keep-app-running` |
-
-**`-d` is display mode; `-D` is device.** They are not `flutter`'s letters. Getting them
-backwards is the classic mistake here.
-
-### What the runner injects — and what it does not
-
-Exactly three defines, on both the native and web paths:
-
-```
---dart-define=testing_mode=true       # lib/shared/constants.dart -> isTestMode
---dart-define=CI=true                 # -> isCiEnvironment
---dart-define=ANALYTICS_DISABLED=true # -> analyticsDisabled
-```
-
-**No `TRON_GASLESS_*` defines reach the integration suite.** GasFree is compiled off for
-every integration run, so no integration test covers that rail. `testing_mode` itself only
-changes error handling and log verbosity — it does not touch auth, analytics, or KDF
-config.
-
-### Suites
-
-| Suite (`-t` path) | In the default run | Logs in via `restoreWalletToTest` |
-|---|---|---|
-| `wallets_tests/wallets_tests.dart` | yes | yes |
-| `wallets_manager_tests/wallets_manager_tests.dart` | yes | **no** — it *is* the auth test; drives import directly |
-| `dex_tests/dex_tests.dart` | yes | yes |
-| `misc_tests/misc_tests.dart` | yes | yes, after the theme and feedback tests |
-| `fiat_onramp_tests/fiat_onramp_tests.dart` | yes | yes |
-| `nfts_tests/nfts_tests.dart` | **no** — `-t` only | yes |
-| `no_login_tests/no_login_tests.dart` | **no** — `-t` only | mostly no, but see below |
-| `suspended_assets_test/suspended_assets_test.dart` | **no** — hardcoded off | n/a |
-| `perf_tests/perf_tests.dart` | **no** — `-t` only, by design (§7) | no |
-
-`no_login_tests` is not entirely login-free: `no_login_taker_form_test.dart` calls
-`restoreWalletToTest` and must stay last in its group.
-
-### The test wallet
-
-`test_integration/helpers/restore_wallet.dart` imports wallet `my-wallet` with password
-`pppaaasssDDD555444@@@` in iguana mode. The seed is a randomly chosen **funded WIF key**
-from `helpers/get_funded_wif.dart` — RICK/MORTY testnet keys, not secrets, not a BIP39
-mnemonic. Because it is not a mnemonic, the helper must confirm the app's custom-seed
-dialog; the EULA and ToS are **one** checkbox (`checkbox-eula-tos`), not two.
-
-### Web vs native
-
-The web path (`-D web-server`, the default) serves the app and drives a real browser via
-chromedriver, which issues a **fresh browser profile per session** — so storage is clean
-every run. The native path (`-D macos|linux|windows|…`) calls `clearNativeAppsData()`
-first, but that function targets the wrong bundle identifiers (§9) — neither path should
-be assumed to give a clean native profile.
-
-### Recipes
-
-```bash
-dart run_integration_tests.dart -t 'wallets_tests/wallets_tests.dart'
-dart run_integration_tests.dart -n safari -m release
-dart run_integration_tests.dart -d headless -b '1600,1024' -n chrome -m profile  # = the Linux CI leg
-dart run_integration_tests.dart -D macos -m debug
-```
-
-`Process.run` buffers all output until the run exits — nothing streams, not even the
-build. With `-d no-headless` the visible browser window is your progress signal.
+The guide also separates the MARTY testnet withdrawal from the real-platform
+clipboard diagnostic. Supply policy and GasFree configuration explicitly for
+the behavior being tested; the runner does not supply those values by default.
 
 ## 4. KDF wallet-load harness
 
@@ -207,7 +132,43 @@ Every other SDK package has tests and **no CI**: `komodo_cex_market_data`,
 `komodo_wallet_build_transformer`, `komodo_coins`, `komodo_defi_framework`,
 `dragon_charts_flutter`, `komodo_wallet_cli`, `komodo_ui`, `dragon_logs`,
 `komodo_symbol_converter`, `komodo_legacy_wallet_migration`. Run them by hand or they ship
-unverified. `komodo_defi_local_auth` is the one *deliberate* exclusion — see §9.
+unverified. `komodo_defi_local_auth` has its own suite and must be run separately for auth changes.
+
+### RC lifecycle and persistence validation
+
+Use the version pinned by `.fvmrc` (`fvm flutter`), including when the integration
+runner invokes Flutter through `PATH`. Run complete local-auth and changed
+RPC/type package suites alongside the SDK suite. Generate test assets at least
+once before using `--no-test-assets`; the harness requires the BIP39 word list.
+
+Browser storage and locks need a real browser:
+
+```bash
+cd sdk/packages/komodo_defi_sdk
+CHROME_EXECUTABLE="$PWD/../../tool/flutter_test_chrome.sh" \
+FLUTTER_TEST_CHROME_BINARY='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+fvm flutter test --no-pub --platform chrome --wasm \
+  test/withdrawals/gasless_submission_lock_web_test.dart \
+  test/withdrawals/pending_gasless_transfer_repository_web_test.dart \
+  test/transaction_history/hive_transaction_cache_web_test.dart \
+  test/transaction_history/history_cache_platform_key_web_test.dart
+```
+
+The wrapper enables software WebGL for headless Wasm tests. Override the binary
+path for your platform. Native harness secure-storage mocks verify SDK behavior
+and cache continuity, not operating-system keychain protection. The browser
+platform-key test registers the real WebCrypto storage implementation.
+
+The explicit geo-disable branch has a separate compile-time regression. From
+the wallet root, run:
+
+```bash
+fvm flutter test --no-pub --dart-define=GEO_BLOCK=disabled \
+  test_units/bloc/trading_status/trading_status_disabled_policy_test.dart
+```
+
+It uses the real repository/service with a network client that throws if called.
+The normal aggregator registers this case but skips it without that define.
 
 ## 6. Skyvern QA runner
 
@@ -362,7 +323,7 @@ fortnight. The chart flow additionally needs keys added to
 | Pure Dart logic in `lib/` | unit | — |
 | A BLoC or its states/events | unit | integration, if it drives a screen a suite touches |
 | A widget carrying a `Key` a test uses | unit **and** integration | grep `test_integration/` for the key first |
-| Anything GasFree / TRON | unit **with all four defines** | integration will not cover it — no defines injected |
+| Anything GasFree / TRON | unit **with all four defines** | integration requires explicit defines and a GasFree-specific scenario |
 | Auth, activation, pubkeys, balances, storage | SDK **and** harness replay | nightly process tier if it touches the real binary |
 | Anything that could move wallet-load timing | harness replay + bench | update `tool/bench_baseline.json` by hand in the same PR |
 | An RPC request/response type | SDK + harness replay | serialisation bugs surface only on transports that `jsonEncode` |
@@ -376,60 +337,43 @@ fortnight. The chart flow additionally needs keys added to
 
 Current as of the last audit. Each is a real defect, not a caveat.
 
-1. **The integration suite reports green when a test throws.** `app.main()` sets
-   `FlutterError.onError = catchUnhandledExceptions` (`lib/main.dart:65-67`), and that
-   handler **never rethrows when `isTestMode` is true** (`lib/main.dart:186-194`) — which
-   the runner always makes true via `--dart-define=testing_mode=true`. It replaces the
-   handler `testWidgets` installed to record failures, so the throw is printed to the
-   browser console and the run still ends `All tests passed!`. Observed directly: a
-   `misc_tests` run where `testFeedbackForm` died on `Bad state: No element`, never
-   reached `restoreWalletToTest`, never printed its own `END MISC TESTS`, and exited 0.
-   **Do not trust a green integration run** — read the browser console
-   (`chromedriver.log`) and confirm the suite's final marker actually printed.
-2. **`restoreWalletToTest` cannot finish inside its own 30s budget.** Its last line is
-   `pumpUntilDisappear(walletsManagerWrapper)`, and `pumpUntilDisappear` hardcodes
-   `timeout: Duration(seconds: 30)` (`test_integration/common/widget_tester_pump_extension.dart:50`).
-   On web, importing the wallet starts KDF from cold — measured here: KDF start at
-   `00:23:17`, import submitted `00:23:32`, `TimeoutException: Pump until has timed out`
-   at `00:24:02` — so the helper throws while sign-in is still legitimately in progress.
-   The import itself completes; the wait does not. Raising that timeout (or making it a
-   parameter) is the next thing standing between this suite and a real pass.
-3. **Three `test_units/` files are orphaned** and never run anywhere:
-   `tests/wallet/legacy_native_wallet_migration_test.dart`,
+> Three entries were removed on 2026-08-27 after verifying they had been fixed on this
+> branch: the `pumpUntilDisappear` timeout is now a `timeout` parameter defaulting to 60s
+> (`widget_tester_pump_extension.dart:55`), `clearNativeAppsData()` uses the Gleec bundle
+> ids (`app_data.dart:16-17`), and nothing references `active-coin-item-` any more.
+> On 2026-09-05, test-mode startup was also corrected to preserve the integration
+> binding's error handler and zone. Previously, application error reporting could
+> swallow a test exception and produce a false green run. Regression tests in
+> `test_units/services/initializer/app_error_handling_test.dart` cover framework
+> and asynchronous failures. For older builds, confirm the suite's final marker
+> in the browser log before trusting its reported success.
+
+1. **Two `test_units/` files are orphaned** and never run anywhere:
    `views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart`,
    `views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart`.
    `testTruncateDecimal()` is also commented out in `test_units/main.dart`.
-4. **`clearNativeAppsData()` targets the wrong paths.** `test_integration/runners/app_data.dart`
-   deletes `com.komodo.wallet` / `com.komodo.KomodoWallet`; this app is
-   `com.GleecDEX.wallet` (macOS) and `com.gleec.GleecDEX` (Linux). Native runs are not
-   isolated, and the function tries to delete an unrelated container — observed on a
-   macOS run as `rm: …/Containers/com.komodo.wallet: Operation not permitted`, because
-   that path is SIP-protected. The failure is printed and the run continues.
-5. **The macOS Debug/Profile configuration has no provisioning profile.** A
+2. **The macOS Debug/Profile configuration has no provisioning profile.** A
    `-D macos -m profile` run fails at `No profiles for 'com.GleecDEX.wallet' were found`.
    Only the Release configuration (bundle id `com23.GleecDEX.wallet`, Developer ID
    signing) is set up. Until that is fixed, the native perf target of §7 cannot run
    locally, and web is the only path — with the caveat there that web frame numbers are
    not baseline-worthy.
-6. **`active-coin-item-<abbr>` does not exist in `lib/`.** Six integration test files look
-   for it — the real key is `coin-list-item-<abbr>` (`active_coins_list.dart:95`). Every
-   test depending on it fails at the finder.
-7. **`--timeout=600` is inert.** `flutter drive` only arms that timer when `--screenshot`
+3. **`--timeout=600` is inert.** `flutter drive` only arms that timer when `--screenshot`
    is passed, which the runner never does. A hung integration test has no wrapper-level
    cap; only a test's own `Timeout` bounds it.
-8. **`suspended_assets_test` is hardcoded off** (`getTestsList(false)`). The `*.cipig.net`
+4. **`suspended_assets_test` is hardcoded off** (`getTestsList(false)`). The `*.cipig.net`
    URL-blocking machinery is intact but unreachable.
-9. **`nfts_tests` and `no_login_tests` are not in the default list** — `-t` only, so they
+5. **`nfts_tests` and `no_login_tests` are not in the default list** — `-t` only, so they
    run only when someone remembers.
-10. **Integration coverage is disabled** in `ui-tests-on-pr.yml` — Hive and other storage
+6. **Integration coverage is disabled** in `ui-tests-on-pr.yml` — Hive and other storage
    providers need mocking, and `flutter drive` is deprecated upstream.
-11. **`komodo_defi_local_auth` is deliberately ungated** — 57 pass, 1 fails
-   (`trezor_repository_test.dart`). Unresolved: either a stale fixture or a real loss of
-   device-error detail.
-12. **`test/gasless_journal_web_key_discovery_test.dart` is `@TestOn('browser')`** and no
+7. **`komodo_defi_local_auth` is not in the wallet unit gate.** Run its
+   package suite separately. Keep exact per-revision results with the release
+   validation artifacts; an older passing count is not current evidence.
+8. **`test/gasless_journal_web_key_discovery_test.dart` is `@TestOn('browser')`** and no
    workflow runs it: `flutter test --platform chrome test/…`.
-13. **No integration coverage of the GasFree rail** — §3.
-14. **Skyvern is not in CI** — §6.
+9. **No integration coverage of the GasFree rail** — §3.
+10. **Skyvern is not in CI** — §6.
 
 ## 10. See also
 
@@ -438,6 +382,7 @@ Current as of the last audit. Each is a real defect, not a caveat.
 | [WALLET_LOAD_MEASUREMENT.md](WALLET_LOAD_MEASUREMENT.md) | the wallet-load tiers, what to measure and why, baseline policy |
 | [../tool/README.md](../tool/README.md) | the KDF probes and the log parser |
 | [../sdk/packages/komodo_defi_harness/README.md](../sdk/packages/komodo_defi_harness/README.md) | harness internals and its API |
+| [TESTING_INTEGRATION.md](TESTING_INTEGRATION.md) | integration runner, test-wallet flows and browser configuration |
 | [MANUAL_TESTING_DEBUGGING.md](MANUAL_TESTING_DEBUGGING.md) | debug login, web debugging, crash logs |
 | [../automated_testing/README.md](../automated_testing/README.md) | running the Skyvern rig |
 | [CONTRIBUTION_GUIDE.md](CONTRIBUTION_GUIDE.md) | the PR checklist |

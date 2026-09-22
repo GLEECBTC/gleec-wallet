@@ -8,7 +8,7 @@ import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/services/feedback/feedback_service.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
-import 'dart:typed_data';
+import 'package:web_dex/services/feedback/feedback_capture_session.dart';
 
 extension BuildContextShowFeedback on BuildContext {
   /// Shows the feedback dialog if the feedback service is available.
@@ -22,27 +22,23 @@ extension BuildContextShowFeedback on BuildContext {
       return;
     }
 
-    BetterFeedback.of(this).show((feedback) async {
-      await Future.delayed(Duration(milliseconds: 500));
+    final feedbackController = BetterFeedback.of(this);
+    if (feedbackController.isVisible) return;
+    final capture = FeedbackCaptureSession.begin(
+      ScreenshotSensitivity.maybeOf(this),
+    );
+    feedbackController.show((feedback) async {
       try {
-        // If current UI is marked screenshot-sensitive, replace screenshot with a
-        // minimal transparent PNG to avoid leaking secrets.
-        final bool isSensitive = isScreenshotSensitive;
-        final UserFeedback sanitized = isSensitive
-            ? UserFeedback(
-                text: feedback.text,
-                extra: feedback.extra,
-                // 1x1 transparent PNG
-                screenshot: Uint8List.fromList(const <int>[
-                  137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,10,73,68,65,84,120,156,99,96,0,0,0,2,0,1,226,33,185,120,0,0,0,0,73,69,78,68,174,66,96,130
-                ]),
-              )
-            : feedback;
-
-        final success = await feedbackService.handleFeedback(sanitized);
+        final success = await capture.submit(
+          feedback,
+          service: feedbackService,
+          currentController: () =>
+              mounted ? ScreenshotSensitivity.maybeOf(this) : null,
+        );
+        if (!mounted) return;
 
         if (success) {
-          BetterFeedback.of(this).hide();
+          feedbackController.hide();
 
           String? contactMethod;
           if (feedback.extra != null && feedback.extra is JsonMap) {
@@ -51,8 +47,10 @@ extension BuildContextShowFeedback on BuildContext {
           }
 
           if (contactMethod == 'discord') {
-            await Future.delayed(Duration(milliseconds: 300));
+            await Future.delayed(const Duration(milliseconds: 300));
+            if (!mounted) return;
             await _showDiscordInfoDialog(this);
+            if (!mounted) return;
           }
 
           ScaffoldMessenger.of(this).showSnackBar(
@@ -82,7 +80,8 @@ extension BuildContextShowFeedback on BuildContext {
           );
         }
       } catch (e) {
-        debugPrint('Error submitting feedback: $e');
+        debugPrint('Feedback submission failed.');
+        if (!mounted) return;
         final theme = Theme.of(this);
         ScaffoldMessenger.of(this).showSnackBar(
           SnackBar(
@@ -171,6 +170,6 @@ Future<void> _openDiscordSupport() async {
   try {
     await launchUrl(discordInviteUrl, mode: LaunchMode.externalApplication);
   } catch (e) {
-    debugPrint('Error opening Discord link: $e');
+    debugPrint('Unable to open the support link.');
   }
 }

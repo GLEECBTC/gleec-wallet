@@ -37,11 +37,6 @@ class _FakeCoinsBloc extends Cubit<CoinsState> implements CoinsBloc {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Future<void> _disposeAnimatedWidgets(WidgetTester tester) async {
-  await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pump(const Duration(seconds: 3));
-}
-
 void testTransactionViewsWidgets() {
   group('Transaction views widgets', () {
     testWidgets('transaction table shows loading spinner while fetching', (
@@ -193,7 +188,6 @@ void testTransactionViewsWidgets() {
       // The destination (custody) address is shown, not the sender.
       expect(find.textContaining('custody-address'), findsWidgets);
       expect(find.textContaining('eoa-address'), findsNothing);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('internal-transfer label fits a phone-width mobile row', (
@@ -246,7 +240,6 @@ void testTransactionViewsWidgets() {
 
       expect(tester.takeException(), isNull);
       expect(find.text(LocaleKeys.txInternalTransfer), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('transaction row still labels positive-net tx as receive', (
@@ -280,7 +273,6 @@ void testTransactionViewsWidgets() {
       expect(find.text(LocaleKeys.receive), findsOneWidget);
       expect(find.text(LocaleKeys.txInternalTransfer), findsNothing);
       expect(find.byIcon(Icons.arrow_circle_down), findsOneWidget);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('transaction details done button calls onClose', (
@@ -305,7 +297,6 @@ void testTransactionViewsWidgets() {
       await tester.pump();
 
       expect(didClose, isTrue);
-      await _disposeAnimatedWidgets(tester);
     });
 
     testWidgets('transaction details view on explorer uses tx hash', (
@@ -332,7 +323,6 @@ void testTransactionViewsWidgets() {
 
       expect(launched, isNotNull);
       expect(launched, contains('abc-hash'));
-      await _disposeAnimatedWidgets(tester);
     });
   });
 }

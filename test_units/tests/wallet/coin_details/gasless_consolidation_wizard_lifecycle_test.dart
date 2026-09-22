@@ -1,4 +1,5 @@
 import 'package:decimal/decimal.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_bloc.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_event.dart';
 import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/gasless_consolidation_wizard.dart';
@@ -259,6 +261,9 @@ class _FakeAddressOperations implements AddressOperations {
 }
 
 class _FakeWithdrawalManager implements WithdrawalManager {
+  _FakeWithdrawalManager({this.previewError});
+
+  final Object? previewError;
   int previewCalls = 0;
 
   @override
@@ -266,6 +271,8 @@ class _FakeWithdrawalManager implements WithdrawalManager {
     WithdrawParameters parameters,
   ) async {
     previewCalls += 1;
+    final error = previewError;
+    if (error != null) throw error;
     return WithdrawResult(
       txHex: 'signed-consolidation-preview-$previewCalls',
       txHash: 'consolidation-preview-$previewCalls',
@@ -349,6 +356,97 @@ class _FakeMm2Api implements Mm2Api {
 }
 
 void testGaslessConsolidationWizardLifecycle() {
+  for (final (errorCode, needsTrx) in [
+    (SdkErrorCode.insufficientGas, true),
+    (SdkErrorCode.insufficientFeeBalance, true),
+    (SdkErrorCode.insufficientFunds, false),
+    (SdkErrorCode.transport, false),
+  ]) {
+    testWidgets(
+      'consolidation ${errorCode.name} preview failure shows the correct '
+      'blocked-source reason',
+      (tester) async {
+        final (parent, token) = _assets();
+        final withdrawals = _FakeWithdrawalManager(
+          previewError: SdkError(
+            code: errorCode,
+            category: errorCode == SdkErrorCode.transport
+                ? SdkErrorCategory.network
+                : SdkErrorCategory.funds,
+            messageKey: 'previewFailure',
+            fallbackMessage: 'Preview failed',
+          ),
+        );
+        final sdk = _FakeSdk(
+          assets: _FakeAssetManager([parent, token]),
+          pubkeys: _FakePubkeyManager({
+            token.id: _assetPubkeys(
+              token,
+              _pubkey(
+                coin: token.id.id,
+                balance: Decimal.fromInt(5),
+                gasfreeAddress: _custodyAddress,
+              ),
+            ),
+            parent.id: _assetPubkeys(
+              parent,
+              _pubkey(coin: parent.id.id, balance: Decimal.zero),
+            ),
+          }),
+          withdrawals: withdrawals,
+        );
+        final addressesBloc = _FakeCoinAddressesBloc(
+          _readyState(observedAt: DateTime.now().toUtc()),
+        );
+        final authBloc = _FakeAuthBloc();
+        addTearDown(addressesBloc.close);
+        addTearDown(authBloc.close);
+
+        await tester.pumpWidget(
+          MultiRepositoryProvider(
+            providers: [
+              RepositoryProvider<KomodoDefiSdk>.value(value: sdk),
+              RepositoryProvider<Mm2Api>.value(value: _FakeMm2Api()),
+            ],
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<AuthBloc>.value(value: authBloc),
+                BlocProvider<CoinAddressesBloc>.value(value: addressesBloc),
+              ],
+              child: MaterialApp(
+                home: Scaffold(
+                  body: GaslessConsolidationWizard(
+                    asset: token,
+                    custodyAddress: _custodyAddress,
+                    expectedWalletId: _user().walletId,
+                    addressVerifier: _testAddressVerifier,
+                    onDone: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(withdrawals.previewCalls, 1);
+        expect(
+          find.text(LocaleKeys.gaslessConsolidationNeedsTrx.tr()),
+          needsTrx ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.text(LocaleKeys.gaslessConsolidationPreflightUnavailable.tr()),
+          needsTrx ? findsNothing : findsOneWidget,
+        );
+        final moveSource = tester.widget<FilledButton>(
+          find.byKey(const Key('gasless-consolidation-move-$_standardAddress')),
+        );
+        expect(moveSource.onPressed, isNull);
+        expect(find.byType(WithdrawForm), findsNothing);
+      },
+    );
+  }
+
   testWidgets(
     'resume disposes the active form and waits for a fresh typed status',
     (tester) async {

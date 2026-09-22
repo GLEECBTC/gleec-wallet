@@ -9,8 +9,6 @@ abstract class NftReceiveState extends Equatable {
 
 class NftReceiveInitial extends NftReceiveState {}
 
-class NftReceiveBackupSuccess extends NftReceiveState {}
-
 class NftReceiveLoadSuccess extends NftReceiveState {
   const NftReceiveLoadSuccess({
     required this.asset,
@@ -36,10 +34,10 @@ class NftReceiveLoadSuccess extends NftReceiveState {
 
   @override
   List<Object> get props => [
-        asset,
-        pubkeys,
-        if (selectedAddress != null) selectedAddress!,
-      ];
+    asset,
+    pubkeys,
+    if (selectedAddress != null) selectedAddress!,
+  ];
 }
 
 class NftReceiveLoadFailure extends NftReceiveState {
