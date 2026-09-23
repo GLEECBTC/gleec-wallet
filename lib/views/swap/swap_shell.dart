@@ -109,6 +109,11 @@ class _SwapShellState extends State<SwapShell> {
               final showIcons = constraints.maxWidth >= 420;
               return SegmentedButton<SwapDestination>(
                 key: const Key('swap-destination-switcher'),
+                // The selected segment otherwise gains a checkmark that the
+                // leading icon's absence does not pay for, and at phone width
+                // it pushes "Advanced" onto a second line mid-word. The fill
+                // already shows which segment is selected.
+                showSelectedIcon: showIcons,
                 // The keys sit on the labels because [ButtonSegment] takes
                 // none, and the integration suite has to be able to address a
                 // single destination: the trading interface it asserts
