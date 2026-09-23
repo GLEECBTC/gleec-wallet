@@ -29,17 +29,36 @@ Future<void> dexPage(WidgetTester tester, {ScreenType? type}) async {
 /// Switches the Swap surface to the destination that hosts the trading UI.
 ///
 /// Safe to call when Advanced is already selected: the segmented button
-/// ignores a tap on the current selection.
+/// ignores a tap on the current selection. Also safe where there is no
+/// switcher at all - the mobile menu router still builds `DexPage` directly
+/// (page_menu_router_delegate.dart), so the trading UI is already what the
+/// menu entry mounted and there is nothing to switch to.
 Future<void> advancedSwapDestination(WidgetTester tester) =>
     _swapDestination('advanced', tester);
 
 /// Switches the Swap surface back to the swap form.
+///
+/// Unlike [advancedSwapDestination] this one asserts, because a caller that
+/// wants the swap form has nothing to fall back on if the shell is absent.
 Future<void> swapFormDestination(WidgetTester tester) =>
-    _swapDestination('swap', tester);
+    _swapDestination('swap', tester, required: true);
 
-Future<void> _swapDestination(String name, WidgetTester tester) async {
+Future<void> _swapDestination(
+  String name,
+  WidgetTester tester, {
+  bool required = false,
+}) async {
   final Finder finder = find.byKey(Key('swap-destination-$name'));
-  expect(finder, findsOneWidget, reason: 'goto.dart _swapDestination($name)');
+  if (finder.evaluate().isEmpty) {
+    if (required) {
+      expect(
+        finder,
+        findsOneWidget,
+        reason: 'goto.dart _swapDestination($name): no swap shell on screen',
+      );
+    }
+    return;
+  }
   await tester.tapAndPump(finder);
   await tester.pumpNFrames(60);
 }

@@ -245,11 +245,34 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     // Re-price before committing. A quote goes stale in about a minute and
     // carries no reservation, so the figure on screen may already be gone.
     emit(state.copyWith(isRepricing: true, clearStartError: true));
-    final fresh = await _repository.quote(
-      from: accepted.from,
-      to: accepted.to,
-      amount: accepted.sellAmount,
-    );
+    final UnifiedSwapQuotes fresh;
+    try {
+      fresh = await _repository.quote(
+        from: accepted.from,
+        to: accepted.to,
+        amount: accepted.sellAmount,
+      );
+    } on Object {
+      // Without this the handler throws with isRepricing still set, and the
+      // button stays on "Checking price…" for the rest of the session with no
+      // way back - the swap can never be started or abandoned.
+      emit(
+        state.copyWith(
+          isRepricing: false,
+          startError: 'Could not check the current price. Try again.',
+        ),
+      );
+      return;
+    }
+
+    // The re-price is an await, and "Back" is live throughout it. Without
+    // this check the handler resumes and starts a real swap against a user
+    // who already left the confirmation screen.
+    if (state.step != UnifiedSwapStep.confirm) {
+      emit(state.copyWith(isRepricing: false));
+      return;
+    }
+
     final freshQuote = fresh.quotes
         .where((q) => q.source == accepted.source)
         .firstOrNull;
@@ -336,7 +359,20 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
         (progress) => add(UnifiedSwapProgressReceived(progress)),
       );
     } on Object catch (error) {
-      emit(state.copyWith(isStarting: false, startError: error.toString()));
+      // The throw says the call failed, not that nothing was submitted: the
+      // engine may already have spawned the task. Re-arming the button here
+      // is how one tap becomes two real, irreversible swaps, so the restart
+      // stays blocked and the user is told where to look instead.
+      emit(
+        state.copyWith(
+          isStarting: false,
+          startMayHaveSubmitted: true,
+          startError:
+              'We could not confirm whether this swap started: $error\n\n'
+              'It may already be running. Check Activity before trying '
+              'again - starting a second swap would trade twice.',
+        ),
+      );
     }
   }
 

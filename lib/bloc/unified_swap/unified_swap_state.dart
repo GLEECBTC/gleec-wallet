@@ -77,6 +77,7 @@ class UnifiedSwapState extends Equatable {
     this.isRepricing = false,
     this.repricedQuote,
     this.startError,
+    this.startMayHaveSubmitted = false,
     this.activeSwapUuid,
   });
 
@@ -130,6 +131,14 @@ class UnifiedSwapState extends Equatable {
   /// Why starting failed.
   final String? startError;
 
+  /// Whether a failed start may nonetheless have submitted a real swap.
+  ///
+  /// `executor.start()` can throw after the engine has already spawned the
+  /// task, and the error alone cannot tell the two apart. Re-arming the
+  /// button on that reading is how one tap becomes two real swaps, so the
+  /// ambiguous case blocks restarting and says so instead.
+  final bool startMayHaveSubmitted;
+
   /// The durable id of the running swap.
   final String? activeSwapUuid;
 
@@ -163,6 +172,7 @@ class UnifiedSwapState extends Equatable {
       selectedQuote != null &&
       !isStarting &&
       !isRepricing &&
+      !startMayHaveSubmitted &&
       repricedQuote == null;
 
   /// Whether the running swap can still be cancelled.
@@ -189,6 +199,7 @@ class UnifiedSwapState extends Equatable {
     bool? isRepricing,
     SwapQuote? repricedQuote,
     String? startError,
+    bool? startMayHaveSubmitted,
     String? activeSwapUuid,
     bool clearFormError = false,
     bool clearQuotes = false,
@@ -219,6 +230,9 @@ class UnifiedSwapState extends Equatable {
           ? null
           : (repricedQuote ?? this.repricedQuote),
       startError: clearStartError ? null : (startError ?? this.startError),
+      startMayHaveSubmitted: clearStartError
+          ? false
+          : (startMayHaveSubmitted ?? this.startMayHaveSubmitted),
       activeSwapUuid: activeSwapUuid ?? this.activeSwapUuid,
     );
   }
@@ -240,6 +254,7 @@ class UnifiedSwapState extends Equatable {
     isRepricing,
     repricedQuote,
     startError,
+    startMayHaveSubmitted,
     activeSwapUuid,
   ];
 }

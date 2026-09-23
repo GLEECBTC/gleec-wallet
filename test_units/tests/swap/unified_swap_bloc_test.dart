@@ -293,6 +293,85 @@ void main() {
     );
   });
 
+  group('abandoning a start', () {
+    /// Reaches the confirmation screen with a quote ready to start.
+    Future<void> reachConfirm(
+      UnifiedSwapBloc bloc,
+      _ProgrammableSource source,
+    ) async {
+      source.priced = quoteOf(guaranteed: '99', payload: _offer());
+      await fillForm(bloc);
+      bloc.add(const UnifiedSwapQuoteRequested());
+      await waitFor(bloc, (s) => s.canReview);
+      bloc.add(const UnifiedSwapReviewRequested());
+      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
+    }
+
+    test('a failing re-price does not jam the button forever', () async {
+      final source = _ProgrammableSource();
+      final bloc = blocWith(source);
+      addTearDown(bloc.close);
+      await reachConfirm(bloc, source);
+
+      source.throws = true;
+      bloc.add(const UnifiedSwapStartRequested());
+
+      final state = await waitFor(bloc, (s) => s.startError != null);
+
+      // Before the fix the handler threw with isRepricing still set, leaving
+      // "Checking price…" on screen with no way to start or abandon.
+      expect(state.isRepricing, isFalse);
+      expect(state.canStart, isTrue, reason: 'the user can try again');
+    });
+
+    test('backing out during the re-price does not execute the swap', () async {
+      final source = _ProgrammableSource();
+      final executor = _FakeExecutor();
+      final bloc = blocWith(source, executor: executor);
+      addTearDown(bloc.close);
+      await reachConfirm(bloc, source);
+
+      // Hold the re-price open, leave the screen, then let it answer.
+      final gate = Completer<void>();
+      source.gate = gate;
+      bloc.add(const UnifiedSwapStartRequested());
+      await waitFor(bloc, (s) => s.isRepricing);
+      bloc.add(const UnifiedSwapReviewDismissed());
+      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.fill);
+      gate.complete();
+
+      // Give the resumed handler every chance to run.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        executor.startCount,
+        0,
+        reason: 'the user left the confirmation screen before it committed',
+      );
+      expect(bloc.state.step, UnifiedSwapStep.fill);
+    });
+
+    test('an ambiguous start failure does not re-arm the button', () async {
+      final source = _ProgrammableSource();
+      final executor = _FakeExecutor()..throwsAfterSubmitting = true;
+      final bloc = blocWith(source, executor: executor);
+      addTearDown(bloc.close);
+      await reachConfirm(bloc, source);
+
+      bloc.add(const UnifiedSwapStartRequested());
+      final state = await waitFor(bloc, (s) => s.startError != null);
+
+      expect(executor.startCount, 1);
+      expect(state.startMayHaveSubmitted, isTrue);
+      expect(
+        state.canStart,
+        isFalse,
+        reason: 'a second press would submit a second real, irreversible swap',
+      );
+      expect(state.startError, contains('Activity'));
+    });
+  });
+
   group('execution', () {
     test('an atomic offer says so instead of silently doing nothing', () async {
       // The button spends money. Pressing it and having nothing happen is the
@@ -394,6 +473,9 @@ class _ProgrammableSource implements SwapQuoteSource {
   SwapQuote? priced;
   SwapQuoteUnavailableReason? rejection;
 
+  /// When true, the lookup throws instead of answering.
+  bool throws = false;
+
   /// When set, the next lookup blocks until completed.
   Completer<void>? gate;
 
@@ -407,6 +489,7 @@ class _ProgrammableSource implements SwapQuoteSource {
     required Decimal amount,
   }) async {
     if (gate != null) await gate!.future;
+    if (throws) throw StateError('quote endpoint down');
     final rejected = rejection;
     if (rejected != null) {
       return SwapQuoteRejected(
@@ -434,11 +517,16 @@ class _FakeExecutor implements SwapExecutor {
   final _controller = StreamController<UnifiedSwapProgress>.broadcast();
   int startCount = 0;
 
+  /// When true, `start` throws *after* counting - the ambiguous case where
+  /// the engine may already hold the task.
+  bool throwsAfterSubmitting = false;
+
   void emit(UnifiedSwapProgress progress) => _controller.add(progress);
 
   @override
   Future<SwapExecutionHandle> start(SwapQuote quote) async {
     startCount++;
+    if (throwsAfterSubmitting) throw StateError('connection lost after submit');
     return _FakeHandle(_controller.stream);
   }
 }

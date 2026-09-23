@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
@@ -100,10 +101,47 @@ class _AssetRow extends StatelessWidget {
   }
 }
 
-class _AmountField extends StatelessWidget {
+class _AmountField extends StatefulWidget {
   const _AmountField({required this.state});
 
   final UnifiedSwapState state;
+
+  @override
+  State<_AmountField> createState() => _AmountFieldState();
+}
+
+class _AmountFieldState extends State<_AmountField> {
+  /// Holds the field's text so amounts the user did not type still show.
+  ///
+  /// Without a controller the field renders whatever was last typed, so
+  /// "Max" and the reverse button changed the amount that would be traded
+  /// while leaving the old figure on screen. The form then showed one number
+  /// and swapped another.
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.state.amountText,
+  );
+
+  @override
+  void didUpdateWidget(_AmountField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final incoming = widget.state.amountText;
+    // Only when it actually differs: assigning on every rebuild would move
+    // the caret to the end mid-typing.
+    if (incoming != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: incoming,
+        selection: TextSelection.collapsed(offset: incoming.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  UnifiedSwapState get state => widget.state;
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +149,19 @@ class _AmountField extends StatelessWidget {
 
     return TextField(
       key: const Key('swap-amount'),
+      controller: _controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      // A comma keypad is what a decimal keyboard offers across most of
+      // Europe, and Decimal.tryParse rejects a comma - so without this the
+      // amount reads as malformed and no fractional swap can be entered at
+      // all. Normalising beats telling people their own keyboard is wrong.
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        TextInputFormatter.withFunction((oldValue, newValue) {
+          if (!newValue.text.contains(',')) return newValue;
+          return newValue.copyWith(text: newValue.text.replaceAll(',', '.'));
+        }),
+      ],
       onChanged: (value) => bloc.add(UnifiedSwapAmountChanged(value)),
       onSubmitted: (_) => bloc.add(const UnifiedSwapQuoteRequested()),
       decoration: InputDecoration(

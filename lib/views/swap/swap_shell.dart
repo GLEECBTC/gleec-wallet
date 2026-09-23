@@ -100,32 +100,47 @@ class _SwapShellState extends State<SwapShell> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: SegmentedButton<SwapDestination>(
-            key: const Key('swap-destination-switcher'),
-            // The keys sit on the labels because [ButtonSegment] takes none,
-            // and the integration suite has to be able to address a single
-            // destination: the trading interface it asserts against is only
-            // mounted once Advanced is selected.
-            segments: const [
-              ButtonSegment(
-                value: SwapDestination.swap,
-                label: Text('Swap', key: Key('swap-destination-swap')),
-                icon: Icon(Icons.swap_calls),
-              ),
-              ButtonSegment(
-                value: SwapDestination.activity,
-                label: Text('Activity', key: Key('swap-destination-activity')),
-                icon: Icon(Icons.history),
-              ),
-              ButtonSegment(
-                value: SwapDestination.advanced,
-                label: Text('Advanced', key: Key('swap-destination-advanced')),
-                icon: Icon(Icons.candlestick_chart),
-              ),
-            ],
-            selected: {_destination},
-            onSelectionChanged: (selection) =>
-                setState(() => _destination = selection.first),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Three icon+label segments do not fit a phone-width screen,
+              // and an overflowing switcher would strand the destination it
+              // clipped. The labels carry the meaning, so the icons are what
+              // gives way.
+              final showIcons = constraints.maxWidth >= 420;
+              return SegmentedButton<SwapDestination>(
+                key: const Key('swap-destination-switcher'),
+                // The keys sit on the labels because [ButtonSegment] takes
+                // none, and the integration suite has to be able to address a
+                // single destination: the trading interface it asserts
+                // against is only mounted once Advanced is selected.
+                segments: [
+                  ButtonSegment(
+                    value: SwapDestination.swap,
+                    label: const Text('Swap', key: Key('swap-destination-swap')),
+                    icon: showIcons ? const Icon(Icons.swap_calls) : null,
+                  ),
+                  ButtonSegment(
+                    value: SwapDestination.activity,
+                    label: const Text(
+                      'Activity',
+                      key: Key('swap-destination-activity'),
+                    ),
+                    icon: showIcons ? const Icon(Icons.history) : null,
+                  ),
+                  ButtonSegment(
+                    value: SwapDestination.advanced,
+                    label: const Text(
+                      'Advanced',
+                      key: Key('swap-destination-advanced'),
+                    ),
+                    icon: showIcons ? const Icon(Icons.candlestick_chart) : null,
+                  ),
+                ],
+                selected: {_destination},
+                onSelectionChanged: (selection) =>
+                    setState(() => _destination = selection.first),
+              );
+            },
           ),
         ),
         Expanded(child: widget.destinationBuilder(_destination)),
