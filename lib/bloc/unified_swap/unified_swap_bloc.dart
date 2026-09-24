@@ -51,6 +51,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     Duration evaluationTimeout = const Duration(seconds: 25),
     Duration refreshInterval = const Duration(seconds: 30),
     Duration rateLimitPause = const Duration(seconds: 30),
+    Duration idleLimit = const Duration(minutes: 5),
   }) : _repository = repository,
        _registry = registry,
        _terms = terms,
@@ -64,6 +65,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
        _evaluationTimeout = evaluationTimeout,
        _refreshInterval = refreshInterval,
        _rateLimitPause = rateLimitPause,
+       _idleLimit = idleLimit,
        super(const UnifiedSwapState()) {
     on<UnifiedSwapStarted>(_onStarted);
     on<UnifiedSwapIntentApplied>(_onIntentApplied);
@@ -87,6 +89,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapBalancesRefreshed>(_onBalancesRefreshed);
     on<UnifiedSwapCatalogRefreshRequested>(_onCatalogRefreshRequested);
     on<UnifiedSwapAssetActivated>(_onAssetActivated);
+    on<UnifiedSwapAlternativesRequested>(_onAlternativesRequested);
+    on<UnifiedSwapForegroundChanged>(_onForegroundChanged);
     on<UnifiedSwapTimerFired>(_onTimerFired);
   }
 
@@ -104,6 +108,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   final Duration _refreshInterval;
   final Duration _rateLimitPause;
 
+  /// How long the form keeps re-pricing without anyone touching it. After
+  /// that the quote is left to expire, and refreshing is one tap away.
+  final Duration _idleLimit;
+
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
 
@@ -112,7 +120,13 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   int _startVersion = 0;
 
   var _visible = true;
+  var _foreground = true;
   var _intentApplied = false;
+  late DateTime _lastInteraction = _now();
+
+  /// The intent someone opened a comparison for: its alternatives stay
+  /// priced on every refresh until the intent changes.
+  Object? _comparing;
 
   /// Pair changes in flight. Each schedules its own evaluation when done.
   var _settingPair = 0;
@@ -121,9 +135,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// can answer or whether an asset still needs activating.
   var _catalogLoading = false;
 
-  /// When the provider last asked to slow down. For a while after, only the
-  /// default route is priced — comparing routes doubles the request rate.
-  DateTime? _lastRateLimited;
   Timer? _debounce;
   Timer? _refresh;
   Timer? _expiry;
@@ -272,12 +283,42 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
 
   // ---------------------------------------------------------- environment
 
+  @override
+  void onEvent(UnifiedSwapEvent event) {
+    super.onEvent(event);
+    final interaction = switch (event) {
+      UnifiedSwapTimerFired() ||
+      UnifiedSwapBalancesRefreshed() ||
+      UnifiedSwapCapabilitiesChanged() => false,
+      UnifiedSwapEvaluationRequested(:final quiet) => !quiet,
+      UnifiedSwapVisibilityChanged(:final visible) => visible,
+      UnifiedSwapForegroundChanged(:final foreground) => foreground,
+      _ => true,
+    };
+    if (interaction) _lastInteraction = _now();
+  }
+
+  /// Whether the form is where someone can see it.
+  bool get _present => _visible && _foreground;
+
   void _onVisibilityChanged(
     UnifiedSwapVisibilityChanged event,
     Emitter<UnifiedSwapState> emit,
   ) {
     _visible = event.visible;
-    if (!event.visible) {
+    _onPresenceChanged();
+  }
+
+  void _onForegroundChanged(
+    UnifiedSwapForegroundChanged event,
+    Emitter<UnifiedSwapState> emit,
+  ) {
+    _foreground = event.foreground;
+    _onPresenceChanged();
+  }
+
+  void _onPresenceChanged() {
+    if (!_present) {
       _refresh?.cancel();
       return;
     }

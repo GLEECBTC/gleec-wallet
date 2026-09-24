@@ -68,6 +68,7 @@ class SwapQuoteFailure extends Equatable {
     this.reasons = const [],
     this.providerRequestId,
     this.detail,
+    this.retryAt,
   });
 
   /// Which source could not price it.
@@ -98,6 +99,9 @@ class SwapQuoteFailure extends Equatable {
   /// A diagnostic message. Not localised; never primary copy.
   final String? detail;
 
+  /// For [SwapQuoteFailureKind.rateLimited]: when asking again is worth it.
+  final DateTime? retryAt;
+
   /// Whether retrying the same request later may succeed.
   bool get isTransient => switch (kind) {
     SwapQuoteFailureKind.rateLimited ||
@@ -126,6 +130,7 @@ class SwapQuoteFailure extends Equatable {
     reasons,
     providerRequestId,
     detail,
+    retryAt,
   ];
 }
 

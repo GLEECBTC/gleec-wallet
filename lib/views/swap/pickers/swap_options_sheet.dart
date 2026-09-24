@@ -13,8 +13,10 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
-/// Opens the options comparison over [bloc]'s live evaluation.
+/// Opens the options comparison over [bloc]'s live evaluation, pricing the
+/// alternative routes now that someone will compare them.
 Future<void> showSwapOptionsSheet(BuildContext context, UnifiedSwapBloc bloc) {
+  bloc.add(const UnifiedSwapAlternativesRequested());
   return showSwapSheet<void>(
     context: context,
     label: LocaleKeys.swapOptionsTitle.tr(),
@@ -69,6 +71,13 @@ class _SwapOptionsSheetState extends State<SwapOptionsSheet> {
               ],
               if (quotes != null)
                 ..._cards(context, quotes, pending, expired: expired),
+              if (state.checkingAlternatives)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SwapHelperLine(
+                    text: LocaleKeys.swapOptionsCheckingFaster.tr(),
+                  ),
+                ),
               if (allUnrankable) ...[
                 const SizedBox(height: 12),
                 SwapCallout(

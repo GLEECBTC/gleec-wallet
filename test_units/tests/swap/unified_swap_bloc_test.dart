@@ -256,7 +256,7 @@ void main() {
       await bloc.close();
     });
 
-    test('a rate limit pauses, retries, and stops comparing routes', () async {
+    test('a rate limit pauses, then retries the default route only', () async {
       routed.respond = null;
       routed.results = [rejected(SwapQuoteFailureKind.rateLimited)];
       final bloc = await ready();
@@ -267,7 +267,7 @@ void main() {
       await settle();
 
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
-      expect(routed.requests.last.includeAlternatives, isFalse);
+      expect(routed.requests.last.orders, {SwapQuoteOrder.cheapest});
       await bloc.close();
     });
 

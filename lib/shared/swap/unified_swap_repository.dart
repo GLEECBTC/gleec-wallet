@@ -242,6 +242,34 @@ class UnifiedSwapRepository {
     return rank(priced, failures);
   }
 
+  /// The routes a comparison adds to [request]'s: each aggregator's fastest
+  /// route, priced. Asked for only when someone opens the comparison, since
+  /// each is one more request against the aggregator's budget.
+  Future<List<SwapQuote>> alternatives(SwapQuoteRequest request) async {
+    if (_localFailures(request.from, request.to) != null) return const [];
+    final routed = _sourcesFor(
+      request.from,
+      request.to,
+    ).where((source) => source.source == SwapLiquiditySource.routed);
+    final results = await Future.wait(
+      routed.map(
+        (source) => source
+            .quote(request.withOrders(const {SwapQuoteOrder.fastest}))
+            .catchError((Object _) => const <SwapQuoteResult>[]),
+      ),
+    );
+    final quotes = [
+      for (final result in results.expand((r) => r))
+        if (result is SwapQuoteAvailable) result.quote,
+    ];
+    await _pricing.prices.warm([
+      for (final quote in quotes)
+        for (final fee in quote.fees)
+          if (fee.asset != null) fee.asset!,
+    ]);
+    return quotes.map(_pricing.price).toList();
+  }
+
   /// Prices [quote] again on the same source and route.
   Future<SwapQuoteResult> requote(SwapQuote quote) async {
     final source = _sources.where((s) => s.source == quote.source).firstOrNull;

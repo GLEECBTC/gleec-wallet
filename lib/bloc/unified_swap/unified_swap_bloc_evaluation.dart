@@ -40,16 +40,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     final UnifiedSwapQuotes result;
     try {
       result = await _repository
-          .quote(
-            SwapQuoteRequest(
-              from: state.pay!,
-              to: state.receive!,
-              amount: amount,
-              includeAlternatives:
-                  _lastRateLimited == null ||
-                  _now().difference(_lastRateLimited!) > _alternativesCooldown,
-            ),
-          )
+          .quote(_request(state, amount))
           .timeout(_evaluationTimeout);
     } on TimeoutException {
       if (version != _evaluationVersion) return;
@@ -120,7 +111,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     // would punish the user for waiting.
     if (quiet && state.selectedQuote != null) {
       if (failure.kind == SwapQuoteFailureKind.rateLimited) {
-        _pauseForRateLimit(emit);
+        _pauseForRateLimit(emit, failure);
       }
       return;
     }
@@ -134,20 +125,97 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       ),
     );
     if (failure.kind == SwapQuoteFailureKind.rateLimited) {
-      _pauseForRateLimit(emit);
+      _pauseForRateLimit(emit, failure);
     }
   }
 
-  void _pauseForRateLimit(Emitter<UnifiedSwapState> emit) {
-    _lastRateLimited = _now();
-    final until = _now().add(_rateLimitPause);
+  /// Waits out a rate limit — for as long as the source is holding requests
+  /// back, when it says.
+  void _pauseForRateLimit(
+    Emitter<UnifiedSwapState> emit,
+    SwapQuoteFailure failure,
+  ) {
+    final until = failure.retryAt ?? _now().add(_rateLimitPause);
     emit(state.copyWith(rateLimitedUntil: until));
     _refresh?.cancel();
     _rateLimit?.cancel();
+    final wait = until.difference(_now());
     _rateLimit = Timer(
-      _rateLimitPause,
+      wait.isNegative ? Duration.zero : wait,
       () =>
           add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.rateLimitOver)),
+    );
+  }
+
+  /// What to price for [state]: the cheapest route, and the alternatives too
+  /// while someone compares them or has chosen one.
+  SwapQuoteRequest _request(UnifiedSwapState state, Decimal amount) {
+    final comparing =
+        _comparing == _intentKey(state) ||
+        state.selectedQuote?.order == SwapQuoteOrder.fastest;
+    return SwapQuoteRequest(
+      from: state.pay!,
+      to: state.receive!,
+      amount: amount,
+      orders: {SwapQuoteOrder.cheapest, if (comparing) SwapQuoteOrder.fastest},
+    );
+  }
+
+  Object _intentKey(UnifiedSwapState state) =>
+      (state.pay, state.receive, amountOf(state));
+
+  Future<void> _onAlternativesRequested(
+    UnifiedSwapAlternativesRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    if (!_evaluable(state)) return;
+    final key = _intentKey(state);
+    final alreadyCompared = _comparing == key;
+    _comparing = key;
+    final quotes = state.quotes;
+    // Not priced yet: the evaluation under way will include them.
+    if (alreadyCompared || quotes == null) return;
+    if (quotes.options.any((q) => q.order == SwapQuoteOrder.fastest)) return;
+    if (!quotes.options.any((q) => q.source == SwapLiquiditySource.routed)) {
+      return;
+    }
+
+    final version = _evaluationVersion;
+    emit(state.copyWith(checkingAlternatives: true));
+    List<SwapQuote> fresh;
+    try {
+      fresh = await _repository
+          .alternatives(_request(state, amountOf(state)!))
+          .timeout(_evaluationTimeout);
+    } on Object {
+      fresh = const [];
+    }
+    if (version != _evaluationVersion || state.quotes == null) {
+      emit(state.copyWith(checkingAlternatives: false));
+      return;
+    }
+    final current = state.quotes!;
+    final added = [
+      for (final quote in fresh)
+        if (!current.options.any(
+          (known) =>
+              known.diagnostic == quote.diagnostic &&
+              known.guaranteedReceive == quote.guaranteedReceive,
+        ))
+          quote,
+    ];
+    emit(
+      _validated(
+        state.copyWith(
+          checkingAlternatives: false,
+          quotes: added.isEmpty
+              ? current
+              : UnifiedSwapRepository.rank([
+                  ...current.options,
+                  ...added,
+                ], current.failures),
+        ),
+      ),
     );
   }
 
@@ -173,7 +241,11 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     switch (event.kind) {
       case UnifiedSwapTimerKind.refresh:
         final paused = state.rateLimitedUntil?.isAfter(_now()) ?? false;
-        if (_visible &&
+        // Left alone long enough, the quote is allowed to expire rather than
+        // re-priced for nobody; "Refresh quote" brings it back.
+        final idle = _now().difference(_lastInteraction) >= _idleLimit;
+        if (_present &&
+            !idle &&
             !paused &&
             state.view == UnifiedSwapView.form &&
             state.evaluation == SwapEvaluationStatus.ready) {
@@ -197,7 +269,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         }
       case UnifiedSwapTimerKind.rateLimitOver:
         emit(state.copyWith(clearRateLimit: true));
-        if (_visible &&
+        if (_present &&
             state.view == UnifiedSwapView.form &&
             state.failure?.kind == SwapQuoteFailureKind.rateLimited) {
           add(const UnifiedSwapEvaluationRequested());

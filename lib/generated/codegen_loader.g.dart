@@ -1776,5 +1776,6 @@ abstract class LocaleKeys {
       'swapPickerUnreachableRoutesOnly';
   static const swapPickerIncomplete = 'swapPickerIncomplete';
   static const swapOptionsExpired = 'swapOptionsExpired';
+  static const swapOptionsCheckingFaster = 'swapOptionsCheckingFaster';
   static const swapReceiveAtLeastShort = 'swapReceiveAtLeastShort';
 }

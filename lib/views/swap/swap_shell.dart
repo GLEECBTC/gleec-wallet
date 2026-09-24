@@ -152,6 +152,7 @@ class _SwapScopeState extends State<_SwapScope> {
   late final UnifiedSwapBloc _swap;
   late final SwapActivityBloc _activity;
   final List<StreamSubscription<Object?>> _subscriptions = [];
+  late final AppLifecycleListener _lifecycle;
   var _activityStarted = false;
 
   bool _tradingEnabled(TradingStatusState state) => state.isEnabled;
@@ -198,6 +199,19 @@ class _SwapScopeState extends State<_SwapScope> {
       ..add(_services.intents.listen((_) => _applyPendingIntent()))
       ..add(_services.openRequests.listen((_) => _openPending()));
 
+    // Hidden or backgrounded, the form stops re-pricing: nobody is reading
+    // it, and each price costs the aggregator's request budget. A window that
+    // merely lost focus is still on screen, so `inactive` counts as shown.
+    _lifecycle = AppLifecycleListener(
+      onStateChange: (state) => _swap.add(
+        UnifiedSwapForegroundChanged(
+          foreground:
+              state == AppLifecycleState.resumed ||
+              state == AppLifecycleState.inactive,
+        ),
+      ),
+    );
+
     widget.controller.addListener(_onDestinationChanged);
     routingState.dexState.addListener(_onRouteChanged);
     _applyPendingIntent();
@@ -220,6 +234,7 @@ class _SwapScopeState extends State<_SwapScope> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     for (final subscription in _subscriptions) {
       unawaited(subscription.cancel());
     }

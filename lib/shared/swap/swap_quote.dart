@@ -437,7 +437,8 @@ class SwapQuoteRequest extends Equatable {
     required this.from,
     required this.to,
     required this.amount,
-    this.includeAlternatives = true,
+    this.orders = const {SwapQuoteOrder.cheapest},
+    this.slippage,
   });
 
   /// The asset being sold.
@@ -449,12 +450,25 @@ class SwapQuoteRequest extends Equatable {
   /// How much of [from] to sell.
   final Decimal amount;
 
-  /// Whether to also price alternative routes (e.g. the fastest one) for
-  /// comparison, or only the default.
-  final bool includeAlternatives;
+  /// Which routes an aggregator prices. Each is a separate provider request,
+  /// so alternatives are asked for only when someone will compare them.
+  final Set<SwapQuoteOrder> orders;
+
+  /// The price movement a route may allow, as a fraction; null for the
+  /// provider's default.
+  final double? slippage;
+
+  /// This request, for [orders] instead.
+  SwapQuoteRequest withOrders(Set<SwapQuoteOrder> orders) => SwapQuoteRequest(
+    from: from,
+    to: to,
+    amount: amount,
+    orders: orders,
+    slippage: slippage,
+  );
 
   @override
-  List<Object?> get props => [from, to, amount, includeAlternatives];
+  List<Object?> get props => [from, to, amount, orders, slippage];
 }
 
 /// The largest sellable amount a source allows, keeping what fees need.

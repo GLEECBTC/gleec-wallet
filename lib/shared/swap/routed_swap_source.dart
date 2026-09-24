@@ -10,6 +10,8 @@ import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
+part 'routed_swap_budget.dart';
+
 /// Prices swaps through the aggregator, executed by KDF.
 ///
 /// Everything hard about the routed contract lives in [RoutedSwapManager];
@@ -25,11 +27,13 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     bool Function(AssetId asset) isCandidate = isRoutedSwapCandidate,
     Duration timeout = const Duration(seconds: 20),
     Duration catalogTimeout = const Duration(seconds: 10),
+    DateTime Function()? now,
   }) : _networks = networks,
        _tradingAllowed = tradingAllowed,
        _isCandidate = isCandidate,
        _timeout = timeout,
-       _catalogTimeout = catalogTimeout;
+       _catalogTimeout = catalogTimeout,
+       _budget = _QuoteBudget(now ?? DateTime.now);
 
   /// The SDK manager doing the real work.
   final RoutedSwapManager manager;
@@ -43,6 +47,11 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
 
   /// What KDF last listed, for when it cannot be read again.
   Set<AssetId>? _lastEligible;
+
+  final _QuoteBudget _budget;
+
+  /// KDF's slippage when a request names none.
+  static const _defaultSlippage = 0.005;
 
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
@@ -89,6 +98,12 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     required AssetId to,
     required Decimal balance,
   }) async {
+    if (!from.isChildAsset) {
+      // A quote for this pair from moments ago knows the route's gas as well
+      // as a probe would, without spending a request on one.
+      final recent = _budget.latestFor(from, to);
+      if (recent != null) return _nativeMax(recent, from, balance);
+    }
     try {
       final max = await manager
           .maxSellAmount(from: from, to: to, balance: balance)
@@ -108,36 +123,36 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     if (_tradingAllowed != null && !_tradingAllowed(request.from, request.to)) {
       return [_rejected(SwapQuoteFailureKind.tradingBlocked)];
     }
-
-    final cheapest = _quote(
-      request.from,
-      request.to,
-      request.amount,
-      SwapQuoteOrder.cheapest,
-    );
-    if (!request.includeAlternatives) return [await cheapest];
-
-    // Both orders in parallel, so comparison costs one round trip. When the
-    // provider rate-limits the second, the first still stands.
+    final orders = request.orders.isEmpty
+        ? const {SwapQuoteOrder.cheapest}
+        : request.orders;
     final results = await Future.wait([
-      cheapest,
-      _quote(request.from, request.to, request.amount, SwapQuoteOrder.fastest),
+      for (final order in orders)
+        _quote(
+          request.from,
+          request.to,
+          request.amount,
+          order,
+          request.slippage ?? _defaultSlippage,
+        ),
     ]);
-    final best = results.first;
-    final fastest = results.last;
-    if (best is SwapQuoteAvailable && fastest is SwapQuoteAvailable) {
-      // The same route under both orders is one option, not two.
-      final a = best.quote;
-      final b = fastest.quote;
-      if (a.diagnostic == b.diagnostic &&
-          a.guaranteedReceive == b.guaranteedReceive) {
-        return [best];
-      }
-      return results;
+    if (results.length < 2) return results;
+
+    final available = results.whereType<SwapQuoteAvailable>().toList();
+    // A failed alternative is not a reason to show an error: the routes
+    // that were priced decide what the user sees.
+    if (available.isEmpty) return [results.first];
+    // The same route under two orders is one option, not two.
+    final distinct = <SwapQuoteAvailable>[];
+    for (final result in available) {
+      final same = distinct.any(
+        (kept) =>
+            kept.quote.diagnostic == result.quote.diagnostic &&
+            kept.quote.guaranteedReceive == result.quote.guaranteedReceive,
+      );
+      if (!same) distinct.add(result);
     }
-    // A failed alternative is not a reason to show an error: the default
-    // route decides what the user sees.
-    return [best];
+    return distinct;
   }
 
   @override
@@ -146,6 +161,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     quote.to,
     quote.sellAmount,
     quote.order ?? SwapQuoteOrder.cheapest,
+    quote.slippage ?? _defaultSlippage,
   );
 
   Future<SwapQuoteResult> _quote(
@@ -153,23 +169,47 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     AssetId to,
     Decimal amount,
     SwapQuoteOrder order,
+    double slippage,
   ) async {
+    final pausedUntil = _budget.pausedUntil;
+    if (pausedUntil != null) {
+      return _rejected(SwapQuoteFailureKind.rateLimited, retryAt: pausedUntil);
+    }
+    final key = (
+      from: from,
+      to: to,
+      amount: amount,
+      order: order,
+      slippage: slippage,
+    );
+    final recent = _budget.recent(key);
+    if (recent != null) {
+      return SwapQuoteAvailable(
+        routedQuoteFromOffer(recent, networks: _networks(), order: order),
+      );
+    }
     try {
       final offer = await manager
           .quote(
             from: from,
             to: to,
             amount: amount,
+            slippage: slippage,
             order: order == SwapQuoteOrder.fastest
                 ? RoutedSwapOrder.fastest
                 : null,
           )
           .timeout(_timeout);
+      _budget.remember(key, offer);
       return SwapQuoteAvailable(
         routedQuoteFromOffer(offer, networks: _networks(), order: order),
       );
     } on TimeoutException {
       return _rejected(SwapQuoteFailureKind.timeout);
+    } on RoutedSwapRateLimitedException catch (error) {
+      return SwapQuoteRejected(
+        failureFor(error, from: from, to: to, retryAt: _budget.pause()),
+      );
     } on RoutedSwapRpcException catch (error) {
       return SwapQuoteRejected(failureFor(error, from: from, to: to));
     } on Object catch (error) {
@@ -177,14 +217,42 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     }
   }
 
-  SwapQuoteRejected _rejected(SwapQuoteFailureKind kind, {String? detail}) =>
-      SwapQuoteRejected(
-        SwapQuoteFailure(
-          source: SwapLiquiditySource.routed,
-          kind: kind,
-          detail: detail,
-        ),
-      );
+  /// Max for a network's own coin from [offer]'s gas, the way the SDK's
+  /// probe computes it.
+  SwapMaxAmount _nativeMax(
+    RoutedSwapOffer offer,
+    AssetId from,
+    Decimal balance,
+  ) {
+    final gas = offer.networkFees
+        .where((fee) => fee.assetId == from || fee.ticker == from.id)
+        .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
+    var reserve = gas * RoutedSwapManager.maxSellFeeMargin;
+    var amount = balance - reserve;
+    final decimals = from.chainId.decimals;
+    if (decimals != null) {
+      reserve = reserve.ceil(scale: decimals);
+      amount = (balance - reserve).floor(scale: decimals);
+    }
+    return SwapMaxAmount(
+      amount: amount < Decimal.zero ? Decimal.zero : amount,
+      reservedForFees: reserve,
+      feeAsset: from,
+    );
+  }
+
+  SwapQuoteRejected _rejected(
+    SwapQuoteFailureKind kind, {
+    String? detail,
+    DateTime? retryAt,
+  }) => SwapQuoteRejected(
+    SwapQuoteFailure(
+      source: SwapLiquiditySource.routed,
+      kind: kind,
+      detail: detail,
+      retryAt: retryAt,
+    ),
+  );
 
   /// Classifies a typed contract error. Never matches on message text.
   @visibleForTesting
@@ -192,6 +260,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     RoutedSwapRpcException error, {
     required AssetId from,
     required AssetId to,
+    DateTime? retryAt,
   }) {
     SwapQuoteFailure failure(
       SwapQuoteFailureKind kind, {
@@ -208,6 +277,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       reasons: reasons,
       providerRequestId: error.providerRequestId,
       detail: '${error.errorType}: ${error.message}',
+      retryAt: retryAt,
     );
 
     return switch (error) {

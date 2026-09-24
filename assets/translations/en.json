@@ -1599,5 +1599,6 @@
   "swapPickerUnreachableRoutesOnly": "{} can only be swapped across networks, which don't reach these assets yet.",
   "swapPickerIncomplete": "Some swap options couldn't load, so this list may be incomplete.",
   "swapOptionsExpired": "These options expired. Refresh to see current prices.",
+  "swapOptionsCheckingFaster": "Checking for a faster route…",
   "swapReceiveAtLeastShort": "At least {}"
 }

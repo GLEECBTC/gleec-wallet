@@ -116,9 +116,6 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
 final _costTolerance = Decimal.parse('0.10');
 final _costToleranceUsd = Decimal.parse('0.50');
 
-/// How long after a rate limit only the default route is priced.
-const _alternativesCooldown = Duration(minutes: 5);
-
 /// Whether the route's shape changed: a different kind, different steps, or
 /// a different permission. Consent to the old shape does not carry over.
 bool _isStructuralChange(SwapQuote accepted, SwapQuote fresh) {

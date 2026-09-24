@@ -191,6 +191,7 @@ class UnifiedSwapState extends Equatable {
     this.failure,
     this.failures = const [],
     this.rateLimitedUntil,
+    this.checkingAlternatives = false,
     this.review,
     this.activeExecutionId,
     this.structuralNotice = false,
@@ -260,6 +261,9 @@ class UnifiedSwapState extends Equatable {
 
   /// While set, automatic re-pricing waits: the provider asked to slow down.
   final DateTime? rateLimitedUntil;
+
+  /// Whether alternative routes are being priced for a comparison.
+  final bool checkingAlternatives;
 
   /// The review step, while open.
   final SwapReview? review;
@@ -333,6 +337,7 @@ class UnifiedSwapState extends Equatable {
     failure,
     failures,
     rateLimitedUntil,
+    checkingAlternatives,
     review,
     activeExecutionId,
     structuralNotice,
@@ -364,6 +369,7 @@ class UnifiedSwapState extends Equatable {
     SwapQuoteFailure? failure,
     List<SwapQuoteFailure>? failures,
     DateTime? rateLimitedUntil,
+    bool? checkingAlternatives,
     SwapReview? review,
     String? activeExecutionId,
     bool? structuralNotice,
@@ -409,6 +415,7 @@ class UnifiedSwapState extends Equatable {
       rateLimitedUntil: clearRateLimit
           ? null
           : (rateLimitedUntil ?? this.rateLimitedUntil),
+      checkingAlternatives: checkingAlternatives ?? this.checkingAlternatives,
       review: clearReview ? null : (review ?? this.review),
       activeExecutionId: clearActiveExecution
           ? null

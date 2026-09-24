@@ -216,6 +216,22 @@ final class UnifiedSwapAssetActivated extends UnifiedSwapEvent {
   List<Object?> get props => [asset];
 }
 
+/// Price the alternative routes too, for a comparison someone opened.
+final class UnifiedSwapAlternativesRequested extends UnifiedSwapEvent {
+  const UnifiedSwapAlternativesRequested();
+}
+
+/// Whether the app is on screen at all. Re-pricing pauses while it is not.
+final class UnifiedSwapForegroundChanged extends UnifiedSwapEvent {
+  const UnifiedSwapForegroundChanged({required this.foreground});
+
+  /// Whether the app is showing.
+  final bool foreground;
+
+  @override
+  List<Object?> get props => [foreground];
+}
+
 /// Internal: the refresh or expiry timer fired.
 final class UnifiedSwapTimerFired extends UnifiedSwapEvent {
   const UnifiedSwapTimerFired(this.kind);

@@ -147,7 +147,11 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
               children: [
                 Expanded(child: _badges(context, quote)),
                 SwapLinkButton(
-                  label: state.quotes?.hasAlternatives ?? false
+                  // An aggregator route may have a faster alternative, priced
+                  // only once the comparison opens.
+                  label:
+                      (state.quotes?.hasAlternatives ?? false) ||
+                          quote.source == SwapLiquiditySource.routed
                       ? LocaleKeys.swapCompareOptions.tr()
                       : LocaleKeys.swapDetails.tr(),
                   onPressed: widget.onCompare,
