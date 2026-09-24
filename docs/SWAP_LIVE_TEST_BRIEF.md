@@ -1,101 +1,68 @@
 # Unified Swap — live test brief
 
-**Status: testnet / tiny amounts only. Do not run mainnet value through the Swap
-segment yet.** The reasons are below, and the one that decides it is the first.
+This round tests the **Swap** and **Activity** destinations of the Swap menu entry. **Advanced** is the existing trading interface, unchanged.
 
-Scope of this brief: the **Swap** and **Activity** segments of the Swap menu
-entry. The **Advanced** segment is the existing trading interface, unchanged,
-and is not what this round is testing.
+**Status:** unit-tested and checked against the pinned engine's wire format (KDF `feat/lifi-integration@4872ef2`). It has **not yet run real swaps on mainnet.** Start with small amounts, and move to larger ones only after the small ones behave as described below.
 
-## Why not mainnet yet
+## What changed since the last brief
 
-Two defects can cost a tester money with no warning on screen, and neither is
-fixed:
+The four money-safety defects in the previous brief are fixed.
 
-1. **A "guaranteed" atomic amount can legitimately under-deliver.** The
-   headline "You receive at least X" is computed by walking several maker
-   orders, but the order actually submitted enforces only *volume × worst
-   price*. On a thin book — GLEEC and GRC-20 tokens especially — the fill can
-   return meaningfully less than the figure labelled as a guarantee, and no
-   "price changed" prompt fires, because the pre-start re-check recomputes the
-   same inflated number and compares like with like.
-2. **The progress screen says "Nothing has left your wallet yet" after funds
-   have moved.** It keeps saying it through "Approving token…" (the ERC-20
-   approval is already on-chain and gas is spent) and through "Confirming…"
-   (the swap transaction is broadcast). A tester is told their money is safe at
-   exactly the moment it is not — and that is the state that invites a retry.
+- **The atomic "receive at least" figure is now what the order enforces.** An atomic quote is priced against the single best maker order that can fill the whole amount. The minimum is amount × that order's price, less any fee taken from the received side. An amount no single order can fill is reported as "no swap available" instead of spinning forever.
+- **Progress never says funds are safe after they moved.** Each stage says what is happening: approving spends a network fee, and sending can no longer be cancelled. Failure screens distinguish "nothing was sent", "only fees were spent" and "may have been sent".
+- **Swaps survive navigation.** Running swaps live app-wide, not on the screen that started them. Leaving the progress screen, switching destination or visiting the wallet keeps the swap followed. A swap still running at sign-out is picked up again at the next sign-in. When it finishes, a notice appears wherever you are, with **View**.
+- **Activity shows both kinds of swap.** Routed swaps come from `routed_swap::history`, and atomic swaps from the recent-swaps list. Activity has three filters:
+  - **Active** — still running;
+  - **Needs attention** — finished, but not as asked, or with funds or a permission to check;
+  - **Completed**.
 
-Until both are closed, mainnet testing risks losing value to a number the app
-presented as a floor.
+  If one source can't be read, the list says it may be incomplete. It never says "no swaps".
 
-## Known broken — please don't file these
+Also new:
 
-These are confirmed and already understood. Reporting them again costs you time
-and tells us nothing new.
+- **Quotes refresh automatically** every 30 seconds while the form is on screen, and expire after 60. A rate limit pauses refreshing and asks for the default route only.
+- **The review re-prices before starting.**
+  - A lower minimum, or a total cost more than 10% and $0.50 higher, stops for old-versus-new consent.
+  - A change in the steps sends you back to fresh options.
+  - If the engine refuses mid-swap because the price moved (`QuoteWorsened`), the result screen offers the new price for consent.
+- **A first routed swap shows the LI.FI terms**, with a link, above the start button. Starting the swap records acceptance for that wallet.
+- **Max keeps back network fees.** For a network's own coin it holds back the estimated gas (probe quote × 1.25) and says how much. A token uses its whole balance. Atomic swaps use the engine's own maximum.
+- **Other additions:** USD amount entry (tap the dollar line under the amount), a rate line (tap to invert), price impact with a warning at 5% or more, and a smart default pair.
 
-- **Activity does not show routed swaps.** The history parser expects a shape
-  the pinned engine does not emit, so after a real routed swap the tab shows
-  *"We could not check all of your swaps. Try again shortly."* permanently, and
-  **Try again** keeps failing. Use **Advanced** or a block explorer to confirm a
-  swap happened.
-- **Activity does not show atomic swaps either** — and worse, it says *"No
-  swaps yet."*, which is a false statement about your own money rather than a
-  gap. GLEEC and GRC-20 trades are atomic, so this is the case you will hit.
-- **An in-flight swap is lost if you leave the Swap segment.** The screen says
-  *"You can leave this screen. The swap keeps running."* That is true of the
-  engine but **not of the UI**: going to Wallet, Activity or Advanced destroys
-  the live view and there is no route back to it. The swap continues; you just
-  cannot watch it or cancel it.
-- **An unfillable atomic quote hangs on a spinner.** If you sell more than the
-  single best maker order covers, the fill-or-kill order never matches and the
-  screen sits on a spinner. No funds move. This is not "peer-to-peer swaps are
-  broken" — it is this specific bug.
+What remains out of scope, and why, is in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md).
 
-## How to test so the results are useful
+## What to try
 
-1. **Stay on the Swap screen from "Swap now" until the swap resolves.** Do not
-   switch segments mid-swap. If you do, the swap is not lost but your view of
-   it is, and you will not be able to report what happened.
-2. **Record what you were shown before you confirm.** Screenshot the review
-   screen — the pay amount, the "receive at least" figure, the fee breakdown,
-   and which source filled it. The most valuable bug report in this round is
-   *"it showed me X and I got Y."*
-3. **Confirm outcomes outside the app.** Because Activity is unreliable, verify
-   in Advanced or on a block explorer. Note the tx hash where you can.
-4. **Try small and awkward amounts**, not just round ones — many decimal places,
-   the exact balance, and the **Max** button.
-5. **Note your window size if anything looks wrong.** Below 768px wide the
-   layout changes materially (see below).
+For each item, note what the screen said before you confirmed and what actually happened. The most valuable report is *"it showed me X and I got Y"*.
 
-## Fixed today — only present in a build made after this commit
+### Entry
+1. **Invalid amounts:** enter an empty amount, `0`, `1..2`, more decimals than the asset allows, more than your balance, and your exact balance. Each should get its own message, and **Review swap** should stay disabled.
+2. **Max:** selling ETH (or another network's own coin) should leave a fee reserve and say so. Selling a token should use the whole balance.
+3. **Selling a token with too little of the network's own coin** for gas should give the "You need about … for network fees" message.
+4. **Switch pay and receive.** The amount should clear, because it was in the other asset's units.
+5. **USD entry:** toggle it, type a dollar amount, and check the token amount beside it.
+6. **Same ticker, different networks** (USDC on Ethereum and on Arbitrum): the picker should mark the rows **Same ticker**, and the review should show each asset's network and contract.
+7. **An asset that isn't active:** it should offer **Activate**, then continue.
 
-If you are testing the existing PR preview
-(`walletrc--pull-3507-merge-*.web.app`), it was built **before** these and still
-has them:
+### Options and review
+8. **With several options:** **Best net return** should appear only when at least two options can be compared. **Compare options** lists the minimum, total cost, time, number of steps and the permission asked for.
+9. **Wait on the form for over a minute.** The countdown should appear from 20 s, then **Refresh quote**.
+10. **Selling ERC-20 tokens:** the review should ask for an exact amount ("Approve exactly … & start"), never unlimited. A token that needs its permission reset first should say "Continue with reset".
+11. **Leave the review while "Checking…"**. Nothing should start.
 
-- A failed price check froze the button on "Checking price…" for the rest of the
-  session — the swap could be neither started nor abandoned.
-- Pressing **Back** during the pre-start price check did not stop the swap; it
-  executed seconds later anyway.
-- A start failure re-armed the button even when the engine may already have
-  taken the swap, so a second press could submit a **second real swap**.
-- **Max** and the reverse arrow changed the amount that would be traded while
-  leaving the old figure on screen — the form showed one number and swapped
-  another.
-- A comma decimal keypad (most of Europe) produced an amount the app rejected as
-  malformed, making fractional swaps impossible to enter.
-- **Under 768px wide — a phone, or just a narrow browser window — the Swap menu
-  opened the old trading page and the unified form could not be reached at
-  all.**
+### Execution
+12. **Same-chain routed swap**, e.g. ETH → USDC on Ethereum: the timeline, the hero text on each step, and the result.
+13. **Cross-chain routed swap**, e.g. ETH on Ethereum → USDC on Arbitrum: the bridge step and "You can leave this screen". Leave, then come back through Activity or the notice.
+14. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
+15. **Atomic swap** (GLEEC or a GRC-20 pair): the matching step, and the result. An amount larger than any single order should say no swap is available instead of hanging.
 
-## What has been verified
+### Activity and recovery
+16. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
+17. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses.
 
-- The unified surface renders and is reachable in the deployed preview build at
-  desktop width; the narrow-window failure above was reproduced against that
-  same build.
-- `dex_tests` and `misc_tests` pass on both CI runners, so the Advanced segment
-  and the surrounding navigation are exercised end to end.
-- Full unit suite: 1214 passing.
-- `fiat_onramp_tests` fails, but for an unrelated reason: the Ramp host API key
-  on `fiat-ramps.gleec.com` is rejected at the quote endpoint. Buy/Sell payment
-  methods will not render until that key is rotated. Banxa is healthy.
+## How to report
+
+- Open the swap in Activity, tap **View evidence**, then **Copy details for support**, and paste that into the report.
+- Add screenshots of the review before you started and of the result.
+- Note your window width if the layout looked wrong. Below 960 px of swap area the review is full screen; wider, it opens beside the form.
+- **Settings → Export swap data** now includes the full routed history: timestamps, requested amounts, the accepted minimum, outcome, funds movement and gas spent.

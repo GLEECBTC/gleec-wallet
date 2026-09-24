@@ -28,11 +28,11 @@ Future<void> dexPage(WidgetTester tester, {ScreenType? type}) async {
 
 /// Switches the Swap surface to the destination that hosts the trading UI.
 ///
-/// Safe to call when Advanced is already selected: the segmented button
-/// ignores a tap on the current selection. Also safe where there is no
-/// switcher at all - the mobile menu router still builds `DexPage` directly
-/// (page_menu_router_delegate.dart), so the trading UI is already what the
-/// menu entry mounted and there is nothing to switch to.
+/// Safe to call when Advanced is already selected: tapping the current
+/// destination changes nothing. Every layout mounts the Swap shell (the
+/// mobile menu router builds it too), so the switcher is always present once
+/// the menu entry has been tapped; the lookup stays tolerant only so helpers
+/// that run before navigation do not fail here.
 Future<void> advancedSwapDestination(WidgetTester tester) =>
     _swapDestination('advanced', tester);
 
