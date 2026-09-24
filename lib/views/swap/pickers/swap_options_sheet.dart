@@ -12,6 +12,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 
 /// Opens the options comparison over [bloc]'s live evaluation, pricing the
 /// alternative routes now that someone will compare them.
@@ -90,6 +91,18 @@ class _SwapOptionsSheetState extends State<SwapOptionsSheet> {
               if (pending != null && quotes?.byId(pending) != null) ...[
                 const SizedBox(height: 12),
                 _FeeBreakdown(quote: quotes!.byId(pending)!),
+              ],
+              if (options.any(
+                (q) => q.source == SwapLiquiditySource.routed,
+              )) ...[
+                const SizedBox(height: 12),
+                SwapSlippageSummary(
+                  slippage: state.slippage,
+                  onChange: () => showSwapSlippageSheet(
+                    context,
+                    context.read<UnifiedSwapBloc>(),
+                  ),
+                ),
               ],
             ],
           ),

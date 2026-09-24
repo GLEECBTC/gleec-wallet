@@ -27,6 +27,14 @@ enum SwapAmountMode {
   fiat,
 }
 
+/// KDF's default slippage for cross-network routes, as a fraction.
+const swapDefaultSlippage = 0.005;
+
+/// The slippage range the form offers: KDF accepts up to 0.5, but beyond 5%
+/// a route mostly invites being traded against.
+const swapMinSlippage = 0.0005;
+const swapMaxSlippage = 0.05;
+
 /// Why the form cannot be evaluated or reviewed.
 enum SwapFormIssue {
   /// No source can trade this pair; see [UnifiedSwapState.pairSupport].
@@ -192,6 +200,7 @@ class UnifiedSwapState extends Equatable {
     this.failures = const [],
     this.rateLimitedUntil,
     this.checkingAlternatives = false,
+    this.slippage = swapDefaultSlippage,
     this.review,
     this.activeExecutionId,
     this.structuralNotice = false,
@@ -264,6 +273,11 @@ class UnifiedSwapState extends Equatable {
 
   /// Whether alternative routes are being priced for a comparison.
   final bool checkingAlternatives;
+
+  /// How far a cross-network route may fill below its expected amount, as a
+  /// fraction. For this session only: a raised allowance should not outlive
+  /// the swap it was raised for.
+  final double slippage;
 
   /// The review step, while open.
   final SwapReview? review;
@@ -338,6 +352,7 @@ class UnifiedSwapState extends Equatable {
     failures,
     rateLimitedUntil,
     checkingAlternatives,
+    slippage,
     review,
     activeExecutionId,
     structuralNotice,
@@ -370,6 +385,7 @@ class UnifiedSwapState extends Equatable {
     List<SwapQuoteFailure>? failures,
     DateTime? rateLimitedUntil,
     bool? checkingAlternatives,
+    double? slippage,
     SwapReview? review,
     String? activeExecutionId,
     bool? structuralNotice,
@@ -416,6 +432,7 @@ class UnifiedSwapState extends Equatable {
           ? null
           : (rateLimitedUntil ?? this.rateLimitedUntil),
       checkingAlternatives: checkingAlternatives ?? this.checkingAlternatives,
+      slippage: slippage ?? this.slippage,
       review: clearReview ? null : (review ?? this.review),
       activeExecutionId: clearActiveExecution
           ? null

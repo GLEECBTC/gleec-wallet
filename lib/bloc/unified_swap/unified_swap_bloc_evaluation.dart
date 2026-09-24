@@ -158,6 +158,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       to: state.receive!,
       amount: amount,
       orders: {SwapQuoteOrder.cheapest, if (comparing) SwapQuoteOrder.fastest},
+      slippage: state.slippage,
     );
   }
 

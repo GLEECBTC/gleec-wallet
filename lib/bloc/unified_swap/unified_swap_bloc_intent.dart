@@ -93,6 +93,28 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     emit(_validated(state.copyWith(amountMode: nextMode, inputText: text)));
   }
 
+  void _onSlippageChanged(
+    UnifiedSwapSlippageChanged event,
+    Emitter<UnifiedSwapState> emit,
+  ) {
+    final slippage = event.slippage.clamp(swapMinSlippage, swapMaxSlippage);
+    if (slippage == state.slippage) return;
+    _invalidate();
+    // Every routed minimum moves with it, so no priced option survives.
+    emit(
+      _validated(
+        state.copyWith(
+          slippage: slippage,
+          clearQuotes: true,
+          clearSelectedId: true,
+          clearFailure: true,
+          evaluation: SwapEvaluationStatus.idle,
+        ),
+      ),
+    );
+    _scheduleEvaluation(immediate: true);
+  }
+
   Future<void> _onMaxRequested(
     UnifiedSwapMaxRequested event,
     Emitter<UnifiedSwapState> emit,

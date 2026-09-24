@@ -90,6 +90,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapCatalogRefreshRequested>(_onCatalogRefreshRequested);
     on<UnifiedSwapAssetActivated>(_onAssetActivated);
     on<UnifiedSwapAlternativesRequested>(_onAlternativesRequested);
+    on<UnifiedSwapSlippageChanged>(_onSlippageChanged);
     on<UnifiedSwapForegroundChanged>(_onForegroundChanged);
     on<UnifiedSwapTimerFired>(_onTimerFired);
   }

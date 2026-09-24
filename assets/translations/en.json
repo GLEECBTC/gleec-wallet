@@ -1600,5 +1600,16 @@
   "swapPickerIncomplete": "Some swap options couldn't load, so this list may be incomplete.",
   "swapOptionsExpired": "These options expired. Refresh to see current prices.",
   "swapOptionsCheckingFaster": "Checking for a faster route…",
+  "swapSlippageTitle": "Slippage",
+  "swapSlippageSummary": "Cross-network routes may fill up to {} below the expected amount. The minimum you receive already allows for it.",
+  "swapSlippageChange": "Change",
+  "swapSlippageBody": "How far a cross-network route may fill below the expected amount before it stops. Order-book swaps fill at the quoted price or not at all.",
+  "swapSlippageCustom": "Custom",
+  "swapSlippageCustomLabel": "Custom slippage, in percent",
+  "swapSlippageInvalid": "Enter a value from 0.05% to 5%.",
+  "swapSlippageHigh": "Above 1%, you may receive noticeably less than expected, and the swap is easier for others to trade against.",
+  "swapSlippageLow": "Below 0.1%, cross-network routes stop more often when the price moves.",
+  "swapSlippageSave": "Use {}",
+  "swapAnnounceSlippage": "Slippage set to {}. Checking prices again.",
   "swapReceiveAtLeastShort": "At least {}"
 }

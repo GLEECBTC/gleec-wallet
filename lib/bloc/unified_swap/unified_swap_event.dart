@@ -216,6 +216,18 @@ final class UnifiedSwapAssetActivated extends UnifiedSwapEvent {
   List<Object?> get props => [asset];
 }
 
+/// The user chose how far a cross-network route may fill below its
+/// expected amount.
+final class UnifiedSwapSlippageChanged extends UnifiedSwapEvent {
+  const UnifiedSwapSlippageChanged(this.slippage);
+
+  /// As a fraction: 0.005 is 0.5%.
+  final double slippage;
+
+  @override
+  List<Object?> get props => [slippage];
+}
+
 /// Price the alternative routes too, for a comparison someone opened.
 final class UnifiedSwapAlternativesRequested extends UnifiedSwapEvent {
   const UnifiedSwapAlternativesRequested();

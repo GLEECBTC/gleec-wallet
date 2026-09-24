@@ -1777,5 +1777,16 @@ abstract class LocaleKeys {
   static const swapPickerIncomplete = 'swapPickerIncomplete';
   static const swapOptionsExpired = 'swapOptionsExpired';
   static const swapOptionsCheckingFaster = 'swapOptionsCheckingFaster';
+  static const swapSlippageTitle = 'swapSlippageTitle';
+  static const swapSlippageSummary = 'swapSlippageSummary';
+  static const swapSlippageChange = 'swapSlippageChange';
+  static const swapSlippageBody = 'swapSlippageBody';
+  static const swapSlippageCustom = 'swapSlippageCustom';
+  static const swapSlippageCustomLabel = 'swapSlippageCustomLabel';
+  static const swapSlippageInvalid = 'swapSlippageInvalid';
+  static const swapSlippageHigh = 'swapSlippageHigh';
+  static const swapSlippageLow = 'swapSlippageLow';
+  static const swapSlippageSave = 'swapSlippageSave';
+  static const swapAnnounceSlippage = 'swapAnnounceSlippage';
   static const swapReceiveAtLeastShort = 'swapReceiveAtLeastShort';
 }
