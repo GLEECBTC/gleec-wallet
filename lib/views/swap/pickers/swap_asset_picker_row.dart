@@ -27,7 +27,6 @@ class _PickerRow extends StatelessWidget {
   final bool active;
   final bool blocked;
 
-  /// The other side's asset, when it cannot be swapped for this one.
   final AssetId? unreachableWith;
   final bool activating;
   final bool activationFailed;

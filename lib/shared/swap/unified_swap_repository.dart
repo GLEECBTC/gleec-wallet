@@ -86,15 +86,6 @@ class UnifiedSwapQuotes extends Equatable {
   bool get isPermanentlyUnsupported =>
       isEmpty && failures.isNotEmpty && failures.every((f) => f.isPermanent);
 
-  /// A source that could not answer at all while another did, so the result
-  /// may be missing an option a retry would find.
-  SwapQuoteFailure? get transientFailure {
-    for (final failure in failures) {
-      if (failure.isTransient) return failure;
-    }
-    return null;
-  }
-
   /// The option with [id], if it is still on offer.
   SwapQuote? byId(String id) {
     for (final option in options) {
@@ -135,9 +126,6 @@ class UnifiedSwapRepository {
   /// The pricing service, for callers that value amounts themselves.
   SwapPricingService get pricing => _pricing;
 
-  /// The catalog last read, if any.
-  SwapCatalog? get lastCatalog => _catalog;
-
   /// Reads what every source can trade, and remembers it for [quote].
   Future<SwapCatalog> catalog() async {
     final activated = await _readActivated();
@@ -147,7 +135,6 @@ class UnifiedSwapRepository {
         (source) => source
             .assets(known: known, activated: activated ?? known)
             .catchError(
-              // A source contract violation must not take down the others.
               (Object _) => SwapSourceAssets(
                 source: source.source,
                 status: SwapCatalogStatus.unavailable,
@@ -166,8 +153,6 @@ class UnifiedSwapRepository {
     }
   }
 
-  /// The sources to ask about [from] for [to]: those the catalog says can
-  /// price the pair, or every source before a catalog has been read.
   List<SwapQuoteSource> _sourcesFor(AssetId from, AssetId to) {
     final catalog = _catalog;
     if (catalog == null) return _sources;
@@ -243,8 +228,7 @@ class UnifiedSwapRepository {
   }
 
   /// The routes a comparison adds to [request]'s: each aggregator's fastest
-  /// route, priced. Asked for only when someone opens the comparison, since
-  /// each is one more request against the aggregator's budget.
+  /// route, priced.
   Future<List<SwapQuote>> alternatives(SwapQuoteRequest request) async {
     if (_localFailures(request.from, request.to) != null) return const [];
     final routed = _sourcesFor(
@@ -324,8 +308,7 @@ class UnifiedSwapRepository {
     };
   }
 
-  /// Failures known without asking any source: an inactive asset, or a pair
-  /// no source can trade. Null when the sources should be asked.
+  /// Failures known without asking any source; null means ask the sources.
   List<SwapQuoteFailure>? _localFailures(AssetId from, AssetId to) {
     final catalog = _catalog;
     if (catalog == null) return null;

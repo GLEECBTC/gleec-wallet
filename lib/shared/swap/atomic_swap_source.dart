@@ -98,8 +98,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
     isWalletOnly: _isWalletOnly,
   );
 
-  /// The orderbook's assets among [known]: tradable active ones now, and the
-  /// rest once activated.
+  /// The orderbook's assets among [known].
   @visibleForTesting
   static SwapSourceAssets catalogFor({
     required Set<AssetId> known,

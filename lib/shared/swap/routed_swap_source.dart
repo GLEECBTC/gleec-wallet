@@ -45,7 +45,6 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// Shorter than a quote's: the form waits on the catalog before pricing.
   final Duration _catalogTimeout;
 
-  /// What KDF last listed, for when it cannot be read again.
   Set<AssetId>? _lastEligible;
 
   final _QuoteBudget _budget;
@@ -217,8 +216,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     }
   }
 
-  /// Max for a network's own coin from [offer]'s gas, the way the SDK's
-  /// probe computes it.
+  /// Max from [offer]'s gas, computed the way the SDK's probe does.
   SwapMaxAmount _nativeMax(
     RoutedSwapOffer offer,
     AssetId from,

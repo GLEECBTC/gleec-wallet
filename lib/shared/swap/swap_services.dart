@@ -168,15 +168,13 @@ class SwapServices {
   /// Every asset the wallet knows.
   Iterable<AssetId> get knownAssets => _available.keys;
 
-  /// The assets a swap may offer: every known asset the app does not
-  /// exclude outright.
+  /// The assets a swap may offer: every known asset not excluded outright.
   Set<AssetId> swappableAssets() => {
     for (final id in _available.keys)
       if (!excludedAssetList.contains(id.id)) id,
   };
 
-  /// Whether the coin config marks [id] wallet-only, which KDF refuses to
-  /// trade on the orderbook.
+  /// Whether the coin config marks [id] wallet-only.
   bool isWalletOnly(AssetId id) => assetOf(id)?.isWalletOnly ?? false;
 
   /// Whether [id] is a test-network asset.

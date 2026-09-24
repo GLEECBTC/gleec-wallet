@@ -199,9 +199,7 @@ class _SwapScopeState extends State<_SwapScope> {
       ..add(_services.intents.listen((_) => _applyPendingIntent()))
       ..add(_services.openRequests.listen((_) => _openPending()));
 
-    // Hidden or backgrounded, the form stops re-pricing: nobody is reading
-    // it, and each price costs the aggregator's request budget. A window that
-    // merely lost focus is still on screen, so `inactive` counts as shown.
+    // `inactive` counts as shown: a window that lost focus is still on screen.
     _lifecycle = AppLifecycleListener(
       onStateChange: (state) => _swap.add(
         UnifiedSwapForegroundChanged(

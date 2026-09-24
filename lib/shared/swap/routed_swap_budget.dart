@@ -1,6 +1,5 @@
 part of 'routed_swap_source.dart';
 
-/// One priced route, as asked for.
 typedef _QuoteKey = ({
   AssetId from,
   AssetId to,
@@ -33,7 +32,6 @@ class _QuoteBudget {
   DateTime? _pausedUntil;
   Duration _nextPause = firstPause;
 
-  /// The reply to [key] if it is fresh enough to reuse.
   RoutedSwapOffer? recent(_QuoteKey key) {
     final hit = _recent[key];
     if (hit == null) return null;
@@ -50,8 +48,6 @@ class _QuoteBudget {
     _nextPause = firstPause;
   }
 
-  /// The newest reply for [from] → [to] at any amount, while its gas is
-  /// still a fair estimate.
   RoutedSwapOffer? latestFor(AssetId from, AssetId to) {
     (DateTime, RoutedSwapOffer)? best;
     for (final entry in _recent.entries) {
@@ -62,13 +58,11 @@ class _QuoteBudget {
     return best.$2;
   }
 
-  /// Until when requests are held back, if they are.
   DateTime? get pausedUntil {
     final until = _pausedUntil;
     return until != null && until.isAfter(_now()) ? until : null;
   }
 
-  /// Holds requests back after a rate limit; returns until when.
   DateTime pause() {
     final until = _now().add(_nextPause);
     _pausedUntil = until;

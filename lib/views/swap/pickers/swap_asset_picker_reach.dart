@@ -1,6 +1,5 @@
 part of 'swap_asset_picker.dart';
 
-/// One line of the picker's list.
 sealed class _PickerEntry {
   const _PickerEntry();
 }
@@ -10,11 +9,9 @@ final class _AssetEntry extends _PickerEntry {
 
   final AssetId asset;
 
-  /// The other side's asset cannot be swapped for this one.
   final bool unreachable;
 }
 
-/// Heads the assets the other side's asset cannot reach, and says why.
 final class _UnreachableHeader extends _PickerEntry {
   const _UnreachableHeader(this.anchor);
 
@@ -27,13 +24,10 @@ final class _IdentityEntry extends _PickerEntry {
   final AssetId asset;
 }
 
-/// What the other side's asset can be swapped for.
-///
-/// Receive-side only: the pay asset is where a swap starts, so it anchors
-/// the list and everything it cannot reach is set apart with the reason,
-/// rather than offered and then refused on the form.
+/// What the pay asset can be swapped for, on the receive side only: the pay
+/// asset is where a swap starts, so what it cannot reach is set apart with
+/// the reason rather than refused on the form.
 extension _PickerReach on _SwapAssetPickerState {
-  /// [rows] as list entries, reachable ones first.
   List<_PickerEntry> _entries(List<AssetId> rows) {
     final anchor = widget.other;
     final selected = widget.selected;
@@ -100,8 +94,6 @@ extension _PickerReach on _SwapAssetPickerState {
     );
   }
 
-  /// Said when some source's list could not be read: the list may be short,
-  /// and retrying is the next step.
   Widget _incompleteNotice(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
     child: SwapCallout(

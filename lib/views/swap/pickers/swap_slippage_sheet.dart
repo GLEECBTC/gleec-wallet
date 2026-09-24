@@ -27,8 +27,7 @@ Future<void> showSwapSlippageSheet(BuildContext context, UnifiedSwapBloc bloc) {
   );
 }
 
-/// [fraction] as a percentage, to two places where they matter: 0.5%,
-/// 0.05%, 1%.
+/// [fraction] as a percentage to at most two places: 0.5%, 0.05%, 1%.
 String slippageText(double fraction) {
   final percent = (fraction * 100).toStringAsFixed(2);
   return '${percent.replaceFirst(RegExp(r'\.?0+$'), '')}%';
@@ -137,8 +136,6 @@ class _SwapSlippageSheetState extends State<SwapSlippageSheet> {
     super.dispose();
   }
 
-  /// The chosen slippage as a fraction, or null while the custom entry is
-  /// not a value the form accepts.
   double? get _value {
     final preset = _presets[_choice];
     if (preset != null) return preset;

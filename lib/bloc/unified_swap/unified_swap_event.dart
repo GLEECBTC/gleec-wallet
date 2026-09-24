@@ -216,8 +216,7 @@ final class UnifiedSwapAssetActivated extends UnifiedSwapEvent {
   List<Object?> get props => [asset];
 }
 
-/// The user chose how far a cross-network route may fill below its
-/// expected amount.
+/// The user chose the slippage for cross-network routes.
 final class UnifiedSwapSlippageChanged extends UnifiedSwapEvent {
   const UnifiedSwapSlippageChanged(this.slippage);
 

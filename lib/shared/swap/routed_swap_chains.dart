@@ -82,8 +82,7 @@ const Set<int> routedSwapChainIds = {
   11155420,
 };
 
-/// Whether [asset] should be routable once active: an EVM asset on a network
-/// the provider serves.
+/// Whether [asset] should be routable once active.
 bool isRoutedSwapCandidate(AssetId asset) {
   final chainId = SwapNetworks.evmChainIdOf(asset);
   return chainId != null && routedSwapChainIds.contains(chainId);

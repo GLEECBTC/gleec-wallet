@@ -24,9 +24,8 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
       return SwapFormIssue.pairUnsupported;
     }
     if (next.inactiveAsset != null) return SwapFormIssue.assetInactive;
-    // A token's routes all pay their fees in the network's own coin; with
-    // none held, no source can price the swap, and asking would only spend
-    // the aggregator's request budget on a failure.
+    // No source can price the swap, and asking would only spend the
+    // aggregator's request budget on a failure.
     if (pay?.parentId != null && next.feeBalance == Decimal.zero) {
       return SwapFormIssue.noFeeBalance;
     }

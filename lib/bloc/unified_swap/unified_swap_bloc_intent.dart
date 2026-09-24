@@ -100,7 +100,6 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final slippage = event.slippage.clamp(swapMinSlippage, swapMaxSlippage);
     if (slippage == state.slippage) return;
     _invalidate();
-    // Every routed minimum moves with it, so no priced option survives.
     emit(
       _validated(
         state.copyWith(

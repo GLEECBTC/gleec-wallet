@@ -51,9 +51,8 @@ enum SwapPairGap {
   /// [SwapPairSupport.limitingAsset] cannot be swapped in this wallet.
   notTradable,
 
-  /// [SwapPairSupport.limitingAsset] trades only on the order book, where
-  /// [SwapPairSupport.routesOnlyAsset] is not listed, and cross-network
-  /// routes do not reach it.
+  /// [SwapPairSupport.limitingAsset] trades only on the order book and
+  /// [SwapPairSupport.routesOnlyAsset] only through cross-network routes.
   sourcesDisjoint,
 }
 
@@ -82,8 +81,7 @@ class SwapPairSupport extends Equatable {
   final AssetId? routesOnlyAsset;
 
   /// When only the order book can price the pair although one asset is
-  /// routable: the asset cross-network routes cannot reach. Explains why no
-  /// cross-network option appears.
+  /// routable: the asset cross-network routes cannot reach.
   final AssetId? routesUnavailableFor;
 
   /// Whether some source can price the pair.
@@ -165,8 +163,7 @@ class SwapCatalog extends Equatable {
         );
       }
     }
-    // Both assets trade somewhere, just never on the same source: one only
-    // on the order book, the other only through cross-network routes.
+    // Both assets trade somewhere, never on the same source.
     final atomic = of(SwapLiquiditySource.atomic);
     final orderBookOnly = (atomic?.supports(from) ?? false) ? from : to;
     return SwapPairSupport(

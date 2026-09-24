@@ -90,8 +90,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           clearSelectedId: selected == null,
           manuallySelected: keep,
           clearFailure: true,
-          // Kept although options exist: a source that could not answer is
-          // worth a quiet word, because the best option may be missing.
+          // Kept although options exist: the best option may be missing.
           failures: result.failures,
           clearRateLimit: true,
         ),
@@ -129,8 +128,6 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     }
   }
 
-  /// Waits out a rate limit — for as long as the source is holding requests
-  /// back, when it says.
   void _pauseForRateLimit(
     Emitter<UnifiedSwapState> emit,
     SwapQuoteFailure failure,
@@ -147,8 +144,6 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     );
   }
 
-  /// What to price for [state]: the cheapest route, and the alternatives too
-  /// while someone compares them or has chosen one.
   SwapQuoteRequest _request(UnifiedSwapState state, Decimal amount) {
     final comparing =
         _comparing == _intentKey(state) ||
@@ -242,8 +237,6 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     switch (event.kind) {
       case UnifiedSwapTimerKind.refresh:
         final paused = state.rateLimitedUntil?.isAfter(_now()) ?? false;
-        // Left alone long enough, the quote is allowed to expire rather than
-        // re-priced for nobody; "Refresh quote" brings it back.
         final idle = _now().difference(_lastInteraction) >= _idleLimit;
         if (_present &&
             !idle &&

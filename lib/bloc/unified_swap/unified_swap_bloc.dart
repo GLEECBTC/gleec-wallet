@@ -129,7 +129,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// priced on every refresh until the intent changes.
   Object? _comparing;
 
-  /// Pair changes in flight. Each schedules its own evaluation when done.
   var _settingPair = 0;
 
   /// While the first catalog read is in flight, nothing says which sources
@@ -186,7 +185,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     await _setPair(emit, pay: pair.pay, receive: pair.receive);
   }
 
-  /// Re-reads the catalog, e.g. once an asset has been activated.
   Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
     final catalog = await _repository.catalog();
     emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
@@ -205,8 +203,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     Emitter<UnifiedSwapState> emit,
   ) async {
     _invalidate();
-    // Activation changes what the aggregator lists, so the catalog is read
-    // again before anything is priced.
     await _refreshCatalog(emit);
     await _loadBalances(emit);
     await _loadAddresses(emit);
@@ -299,7 +295,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     if (interaction) _lastInteraction = _now();
   }
 
-  /// Whether the form is where someone can see it.
   bool get _present => _visible && _foreground;
 
   void _onVisibilityChanged(

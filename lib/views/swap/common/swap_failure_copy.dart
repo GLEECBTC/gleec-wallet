@@ -21,11 +21,8 @@ class SwapFailureCopy {
   final String? detail;
   final SwapEntryAction action;
 
-  /// The copy for [failure], the evaluation's primary failure.
-  ///
-  /// [all] is every source's failure, so a firm answer from one source can
-  /// say the other could not answer; [support] explains why only one source
-  /// was asked; [networks] names networks.
+  /// The copy for [failure], the evaluation's primary failure; [all] is every
+  /// source's, so a firm answer can say another source could not answer.
   static SwapFailureCopy of(
     SwapQuoteFailure failure,
     AssetId? pay, {
@@ -111,8 +108,6 @@ class SwapFailureCopy {
     };
   }
 
-  /// "Nothing fits" — unless the other source could not look at all, which
-  /// makes the answer temporary and worth saying so.
   static SwapFailureCopy _noRoute(
     SwapQuoteFailure failure,
     List<SwapQuoteFailure> all,
@@ -263,8 +258,6 @@ class SwapIssueCopy {
     };
   }
 
-  /// Why no source can trade the pair, and which network the order-book-only
-  /// side is on, so the user knows which asset to change.
   static SwapIssueCopy _pairUnsupported(
     SwapPairSupport? support,
     SwapNetworks networks,
@@ -295,8 +288,7 @@ class SwapIssueCopy {
   }
 }
 
-/// Why cross-network routes cannot trade [asset]: its network is not
-/// reached yet, or it is not on an EVM network at all.
+/// Why cross-network routes cannot trade [asset].
 String routesReachDetail(AssetId asset, SwapNetworks networks) =>
     SwapNetworks.evmChainIdOf(asset) != null
     ? LocaleKeys.swapHelperRoutesNoNetwork.tr(args: [networks.networkOf(asset)])

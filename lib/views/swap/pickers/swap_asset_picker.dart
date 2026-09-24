@@ -41,8 +41,7 @@ const _popularTickers = [
   'AVAX',
 ];
 
-/// Opens the asset picker over [bloc]'s catalog and returns the chosen
-/// asset, activated.
+/// Opens the asset picker and returns the chosen asset, activated.
 Future<AssetId?> showSwapAssetPicker({
   required BuildContext context,
   required SwapPickerSide side,
@@ -88,10 +87,8 @@ bool _testCoinsEnabled(BuildContext context) {
 
 /// Chooses an asset and its network.
 ///
-/// Offers every asset some source can trade, active or not: choosing an
-/// inactive one activates it, in the open, before the form uses it. The
-/// same ticker on two networks is two different assets, so every row names
-/// its network, and a row sharing the other side's ticker says so.
+/// The same ticker on two networks is two different assets, so every row
+/// names its network, and a row sharing the other side's ticker says so.
 class SwapAssetPicker extends StatefulWidget {
   const SwapAssetPicker({
     required this.side,
@@ -117,7 +114,6 @@ class SwapAssetPicker extends StatefulWidget {
   /// Whether inactive test-network assets are offered.
   final bool showTestCoins;
 
-  /// Reads the catalog again after part of it failed to load.
   final VoidCallback? onRetryCatalog;
 
   @override
@@ -164,8 +160,6 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     }
   }
 
-  /// Every asset on offer: what some source can trade, less inactive
-  /// test-network assets the user has chosen not to see.
   Set<AssetId> _offered() {
     final activated = _activated ?? widget.catalog.activated ?? const {};
     return {

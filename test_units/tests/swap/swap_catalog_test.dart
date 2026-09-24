@@ -170,7 +170,10 @@ void main() {
       final result = await repo.quote(request(eth, usdc));
 
       expect(result.primaryFailure!.kind, SwapQuoteFailureKind.noRoute);
-      expect(result.transientFailure!.source, SwapLiquiditySource.routed);
+      expect(
+        result.failures.singleWhere((f) => f.isTransient).source,
+        SwapLiquiditySource.routed,
+      );
     });
 
     test('Max is only asked of sources that can sell the pair', () async {

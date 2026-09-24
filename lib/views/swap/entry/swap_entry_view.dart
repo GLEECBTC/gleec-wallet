@@ -222,7 +222,6 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         return [
           SwapHelperLine(
             text: copy.message,
-            // Not yet active is a step to take, not a mistake.
             tone: issue == SwapFormIssue.assetInactive
                 ? SwapTone.warning
                 : SwapTone.danger,
@@ -299,8 +298,6 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     networks: _services.networks(),
   );
 
-  /// A quiet word when options are showing but a source could not answer:
-  /// the best option may be the one missing.
   String? _partialNote(UnifiedSwapState state) {
     if (state.evaluation != SwapEvaluationStatus.ready) return null;
     final missing = state.failures.where((f) => f.isTransient).firstOrNull;

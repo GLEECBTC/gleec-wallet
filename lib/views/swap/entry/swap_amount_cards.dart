@@ -85,8 +85,7 @@ class _AmountCardFrame extends StatelessWidget {
                 final scale = MediaQuery.textScalerOf(context).scale(1);
                 final half = constraints.maxWidth * 0.5;
                 final pill = 190 * scale;
-                // Larger text must not cut the pill short: it moves under
-                // the amount once half the row can no longer hold it.
+                // Under larger text, stack rather than cut the pill short.
                 if (constraints.maxWidth / scale < 240 ||
                     (scale > 1 && half < pill)) {
                   return Column(

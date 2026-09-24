@@ -14,8 +14,7 @@ import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 
-/// Opens the options comparison over [bloc]'s live evaluation, pricing the
-/// alternative routes now that someone will compare them.
+/// Opens the options comparison over [bloc]'s live evaluation.
 Future<void> showSwapOptionsSheet(BuildContext context, UnifiedSwapBloc bloc) {
   bloc.add(const UnifiedSwapAlternativesRequested());
   return showSwapSheet<void>(
