@@ -19,26 +19,54 @@ KDF paths are relative to `mm2src/mm2_main/src/` unless a path says otherwise. L
 | **Mixed routes** (atomic and routed legs in one swap) | The contract prices "single best route" (contract l.13), and no RPC composes an atomic leg with a routed one. | A composition layer, in KDF or the SDK, that can hold and prove an intermediate holding between legs. |
 | **Stop after the current step** | Cancelling works only while the execution gate is reversible. Once it is `Irreversible`, cancel returns `TaskAlreadyBroadcast` (`routed_swap/swap_task.rs:1974-1979`). No "finish this step, skip the rest" state exists. | A KDF execution gate between steps. |
 | **Claim a refund** | LI.FI refunds itself; `refunded` means "funds returned on the source chain" (contract l.230). `BridgeFailed` means "direct user to the explorer link / support" (contract l.244). No claim RPC exists. | Nothing, unless a provider adds a claimable refund. The shipped recovery screen sends users to the evidence and support hand-off. |
-| **Revoke an approval** | The generic `approve_token` and `get_token_allowance` RPCs exist (`rpc/dispatcher/dispatcher.rs:256-257`), so approving zero is possible. There is no fee preview for that transaction. The prototype's revoke dialog promises "may cost up to $4.80", and that figure can't be computed. | A follow-up: read the allowance, estimate the gas for approving zero, then confirm with a real fee. The recovery copy already tells the user when an exact permission remains. |
+| **Revoke an approval** | The generic `approve_token` and `get_token_allowance` RPCs exist (`rpc/dispatcher/dispatcher.rs:256-257`), so approving zero is possible, but nothing can price it first. `approve_token` signs and sends at once. Its gas limit comes from a live `eth_estimateGas` times the coin's `estimate_gas_mult` (`coins/eth.rs` `approve` → `sign_and_send_transaction` → `estimate_gas_for_contract_call_if_conf`), at KDF's own gas price. The estimator that could say it, `estimate_erc20_approval`, only reaches the wire inside a routed quote, for the provider's spender. The prototype's revoke dialog promises "may cost up to $4.80", and the wallet can't compute that figure. KDF changes are out of scope for this release (decided 2026-09-24), so revoke stays deferred. | A KDF RPC that estimates an approval without sending it. Then read the allowance and confirm the revoke with that real fee. The recovery copy already tells the user when an exact permission remains. |
 | **Maximum network cost** | Routes carry estimates only (`gas_costs`, `total_gas_costs`). KDF bounds gas by its own safety limits at signing (contract l.380) but never reports a ceiling. | A ceiling in the contract. Until then the review shows "Network cost (estimate)". |
 | **Timestamps for each step** | A history entry has `created_at`, `updated_at` and `finished_at` only (`routed_swap/history.rs:216-221`). The per-event log is internal. | Expose the event log in `routed_swap::history`. Today the timeline shows how far a swap got, not when each step happened. |
 | **Action required** | `ActionRequired` is a dead-code variant kept only for wire compatibility (`routed_swap/types.rs:249-251`, enum at 244), and "`action_required` is not emitted in v1" (contract l.208). | Nothing. The UI already handles it: an "Action required" hero, a route-page button when `action_url` is present, a notice, and an Activity badge. |
-| **Picking between routes** | "`routes` has exactly one entry in v1" (contract l.85). | Nothing yet. The options sheet already compares the cheapest and fastest orders and the atomic fill, so a longer `routes` list slots in. |
+| **Picking between routes** | "`routes` has exactly one entry in v1" (contract l.85). | Nothing yet. The options sheet already compares the cheapest and fastest orders and the atomic fill, so a longer `routes` list slots in. The fastest is priced only when the sheet opens, since each order is a separate provider request. |
 | **Route warnings** (low liquidity and similar) | Routes have no warnings or tags field (`routed_swap/types.rs`, `RoutedSwapRoute`). | A contract field. The review already warns when price impact reaches 5% or more, and when a price is missing. |
-| **Editing slippage** | The request takes `slippage`, defaulting to 0.005 with a maximum of 0.5 (`types.rs:24-25`; contract l.45). | A UI decision, not a contract gap. v1 keeps the 0.5% default. The review shows it, along with the minimum it guarantees. |
 | **Routed swaps in `my_recent_swaps`** | `swap_type: "routed" \| "all"` exists (contract l.373). | Not needed. Activity reads `routed_swap::history`, which the contract calls "the primary typed surface", and keeps atomic history on the legacy list, so no swap is listed twice. |
 | **External wallet steps** (awaiting approval or signature) | `init` accepts internal signing (iguana and HD) and WalletConnect. It refuses Trezor and Metamask with `InvalidParam { param: "from" }` (`routed_swap/swap_task.rs:1854-1869`). The app already disables the Swap menu entry for hardware wallets, and it signs these swaps internally, so the prototype's approval and signature prompts never appear. | Trezor or Metamask support in the routed task, plus the prompt states from the prototype. |
-| **A `/swap` route** | The app router serves `/dex`. `from_currency`, `to_currency`, `from_amount` and `order_type=maker` deep links work as before. | Router work, separate from this feature. |
 
 ## Interim: Max
 
 The spec's Max option is still to come, so v1 has an interim version behind a single SDK entry point, `RoutedSwapManager.maxSellAmount`:
 
 - **Selling a token:** Max uses the whole balance. The network fee is paid in the network's own coin.
-- **Selling a network's own coin:** Max keeps back the native `total_gas_costs` from a probe quote, times 1.25. The form says how much was kept back.
+- **Selling a network's own coin:** Max keeps back three times the native network fee of the route. The form says how much was kept back. The fee comes from a quote on the same pair in the last minute when there is one, and from a probe quote otherwise. The margin is large because `init` checks the balance against the route's gas limit at KDF's own maximum fee per gas (`check_balances` in `routed_swap/swap_task.rs`), which runs well above the provider's estimate. If that check still fails, nothing is sent and the result screen shows KDF's shortfall.
 - **Atomic swaps:** Max uses KDF's `max_taker_vol`, which already accounts for the trading and network fees.
 
-When the spec adds Max, it replaces the probe inside `maxSellAmount`. The form does not change.
+When the spec adds Max, it replaces this inside `maxSellAmount`, and the form does not change. A draft for the spec is kept outside the repos until it is agreed.
+
+## Shipped from this list
+
+- **Editing slippage.** The comparison sheet shows the allowance for cross-network routes and offers 0.5%, 1% or 2%, or a custom 0.05–5%. It warns above 1% and below 0.1%. A change prices every option again. It lasts for the session only.
+- **A `/swap` route.** `/swap` opens the same surface as `/dex`, with the same deep-link parameters, and settles on `/dex`.
+
+## KDF behaviour the wallet works around
+
+KDF changes are out of scope for this release, so the wallet compensates for these. Each is worth raising with the KDF team for a later version.
+
+| Behaviour | Effect without the workaround | What the wallet does |
+|---|---|---|
+| `routed_swap::quote` never checks the provider's chain list (`routed_swap/quote.rs` `resolve_routed_request`/`resolve_routed_coin`; only `supported_coins.rs` filters on it). | A pair on a chain the provider does not serve reaches the provider, which answers HTTP 400, code 1011. KDF maps that to `ProviderApiError`, and the form said "We couldn't check swap options" for GLEEC, GRC-20, KCC, ETC and others. | The swap catalog only asks a source that can price the pair. Anything else is answered locally, with the reason. |
+| `supported_coins` lists activated coins only (contract l.298). | No way to tell whether an inactive asset is routable. | A bundled copy of the provider's EVM chain list (`routed_swap_chains.dart`) decides until the asset is active. |
+| A token quote from an address without the network's own coin fails as `TransportError: Unable to estimate source-chain approval cost` (`routed_swap/quote.rs:334`). The approval estimate sends `eth_estimateGas` with a gas price, and nodes refuse it without funds for gas. It fails after the provider quote, so the request is spent. | A permanent condition reads as an outage, and each retry spends another request. | A token with none of its network's coin is stopped at the form with that reason. A routed service error on a token sale suggests checking that coin. |
+| `init` reserves the route's gas limit at KDF's maximum fee (`check_balances`). The quote reports the provider's estimate. | A Max built on the quoted gas could fail at start. | Max keeps back three times the quoted gas. |
+| Routed status is polled every 5 seconds per swap with no backoff (`routed_swap/swap_task.rs`, `resume.rs`). | About 12 provider calls a minute per bridging swap. Harmless without a key, because the per-address limit for status calls is 100 a minute. It matters once a shared-key proxy is in place. | Nothing yet; recorded for the proxy work. |
+| On web, a provider error carries no `provider_request_id`. The provider's `x-lifi-requestid` header is not exposed to browsers (CORS). | Support diagnostics on web lack the provider's correlation id. | Nothing; the evidence still carries the swap's uuid and hashes. |
+
+## Phase 2 change points
+
+Phase 2 (BTC as the source coin, and Tron) is KDF's to add (contract l.12). The provider already serves Solana, Bitcoin, Sui and Tron. These wallet and SDK parts assume EVM and must change with it:
+
+- **Network names for route legs** (`lib/shared/swap/swap_networks.dart`). Legs are named from EVM chain ids only (`networkOfEvmChain`, and `evmChainIdOf` checks an EVM subclass list). A non-EVM leg falls back to the route's source or destination network name, so a hop through Bitcoin or Tron would be mislabelled.
+- **Which assets are routable before activation** (`lib/shared/swap/routed_swap_chains.dart`). The bundled list is `chainTypes=EVM`, keyed by integer chain id.
+- **Chain ids are integers** (`RoutedSwapSupportedCoin.chainId` in the SDK). An entry with another chain id is skipped and logged rather than failing the whole list, so a Phase 2 coin disappears quietly until the SDK models it.
+- **One source address per asset** (`SwapServices.addressOf`, KDF's `single_addr_or_err`). A UTXO source can spend from many addresses of an HD account, and the form, Max and the review all assume one.
+- **Max's native-gas rule** (`RoutedSwapManager.maxSellAmount`, `RoutedSwapQuoteSource._nativeMax`). It assumes the fee is paid in the sold coin at EVM gas prices. UTXO fees depend on the inputs spent, and Tron has energy, bandwidth and gas-free transfers.
+- **Fees in the network's own coin** (`SwapFormIssue.noFeeBalance`). This is true for EVM tokens. A Tron token may pay with energy, or through GasFree.
+- **Exact approvals and zero-reset** (the approve stages in `routed_swap_source.dart`, and the review's permission copy). These are ERC-20 concepts. A BTC source needs none, and Tron's TRC-20 approvals differ.
 
 ## Prototype adaptations
 
