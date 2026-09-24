@@ -35,7 +35,7 @@ void main() {
   testWidgets('keeps the full trading interface one tap away', (tester) async {
     await pump(tester);
 
-    await tester.tap(find.text('Advanced'));
+    await tester.tap(find.byKey(const Key('swap-destination-advanced')));
     await tester.pumpAndSettle();
 
     // Demoting the trading UI is only acceptable while it remains reachable.
@@ -46,7 +46,7 @@ void main() {
   testWidgets('reaches history without leaving the surface', (tester) async {
     await pump(tester);
 
-    await tester.tap(find.text('Activity'));
+    await tester.tap(find.byKey(const Key('swap-destination-activity')));
     await tester.pumpAndSettle();
 
     expect(find.text('body:activity'), findsOneWidget);
@@ -56,9 +56,9 @@ void main() {
     await pump(tester);
 
     expect(find.byKey(const Key('swap-destination-switcher')), findsOneWidget);
-    expect(find.text('Swap'), findsOneWidget);
-    expect(find.text('Activity'), findsOneWidget);
-    expect(find.text('Advanced'), findsOneWidget);
+    expect(find.byKey(const Key('swap-destination-swap')), findsOneWidget);
+    expect(find.byKey(const Key('swap-destination-activity')), findsOneWidget);
+    expect(find.byKey(const Key('swap-destination-advanced')), findsOneWidget);
   });
 
   testWidgets('keeps the keys the integration suite navigates by', (
@@ -74,9 +74,9 @@ void main() {
     expect(find.byKey(const Key('swap-destination-activity')), findsOneWidget);
     expect(find.byKey(const Key('swap-destination-advanced')), findsOneWidget);
 
-    // The keys sit on the labels rather than on the segments, which take
-    // none, so a tap has to reach the segment through them. Asserting they
-    // exist would not catch a label that stopped being tappable.
+    // The keys sit on the labels inside each destination's tap target, so a
+    // tap has to reach the target through them. Asserting they exist would
+    // not catch a label that stopped being tappable.
     await tester.tap(find.byKey(const Key('swap-destination-advanced')));
     await tester.pumpAndSettle();
     expect(find.text('body:advanced'), findsOneWidget);

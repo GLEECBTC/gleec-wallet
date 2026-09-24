@@ -1,303 +1,184 @@
 import 'dart:async';
 
-import 'package:decimal/decimal.dart';
-import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:rational/rational.dart';
-import 'package:web_dex/bloc/dex_repository.dart';
-import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
-import 'package:web_dex/shared/swap/atomic_swap_source.dart';
+import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
-/// Where a running swap has got to, whichever source is filling it.
-enum SwapPhase {
-  /// Pricing, allowance checks, order submission. Nothing irreversible.
-  preparing,
-
-  /// An ERC-20 approval is on-chain.
-  approving,
-
-  /// Signing locally.
-  signing,
-
-  /// Handed to the network. No longer stoppable.
-  sending,
-
-  /// Waiting for on-chain confirmation.
-  confirming,
-
-  /// Following a bridge, or waiting for an atomic counterparty.
-  settling,
-
-  /// Stopped. Check the outcome — stopped is not succeeded.
-  finished,
-
-  /// Failed.
-  failed,
-
-  /// Unrecognised.
-  unknown,
-}
-
-/// A snapshot of a running or finished swap.
-class UnifiedSwapProgress {
-  const UnifiedSwapProgress({
-    required this.id,
-    required this.source,
-    required this.phase,
-    required this.canCancel,
-    this.isSuccess = false,
-    this.headline,
-    this.detail,
-    this.receivedAmount,
-    this.receivedToken,
-    this.fundsUntouched = false,
-    this.providerDetail,
-    this.explorerUrl,
-  });
-
-  /// Builds a snapshot from the routed SDK's own progress type.
-  factory UnifiedSwapProgress.fromRouted(RoutedSwapProgress progress) {
-    final receipt = progress.receipt;
-    return UnifiedSwapProgress(
-      id: progress.uuid,
-      source: SwapLiquiditySource.routed,
-      phase: switch (progress.phase) {
-        RoutedSwapPhase.preparing => SwapPhase.preparing,
-        RoutedSwapPhase.approving => SwapPhase.approving,
-        RoutedSwapPhase.signing => SwapPhase.signing,
-        RoutedSwapPhase.sending => SwapPhase.sending,
-        RoutedSwapPhase.confirming => SwapPhase.confirming,
-        RoutedSwapPhase.bridging => SwapPhase.settling,
-        RoutedSwapPhase.finished => SwapPhase.finished,
-        RoutedSwapPhase.failed => SwapPhase.failed,
-        RoutedSwapPhase.unknown => SwapPhase.unknown,
-      },
-      canCancel: progress.canCancel,
-      isSuccess: progress.isSuccess,
-      headline: switch (receipt?.outcome.wire) {
-        'completed' => 'You received ${receipt!.amount} ${receipt.tokenLabel}',
-        'partial' => 'Partly filled',
-        'refunded' => 'Swap refunded',
-        _ => null,
-      },
-      detail: switch (receipt?.outcome.wire) {
-        'partial' =>
-          'You received ${receipt!.amount} ${receipt.tokenLabel}, which is '
-              'not the full amount you asked for.',
-        'refunded' =>
-          'The swap did not happen. ${receipt!.amount} ${receipt.tokenLabel} '
-              'was returned to you.',
-        _ => progress.failure?.message,
-      },
-      receivedAmount: receipt?.amount,
-      receivedToken: receipt?.tokenLabel,
-      fundsUntouched: progress.failure?.fundsUntouched ?? false,
-      providerDetail: progress.providerStatusDetail,
-      explorerUrl: progress.explorerUrl,
-    );
-  }
-
-  /// The durable id. A uuid from either source.
-  final String id;
-
-  /// Which source is filling this.
-  final SwapLiquiditySource source;
-
-  /// Where it has got to.
-  final SwapPhase phase;
-
-  /// Whether stopping it would currently be accepted.
-  final bool canCancel;
-
-  /// Whether it delivered what was asked for.
-  ///
-  /// Never inferred from [phase]: a refund and a partial fill are both
-  /// finished and neither is a success.
-  final bool isSuccess;
-
-  /// Terminal headline, when there is one.
-  final String? headline;
-
-  /// Supporting detail.
-  final String? detail;
-
-  /// What actually arrived.
-  final Decimal? receivedAmount;
-
-  /// The token that arrived.
-  final String? receivedToken;
-
-  /// Whether nothing was broadcast, so the balance is unchanged.
-  final bool fundsUntouched;
-
-  /// Opaque provider progress text.
-  final String? providerDetail;
-
-  /// An explorer link for the swap.
-  final String? explorerUrl;
-
-  /// Whether the swap has stopped, either way.
-  bool get isTerminal =>
-      phase == SwapPhase.finished || phase == SwapPhase.failed;
-}
-
-/// A running swap the caller can follow and possibly stop.
+/// A running or finished swap the caller can follow and possibly stop.
 abstract interface class SwapExecutionHandle {
   /// The durable id.
   String get id;
 
-  /// Progress until terminal.
-  Stream<UnifiedSwapProgress> get progress;
+  /// The most recent snapshot.
+  SwapExecutionSnapshot get latest;
+
+  /// Snapshots until terminal. Each access replays [latest] first.
+  Stream<SwapExecutionSnapshot> get updates;
 
   /// Stops the swap if that is still possible.
+  ///
+  /// Throws [SwapCancelRefusedException] when it is not, and
+  /// [SwapCancelUnconfirmedException] when the answer could not be read.
   Future<void> cancel();
+
+  /// Stops following the swap. The swap itself keeps running in the engine.
+  Future<void> close();
 }
 
-/// Starts swaps for one liquidity source.
+/// Starts and resumes swaps for one liquidity source.
 abstract interface class SwapExecutor {
   /// Which source this executes for.
   SwapLiquiditySource get source;
 
   /// Begins executing [quote].
+  ///
+  /// Throws [SwapStartRejectedException] when the engine refused before
+  /// anything started, and [SwapStartUnconfirmedException] when the swap may
+  /// have started but could not be confirmed.
   Future<SwapExecutionHandle> start(SwapQuote quote);
+
+  /// Re-attaches to a swap by its durable id, or null when this source does
+  /// not know it.
+  Future<SwapExecutionHandle?> resume(String id);
 }
 
-/// Executes routed swaps through the SDK.
-class RoutedSwapExecutor implements SwapExecutor {
-  /// Creates an executor over [manager].
-  const RoutedSwapExecutor(this.manager);
+/// The engine refused to start a swap. Nothing started.
+class SwapStartRejectedException implements Exception {
+  const SwapStartRejectedException(this.reason, {this.detail});
 
-  /// The SDK manager.
-  final RoutedSwapManager manager;
+  /// Why, in terms the entry form already explains.
+  final SwapStartRejection reason;
+
+  /// Diagnostic text.
+  final String? detail;
 
   @override
-  SwapLiquiditySource get source => SwapLiquiditySource.routed;
-
-  @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
-    final offer = quote.payload;
-    if (offer is! RoutedSwapOffer) {
-      throw StateError('This offer can no longer be executed. Re-quote first.');
-    }
-    return _RoutedHandle(await manager.start(offer));
-  }
+  String toString() => 'SwapStartRejectedException(${reason.name}): $detail';
 }
 
-class _RoutedHandle implements SwapExecutionHandle {
-  _RoutedHandle(this._handle);
+/// Why a start was refused.
+enum SwapStartRejection {
+  /// The quote went stale; price again.
+  quoteStale,
 
-  final RoutedSwapHandle _handle;
+  /// Not enough balance for the swap and its fees.
+  insufficientBalance,
 
-  @override
-  String get id => _handle.uuid;
+  /// The pair or amount is no longer accepted.
+  notAvailable,
 
-  @override
-  Stream<UnifiedSwapProgress> get progress =>
-      _handle.progress.map(UnifiedSwapProgress.fromRouted);
-
-  @override
-  Future<void> cancel() => _handle.cancel();
+  /// Something else; retrying may work.
+  unknown,
 }
 
-/// Executes atomic swaps by placing a fill-or-kill taker order.
+/// The swap may have started, but the engine's answer was lost.
 ///
-/// Fill-or-kill is the right order type for a quoted swap: the user was shown
-/// a price for a specific size, and a partially filled or resting order is a
-/// different trade from the one they agreed to.
-class AtomicSwapExecutor implements SwapExecutor {
-  /// Creates an executor over the DEX repository and trading manager.
-  const AtomicSwapExecutor({
-    required DexRepository dexRepository,
-    required TradingManager trading,
-  }) : _dex = dexRepository,
-       _trading = trading;
+/// Never re-arm a start button on this: the engine may already be running the
+/// swap, and a second tap is a second real swap. Point the user at Activity.
+class SwapStartUnconfirmedException implements Exception {
+  const SwapStartUnconfirmedException(this.cause);
 
-  final DexRepository _dex;
-  final TradingManager _trading;
+  /// What went wrong.
+  final Object cause;
 
   @override
-  SwapLiquiditySource get source => SwapLiquiditySource.atomic;
-
-  @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
-    final plan = quote.payload;
-    if (plan is! AtomicSwapPlan) {
-      throw StateError('This offer can no longer be executed. Re-quote first.');
-    }
-
-    final response = await _dex.sell(
-      SellRequest(
-        base: plan.base.id,
-        rel: plan.rel.id,
-        volume: Rational.parse(plan.volume.toString()),
-        price: Rational.parse(plan.price.toString()),
-        orderType: SellBuyOrderType.fillOrKill,
-      ),
-    );
-
-    final error = response.error;
-    if (error != null) throw StateError(error.message);
-
-    final uuid = response.result?.uuid;
-    if (uuid == null) {
-      throw StateError('The order was accepted but returned no reference.');
-    }
-
-    return _AtomicHandle(uuid: uuid, trading: _trading);
-  }
+  String toString() => 'Could not confirm whether the swap started: $cause';
 }
 
-class _AtomicHandle implements SwapExecutionHandle {
-  _AtomicHandle({required String uuid, required TradingManager trading})
-    : id = uuid,
-      _trading = trading;
+/// A cancel request was refused.
+class SwapCancelRefusedException implements Exception {
+  const SwapCancelRefusedException(this.reason);
+
+  /// Why.
+  final SwapCancelRefusal reason;
 
   @override
-  final String id;
+  String toString() => 'SwapCancelRefusedException(${reason.name})';
+}
 
-  final TradingManager _trading;
+/// Why a cancel was refused.
+enum SwapCancelRefusal {
+  /// Already handed to the network.
+  alreadySent,
+
+  /// Already finished.
+  alreadyFinished,
+
+  /// This kind of swap cannot be stopped once it has begun.
+  notSupported,
+}
+
+/// A cancel request's answer could not be read. The swap may or may not
+/// have stopped; its updates keep reporting the truth.
+class SwapCancelUnconfirmedException implements Exception {
+  const SwapCancelUnconfirmedException(this.cause);
+
+  /// What went wrong.
+  final Object cause;
 
   @override
-  Stream<UnifiedSwapProgress> get progress =>
-      _trading.watchSwapStatus(uuid: id).map(_toProgress);
+  String toString() => 'Could not confirm cancelling the swap: $cause';
+}
 
-  /// An atomic taker order cannot be recalled once it is matched, and KDF
-  /// exposes no cancel for an in-flight swap — only for a resting order, which
-  /// a fill-or-kill never becomes.
-  @override
-  Future<void> cancel() async =>
-      throw StateError('An atomic swap cannot be cancelled once placed.');
-
-  UnifiedSwapProgress _toProgress(SwapInfo info) {
-    if (!info.isComplete) {
-      return UnifiedSwapProgress(
-        id: id,
-        source: SwapLiquiditySource.atomic,
-        phase: SwapPhase.settling,
-        canCancel: false,
-        detail: 'Waiting for the other side to complete their part.',
-      );
-    }
-
-    final succeeded = info.isSuccessful;
-    return UnifiedSwapProgress(
-      id: id,
-      source: SwapLiquiditySource.atomic,
-      phase: succeeded ? SwapPhase.finished : SwapPhase.failed,
-      canCancel: false,
-      isSuccess: succeeded,
-      headline: succeeded
-          ? 'You received ${info.makerAmount} ${info.makerCoin}'
-          : 'Swap did not complete',
-      // Atomic swaps have their own recovery machinery and a much richer
-      // event log than this surface renders. Pointing at it beats paraphrasing
-      // a failure whose detail lives elsewhere.
-      detail: succeeded
-          ? null
-          : 'See Advanced for the full swap log and any recovery options.',
-      receivedAmount: succeeded ? Decimal.tryParse(info.makerAmount) : null,
-      receivedToken: succeeded ? info.makerCoin : null,
+/// A handle over a stream of snapshots, shared by both executors.
+class StreamSwapExecutionHandle implements SwapExecutionHandle {
+  StreamSwapExecutionHandle({
+    required SwapExecutionSnapshot initial,
+    required Stream<SwapExecutionSnapshot> source,
+    required Future<void> Function() cancel,
+    Future<void> Function()? onClose,
+  }) : _latest = initial,
+       _cancel = cancel,
+       _onClose = onClose {
+    _subscription = source.listen(
+      _add,
+      onError: (Object error, StackTrace trace) {
+        if (!_controller.isClosed) _controller.addError(error, trace);
+      },
+      onDone: () => unawaited(_controller.close()),
     );
+  }
+
+  SwapExecutionSnapshot _latest;
+  final Future<void> Function() _cancel;
+  final Future<void> Function()? _onClose;
+  final StreamController<SwapExecutionSnapshot> _controller =
+      StreamController<SwapExecutionSnapshot>.broadcast();
+  late final StreamSubscription<SwapExecutionSnapshot> _subscription;
+
+  void _add(SwapExecutionSnapshot snapshot) {
+    if (snapshot == _latest) return;
+    _latest = snapshot;
+    if (!_controller.isClosed) _controller.add(snapshot);
+  }
+
+  @override
+  String get id => _latest.id;
+
+  @override
+  SwapExecutionSnapshot get latest => _latest;
+
+  @override
+  Stream<SwapExecutionSnapshot> get updates => Stream.multi((out) {
+    out.add(_latest);
+    if (_controller.isClosed) {
+      unawaited(out.close());
+      return;
+    }
+    final subscription = _controller.stream.listen(
+      out.add,
+      onError: out.addError,
+      onDone: out.close,
+    );
+    out.onCancel = subscription.cancel;
+  });
+
+  @override
+  Future<void> cancel() => _cancel();
+
+  @override
+  Future<void> close() async {
+    await _subscription.cancel();
+    await _onClose?.call();
+    if (!_controller.isClosed) await _controller.close();
   }
 }

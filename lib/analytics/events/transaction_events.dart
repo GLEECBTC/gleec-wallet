@@ -425,6 +425,8 @@ class SwapInitiatedEventData extends AnalyticsEventData {
     required this.network,
     required this.secondaryNetwork,
     required this.hdType,
+    this.routeCategory,
+    this.stageCount,
   });
 
   final String asset;
@@ -432,6 +434,13 @@ class SwapInitiatedEventData extends AnalyticsEventData {
   final String network;
   final String secondaryNetwork;
   final String hdType;
+
+  /// How the swap completes: `atomic`, `same_chain` or `cross_chain`. Set by
+  /// the unified swap flow only.
+  final String? routeCategory;
+
+  /// How many steps the swap takes. Unified swap flow only.
+  final int? stageCount;
 
   @override
   String get name => 'swap_initiated';
@@ -443,6 +452,8 @@ class SwapInitiatedEventData extends AnalyticsEventData {
     'network': network,
     'secondary_network': secondaryNetwork,
     'hd_type': hdType,
+    if (routeCategory != null) 'route_category': routeCategory,
+    if (stageCount != null) 'stage_count': stageCount,
   };
 }
 
@@ -481,6 +492,8 @@ class SwapSucceededEventData extends AnalyticsEventData {
     required this.fee,
     required this.hdType,
     this.durationMs,
+    this.routeCategory,
+    this.stageCount,
   });
 
   final String asset;
@@ -491,6 +504,12 @@ class SwapSucceededEventData extends AnalyticsEventData {
   final double fee;
   final String hdType;
   final int? durationMs;
+
+  /// See [SwapInitiatedEventData.routeCategory].
+  final String? routeCategory;
+
+  /// See [SwapInitiatedEventData.stageCount].
+  final int? stageCount;
 
   @override
   String get name => 'swap_success';
@@ -505,6 +524,8 @@ class SwapSucceededEventData extends AnalyticsEventData {
     'fee': fee,
     'hd_type': hdType,
     if (durationMs != null) 'duration_ms': durationMs,
+    if (routeCategory != null) 'route_category': routeCategory,
+    if (stageCount != null) 'stage_count': stageCount,
   };
 }
 
@@ -549,6 +570,9 @@ class SwapFailedEventData extends AnalyticsEventData {
     this.failureDetail,
     required this.hdType,
     this.durationMs,
+    this.routeCategory,
+    this.outcomeCategory,
+    this.stageCount,
   });
 
   final String asset;
@@ -559,6 +583,17 @@ class SwapFailedEventData extends AnalyticsEventData {
   final String? failureDetail;
   final String hdType;
   final int? durationMs;
+
+  /// See [SwapInitiatedEventData.routeCategory].
+  final String? routeCategory;
+
+  /// How the swap ended when it did not deliver what was asked:
+  /// `refunded`, `cancelled`, `no_match`, `partial_below_minimum`,
+  /// `partial_other_token` or `failed`. Unified swap flow only.
+  final String? outcomeCategory;
+
+  /// See [SwapInitiatedEventData.stageCount].
+  final int? stageCount;
 
   @override
   String get name => 'swap_failure';
@@ -575,6 +610,9 @@ class SwapFailedEventData extends AnalyticsEventData {
     ),
     'hd_type': hdType,
     if (durationMs != null) 'duration_ms': durationMs,
+    if (routeCategory != null) 'route_category': routeCategory,
+    if (outcomeCategory != null) 'outcome_category': outcomeCategory,
+    if (stageCount != null) 'stage_count': stageCount,
   };
 }
 

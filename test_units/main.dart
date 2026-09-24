@@ -113,10 +113,14 @@ import 'tests/gasless/tron_gasless_policy_test.dart';
 import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
-import 'tests/swap/swap_execution_test.dart' as swap_execution_test;
+import 'tests/swap/swap_copy_test.dart' as swap_copy_test;
+import 'tests/swap/swap_execution_bloc_test.dart' as swap_execution_bloc_test;
+import 'tests/swap/swap_execution_registry_test.dart'
+    as swap_execution_registry_test;
 import 'tests/swap/swap_history_repository_test.dart'
     as swap_history_repository_test;
 import 'tests/swap/swap_shell_test.dart' as swap_shell_test;
+import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
 import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
 import 'tests/swap/unified_swap_bloc_test.dart' as unified_swap_bloc_test;
 import 'tests/swap/unified_swap_repository_test.dart'
@@ -359,7 +363,10 @@ void main() {
   swap_widgets_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
-  swap_execution_test.main();
+  swap_execution_registry_test.main();
+  swap_execution_bloc_test.main();
+  swap_copy_test.main();
+  swap_sources_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();

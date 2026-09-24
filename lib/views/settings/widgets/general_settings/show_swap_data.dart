@@ -151,23 +151,50 @@ class _ShowSwapDataState extends State<ShowSwapData> {
   Future<Object> _routedSwapData() async {
     try {
       final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-      final entries = await sdk.routedSwaps.history(limit: 200);
+      final entries = <RoutedSwapProgress>[];
+      for (var page = 1; page <= 4; page++) {
+        final result = await sdk.routedSwaps.history(
+          pageNumber: page,
+          limit: 50,
+        );
+        entries.addAll(result.entries);
+        if (!result.hasMore) break;
+      }
       return [
         for (final entry in entries)
           {
             'uuid': entry.uuid,
             'phase': entry.phase.name,
             'raw_state': entry.rawState,
+            'stage': entry.bridgeStage?.name,
+            'created_at': entry.createdAt?.toIso8601String(),
+            'updated_at': entry.updatedAt?.toIso8601String(),
+            'finished_at': entry.finishedAt?.toIso8601String(),
+            'requested_from': entry.requested?.fromTicker,
+            'requested_to': entry.requested?.toTicker,
+            'requested_amount': entry.requested?.amount.toString(),
+            'min_to_amount_accepted': entry.minToAmountAccepted?.toString(),
             'outcome': entry.receipt?.outcome.wire,
+            'partial_reason': entry.receipt?.partialReason?.name,
             'received_amount': entry.receipt?.amount.toString(),
             'received_token': entry.receipt?.tokenLabel,
             'failure': entry.failure?.kind.name,
+            'error_type': entry.failure?.errorType,
             'failure_message': entry.failure?.message,
-            'funds_untouched': entry.failure?.fundsUntouched,
-            'approval_tx_hash': entry.approvalTxHash,
+            'funds_movement': entry.failure?.fundsMovement.name,
+            'provider_request_id': entry.failure?.providerRequestId,
+            'approval_tx_hashes': entry.approvalTxHashes,
             'source_tx_hash': entry.sourceTxHash,
             'destination_tx_hash': entry.destinationTxHash,
             'explorer_url': entry.explorerUrl,
+            'gas_spent': [
+              for (final gas in entry.gasSpent)
+                {
+                  'coin': gas.ticker,
+                  'amount': gas.amount.toString(),
+                  'tx_hash': gas.txHash,
+                },
+            ],
           },
       ];
     } on Object catch (error) {

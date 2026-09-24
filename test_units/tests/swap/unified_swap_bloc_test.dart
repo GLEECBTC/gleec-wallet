@@ -2,544 +2,497 @@ import 'dart:async';
 
 import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
-import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
+import 'package:web_dex/shared/swap/swap_execution_registry.dart';
+import 'package:web_dex/shared/swap/swap_preferences.dart';
+import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
-/// Covers the rules that stand between a user and a trade they did not agree
-/// to.
-///
-/// The two that matter most are the pre-start re-price and the stale-answer
-/// guard. Both are invisible in the type signatures and both fail silently if
-/// broken — the swap simply executes against the wrong number.
+import 'swap_test_fixtures.dart';
+
+/// Covers the swap form's rules. Most follow from one fact: the user commits
+/// money against a number that moves — so nothing starts against a price
+/// they have not seen, a stale answer never wins, and a start whose answer
+/// was lost is never repeated.
 void main() {
-  AssetId assetOf(String id) => AssetId(
-    id: id,
-    name: id,
-    symbol: AssetSymbol(assetConfigId: id),
-    chainId: AssetChainId(chainId: 1),
-    derivationPath: null,
-    subClass: CoinSubClass.erc20,
-  );
+  late FakeQuoteSource routed;
+  late FakeQuoteSource atomic;
+  late FakeExecutor routedExecutor;
+  late SwapExecutionRegistry registry;
+  late MemoryStorage storage;
+  late Map<AssetId, Decimal> balances;
+  late DateTime clock;
+  late List<({AssetId asset, Decimal usdValue})> holdings;
 
-  final usdt = assetOf('USDT-PLG20');
-  final usdc = assetOf('USDC-ERC20');
+  AssetId? resolve(String ticker) => {
+    for (final a in [eth, usdc, btc, gleec]) a.id: a,
+  }[ticker];
 
-  SwapQuote quoteOf({
-    required String guaranteed,
-    SwapLiquiditySource source = SwapLiquiditySource.routed,
-    String? expected,
-    Object? payload,
-  }) => SwapQuote(
-    source: source,
-    from: usdt,
-    to: usdc,
-    sellAmount: Decimal.parse('100'),
-    expectedReceive: Decimal.parse(expected ?? guaranteed),
-    guaranteedReceive: Decimal.parse(guaranteed),
-    costs: const [],
-    quotedAt: DateTime(2026),
-    hasUndisclosedCosts: false,
-    payload: payload,
-  );
+  List<SwapQuoteResult> pricedFor(SwapQuoteRequest request) => [
+    SwapQuoteAvailable(
+      quoteOf(
+        id: 'routed-${request.amount}',
+        from: request.from,
+        to: request.to,
+        sell: request.amount.toString(),
+        quotedAt: clock,
+        pricing: const SwapQuotePricing(),
+      ),
+    ),
+  ];
 
-  UnifiedSwapBloc blocWith(
-    _ProgrammableSource source, {
-    Decimal? balance,
-    _FakeExecutor? executor,
-  }) => UnifiedSwapBloc(
-    repository: UnifiedSwapRepository(sources: [source]),
-    executors: [executor ?? _FakeExecutor()],
-    spendableBalance: (_) async => balance,
-  );
-
-  /// Waits for a state matching [test], failing fast rather than hanging.
-  ///
-  /// A bare `firstWhere` on a bloc stream wedges the whole runner when the
-  /// expected state never arrives.
-  Future<UnifiedSwapState> waitFor(
-    UnifiedSwapBloc bloc,
-    bool Function(UnifiedSwapState) test,
-  ) {
-    if (test(bloc.state)) return Future.value(bloc.state);
-    return bloc.stream
-        .firstWhere(test)
-        .timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => fail('no matching state arrived'),
-        );
+  UnifiedSwapBloc build() {
+    final prices = FakePriceSource({eth: d('3000'), usdc: d('1')});
+    return UnifiedSwapBloc(
+      repository: UnifiedSwapRepository(
+        sources: [routed, atomic],
+        pricing: SwapPricingService(prices),
+      ),
+      registry: registry,
+      terms: SwapTermsRepository(
+        walletKey: () async => 'wallet',
+        storage: storage,
+      ),
+      preferences: SwapPreferences(
+        walletKey: () async => 'wallet',
+        storage: storage,
+      ),
+      spendableBalance: (asset) async => balances[asset],
+      addressOf: (asset) async => '0xaddress',
+      resolveAsset: resolve,
+      holdings: () async => holdings,
+      now: () => clock,
+      debounce: Duration.zero,
+      evaluationTimeout: const Duration(seconds: 2),
+      refreshInterval: const Duration(hours: 1),
+      rateLimitPause: const Duration(milliseconds: 30),
+    );
   }
 
-  Future<void> fillForm(UnifiedSwapBloc bloc, {String amount = '100'}) async {
-    bloc
-      ..add(UnifiedSwapSellAssetChanged(usdt))
-      ..add(UnifiedSwapReceiveAssetChanged(usdc))
-      ..add(UnifiedSwapAmountChanged(amount));
-    await waitFor(bloc, (s) => s.amountText == amount && s.sellAsset != null);
-  }
-
-  group('form validation', () {
-    test('rejects an amount above the spendable balance', () async {
-      final bloc = blocWith(
-        _ProgrammableSource(),
-        balance: Decimal.parse('50'),
-      );
-      addTearDown(bloc.close);
-
-      await fillForm(bloc, amount: '100');
-      final state = await waitFor(bloc, (s) => s.formError != null);
-
-      expect(state.formError, UnifiedSwapFormError.amountExceedsBalance);
-      expect(state.canRequestQuote, isFalse);
-    });
-
-    test('rejects a malformed amount without crashing', () async {
-      final bloc = blocWith(_ProgrammableSource());
-      addTearDown(bloc.close);
-
-      await fillForm(bloc, amount: '12..3');
-      final state = await waitFor(bloc, (s) => s.formError != null);
-
-      expect(state.formError, UnifiedSwapFormError.amountMalformed);
-    });
-
-    test('rejects the same asset on both sides', () async {
-      final bloc = blocWith(_ProgrammableSource());
-      addTearDown(bloc.close);
-
-      bloc
-        ..add(UnifiedSwapSellAssetChanged(usdt))
-        ..add(UnifiedSwapReceiveAssetChanged(usdt));
-
-      final state = await waitFor(
-        bloc,
-        (s) => s.formError == UnifiedSwapFormError.sameAsset,
-      );
-      expect(state.canRequestQuote, isFalse);
-    });
-
-    test('clears the amount when the sides are reversed', () async {
-      final bloc = blocWith(_ProgrammableSource());
-      addTearDown(bloc.close);
-
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapSidesReversed());
-
-      final state = await waitFor(bloc, (s) => s.sellAsset == usdc);
-      // The amount was denominated in the old sell asset. Keeping it would
-      // re-denominate the trade without telling anyone.
-      expect(state.amountText, isEmpty);
-      expect(state.receiveAsset, usdt);
-    });
-  });
-
-  group('quoting', () {
-    test(
-      'discards a slow answer for a form the user has moved on from',
-      () async {
-        final source = _ProgrammableSource()
-          ..gate = Completer<void>()
-          ..priced = quoteOf(guaranteed: '99');
-        final bloc = blocWith(source);
-        addTearDown(bloc.close);
-
-        await fillForm(bloc);
-        bloc.add(const UnifiedSwapQuoteRequested());
-        await waitFor(
-          bloc,
-          (s) => s.quoteStatus == UnifiedSwapQuoteStatus.loading,
-        );
-
-        // The user keeps typing while the first lookup is still out.
-        bloc.add(const UnifiedSwapAmountChanged('250'));
-        await waitFor(bloc, (s) => s.amountText == '250');
-
-        source.gate!.complete();
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-
-        // The stale price must not land: it was quoted for 100, not 250.
-        expect(bloc.state.selectedQuote, isNull);
-        expect(bloc.state.quoteStatus, UnifiedSwapQuoteStatus.idle);
-      },
-    );
-
-    test('separates an unsupported pair from a transient failure', () async {
-      final source = _ProgrammableSource()
-        ..rejection = SwapQuoteUnavailableReason.pairUnsupported;
-      final bloc = blocWith(source);
-      addTearDown(bloc.close);
-
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-
-      final state = await waitFor(
-        bloc,
-        (s) =>
-            s.quoteStatus != UnifiedSwapQuoteStatus.loading &&
-            s.quoteStatus != UnifiedSwapQuoteStatus.idle,
-      );
-      // Retrying will never help, so the UI must not offer it.
-      expect(state.quoteStatus, UnifiedSwapQuoteStatus.unsupported);
-    });
-  });
-
-  group('pre-start re-price', () {
-    test('stops for consent when the guaranteed amount drops', () async {
-      final source = _ProgrammableSource()
-        ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source);
-      addTearDown(bloc.close);
-
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-      await waitFor(bloc, (s) => s.canReview);
-      bloc.add(const UnifiedSwapReviewRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
-
-      // The price moves against the user between review and start.
-      source.priced = quoteOf(guaranteed: '95', payload: _offer());
-      bloc.add(const UnifiedSwapStartRequested());
-
-      final state = await waitFor(bloc, (s) => s.repricedQuote != null);
-
-      expect(state.step, UnifiedSwapStep.confirm);
-      expect(state.repricedQuote!.guaranteedReceive, Decimal.parse('95'));
-      expect(
-        state.canStart,
-        isFalse,
-        reason: 'the user has not agreed to the new number yet',
-      );
-      expect(state.activeSwapUuid, isNull);
-    });
-
-    test('proceeds when the re-price is not worse', () async {
-      final manager = _FakeExecutor();
-      final source = _ProgrammableSource()
-        ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source, executor: manager);
-      addTearDown(bloc.close);
-
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-      await waitFor(bloc, (s) => s.canReview);
-      bloc.add(const UnifiedSwapReviewRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
-
-      source.priced = quoteOf(guaranteed: '101', payload: _offer());
-      bloc.add(const UnifiedSwapStartRequested());
-
-      final state = await waitFor(bloc, (s) => s.activeSwapUuid != null);
-      expect(state.step, UnifiedSwapStep.inProgress);
-      expect(manager.startCount, 1);
-    });
-
-    test('accepting a re-price executes against the new number', () async {
-      final manager = _FakeExecutor();
-      final source = _ProgrammableSource()
-        ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source, executor: manager);
-      addTearDown(bloc.close);
-
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-      await waitFor(bloc, (s) => s.canReview);
-      bloc.add(const UnifiedSwapReviewRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
-
-      source.priced = quoteOf(guaranteed: '95', payload: _offer());
-      bloc.add(const UnifiedSwapStartRequested());
-      await waitFor(bloc, (s) => s.repricedQuote != null);
-
-      bloc.add(const UnifiedSwapRepriceAccepted());
-      final state = await waitFor(bloc, (s) => s.activeSwapUuid != null);
-
-      expect(state.selectedQuote!.guaranteedReceive, Decimal.parse('95'));
-      expect(manager.startCount, 1);
-    });
-
-    test(
-      'rejecting a re-price sends the user back without executing',
-      () async {
-        final manager = _FakeExecutor();
-        final source = _ProgrammableSource()
-          ..priced = quoteOf(guaranteed: '99', payload: _offer());
-        final bloc = blocWith(source, executor: manager);
-        addTearDown(bloc.close);
-
-        await fillForm(bloc);
-        bloc.add(const UnifiedSwapQuoteRequested());
-        await waitFor(bloc, (s) => s.canReview);
-        bloc.add(const UnifiedSwapReviewRequested());
-        await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
-
-        source.priced = quoteOf(guaranteed: '95', payload: _offer());
-        bloc.add(const UnifiedSwapStartRequested());
-        await waitFor(bloc, (s) => s.repricedQuote != null);
-
-        bloc.add(const UnifiedSwapRepriceRejected());
-        final state = await waitFor(
-          bloc,
-          (s) => s.step == UnifiedSwapStep.fill,
-        );
-
-        expect(state.repricedQuote, isNull);
-        expect(manager.startCount, 0);
-      },
-    );
-  });
-
-  group('abandoning a start', () {
-    /// Reaches the confirmation screen with a quote ready to start.
-    Future<void> reachConfirm(
-      UnifiedSwapBloc bloc,
-      _ProgrammableSource source,
-    ) async {
-      source.priced = quoteOf(guaranteed: '99', payload: _offer());
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-      await waitFor(bloc, (s) => s.canReview);
-      bloc.add(const UnifiedSwapReviewRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
+  Future<void> settle() async {
+    for (var i = 0; i < 5; i++) {
+      await pumpEventQueue(times: 30);
+      await Future<void>.delayed(const Duration(milliseconds: 2));
     }
+  }
 
-    test('a failing re-price does not jam the button forever', () async {
-      final source = _ProgrammableSource();
-      final bloc = blocWith(source);
-      addTearDown(bloc.close);
-      await reachConfirm(bloc, source);
-
-      source.throws = true;
-      bloc.add(const UnifiedSwapStartRequested());
-
-      final state = await waitFor(bloc, (s) => s.startError != null);
-
-      // Before the fix the handler threw with isRepricing still set, leaving
-      // "Checking price…" on screen with no way to start or abandon.
-      expect(state.isRepricing, isFalse);
-      expect(state.canStart, isTrue, reason: 'the user can try again');
-    });
-
-    test('backing out during the re-price does not execute the swap', () async {
-      final source = _ProgrammableSource();
-      final executor = _FakeExecutor();
-      final bloc = blocWith(source, executor: executor);
-      addTearDown(bloc.close);
-      await reachConfirm(bloc, source);
-
-      // Hold the re-price open, leave the screen, then let it answer.
-      final gate = Completer<void>();
-      source.gate = gate;
-      bloc.add(const UnifiedSwapStartRequested());
-      await waitFor(bloc, (s) => s.isRepricing);
-      bloc.add(const UnifiedSwapReviewDismissed());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.fill);
-      gate.complete();
-
-      // Give the resumed handler every chance to run.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-
-      expect(
-        executor.startCount,
-        0,
-        reason: 'the user left the confirmation screen before it committed',
-      );
-      expect(bloc.state.step, UnifiedSwapStep.fill);
-    });
-
-    test('an ambiguous start failure does not re-arm the button', () async {
-      final source = _ProgrammableSource();
-      final executor = _FakeExecutor()..throwsAfterSubmitting = true;
-      final bloc = blocWith(source, executor: executor);
-      addTearDown(bloc.close);
-      await reachConfirm(bloc, source);
-
-      bloc.add(const UnifiedSwapStartRequested());
-      final state = await waitFor(bloc, (s) => s.startError != null);
-
-      expect(executor.startCount, 1);
-      expect(state.startMayHaveSubmitted, isTrue);
-      expect(
-        state.canStart,
-        isFalse,
-        reason: 'a second press would submit a second real, irreversible swap',
-      );
-      expect(state.startError, contains('Activity'));
-    });
-  });
-
-  group('execution', () {
-    test('an atomic offer says so instead of silently doing nothing', () async {
-      // The button spends money. Pressing it and having nothing happen is the
-      // worst available outcome, so the unimplemented path is explicit.
-      // Only a routed executor is registered, so an atomic quote has nothing
-      // to execute it. The user must be told, not left with a dead button.
-      final manager = _FakeExecutor();
-      final source = _ProgrammableSource()
-        ..priced = quoteOf(
-          guaranteed: '99',
+  setUp(() {
+    clock = DateTime(2026, 9, 24, 12);
+    routed = FakeQuoteSource(SwapLiquiditySource.routed, respond: pricedFor);
+    atomic = FakeQuoteSource(
+      SwapLiquiditySource.atomic,
+      results: [
+        rejected(
+          SwapQuoteFailureKind.pairUnsupported,
           source: SwapLiquiditySource.atomic,
-        );
-      final bloc = blocWith(source, executor: manager);
-      addTearDown(bloc.close);
+        ),
+      ],
+    );
+    routedExecutor = FakeExecutor(SwapLiquiditySource.routed);
+    registry = SwapExecutionRegistry(
+      executors: [routedExecutor, FakeExecutor(SwapLiquiditySource.atomic)],
+      inFlight: () async => const [],
+    );
+    storage = MemoryStorage();
+    balances = {eth: d('2'), usdc: d('5000'), btc: d('1')};
+    holdings = [];
+  });
 
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-      await waitFor(bloc, (s) => s.canReview);
-      bloc.add(const UnifiedSwapReviewRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
-      bloc.add(const UnifiedSwapStartRequested());
+  tearDown(() => registry.dispose());
 
-      final state = await waitFor(bloc, (s) => s.startError != null);
-      expect(state.step, UnifiedSwapStep.confirm);
-      expect(manager.startCount, 0);
-    });
-
-    test('progress drives the step, and a refund is not a success', () async {
-      final manager = _FakeExecutor();
-      final source = _ProgrammableSource()
-        ..priced = quoteOf(guaranteed: '99', payload: _offer());
-      final bloc = blocWith(source, executor: manager);
-      addTearDown(bloc.close);
-
-      await fillForm(bloc);
-      bloc.add(const UnifiedSwapQuoteRequested());
-      await waitFor(bloc, (s) => s.canReview);
-      bloc.add(const UnifiedSwapReviewRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.confirm);
-      bloc.add(const UnifiedSwapStartRequested());
-      await waitFor(bloc, (s) => s.step == UnifiedSwapStep.inProgress);
-      // The bloc subscribes just after emitting the in-progress state, and the
-      // fake's stream is broadcast, so an event pushed immediately would be
-      // dropped for want of a listener.
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      manager.emit(
-        const UnifiedSwapProgress(
-          id: 'u',
-          source: SwapLiquiditySource.routed,
-          phase: SwapPhase.finished,
-          canCancel: false,
+  Future<UnifiedSwapBloc> ready({String amount = '1'}) async {
+    final bloc = build()
+      ..add(const UnifiedSwapStarted())
+      ..add(
+        UnifiedSwapIntentApplied(
+          pay: 'ETH',
+          receive: 'USDC-ERC20',
+          amount: amount,
         ),
       );
+    await settle();
+    return bloc;
+  }
 
-      final state = await waitFor(
-        bloc,
-        (s) => s.step == UnifiedSwapStep.complete,
-      );
-      // Reaching the complete step says the swap stopped, not that it worked.
-      expect(state.progress!.isSuccess, isFalse);
+  group('opening pair', () {
+    test('opens on the pair last swapped', () async {
+      await SwapPreferences(
+        walletKey: () async => 'wallet',
+        storage: storage,
+      ).rememberPair(btc, eth);
+      final bloc = build()..add(const UnifiedSwapStarted());
+      await settle();
+
+      expect(bloc.state.pay, btc);
+      expect(bloc.state.receive, eth);
+      await bloc.close();
+    });
+
+    test('otherwise pairs the largest holding with a stablecoin', () async {
+      holdings = [
+        (asset: btc, usdValue: d('10')),
+        (asset: eth, usdValue: d('6000')),
+      ];
+      final bloc = build()..add(const UnifiedSwapStarted());
+      await settle();
+
+      expect(bloc.state.pay, eth);
+      expect(bloc.state.receive, usdc);
+      await bloc.close();
+    });
+
+    test('an intent wins over the default pair', () async {
+      holdings = [(asset: eth, usdValue: d('6000'))];
+      final bloc = build()
+        ..add(const UnifiedSwapStarted())
+        ..add(const UnifiedSwapIntentApplied(pay: 'BTC'));
+      await settle();
+
+      expect(bloc.state.pay, btc);
+      await bloc.close();
     });
   });
-}
 
-RoutedSwapOffer _offer() => RoutedSwapOffer(
-  from: AssetId(
-    id: 'USDT-PLG20',
-    name: 'USDT',
-    symbol: AssetSymbol(assetConfigId: 'USDT-PLG20'),
-    chainId: AssetChainId(chainId: 137),
-    derivationPath: null,
-    subClass: CoinSubClass.erc20,
-  ),
-  to: AssetId(
-    id: 'USDC-ERC20',
-    name: 'USDC',
-    symbol: AssetSymbol(assetConfigId: 'USDC-ERC20'),
-    chainId: AssetChainId(chainId: 1),
-    derivationPath: null,
-    subClass: CoinSubClass.erc20,
-  ),
-  sellAmount: Decimal.parse('100'),
-  expectedReceive: Decimal.parse('100'),
-  guaranteedReceive: Decimal.parse('99'),
-  toolName: 'Test Bridge',
-  isCrossChain: true,
-  costs: const [],
-  quotedAt: DateTime(2026),
-  mayRequireApproval: true,
-  provider: 'lifi',
-);
-
-/// A source whose answer the test controls, including its timing.
-class _ProgrammableSource implements SwapQuoteSource {
-  @override
-  SwapLiquiditySource get source => SwapLiquiditySource.routed;
-
-  SwapQuote? priced;
-  SwapQuoteUnavailableReason? rejection;
-
-  /// When true, the lookup throws instead of answering.
-  bool throws = false;
-
-  /// When set, the next lookup blocks until completed.
-  Completer<void>? gate;
-
-  @override
-  Future<Set<AssetId>> tradableAssets() async => const {};
-
-  @override
-  Future<SwapQuoteResult> quote({
-    required AssetId from,
-    required AssetId to,
-    required Decimal amount,
-  }) async {
-    if (gate != null) await gate!.future;
-    if (throws) throw StateError('quote endpoint down');
-    final rejected = rejection;
-    if (rejected != null) {
-      return SwapQuoteRejected(
-        SwapQuoteUnavailable(source: source, reason: rejected),
-      );
+  group('validation', () {
+    Future<SwapFormIssue?> issueFor(String text, {AssetId? pay}) async {
+      final bloc = build()
+        ..add(
+          UnifiedSwapIntentApplied(pay: (pay ?? eth).id, receive: 'USDC-ERC20'),
+        );
+      await settle();
+      bloc.add(UnifiedSwapAmountChanged(text));
+      await settle();
+      final issue = bloc.state.issue;
+      await bloc.close();
+      return issue;
     }
-    final offer = priced;
-    if (offer == null) {
-      return SwapQuoteRejected(
-        SwapQuoteUnavailable(
-          source: source,
-          reason: SwapQuoteUnavailableReason.noLiquidity,
+
+    test('names what is wrong with the amount', () async {
+      expect(await issueFor(''), SwapFormIssue.amountMissing);
+      expect(await issueFor('1..2'), SwapFormIssue.amountMalformed);
+      expect(await issueFor('0'), SwapFormIssue.amountZero);
+      expect(await issueFor('3'), SwapFormIssue.insufficient);
+      expect(
+        await issueFor('0.123456789', pay: btc),
+        SwapFormIssue.tooManyDecimals,
+      );
+      expect(await issueFor('1.5'), isNull);
+    });
+
+    test('checks the network fee can be paid when selling a token', () async {
+      balances[eth] = d('0.0001');
+      routed.respond = (request) => [
+        SwapQuoteAvailable(
+          quoteOf(
+            from: usdc,
+            to: eth,
+            sell: request.amount.toString(),
+            quotedAt: clock,
+          ),
+        ),
+      ];
+      final bloc = build()
+        ..add(
+          const UnifiedSwapIntentApplied(
+            pay: 'USDC-ERC20',
+            receive: 'ETH',
+            amount: '100',
+          ),
+        );
+      await settle();
+
+      expect(bloc.state.issue, SwapFormIssue.insufficientForFees);
+      expect(bloc.state.canReview, isFalse);
+      await bloc.close();
+    });
+  });
+
+  group('evaluation', () {
+    test('prices the intent and preselects an option', () async {
+      final bloc = await ready();
+
+      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+      expect(bloc.state.selectedQuote!.sellAmount, d('1'));
+      expect(bloc.state.canReview, isTrue);
+      await bloc.close();
+    });
+
+    test('a stale answer never replaces a newer intent', () async {
+      final bloc = await ready();
+      routed.gate = Completer<void>();
+      bloc.add(const UnifiedSwapAmountChanged('0.5'));
+      await settle();
+      bloc.add(const UnifiedSwapAmountChanged('0.25'));
+      await settle();
+      final seen = <UnifiedSwapState>[];
+      final sub = bloc.stream.listen(seen.add);
+
+      routed.gate!.complete();
+      await settle();
+
+      expect(bloc.state.selectedQuote!.sellAmount, d('0.25'));
+      expect(
+        seen.where((s) => s.selectedQuote?.sellAmount == d('0.5')),
+        isEmpty,
+      );
+      await sub.cancel();
+      await bloc.close();
+    });
+
+    test('explains why nothing could be priced', () async {
+      routed.respond = null;
+      routed.results = [rejected(SwapQuoteFailureKind.noRoute)];
+      final bloc = await ready();
+
+      expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
+      expect(bloc.state.failure!.kind, SwapQuoteFailureKind.noRoute);
+      await bloc.close();
+    });
+
+    test('a rate limit pauses, retries, and stops comparing routes', () async {
+      routed.respond = null;
+      routed.results = [rejected(SwapQuoteFailureKind.rateLimited)];
+      final bloc = await ready();
+      expect(bloc.state.rateLimitedUntil, isNotNull);
+
+      routed.respond = pricedFor;
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await settle();
+
+      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+      expect(routed.requests.last.includeAlternatives, isFalse);
+      await bloc.close();
+    });
+
+    test('an old quote expires instead of being reviewed', () async {
+      final bloc = build()
+        ..add(
+          const UnifiedSwapIntentApplied(
+            pay: 'ETH',
+            receive: 'USDC-ERC20',
+            amount: '1',
+          ),
+        );
+      // The provider answered, but the answer is older than a quote's life.
+      routed.respond = (request) => [
+        SwapQuoteAvailable(
+          quoteOf(
+            sell: '1',
+            quotedAt: clock.subtract(const Duration(minutes: 2)),
+          ),
+        ),
+      ];
+      await settle();
+
+      expect(bloc.state.evaluation, SwapEvaluationStatus.expired);
+      expect(bloc.state.canReview, isFalse);
+      await bloc.close();
+    });
+
+    test('nothing is priced while trading is unavailable', () async {
+      final bloc = build()
+        ..add(
+          const UnifiedSwapCapabilitiesChanged(
+            tradingEnabled: false,
+            clockValid: true,
+          ),
+        )
+        ..add(
+          const UnifiedSwapIntentApplied(
+            pay: 'ETH',
+            receive: 'USDC-ERC20',
+            amount: '1',
+          ),
+        );
+      await settle();
+
+      expect(routed.requests, isEmpty);
+      expect(bloc.state.canReview, isFalse);
+      await bloc.close();
+    });
+  });
+
+  group('amount entry', () {
+    test('switching sides clears an amount in the old denomination', () async {
+      final bloc = await ready();
+      bloc.add(const UnifiedSwapSidesSwitched());
+      await settle();
+
+      expect(bloc.state.pay, usdc);
+      expect(bloc.state.inputText, '');
+      await bloc.close();
+    });
+
+    test('fiat entry converts at the current price', () async {
+      final bloc = await ready();
+      bloc.add(const UnifiedSwapAmountModeToggled());
+      await settle();
+      expect(bloc.state.amountMode, SwapAmountMode.fiat);
+      expect(bloc.state.inputText, '3000');
+
+      bloc.add(const UnifiedSwapAmountChanged('1500'));
+      await settle();
+      expect(bloc.amountOf(bloc.state), d('0.5'));
+      await bloc.close();
+    });
+
+    test('Max keeps what the network fee needs', () async {
+      routed.max = SwapMaxAmount(
+        amount: d('1.99'),
+        reservedForFees: d('0.01'),
+        feeAsset: eth,
+      );
+      final bloc = await ready();
+      bloc.add(const UnifiedSwapMaxRequested());
+      await settle();
+
+      expect(bloc.state.inputText, '1.99');
+      expect(bloc.state.maxApplied!.reservedForFees, d('0.01'));
+      await bloc.close();
+    });
+  });
+
+  group('review and start', () {
+    Future<UnifiedSwapBloc> inReview() async {
+      final bloc = await ready();
+      bloc.add(const UnifiedSwapReviewOpened());
+      await settle();
+      return bloc;
+    }
+
+    test('a first routed swap presents the provider terms', () async {
+      final bloc = await inReview();
+
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review!.termsRequired, isTrue);
+      await bloc.close();
+    });
+
+    test('starting records the terms and starts the re-priced swap', () async {
+      final bloc = await inReview();
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
+
+      expect(routed.requoted, hasLength(1));
+      expect(routedExecutor.started, hasLength(1));
+      expect(bloc.state.view, UnifiedSwapView.progress);
+      expect(bloc.state.activeExecutionId, isNotNull);
+      expect(
+        await SwapTermsRepository(
+          walletKey: () async => 'wallet',
+          storage: storage,
+        ).hasAccepted(),
+        isTrue,
+      );
+      await bloc.close();
+    });
+
+    test('a lower minimum stops for old-versus-new consent', () async {
+      final bloc = await inReview();
+      routed.requoteResult = SwapQuoteAvailable(
+        quoteOf(id: 'fresh', guaranteed: '2900', quotedAt: clock),
+      );
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
+
+      final review = bloc.state.review!;
+      expect(review.status, SwapReviewStatus.materialUpdate);
+      expect(review.previous!.guaranteedReceive, d('2985'));
+      expect(review.quote.guaranteedReceive, d('2900'));
+      expect(routedExecutor.started, isEmpty);
+
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
+      expect(routedExecutor.started.single.guaranteedReceive, d('2900'));
+      await bloc.close();
+    });
+
+    test('changed steps go back to a fresh evaluation', () async {
+      final bloc = await inReview();
+      routed.requoteResult = SwapQuoteAvailable(
+        quoteOf(
+          routeKind: SwapRouteKind.crossChain,
+          quotedAt: clock,
+          stages: [
+            const SwapRouteStage(kind: SwapRouteStageKind.prepare),
+            SwapRouteStage(kind: SwapRouteStageKind.send, asset: eth),
+            SwapRouteStage(kind: SwapRouteStageKind.bridge, asset: usdc),
+            SwapRouteStage(kind: SwapRouteStageKind.receive, asset: usdc),
+          ],
         ),
       );
-    }
-    return SwapQuoteAvailable(offer);
-  }
-}
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
 
-/// A routed manager that records starts and lets the test push progress.
-class _FakeExecutor implements SwapExecutor {
-  @override
-  SwapLiquiditySource get source => SwapLiquiditySource.routed;
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.structuralNotice, isTrue);
+      expect(routedExecutor.started, isEmpty);
+      await bloc.close();
+    });
 
-  final _controller = StreamController<UnifiedSwapProgress>.broadcast();
-  int startCount = 0;
+    test('leaving the review while re-pricing never starts', () async {
+      final bloc = await inReview();
+      routed.requoteGate = Completer<void>();
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
 
-  /// When true, `start` throws *after* counting - the ambiguous case where
-  /// the engine may already hold the task.
-  bool throwsAfterSubmitting = false;
+      bloc.add(const UnifiedSwapReviewClosed());
+      await settle();
+      routed.requoteGate!.complete();
+      await settle();
 
-  void emit(UnifiedSwapProgress progress) => _controller.add(progress);
+      expect(routedExecutor.started, isEmpty);
+      expect(bloc.state.view, UnifiedSwapView.form);
+      await bloc.close();
+    });
 
-  @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
-    startCount++;
-    if (throwsAfterSubmitting) throw StateError('connection lost after submit');
-    return _FakeHandle(_controller.stream);
-  }
-}
+    test('a refused start says so and allows another try', () async {
+      routedExecutor.startError = const SwapStartRejectedException(
+        SwapStartRejection.insufficientBalance,
+      );
+      final bloc = await inReview();
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
 
-class _FakeHandle implements SwapExecutionHandle {
-  _FakeHandle(this.progress);
+      expect(bloc.state.review!.status, SwapReviewStatus.rejected);
+      await bloc.close();
+    });
 
-  @override
-  final Stream<UnifiedSwapProgress> progress;
+    test('a lost start answer never offers another start', () async {
+      routedExecutor.startError = TimeoutException('lost');
+      final bloc = await inReview();
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
 
-  @override
-  String get id => 'fake-uuid';
+      expect(bloc.state.review!.status, SwapReviewStatus.unconfirmed);
+      expect(bloc.state.review!.canStart, isFalse);
 
-  @override
-  Future<void> cancel() async {}
+      bloc.add(const UnifiedSwapStartRequested());
+      await settle();
+      expect(routedExecutor.started, hasLength(1));
+      await bloc.close();
+    });
+
+    test('a consented fresh quote starts without another review', () async {
+      final bloc = await ready();
+      bloc.add(
+        UnifiedSwapFreshQuoteAccepted(
+          quoteOf(id: 'fresh', guaranteed: '2950', quotedAt: clock),
+        ),
+      );
+      await settle();
+
+      expect(routedExecutor.started.single.id, 'fresh');
+      expect(bloc.state.view, UnifiedSwapView.progress);
+      await bloc.close();
+    });
+  });
 }

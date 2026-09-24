@@ -1,344 +1,397 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
-/// Covers the aggregation rules that decide what a user is shown.
+import 'swap_test_fixtures.dart';
+
+/// Covers what a user is shown when both sources answer.
 ///
-/// The ranking is the part with teeth: the two sources make different promises
-/// — a routed quote's headline is subject to slippage, an atomic fill is not —
-/// so a naive comparison systematically favours the looser promise.
+/// The two sources make different promises — a routed quote's headline is
+/// subject to slippage, an atomic fill is not — so ranking is on the
+/// guaranteed minimum's value net of costs, never on the headline.
 void main() {
-  AssetId assetOf(String id) => AssetId(
-    id: id,
-    name: id,
-    symbol: AssetSymbol(assetConfigId: id),
-    chainId: AssetChainId(chainId: 1),
-    derivationPath: null,
-    subClass: CoinSubClass.erc20,
-  );
+  final prices = FakePriceSource({
+    eth: d('3000'),
+    usdc: d('1'),
+    btc: d('60000'),
+  });
+  final pricing = SwapPricingService(prices);
 
-  final gleec = assetOf('GLEEC');
-  final usdt = assetOf('USDT-PLG20');
-
-  SwapQuote quoteOf({
+  SwapQuote unpriced({
+    required String id,
     required SwapLiquiditySource source,
-    required String expected,
     required String guaranteed,
-    Duration? duration,
-  }) => SwapQuote(
+    String expected = '3000',
+    List<SwapFeeComponent>? fees,
+    Duration? duration = const Duration(seconds: 45),
+  }) => quoteOf(
+    id: id,
     source: source,
-    from: gleec,
-    to: usdt,
-    sellAmount: Decimal.parse('100'),
-    expectedReceive: Decimal.parse(expected),
-    guaranteedReceive: Decimal.parse(guaranteed),
-    costs: const [],
-    quotedAt: DateTime(2026),
-    hasUndisclosedCosts: false,
-    estimatedDuration: duration,
+    expected: expected,
+    guaranteed: guaranteed,
+    duration: duration,
+    fees:
+        fees ??
+        [
+          SwapFeeComponent(
+            kind: SwapFeeKind.network,
+            amount: d('0.001'),
+            deductedFromReceive: false,
+            asset: eth,
+          ),
+        ],
+    pricing: const SwapQuotePricing(),
   );
+
+  UnifiedSwapRepository repoOf(List<FakeQuoteSource> sources) =>
+      UnifiedSwapRepository(sources: sources, pricing: pricing);
+
+  final request = SwapQuoteRequest(from: eth, to: usdc, amount: d('1'));
 
   group('ranking', () {
-    test(
-      'prefers the larger guaranteed amount, not the larger estimate',
-      () async {
-        // The routed option looks better on its headline number and worse on
-        // what it actually promises. Ranking on the headline would put a swap
-        // that may deliver less at the top.
-        final repo = UnifiedSwapRepository(
-          sources: [
-            _StubSource(
-              SwapLiquiditySource.routed,
-              priced: quoteOf(
+    test('ranks on net return, not the headline estimate', () async {
+      final repo = repoOf([
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          results: [
+            SwapQuoteAvailable(
+              unpriced(
+                id: 'routed',
                 source: SwapLiquiditySource.routed,
-                expected: '105',
-                guaranteed: '99',
-              ),
-            ),
-            _StubSource(
-              SwapLiquiditySource.atomic,
-              priced: quoteOf(
-                source: SwapLiquiditySource.atomic,
-                expected: '101',
-                guaranteed: '101',
+                expected: '3100',
+                guaranteed: '2950',
               ),
             ),
           ],
-        );
-
-        final result = await repo.quote(
-          from: gleec,
-          to: usdt,
-          amount: Decimal.parse('100'),
-        );
-
-        expect(result.best!.source, SwapLiquiditySource.atomic);
-        expect(result.quotes, hasLength(2));
-      },
-    );
-
-    test('breaks an exact tie toward the peer-to-peer option', () async {
-      final repo = UnifiedSwapRepository(
-        sources: [
-          _StubSource(
-            SwapLiquiditySource.routed,
-            priced: quoteOf(
-              source: SwapLiquiditySource.routed,
-              expected: '100',
-              guaranteed: '100',
+        ),
+        FakeQuoteSource(
+          SwapLiquiditySource.atomic,
+          results: [
+            SwapQuoteAvailable(
+              unpriced(
+                id: 'atomic',
+                source: SwapLiquiditySource.atomic,
+                expected: '2990',
+                guaranteed: '2990',
+              ),
             ),
-          ),
-          _StubSource(
-            SwapLiquiditySource.atomic,
-            priced: quoteOf(
-              source: SwapLiquiditySource.atomic,
-              expected: '100',
-              guaranteed: '100',
+          ],
+        ),
+      ]);
+
+      final result = await repo.quote(request);
+
+      expect(result.ranked.map((q) => q.id), ['atomic', 'routed']);
+      expect(result.preselected!.id, 'atomic');
+      expect(result.canClaimBestNetReturn, isTrue);
+    });
+
+    test('subtracts costs the receive amount does not account for', () async {
+      final repo = repoOf([
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          results: [
+            SwapQuoteAvailable(
+              unpriced(
+                id: 'cheap-headline',
+                source: SwapLiquiditySource.routed,
+                guaranteed: '2990',
+                fees: [
+                  SwapFeeComponent(
+                    kind: SwapFeeKind.network,
+                    amount: d('0.01'),
+                    deductedFromReceive: false,
+                    asset: eth,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            SwapQuoteAvailable(
+              unpriced(
+                id: 'low-cost',
+                source: SwapLiquiditySource.routed,
+                guaranteed: '2980',
+                fees: [
+                  SwapFeeComponent(
+                    kind: SwapFeeKind.network,
+                    amount: d('0.001'),
+                    deductedFromReceive: false,
+                    asset: eth,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ]);
+
+      final result = await repo.quote(request);
+
+      // 2990 - 30 = 2960 against 2980 - 3 = 2977.
+      expect(result.ranked.first.id, 'low-cost');
+      expect(result.ranked.first.netReturnUsd, d('2977'));
+    });
+
+    test('does not double count a fee already taken from the receive', () {
+      final quote = pricing.price(
+        unpriced(
+          id: 'included',
+          source: SwapLiquiditySource.routed,
+          guaranteed: '2990',
+          fees: [
+            SwapFeeComponent(
+              kind: SwapFeeKind.swap,
+              amount: d('5'),
+              deductedFromReceive: true,
+              asset: usdc,
+            ),
+            SwapFeeComponent(
+              kind: SwapFeeKind.network,
+              amount: d('0.001'),
+              deductedFromReceive: false,
+              asset: eth,
+            ),
+          ],
+        ),
+      );
+      expect(quote.netReturnUsd, d('2987'));
+      expect(quote.pricing.totalCostUsd, d('8'));
+    });
+
+    test('breaks an exact tie toward speed, then peer-to-peer', () {
+      final a = pricing.price(
+        unpriced(
+          id: 'slow-routed',
+          source: SwapLiquiditySource.routed,
+          guaranteed: '2990',
+          duration: const Duration(minutes: 5),
+        ),
+      );
+      final b = pricing.price(
+        unpriced(
+          id: 'fast-routed',
+          source: SwapLiquiditySource.routed,
+          guaranteed: '2990',
+          duration: const Duration(seconds: 30),
+        ),
+      );
+      final c = pricing.price(
+        unpriced(
+          id: 'fast-atomic',
+          source: SwapLiquiditySource.atomic,
+          guaranteed: '2990',
+          duration: const Duration(seconds: 30),
+        ),
       );
 
-      final result = await repo.quote(
-        from: gleec,
-        to: usdt,
-        amount: Decimal.parse('100'),
-      );
+      final result = UnifiedSwapRepository.rank([a, b, c], const []);
 
-      // Equal promises, so prefer the one where no third party ever holds the
-      // funds.
-      expect(result.best!.source, SwapLiquiditySource.atomic);
+      expect(result.ranked.map((q) => q.id), [
+        'fast-atomic',
+        'fast-routed',
+        'slow-routed',
+      ]);
+    });
+
+    test('keeps an option with an unpriced cost out of the ranking', () async {
+      final repo = repoOf([
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          results: [
+            SwapQuoteAvailable(
+              unpriced(
+                id: 'unknown-fee',
+                source: SwapLiquiditySource.routed,
+                guaranteed: '2999',
+                fees: [
+                  SwapFeeComponent(
+                    kind: SwapFeeKind.swap,
+                    amount: Decimal.one,
+                    deductedFromReceive: false,
+                    symbol: 'XYZ',
+                  ),
+                ],
+              ),
+            ),
+            SwapQuoteAvailable(
+              unpriced(
+                id: 'priced',
+                source: SwapLiquiditySource.routed,
+                guaranteed: '2980',
+              ),
+            ),
+          ],
+        ),
+      ]);
+
+      final result = await repo.quote(request);
+
+      // Ranking on the costs that happen to be priced would put the option
+      // with the hidden cost on top.
+      expect(result.ranked.map((q) => q.id), ['priced']);
+      expect(result.unrankable.map((q) => q.id), ['unknown-fee']);
+      expect(result.canClaimBestNetReturn, isFalse);
+    });
+
+    test('preselects nothing when several options cannot be ranked', () {
+      final result = UnifiedSwapRepository.rank([
+        unpriced(id: 'a', source: SwapLiquiditySource.routed, guaranteed: '1'),
+        unpriced(id: 'b', source: SwapLiquiditySource.atomic, guaranteed: '2'),
+      ], const []);
+
+      expect(result.preselected, isNull);
+      expect(result.unrankable.first.id, 'b');
+    });
+
+    test('preselects a lone unrankable option', () {
+      final result = UnifiedSwapRepository.rank([
+        unpriced(
+          id: 'only',
+          source: SwapLiquiditySource.routed,
+          guaranteed: '1',
+        ),
+      ], const []);
+      expect(result.preselected!.id, 'only');
     });
   });
 
-  group('resilience', () {
-    test('one broken source does not withhold the other price', () async {
+  group('failures', () {
+    test('a throwing source does not withhold the other price', () async {
       final repo = UnifiedSwapRepository(
         sources: [
-          _ThrowingSource(SwapLiquiditySource.routed),
-          _StubSource(
+          _ThrowingSource(),
+          FakeQuoteSource(
             SwapLiquiditySource.atomic,
-            priced: quoteOf(
-              source: SwapLiquiditySource.atomic,
-              expected: '101',
-              guaranteed: '101',
-            ),
+            results: [
+              SwapQuoteAvailable(
+                unpriced(
+                  id: 'atomic',
+                  source: SwapLiquiditySource.atomic,
+                  guaranteed: '2990',
+                ),
+              ),
+            ],
           ),
         ],
+        pricing: pricing,
       );
 
-      final result = await repo.quote(
-        from: gleec,
-        to: usdt,
-        amount: Decimal.parse('100'),
-      );
+      final result = await repo.quote(request);
 
-      expect(result.best, isNotNull);
-      expect(result.rejections, hasLength(1));
-      expect(
-        result.rejections.single.reason,
-        SwapQuoteUnavailableReason.temporarilyUnavailable,
-      );
+      expect(result.options.single.id, 'atomic');
+      expect(result.failures.single.kind, SwapQuoteFailureKind.unknown);
     });
 
-    test('a source that throws is reported, not swallowed', () async {
-      final repo = UnifiedSwapRepository(
-        sources: [_ThrowingSource(SwapLiquiditySource.routed)],
-      );
+    test('explains an empty result with the most actionable failure', () async {
+      final repo = repoOf([
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          results: [rejected(SwapQuoteFailureKind.noRoute)],
+        ),
+        FakeQuoteSource(
+          SwapLiquiditySource.atomic,
+          results: [
+            rejected(
+              SwapQuoteFailureKind.assetInactive,
+              source: SwapLiquiditySource.atomic,
+              asset: usdc,
+            ),
+          ],
+        ),
+      ]);
 
-      final result = await repo.quote(
-        from: gleec,
-        to: usdt,
-        amount: Decimal.parse('100'),
-      );
+      final result = await repo.quote(request);
 
       expect(result.isEmpty, isTrue);
-      expect(result.rejections, hasLength(1));
-      expect(
-        result.isPermanentlyUnsupported,
-        isFalse,
-        reason: 'a crash is not proof the pair is unsupported',
-      );
+      expect(result.primaryFailure!.kind, SwapQuoteFailureKind.assetInactive);
     });
-  });
 
-  group('unsupported pairs', () {
-    test('is permanent only when every source says so', () async {
-      // GLEEC is the case this exists for: no aggregator indexes the Gleec
-      // chain, so routed will always decline. If atomic declines too, the
-      // pair genuinely cannot be traded and a retry button would be a lie.
-      final repo = UnifiedSwapRepository(
-        sources: [
-          _RejectingSource(
-            SwapLiquiditySource.routed,
-            SwapQuoteUnavailableReason.pairUnsupported,
-          ),
-          _RejectingSource(
-            SwapLiquiditySource.atomic,
-            SwapQuoteUnavailableReason.pairUnsupported,
-          ),
-        ],
-      );
+    test('a pair nobody lists is permanently unsupported', () async {
+      final repo = repoOf([
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          results: [rejected(SwapQuoteFailureKind.pairUnsupported)],
+        ),
+        FakeQuoteSource(
+          SwapLiquiditySource.atomic,
+          results: [
+            rejected(
+              SwapQuoteFailureKind.pairUnsupported,
+              source: SwapLiquiditySource.atomic,
+            ),
+          ],
+        ),
+      ]);
 
-      final result = await repo.quote(
-        from: gleec,
-        to: usdt,
-        amount: Decimal.parse('100'),
-      );
-
+      final result = await repo.quote(request);
       expect(result.isPermanentlyUnsupported, isTrue);
     });
 
-    test('is not permanent when one source merely has no liquidity', () async {
-      final repo = UnifiedSwapRepository(
-        sources: [
-          _RejectingSource(
-            SwapLiquiditySource.routed,
-            SwapQuoteUnavailableReason.pairUnsupported,
-          ),
-          _RejectingSource(
-            SwapLiquiditySource.atomic,
-            SwapQuoteUnavailableReason.noLiquidity,
-          ),
-        ],
-      );
+    test('asks nobody for a price of nothing', () async {
+      final source = FakeQuoteSource(SwapLiquiditySource.routed);
+      final repo = repoOf([source]);
 
       final result = await repo.quote(
-        from: gleec,
-        to: usdt,
-        amount: Decimal.parse('100'),
+        SwapQuoteRequest(from: eth, to: usdc, amount: Decimal.zero),
       );
 
-      expect(
-        result.isPermanentlyUnsupported,
-        isFalse,
-        reason: 'an empty book today says nothing about tomorrow',
-      );
+      expect(result.isEmpty, isTrue);
+      expect(source.requests, isEmpty);
     });
   });
 
-  group('asset gating', () {
-    test('offers the union of what any source can trade', () async {
-      final repo = UnifiedSwapRepository(
-        sources: [
-          _StubSource(SwapLiquiditySource.routed, assets: {usdt}),
-          _StubSource(SwapLiquiditySource.atomic, assets: {gleec}),
-        ],
-      );
+  group('max and requote', () {
+    test('reports each source its own maximum', () async {
+      final repo = repoOf([
+        FakeQuoteSource(
+          SwapLiquiditySource.routed,
+          max: SwapMaxAmount(
+            amount: d('0.99'),
+            reservedForFees: d('0.01'),
+            feeAsset: eth,
+          ),
+        ),
+        FakeQuoteSource(SwapLiquiditySource.atomic),
+      ]);
 
-      final assets = await repo.tradableAssets();
+      final maxes = await repo.maxAmounts(from: eth, to: usdc, balance: d('1'));
 
-      // GLEEC is only reachable peer-to-peer. Gating the picker on the routed
-      // list alone would hide the wallet's own asset from its swap screen.
-      expect(assets, {usdt, gleec});
+      expect(maxes.keys, [SwapLiquiditySource.routed]);
+      expect(maxes[SwapLiquiditySource.routed]!.amount, d('0.99'));
     });
 
-    test('reports which sources can trade an asset', () async {
-      final repo = UnifiedSwapRepository(
-        sources: [
-          _StubSource(SwapLiquiditySource.routed, assets: {usdt}),
-          _StubSource(SwapLiquiditySource.atomic, assets: {gleec, usdt}),
-        ],
-      );
-
-      expect(await repo.sourcesFor(gleec), {SwapLiquiditySource.atomic});
-      expect(await repo.sourcesFor(usdt), {
-        SwapLiquiditySource.atomic,
+    test('re-prices on the same source and prices the result', () async {
+      final routed = FakeQuoteSource(
         SwapLiquiditySource.routed,
-      });
-    });
-  });
-
-  test('a non-positive amount is not sent to any source', () async {
-    final source = _StubSource(
-      SwapLiquiditySource.routed,
-      priced: quoteOf(
-        source: SwapLiquiditySource.routed,
-        expected: '1',
-        guaranteed: '1',
-      ),
-    );
-    final repo = UnifiedSwapRepository(sources: [source]);
-
-    final result = await repo.quote(
-      from: gleec,
-      to: usdt,
-      amount: Decimal.zero,
-    );
-
-    expect(result.isEmpty, isTrue);
-    expect(source.quoteCalls, 0);
-  });
-}
-
-class _StubSource implements SwapQuoteSource {
-  _StubSource(this.source, {this.priced, this.assets = const {}});
-
-  @override
-  final SwapLiquiditySource source;
-
-  final SwapQuote? priced;
-  final Set<AssetId> assets;
-  int quoteCalls = 0;
-
-  @override
-  Future<Set<AssetId>> tradableAssets() async => assets;
-
-  @override
-  Future<SwapQuoteResult> quote({
-    required AssetId from,
-    required AssetId to,
-    required Decimal amount,
-  }) async {
-    quoteCalls++;
-    final priced = this.priced;
-    if (priced == null) {
-      return SwapQuoteRejected(
-        SwapQuoteUnavailable(
-          source: source,
-          reason: SwapQuoteUnavailableReason.noLiquidity,
+        requoteResult: SwapQuoteAvailable(
+          unpriced(
+            id: 'fresh',
+            source: SwapLiquiditySource.routed,
+            guaranteed: '2970',
+          ),
         ),
       );
-    }
-    return SwapQuoteAvailable(priced);
-  }
+      final repo = repoOf([
+        routed,
+        FakeQuoteSource(SwapLiquiditySource.atomic),
+      ]);
+
+      final result = await repo.requote(quoteOf());
+
+      expect(routed.requoted, hasLength(1));
+      final fresh = (result as SwapQuoteAvailable).quote;
+      expect(fresh.pricing.minimumUsd, d('2970'));
+    });
+  });
 }
 
-class _RejectingSource implements SwapQuoteSource {
-  _RejectingSource(this.source, this.reason);
+class _ThrowingSource extends FakeQuoteSource {
+  _ThrowingSource() : super(SwapLiquiditySource.routed);
 
   @override
-  final SwapLiquiditySource source;
-
-  final SwapQuoteUnavailableReason reason;
-
-  @override
-  Future<Set<AssetId>> tradableAssets() async => const {};
-
-  @override
-  Future<SwapQuoteResult> quote({
-    required AssetId from,
-    required AssetId to,
-    required Decimal amount,
-  }) async =>
-      SwapQuoteRejected(SwapQuoteUnavailable(source: source, reason: reason));
-}
-
-class _ThrowingSource implements SwapQuoteSource {
-  _ThrowingSource(this.source);
-
-  @override
-  final SwapLiquiditySource source;
-
-  @override
-  Future<Set<AssetId>> tradableAssets() async => const {};
-
-  @override
-  Future<SwapQuoteResult> quote({
-    required AssetId from,
-    required AssetId to,
-    required Decimal amount,
-  }) async => throw StateError('source exploded');
+  Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) =>
+      Future.error(StateError('provider exploded'));
 }

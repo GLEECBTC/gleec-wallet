@@ -1,175 +1,190 @@
+import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/model/swap.dart';
+import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
+import 'package:web_dex/shared/swap/routed_swap_execution.dart';
+import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
+import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
-/// One swap in the history list, from either liquidity source.
-///
-/// The two backends persist swaps in completely different shapes and, as of
-/// today, in completely separate stores. Presenting them as one list is a GUI
-/// responsibility precisely because KDF does not do it: `my_recent_swaps`
-/// knows nothing about routed swaps, and `routed_swap::history` knows nothing
-/// about atomic ones.
-class SwapHistoryEntry {
-  const SwapHistoryEntry({
-    required this.id,
-    required this.source,
-    required this.isInFlight,
-    required this.updatedAt,
-    this.title,
-    this.statusLabel,
-    this.needsAttention = false,
-    this.progress,
-    this.raw,
-  });
+/// The three views of Activity.
+enum SwapActivityFilter {
+  /// Still running.
+  active,
 
-  /// The durable identifier. A uuid on both sides, so the two never collide.
-  final String id;
+  /// Finished, but not as asked, or with funds or a permission to check.
+  attention,
 
-  /// Which liquidity source ran this swap.
-  final SwapLiquiditySource source;
-
-  /// Whether it is still running and should be resumable.
-  final bool isInFlight;
-
-  /// When it last changed, used for ordering.
-  final DateTime updatedAt;
-
-  /// A one-line description, when one can be derived.
-  final String? title;
-
-  /// A short human status.
-  final String? statusLabel;
-
-  /// Whether the entry needs the user to look at it.
-  ///
-  /// True for outcomes that are terminal but not what was asked for — a
-  /// partial fill or a refund — which would otherwise sit in the list looking
-  /// like ordinary completed swaps.
-  final bool needsAttention;
-
-  /// Routed progress, when this came from the routed side.
-  final RoutedSwapProgress? progress;
-
-  /// The original record, for the support export.
-  final Object? raw;
+  /// Finished with nothing left to do.
+  completed,
 }
 
-/// Reads swap history from every source and presents one list.
+/// A page of atomic swaps from the legacy recent-swaps list.
+class AtomicSwapHistoryPage {
+  const AtomicSwapHistoryPage({required this.swaps, required this.hasMore});
+
+  /// The swaps, newest first.
+  final List<Swap> swaps;
+
+  /// Whether a later page exists.
+  final bool hasMore;
+}
+
+/// Reads one page of atomic swap history.
+typedef AtomicSwapHistoryReader =
+    Future<AtomicSwapHistoryPage> Function({
+      required int limit,
+      required int page,
+    });
+
+/// One page of merged Activity.
+class SwapActivityPage extends Equatable {
+  const SwapActivityPage({
+    required this.entries,
+    required this.failedSources,
+    required this.hasMore,
+  });
+
+  /// The swaps, newest first.
+  final List<SwapExecutionSnapshot> entries;
+
+  /// Sources that could not be read. Non-empty means the list is incomplete —
+  /// "we could not check" is not the same statement as "you have none".
+  final Set<SwapLiquiditySource> failedSources;
+
+  /// Whether loading more may find older swaps.
+  final bool hasMore;
+
+  /// Whether anything is missing from this page.
+  bool get isPartial => failedSources.isNotEmpty;
+
+  @override
+  List<Object?> get props => [entries, failedSources, hasMore];
+}
+
+/// Reads swap history from both sources and presents one list.
 ///
-/// Deliberately tolerant of a source being unavailable: a routed-history
-/// outage must not blank the atomic swaps a user has been running for years,
-/// and vice versa. A partial list is more useful than an error page, provided
-/// the caller can tell it is partial.
+/// KDF keeps routed and atomic swaps in separate stores with separate shapes,
+/// so merging them is the app's job. Deliberately tolerant of a source being
+/// unavailable: a routed-history outage must not blank the atomic swaps a user
+/// has been running for years, and vice versa.
 class SwapHistoryRepository {
   /// Creates a repository over the routed manager and an atomic reader.
   SwapHistoryRepository({
     required RoutedSwapManager routedSwaps,
-    required Future<List<SwapHistoryEntry>> Function({int limit}) atomicHistory,
+    required AtomicSwapHistoryReader atomicHistory,
+    required SwapNetworks Function() networks,
+    required AssetId? Function(String ticker) resolveAsset,
   }) : _routedSwaps = routedSwaps,
-       _atomicHistory = atomicHistory;
+       _atomicHistory = atomicHistory,
+       _networks = networks,
+       _resolveAsset = resolveAsset;
 
   final RoutedSwapManager _routedSwaps;
-  final Future<List<SwapHistoryEntry>> Function({int limit}) _atomicHistory;
+  final AtomicSwapHistoryReader _atomicHistory;
+  final SwapNetworks Function() _networks;
+  final AssetId? Function(String ticker) _resolveAsset;
 
-  /// Merged history, newest first.
-  ///
-  /// [failedSources] reports which backends could not be read, so the UI can
-  /// say the list is incomplete rather than implying the missing swaps never
-  /// happened.
-  Future<SwapHistoryPage> recent({int limit = 20}) async {
+  /// Swaps matching [filter], newest first: the most recent [limit] from each
+  /// source, merged.
+  Future<SwapActivityPage> load({
+    required SwapActivityFilter filter,
+    int limit = 25,
+  }) async {
     final failed = <SwapLiquiditySource>{};
+    final networks = _networks();
 
-    final routed = await _routedSwaps
-        .history(limit: limit)
-        .then(
-          (entries) => entries.map(_fromRouted).toList(),
-          onError: (Object _) {
-            failed.add(SwapLiquiditySource.routed);
-            return <SwapHistoryEntry>[];
-          },
-        );
+    final routedFuture = _routed(filter, limit, networks).catchError((
+      Object _,
+    ) {
+      failed.add(SwapLiquiditySource.routed);
+      return (entries: <SwapExecutionSnapshot>[], hasMore: false);
+    });
+    final atomicFuture = _atomic(limit, networks).catchError((Object _) {
+      failed.add(SwapLiquiditySource.atomic);
+      return (entries: <SwapExecutionSnapshot>[], hasMore: false);
+    });
+    final routed = await routedFuture;
+    final atomic = await atomicFuture;
 
-    final atomic = await _atomicHistory(limit: limit).then(
-      (entries) => entries,
-      onError: (Object _) {
-        failed.add(SwapLiquiditySource.atomic);
-        return <SwapHistoryEntry>[];
-      },
-    );
+    final entries = [
+      ...routed.entries,
+      ...atomic.entries,
+    ].where((entry) => matches(entry, filter)).toList()..sort(byNewest);
 
-    final merged = [...routed, ...atomic]
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
-    return SwapHistoryPage(
-      entries: merged.take(limit).toList(),
+    return SwapActivityPage(
+      entries: entries,
       failedSources: failed,
+      hasMore: routed.hasMore || atomic.hasMore,
     );
   }
 
-  /// Swaps still running, across both sources.
-  ///
-  /// The cold-start question after a relaunch. A cross-chain swap can outlive
-  /// several app sessions, so this is routine rather than exceptional.
-  Future<List<SwapHistoryEntry>> inFlight() async {
-    try {
-      final routed = await _routedSwaps.inFlight();
-      return routed.map(_fromRouted).toList();
-    } on Object {
-      return const [];
-    }
+  /// Whether [entry] belongs under [filter].
+  static bool matches(
+    SwapExecutionSnapshot entry,
+    SwapActivityFilter filter,
+  ) => switch (filter) {
+    SwapActivityFilter.active => !entry.isTerminal,
+    SwapActivityFilter.attention => entry.isTerminal && entry.needsAttention,
+    SwapActivityFilter.completed => entry.isTerminal && !entry.needsAttention,
+  };
+
+  /// Newest first; a swap without a start time sorts as newest, since only a
+  /// just-started swap lacks one.
+  static int byNewest(SwapExecutionSnapshot a, SwapExecutionSnapshot b) {
+    final aTime = a.createdAt;
+    final bTime = b.createdAt;
+    if (aTime == null && bTime == null) return a.id.compareTo(b.id);
+    if (aTime == null) return -1;
+    if (bTime == null) return 1;
+    final byTime = bTime.compareTo(aTime);
+    return byTime != 0 ? byTime : a.id.compareTo(b.id);
   }
 
-  SwapHistoryEntry _fromRouted(RoutedSwapProgress progress) {
-    final receipt = progress.receipt;
-    return SwapHistoryEntry(
-      id: progress.uuid,
-      source: SwapLiquiditySource.routed,
-      isInFlight: !progress.isTerminal,
-      // The routed record carries its own timestamps, but the SDK's progress
-      // type does not surface them yet; ordering falls back to now for live
-      // entries, which keeps them at the top where they belong.
-      updatedAt: DateTime.now(),
-      title: receipt == null
-          ? null
-          : 'Received ${receipt.amount} ${receipt.tokenLabel}',
-      statusLabel: _labelFor(progress),
-      // A partial fill or a refund is finished but is not what was asked for.
-      // Leaving them unmarked would bury them among ordinary completions.
-      needsAttention:
-          progress.isTerminal &&
-          !progress.isSuccess &&
-          progress.failure?.kind != RoutedSwapFailureKind.cancelled,
-      progress: progress,
+  Future<({List<SwapExecutionSnapshot> entries, bool hasMore})> _routed(
+    SwapActivityFilter filter,
+    int limit,
+    SwapNetworks networks,
+  ) async {
+    if (filter == SwapActivityFilter.active) {
+      final running = await _routedSwaps.inFlight();
+      return (
+        entries: [
+          for (final progress in running)
+            routedSnapshotFrom(progress, networks: networks),
+        ],
+        hasMore: false,
+      );
+    }
+    final page = await _routedSwaps.history(
+      filter: RoutedSwapHistoryFilter.terminal,
+      limit: limit,
+    );
+    return (
+      entries: [
+        for (final progress in page.entries)
+          routedSnapshotFrom(progress, networks: networks),
+      ],
+      hasMore: page.hasMore,
     );
   }
 
-  static String _labelFor(RoutedSwapProgress progress) {
-    if (progress.failure != null) return 'Failed';
-    final receipt = progress.receipt;
-    if (receipt != null) {
-      return switch (receipt.outcome.wire) {
-        'completed' => 'Completed',
-        'partial' => 'Partly filled',
-        'refunded' => 'Refunded',
-        _ => 'Finished',
-      };
-    }
-    return 'In progress';
+  Future<({List<SwapExecutionSnapshot> entries, bool hasMore})> _atomic(
+    int limit,
+    SwapNetworks networks,
+  ) async {
+    final page = await _atomicHistory(limit: limit, page: 1);
+    return (
+      entries: [
+        for (final swap in page.swaps)
+          atomicSnapshotFromSwap(
+            swap,
+            networks: networks,
+            resolveAsset: _resolveAsset,
+          ),
+      ],
+      hasMore: page.hasMore,
+    );
   }
-}
-
-/// A page of merged history.
-class SwapHistoryPage {
-  const SwapHistoryPage({required this.entries, required this.failedSources});
-
-  /// The merged entries, newest first.
-  final List<SwapHistoryEntry> entries;
-
-  /// Sources that could not be read.
-  ///
-  /// Non-empty means the list is incomplete. Saying so is the difference
-  /// between "you have no routed swaps" and "we could not check".
-  final Set<SwapLiquiditySource> failedSources;
-
-  /// Whether anything is missing from this page.
-  bool get isPartial => failedSources.isNotEmpty;
 }
