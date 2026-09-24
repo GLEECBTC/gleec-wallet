@@ -83,7 +83,12 @@ class _AmountCardFrame extends StatelessWidget {
             LayoutBuilder(
               builder: (context, constraints) {
                 final scale = MediaQuery.textScalerOf(context).scale(1);
-                if (constraints.maxWidth / scale < 240) {
+                final half = constraints.maxWidth * 0.5;
+                final pill = 190 * scale;
+                // Larger text must not cut the pill short: it moves under
+                // the amount once half the row can no longer hold it.
+                if (constraints.maxWidth / scale < 240 ||
+                    (scale > 1 && half < pill)) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [amount, const SizedBox(height: 14), assetPill],
@@ -96,9 +101,7 @@ class _AmountCardFrame extends StatelessWidget {
                     const SizedBox(width: 14),
                     ConstrainedBox(
                       constraints: BoxConstraints(
-                        maxWidth: constraints.maxWidth * 0.5 < 190
-                            ? constraints.maxWidth * 0.5
-                            : 190,
+                        maxWidth: half < pill ? half : pill,
                       ),
                       child: assetPill,
                     ),
@@ -214,7 +217,10 @@ class _SwapPayCardState extends State<SwapPayCard> {
       style: amountStyle,
       cursorColor: palette.brand,
       decoration: InputDecoration(
-        isCollapsed: true,
+        // Uncollapsed at standard density, so on every platform the field
+        // itself is at least 48 dp tall with its text centred.
+        contentPadding: EdgeInsets.zero,
+        visualDensity: VisualDensity.standard,
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
@@ -233,12 +239,10 @@ class _SwapPayCardState extends State<SwapPayCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Semantics(
-          label: LocaleKeys.swapAmountToPay.tr(),
-          textField: true,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Align(alignment: Alignment.centerLeft, child: field),
+        MergeSemantics(
+          child: Semantics(
+            label: LocaleKeys.swapAmountToPay.tr(),
+            child: field,
           ),
         ),
         const SizedBox(height: 6),
@@ -315,17 +319,16 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final label = fiat
         ? LocaleKeys.swapEnterInToken.tr(args: [ticker])
         : LocaleKeys.swapEnterInUsd.tr();
-    return Semantics(
-      button: true,
+    return SwapButtonSemantics(
       label: '$text. $label',
-      excludeSemantics: true,
+      onTap: widget.onModeToggled,
       child: Tooltip(
         message: label,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: widget.onModeToggled,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

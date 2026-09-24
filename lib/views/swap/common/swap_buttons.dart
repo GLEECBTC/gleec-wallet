@@ -78,33 +78,28 @@ class SwapButton extends StatelessWidget {
         SwapText.strong(context).copyWith(fontWeight: FontWeight.w800),
       ),
     );
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: busy ? label : null,
-      child: TextButton(
-        style: style,
-        onPressed: enabled ? onPressed : null,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (busy) ...[
-              SizedBox.square(
-                dimension: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: foreground,
-                ),
+    return TextButton(
+      style: style,
+      onPressed: enabled ? onPressed : null,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (busy) ...[
+            SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: foreground,
               ),
-              const SizedBox(width: 10),
-            ] else if (icon != null) ...[
-              Icon(icon, size: 18),
-              const SizedBox(width: 8),
-            ],
-            Flexible(child: Text(label, textAlign: TextAlign.center)),
+            ),
+            const SizedBox(width: 10),
+          ] else if (icon != null) ...[
+            Icon(icon, size: 18),
+            const SizedBox(width: 8),
           ],
-        ),
+          Flexible(child: Text(label, textAlign: TextAlign.center)),
+        ],
       ),
     );
   }
@@ -162,12 +157,11 @@ class SwapIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    return Tooltip(
-      message: label,
-      child: Semantics(
-        button: true,
-        label: label,
-        excludeSemantics: true,
+    return SwapButtonSemantics(
+      label: label,
+      onTap: onPressed,
+      child: Tooltip(
+        message: label,
         child: Material(
           color: palette.surfaceHigh,
           borderRadius: BorderRadius.circular(14),
@@ -183,4 +177,33 @@ class SwapIconButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Announces [child] as one button named [label].
+///
+/// Replacing the child's semantics also drops its tap, so the tap is given
+/// here again; without it a screen reader can focus the button but not press
+/// it.
+class SwapButtonSemantics extends StatelessWidget {
+  const SwapButtonSemantics({
+    required this.label,
+    required this.onTap,
+    required this.child,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    button: true,
+    enabled: onTap != null,
+    label: label,
+    onTap: onTap,
+    excludeSemantics: true,
+    child: child,
+  );
 }

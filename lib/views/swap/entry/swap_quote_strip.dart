@@ -143,10 +143,10 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
             const SizedBox(height: 10),
             Divider(height: 1, thickness: 1, color: palette.border),
             const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(child: _badges(context, quote)),
-                SwapLinkButton(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final badges = _badges(context, quote);
+                final compare = SwapLinkButton(
                   // An aggregator route may have a faster alternative, priced
                   // only once the comparison opens.
                   label:
@@ -155,8 +155,21 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
                       ? LocaleKeys.swapCompareOptions.tr()
                       : LocaleKeys.swapDetails.tr(),
                   onPressed: widget.onCompare,
-                ),
-              ],
+                );
+                final scale = MediaQuery.textScalerOf(context).scale(1);
+                if (constraints.maxWidth / scale < 300) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [badges, compare],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: badges),
+                    compare,
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -267,17 +280,17 @@ class _SwapRateLineState extends State<SwapRateLine> {
         ? LocaleKeys.swapRate.tr(args: [to, SwapFormat.amount(inverse), from])
         : LocaleKeys.swapRate.tr(args: [from, SwapFormat.amount(rate), to]);
     final palette = SwapPalette.of(context);
+    void invert() => setState(() => _inverted = !_inverted);
     return Align(
       alignment: Alignment.centerLeft,
-      child: Semantics(
-        button: true,
+      child: SwapButtonSemantics(
         label: '$text. ${LocaleKeys.swapRateInvert.tr()}',
-        excludeSemantics: true,
+        onTap: invert,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () => setState(() => _inverted = !_inverted),
+          onTap: invert,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 40),
+            constraints: const BoxConstraints(minHeight: 48),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
               child: Row(

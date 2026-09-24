@@ -47,36 +47,45 @@ class SwapSlippageSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: MergeSemantics(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${LocaleKeys.swapSlippageTitle.tr()} · '
-                  '${slippageText(slippage)}',
-                  style: SwapText.strong(context).copyWith(fontSize: 14),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  LocaleKeys.swapSlippageSummary.tr(
-                    args: [slippageText(slippage)],
-                  ),
-                  style: SwapText.small(context),
-                ),
-              ],
-            ),
+    final summary = MergeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${LocaleKeys.swapSlippageTitle.tr()} · '
+            '${slippageText(slippage)}',
+            style: SwapText.strong(context).copyWith(fontSize: 14),
           ),
-        ),
-        const SizedBox(width: 8),
-        SwapLinkButton(
-          label: LocaleKeys.swapSlippageChange.tr(),
-          onPressed: onChange,
-        ),
-      ],
+          const SizedBox(height: 4),
+          Text(
+            LocaleKeys.swapSlippageSummary.tr(args: [slippageText(slippage)]),
+            style: SwapText.small(context),
+          ),
+        ],
+      ),
+    );
+    final change = SwapLinkButton(
+      label: LocaleKeys.swapSlippageChange.tr(),
+      onPressed: onChange,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(context).scale(1);
+        if (constraints.maxWidth / scale < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [summary, change],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: summary),
+            const SizedBox(width: 8),
+            change,
+          ],
+        );
+      },
     );
   }
 }
@@ -190,6 +199,7 @@ class _SwapSlippageSheetState extends State<SwapSlippageSheet> {
                 labelText: LocaleKeys.swapSlippageCustomLabel.tr(),
                 suffixText: '%',
                 errorText: invalid ? LocaleKeys.swapSlippageInvalid.tr() : null,
+                errorMaxLines: 4,
               ),
             ),
           ],
@@ -201,7 +211,7 @@ class _SwapSlippageSheetState extends State<SwapSlippageSheet> {
       ),
       footer: SwapButton(
         label: value == null
-            ? LocaleKeys.swapSlippageTitle.tr()
+            ? LocaleKeys.swapSlippageSaveNone.tr()
             : LocaleKeys.swapSlippageSave.tr(args: [slippageText(value)]),
         onPressed: value == null
             ? null

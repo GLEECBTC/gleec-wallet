@@ -35,6 +35,7 @@ import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
+import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
 
 class _EnglishAssetLoader extends AssetLoader {
@@ -58,6 +59,7 @@ void main() {
   late SwapShellController shell;
 
   setUpAll(() async {
+    await loadSwapFont();
     SharedPreferences.setMockInitialValues({});
     await EasyLocalization.ensureInitialized();
   });
@@ -115,7 +117,7 @@ void main() {
         assetLoader: const _EnglishAssetLoader(),
         child: Builder(
           builder: (context) => MaterialApp(
-            theme: ThemeData.dark(),
+            theme: ThemeData(brightness: Brightness.dark, fontFamily: swapFont),
             locale: context.locale,
             supportedLocales: context.supportedLocales,
             localizationsDelegates: context.localizationDelegates,
@@ -138,6 +140,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await expectSwapAccessible(tester);
   }
 
   UnifiedSwapState formState({

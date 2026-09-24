@@ -114,6 +114,7 @@ import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
 import 'tests/router/swap_route_alias_test.dart' as swap_route_alias_test;
+import 'tests/swap/swap_accessibility_test.dart' as swap_accessibility_test;
 import 'tests/swap/swap_asset_picker_test.dart' as swap_asset_picker_test;
 import 'tests/swap/swap_catalog_test.dart' as swap_catalog_test;
 import 'tests/swap/swap_copy_test.dart' as swap_copy_test;
@@ -376,6 +377,7 @@ void main() {
   swap_slippage_test.main();
   swap_route_alias_test.main();
   swap_widgets_test.main();
+  swap_accessibility_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
   swap_execution_registry_test.main();

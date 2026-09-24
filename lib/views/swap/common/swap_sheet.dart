@@ -103,12 +103,23 @@ class SwapSheetScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final subtitle = this.subtitle;
+    final text = this.subtitle;
+    final subtitle = text == null
+        ? null
+        : Text(text, style: SwapText.small(context));
+    // A scrolling body carries the subtitle, so large text cannot push the
+    // pinned heading and footer past the screen.
+    final pinnedSubtitle = scrollable ? null : subtitle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+          padding: EdgeInsets.fromLTRB(
+            18,
+            18,
+            18,
+            subtitle != null && scrollable ? 4 : 12,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -120,9 +131,9 @@ class SwapSheetScaffold extends StatelessWidget {
                       header: true,
                       child: Text(title, style: SwapText.heading(context)),
                     ),
-                    if (subtitle != null) ...[
+                    if (pinnedSubtitle != null) ...[
                       const SizedBox(height: 4),
-                      Text(subtitle, style: SwapText.small(context)),
+                      pinnedSubtitle,
                     ],
                   ],
                 ),
@@ -140,7 +151,16 @@ class SwapSheetScaffold extends StatelessWidget {
           child: scrollable
               ? SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  child: body,
+                  child: subtitle == null
+                      ? body
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            subtitle,
+                            const SizedBox(height: 12),
+                            body,
+                          ],
+                        ),
                 )
               : Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),

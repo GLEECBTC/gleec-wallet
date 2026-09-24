@@ -76,10 +76,12 @@ class SwapCopyLine extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: SelectableText(
-            value,
-            style: SwapText.code(context),
-            semanticsLabel: label == null ? value : '$label: $value',
+          // Read as text: the copy button is the screen-reader action, not
+          // an 18 dp long-press to select.
+          child: Semantics(
+            label: label == null ? value : '$label: $value',
+            excludeSemantics: true,
+            child: SelectableText(value, style: SwapText.code(context)),
           ),
         ),
         const SizedBox(width: 8),
@@ -324,16 +326,10 @@ class SwapFilterBar<T> extends StatelessWidget {
     return Semantics(
       container: true,
       label: semanticLabel,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            for (final value in values) ...[
-              _chip(context, palette, value),
-              const SizedBox(width: 6),
-            ],
-          ],
-        ),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [for (final value in values) _chip(context, palette, value)],
       ),
     );
   }

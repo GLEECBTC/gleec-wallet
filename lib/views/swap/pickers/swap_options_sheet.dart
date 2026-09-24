@@ -274,7 +274,14 @@ class _OptionCard extends StatelessWidget {
                       const SizedBox(height: 12),
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          final columns = constraints.maxWidth < 320 ? 2 : 3;
+                          final scaled =
+                              constraints.maxWidth /
+                              MediaQuery.textScalerOf(context).scale(1);
+                          final columns = scaled < 200
+                              ? 1
+                              : scaled < 320
+                              ? 2
+                              : 3;
                           final width =
                               (constraints.maxWidth - (columns - 1) * 8) /
                               columns;

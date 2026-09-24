@@ -342,12 +342,14 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
               onChanged: (_) => setState(() {}),
               style: SwapText.body(context).copyWith(color: palette.text),
               decoration: InputDecoration(
-                isCollapsed: true,
+                contentPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.standard,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 filled: false,
                 hintText: LocaleKeys.swapPickerSearch.tr(),
+                hintMaxLines: 4,
                 hintStyle: SwapText.body(
                   context,
                 ).copyWith(color: palette.textTertiary),

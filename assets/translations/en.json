@@ -1610,6 +1610,7 @@
   "swapSlippageHigh": "Above 1%, you may receive noticeably less than expected, and the swap is easier for others to trade against.",
   "swapSlippageLow": "Below 0.1%, cross-network routes stop more often when the price moves.",
   "swapSlippageSave": "Use {}",
+  "swapSlippageSaveNone": "Use this slippage",
   "swapAnnounceSlippage": "Slippage set to {}. Checking prices again.",
   "swapReceiveAtLeastShort": "At least {}"
 }

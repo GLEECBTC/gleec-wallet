@@ -1787,6 +1787,7 @@ abstract class LocaleKeys {
   static const swapSlippageHigh = 'swapSlippageHigh';
   static const swapSlippageLow = 'swapSlippageLow';
   static const swapSlippageSave = 'swapSlippageSave';
+  static const swapSlippageSaveNone = 'swapSlippageSaveNone';
   static const swapAnnounceSlippage = 'swapAnnounceSlippage';
   static const swapReceiveAtLeastShort = 'swapReceiveAtLeastShort';
 }

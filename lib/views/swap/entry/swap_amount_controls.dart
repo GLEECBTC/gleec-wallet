@@ -21,12 +21,11 @@ class SwapAssetPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
     final asset = this.asset;
-    return Semantics(
-      button: true,
+    return SwapButtonSemantics(
       label: asset == null
           ? semanticLabel
           : '$semanticLabel: ${SwapFormat.ticker(asset)}, $network',
-      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: palette.surfaceHigh,
         shape: RoundedRectangleBorder(
@@ -104,17 +103,14 @@ class _AddressFooterButton extends StatelessWidget {
     if (address == null) {
       return const SizedBox(height: 48);
     }
-    return Semantics(
-      button: true,
+    void copy() =>
+        copyToClipBoard(context, address, LocaleKeys.swapAddressCopied.tr());
+    return SwapButtonSemantics(
       label: '${prefix(address)}. ${LocaleKeys.swapCopyAddress.tr()}',
-      excludeSemantics: true,
+      onTap: copy,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => copyToClipBoard(
-          context,
-          address,
-          LocaleKeys.swapAddressCopied.tr(),
-        ),
+        onTap: copy,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
@@ -154,12 +150,11 @@ class SwapSwitchButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    return Tooltip(
-      message: LocaleKeys.swapSwitchDirection.tr(),
-      child: Semantics(
-        button: true,
-        label: LocaleKeys.swapSwitchDirection.tr(),
-        excludeSemantics: true,
+    return SwapButtonSemantics(
+      label: LocaleKeys.swapSwitchDirection.tr(),
+      onTap: onPressed,
+      child: Tooltip(
+        message: LocaleKeys.swapSwitchDirection.tr(),
         child: Container(
           width: 48,
           height: 48,

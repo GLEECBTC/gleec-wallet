@@ -26,6 +26,8 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Max on a network's own coin keeps back three times the quoted gas.** The engine checks the balance at start against a higher figure than the quote shows. If the check still fails, nothing is sent and the result screen shows the shortfall.
 - **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
 - **`/swap` works as an address,** as well as `/dex`, with the same link parameters.
+- **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them.
+- **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off.
 
 Unchanged from the last brief:
 - the atomic "receive at least" figure is what the order enforces;
@@ -82,6 +84,10 @@ For each item, note what the screen said before you confirmed and what actually 
 ### Activity and recovery
 18. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
 19. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses. On web, a provider error has no provider reference; the engine can't read it there.
+
+### Accessibility
+20. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
+21. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
 
 ## How to report
 
