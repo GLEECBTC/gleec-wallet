@@ -31,6 +31,7 @@ import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 import 'package:web_dex/shared/widgets/segwit_icon.dart';
@@ -1168,6 +1169,13 @@ class _GetRewardsButton extends StatelessWidget {
 }
 
 void _goToSwap(BuildContext context, Coin coin) {
+  // The Swap form opens on this coin; Advanced's taker form is seeded too, so
+  // switching to it keeps the choice.
+  context.read<SwapServices>().requestIntent((
+    pay: coin.abbr,
+    receive: null,
+    amount: null,
+  ));
   context.read<TakerBloc>().add(TakerSetSellCoin(coin));
   routingState.selectedMenu = MainMenuValue.dex;
 }
