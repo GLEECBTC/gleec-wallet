@@ -20,6 +20,16 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
   SwapFormIssue? _issueFor(UnifiedSwapState next) {
     final pay = next.pay;
     if (pay != null && pay == next.receive) return SwapFormIssue.sameAsset;
+    if (next.pairSupport case final support? when !support.isSupported) {
+      return SwapFormIssue.pairUnsupported;
+    }
+    if (next.inactiveAsset != null) return SwapFormIssue.assetInactive;
+    // A token's routes all pay their fees in the network's own coin; with
+    // none held, no source can price the swap, and asking would only spend
+    // the aggregator's request budget on a failure.
+    if (pay?.parentId != null && next.feeBalance == Decimal.zero) {
+      return SwapFormIssue.noFeeBalance;
+    }
 
     final text = next.inputText.trim();
     if (text.isEmpty) return SwapFormIssue.amountMissing;

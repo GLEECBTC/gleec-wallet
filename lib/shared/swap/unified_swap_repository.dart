@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
@@ -64,10 +65,12 @@ class UnifiedSwapQuotes extends Equatable {
       SwapQuoteFailureKind.aboveMaximum,
       SwapQuoteFailureKind.invalidAmount,
       SwapQuoteFailureKind.unsupportedSigner,
+      // A source that looked and found nothing is a firmer answer than one
+      // that could not look; the copy adds the other's failure to it.
+      SwapQuoteFailureKind.noRoute,
       SwapQuoteFailureKind.rateLimited,
       SwapQuoteFailureKind.timeout,
       SwapQuoteFailureKind.serviceError,
-      SwapQuoteFailureKind.noRoute,
       SwapQuoteFailureKind.notConfigured,
       SwapQuoteFailureKind.pairUnsupported,
       SwapQuoteFailureKind.unknown,
@@ -82,6 +85,15 @@ class UnifiedSwapQuotes extends Equatable {
   /// Whether every source agrees this pair simply cannot be traded here.
   bool get isPermanentlyUnsupported =>
       isEmpty && failures.isNotEmpty && failures.every((f) => f.isPermanent);
+
+  /// A source that could not answer at all while another did, so the result
+  /// may be missing an option a retry would find.
+  SwapQuoteFailure? get transientFailure {
+    for (final failure in failures) {
+      if (failure.isTransient) return failure;
+    }
+    return null;
+  }
 
   /// The option with [id], if it is still on offer.
   SwapQuote? byId(String id) {
@@ -102,51 +114,87 @@ class UnifiedSwapQuotes extends Equatable {
 /// atomic orderbook is peer-to-peer and is the only route for the wallet's own
 /// GLEEC and GRC-20 assets.
 class UnifiedSwapRepository {
-  /// Creates a repository over [sources], priced by [pricing].
+  /// Creates a repository over [sources], priced by [pricing], for the
+  /// wallet's [knownAssets] of which [activatedAssets] are active.
   UnifiedSwapRepository({
     required List<SwapQuoteSource> sources,
     required SwapPricingService pricing,
+    Set<AssetId> Function()? knownAssets,
+    Future<Set<AssetId>> Function()? activatedAssets,
   }) : _sources = sources,
-       _pricing = pricing;
+       _pricing = pricing,
+       _knownAssets = knownAssets ?? (() => const {}),
+       _activatedAssets = activatedAssets;
 
   final List<SwapQuoteSource> _sources;
   final SwapPricingService _pricing;
+  final Set<AssetId> Function() _knownAssets;
+  final Future<Set<AssetId>> Function()? _activatedAssets;
+  SwapCatalog? _catalog;
 
   /// The pricing service, for callers that value amounts themselves.
   SwapPricingService get pricing => _pricing;
 
-  /// Every asset that at least one source can trade.
-  Future<Set<AssetId>> tradableAssets() async {
-    final results = await Future.wait(
+  /// The catalog last read, if any.
+  SwapCatalog? get lastCatalog => _catalog;
+
+  /// Reads what every source can trade, and remembers it for [quote].
+  Future<SwapCatalog> catalog() async {
+    final activated = await _readActivated();
+    final known = {..._knownAssets(), ...?activated};
+    final lists = await Future.wait(
       _sources.map(
-        (source) =>
-            source.tradableAssets().catchError((Object _) => <AssetId>{}),
+        (source) => source
+            .assets(known: known, activated: activated ?? known)
+            .catchError(
+              // A source contract violation must not take down the others.
+              (Object _) => SwapSourceAssets(
+                source: source.source,
+                status: SwapCatalogStatus.unavailable,
+              ),
+            ),
       ),
     );
-    return results.expand((assets) => assets).toSet();
+    return _catalog = SwapCatalog(sources: lists, activated: activated);
   }
 
-  /// Which sources can trade [asset].
-  Future<Set<SwapLiquiditySource>> sourcesFor(AssetId asset) async {
-    final available = <SwapLiquiditySource>{};
-    await Future.wait(
-      _sources.map((source) async {
-        final assets = await source.tradableAssets().catchError(
-          (Object _) => <AssetId>{},
-        );
-        if (assets.contains(asset)) available.add(source.source);
-      }),
-    );
-    return available;
+  Future<Set<AssetId>?> _readActivated() async {
+    try {
+      return await _activatedAssets?.call();
+    } on Object {
+      return _catalog?.activated;
+    }
   }
 
-  /// Prices a swap everywhere at once.
+  /// The sources to ask about [from] for [to]: those the catalog says can
+  /// price the pair, or every source before a catalog has been read.
+  List<SwapQuoteSource> _sourcesFor(AssetId from, AssetId to) {
+    final catalog = _catalog;
+    if (catalog == null) return _sources;
+    final able = catalog.support(from, to).sources;
+    return [
+      for (final source in _sources)
+        if (able.contains(source.source)) source,
+    ];
+  }
+
+  /// Prices a swap everywhere it can be priced, at once.
   ///
   /// Sources are queried concurrently and independently: one venue being slow
-  /// or broken must not withhold a price another already has.
+  /// or broken must not withhold a price another already has. A source the
+  /// catalog says cannot trade the pair is not asked at all — asking it only
+  /// spends its request budget on an answer that is known in advance.
   Future<UnifiedSwapQuotes> quote(SwapQuoteRequest request) async {
     if (request.amount <= Decimal.zero) {
       return const UnifiedSwapQuotes(ranked: [], unrankable: [], failures: []);
+    }
+    final local = _localFailures(request.from, request.to);
+    if (local != null) {
+      return UnifiedSwapQuotes(
+        ranked: const [],
+        unrankable: const [],
+        failures: local,
+      );
     }
     await _pricing.prices.warm([
       request.from,
@@ -155,7 +203,7 @@ class UnifiedSwapRepository {
     ]);
 
     final results = await Future.wait(
-      _sources.map(
+      _sourcesFor(request.from, request.to).map(
         (source) => source
             .quote(request)
             .catchError(
@@ -235,7 +283,7 @@ class UnifiedSwapRepository {
     required Decimal balance,
   }) async {
     final entries = await Future.wait(
-      _sources.map((source) async {
+      _sourcesFor(from, to).map((source) async {
         final max = await source
             .maxAmount(from: from, to: to, balance: balance)
             .catchError((Object _) => null);
@@ -246,6 +294,35 @@ class UnifiedSwapRepository {
       for (final entry in entries)
         if (entry.value != null) entry.key: entry.value!,
     };
+  }
+
+  /// Failures known without asking any source: an inactive asset, or a pair
+  /// no source can trade. Null when the sources should be asked.
+  List<SwapQuoteFailure>? _localFailures(AssetId from, AssetId to) {
+    final catalog = _catalog;
+    if (catalog == null) return null;
+    final support = catalog.support(from, to);
+    if (!support.isSupported) {
+      return [
+        for (final source in _sources)
+          SwapQuoteFailure(
+            source: source.source,
+            kind: SwapQuoteFailureKind.pairUnsupported,
+          ),
+      ];
+    }
+    for (final asset in [from, to]) {
+      if (!catalog.isActive(asset)) {
+        return [
+          SwapQuoteFailure(
+            source: support.sources.first,
+            kind: SwapQuoteFailureKind.assetInactive,
+            asset: asset,
+          ),
+        ];
+      }
+    }
+    return null;
   }
 
   /// Ranks [quotes] by what each actually promises.

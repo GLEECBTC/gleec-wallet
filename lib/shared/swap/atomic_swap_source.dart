@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
@@ -46,40 +47,76 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
   /// Creates a source backed by the SDK's trading manager.
   AtomicSwapQuoteSource({
     required TradingManager trading,
-    required Future<Set<AssetId>> Function() activatedAssets,
     required SwapNetworks Function() networks,
     Future<String?> Function(AssetId asset)? addressOf,
     bool Function(AssetId from, AssetId to)? tradingAllowed,
     bool Function()? clockValid,
+    bool Function(AssetId asset)? isWalletOnly,
     DateTime Function()? now,
   }) : _trading = trading,
-       _activatedAssets = activatedAssets,
        _networks = networks,
        _addressOf = addressOf,
        _tradingAllowed = tradingAllowed,
        _clockValid = clockValid,
+       _isWalletOnly = isWalletOnly,
        _now = now ?? DateTime.now;
 
   final TradingManager _trading;
-  final Future<Set<AssetId>> Function() _activatedAssets;
   final SwapNetworks Function() _networks;
   final Future<String?> Function(AssetId asset)? _addressOf;
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
   final bool Function()? _clockValid;
+  final bool Function(AssetId asset)? _isWalletOnly;
   final DateTime Function() _now;
 
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.atomic;
 
+  /// Whether the orderbook can trade [asset] at all.
+  bool canTrade(AssetId asset) => canTradeWith(asset, _isWalletOnly);
+
+  /// Whether the orderbook can trade [asset], given the config's
+  /// [isWalletOnly] flag.
+  ///
+  /// Wallet-only assets are excluded here rather than at the call site, so
+  /// every entry point inherits the same rule. GasFree custody-backed
+  /// balances are in that set: DEX settlement spends the standard EOA, which
+  /// does not hold them. So are coins the config marks wallet-only, which
+  /// KDF refuses to trade.
+  static bool canTradeWith(
+    AssetId asset,
+    bool Function(AssetId asset)? isWalletOnly,
+  ) => canTradeAssetId(asset) && !(isWalletOnly?.call(asset) ?? false);
+
   @override
-  Future<Set<AssetId>> tradableAssets() async {
-    final activated = await _activatedAssets();
-    // Wallet-only assets are excluded here rather than at the call site, so
-    // every entry point inherits the same rule. GasFree custody-backed
-    // balances are in that set: DEX settlement spends the standard EOA, which
-    // does not hold them.
-    return activated.where(canTradeAssetId).toSet();
-  }
+  Future<SwapSourceAssets> assets({
+    required Set<AssetId> known,
+    required Set<AssetId> activated,
+  }) async => catalogFor(
+    known: known,
+    activated: activated,
+    isWalletOnly: _isWalletOnly,
+  );
+
+  /// The orderbook's assets among [known]: tradable active ones now, and the
+  /// rest once activated.
+  @visibleForTesting
+  static SwapSourceAssets catalogFor({
+    required Set<AssetId> known,
+    required Set<AssetId> activated,
+    bool Function(AssetId asset)? isWalletOnly,
+  }) => SwapSourceAssets(
+    source: SwapLiquiditySource.atomic,
+    quotable: {
+      for (final asset in activated)
+        if (canTradeWith(asset, isWalletOnly)) asset,
+    },
+    onceActive: {
+      for (final asset in known)
+        if (!activated.contains(asset) && canTradeWith(asset, isWalletOnly))
+          asset,
+    },
+  );
 
   @override
   Future<Decimal?> minimumAmount({required AssetId from}) async {
@@ -146,7 +183,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       ),
     );
 
-    if (!canTradeAssetId(from) || !canTradeAssetId(to)) {
+    if (!canTrade(from) || !canTrade(to)) {
       return reject(SwapQuoteFailureKind.pairUnsupported);
     }
     if (_tradingAllowed != null && !_tradingAllowed(from, to)) {

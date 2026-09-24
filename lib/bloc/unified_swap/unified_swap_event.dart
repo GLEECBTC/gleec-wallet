@@ -200,6 +200,22 @@ final class UnifiedSwapBalancesRefreshed extends UnifiedSwapEvent {
   const UnifiedSwapBalancesRefreshed();
 }
 
+/// Re-read what the sources can trade — after a list failed to load, say.
+final class UnifiedSwapCatalogRefreshRequested extends UnifiedSwapEvent {
+  const UnifiedSwapCatalogRefreshRequested();
+}
+
+/// The user activated [asset] from the swap form.
+final class UnifiedSwapAssetActivated extends UnifiedSwapEvent {
+  const UnifiedSwapAssetActivated(this.asset);
+
+  /// The asset now active.
+  final AssetId asset;
+
+  @override
+  List<Object?> get props => [asset];
+}
+
 /// Internal: the refresh or expiry timer fired.
 final class UnifiedSwapTimerFired extends UnifiedSwapEvent {
   const UnifiedSwapTimerFired(this.kind);

@@ -13,6 +13,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
 
   bool _evaluable(UnifiedSwapState state) =>
       state.hasPair &&
+      !_catalogLoading &&
       state.tradingEnabled &&
       state.issue == null &&
       (amountOf(state) ?? Decimal.zero) > Decimal.zero;
@@ -76,6 +77,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
               kind: SwapQuoteFailureKind.unknown,
             ),
         quiet: quiet,
+        all: result.failures,
       );
       return;
     }
@@ -97,6 +99,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           clearSelectedId: selected == null,
           manuallySelected: keep,
           clearFailure: true,
+          // Kept although options exist: a source that could not answer is
+          // worth a quiet word, because the best option may be missing.
+          failures: result.failures,
           clearRateLimit: true,
         ),
       ),
@@ -108,6 +113,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
     SwapQuoteFailure failure, {
     required bool quiet,
+    List<SwapQuoteFailure> all = const [],
   }) {
     // A refresh that fails keeps the options it had until they expire:
     // replacing a working quote with an error because one re-price blipped
@@ -122,6 +128,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       state.copyWith(
         evaluation: SwapEvaluationStatus.failed,
         failure: failure,
+        failures: all.isEmpty ? [failure] : all,
         clearQuotes: true,
         clearSelectedId: true,
       ),

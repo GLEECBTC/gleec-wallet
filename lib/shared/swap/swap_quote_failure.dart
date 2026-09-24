@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
 /// Why a source could not price a swap.
@@ -154,11 +155,17 @@ abstract interface class SwapQuoteSource {
   /// Which source this is.
   SwapLiquiditySource get source;
 
-  /// The assets this source can currently trade.
+  /// What this source can trade among the wallet's [known] assets, of which
+  /// [activated] are active.
   ///
-  /// Used to gate the pickers. Membership does not promise a route exists —
-  /// only [quote] can answer that.
-  Future<Set<AssetId>> tradableAssets();
+  /// Used to gate quoting and the pickers. Membership does not promise a
+  /// route exists — only [quote] can answer that. Must not throw: a source
+  /// that cannot refresh its list says so in [SwapSourceAssets.status] and
+  /// reports what it last knew.
+  Future<SwapSourceAssets> assets({
+    required Set<AssetId> known,
+    required Set<AssetId> activated,
+  });
 
   /// Prices a swap — possibly several routes — or explains why it cannot.
   ///

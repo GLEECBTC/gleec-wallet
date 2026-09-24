@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
@@ -220,8 +221,27 @@ class FakeQuoteSource implements SwapQuoteSource {
   final List<SwapQuoteRequest> requests = [];
   final List<SwapQuote> requoted = [];
 
+  /// Tradable assets the wallet holds but has not activated.
+  Set<AssetId> inactive = {};
+
+  /// How current the list reads, for outage tests.
+  SwapCatalogStatus status = SwapCatalogStatus.fresh;
+
+  int assetsCalls = 0;
+
   @override
-  Future<Set<AssetId>> tradableAssets() async => tradable;
+  Future<SwapSourceAssets> assets({
+    required Set<AssetId> known,
+    required Set<AssetId> activated,
+  }) async {
+    assetsCalls++;
+    return SwapSourceAssets(
+      source: source,
+      quotable: tradable.difference(inactive),
+      onceActive: tradable.intersection(inactive),
+      status: status,
+    );
+  }
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async {

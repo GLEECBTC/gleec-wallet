@@ -1,14 +1,23 @@
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/settings/settings_bloc.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import 'package:web_dex/views/swap/common/swap_failure_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
+part 'swap_asset_picker_reach.dart';
 part 'swap_asset_picker_row.dart';
 
 /// Which side of the swap a picker chooses for.
@@ -32,51 +41,84 @@ const _popularTickers = [
   'AVAX',
 ];
 
-/// Opens the asset picker and returns the chosen asset, activated.
+/// Opens the asset picker over [bloc]'s catalog and returns the chosen
+/// asset, activated.
 Future<AssetId?> showSwapAssetPicker({
   required BuildContext context,
   required SwapPickerSide side,
-  required Set<AssetId> tradable,
+  required UnifiedSwapBloc bloc,
   required AssetId? selected,
   required AssetId? other,
   required SwapServices services,
   required bool Function(AssetId asset) isBlocked,
 }) {
+  final showTestCoins = _testCoinsEnabled(context);
   return showSwapSheet<AssetId>(
     context: context,
     label: LocaleKeys.swapPickerTitle.tr(),
-    builder: (context) => SwapAssetPicker(
-      side: side,
-      tradable: tradable,
-      selected: selected,
-      other: other,
-      services: services,
-      isBlocked: isBlocked,
+    builder: (context) => BlocProvider.value(
+      value: bloc,
+      child: BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
+        buildWhen: (a, b) =>
+            a.catalog != b.catalog || a.loadingAssets != b.loadingAssets,
+        builder: (context, state) => SwapAssetPicker(
+          side: side,
+          catalog: state.catalog,
+          loading: state.loadingAssets,
+          selected: selected,
+          other: other,
+          services: services,
+          isBlocked: isBlocked,
+          showTestCoins: showTestCoins,
+          onRetryCatalog: () =>
+              bloc.add(const UnifiedSwapCatalogRefreshRequested()),
+        ),
+      ),
     ),
   );
 }
 
+bool _testCoinsEnabled(BuildContext context) {
+  try {
+    return context.read<SettingsBloc>().state.testCoinsEnabled;
+  } on Object {
+    return true;
+  }
+}
+
 /// Chooses an asset and its network.
 ///
-/// The same ticker on two networks is two different assets, so every row
-/// names its network, and a row sharing the other side's ticker says so.
+/// Offers every asset some source can trade, active or not: choosing an
+/// inactive one activates it, in the open, before the form uses it. The
+/// same ticker on two networks is two different assets, so every row names
+/// its network, and a row sharing the other side's ticker says so.
 class SwapAssetPicker extends StatefulWidget {
   const SwapAssetPicker({
     required this.side,
-    required this.tradable,
+    required this.catalog,
     required this.selected,
     required this.other,
     required this.services,
     required this.isBlocked,
+    this.loading = false,
+    this.showTestCoins = true,
+    this.onRetryCatalog,
     super.key,
   });
 
   final SwapPickerSide side;
-  final Set<AssetId> tradable;
+  final SwapCatalog catalog;
+  final bool loading;
   final AssetId? selected;
   final AssetId? other;
   final SwapServices services;
   final bool Function(AssetId asset) isBlocked;
+
+  /// Whether inactive test-network assets are offered.
+  final bool showTestCoins;
+
+  /// Reads the catalog again after part of it failed to load.
+  final VoidCallback? onRetryCatalog;
 
   @override
   State<SwapAssetPicker> createState() => _SwapAssetPickerState();
@@ -86,7 +128,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
   final TextEditingController _search = TextEditingController();
   _PickerTab _tab = _PickerTab.mine;
   Set<AssetId>? _activated;
-  List<AssetId> _recent = const [];
+  List<String> _recentTickers = const [];
   bool _failed = false;
   AssetId? _activating;
   AssetId? _activationFailed;
@@ -109,18 +151,12 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
       final activated = await widget.services.activatedAssets();
       final recentTickers = await widget.services.preferences.recentAssets();
       if (!mounted) return;
-      final recent = [
-        for (final ticker in recentTickers)
-          if (widget.services.resolveAsset(ticker) case final AssetId id
-              when widget.tradable.contains(id))
-            id,
-      ];
       setState(() {
         _activated = activated;
-        _recent = recent;
+        _recentTickers = recentTickers;
         // Open on something useful: holdings when there are any.
         if (_mine(activated).isEmpty) {
-          _tab = recent.isNotEmpty ? _PickerTab.recent : _PickerTab.all;
+          _tab = _recent().isNotEmpty ? _PickerTab.recent : _PickerTab.all;
         }
       });
     } on Object {
@@ -128,9 +164,32 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     }
   }
 
+  /// Every asset on offer: what some source can trade, less inactive
+  /// test-network assets the user has chosen not to see.
+  Set<AssetId> _offered() {
+    final activated = _activated ?? widget.catalog.activated ?? const {};
+    return {
+      for (final id in widget.catalog.assets)
+        if (widget.showTestCoins ||
+            activated.contains(id) ||
+            !widget.services.isTestnet(id))
+          id,
+    };
+  }
+
+  List<AssetId> _recent() {
+    final offered = _offered();
+    return [
+      for (final ticker in _recentTickers)
+        if (widget.services.resolveAsset(ticker) case final AssetId id
+            when offered.contains(id))
+          id,
+    ];
+  }
+
   List<AssetId> _mine(Set<AssetId> activated) {
     final held = [
-      for (final id in widget.tradable)
+      for (final id in _offered())
         if (activated.contains(id) &&
             (widget.services.lastKnownBalance(id) ?? Decimal.zero) >
                 Decimal.zero)
@@ -151,7 +210,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
       for (var i = 0; i < _popularTickers.length; i++) _popularTickers[i]: i,
     };
     final list = [
-      for (final id in widget.tradable)
+      for (final id in _offered())
         if (rank.containsKey(SwapFormat.ticker(id).toUpperCase())) id,
     ];
     list.sort((a, b) {
@@ -172,7 +231,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     return networks.networkOf(a).compareTo(networks.networkOf(b));
   }
 
-  List<AssetId> _all() => widget.tradable.toList()..sort(_byName);
+  List<AssetId> _all() => _offered().toList()..sort(_byName);
 
   bool _matches(AssetId id, String query) {
     final networks = widget.services.networks();
@@ -197,7 +256,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     final activated = _activated ?? const {};
     return switch (_tab) {
       _PickerTab.mine => _mine(activated),
-      _PickerTab.recent => _recent,
+      _PickerTab.recent => _recent(),
       _PickerTab.popular => _popular(),
       _PickerTab.all => _all(),
     };
@@ -254,6 +313,8 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
               onChanged: (tab) => setState(() => _tab = tab),
             ),
           const SizedBox(height: 14),
+          if (widget.catalog.isIncomplete && !widget.loading)
+            _incompleteNotice(context),
           Expanded(child: _list(context)),
         ],
       ),
@@ -315,7 +376,8 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
         ),
       );
     }
-    if (_activated == null) {
+    if (_activated == null ||
+        (widget.loading && widget.catalog.assets.isEmpty)) {
       return Semantics(
         label: LocaleKeys.swapPickerLoading.tr(),
         child: ListView(
@@ -373,14 +435,18 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     }
 
     final selected = widget.selected;
+    final entries = _entries(rows);
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 18),
-      itemCount: rows.length + (selected == null ? 0 : 1),
+      itemCount: entries.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        if (index == rows.length) return _identity(context, selected!);
-        final id = rows[index];
-        return _PickerRow(
+      itemBuilder: (context, index) => switch (entries[index]) {
+        _IdentityEntry(:final asset) => _identity(context, asset),
+        _UnreachableHeader(:final anchor) => _unreachableHeader(
+          context,
+          anchor,
+        ),
+        _AssetEntry(asset: final id, :final unreachable) => _PickerRow(
           asset: id,
           network: widget.services.networks().networkOf(id),
           contract: widget.services.contractOf(id),
@@ -393,10 +459,11 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
               SwapFormat.ticker(widget.other!) == SwapFormat.ticker(id),
           active: _activated?.contains(id) ?? false,
           blocked: widget.isBlocked(id),
+          unreachableWith: unreachable ? widget.other : null,
           activating: _activating == id,
           activationFailed: _activationFailed == id,
-          onTap: _activating == null ? () => _choose(id) : null,
-        );
+          onTap: _activating == null && !unreachable ? () => _choose(id) : null,
+        ),
       },
     );
   }

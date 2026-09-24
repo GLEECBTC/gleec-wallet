@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
@@ -28,6 +29,13 @@ enum SwapAmountMode {
 
 /// Why the form cannot be evaluated or reviewed.
 enum SwapFormIssue {
+  /// No source can trade this pair; see [UnifiedSwapState.pairSupport].
+  pairUnsupported,
+
+  /// An asset in the pair is not active in the wallet yet. It is activated
+  /// only when the user asks — activation is never a side effect of looking.
+  assetInactive,
+
   /// No amount yet. Not an error — the user has not finished.
   amountMissing,
 
@@ -45,6 +53,10 @@ enum SwapFormIssue {
 
   /// Not enough of the network's native coin for the network fees.
   insufficientForFees,
+
+  /// The pay asset is a token and the wallet holds none of the network's
+  /// native coin, which every route needs for its fees.
+  noFeeBalance,
 
   /// Both sides are the same asset.
   sameAsset,
@@ -161,7 +173,7 @@ class UnifiedSwapState extends Equatable {
   const UnifiedSwapState({
     this.view = UnifiedSwapView.form,
     this.loadingAssets = true,
-    this.tradableAssets = const {},
+    this.catalog = SwapCatalog.empty,
     this.pay,
     this.receive,
     this.payAddress,
@@ -177,6 +189,7 @@ class UnifiedSwapState extends Equatable {
     this.selectedId,
     this.manuallySelected = false,
     this.failure,
+    this.failures = const [],
     this.rateLimitedUntil,
     this.review,
     this.activeExecutionId,
@@ -191,8 +204,8 @@ class UnifiedSwapState extends Equatable {
   /// Whether the tradable assets are still loading.
   final bool loadingAssets;
 
-  /// Assets at least one source can trade.
-  final Set<AssetId> tradableAssets;
+  /// What the sources can trade, active or not.
+  final SwapCatalog catalog;
 
   /// The asset being sold.
   final AssetId? pay;
@@ -241,6 +254,10 @@ class UnifiedSwapState extends Equatable {
   /// Why nothing could be priced, when nothing could.
   final SwapQuoteFailure? failure;
 
+  /// Every source's failure from the last evaluation, including those of
+  /// sources that could not answer while another did.
+  final List<SwapQuoteFailure> failures;
+
   /// While set, automatic re-pricing waits: the provider asked to slow down.
   final DateTime? rateLimitedUntil;
 
@@ -272,6 +289,20 @@ class UnifiedSwapState extends Equatable {
   /// Whether both assets are chosen and differ.
   bool get hasPair => pay != null && receive != null && pay != receive;
 
+  /// Which sources can price the pair. Null until both assets are chosen and
+  /// the catalog has loaded.
+  SwapPairSupport? get pairSupport =>
+      hasPair && !loadingAssets ? catalog.support(pay!, receive!) : null;
+
+  /// The first asset of the pair that is not active yet, pay side first.
+  AssetId? get inactiveAsset {
+    if (loadingAssets) return null;
+    for (final asset in [pay, receive]) {
+      if (asset != null && !catalog.isActive(asset)) return asset;
+    }
+    return null;
+  }
+
   /// Whether the review may be opened.
   bool get canReview =>
       view == UnifiedSwapView.form &&
@@ -284,7 +315,7 @@ class UnifiedSwapState extends Equatable {
   List<Object?> get props => [
     view,
     loadingAssets,
-    tradableAssets,
+    catalog,
     pay,
     receive,
     payAddress,
@@ -300,6 +331,7 @@ class UnifiedSwapState extends Equatable {
     selectedId,
     manuallySelected,
     failure,
+    failures,
     rateLimitedUntil,
     review,
     activeExecutionId,
@@ -314,7 +346,7 @@ class UnifiedSwapState extends Equatable {
   UnifiedSwapState copyWith({
     UnifiedSwapView? view,
     bool? loadingAssets,
-    Set<AssetId>? tradableAssets,
+    SwapCatalog? catalog,
     AssetId? pay,
     AssetId? receive,
     String? payAddress,
@@ -330,6 +362,7 @@ class UnifiedSwapState extends Equatable {
     String? selectedId,
     bool? manuallySelected,
     SwapQuoteFailure? failure,
+    List<SwapQuoteFailure>? failures,
     DateTime? rateLimitedUntil,
     SwapReview? review,
     String? activeExecutionId,
@@ -354,7 +387,7 @@ class UnifiedSwapState extends Equatable {
     return UnifiedSwapState(
       view: view ?? this.view,
       loadingAssets: loadingAssets ?? this.loadingAssets,
-      tradableAssets: tradableAssets ?? this.tradableAssets,
+      catalog: catalog ?? this.catalog,
       pay: clearPay ? null : (pay ?? this.pay),
       receive: clearReceive ? null : (receive ?? this.receive),
       payAddress: clearPayAddress ? null : (payAddress ?? this.payAddress),
@@ -372,6 +405,7 @@ class UnifiedSwapState extends Equatable {
       selectedId: clearSelectedId ? null : (selectedId ?? this.selectedId),
       manuallySelected: manuallySelected ?? this.manuallySelected,
       failure: clearFailure ? null : (failure ?? this.failure),
+      failures: failures ?? (clearFailure ? const [] : this.failures),
       rateLimitedUntil: clearRateLimit
           ? null
           : (rateLimitedUntil ?? this.rateLimitedUntil),

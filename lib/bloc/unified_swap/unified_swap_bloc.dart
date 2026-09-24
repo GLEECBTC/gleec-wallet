@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
@@ -84,6 +85,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapVisibilityChanged>(_onVisibilityChanged);
     on<UnifiedSwapCapabilitiesChanged>(_onCapabilitiesChanged);
     on<UnifiedSwapBalancesRefreshed>(_onBalancesRefreshed);
+    on<UnifiedSwapCatalogRefreshRequested>(_onCatalogRefreshRequested);
+    on<UnifiedSwapAssetActivated>(_onAssetActivated);
     on<UnifiedSwapTimerFired>(_onTimerFired);
   }
 
@@ -110,6 +113,13 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
 
   var _visible = true;
   var _intentApplied = false;
+
+  /// Pair changes in flight. Each schedules its own evaluation when done.
+  var _settingPair = 0;
+
+  /// While the first catalog read is in flight, nothing says which sources
+  /// can answer or whether an asset still needs activating.
+  var _catalogLoading = false;
 
   /// When the provider last asked to slow down. For a while after, only the
   /// default route is priced — comparing routes doubles the request rate.
@@ -140,13 +150,55 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     UnifiedSwapStarted event,
     Emitter<UnifiedSwapState> emit,
   ) async {
-    final assets = await _repository.tradableAssets();
-    emit(state.copyWith(tradableAssets: assets, loadingAssets: false));
-    if (state.pay != null || _intentApplied) return;
+    _catalogLoading = true;
+    final SwapCatalog catalog;
+    try {
+      catalog = await _repository.catalog();
+    } finally {
+      _catalogLoading = false;
+    }
+    emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
+    if (state.pay != null || _intentApplied) {
+      // A pair set while the catalog loaded could not be priced then; one
+      // still being set prices itself when it finishes.
+      if (state.hasPair && _settingPair == 0) {
+        _scheduleEvaluation(immediate: true);
+      }
+      return;
+    }
 
-    final pair = await _defaultPair(assets);
+    final pair = await _defaultPair({
+      for (final source in catalog.sources) ...source.quotable,
+    });
     if (pair == null || state.pay != null || _intentApplied) return;
     await _setPair(emit, pay: pair.pay, receive: pair.receive);
+  }
+
+  /// Re-reads the catalog, e.g. once an asset has been activated.
+  Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
+    final catalog = await _repository.catalog();
+    emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
+  }
+
+  Future<void> _onCatalogRefreshRequested(
+    UnifiedSwapCatalogRefreshRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    await _refreshCatalog(emit);
+    _scheduleEvaluation(immediate: true);
+  }
+
+  Future<void> _onAssetActivated(
+    UnifiedSwapAssetActivated event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    _invalidate();
+    // Activation changes what the aggregator lists, so the catalog is read
+    // again before anything is priced.
+    await _refreshCatalog(emit);
+    await _loadBalances(emit);
+    await _loadAddresses(emit);
+    _scheduleEvaluation(immediate: true);
   }
 
   Future<void> _onIntentApplied(
@@ -173,6 +225,20 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     AssetId? receive,
     String? amount,
   }) async {
+    _settingPair++;
+    try {
+      await _applyPair(emit, pay: pay, receive: receive, amount: amount);
+    } finally {
+      _settingPair--;
+    }
+  }
+
+  Future<void> _applyPair(
+    Emitter<UnifiedSwapState> emit, {
+    AssetId? pay,
+    AssetId? receive,
+    String? amount,
+  }) async {
     _invalidate();
     emit(
       _validated(
@@ -194,6 +260,11 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
         ),
       ),
     );
+    // An asset the catalog thinks inactive may have been activated since —
+    // by the picker a moment ago, or elsewhere in the app.
+    if (!state.loadingAssets && state.inactiveAsset != null) {
+      await _refreshCatalog(emit);
+    }
     await _loadBalances(emit);
     await _loadAddresses(emit);
     _scheduleEvaluation(immediate: true);

@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/app_config/app_config.dart' show excludedAssetList;
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
@@ -167,6 +168,26 @@ class SwapServices {
   /// Every asset the wallet knows.
   Iterable<AssetId> get knownAssets => _available.keys;
 
+  /// The assets a swap may offer: every known asset the app does not
+  /// exclude outright.
+  Set<AssetId> swappableAssets() => {
+    for (final id in _available.keys)
+      if (!excludedAssetList.contains(id.id)) id,
+  };
+
+  /// Whether the coin config marks [id] wallet-only, which KDF refuses to
+  /// trade on the orderbook.
+  bool isWalletOnly(AssetId id) => assetOf(id)?.isWalletOnly ?? false;
+
+  /// Whether [id] is a test-network asset.
+  bool isTestnet(AssetId id) {
+    try {
+      return assetOf(id)?.protocol.isTestnet ?? false;
+    } on Object {
+      return false;
+    }
+  }
+
   /// The token contract behind [id], for a token; null for a native coin.
   String? contractOf(AssetId id) {
     try {
@@ -258,14 +279,16 @@ class SwapServices {
         ),
         AtomicSwapQuoteSource(
           trading: _sdk.trading,
-          activatedAssets: activatedAssets,
           networks: networks,
           addressOf: addressOf,
           tradingAllowed: tradingAllowed,
           clockValid: clockValid,
+          isWalletOnly: isWalletOnly,
         ),
       ],
       pricing: pricing,
+      knownAssets: swappableAssets,
+      activatedAssets: activatedAssets,
     );
   }
 
@@ -290,8 +313,19 @@ class SwapServices {
     final known = _sdk.pubkeys.lastKnown(id);
     if (known != null && known.keys.isNotEmpty) return known;
     final asset = assetOf(id);
-    if (asset == null) return null;
+    if (asset == null || !await _isActivated(id)) return null;
     return _sdk.pubkeys.getPubkeys(asset);
+  }
+
+  /// Whether [id] is active. Every read of an address or balance goes
+  /// through this first: the SDK activates an asset to read either, and on
+  /// the swap form activation is the user's decision, never a side effect.
+  Future<bool> _isActivated(AssetId id) async {
+    try {
+      return (await activatedAssets()).contains(id);
+    } on Object {
+      return false;
+    }
   }
 
   /// The address swaps of [id] spend from and deliver to.
@@ -319,6 +353,7 @@ class SwapServices {
       // Fall back to the asset-wide balance.
     }
     try {
+      if (!await _isActivated(id)) return null;
       final balance = await _coinsRepo.balance(id);
       if (balance == null) return null;
       return Decimal.tryParse(balance.spendable.toString());

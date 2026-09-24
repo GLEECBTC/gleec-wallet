@@ -1404,7 +1404,7 @@ abstract class LocaleKeys {
   static const swapCtaReview = 'swapCtaReview';
   static const swapCtaRefresh = 'swapCtaRefresh';
   static const swapCtaChooseAnother = 'swapCtaChooseAnother';
-  static const swapCtaActivate = 'swapCtaActivate';
+  static const swapCtaActivateAsset = 'swapCtaActivateAsset';
   static const swapCtaSelectOption = 'swapCtaSelectOption';
   static const swapErrorMalformed = 'swapErrorMalformed';
   static const swapErrorZero = 'swapErrorZero';
@@ -1417,6 +1417,12 @@ abstract class LocaleKeys {
   static const swapErrorAboveMaximum = 'swapErrorAboveMaximum';
   static const swapErrorNoRoute = 'swapErrorNoRoute';
   static const swapErrorPairUnsupported = 'swapErrorPairUnsupported';
+  static const swapErrorPairDisjoint = 'swapErrorPairDisjoint';
+  static const swapErrorNotTradable = 'swapErrorNotTradable';
+  static const swapErrorNoFeeBalance = 'swapErrorNoFeeBalance';
+  static const swapErrorNoRouteOrderBook = 'swapErrorNoRouteOrderBook';
+  static const swapErrorNoRouteCrossNetwork = 'swapErrorNoRouteCrossNetwork';
+  static const swapErrorServiceToken = 'swapErrorServiceToken';
   static const swapErrorInactive = 'swapErrorInactive';
   static const swapErrorUnsupportedSigner = 'swapErrorUnsupportedSigner';
   static const swapErrorRateLimited = 'swapErrorRateLimited';
@@ -1436,6 +1442,12 @@ abstract class LocaleKeys {
   static const swapHelperMaxAtomic = 'swapHelperMaxAtomic';
   static const swapHelperStructural = 'swapHelperStructural';
   static const swapHelperNoRouteReasons = 'swapHelperNoRouteReasons';
+  static const swapHelperOrderBookOnly = 'swapHelperOrderBookOnly';
+  static const swapHelperRoutesNoNetwork = 'swapHelperRoutesNoNetwork';
+  static const swapHelperRoutesEvmOnly = 'swapHelperRoutesEvmOnly';
+  static const swapHelperRoutedUnavailable = 'swapHelperRoutedUnavailable';
+  static const swapHelperAtomicUnavailable = 'swapHelperAtomicUnavailable';
+  static const swapHelperRoutedPaused = 'swapHelperRoutedPaused';
   static const swapWarningHighImpact = 'swapWarningHighImpact';
   static const swapWarningPriceUnavailable = 'swapWarningPriceUnavailable';
   static const swapMinimumReceived = 'swapMinimumReceived';
@@ -1757,6 +1769,12 @@ abstract class LocaleKeys {
   static const swapPickerNoHoldingsTitle = 'swapPickerNoHoldingsTitle';
   static const swapPickerNoHoldingsBody = 'swapPickerNoHoldingsBody';
   static const swapPickerBlocked = 'swapPickerBlocked';
+  static const swapPickerUnreachableTitle = 'swapPickerUnreachableTitle';
+  static const swapPickerUnreachableOrderBookOnly =
+      'swapPickerUnreachableOrderBookOnly';
+  static const swapPickerUnreachableRoutesOnly =
+      'swapPickerUnreachableRoutesOnly';
+  static const swapPickerIncomplete = 'swapPickerIncomplete';
   static const swapOptionsExpired = 'swapOptionsExpired';
   static const swapReceiveAtLeastShort = 'swapReceiveAtLeastShort';
 }

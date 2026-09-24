@@ -61,7 +61,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     final chosen = await showSwapAssetPicker(
       context: context,
       side: side,
-      tradable: state.tradableAssets,
+      bloc: _bloc,
       selected: side == SwapPickerSide.pay ? state.pay : state.receive,
       other: side == SwapPickerSide.pay ? state.receive : state.pay,
       services: _services,
@@ -80,9 +80,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     try {
       await _services.activate(asset);
       if (!mounted) return;
-      _bloc
-        ..add(const UnifiedSwapBalancesRefreshed())
-        ..add(const UnifiedSwapEvaluationRequested());
+      _bloc.add(UnifiedSwapAssetActivated(asset));
     } on Object {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -213,21 +211,30 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     final pay = state.pay;
     final issue = state.issue;
     if (issue != null && issue != SwapFormIssue.amountMissing) {
-      final message = swapIssueMessage(
+      final copy = SwapIssueCopy.of(
         issue,
-        pay: pay,
-        balance: state.balance,
+        state,
+        networks: _services.networks(),
         feeNeeded: _feeNeeded(state),
         feeHeld: _feeHeld(state),
       );
-      if (message != null) {
-        return [SwapHelperLine(text: message, tone: SwapTone.danger)];
+      if (copy != null) {
+        return [
+          SwapHelperLine(
+            text: copy.message,
+            // Not yet active is a step to take, not a mistake.
+            tone: issue == SwapFormIssue.assetInactive
+                ? SwapTone.warning
+                : SwapTone.danger,
+          ),
+          if (copy.detail != null) SwapHelperLine(text: copy.detail!),
+        ];
       }
     }
 
     final failure = state.failure;
     if (state.evaluation == SwapEvaluationStatus.failed && failure != null) {
-      final copy = SwapFailureCopy.of(failure, pay);
+      final copy = _failureCopy(state, failure);
       final tone = failure.kind == SwapQuoteFailureKind.rateLimited
           ? SwapTone.warning
           : SwapTone.danger;
@@ -236,6 +243,8 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         if (copy.detail != null) SwapHelperLine(text: copy.detail!),
       ];
     }
+
+    final partial = _partialNote(state);
 
     final messages = <Widget>[];
     if (state.structuralNotice) {
@@ -258,6 +267,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         ),
       );
     }
+    if (partial != null) messages.add(SwapHelperLine(text: partial));
     if (messages.isNotEmpty) return messages;
 
     if (state.evaluation == SwapEvaluationStatus.checking) {
@@ -276,6 +286,31 @@ class _SwapEntryViewState extends State<SwapEntryView> {
       return [SwapHelperLine(text: LocaleKeys.swapHelperLoadingAssets.tr())];
     }
     return const [];
+  }
+
+  SwapFailureCopy _failureCopy(
+    UnifiedSwapState state,
+    SwapQuoteFailure failure,
+  ) => SwapFailureCopy.of(
+    failure,
+    state.pay,
+    all: state.failures,
+    support: state.pairSupport,
+    networks: _services.networks(),
+  );
+
+  /// A quiet word when options are showing but a source could not answer:
+  /// the best option may be the one missing.
+  String? _partialNote(UnifiedSwapState state) {
+    if (state.evaluation != SwapEvaluationStatus.ready) return null;
+    final missing = state.failures.where((f) => f.isTransient).firstOrNull;
+    if (missing == null) return null;
+    if (missing.source == SwapLiquiditySource.atomic) {
+      return LocaleKeys.swapHelperAtomicUnavailable.tr();
+    }
+    return missing.kind == SwapQuoteFailureKind.rateLimited
+        ? LocaleKeys.swapHelperRoutedPaused.tr()
+        : LocaleKeys.swapHelperRoutedUnavailable.tr();
   }
 
   String _maxHint(SwapMaxAmount max, AssetId pay) {
@@ -360,6 +395,22 @@ class _SwapEntryViewState extends State<SwapEntryView> {
       );
     }
     final issue = state.issue;
+    if (issue == SwapFormIssue.assetInactive) {
+      final asset = state.inactiveAsset!;
+      return (
+        LocaleKeys.swapCtaActivateAsset.tr(args: [SwapFormat.ticker(asset)]),
+        _activating ? null : () => _activate(asset),
+        _activating,
+      );
+    }
+    if (issue == SwapFormIssue.pairUnsupported ||
+        issue == SwapFormIssue.sameAsset) {
+      return (
+        LocaleKeys.swapCtaChooseAnother.tr(),
+        () => _pick(SwapPickerSide.receive),
+        false,
+      );
+    }
     if (issue == SwapFormIssue.amountMissing) {
       return (LocaleKeys.swapCtaEnterAmount.tr(), null, false);
     }
@@ -383,7 +434,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             false,
           );
         }
-        final copy = SwapFailureCopy.of(failure, state.pay);
+        final copy = _failureCopy(state, failure);
         return switch (copy.action) {
           SwapEntryAction.retry => (
             LocaleKeys.tryAgain.tr(),
@@ -391,7 +442,9 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             false,
           ),
           SwapEntryAction.activate => (
-            LocaleKeys.swapCtaActivate.tr(),
+            LocaleKeys.swapCtaActivateAsset.tr(
+              args: [SwapFormat.ticker(failure.asset ?? state.pay!)],
+            ),
             _activating ? null : () => _activate(failure.asset ?? state.pay!),
             _activating,
           ),

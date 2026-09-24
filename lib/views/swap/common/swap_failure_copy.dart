@@ -3,6 +3,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_networks.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 
@@ -18,7 +21,18 @@ class SwapFailureCopy {
   final String? detail;
   final SwapEntryAction action;
 
-  static SwapFailureCopy of(SwapQuoteFailure failure, AssetId? pay) {
+  /// The copy for [failure], the evaluation's primary failure.
+  ///
+  /// [all] is every source's failure, so a firm answer from one source can
+  /// say the other could not answer; [support] explains why only one source
+  /// was asked; [networks] names networks.
+  static SwapFailureCopy of(
+    SwapQuoteFailure failure,
+    AssetId? pay, {
+    List<SwapQuoteFailure> all = const [],
+    SwapPairSupport? support,
+    SwapNetworks? networks,
+  }) {
     String ticker(AssetId? asset) =>
         asset == null ? '' : SwapFormat.ticker(asset);
     final bound = failure.minimum ?? failure.maximum;
@@ -54,20 +68,13 @@ class SwapFailureCopy {
         ),
         action: SwapEntryAction.none,
       ),
-      SwapQuoteFailureKind.noRoute => SwapFailureCopy(
-        message: LocaleKeys.swapErrorNoRoute.tr(),
-        detail: failure.reasons.isEmpty
-            ? null
-            : LocaleKeys.swapHelperNoRouteReasons.tr(
-                args: [failure.reasons.join(' · ')],
-              ),
-      ),
+      SwapQuoteFailureKind.noRoute => _noRoute(failure, all, support),
       SwapQuoteFailureKind.rateLimited => SwapFailureCopy(
         message: LocaleKeys.swapErrorRateLimited.tr(),
         action: SwapEntryAction.wait,
       ),
       SwapQuoteFailureKind.serviceError => SwapFailureCopy(
-        message: LocaleKeys.swapErrorService.tr(),
+        message: _serviceMessage(failure, pay, networks),
       ),
       SwapQuoteFailureKind.timeout => SwapFailureCopy(
         message: LocaleKeys.swapErrorTimeout.tr(),
@@ -103,6 +110,61 @@ class SwapFailureCopy {
       ),
     };
   }
+
+  /// "Nothing fits" — unless the other source could not look at all, which
+  /// makes the answer temporary and worth saying so.
+  static SwapFailureCopy _noRoute(
+    SwapQuoteFailure failure,
+    List<SwapQuoteFailure> all,
+    SwapPairSupport? support,
+  ) {
+    final unanswered = all.any(
+      (other) => other.source != failure.source && other.isTransient,
+    );
+    if (unanswered) {
+      return SwapFailureCopy(
+        message: failure.source == SwapLiquiditySource.atomic
+            ? LocaleKeys.swapErrorNoRouteOrderBook.tr()
+            : LocaleKeys.swapErrorNoRouteCrossNetwork.tr(),
+      );
+    }
+    final String? detail;
+    if (failure.reasons.isNotEmpty) {
+      detail = LocaleKeys.swapHelperNoRouteReasons.tr(
+        args: [failure.reasons.join(' · ')],
+      );
+    } else if (support?.routesUnavailableFor case final AssetId asset) {
+      detail = LocaleKeys.swapHelperOrderBookOnly.tr(
+        args: [SwapFormat.ticker(asset)],
+      );
+    } else {
+      detail = null;
+    }
+    return SwapFailureCopy(
+      message: LocaleKeys.swapErrorNoRoute.tr(),
+      detail: detail,
+    );
+  }
+
+  /// A token's cross-network quote fails as a service error when the node
+  /// cannot estimate its approval, which is what an address short of the
+  /// network's own coin produces. That cause is only likely, never known,
+  /// so the copy suggests the check rather than asserting it.
+  static String _serviceMessage(
+    SwapQuoteFailure failure,
+    AssetId? pay,
+    SwapNetworks? networks,
+  ) {
+    final parent = pay?.parentId;
+    if (failure.source == SwapLiquiditySource.routed &&
+        parent != null &&
+        networks != null) {
+      return LocaleKeys.swapErrorServiceToken.tr(
+        args: [SwapFormat.ticker(parent), networks.networkOf(parent)],
+      );
+    }
+    return LocaleKeys.swapErrorService.tr();
+  }
 }
 
 /// The entry form's primary action when pricing failed.
@@ -123,36 +185,119 @@ enum SwapEntryAction {
   none,
 }
 
-/// The message for a form issue, or null for "not finished yet".
-String? swapIssueMessage(
-  SwapFormIssue issue, {
-  required AssetId? pay,
-  required Decimal? balance,
-  String? feeNeeded,
-  String? feeHeld,
-}) {
-  final ticker = pay == null ? '' : SwapFormat.ticker(pay);
-  return switch (issue) {
-    SwapFormIssue.amountMissing => null,
-    SwapFormIssue.amountMalformed => LocaleKeys.swapErrorMalformed.tr(),
-    SwapFormIssue.amountZero => LocaleKeys.swapErrorZero.tr(),
-    SwapFormIssue.tooManyDecimals => LocaleKeys.swapErrorTooManyDecimals.tr(
-      args: [ticker, '${pay?.chainId.decimals ?? 8}'],
-    ),
-    SwapFormIssue.insufficient => LocaleKeys.swapErrorInsufficient.tr(
-      args: [
-        balance == null
-            ? ticker
-            : SwapFormat.tokens(balance, ticker, rounding: SwapRounding.down),
-      ],
-    ),
-    SwapFormIssue.insufficientForFees =>
-      LocaleKeys.swapErrorInsufficientForFees.tr(
-        args: [feeNeeded ?? '', feeHeld ?? ''],
+/// The entry form's message for a form issue.
+class SwapIssueCopy {
+  const SwapIssueCopy({
+    required this.message,
+    this.detail,
+    this.action = SwapEntryAction.none,
+  });
+
+  final String message;
+  final String? detail;
+  final SwapEntryAction action;
+
+  /// The copy for [issue] in [state], or null for "not finished yet".
+  static SwapIssueCopy? of(
+    SwapFormIssue issue,
+    UnifiedSwapState state, {
+    required SwapNetworks networks,
+    String? feeNeeded,
+    String? feeHeld,
+  }) {
+    final pay = state.pay;
+    final ticker = pay == null ? '' : SwapFormat.ticker(pay);
+    return switch (issue) {
+      SwapFormIssue.amountMissing => null,
+      SwapFormIssue.pairUnsupported => _pairUnsupported(
+        state.pairSupport,
+        networks,
       ),
-    SwapFormIssue.sameAsset => LocaleKeys.swapErrorSameAsset.tr(),
-    SwapFormIssue.fiatUnavailable => LocaleKeys.swapErrorFiatUnavailable.tr(
-      args: [ticker, ticker],
-    ),
-  };
+      SwapFormIssue.assetInactive => SwapIssueCopy(
+        message: LocaleKeys.swapErrorInactive.tr(
+          args: [SwapFormat.ticker(state.inactiveAsset ?? pay!)],
+        ),
+        action: SwapEntryAction.activate,
+      ),
+      SwapFormIssue.noFeeBalance => SwapIssueCopy(
+        message: LocaleKeys.swapErrorNoFeeBalance.tr(
+          args: [
+            SwapFormat.ticker(pay!.parentId!),
+            networks.networkOf(pay.parentId!),
+          ],
+        ),
+      ),
+      SwapFormIssue.amountMalformed => SwapIssueCopy(
+        message: LocaleKeys.swapErrorMalformed.tr(),
+      ),
+      SwapFormIssue.amountZero => SwapIssueCopy(
+        message: LocaleKeys.swapErrorZero.tr(),
+      ),
+      SwapFormIssue.tooManyDecimals => SwapIssueCopy(
+        message: LocaleKeys.swapErrorTooManyDecimals.tr(
+          args: [ticker, '${pay?.chainId.decimals ?? 8}'],
+        ),
+      ),
+      SwapFormIssue.insufficient => SwapIssueCopy(
+        message: LocaleKeys.swapErrorInsufficient.tr(
+          args: [
+            if (state.balance case final Decimal balance)
+              SwapFormat.tokens(balance, ticker, rounding: SwapRounding.down)
+            else
+              ticker,
+          ],
+        ),
+      ),
+      SwapFormIssue.insufficientForFees => SwapIssueCopy(
+        message: LocaleKeys.swapErrorInsufficientForFees.tr(
+          args: [feeNeeded ?? '', feeHeld ?? ''],
+        ),
+      ),
+      SwapFormIssue.sameAsset => SwapIssueCopy(
+        message: LocaleKeys.swapErrorSameAsset.tr(),
+        action: SwapEntryAction.chooseAnother,
+      ),
+      SwapFormIssue.fiatUnavailable => SwapIssueCopy(
+        message: LocaleKeys.swapErrorFiatUnavailable.tr(args: [ticker, ticker]),
+      ),
+    };
+  }
+
+  /// Why no source can trade the pair, and which network the order-book-only
+  /// side is on, so the user knows which asset to change.
+  static SwapIssueCopy _pairUnsupported(
+    SwapPairSupport? support,
+    SwapNetworks networks,
+  ) {
+    final limiting = support?.limitingAsset;
+    final routesOnly = support?.routesOnlyAsset;
+    if (limiting == null) {
+      return SwapIssueCopy(
+        message: LocaleKeys.swapErrorPairUnsupported.tr(),
+        action: SwapEntryAction.chooseAnother,
+      );
+    }
+    if (support?.gap == SwapPairGap.notTradable || routesOnly == null) {
+      return SwapIssueCopy(
+        message: LocaleKeys.swapErrorNotTradable.tr(
+          args: [SwapFormat.ticker(limiting)],
+        ),
+        action: SwapEntryAction.chooseAnother,
+      );
+    }
+    return SwapIssueCopy(
+      message: LocaleKeys.swapErrorPairDisjoint.tr(
+        args: [SwapFormat.ticker(routesOnly), SwapFormat.ticker(limiting)],
+      ),
+      detail: routesReachDetail(limiting, networks),
+      action: SwapEntryAction.chooseAnother,
+    );
+  }
 }
+
+/// Why cross-network routes cannot trade [asset]: its network is not
+/// reached yet, or it is not on an EVM network at all.
+String routesReachDetail(AssetId asset, SwapNetworks networks) =>
+    SwapNetworks.evmChainIdOf(asset) != null
+    ? LocaleKeys.swapHelperRoutesNoNetwork.tr(args: [networks.networkOf(asset)])
+    : LocaleKeys.swapHelperRoutesEvmOnly.tr();

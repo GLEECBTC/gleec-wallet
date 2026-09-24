@@ -4,6 +4,8 @@ import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/routed_swap_chains.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
@@ -20,28 +22,61 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     this.manager, {
     required SwapNetworks Function() networks,
     bool Function(AssetId from, AssetId to)? tradingAllowed,
+    bool Function(AssetId asset) isCandidate = isRoutedSwapCandidate,
     Duration timeout = const Duration(seconds: 20),
+    Duration catalogTimeout = const Duration(seconds: 10),
   }) : _networks = networks,
        _tradingAllowed = tradingAllowed,
-       _timeout = timeout;
+       _isCandidate = isCandidate,
+       _timeout = timeout,
+       _catalogTimeout = catalogTimeout;
 
   /// The SDK manager doing the real work.
   final RoutedSwapManager manager;
   final SwapNetworks Function() _networks;
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
+  final bool Function(AssetId asset) _isCandidate;
   final Duration _timeout;
+
+  /// Shorter than a quote's: the form waits on the catalog before pricing.
+  final Duration _catalogTimeout;
+
+  /// What KDF last listed, for when it cannot be read again.
+  Set<AssetId>? _lastEligible;
 
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
 
   @override
-  Future<Set<AssetId>> tradableAssets() async {
+  Future<SwapSourceAssets> assets({
+    required Set<AssetId> known,
+    required Set<AssetId> activated,
+  }) async {
+    final candidates = {
+      for (final asset in known)
+        if (_isCandidate(asset)) asset,
+    };
+    final onceActive = candidates.difference(activated);
     try {
-      return await manager.eligibleAssets();
+      final eligible = await manager.eligibleAssets().timeout(_catalogTimeout);
+      _lastEligible = eligible;
+      return SwapSourceAssets(
+        source: source,
+        quotable: eligible,
+        onceActive: onceActive,
+      );
     } on Object {
-      // A provider outage must not empty the picker — the atomic source can
-      // still trade, and a silently shorter list reads as "unsupported".
-      return const {};
+      // An outage must not empty the picker or make every pair read as
+      // unsupported: keep KDF's last answer, else the wallet's own guess.
+      final last = _lastEligible;
+      return SwapSourceAssets(
+        source: source,
+        quotable: last ?? candidates.intersection(activated),
+        onceActive: onceActive,
+        status: last == null
+            ? SwapCatalogStatus.unavailable
+            : SwapCatalogStatus.stale,
+      );
     }
   }
 
@@ -189,11 +224,16 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
             : SwapQuoteFailureKind.unknown,
       ),
       RoutedSwapAmountOutOfBoundsException(
+        :final param,
         :final value,
         :final min,
         :final max,
       ) =>
-        _bounds(value, min, max, failure),
+        // KDF reports a slippage outside its cap the same way; only the
+        // amount's bounds tell the user to change the amount.
+        param == 'amount'
+            ? _bounds(value, min, max, failure)
+            : failure(SwapQuoteFailureKind.unknown),
       RoutedSwapMyAddressException() => failure(
         SwapQuoteFailureKind.unsupportedSigner,
       ),

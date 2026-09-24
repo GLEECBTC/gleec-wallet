@@ -12,6 +12,7 @@ class _PickerRow extends StatelessWidget {
     required this.active,
     required this.blocked,
     required this.activating,
+    this.unreachableWith,
     required this.activationFailed,
     required this.onTap,
   });
@@ -25,6 +26,9 @@ class _PickerRow extends StatelessWidget {
   final bool sameTicker;
   final bool active;
   final bool blocked;
+
+  /// The other side's asset, when it cannot be swapped for this one.
+  final AssetId? unreachableWith;
   final bool activating;
   final bool activationFailed;
   final VoidCallback? onTap;
@@ -59,7 +63,7 @@ class _PickerRow extends StatelessWidget {
           ),
         ],
       );
-    } else if (!active && !blocked) {
+    } else if (!active && !blocked && unreachableWith == null) {
       trailing = Text(
         LocaleKeys.swapPickerActivate.tr(),
         style: SwapText.strong(
@@ -106,12 +110,18 @@ class _PickerRow extends StatelessWidget {
         SwapBadge(label: LocaleKeys.swapPickerInactive.tr()),
     ];
 
+    final disabled = blocked || unreachableWith != null;
     return Semantics(
       button: true,
       selected: selected,
-      enabled: !blocked,
+      enabled: !disabled,
+      hint: unreachableWith == null
+          ? null
+          : LocaleKeys.swapPickerUnreachableTitle.tr(
+              args: [SwapFormat.ticker(unreachableWith!)],
+            ),
       child: Opacity(
-        opacity: blocked ? 0.55 : 1,
+        opacity: disabled ? 0.55 : 1,
         child: Material(
           color: selected ? palette.selected : palette.surface,
           shape: RoundedRectangleBorder(
@@ -122,7 +132,7 @@ class _PickerRow extends StatelessWidget {
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: blocked ? null : onTap,
+            onTap: disabled ? null : onTap,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 68),
               child: Padding(

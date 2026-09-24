@@ -89,6 +89,23 @@ void main() {
       expect(below.minimum, d('0.01'));
     });
 
+    test('a slippage outside the cap is not an amount bound', () {
+      // KDF reports it as AmountOutOfBounds with param "slippage"; telling
+      // the user to change the amount would send them the wrong way.
+      final failure = classify(
+        const RoutedSwapAmountOutOfBoundsException(
+          param: 'slippage',
+          value: '0.6',
+          min: '0',
+          max: '0.5',
+          message: 'slippage out of bounds',
+        ),
+      );
+      expect(failure.kind, SwapQuoteFailureKind.unknown);
+      expect(failure.minimum, isNull);
+      expect(failure.maximum, isNull);
+    });
+
     test('no route keeps its reasons and support id', () {
       final failure = classify(
         const RoutedSwapNoRouteException(
