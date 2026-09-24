@@ -28,6 +28,7 @@ import 'package:web_dex/bloc/coins_manager/coins_manager_bloc.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
+import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -129,7 +130,9 @@ class _MainLayoutState extends State<MainLayout> {
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
               appBar: null,
-              body: SafeArea(child: MainLayoutRouter()),
+              body: SafeArea(
+                child: SwapNoticeListener(child: MainLayoutRouter()),
+              ),
               bottomNavigationBar: (isMobile || isTablet)
                   ? MainMenuBarMobile()
                   : null,
