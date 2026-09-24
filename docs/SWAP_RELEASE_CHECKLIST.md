@@ -29,15 +29,15 @@ Do these in order. Each needs a go.
    - Regenerate it with Flutter 3.41.4, and check the diff is only those versions.
 5. **Wallet #3507:**
    - Check the `# Unreleased` changelog entry against what shipped.
-   - Take it out of draft and refresh both PR descriptions.
+   - It has been marked ready for review since 2026-09-24. Refresh both PR descriptions.
    - Merge only **after** the 0.9.7 release candidate (#3525) has merged. Otherwise the swap ships in 0.9.7.
 
 ## Gates
 
 | Gate | How | Last result |
 |---|---|---|
-| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 1,324 passed, 4 skipped (2026-09-24) |
-| SDK suites | Each package's `flutter test`: `komodo_defi_harness`, `komodo_defi_rpc_methods`, `komodo_defi_sdk` | Harness 220 (4 skipped), rpc 246; sdk to run with the repin |
+| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 1,380 passed, 4 skipped (2026-09-24) |
+| SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | Green on #389 at `179453cb` (2026-09-24). Locally: harness 220 (4 skipped), rpc 246. Run again after the repin |
 | KDF `routed_swap` tests | KDF team's CI on #29. The `Test` workflow runs only when dispatched by hand. | 36 `routed_swap` + 18 LI.FI client tests passed locally at `4872ef2` |
 | Live engine check, no funds | `routed_swap_live_capture_test.dart` holds the recorded responses | Native and WebAssembly agree; 9 of the day's 75 keyless quotes used |
 | Quote budget | `swap_quote_budget_test.dart` | Idle form 42 → 10 requests per 10 minutes, then none; typing 2 → 1; native Max 3 → 1; start 1 → 0 |
