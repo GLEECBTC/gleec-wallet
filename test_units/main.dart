@@ -136,6 +136,23 @@ import 'tests/swap/unified_swap_catalog_bloc_test.dart'
     as unified_swap_catalog_bloc_test;
 import 'tests/swap/unified_swap_repository_test.dart'
     as unified_swap_repository_test;
+import 'tests/swap/swap_src_analytics_test.dart' as swap_src_analytics_test;
+import 'tests/swap/swap_src_atomic_limits_test.dart'
+    as swap_src_atomic_limits_test;
+import 'tests/swap/swap_src_atomic_quote_test.dart'
+    as swap_src_atomic_quote_test;
+import 'tests/swap/swap_src_models_test.dart' as swap_src_models_test;
+import 'tests/swap/swap_src_repository_test.dart' as swap_src_repository_test;
+import 'tests/swap/swap_src_routed_max_test.dart' as swap_src_routed_max_test;
+import 'tests/swap/swap_src_routed_offer_test.dart'
+    as swap_src_routed_offer_test;
+import 'tests/swap/swap_src_routed_quote_test.dart'
+    as swap_src_routed_quote_test;
+import 'tests/swap/swap_src_services_assets_test.dart'
+    as swap_src_services_assets_test;
+import 'tests/swap/swap_src_services_session_test.dart'
+    as swap_src_services_session_test;
+import 'tests/swap/swap_src_storage_test.dart' as swap_src_storage_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -387,6 +404,17 @@ void main() {
   swap_execution_bloc_test.main();
   swap_copy_test.main();
   swap_sources_test.main();
+  swap_src_analytics_test.main();
+  swap_src_atomic_limits_test.main();
+  swap_src_atomic_quote_test.main();
+  swap_src_models_test.main();
+  swap_src_repository_test.main();
+  swap_src_routed_max_test.main();
+  swap_src_routed_offer_test.main();
+  swap_src_routed_quote_test.main();
+  swap_src_services_assets_test.main();
+  swap_src_services_session_test.main();
+  swap_src_storage_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
