@@ -16,6 +16,8 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **A pair nobody can swap says why, and what to do.** For example, an asset only reachable across networks paired with one that trades only on the order book. Each message names the network reason and offers **Choose another asset**.
 - **The picker offers every supported asset,** active or not. Choosing an inactive one activates it first, in the open. Nothing is activated just by opening the form. An inactive asset arriving from a coin page or a link shows **Activate {asset}**.
 - **Choosing what to receive shows what you can reach.** Assets your pay asset can't be swapped for are listed apart, under "Not available with {asset}", with the reason.
+- **Choosing what to pay with can hide assets without a balance.** A **Hide 0 balance assets** switch sits under **Recent**, **Popular** and **All**, and under the search while you type. It says how many assets it hid, offers **Show all assets** when it hides everything, and is remembered. **My assets** already lists only what you hold, and choosing what to receive has no switch.
+- **An asset you don't hold can be priced.** An amount above your balance is still priced, so you can see the rate and compare options before you buy the asset. The button reads **Not enough {asset}** and the review stays closed. Such a price is fetched once and not kept fresh; when it expires, **Refresh quote** fetches it again. An order-book price for more than you hold shows its costs as **Incomplete**, because the engine only works them out for an amount you can pay. A token on a network where you hold none of the network's coin is still not priced: the engine needs gas to estimate its approval.
 - **If part of the asset list can't load,** the picker says the list may be incomplete and offers **Try again**. It keeps the last list rather than dropping assets.
 - **Quotes are spent carefully** (see the limit above):
   - Each refresh prices the cheapest route only. The fastest is priced when you open **Compare options**, and kept fresh while you compare.
@@ -27,7 +29,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
 - **`/swap` works as an address,** as well as `/dex`, with the same link parameters.
 - **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them.
-- **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off.
+- **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off. In the asset picker, the search, groups and switch scroll with the list, and a row whose badges and balance don't fit side by side puts the balance under the name.
 
 Unchanged from the last brief:
 - the atomic "receive at least" figure is what the order enforces;
@@ -55,7 +57,7 @@ Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum
 For each item, note what the screen said before you confirmed and what actually happened. The most valuable report is *"it showed me X and I got Y"*.
 
 ### Entry
-1. **Invalid amounts:** enter an empty amount, `0`, `1..2`, more decimals than the asset allows, more than your balance, and your exact balance. Each should get its own message, and **Review swap** should stay disabled.
+1. **Invalid amounts:** enter an empty amount, `0`, `1..2`, more decimals than the asset allows, more than your balance, and your exact balance. Each should get its own message, and **Review swap** should stay disabled. More than your balance is still priced, and the button reads **Not enough {asset}**.
 2. **Max:** selling ETH (or another network's own coin) should leave a fee reserve and say so. Selling a token should use the whole balance.
 3. **A token with none of its network's coin:** "You need some … to pay the network fees", and nothing priced. With some but too little, you should see "You need about … for network fees".
 4. **Switch pay and receive.** The amount should clear, because it was in the other asset's units.
@@ -67,27 +69,29 @@ For each item, note what the screen said before you confirmed and what actually 
 8. **GLEEC as what you pay:**
    - Open the receive picker: order-book assets appear normally; cross-network-only tokens appear under "Not available with GLEEC", with the reason.
    - With no offer on the order book, the form should say no swap is available, not that it couldn't check.
+9. **Hide 0 balance assets:** choose what to pay with, open **All** and turn the switch on. Only assets with a balance should remain, with "{n} hidden" under the switch. Search for an asset you don't hold: the picker should say it is hidden and offer **Show all assets**. Close and reopen the picker: the switch should keep its setting.
+10. **A price for an asset you don't hold:** pay with a coin you hold none of and enter a small amount. ETH on Base is priced by cross-network routes, and BTC by the order book when an order can fill the amount. The form should show a price and options, say how much is spendable, and the button should read **Not enough ETH** (or **BTC**). After a minute the price should expire and offer **Refresh quote**, without refreshing by itself.
 
 ### Options and review
-9. **Compare options:** a cross-network price shows **Compare options**. Opening it prices the fastest route ("Checking for a faster route…"). **Best net return** appears only when at least two options can be compared.
-10. **Slippage:** in the comparison, change it to 1% and 2%, then set a custom value. Every price should update. Above 1% there should be a warning. The review's **Costs & protection** should show the new value.
-11. **Leave the form alone for six minutes.** Refreshing should stop, the quote expire, and **Refresh quote** appear. Switching to another app or tab should stop refreshing at once.
-12. **Selling ERC-20 tokens:** the review should ask for an exact amount, never unlimited. A token that needs its permission reset first should say "Continue with reset".
-13. **Leave the review while "Checking…"**. Nothing should start.
+11. **Compare options:** a cross-network price shows **Compare options**. Opening it prices the fastest route ("Checking for a faster route…"). **Best net return** appears only when at least two options can be compared.
+12. **Slippage:** in the comparison, change it to 1% and 2%, then set a custom value. Every price should update. Above 1% there should be a warning. The review's **Costs & protection** should show the new value.
+13. **Leave the form alone for six minutes.** Refreshing should stop, the quote expire, and **Refresh quote** appear. Switching to another app or tab should stop refreshing at once.
+14. **Selling ERC-20 tokens:** the review should ask for an exact amount, never unlimited. A token that needs its permission reset first should say "Continue with reset".
+15. **Leave the review while "Checking…"**. Nothing should start.
 
 ### Execution
-14. **Same-chain routed swap:** the timeline, the hero text on each step, and the result.
-15. **Cross-chain routed swap:** the bridge step; leave and come back.
-16. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
-17. **Atomic swap:** the matching step, and the result. An amount larger than any single order should say no swap is available instead of hanging.
+16. **Same-chain routed swap:** the timeline, the hero text on each step, and the result.
+17. **Cross-chain routed swap:** the bridge step; leave and come back.
+18. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
+19. **Atomic swap:** the matching step, and the result. An amount larger than any single order should say no swap is available instead of hanging.
 
 ### Activity and recovery
-18. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
-19. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses. On web, a provider error has no provider reference; the engine can't read it there.
+20. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
+21. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses. On web, a provider error has no provider reference; the engine can't read it there.
 
 ### Accessibility
-20. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
-21. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
+22. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
+23. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
 
 ## How to report
 

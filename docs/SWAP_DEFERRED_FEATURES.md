@@ -55,6 +55,7 @@ KDF changes are out of scope for this release, so the wallet compensates for the
 | `init` reserves the route's gas limit at KDF's maximum fee (`check_balances`). The quote reports the provider's estimate. | A Max built on the quoted gas could fail at start. | Max keeps back three times the quoted gas. |
 | Routed status is polled every 5 seconds per swap with no backoff (`routed_swap/swap_task.rs`, `resume.rs`). | About 12 provider calls a minute per bridging swap. Harmless without a key, because the per-address limit for status calls is 100 a minute. It matters once a shared-key proxy is in place. | Nothing yet; recorded for the proxy work. |
 | On web, a provider error carries no `provider_request_id`. The provider's `x-lifi-requestid` header is not exposed to browsers (CORS). | Support diagnostics on web lack the provider's correlation id. | Nothing; the evidence still carries the swap's uuid and hashes. |
+| `trade_preimage` refuses an amount above the balance with `NotSufficientBalance`, and it is the only source of an order-book swap's fees. | Nobody could see an order-book price for an asset they don't hold. | Above the balance, the order's price is shown without the preimage. Its costs read as incomplete and it is never ranked, and review stays closed until the amount fits the balance. |
 
 ## Phase 2 change points
 
