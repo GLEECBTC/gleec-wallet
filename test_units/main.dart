@@ -244,6 +244,42 @@ import 'tests/swap/swap_surface_ui_scope_test.dart'
     as swap_surface_ui_scope_test;
 import 'tests/swap/swap_surface_ui_shell_test.dart'
     as swap_surface_ui_shell_test;
+import 'tests/swap/swap_common_ui_actions_test.dart'
+    as swap_common_ui_actions_test;
+import 'tests/swap/swap_common_ui_buttons_test.dart'
+    as swap_common_ui_buttons_test;
+import 'tests/swap/swap_common_ui_card_pair_test.dart'
+    as swap_common_ui_card_pair_test;
+import 'tests/swap/swap_common_ui_content_test.dart'
+    as swap_common_ui_content_test;
+import 'tests/swap/swap_common_ui_details_test.dart'
+    as swap_common_ui_details_test;
+import 'tests/swap/swap_common_ui_failure_copy_test.dart'
+    as swap_common_ui_failure_copy_test;
+import 'tests/swap/swap_common_ui_fix_copy_test.dart'
+    as swap_common_ui_fix_copy_test;
+import 'tests/swap/swap_common_ui_fix_widgets_test.dart'
+    as swap_common_ui_fix_widgets_test;
+import 'tests/swap/swap_common_ui_format_test.dart'
+    as swap_common_ui_format_test;
+import 'tests/swap/swap_common_ui_hero_test.dart' as swap_common_ui_hero_test;
+import 'tests/swap/swap_common_ui_issue_copy_test.dart'
+    as swap_common_ui_issue_copy_test;
+import 'tests/swap/swap_common_ui_layout_test.dart'
+    as swap_common_ui_layout_test;
+import 'tests/swap/swap_common_ui_outcome_test.dart'
+    as swap_common_ui_outcome_test;
+import 'tests/swap/swap_common_ui_palette_test.dart'
+    as swap_common_ui_palette_test;
+import 'tests/swap/swap_common_ui_recovery_test.dart'
+    as swap_common_ui_recovery_test;
+import 'tests/swap/swap_common_ui_sheet_scaffold_test.dart'
+    as swap_common_ui_sheet_scaffold_test;
+import 'tests/swap/swap_common_ui_sheet_test.dart' as swap_common_ui_sheet_test;
+import 'tests/swap/swap_common_ui_status_test.dart'
+    as swap_common_ui_status_test;
+import 'tests/swap/swap_common_ui_timeline_test.dart'
+    as swap_common_ui_timeline_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -565,6 +601,25 @@ void main() {
   swap_surface_ui_running_test.main();
   swap_surface_ui_scope_test.main();
   swap_surface_ui_shell_test.main();
+  swap_common_ui_actions_test.main();
+  swap_common_ui_buttons_test.main();
+  swap_common_ui_card_pair_test.main();
+  swap_common_ui_content_test.main();
+  swap_common_ui_details_test.main();
+  swap_common_ui_failure_copy_test.main();
+  swap_common_ui_fix_copy_test.main();
+  swap_common_ui_fix_widgets_test.main();
+  swap_common_ui_format_test.main();
+  swap_common_ui_hero_test.main();
+  swap_common_ui_issue_copy_test.main();
+  swap_common_ui_layout_test.main();
+  swap_common_ui_outcome_test.main();
+  swap_common_ui_palette_test.main();
+  swap_common_ui_recovery_test.main();
+  swap_common_ui_sheet_scaffold_test.main();
+  swap_common_ui_sheet_test.main();
+  swap_common_ui_status_test.main();
+  swap_common_ui_timeline_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
