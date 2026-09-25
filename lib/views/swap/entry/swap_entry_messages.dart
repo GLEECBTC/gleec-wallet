@@ -147,7 +147,12 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     if (parent == null || quote == null) return null;
     var total = Decimal.zero;
     for (final fee in quote.fees) {
-      if (fee.asset == parent && !fee.deductedFromReceive) total += fee.amount;
+      final network =
+          fee.kind == SwapFeeKind.network ||
+          fee.kind == SwapFeeKind.approvalNetwork;
+      if (network && fee.asset == parent && !fee.deductedFromReceive) {
+        total += fee.amount;
+      }
     }
     return SwapFormat.tokens(
       total,

@@ -81,16 +81,22 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
           );
   }
 
-  bool get _nothingSent => snapshot.fundsMovement == SwapFundsMovement.none;
+  bool get _nothingSent => _movement == SwapFundsMovement.none;
+
+  String _unlessMoved(String safe) => switch (_movement) {
+    SwapFundsMovement.none => safe,
+    SwapFundsMovement.feesOnly => LocaleKeys.swapFailFeesOnlyBody.tr(
+      args: [fromTicker],
+    ),
+    SwapFundsMovement.uncertain ||
+    SwapFundsMovement.sent => LocaleKeys.swapFailUncertainBody.tr(),
+  };
 
   SwapHeroCopy _failureHero(SwapExecutionFailure? failure) {
     final reason = failure?.reason ?? SwapFailureReason.unknown;
     final uncertain =
         snapshot.fundsMovement == SwapFundsMovement.uncertain ||
         snapshot.fundsMovement == SwapFundsMovement.sent;
-
-    String bodyUnlessMoved(String safe) =>
-        _nothingSent ? safe : LocaleKeys.swapFailUncertainBody.tr();
 
     return switch (reason) {
       SwapFailureReason.priceMoved => SwapHeroCopy(
@@ -125,7 +131,7 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
       ),
       SwapFailureReason.walletRejected => SwapHeroCopy(
         title: LocaleKeys.swapFailRejectedTitle.tr(),
-        body: bodyUnlessMoved(LocaleKeys.swapFailRejectedBody.tr()),
+        body: _unlessMoved(LocaleKeys.swapFailRejectedBody.tr()),
         icon: Icons.do_not_disturb_on_outlined,
         tone: SwapTone.warning,
       ),
@@ -137,19 +143,19 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
       ),
       SwapFailureReason.safetyCheck => SwapHeroCopy(
         title: LocaleKeys.swapFailSafetyTitle.tr(),
-        body: bodyUnlessMoved(LocaleKeys.swapFailSafetyBody.tr()),
+        body: _unlessMoved(LocaleKeys.swapFailSafetyBody.tr()),
         icon: Icons.shield_outlined,
         tone: SwapTone.warning,
       ),
       SwapFailureReason.quoteUnavailable => SwapHeroCopy(
         title: LocaleKeys.swapFailQuoteTitle.tr(),
-        body: bodyUnlessMoved(LocaleKeys.swapFailQuoteBody.tr()),
+        body: _unlessMoved(LocaleKeys.swapFailQuoteBody.tr()),
         icon: Icons.price_change_outlined,
         tone: SwapTone.warning,
       ),
       SwapFailureReason.restarted => SwapHeroCopy(
         title: LocaleKeys.swapFailRestartTitle.tr(),
-        body: bodyUnlessMoved(LocaleKeys.swapFailRestartBody.tr()),
+        body: _unlessMoved(LocaleKeys.swapFailRestartBody.tr()),
         icon: Icons.restart_alt_rounded,
         tone: SwapTone.warning,
       ),
@@ -163,7 +169,7 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
       ),
       SwapFailureReason.internal => SwapHeroCopy(
         title: LocaleKeys.swapFailInternalTitle.tr(),
-        body: bodyUnlessMoved(LocaleKeys.swapFailInternalBody.tr()),
+        body: _unlessMoved(LocaleKeys.swapFailInternalBody.tr()),
         icon: Icons.error_outline_rounded,
         tone: uncertain ? SwapTone.danger : SwapTone.warning,
       ),
@@ -186,7 +192,7 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
         failure?.shortfallTicker ??
         fromTicker;
     if (required == null || available == null) {
-      return LocaleKeys.swapFundsUnchanged.tr();
+      return _unlessMoved(LocaleKeys.swapFundsUnchanged.tr());
     }
     return LocaleKeys.swapFailBalanceBody.tr(
       args: [

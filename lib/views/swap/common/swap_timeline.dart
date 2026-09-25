@@ -176,26 +176,47 @@ abstract final class SwapTimeline {
   }) {
     final received = status == SwapStepStatus.done;
     return SwapTimelineStep(
-      title: stageTitle(stage, networks: networks, received: received),
+      title: stageTitle(
+        stage,
+        networks: networks,
+        received: received,
+        snapshot: snapshot,
+      ),
       detail: _detail(stage, networks: networks, snapshot: snapshot),
       status: status,
     );
   }
 
-  static String _network(SwapRouteStage stage, SwapNetworks networks) {
-    final network = stage.network;
-    if (network != null && network.isNotEmpty) return network;
-    final asset = stage.asset;
-    return asset == null ? '' : networks.networkOf(asset);
+  /// A stage without an asset names its side of [s] as the swap's copy does:
+  /// by the recorded ticker when the wallet does not know the asset.
+  static String _ticker(SwapRouteStage stage, SwapExecutionSnapshot? s) {
+    final receiving = stage.kind == SwapRouteStageKind.receive;
+    final asset = stage.asset ?? (receiving ? s?.to : s?.from);
+    if (asset != null) return SwapFormat.ticker(asset);
+    return (receiving ? s?.toTicker : s?.fromTicker) ?? '';
   }
 
-  /// A stage's title.
+  static String _network(
+    SwapRouteStage stage,
+    SwapNetworks networks,
+    SwapExecutionSnapshot? s,
+  ) {
+    final network = stage.network;
+    if (network != null && network.isNotEmpty) return network;
+    final sending = stage.kind == SwapRouteStageKind.send;
+    final asset = stage.asset ?? (sending ? s?.from : s?.to);
+    if (asset != null) return networks.networkOf(asset);
+    return (sending ? s?.fromTicker : s?.toTicker) ?? '';
+  }
+
+  /// A stage's title, naming from [snapshot] what the stage does not.
   static String stageTitle(
     SwapRouteStage stage, {
     required SwapNetworks networks,
     required bool received,
+    SwapExecutionSnapshot? snapshot,
   }) {
-    final ticker = stage.asset == null ? '' : SwapFormat.ticker(stage.asset!);
+    final ticker = _ticker(stage, snapshot);
     return switch (stage.kind) {
       SwapRouteStageKind.prepare => LocaleKeys.swapStagePrepare.tr(),
       SwapRouteStageKind.resetApproval => LocaleKeys.swapStageReset.tr(),
@@ -203,10 +224,10 @@ abstract final class SwapTimeline {
         args: [ticker],
       ),
       SwapRouteStageKind.send => LocaleKeys.swapStageSend.tr(
-        args: [_network(stage, networks)],
+        args: [_network(stage, networks, snapshot)],
       ),
       SwapRouteStageKind.bridge => LocaleKeys.swapStageBridge.tr(
-        args: [_network(stage, networks)],
+        args: [_network(stage, networks, snapshot)],
       ),
       SwapRouteStageKind.convert => LocaleKeys.swapStageConvert.tr(),
       SwapRouteStageKind.exchange => LocaleKeys.swapStageExchange.tr(),
@@ -222,8 +243,8 @@ abstract final class SwapTimeline {
     required SwapNetworks networks,
     required SwapExecutionSnapshot snapshot,
   }) {
-    final ticker = stage.asset == null ? '' : SwapFormat.ticker(stage.asset!);
-    final network = _network(stage, networks);
+    final ticker = _ticker(stage, snapshot);
+    final network = _network(stage, networks, snapshot);
     switch (stage.kind) {
       case SwapRouteStageKind.prepare:
         return LocaleKeys.swapStagePrepareDetail.tr();

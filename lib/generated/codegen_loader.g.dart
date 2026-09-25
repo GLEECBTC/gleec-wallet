@@ -1415,6 +1415,7 @@ abstract class LocaleKeys {
   static const swapErrorSameAsset = 'swapErrorSameAsset';
   static const swapErrorFiatUnavailable = 'swapErrorFiatUnavailable';
   static const swapErrorBelowMinimum = 'swapErrorBelowMinimum';
+  static const swapErrorTooSmall = 'swapErrorTooSmall';
   static const swapErrorAboveMaximum = 'swapErrorAboveMaximum';
   static const swapErrorNoRoute = 'swapErrorNoRoute';
   static const swapErrorPairUnsupported = 'swapErrorPairUnsupported';
@@ -1469,6 +1470,7 @@ abstract class LocaleKeys {
   static const swapDurationSeconds = 'swapDurationSeconds';
   static const swapDurationOneMinute = 'swapDurationOneMinute';
   static const swapDurationMinutes = 'swapDurationMinutes';
+  static const swapDurationOneHour = 'swapDurationOneHour';
   static const swapDurationHours = 'swapDurationHours';
   static const swapDurationVaries = 'swapDurationVaries';
   static const swapOptionsTitle = 'swapOptionsTitle';
@@ -1662,6 +1664,7 @@ abstract class LocaleKeys {
   static const swapFailInternalTitle = 'swapFailInternalTitle';
   static const swapFailInternalBody = 'swapFailInternalBody';
   static const swapFailUncertainBody = 'swapFailUncertainBody';
+  static const swapFailFeesOnlyBody = 'swapFailFeesOnlyBody';
   static const swapFailUnknownTitle = 'swapFailUnknownTitle';
   static const swapFailUnknownBody = 'swapFailUnknownBody';
   static const swapQuestionWhat = 'swapQuestionWhat';
@@ -1698,6 +1701,7 @@ abstract class LocaleKeys {
   static const swapEvidenceCopyAll = 'swapEvidenceCopyAll';
   static const swapEvidenceCopiedAll = 'swapEvidenceCopiedAll';
   static const swapEvidenceRoute = 'swapEvidenceRoute';
+  static const swapEvidenceStatus = 'swapEvidenceStatus';
   static const swapActivityFilterActive = 'swapActivityFilterActive';
   static const swapActivityFilterAttention = 'swapActivityFilterAttention';
   static const swapActivityFilterCompleted = 'swapActivityFilterCompleted';

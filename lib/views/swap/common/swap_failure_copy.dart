@@ -32,10 +32,6 @@ class SwapFailureCopy {
   }) {
     String ticker(AssetId? asset) =>
         asset == null ? '' : SwapFormat.ticker(asset);
-    final bound = failure.minimum ?? failure.maximum;
-    final boundText = bound == null
-        ? ''
-        : SwapFormat.tokens(bound, ticker(pay), rounding: SwapRounding.up);
     return switch (failure.kind) {
       SwapQuoteFailureKind.assetInactive => SwapFailureCopy(
         message: LocaleKeys.swapErrorInactive.tr(
@@ -48,7 +44,17 @@ class SwapFailureCopy {
         action: SwapEntryAction.chooseAnother,
       ),
       SwapQuoteFailureKind.belowMinimum => SwapFailureCopy(
-        message: LocaleKeys.swapErrorBelowMinimum.tr(args: [boundText]),
+        message: failure.minimum == null
+            ? LocaleKeys.swapErrorTooSmall.tr()
+            : LocaleKeys.swapErrorBelowMinimum.tr(
+                args: [
+                  SwapFormat.tokens(
+                    failure.minimum!,
+                    ticker(pay),
+                    rounding: SwapRounding.up,
+                  ),
+                ],
+              ),
         action: SwapEntryAction.none,
       ),
       SwapQuoteFailureKind.aboveMaximum => SwapFailureCopy(

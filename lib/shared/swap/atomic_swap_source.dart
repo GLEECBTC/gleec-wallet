@@ -142,9 +142,10 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       );
       final max = Decimal.tryParse(response.amount);
       if (max == null) return null;
-      final amount = max > balance ? balance : max;
+      final capped = max > balance ? balance : max;
+      final amount = capped < Decimal.zero ? Decimal.zero : capped;
       return SwapMaxAmount(
-        amount: amount < Decimal.zero ? Decimal.zero : amount,
+        amount: amount,
         reservedForFees: balance > amount ? balance - amount : Decimal.zero,
         feeAsset: from,
       );
@@ -316,6 +317,24 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
     Decimal volume,
     Decimal price,
   ) async {
+    AssetId? assetOf(String coin) => coin == base.id
+        ? base
+        : coin == rel.id
+        ? rel
+        : base.parentId?.id == coin
+        ? base.parentId
+        : rel.parentId?.id == coin
+        ? rel.parentId
+        : null;
+    SwapQuoteFailure insufficient(String coin, BigDecimal required) =>
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.atomic,
+          kind: SwapQuoteFailureKind.insufficientFunds,
+          asset: assetOf(coin),
+          minimum: Decimal.tryParse(required.value),
+          detail: coin,
+        );
+
     try {
       final preimage = await _trading.tradePreimage(
         base: base.id,
@@ -332,15 +351,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
           kind: kind,
           amount: amount,
           deductedFromReceive: raw.paidFromTradingVol,
-          asset: raw.coin == base.id
-              ? base
-              : raw.coin == rel.id
-              ? rel
-              : base.parentId?.id == raw.coin
-              ? base.parentId
-              : rel.parentId?.id == raw.coin
-              ? rel.parentId
-              : null,
+          asset: assetOf(raw.coin),
           symbol: raw.coin,
         );
       }
@@ -352,17 +363,17 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
         ?fee(preimage.relCoinFee, SwapFeeKind.network),
       ]);
     } on TradePreimageRpcErrorNotSufficientBalanceException catch (error) {
-      return _PreimageRejected(_insufficient(error.coin, error.required));
+      return _PreimageRejected(insufficient(error.coin, error.required));
     } on TradePreimageRpcErrorNotSufficientBaseCoinBalanceException catch (
       error
     ) {
-      return _PreimageRejected(_insufficient(error.coin, error.required));
+      return _PreimageRejected(insufficient(error.coin, error.required));
     } on TradePreimageRpcErrorVolumeTooLowException catch (error) {
       return _PreimageRejected(
         SwapQuoteFailure(
           source: SwapLiquiditySource.atomic,
           kind: SwapQuoteFailureKind.belowMinimum,
-          minimum: Decimal.tryParse(error.threshold.toString()),
+          minimum: Decimal.tryParse(error.threshold.value),
         ),
       );
     } on Object {
@@ -372,14 +383,6 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       return const _PreimageUnavailable();
     }
   }
-
-  SwapQuoteFailure _insufficient(String coin, Object required) =>
-      SwapQuoteFailure(
-        source: SwapLiquiditySource.atomic,
-        kind: SwapQuoteFailureKind.insufficientFunds,
-        minimum: Decimal.tryParse(required.toString()),
-        detail: coin,
-      );
 
   Future<String?> _address(AssetId asset) async {
     try {

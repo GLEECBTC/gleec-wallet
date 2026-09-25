@@ -115,6 +115,19 @@ class SwapExecutionCopy {
     );
   }
 
+  /// How the sold funds moved, counting a paid approval or reported gas as
+  /// fees spent even where the engine reports that nothing moved.
+  SwapFundsMovement get _movement {
+    final evidence = snapshot.evidence;
+    final feesPaid =
+        snapshot.approvalRemains ||
+        evidence.approvalTxHashes.isNotEmpty ||
+        evidence.gasSpent.isNotEmpty;
+    return snapshot.fundsMovement == SwapFundsMovement.none && feesPaid
+        ? SwapFundsMovement.feesOnly
+        : snapshot.fundsMovement;
+  }
+
   /// "0.42 ETH → 1,318.42 USDT", or the tickers when amounts are unknown.
   String get pairLine {
     final sell = snapshot.sellAmount;

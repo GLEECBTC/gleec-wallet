@@ -41,10 +41,11 @@ extension SwapRecoveryCopy on SwapExecutionCopy {
         );
       case SwapOutcomeKind.refunded:
         lines.add(LocaleKeys.swapFundsRefunded.tr(args: [fromNetwork]));
-      case SwapOutcomeKind.cancelled || SwapOutcomeKind.noMatch:
-        lines.add(LocaleKeys.swapFundsUnchanged.tr());
-      case SwapOutcomeKind.failed || null:
-        lines.add(switch (snapshot.fundsMovement) {
+      case SwapOutcomeKind.cancelled ||
+          SwapOutcomeKind.noMatch ||
+          SwapOutcomeKind.failed ||
+          null:
+        lines.add(switch (_movement) {
           SwapFundsMovement.none => LocaleKeys.swapFundsUnchanged.tr(),
           SwapFundsMovement.feesOnly => LocaleKeys.swapFundsFeesOnly.tr(
             args: [fromTicker],
@@ -159,7 +160,7 @@ extension SwapRecoveryCopy on SwapExecutionCopy {
     final buffer = StringBuffer()
       ..writeln('${LocaleKeys.swapEvidenceExecutionId.tr()}: ${snapshot.id}')
       ..writeln('${LocaleKeys.swapEvidenceRoute.tr()}: $pairLine')
-      ..writeln('${LocaleKeys.swapActivityInProgress.tr()}: $statusLine');
+      ..writeln('${LocaleKeys.swapEvidenceStatus.tr()}: $statusLine');
     final created = snapshot.createdAt;
     if (created != null) {
       buffer.writeln(

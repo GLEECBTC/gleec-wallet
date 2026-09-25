@@ -93,6 +93,7 @@ abstract final class SwapFormat {
     final label = hours < 10
         ? _trim(hours.toStringAsFixed(1))
         : '${hours.round()}';
+    if (label == '1') return LocaleKeys.swapDurationOneHour.tr();
     return LocaleKeys.swapDurationHours.tr(args: [label]);
   }
 

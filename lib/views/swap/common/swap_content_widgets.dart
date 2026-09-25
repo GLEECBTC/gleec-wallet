@@ -29,7 +29,8 @@ class SwapTokenIcon extends StatelessWidget {
       );
     }
     final palette = SwapPalette.of(context);
-    final label = (ticker ?? '?').trim();
+    final ticker = this.ticker?.trim().toUpperCase() ?? '';
+    final label = ticker.length > 3 ? ticker.substring(0, 3) : ticker;
     return ExcludeSemantics(
       child: Container(
         width: size,
@@ -40,7 +41,7 @@ class SwapTokenIcon extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         child: Text(
-          label.length > 3 ? label.substring(0, 3).toUpperCase() : label,
+          label.isEmpty ? '?' : label,
           style: SwapText.small(context).copyWith(
             color: palette.text,
             fontWeight: FontWeight.w800,
@@ -285,7 +286,7 @@ class SwapDetailRow extends StatelessWidget {
               children: [
                 Expanded(child: labelText),
                 const SizedBox(width: 18),
-                Flexible(
+                Expanded(
                   child: Text(
                     value,
                     style: valueStyle,
