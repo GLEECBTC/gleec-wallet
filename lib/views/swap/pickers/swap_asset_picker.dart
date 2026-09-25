@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +19,8 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
+part 'swap_asset_picker_balance.dart';
+part 'swap_asset_picker_list.dart';
 part 'swap_asset_picker_reach.dart';
 part 'swap_asset_picker_row.dart';
 
@@ -24,6 +28,10 @@ part 'swap_asset_picker_row.dart';
 enum SwapPickerSide { pay, receive }
 
 enum _PickerTab { mine, recent, popular, all }
+
+/// The height below which the picker's header scrolls with its list rather
+/// than staying pinned above it and leaving the list no room.
+const _pinnedHeaderMinHeight = 420.0;
 
 /// Tickers offered under "Popular", most traded first.
 const _popularTickers = [
@@ -126,6 +134,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
   Set<AssetId>? _activated;
   List<String> _recentTickers = const [];
   bool _failed = false;
+  bool _hideZero = false;
   AssetId? _activating;
   AssetId? _activationFailed;
 
@@ -144,12 +153,17 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
   Future<void> _load() async {
     setState(() => _failed = false);
     try {
+      final preferences = widget.services.preferences;
       final activated = await widget.services.activatedAssets();
-      final recentTickers = await widget.services.preferences.recentAssets();
+      final recentTickers = await preferences.recentAssets();
+      final hideZero =
+          widget.side == SwapPickerSide.pay &&
+          await preferences.hideZeroBalances();
       if (!mounted) return;
       setState(() {
         _activated = activated;
         _recentTickers = recentTickers;
+        _hideZero = hideZero;
         // Open on something useful: holdings when there are any.
         if (_mine(activated).isEmpty) {
           _tab = _recent().isNotEmpty ? _PickerTab.recent : _PickerTab.all;
@@ -184,10 +198,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
   List<AssetId> _mine(Set<AssetId> activated) {
     final held = [
       for (final id in _offered())
-        if (activated.contains(id) &&
-            (widget.services.lastKnownBalance(id) ?? Decimal.zero) >
-                Decimal.zero)
-          id,
+        if (_held(id, activated)) id,
     ];
     Decimal value(AssetId id) {
       final balance = widget.services.lastKnownBalance(id) ?? Decimal.zero;
@@ -280,37 +291,78 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     }
   }
 
+  void _setHideZero(bool hide) {
+    setState(() => _hideZero = hide);
+    unawaited(widget.services.preferences.rememberHideZeroBalances(hide));
+  }
+
+  void _clearSearch() => setState(_search.clear);
+
   @override
   Widget build(BuildContext context) {
+    final searching = _search.text.trim().isNotEmpty;
+    final listed = _activated == null ? null : _listed();
+    final header = [
+      _searchField(context),
+      const SizedBox(height: 14),
+      if (!searching)
+        SwapFilterBar<_PickerTab>(
+          values: _PickerTab.values,
+          selected: _tab,
+          semanticLabel: LocaleKeys.swapPickerTitle.tr(),
+          labelOf: (tab) => switch (tab) {
+            _PickerTab.mine => LocaleKeys.swapPickerTabMine.tr(),
+            _PickerTab.recent => LocaleKeys.swapPickerTabRecent.tr(),
+            _PickerTab.popular => LocaleKeys.swapPickerTabPopular.tr(),
+            _PickerTab.all => LocaleKeys.swapPickerTabAll.tr(),
+          },
+          onChanged: (tab) => setState(() => _tab = tab),
+        ),
+      if (_filterable) ...[
+        if (!searching) const SizedBox(height: 8),
+        _ZeroBalanceSwitch(
+          value: _hideZero,
+          hidden: listed?.hidden ?? 0,
+          onChanged: _setHideZero,
+        ),
+      ],
+      const SizedBox(height: 14),
+      if (widget.catalog.isIncomplete && !widget.loading)
+        _incompleteNotice(context),
+    ];
+    final content = _content(context, listed);
     return SwapSheetScaffold(
       title: LocaleKeys.swapPickerTitle.tr(),
       subtitle: widget.side == SwapPickerSide.pay
           ? LocaleKeys.swapPickerSubtitlePay.tr()
           : LocaleKeys.swapPickerSubtitleReceive.tr(),
       scrollable: false,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _searchField(context),
-          const SizedBox(height: 14),
-          if (_search.text.trim().isEmpty)
-            SwapFilterBar<_PickerTab>(
-              values: _PickerTab.values,
-              selected: _tab,
-              semanticLabel: LocaleKeys.swapPickerTitle.tr(),
-              labelOf: (tab) => switch (tab) {
-                _PickerTab.mine => LocaleKeys.swapPickerTabMine.tr(),
-                _PickerTab.recent => LocaleKeys.swapPickerTabRecent.tr(),
-                _PickerTab.popular => LocaleKeys.swapPickerTabPopular.tr(),
-                _PickerTab.all => LocaleKeys.swapPickerTabAll.tr(),
-              },
-              onChanged: (tab) => setState(() => _tab = tab),
-            ),
-          const SizedBox(height: 14),
-          if (widget.catalog.isIncomplete && !widget.loading)
-            _incompleteNotice(context),
-          Expanded(child: _list(context)),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final pinned =
+              MediaQuery.textScalerOf(context).scale(1) < 1.3 &&
+              constraints.maxHeight >= _pinnedHeaderMinHeight;
+          if (!pinned) {
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: header,
+                  ),
+                ),
+                content,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ...header,
+              Expanded(child: CustomScrollView(slivers: [content])),
+            ],
+          );
+        },
       ),
     );
   }
@@ -353,135 +405,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
           if (_search.text.isNotEmpty)
             SwapLinkButton(
               label: LocaleKeys.clear.tr(),
-              onPressed: () => setState(_search.clear),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _list(BuildContext context) {
-    if (_failed) {
-      return SingleChildScrollView(
-        child: SwapStatusHero(
-          icon: Icons.error_outline_rounded,
-          tone: SwapTone.danger,
-          title: LocaleKeys.swapPickerErrorTitle.tr(),
-          body: LocaleKeys.swapPickerErrorBody.tr(),
-          action: SwapButton(label: LocaleKeys.tryAgain.tr(), onPressed: _load),
-        ),
-      );
-    }
-    if (_activated == null ||
-        (widget.loading && widget.catalog.assets.isEmpty)) {
-      return Semantics(
-        label: LocaleKeys.swapPickerLoading.tr(),
-        child: ListView(
-          children: [
-            for (var i = 0; i < 5; i++) ...[
-              const SwapSkeleton(height: 68),
-              const SizedBox(height: 8),
-            ],
-          ],
-        ),
-      );
-    }
-
-    final rows = _rows();
-    final query = _search.text.trim();
-    if (rows.isEmpty) {
-      if (query.isNotEmpty) {
-        return SingleChildScrollView(
-          child: SwapStatusHero(
-            icon: Icons.search_off_rounded,
-            tone: SwapTone.neutral,
-            title: LocaleKeys.swapPickerNoResultsTitle.tr(args: [query]),
-            body: LocaleKeys.swapPickerNoResultsBody.tr(),
-            action: SwapButton(
-              label: LocaleKeys.swapPickerClearSearch.tr(),
-              variant: SwapButtonVariant.secondary,
-              onPressed: () => setState(_search.clear),
-            ),
-          ),
-        );
-      }
-      final (title, body) = switch (_tab) {
-        _PickerTab.mine => (
-          LocaleKeys.swapPickerNoHoldingsTitle.tr(),
-          LocaleKeys.swapPickerNoHoldingsBody.tr(),
-        ),
-        _PickerTab.recent => (
-          LocaleKeys.swapPickerNoRecentTitle.tr(),
-          LocaleKeys.swapPickerNoRecentBody.tr(),
-        ),
-        _ => (
-          LocaleKeys.swapPickerNoAssetsTitle.tr(),
-          LocaleKeys.swapPickerNoResultsBody.tr(),
-        ),
-      };
-      return SingleChildScrollView(
-        child: SwapStatusHero(
-          icon: Icons.inventory_2_outlined,
-          tone: SwapTone.neutral,
-          title: title,
-          body: body,
-          liveRegion: false,
-        ),
-      );
-    }
-
-    final selected = widget.selected;
-    final entries = _entries(rows);
-    return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 18),
-      itemCount: entries.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => switch (entries[index]) {
-        _IdentityEntry(:final asset) => _identity(context, asset),
-        _UnreachableHeader(:final anchor) => _unreachableHeader(
-          context,
-          anchor,
-        ),
-        _AssetEntry(asset: final id, :final unreachable) => _PickerRow(
-          asset: id,
-          network: widget.services.networks().networkOf(id),
-          contract: widget.services.contractOf(id),
-          balance: widget.services.lastKnownBalance(id),
-          usdPrice: widget.services.usdPrice(id),
-          selected: id == selected,
-          sameTicker:
-              widget.other != null &&
-              widget.other != id &&
-              SwapFormat.ticker(widget.other!) == SwapFormat.ticker(id),
-          active: _activated?.contains(id) ?? false,
-          blocked: widget.isBlocked(id),
-          unreachableWith: unreachable ? widget.other : null,
-          activating: _activating == id,
-          activationFailed: _activationFailed == id,
-          onTap: _activating == null && !unreachable ? () => _choose(id) : null,
-        ),
-      },
-    );
-  }
-
-  Widget _identity(BuildContext context, AssetId id) {
-    final contract = widget.services.contractOf(id);
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: SwapDetails(
-        title: LocaleKeys.swapPickerIdentity.tr(),
-        children: [
-          Text(
-            '${SwapFormat.ticker(id)} · '
-            '${widget.services.networks().networkOf(id)}',
-            style: SwapText.strong(context),
-          ),
-          const SizedBox(height: 6),
-          SwapCopyLine(value: id.id, label: LocaleKeys.swapPickerIdentity.tr()),
-          if (contract != null)
-            SwapCopyLine(
-              value: contract,
-              label: LocaleKeys.swapContractIdentity.tr(args: ['']).trim(),
+              onPressed: _clearSearch,
             ),
         ],
       ),

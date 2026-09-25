@@ -4,8 +4,9 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 
-/// Per-wallet memory for the swap form: the last pair used and the assets
-/// picked recently.
+/// Per-wallet memory for the swap form: the last pair used, the assets
+/// picked recently, and whether the pay picker hides assets without a
+/// balance.
 ///
 /// Opening on the pair someone last swapped removes a step, and a short
 /// recents list is how the asset picker answers "the one I used yesterday".
@@ -18,6 +19,7 @@ class SwapPreferences {
 
   static const _pairKey = 'swap_last_pair_v1';
   static const _recentKey = 'swap_recent_assets_v1';
+  static const _hideZeroKey = 'swap_pay_hide_zero_v1';
 
   /// How many recent assets are kept.
   static const maxRecent = 8;
@@ -81,5 +83,25 @@ class SwapPreferences {
         if (id != asset.id) id,
     ].take(maxRecent).toList();
     await _storage.write(key, jsonEncode(recent));
+  }
+
+  /// Whether the pay picker hides assets without a balance. Off until
+  /// someone turns it on.
+  Future<bool> hideZeroBalances() async {
+    final key = await _key(_hideZeroKey);
+    if (key == null) return false;
+    try {
+      final raw = await _storage.read(key);
+      return (raw is String ? jsonDecode(raw) : raw) == true;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Remembers whether the pay picker hides assets without a balance.
+  Future<void> rememberHideZeroBalances(bool hide) async {
+    final key = await _key(_hideZeroKey);
+    if (key == null) return;
+    await _storage.write(key, jsonEncode(hide));
   }
 }

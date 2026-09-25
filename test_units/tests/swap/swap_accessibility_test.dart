@@ -287,6 +287,35 @@ void main() {
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 
+      testWidgets('picker: paying, with every asset hidden', (tester) async {
+        services.balances = {for (final id in catalog.assets) id: Decimal.zero};
+        await services.preferences.rememberHideZeroBalances(true);
+        await pump(
+          tester,
+          layout,
+          SwapAssetPicker(
+            side: SwapPickerSide.pay,
+            catalog: catalog,
+            selected: null,
+            other: null,
+            services: services,
+            isBlocked: (_) => false,
+          ),
+        );
+        // At large text the header scrolls with the list, pushing this down.
+        await tester.scrollUntilVisible(
+          find.text('Show all assets'),
+          200,
+          scrollable: find
+              .descendant(
+                of: find.byType(CustomScrollView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
       testWidgets('comparison with the slippage setting', (tester) async {
         swap.emit(form());
         await pump(tester, layout, const SwapOptionsSheet());
@@ -315,6 +344,7 @@ class _Services implements SwapServices {
   final SwapExecutionRegistry registry;
 
   final Set<AssetId> _activated;
+  Map<AssetId, Decimal> balances = {};
 
   @override
   final Set<String> viewing = {};
@@ -341,7 +371,7 @@ class _Services implements SwapServices {
   Decimal? usdPrice(AssetId id) => id == eth ? d('3000') : null;
 
   @override
-  Decimal? lastKnownBalance(AssetId id) => null;
+  Decimal? lastKnownBalance(AssetId id) => balances[id];
 
   @override
   String? contractOf(AssetId id) => null;

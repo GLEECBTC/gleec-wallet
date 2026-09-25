@@ -35,7 +35,8 @@ class _EnglishAssetLoader extends AssetLoader {
 
 /// Covers what the picker offers: every asset some source can trade, the
 /// inactive ones activated only when chosen, and — for what to receive —
-/// the assets the pay asset cannot reach, set apart with the reason.
+/// the assets the pay asset cannot reach, set apart with the reason. When
+/// paying, assets without a balance can be hidden.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -228,6 +229,108 @@ void main() {
     expect(find.text(SwapFormat.ticker(testEth)), findsNothing);
     expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
   });
+
+  group('hide 0 balance assets', () {
+    const hideZero = 'Hide 0 balance assets';
+
+    SwapAssetPicker picker(SwapPickerSide side) => SwapAssetPicker(
+      side: side,
+      catalog: catalog(),
+      selected: null,
+      other: null,
+      services: services,
+      isBlocked: (_) => false,
+    );
+
+    Future<void> tapText(WidgetTester tester, String text) async {
+      await tester.tap(find.text(text));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('is offered when paying, beside every group but My assets', (
+      tester,
+    ) async {
+      services.balances = {eth: d('1.5')};
+      await open(tester, picker(SwapPickerSide.pay));
+
+      expect(find.text('My assets'), findsOneWidget);
+      expect(find.text(hideZero), findsNothing);
+      for (final tab in ['Recent', 'Popular', 'All']) {
+        await tapText(tester, tab);
+        expect(find.text(hideZero), findsOneWidget, reason: tab);
+      }
+    });
+
+    testWidgets('is not offered when choosing what to receive', (tester) async {
+      services.balances = {eth: d('1.5')};
+      await open(tester, picker(SwapPickerSide.receive));
+
+      await tapText(tester, 'All');
+      expect(find.text(hideZero), findsNothing);
+    });
+
+    testWidgets('keeps what the wallet holds, counts the rest, and sticks', (
+      tester,
+    ) async {
+      services.balances = {
+        eth: d('1.5'),
+        usdc: Decimal.zero,
+        btc: Decimal.zero,
+        gleecEvm: Decimal.zero,
+      };
+      await open(tester, picker(SwapPickerSide.pay));
+      await tapText(tester, 'All');
+      await tapText(tester, hideZero);
+
+      // Zero balances and an inactive asset are hidden.
+      expect(find.text(SwapFormat.ticker(usdc)), findsNothing);
+      expect(find.text(SwapFormat.ticker(testEth)), findsNothing);
+      expect(find.text('4 hidden'), findsOneWidget);
+      expect(find.text(SwapFormat.ticker(eth)), findsWidgets);
+      // PAXG's balance has not been read yet; it may hold funds.
+      expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await open(tester, picker(SwapPickerSide.pay));
+      await tapText(tester, 'All');
+      expect(
+        tester.widget<Switch>(find.byType(Switch)).value,
+        isTrue,
+        reason: 'the choice is remembered',
+      );
+    });
+
+    testWidgets('a list it empties offers every asset back', (tester) async {
+      services.balances = {for (final id in activated) id: Decimal.zero};
+      await services.preferences.rememberHideZeroBalances(true);
+      await open(tester, picker(SwapPickerSide.pay));
+
+      // Nothing is held, so the picker opens on All, with everything hidden.
+      expect(find.text('No assets with a balance here'), findsOneWidget);
+      await tapText(tester, 'Show all assets');
+
+      expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
+      expect(await services.preferences.hideZeroBalances(), isFalse);
+    });
+
+    testWidgets('search honours it, and says a match is hidden', (
+      tester,
+    ) async {
+      services.balances = {eth: d('1.5'), paxg: Decimal.zero};
+      await services.preferences.rememberHideZeroBalances(true);
+      await open(tester, picker(SwapPickerSide.pay));
+
+      await tester.enterText(find.byType(TextField), 'paxg');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No assets with a balance match “paxg”'),
+        findsOneWidget,
+      );
+
+      await tapText(tester, 'Show all assets');
+      expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
+    });
+  });
 }
 
 class _PickerServices implements SwapServices {
@@ -236,6 +339,7 @@ class _PickerServices implements SwapServices {
   final Set<AssetId> Function() _activated;
   final List<AssetId> activated = [];
   Set<AssetId> testnets = {};
+  Map<AssetId, Decimal> balances = {};
 
   @override
   late final SwapPreferences preferences = SwapPreferences(
@@ -262,7 +366,7 @@ class _PickerServices implements SwapServices {
   String? contractOf(AssetId id) => null;
 
   @override
-  Decimal? lastKnownBalance(AssetId id) => null;
+  Decimal? lastKnownBalance(AssetId id) => balances[id];
 
   @override
   Decimal? usdPrice(AssetId id) => null;
