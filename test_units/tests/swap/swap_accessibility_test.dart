@@ -2,6 +2,7 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -348,6 +349,39 @@ void main() {
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 
+      testWidgets('picker: while an asset activates', (tester) async {
+        services = _Services(registry, {eth});
+        await pump(
+          tester,
+          layout,
+          SwapAssetPicker(
+            side: SwapPickerSide.pay,
+            catalog: catalog,
+            selected: null,
+            other: null,
+            services: services,
+            isBlocked: (_) => false,
+          ),
+        );
+        final inactive = find.text('BTC').first;
+        await tester.scrollUntilVisible(
+          inactive,
+          200,
+          scrollable: find
+              .descendant(
+                of: find.byType(CustomScrollView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(inactive);
+        // The spinner never settles, so pump once rather than settle.
+        await tester.pump();
+        expect(find.text('Activating…'), findsOneWidget);
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
       testWidgets('comparison with the slippage setting', (tester) async {
         swap.emit(form());
         await pump(tester, layout, const SwapOptionsSheet());
@@ -392,6 +426,10 @@ class _Services implements SwapServices {
 
   @override
   Future<Set<AssetId>> activatedAssets() async => _activated;
+
+  /// Never finishes, so a test sees the picker mid-activation.
+  @override
+  Future<void> activate(AssetId id) => Completer<void>().future;
 
   @override
   bool isTestnet(AssetId id) => false;

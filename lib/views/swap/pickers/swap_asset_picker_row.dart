@@ -145,10 +145,11 @@ class _PickerRow extends StatelessWidget {
     ]);
 
     final disabled = blocked || unreachableWith != null;
+    final onTap = disabled ? null : this.onTap;
     return Semantics(
       button: true,
       selected: selected,
-      enabled: !disabled,
+      enabled: onTap != null,
       hint: unreachableWith == null
           ? null
           : LocaleKeys.swapPickerUnreachableTitle.tr(
@@ -166,7 +167,7 @@ class _PickerRow extends StatelessWidget {
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: disabled ? null : onTap,
+            onTap: onTap,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 68),
               child: Padding(
