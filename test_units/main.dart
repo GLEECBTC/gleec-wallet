@@ -217,6 +217,33 @@ import 'tests/swap/swap_entry_ui_review_test.dart' as swap_entry_ui_review_test;
 import 'tests/swap/swap_entry_ui_slippage_test.dart'
     as swap_entry_ui_slippage_test;
 import 'tests/swap/swap_entry_ui_strip_test.dart' as swap_entry_ui_strip_test;
+import 'tests/swap/swap_surface_ui_actions_test.dart'
+    as swap_surface_ui_actions_test;
+import 'tests/swap/swap_surface_ui_activity_more_test.dart'
+    as swap_surface_ui_activity_more_test;
+import 'tests/swap/swap_surface_ui_activity_test.dart'
+    as swap_surface_ui_activity_test;
+import 'tests/swap/swap_surface_ui_cancel_test.dart'
+    as swap_surface_ui_cancel_test;
+import 'tests/swap/swap_surface_ui_evidence_test.dart'
+    as swap_surface_ui_evidence_test;
+import 'tests/swap/swap_surface_ui_failures_test.dart'
+    as swap_surface_ui_failures_test;
+import 'tests/swap/swap_surface_ui_links_test.dart'
+    as swap_surface_ui_links_test;
+import 'tests/swap/swap_surface_ui_notices_test.dart'
+    as swap_surface_ui_notices_test;
+import 'tests/swap/swap_surface_ui_outcomes_test.dart'
+    as swap_surface_ui_outcomes_test;
+import 'tests/swap/swap_surface_ui_page_test.dart' as swap_surface_ui_page_test;
+import 'tests/swap/swap_surface_ui_progress_test.dart'
+    as swap_surface_ui_progress_test;
+import 'tests/swap/swap_surface_ui_running_test.dart'
+    as swap_surface_ui_running_test;
+import 'tests/swap/swap_surface_ui_scope_test.dart'
+    as swap_surface_ui_scope_test;
+import 'tests/swap/swap_surface_ui_shell_test.dart'
+    as swap_surface_ui_shell_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -524,6 +551,20 @@ void main() {
   swap_entry_ui_review_test.main();
   swap_entry_ui_slippage_test.main();
   swap_entry_ui_strip_test.main();
+  swap_surface_ui_actions_test.main();
+  swap_surface_ui_activity_more_test.main();
+  swap_surface_ui_activity_test.main();
+  swap_surface_ui_cancel_test.main();
+  swap_surface_ui_evidence_test.main();
+  swap_surface_ui_failures_test.main();
+  swap_surface_ui_links_test.main();
+  swap_surface_ui_notices_test.main();
+  swap_surface_ui_outcomes_test.main();
+  swap_surface_ui_page_test.main();
+  swap_surface_ui_progress_test.main();
+  swap_surface_ui_running_test.main();
+  swap_surface_ui_scope_test.main();
+  swap_surface_ui_shell_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
