@@ -42,9 +42,19 @@ class _PickerRow extends StatelessWidget {
     final subtitle = contract == null
         ? network
         : '$network · ${SwapFormat.short(contract)}';
+    final failure = activationFailed
+        ? LocaleKeys.swapPickerActivationFailed.tr(args: [ticker])
+        : null;
+    final tickerStyle = SwapText.strong(context);
+    final small = SwapText.small(context);
+    final failureStyle = small.copyWith(color: palette.danger);
+    double widest(Iterable<double> widths) =>
+        widths.fold(0.0, (a, b) => a > b ? a : b);
 
-    final Widget trailing;
+    final Widget? trailing;
+    final double trailingWidth;
     if (activating) {
+      final label = LocaleKeys.swapPickerActivating.tr();
       trailing = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -56,37 +66,36 @@ class _PickerRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            LocaleKeys.swapPickerActivating.tr(),
-            style: SwapText.small(context),
-          ),
+          Text(label, style: small),
         ],
       );
+      trailingWidth = 16 + 8 + SwapText.widthOf(context, label, small);
     } else if (!active && !blocked && unreachableWith == null) {
-      trailing = Text(
-        LocaleKeys.swapPickerActivate.tr(),
-        style: SwapText.strong(
-          context,
-        ).copyWith(color: palette.brandHover, fontSize: 14),
-      );
+      final label = LocaleKeys.swapPickerActivate.tr();
+      final style = SwapText.strong(
+        context,
+      ).copyWith(color: palette.brandHover, fontSize: 14);
+      trailing = Text(label, style: style);
+      trailingWidth = SwapText.widthOf(context, label, style);
     } else if (active && balance != null) {
+      final amount = SwapFormat.amount(balance, rounding: SwapRounding.down);
+      final usd = price == null ? null : SwapFormat.usd(balance * price);
+      final style = SwapText.strong(context).copyWith(fontSize: 14);
       trailing = Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            SwapFormat.amount(balance, rounding: SwapRounding.down),
-            style: SwapText.strong(context).copyWith(fontSize: 14),
-          ),
-          if (price != null)
-            Text(
-              SwapFormat.usd(balance * price),
-              style: SwapText.small(context),
-            ),
+          Text(amount, style: style),
+          if (usd != null) Text(usd, style: small),
         ],
       );
+      trailingWidth = widest([
+        SwapText.widthOf(context, amount, style),
+        if (usd != null) SwapText.widthOf(context, usd, small),
+      ]);
     } else {
-      trailing = const SizedBox.shrink();
+      trailing = null;
+      trailingWidth = 0;
     }
 
     final badges = [
@@ -108,6 +117,32 @@ class _PickerRow extends StatelessWidget {
       else if (!active)
         SwapBadge(label: LocaleKeys.swapPickerInactive.tr()),
     ];
+
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(ticker, style: tickerStyle),
+            ...badges,
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(subtitle, style: small),
+        if (failure != null) Text(failure, style: failureStyle),
+      ],
+    );
+    // Narrower than this, a badge or word of the title would split.
+    final titleWidth = widest([
+      SwapText.widthOf(context, ticker, tickerStyle),
+      for (final badge in badges) SwapBadge.widthOf(context, badge.label),
+      SwapText.widthOf(context, subtitle, small, longestWord: true),
+      if (failure != null)
+        SwapText.widthOf(context, failure, failureStyle, longestWord: true),
+    ]);
 
     final disabled = blocked || unreachableWith != null;
     return Semantics(
@@ -141,34 +176,15 @@ class _PickerRow extends StatelessWidget {
                     SwapTokenIcon(asset: asset),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(ticker, style: SwapText.strong(context)),
-                              ...badges,
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Text(subtitle, style: SwapText.small(context)),
-                          if (activationFailed)
-                            Text(
-                              LocaleKeys.swapPickerActivationFailed.tr(
-                                args: [ticker],
-                              ),
-                              style: SwapText.small(
-                                context,
-                              ).copyWith(color: palette.danger),
+                      child: trailing == null
+                          ? title
+                          : _TitleAndTrailing(
+                              title: title,
+                              titleWidth: titleWidth,
+                              trailing: trailing,
+                              trailingWidth: trailingWidth,
                             ),
-                        ],
-                      ),
                     ),
-                    const SizedBox(width: 12),
-                    trailing,
                   ],
                 ),
               ),
@@ -178,4 +194,45 @@ class _PickerRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// [trailing] beside [title] while the title keeps [titleWidth] there, and
+/// under it, end-aligned, once it would not.
+class _TitleAndTrailing extends StatelessWidget {
+  const _TitleAndTrailing({
+    required this.title,
+    required this.titleWidth,
+    required this.trailing,
+    required this.trailingWidth,
+  });
+
+  final Widget title;
+  final double titleWidth;
+  final Widget trailing;
+  final double trailingWidth;
+
+  static const _gap = 12.0;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (titleWidth + _gap + trailingWidth <= constraints.maxWidth) {
+        return Row(
+          children: [
+            Expanded(child: title),
+            const SizedBox(width: _gap),
+            trailing,
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          title,
+          const SizedBox(height: 6),
+          Align(alignment: AlignmentDirectional.centerEnd, child: trailing),
+        ],
+      );
+    },
+  );
 }

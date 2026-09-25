@@ -14,6 +14,16 @@ class SwapBadge extends StatelessWidget {
   final SwapTone tone;
   final IconData? icon;
 
+  static const _padding = EdgeInsets.symmetric(horizontal: 9, vertical: 4);
+
+  static TextStyle _labelStyle(BuildContext context) =>
+      SwapText.small(context).copyWith(fontWeight: FontWeight.w700);
+
+  /// How wide a badge reading [label], without an icon, is on one line.
+  static double widthOf(BuildContext context, String label) =>
+      _padding.horizontal +
+      SwapText.widthOf(context, label, _labelStyle(context));
+
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
@@ -27,7 +37,7 @@ class SwapBadge extends StatelessWidget {
           border: Border.all(color: palette.toneBorder(tone)),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          padding: _padding,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -38,9 +48,7 @@ class SwapBadge extends StatelessWidget {
               Flexible(
                 child: Text(
                   label,
-                  style: SwapText.small(
-                    context,
-                  ).copyWith(color: foreground, fontWeight: FontWeight.w700),
+                  style: _labelStyle(context).copyWith(color: foreground),
                 ),
               ),
             ],

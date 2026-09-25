@@ -70,6 +70,11 @@ void main() {
     chainId: 11169,
   );
   final paxg = assetOf('PAXG-ERC20', parent: eth);
+  final ethOnArbitrum = assetOf(
+    'ETH-ARB20',
+    subClass: CoinSubClass.arbitrum,
+    chainId: 42161,
+  );
   final catalog = SwapCatalog(
     sources: [
       SwapSourceAssets(
@@ -269,6 +274,31 @@ void main() {
           );
         });
       }
+
+      testWidgets('picker: paying, with a held asset selected', (tester) async {
+        services.balances[eth] = d('1.5');
+        await pump(
+          tester,
+          layout,
+          SwapAssetPicker(
+            side: SwapPickerSide.pay,
+            catalog: catalog,
+            selected: eth,
+            other: ethOnArbitrum,
+            services: services,
+            isBlocked: (_) => false,
+          ),
+        );
+        expect(find.text('Same ticker'), findsOneWidget);
+        // Wherever the balance sits, the row stays one button, read whole.
+        final row = tester.getSemantics(find.text('Selected'));
+        expect(tester.getSemantics(find.text(r'$4,500.00')), same(row));
+        expect(
+          row,
+          isSemantics(isButton: true, isSelected: true, hasTapAction: true),
+        );
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
 
       testWidgets('picker: unreachable group and incomplete notice', (
         tester,

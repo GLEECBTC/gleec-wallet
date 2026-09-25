@@ -238,6 +238,38 @@ abstract final class SwapText {
     fontFamilyFallback: const ['Courier New', 'Courier'],
     color: SwapPalette.of(context).text,
   );
+
+  /// How wide a [Text] of [text] in [style] sets on one line here, or, with
+  /// [longestWord], how wide its longest unbreakable run is.
+  static double widthOf(
+    BuildContext context,
+    String text,
+    TextStyle style, {
+    bool longestWord = false,
+  }) {
+    // The adjustments Text.build makes before it lays the text out.
+    var effective = style.inherit
+        ? DefaultTextStyle.of(context).style.merge(style)
+        : style;
+    if (MediaQuery.boldTextOf(context)) {
+      effective = effective.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+    effective = effective.copyWith(
+      letterSpacing: MediaQuery.maybeLetterSpacingOverrideOf(context),
+      wordSpacing: MediaQuery.maybeWordSpacingOverrideOf(context),
+    );
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: effective),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+    )..layout();
+    final width = longestWord
+        ? painter.minIntrinsicWidth
+        : painter.maxIntrinsicWidth;
+    painter.dispose();
+    return width;
+  }
 }
 
 /// Shared geometry.
