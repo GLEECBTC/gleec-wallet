@@ -29,6 +29,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
 - **`/swap` works as an address,** as well as `/dex`, with the same link parameters.
 - **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them. While an asset activates, the picker's rows are announced as unavailable until it finishes, rather than as buttons that do nothing.
+- **A start that may be running stays on screen.** If the answer to Start is lost, the review keeps its warning until you check Activity. Back is disabled and the form beside it is set aside, so the same swap can't be started twice. A failure that spent only fees now says so, and an order-book shortfall names the coin that is short and how much is needed.
 - **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off. In the asset picker, the search, groups and switch scroll with the list, and a row whose badges and balance don't fit side by side puts the balance under the name.
 
 Unchanged from the last brief:
