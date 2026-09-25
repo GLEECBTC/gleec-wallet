@@ -26,28 +26,44 @@ void testDurationFormat() {
     expect(durationFormat(const Duration(seconds: 61), locale), '1$m 1$s');
     expect(durationFormat(const Duration(minutes: 1), locale), '1$m 0$s');
     expect(durationFormat(const Duration(minutes: 59), locale), '59$m 0$s');
-    expect(durationFormat(const Duration(milliseconds: 119000), locale),
-        '1$m 59$s');
-    expect(durationFormat(const Duration(milliseconds: 987654321), locale),
-        '274$h 20$m 54$s');
+    expect(
+      durationFormat(const Duration(milliseconds: 119000), locale),
+      '1$m 59$s',
+    );
+    expect(
+      durationFormat(const Duration(milliseconds: 987654321), locale),
+      '274$h 20$m 54$s',
+    );
     expect(durationFormat(const Duration(minutes: 60), locale), '1$h 0$m 0$s');
     expect(durationFormat(const Duration(minutes: 61), locale), '1$h 1$m 0$s');
     expect(
-        durationFormat(const Duration(seconds: 8000), locale), '2$h 13$m 20$s');
-    expect(durationFormat(const Duration(seconds: 60000232), locale),
-        '16666$h 43$m 52$s');
+      durationFormat(const Duration(seconds: 8000), locale),
+      '2$h 13$m 20$s',
+    );
     expect(
-        durationFormat(const Duration(minutes: 176), locale), '2$h 56$m 0$s');
+      durationFormat(const Duration(seconds: 60000232), locale),
+      '16666$h 43$m 52$s',
+    );
+    expect(
+      durationFormat(const Duration(minutes: 176), locale),
+      '2$h 56$m 0$s',
+    );
     expect(durationFormat(const Duration(hours: 2), locale), '2$h 0$m 0$s');
-    expect(durationFormat(const Duration(milliseconds: 7200000), locale),
-        '2$h 0$m 0$s');
-    expect(durationFormat(const Duration(hours: 1, seconds: 1), locale),
-        '1$h 0$m 1$s');
     expect(
-        durationFormat(
-            const Duration(hours: 1, minutes: 1, seconds: 1), locale),
-        '1$h 1$m 1$s');
-    expect(durationFormat(const Duration(days: 1, seconds: 1), locale),
-        '24$h 0$m 1$s');
+      durationFormat(const Duration(milliseconds: 7200000), locale),
+      '2$h 0$m 0$s',
+    );
+    expect(
+      durationFormat(const Duration(hours: 1, seconds: 1), locale),
+      '1$h 0$m 1$s',
+    );
+    expect(
+      durationFormat(const Duration(hours: 1, minutes: 1, seconds: 1), locale),
+      '1$h 1$m 1$s',
+    );
+    expect(
+      durationFormat(const Duration(days: 1, seconds: 1), locale),
+      '24$h 0$m 1$s',
+    );
   });
 }

@@ -51,6 +51,9 @@ const _price = '0.4';
 /// it and a retry does not need a fresh order.
 const _volume = '0.1';
 
+/// The testnet faucet the app's own tests top up from.
+const _faucet = 'https://faucet.gleec.com/faucet';
+
 Future<void> main(List<String> args) async {
   final options = _Options.parse(args);
   final log = _Log('counterparty');
@@ -216,14 +219,16 @@ Future<void> main(List<String> args) async {
       await _activate(rpc, coin, coinsConfig, log);
     }
 
-    final balance = await _balanceOf(rpc, _base);
+    var balance = await _balanceOf(rpc, _base);
     log.line('$_base balance=$balance');
+    if (balance <= Decimalish.parse(_volume)) {
+      balance = await _topUp(rpc, log, options.fundingTimeout);
+    }
     if (balance <= Decimalish.parse(_volume)) {
       throw StateError(
         'Counterparty wallet ${options.slot} holds $balance $_base, which is '
-        'not enough to offer $_volume. Reserved wallets are funded from the '
-        'same faucet as the app under test; top this one up or move to '
-        'another slot.',
+        'not enough to offer $_volume, and the faucet did not top it up. '
+        'Top it up by hand or move to another slot.',
       );
     }
 
@@ -322,6 +327,41 @@ Future<Decimalish> _balanceOf(_Rpc rpc, String coin) async {
   final response = await rpc.call({'method': 'my_balance', 'coin': coin});
 
   return Decimalish.parse('${response['balance'] ?? '0'}');
+}
+
+/// Asks the faucet for more [_base] and waits for it to reach the balance.
+///
+/// Every taken order sells the taker some [_base], so a reserved wallet
+/// drains by design and needs topping up the way the app's wallets are.
+Future<Decimalish> _topUp(_Rpc rpc, _Log log, Duration timeout) async {
+  final wallet = await rpc.call({'method': 'my_balance', 'coin': _base});
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(
+      Uri.parse('$_faucet/$_base/${wallet['address']}'),
+    );
+    final response = await request.close();
+    final body = await response.transform(utf8.decoder).join();
+    log.line('faucet answered ${response.statusCode}: $body');
+    if ((jsonDecode(body) as Map?)?['status'] != 'success') {
+      return _balanceOf(rpc, _base);
+    }
+  } on Object catch (error) {
+    log.line('faucet request failed: $error');
+    return _balanceOf(rpc, _base);
+  } finally {
+    client.close(force: true);
+  }
+
+  final deadline = DateTime.now().add(timeout);
+  var balance = await _balanceOf(rpc, _base);
+  while (balance <= Decimalish.parse(_volume) &&
+      DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(seconds: 10));
+    balance = await _balanceOf(rpc, _base);
+    log.line('$_base balance=$balance');
+  }
+  return balance;
 }
 
 /// Waits until the order is actually on this node's book.
@@ -462,6 +502,7 @@ class _Options {
     required this.seedNodesPath,
     required this.startupTimeout,
     required this.bookTimeout,
+    required this.fundingTimeout,
   });
 
   factory _Options.parse(List<String> args) {
@@ -488,6 +529,8 @@ class _Options {
       seedNodesPath: valueOf('seed-nodes') ?? '$assets/seed_nodes.json',
       startupTimeout: Duration(seconds: int.parse(valueOf('startup') ?? '120')),
       bookTimeout: Duration(seconds: int.parse(valueOf('book') ?? '180')),
+      // Inside the ten minutes the workflow waits for the ready marker.
+      fundingTimeout: Duration(seconds: int.parse(valueOf('funding') ?? '300')),
     );
   }
 
@@ -499,6 +542,7 @@ class _Options {
   final String seedNodesPath;
   final Duration startupTimeout;
   final Duration bookTimeout;
+  final Duration fundingTimeout;
 }
 
 Map<String, dynamic> _readJsonMap(String path) =>

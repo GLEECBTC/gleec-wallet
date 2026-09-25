@@ -9,9 +9,9 @@ void testEncryptDataTool() {
     const data = 'Hello my friend';
 
     expect(
-        await tool.decryptData(
-            password, await tool.encryptData(password, data)),
-        data);
+      await tool.decryptData(password, await tool.encryptData(password, data)),
+      data,
+    );
   });
 
   test('Test that algorithm encrypt every time diff result', () async {
