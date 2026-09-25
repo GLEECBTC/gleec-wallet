@@ -195,6 +195,28 @@ import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
 import 'tests/swap/swap_bloc_timers_test.dart' as swap_bloc_timers_test;
 import 'tests/swap/swap_bloc_validation_test.dart' as swap_bloc_validation_test;
 import 'tests/swap/swap_bloc_values_test.dart' as swap_bloc_values_test;
+import 'tests/swap/swap_entry_ui_cards_test.dart' as swap_entry_ui_cards_test;
+import 'tests/swap/swap_entry_ui_cta_test.dart' as swap_entry_ui_cta_test;
+import 'tests/swap/swap_entry_ui_failures_test.dart'
+    as swap_entry_ui_failures_test;
+import 'tests/swap/swap_entry_ui_form_test.dart' as swap_entry_ui_form_test;
+import 'tests/swap/swap_entry_ui_messages_test.dart'
+    as swap_entry_ui_messages_test;
+import 'tests/swap/swap_entry_ui_options_test.dart'
+    as swap_entry_ui_options_test;
+import 'tests/swap/swap_entry_ui_panel_start_test.dart'
+    as swap_entry_ui_panel_start_test;
+import 'tests/swap/swap_entry_ui_picker_flow_test.dart'
+    as swap_entry_ui_picker_flow_test;
+import 'tests/swap/swap_entry_ui_picker_layout_test.dart'
+    as swap_entry_ui_picker_layout_test;
+import 'tests/swap/swap_entry_ui_picker_test.dart' as swap_entry_ui_picker_test;
+import 'tests/swap/swap_entry_ui_review_details_test.dart'
+    as swap_entry_ui_review_details_test;
+import 'tests/swap/swap_entry_ui_review_test.dart' as swap_entry_ui_review_test;
+import 'tests/swap/swap_entry_ui_slippage_test.dart'
+    as swap_entry_ui_slippage_test;
+import 'tests/swap/swap_entry_ui_strip_test.dart' as swap_entry_ui_strip_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -488,6 +510,20 @@ void main() {
   swap_bloc_timers_test.main();
   swap_bloc_validation_test.main();
   swap_bloc_values_test.main();
+  swap_entry_ui_cards_test.main();
+  swap_entry_ui_cta_test.main();
+  swap_entry_ui_failures_test.main();
+  swap_entry_ui_form_test.main();
+  swap_entry_ui_messages_test.main();
+  swap_entry_ui_options_test.main();
+  swap_entry_ui_panel_start_test.main();
+  swap_entry_ui_picker_flow_test.main();
+  swap_entry_ui_picker_layout_test.main();
+  swap_entry_ui_picker_test.main();
+  swap_entry_ui_review_details_test.main();
+  swap_entry_ui_review_test.main();
+  swap_entry_ui_slippage_test.main();
+  swap_entry_ui_strip_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
