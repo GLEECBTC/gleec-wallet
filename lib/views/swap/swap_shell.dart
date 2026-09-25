@@ -266,7 +266,18 @@ class _SwapScopeState extends State<_SwapScope> {
     }
   }
 
-  void _onRouteChanged() => _applyRouteIntent(force: true);
+  var _routeReadScheduled = false;
+
+  // The router sets a link's fields one by one, notifying for each: a maker
+  // link's currencies arrive before the order type that rules it out.
+  void _onRouteChanged() {
+    if (_routeReadScheduled) return;
+    _routeReadScheduled = true;
+    scheduleMicrotask(() {
+      _routeReadScheduled = false;
+      if (mounted) _applyRouteIntent(force: true);
+    });
+  }
 
   void _applyPendingIntent() {
     final intent = _services.takePendingIntent();
@@ -359,12 +370,12 @@ class _SwapNavigation extends StatelessWidget {
                           child: _NavItem(
                             destination: destination,
                             selected: destination == selected,
-                            badge: destination == SwapDestination.activity
-                                ? active + attention
+                            active: destination == SwapDestination.activity
+                                ? active
                                 : 0,
-                            attention:
-                                destination == SwapDestination.activity &&
-                                attention > 0,
+                            attention: destination == SwapDestination.activity
+                                ? attention
+                                : 0,
                             onTap: () => onSelected(destination),
                           ),
                         ),
@@ -387,15 +398,15 @@ class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.destination,
     required this.selected,
-    required this.badge,
+    required this.active,
     required this.attention,
     required this.onTap,
   });
 
   final SwapDestination destination;
   final bool selected;
-  final int badge;
-  final bool attention;
+  final int active;
+  final int attention;
   final VoidCallback onTap;
 
   @override
@@ -413,12 +424,20 @@ class _NavItem extends StatelessWidget {
       ),
     };
     final foreground = selected ? palette.text : palette.textSecondary;
+    final badge = active + attention;
+    // The label replaces the pill's own text, so the tap is given again.
     return Semantics(
+      container: true,
       button: true,
       selected: selected,
-      label: badge > 0
-          ? '$label, ${LocaleKeys.swapNavActiveCount.tr(args: ['$badge'])}'
-          : null,
+      enabled: true,
+      label: [
+        label,
+        if (active > 0) LocaleKeys.swapNavActiveCount.tr(args: ['$active']),
+        if (attention > 0) LocaleKeys.swapNavNeedsAttention.tr(),
+      ].join(', '),
+      onTap: onTap,
+      excludeSemantics: true,
       child: Material(
         color: selected ? palette.selected : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
@@ -457,7 +476,7 @@ class _NavItem extends StatelessWidget {
                         const SizedBox(width: 6),
                         SwapCountDot(
                           count: badge,
-                          tone: attention ? SwapTone.warning : null,
+                          tone: attention > 0 ? SwapTone.warning : null,
                         ),
                       ],
                     ],

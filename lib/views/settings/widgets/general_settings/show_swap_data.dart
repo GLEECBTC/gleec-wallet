@@ -121,12 +121,9 @@ class _ShowSwapDataState extends State<ShowSwapData> {
   Future<void> _exportSwapData() async {
     setState(() => _isDownloading = true);
     try {
-      final mm2Api = RepositoryProvider.of<Mm2Api>(context);
-      final atomic = await mm2Api.getRawSwapData(MyRecentSwapsRequest());
-
       final bundle = <String, dynamic>{
         'exported_at': DateTime.now().toUtc().toIso8601String(),
-        'atomic': jsonDecode(atomic),
+        'atomic': await _atomicSwapData(),
         'routed': await _routedSwapData(),
       };
 
@@ -140,6 +137,17 @@ class _ShowSwapDataState extends State<ShowSwapData> {
       );
     } finally {
       if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  /// The raw `my_recent_swaps` answer, or a recorded reason it is absent, so
+  /// the routed half still reaches support.
+  Future<Object?> _atomicSwapData() async {
+    try {
+      final mm2Api = RepositoryProvider.of<Mm2Api>(context);
+      return jsonDecode(await mm2Api.getRawSwapData(MyRecentSwapsRequest()));
+    } on Object catch (error) {
+      return {'unavailable': error.toString()};
     }
   }
 

@@ -87,7 +87,10 @@ class SwapAnalyticsReporter {
         network: _network(snapshot.from),
         secondaryNetwork: _network(snapshot.to),
         failureStage: '${snapshot.source.name}_execution',
-        failureDetail: outcome.failure?.reason.name,
+        failureCategory: switch (outcome.failure?.reason) {
+          final SwapFailureReason reason => failureCategory(reason),
+          null => null,
+        },
         hdType: _walletType(),
         durationMs: durationMs,
         routeCategory: routeCategory(snapshot),
@@ -114,6 +117,23 @@ class SwapAnalyticsReporter {
     SwapOutcomeKind.cancelled => 'cancelled',
     SwapOutcomeKind.noMatch => 'no_match',
     SwapOutcomeKind.failed => 'failed',
+  };
+
+  /// The analytics name of why a swap failed.
+  static String failureCategory(SwapFailureReason reason) => switch (reason) {
+    SwapFailureReason.priceMoved => 'price_moved',
+    SwapFailureReason.insufficientBalance => 'insufficient_funds',
+    SwapFailureReason.approvalFailed => 'approval_failed',
+    SwapFailureReason.reverted => 'reverted',
+    SwapFailureReason.notConfirmed => 'not_confirmed',
+    SwapFailureReason.walletRejected => 'wallet_rejected',
+    SwapFailureReason.routeFailed => 'route_failed',
+    SwapFailureReason.safetyCheck => 'safety_check',
+    SwapFailureReason.quoteUnavailable => 'quote_unavailable',
+    SwapFailureReason.restarted => 'restarted',
+    SwapFailureReason.exchangeFailed => 'exchange_failed',
+    SwapFailureReason.internal => 'internal',
+    SwapFailureReason.unknown => 'unknown',
   };
 
   static String _network(AssetId? asset) =>

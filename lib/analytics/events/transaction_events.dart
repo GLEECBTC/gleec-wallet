@@ -568,6 +568,7 @@ class SwapFailedEventData extends AnalyticsEventData {
     required this.secondaryNetwork,
     required this.failureStage,
     this.failureDetail,
+    this.failureCategory,
     required this.hdType,
     this.durationMs,
     this.routeCategory,
@@ -581,6 +582,11 @@ class SwapFailedEventData extends AnalyticsEventData {
   final String secondaryNetwork;
   final String failureStage;
   final String? failureDetail;
+
+  /// Why the swap failed, as a category the app already chose, such as
+  /// `price_moved`. Sent as is, unlike [failureDetail], which may carry
+  /// provider text. Unified swap flow only.
+  final String? failureCategory;
   final String hdType;
   final int? durationMs;
 
@@ -607,6 +613,7 @@ class SwapFailedEventData extends AnalyticsEventData {
     'failure_reason': _formatFailureReason(
       stage: failureStage,
       reason: failureDetail,
+      category: failureCategory,
     ),
     'hd_type': hdType,
     if (durationMs != null) 'duration_ms': durationMs,
@@ -641,7 +648,12 @@ class AnalyticsSwapFailedEvent extends AnalyticsSendDataEvent {
        );
 }
 
-String _formatFailureReason({String? stage, String? reason, String? code}) {
+String _formatFailureReason({
+  String? stage,
+  String? reason,
+  String? code,
+  String? category,
+}) {
   final parts = <String>[];
 
   String? sanitizeStage(String? value) {
@@ -655,7 +667,9 @@ String _formatFailureReason({String? stage, String? reason, String? code}) {
   }
 
   final sanitizedStage = sanitizeStage(stage);
-  final sanitizedReason = _stableFailureToken(reason);
+  final sanitizedReason = category != null
+      ? _stableAnalyticsToken(category)
+      : _stableFailureToken(reason);
   final sanitizedCode = _stableFailureToken(code);
 
   if (sanitizedStage != null) {
