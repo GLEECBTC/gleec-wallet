@@ -37,7 +37,7 @@ class SwapPage extends StatelessWidget {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Expanded(child: SwapEntryView(panelOpen: true)),
+                    const Expanded(child: _SideForm()),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(0, 20, 16, 20),
                       child: SizedBox(
@@ -59,6 +59,35 @@ class SwapPage extends StatelessWidget {
             );
         }
       },
+    );
+  }
+}
+
+/// The form beside a review. While the reviewed swap's start is unanswered
+/// or lost, the review is the only way on, so the form is set aside.
+class _SideForm extends StatelessWidget {
+  const _SideForm();
+
+  @override
+  Widget build(BuildContext context) {
+    final inDoubt = context.select<UnifiedSwapBloc, bool>(
+      (bloc) => switch (bloc.state.review?.status) {
+        SwapReviewStatus.starting || SwapReviewStatus.unconfirmed => true,
+        _ => false,
+      },
+    );
+    return IgnorePointer(
+      ignoring: inDoubt,
+      child: ExcludeFocus(
+        excluding: inDoubt,
+        child: ExcludeSemantics(
+          excluding: inDoubt,
+          child: Opacity(
+            opacity: inDoubt ? 0.55 : 1,
+            child: const SwapEntryView(panelOpen: true),
+          ),
+        ),
+      ),
     );
   }
 }

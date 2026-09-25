@@ -233,6 +233,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     AssetId? receive,
     String? amount,
   }) async {
+    if (_startInDoubt) return;
     _settingPair++;
     try {
       await _applyPair(emit, pay: pay, receive: receive, amount: amount);
@@ -326,7 +327,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     if (stale && state.issue == null) {
       add(const UnifiedSwapEvaluationRequested());
     } else {
-      _armTimers(quote);
+      _armTimers(quote, shownAgain: true);
     }
   }
 

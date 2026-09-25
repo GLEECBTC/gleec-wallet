@@ -154,9 +154,10 @@ class _ReviewContent extends StatelessWidget {
           leading: SwapIconButton(
             icon: Icons.arrow_back_rounded,
             label: LocaleKeys.back.tr(),
-            onPressed: review.status == SwapReviewStatus.starting
-                ? null
-                : onBack,
+            onPressed: switch (review.status) {
+              SwapReviewStatus.starting || SwapReviewStatus.unconfirmed => null,
+              _ => onBack,
+            },
           ),
         ),
         if (_badge(review.status) case final (String, SwapTone) badge)

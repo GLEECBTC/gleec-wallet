@@ -2,6 +2,12 @@ part of 'unified_swap_bloc.dart';
 
 /// The review and the start, which re-prices before committing.
 extension _UnifiedSwapReview on UnifiedSwapBloc {
+  /// Whether the reviewed swap may be running, its start unanswered or lost.
+  bool get _startInDoubt => switch (state.review?.status) {
+    SwapReviewStatus.starting || SwapReviewStatus.unconfirmed => true,
+    _ => false,
+  };
+
   Future<void> _onReviewOpened(
     UnifiedSwapReviewOpened event,
     Emitter<UnifiedSwapState> emit,
@@ -27,23 +33,23 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         ),
       ),
     );
+    _armExpiry(quote);
   }
 
   void _onReviewClosed(
     UnifiedSwapReviewClosed event,
     Emitter<UnifiedSwapState> emit,
   ) {
-    final review = state.review;
     // Once the engine has been asked to start, the answer must be seen —
     // closing now would hide a swap that may already be running.
-    if (review != null && review.status == SwapReviewStatus.starting) return;
+    if (_startInDoubt) return;
     _startVersion++;
     emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
     final quote = state.selectedQuote;
     if (quote != null && quote.isExpiredAt(_now())) {
       add(const UnifiedSwapEvaluationRequested());
     } else {
-      _armTimers(quote);
+      _armTimers(quote, shownAgain: true);
     }
   }
 
@@ -58,12 +64,24 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         review.status == SwapReviewStatus.revalidationFailed ||
         review.status == SwapReviewStatus.rejected) {
       // "Refresh quote" / "Try again": re-price the same route in place.
-      await _revalidate(emit, review);
+      final fresh = await _revalidate(emit, review);
+      if (fresh == null) return;
+      emit(
+        state.copyWith(
+          review: SwapReview(
+            quote: fresh,
+            status: SwapReviewStatus.ready,
+            termsRequired: review.termsRequired,
+          ),
+        ),
+      );
+      _armExpiry(fresh);
       return;
     }
     if (!review.canStart) return;
 
-    if (review.status == SwapReviewStatus.materialUpdate) {
+    if (review.status == SwapReviewStatus.materialUpdate &&
+        !review.quote.isExpiredAt(_now())) {
       // The user has seen the updated numbers side by side and accepted them.
       await _start(emit, review.quote, termsRequired: review.termsRequired);
       return;
@@ -141,6 +159,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
               ),
             ),
           );
+          _armExpiry(fresh);
           return null;
         }
         return fresh;
@@ -206,16 +225,21 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     UnifiedSwapFreshQuoteAccepted event,
     Emitter<UnifiedSwapState> emit,
   ) async {
+    if (state.review?.status == SwapReviewStatus.starting) return;
     // Consent was given on the progress screen, old against new, after the
     // engine stopped a swap before sending anything.
+    final stale = event.quote.isExpiredAt(_now());
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,
-        review: SwapReview(quote: event.quote, status: SwapReviewStatus.ready),
+        review: SwapReview(
+          quote: event.quote,
+          status: stale ? SwapReviewStatus.expired : SwapReviewStatus.ready,
+        ),
         clearActiveExecution: true,
       ),
     );
-    await _start(emit, event.quote, termsRequired: false);
+    if (!stale) await _start(emit, event.quote, termsRequired: false);
   }
 
   void _onProgressLeft(
@@ -229,6 +253,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   ) => _resetForm(emit, keepPair: event.keepPair);
 
   void _resetForm(Emitter<UnifiedSwapState> emit, {required bool keepPair}) {
+    if (state.review?.status == SwapReviewStatus.starting) return;
     _invalidate();
     _startVersion++;
     emit(
@@ -257,6 +282,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     UnifiedSwapFollowUpRequested event,
     Emitter<UnifiedSwapState> emit,
   ) async {
+    if (_startInDoubt) return;
     _startVersion++;
     emit(state.copyWith(clearActiveExecution: true, clearReview: true));
     await _setPair(

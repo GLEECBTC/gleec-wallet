@@ -221,19 +221,28 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     );
   }
 
-  void _armTimers(SwapQuote? selected) {
+  void _armTimers(SwapQuote? selected, {bool shownAgain = false}) {
     _refresh?.cancel();
     _expiry?.cancel();
     if (selected == null) return;
     // A price the balance keeps from starting is a look, priced once: keeping
     // it fresh would spend the aggregator's budget on nothing to act on.
     if (state.issue == null) {
+      // Shown again late, a price would expire before its refresh: renew now.
+      final renewNow =
+          shownAgain &&
+          selected.expiresAt.difference(_now()) <= _refreshInterval;
       _refresh = Timer(
-        _refreshInterval,
+        renewNow ? Duration.zero : _refreshInterval,
         () => add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh)),
       );
     }
-    final untilExpiry = selected.expiresAt.difference(_now());
+    _armExpiry(selected);
+  }
+
+  void _armExpiry(SwapQuote quote) {
+    _expiry?.cancel();
+    final untilExpiry = quote.expiresAt.difference(_now());
     _expiry = Timer(
       untilExpiry.isNegative ? Duration.zero : untilExpiry,
       () => add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.expiry)),
@@ -256,18 +265,20 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           add(const UnifiedSwapEvaluationRequested(quiet: true));
         }
       case UnifiedSwapTimerKind.expiry:
+        final review = state.review;
+        if (state.view == UnifiedSwapView.review && review != null) {
+          if (review.canStart && review.quote.isExpiredAt(_now())) {
+            emit(
+              state.copyWith(
+                review: review.copyWith(status: SwapReviewStatus.expired),
+              ),
+            );
+          }
+          return;
+        }
         final quote = state.selectedQuote;
         if (quote == null || !quote.isExpiredAt(_now())) return;
-        final review = state.review;
-        if (state.view == UnifiedSwapView.review &&
-            review != null &&
-            review.status == SwapReviewStatus.ready) {
-          emit(
-            state.copyWith(
-              review: review.copyWith(status: SwapReviewStatus.expired),
-            ),
-          );
-        } else if (state.view == UnifiedSwapView.form &&
+        if (state.view == UnifiedSwapView.form &&
             state.evaluation == SwapEvaluationStatus.ready) {
           emit(state.copyWith(evaluation: SwapEvaluationStatus.expired));
         }
