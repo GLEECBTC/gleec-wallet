@@ -36,12 +36,12 @@ Do these in order. Each needs a go.
 
 | Gate | How | Last result |
 |---|---|---|
-| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 1,380 passed, 4 skipped (2026-09-24) |
+| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 1,422 passed, 4 skipped (2026-09-25) |
 | SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | Green on #389 at `179453cb` (2026-09-24). Locally: harness 220 (4 skipped), rpc 246. Run again after the repin |
 | KDF `routed_swap` tests | KDF team's CI on #29. The `Test` workflow runs only when dispatched by hand. | 36 `routed_swap` + 18 LI.FI client tests passed locally at `4872ef2` |
 | Live engine check, no funds | `routed_swap_live_capture_test.dart` holds the recorded responses | Native and WebAssembly agree; 9 of the day's 75 keyless quotes used |
 | Quote budget | `swap_quote_budget_test.dart` | Idle form 42 → 10 requests per 10 minutes, then none; typing 2 → 1; native Max 3 → 1; start 1 → 0 |
-| Accessibility and layout | `swap_accessibility_test.dart`; `swap_widgets_test.dart` runs the same checks on review, outcomes and Activity | Every new and changed state at 375, 390, 768, 1024 and 1440 px, light and dark, and at 200% text, measured in Manrope: no overflow, no text cut short or split mid-word, 48 dp targets, every control labelled and pressable by a screen reader. Passing (2026-09-24) |
+| Accessibility and layout | `swap_accessibility_test.dart`; `swap_widgets_test.dart` runs the same checks on review, outcomes and Activity | Every new and changed state at 375, 390, 768, 1024 and 1440 px, light and dark, and at 200% text, measured in Manrope: no overflow, no text cut short or split mid-word, 48 dp targets, every control labelled and pressable by a screen reader. Passing (2026-09-25) |
 | UI tests | `ui-tests-on-pr` | Red only at `fiat_onramp_tests`, an external Ramp key issue |
 | Live swaps with funds | [`SWAP_LIVE_TEST_BRIEF.md`](SWAP_LIVE_TEST_BRIEF.md) — the release owner runs them with small amounts | Not run |
 | Moderated usability session | [`SWAP_USABILITY_SESSION.md`](SWAP_USABILITY_SESSION.md) — five users | Not run |

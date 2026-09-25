@@ -28,7 +28,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Max on a network's own coin keeps back three times the quoted gas.** The engine checks the balance at start against a higher figure than the quote shows. If the check still fails, nothing is sent and the result screen shows the shortfall.
 - **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
 - **`/swap` works as an address,** as well as `/dex`, with the same link parameters.
-- **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them.
+- **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them. While an asset activates, the picker's rows are announced as unavailable until it finishes, rather than as buttons that do nothing.
 - **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off. In the asset picker, the search, groups and switch scroll with the list, and a row whose badges and balance don't fit side by side puts the balance under the name.
 
 Unchanged from the last brief:
