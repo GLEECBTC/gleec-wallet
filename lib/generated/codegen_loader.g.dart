@@ -1406,6 +1406,7 @@ abstract class LocaleKeys {
   static const swapCtaChooseAnother = 'swapCtaChooseAnother';
   static const swapCtaActivateAsset = 'swapCtaActivateAsset';
   static const swapCtaSelectOption = 'swapCtaSelectOption';
+  static const swapCtaNotEnough = 'swapCtaNotEnough';
   static const swapErrorMalformed = 'swapErrorMalformed';
   static const swapErrorZero = 'swapErrorZero';
   static const swapErrorTooManyDecimals = 'swapErrorTooManyDecimals';

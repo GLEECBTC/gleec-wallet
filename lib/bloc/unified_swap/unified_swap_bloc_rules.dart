@@ -64,7 +64,10 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
       final ownFees = fees
           .where((fee) => fee.asset == pay)
           .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
-      if (balance != null && amount + ownFees > balance) {
+      // The option is what starts, and switching to a dollar amount can leave
+      // it priced for a little more than the amount now shown.
+      final spend = quote.sellAmount > amount ? quote.sellAmount : amount;
+      if (balance != null && spend + ownFees > balance) {
         return SwapFormIssue.insufficient;
       }
       final feeAsset = pay.parentId;

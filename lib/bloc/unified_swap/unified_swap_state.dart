@@ -70,7 +70,11 @@ enum SwapFormIssue {
   sameAsset,
 
   /// No price for the fiat amount, so no token amount can be derived.
-  fiatUnavailable,
+  fiatUnavailable;
+
+  /// Whether the form still prices the swap. It cannot be reviewed, but
+  /// people look up a price before they hold enough to pay.
+  bool get stillPriced => this == insufficient || this == insufficientForFees;
 }
 
 /// What the quote evaluation is doing.

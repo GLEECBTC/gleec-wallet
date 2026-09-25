@@ -320,8 +320,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     }
     if (state.view != UnifiedSwapView.form) return;
     final quote = state.selectedQuote;
-    if (state.evaluation == SwapEvaluationStatus.expired ||
-        (quote != null && quote.isExpiredAt(_now()))) {
+    final stale =
+        state.evaluation == SwapEvaluationStatus.expired ||
+        (quote != null && quote.isExpiredAt(_now()));
+    if (stale && state.issue == null) {
       add(const UnifiedSwapEvaluationRequested());
     } else {
       _armTimers(quote);

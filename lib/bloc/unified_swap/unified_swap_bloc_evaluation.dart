@@ -15,7 +15,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       state.hasPair &&
       !_catalogLoading &&
       state.tradingEnabled &&
-      state.issue == null &&
+      (state.issue?.stillPriced ?? true) &&
       (amountOf(state) ?? Decimal.zero) > Decimal.zero;
 
   Future<void> _onEvaluationRequested(
@@ -114,13 +114,17 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       }
       return;
     }
+    // Re-checked, because an issue read from the cleared option's fees no
+    // longer has the numbers its message needs.
     emit(
-      state.copyWith(
-        evaluation: SwapEvaluationStatus.failed,
-        failure: failure,
-        failures: all.isEmpty ? [failure] : all,
-        clearQuotes: true,
-        clearSelectedId: true,
+      _validated(
+        state.copyWith(
+          evaluation: SwapEvaluationStatus.failed,
+          failure: failure,
+          failures: all.isEmpty ? [failure] : all,
+          clearQuotes: true,
+          clearSelectedId: true,
+        ),
       ),
     );
     if (failure.kind == SwapQuoteFailureKind.rateLimited) {
@@ -148,12 +152,14 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     final comparing =
         _comparing == _intentKey(state) ||
         state.selectedQuote?.order == SwapQuoteOrder.fastest;
+    final balance = state.balance;
     return SwapQuoteRequest(
       from: state.pay!,
       to: state.receive!,
       amount: amount,
       orders: {SwapQuoteOrder.cheapest, if (comparing) SwapQuoteOrder.fastest},
       slippage: state.slippage,
+      indicative: balance != null && amount > balance,
     );
   }
 
@@ -219,10 +225,14 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     _refresh?.cancel();
     _expiry?.cancel();
     if (selected == null) return;
-    _refresh = Timer(
-      _refreshInterval,
-      () => add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh)),
-    );
+    // A price the balance keeps from starting is a look, priced once: keeping
+    // it fresh would spend the aggregator's budget on nothing to act on.
+    if (state.issue == null) {
+      _refresh = Timer(
+        _refreshInterval,
+        () => add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh)),
+      );
+    }
     final untilExpiry = selected.expiresAt.difference(_now());
     _expiry = Timer(
       untilExpiry.isNegative ? Duration.zero : untilExpiry,

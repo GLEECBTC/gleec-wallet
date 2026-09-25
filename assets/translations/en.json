@@ -1239,6 +1239,7 @@
   "swapCtaChooseAnother": "Choose another asset",
   "swapCtaActivateAsset": "Activate {}",
   "swapCtaSelectOption": "Select an option",
+  "swapCtaNotEnough": "Not enough {}",
   "swapErrorMalformed": "Enter a valid number.",
   "swapErrorZero": "Amount must be greater than 0.",
   "swapErrorTooManyDecimals": "{} supports up to {} decimal places.",

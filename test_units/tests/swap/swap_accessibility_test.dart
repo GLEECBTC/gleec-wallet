@@ -252,6 +252,8 @@ void main() {
         ),
       ],
     ),
+    'priced, but more than the balance': () =>
+        form(issue: SwapFormIssue.insufficient),
   };
 
   for (final layout in _layouts) {

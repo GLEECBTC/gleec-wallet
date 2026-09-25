@@ -99,15 +99,16 @@ class SwapPricingService {
       ),
     );
 
+    final known = quote.feesKnown;
     return quote.withPricing(
       SwapQuotePricing(
         payUsd: usdValue(quote.from, quote.sellAmount),
         expectedUsd: usdValue(quote.to, quote.expectedReceive),
         minimumUsd: usdValue(quote.to, quote.guaranteedReceive),
-        networkCostUsd: network,
-        approvalNetworkCostUsd: approval,
-        swapCostUsd: swap,
-        isComplete: network != null && swap != null,
+        networkCostUsd: known ? network : null,
+        approvalNetworkCostUsd: known ? approval : null,
+        swapCostUsd: known ? swap : null,
+        isComplete: known && network != null && swap != null,
       ),
       fees: fees,
     );

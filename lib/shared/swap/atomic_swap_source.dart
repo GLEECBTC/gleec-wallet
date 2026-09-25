@@ -155,7 +155,12 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async => [
-    await _quote(request.from, request.to, request.amount),
+    await _quote(
+      request.from,
+      request.to,
+      request.amount,
+      indicative: request.indicative,
+    ),
   ];
 
   @override
@@ -165,8 +170,9 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
   Future<SwapQuoteResult> _quote(
     AssetId from,
     AssetId to,
-    Decimal amount,
-  ) async {
+    Decimal amount, {
+    bool indicative = false,
+  }) async {
     SwapQuoteRejected reject(
       SwapQuoteFailureKind kind, {
       AssetId? asset,
@@ -212,7 +218,12 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       return reject(SwapQuoteFailureKind.noRoute);
     }
 
-    final preimage = await _preimage(from, to, amount, order.price);
+    // KDF's preimage refuses an amount the wallet cannot pay, which would hide
+    // the order's price from someone looking it up. The quote then carries
+    // no fees.
+    final preimage = indicative
+        ? const _PreimageUnavailable()
+        : await _preimage(from, to, amount, order.price);
     if (preimage case _PreimageRejected(:final failure)) {
       return SwapQuoteRejected(failure);
     }
@@ -268,6 +279,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
         fromAddress: await _address(from),
         toAddress: await _address(to),
         quotedAt: _now(),
+        feesKnown: preimage is _PreimageFees,
         payload: AtomicSwapPlan(
           base: from,
           rel: to,
@@ -355,8 +367,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       );
     } on Object {
       // A preimage failure should not hide an otherwise valid price. The
-      // quote carries no fees, which leaves its costs unpriced — it cannot be
-      // ranked or presented with a total.
+      // quote carries no fees and says so, which leaves its costs unpriced —
+      // it cannot be ranked or presented with a total.
       return const _PreimageUnavailable();
     }
   }

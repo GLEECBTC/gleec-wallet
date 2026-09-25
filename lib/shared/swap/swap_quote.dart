@@ -2,6 +2,8 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 
+part 'swap_quote_request.dart';
+
 /// Where a swap's liquidity comes from.
 ///
 /// The two sources are not interchangeable: one is peer-to-peer, the other
@@ -263,6 +265,7 @@ class SwapQuote extends Equatable {
     this.estimatedDuration,
     this.slippage,
     this.pricing = const SwapQuotePricing(),
+    this.feesKnown = true,
     this.diagnostic,
     this.payload,
   });
@@ -323,6 +326,10 @@ class SwapQuote extends Equatable {
 
   /// US-dollar figures, where prices are known.
   final SwapQuotePricing pricing;
+
+  /// Whether [fees] lists every cost. An order-book price read without the
+  /// engine's fee preimage has none, which must not read as free.
+  final bool feesKnown;
 
   /// Infrastructure identity (provider, tool) for support diagnostics. Never
   /// shown as primary copy.
@@ -403,6 +410,7 @@ class SwapQuote extends Equatable {
     slippage: slippage,
     quotedAt: quotedAt,
     pricing: pricing,
+    feesKnown: feesKnown,
     diagnostic: diagnostic,
     payload: payload,
   );
@@ -427,68 +435,7 @@ class SwapQuote extends Equatable {
     slippage,
     quotedAt,
     pricing,
+    feesKnown,
     diagnostic,
   ];
-}
-
-/// The request one pricing attempt answers.
-class SwapQuoteRequest extends Equatable {
-  const SwapQuoteRequest({
-    required this.from,
-    required this.to,
-    required this.amount,
-    this.orders = const {SwapQuoteOrder.cheapest},
-    this.slippage,
-  });
-
-  /// The asset being sold.
-  final AssetId from;
-
-  /// The asset being bought.
-  final AssetId to;
-
-  /// How much of [from] to sell.
-  final Decimal amount;
-
-  /// Which routes an aggregator prices. Each is a separate provider request,
-  /// so alternatives are asked for only when someone will compare them.
-  final Set<SwapQuoteOrder> orders;
-
-  /// The price movement a route may allow, as a fraction; null for the
-  /// provider's default.
-  final double? slippage;
-
-  /// This request, for [orders] instead.
-  SwapQuoteRequest withOrders(Set<SwapQuoteOrder> orders) => SwapQuoteRequest(
-    from: from,
-    to: to,
-    amount: amount,
-    orders: orders,
-    slippage: slippage,
-  );
-
-  @override
-  List<Object?> get props => [from, to, amount, orders, slippage];
-}
-
-/// The largest sellable amount a source allows, keeping what fees need.
-class SwapMaxAmount extends Equatable {
-  const SwapMaxAmount({
-    required this.amount,
-    required this.reservedForFees,
-    this.feeAsset,
-  });
-
-  /// What may be sold.
-  final Decimal amount;
-
-  /// Held back for network fees, in [feeAsset] units. Zero when fees are paid
-  /// in another coin.
-  final Decimal reservedForFees;
-
-  /// The coin the reserve is held in.
-  final AssetId? feeAsset;
-
-  @override
-  List<Object?> get props => [amount, reservedForFees, feeAsset];
 }

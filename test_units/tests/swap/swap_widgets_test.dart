@@ -31,6 +31,7 @@ import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/activity/swap_activity_view.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
@@ -257,20 +258,41 @@ void main() {
       expect(find.text('Trading unavailable in your location'), findsWidgets);
     });
 
-    testWidgets('says why an amount is too much', (tester) async {
-      swap.emit(
-        formState(
-          input: '5',
-          issue: SwapFormIssue.insufficient,
-        ).copyWith(evaluation: SwapEvaluationStatus.idle, clearQuotes: true),
-      );
+    testWidgets('prices an amount that is too much, but only to look at', (
+      tester,
+    ) async {
+      swap.emit(formState(input: '5', issue: SwapFormIssue.insufficient));
       await pump(tester, const SwapEntryView());
 
       expect(
         find.text('Only 2 ETH is spendable at this address.'),
         findsOneWidget,
       );
+      expect(find.byType(SwapQuoteStrip), findsOneWidget);
+      expect(
+        find.descendant(of: primary(), matching: find.text('Not enough ETH')),
+        findsOneWidget,
+      );
       expect(primaryEnabled(tester), isFalse);
+    });
+
+    testWidgets('that price is not kept fresh, but can be refreshed', (
+      tester,
+    ) async {
+      swap.emit(
+        formState(
+          input: '5',
+          issue: SwapFormIssue.insufficient,
+          evaluation: SwapEvaluationStatus.expired,
+        ),
+      );
+      await pump(tester, const SwapEntryView());
+
+      expect(
+        find.descendant(of: primary(), matching: find.text('Refresh quote')),
+        findsOneWidget,
+      );
+      expect(primaryEnabled(tester), isTrue);
     });
   });
 

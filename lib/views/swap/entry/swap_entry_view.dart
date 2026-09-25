@@ -22,6 +22,8 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 
+part 'swap_entry_messages.dart';
+
 /// The swap form: what to pay, what to receive, and the best way to do it.
 class SwapEntryView extends StatefulWidget {
   const SwapEntryView({this.panelOpen = false, super.key});
@@ -206,163 +208,6 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     );
   }
 
-  /// One line under the cards: an error, else a warning, else a hint.
-  List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
-    final pay = state.pay;
-    final issue = state.issue;
-    if (issue != null && issue != SwapFormIssue.amountMissing) {
-      final copy = SwapIssueCopy.of(
-        issue,
-        state,
-        networks: _services.networks(),
-        feeNeeded: _feeNeeded(state),
-        feeHeld: _feeHeld(state),
-      );
-      if (copy != null) {
-        return [
-          SwapHelperLine(
-            text: copy.message,
-            tone: issue == SwapFormIssue.assetInactive
-                ? SwapTone.warning
-                : SwapTone.danger,
-          ),
-          if (copy.detail != null) SwapHelperLine(text: copy.detail!),
-        ];
-      }
-    }
-
-    final failure = state.failure;
-    if (state.evaluation == SwapEvaluationStatus.failed && failure != null) {
-      final copy = _failureCopy(state, failure);
-      final tone = failure.kind == SwapQuoteFailureKind.rateLimited
-          ? SwapTone.warning
-          : SwapTone.danger;
-      return [
-        SwapHelperLine(text: copy.message, tone: tone),
-        if (copy.detail != null) SwapHelperLine(text: copy.detail!),
-      ];
-    }
-
-    final partial = _partialNote(state);
-
-    final messages = <Widget>[];
-    if (state.structuralNotice) {
-      messages.add(
-        SwapHelperLine(
-          text: LocaleKeys.swapHelperStructural.tr(),
-          tone: SwapTone.warning,
-        ),
-      );
-    }
-    final quote = state.selectedQuote;
-    final impact = quote?.pricing.priceImpact;
-    if (impact != null && impact >= swapHighImpact) {
-      messages.add(
-        SwapHelperLine(
-          text: LocaleKeys.swapWarningHighImpact.tr(
-            args: [SwapFormat.percent(impact)],
-          ),
-          tone: SwapTone.warning,
-        ),
-      );
-    }
-    if (partial != null) messages.add(SwapHelperLine(text: partial));
-    if (messages.isNotEmpty) return messages;
-
-    if (state.evaluation == SwapEvaluationStatus.checking) {
-      return [SwapHelperLine(text: LocaleKeys.swapHelperChecking.tr())];
-    }
-    final max = state.maxApplied;
-    if (max != null && pay != null) {
-      return [SwapHelperLine(text: _maxHint(max, pay))];
-    }
-    if (quote != null && quote.pricing.expectedUsd == null) {
-      return [
-        SwapHelperLine(text: LocaleKeys.swapWarningPriceUnavailable.tr()),
-      ];
-    }
-    if (state.loadingAssets) {
-      return [SwapHelperLine(text: LocaleKeys.swapHelperLoadingAssets.tr())];
-    }
-    return const [];
-  }
-
-  SwapFailureCopy _failureCopy(
-    UnifiedSwapState state,
-    SwapQuoteFailure failure,
-  ) => SwapFailureCopy.of(
-    failure,
-    state.pay,
-    all: state.failures,
-    support: state.pairSupport,
-    networks: _services.networks(),
-  );
-
-  String? _partialNote(UnifiedSwapState state) {
-    if (state.evaluation != SwapEvaluationStatus.ready) return null;
-    final missing = state.failures.where((f) => f.isTransient).firstOrNull;
-    if (missing == null) return null;
-    if (missing.source == SwapLiquiditySource.atomic) {
-      return LocaleKeys.swapHelperAtomicUnavailable.tr();
-    }
-    return missing.kind == SwapQuoteFailureKind.rateLimited
-        ? LocaleKeys.swapHelperRoutedPaused.tr()
-        : LocaleKeys.swapHelperRoutedUnavailable.tr();
-  }
-
-  String _maxHint(SwapMaxAmount max, AssetId pay) {
-    final ticker = SwapFormat.ticker(pay);
-    final amount = SwapFormat.tokens(max.amount, ticker);
-    if (max.reservedForFees > Decimal.zero) {
-      final feeTicker = max.feeAsset == null
-          ? ticker
-          : SwapFormat.ticker(max.feeAsset!);
-      return LocaleKeys.swapHelperMaxNative.tr(
-        args: [
-          amount,
-          SwapFormat.tokens(
-            max.reservedForFees,
-            feeTicker,
-            rounding: SwapRounding.up,
-          ),
-        ],
-      );
-    }
-    final parent = pay.parentId;
-    if (parent != null) {
-      return LocaleKeys.swapHelperMaxToken.tr(
-        args: [amount, SwapFormat.ticker(parent)],
-      );
-    }
-    return LocaleKeys.swapHelperMaxAtomic.tr(args: [amount]);
-  }
-
-  String? _feeNeeded(UnifiedSwapState state) {
-    final parent = state.pay?.parentId;
-    final quote = state.selectedQuote;
-    if (parent == null || quote == null) return null;
-    var total = Decimal.zero;
-    for (final fee in quote.fees) {
-      if (fee.asset == parent && !fee.deductedFromReceive) total += fee.amount;
-    }
-    return SwapFormat.tokens(
-      total,
-      SwapFormat.ticker(parent),
-      rounding: SwapRounding.up,
-    );
-  }
-
-  String? _feeHeld(UnifiedSwapState state) {
-    final parent = state.pay?.parentId;
-    final held = state.feeBalance;
-    if (parent == null || held == null) return null;
-    return SwapFormat.tokens(
-      held,
-      SwapFormat.ticker(parent),
-      rounding: SwapRounding.down,
-    );
-  }
-
   Widget _primaryAction(BuildContext context, UnifiedSwapState state) {
     final (label, onPressed, busy) = _cta(state);
     return SwapButton(
@@ -411,7 +256,11 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     if (issue == SwapFormIssue.amountMissing) {
       return (LocaleKeys.swapCtaEnterAmount.tr(), null, false);
     }
-    if (issue != null) return (LocaleKeys.swapCtaReview.tr(), null, false);
+    final short = _shortOf(state);
+    final review = short == null
+        ? LocaleKeys.swapCtaReview.tr()
+        : LocaleKeys.swapCtaNotEnough.tr(args: [short]);
+    if (issue != null && !issue.stillPriced) return (review, null, false);
 
     switch (state.evaluation) {
       case SwapEvaluationStatus.idle || SwapEvaluationStatus.checking:
@@ -457,7 +306,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                 : () => _bloc.add(const UnifiedSwapEvaluationRequested()),
             false,
           ),
-          SwapEntryAction.none => (LocaleKeys.swapCtaReview.tr(), null, false),
+          SwapEntryAction.none => (review, null, false),
         };
       case SwapEvaluationStatus.ready:
         if (state.selectedQuote == null) {
@@ -468,12 +317,24 @@ class _SwapEntryViewState extends State<SwapEntryView> {
           );
         }
         return (
-          LocaleKeys.swapCtaReview.tr(),
+          review,
           state.canReview
               ? () => _bloc.add(const UnifiedSwapReviewOpened())
               : null,
           false,
         );
     }
+  }
+
+  /// The ticker the wallet is short of, when that is what stops the swap.
+  String? _shortOf(UnifiedSwapState state) {
+    final pay = state.pay;
+    if (pay == null) return null;
+    return switch (state.issue) {
+      SwapFormIssue.insufficient => SwapFormat.ticker(pay),
+      SwapFormIssue.insufficientForFees ||
+      SwapFormIssue.noFeeBalance => SwapFormat.ticker(pay.parentId ?? pay),
+      _ => null,
+    };
   }
 }

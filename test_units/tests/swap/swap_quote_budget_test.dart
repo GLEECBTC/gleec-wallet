@@ -92,6 +92,18 @@ void main() {
     expect(calls, 0);
   });
 
+  test('a price above the balance is asked for once, not kept fresh', () {
+    // Before: nothing at all, as an amount above the balance was not priced.
+    final calls = _run(amount: '5', (bloc, async) {
+      async.elapse(const Duration(minutes: 2));
+      bloc.add(const UnifiedSwapForegroundChanged(foreground: false));
+      async.elapse(const Duration(minutes: 1));
+      bloc.add(const UnifiedSwapForegroundChanged(foreground: true));
+      async.elapse(const Duration(minutes: 7));
+    });
+    expect(calls, 1, reason: 'no refresh, and no re-price on coming back');
+  });
+
   test('a rate limit is waited out, longer each time', () {
     final calls = _run(rateLimited: true, (bloc, async) {
       async.elapse(const Duration(minutes: 5));
