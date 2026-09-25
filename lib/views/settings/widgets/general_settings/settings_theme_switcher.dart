@@ -22,7 +22,7 @@ class SettingsThemeSwitcher extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 340),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18.0),
-          color: Theme.of(context).colorScheme.onSurface,
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.max,

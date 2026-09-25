@@ -44,7 +44,7 @@ class AssetsList extends StatelessWidget {
         final asset = filteredAssets[index];
         final Color backgroundColor = index.isEven
             ? Theme.of(context).colorScheme.surface
-            : Theme.of(context).colorScheme.onSurface;
+            : Theme.of(context).scaffoldBackgroundColor;
 
         return AssetListItem(
           assetId: asset,

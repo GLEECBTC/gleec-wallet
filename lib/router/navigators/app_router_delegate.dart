@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_event.dart';
 import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/blocs/maker_form_bloc.dart';
@@ -9,7 +7,6 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/settings_menu_value.dart';
 import 'package:web_dex/router/routes.dart';
-import 'package:web_dex/router/state/bridge_section_state.dart';
 import 'package:web_dex/router/state/dex_state.dart';
 import 'package:web_dex/router/state/fiat_state.dart';
 import 'package:web_dex/router/state/market_maker_bot_state.dart';
@@ -61,11 +58,6 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
     final makerFormBloc = RepositoryProvider.of<MakerFormBloc>(context);
     makerFormBloc.showSellCoinSelect = false;
     makerFormBloc.showBuyCoinSelect = false;
-
-    // Bridge form
-    context.read<BridgeBloc>().add(const BridgeShowTickerDropdown(false));
-    context.read<BridgeBloc>().add(const BridgeShowSourceDropdown(false));
-    context.read<BridgeBloc>().add(const BridgeShowTargetDropdown(false));
   }
 
   @override
@@ -80,8 +72,6 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       _setNewFiatRoutePath(configurationToSet);
     } else if (configurationToSet is DexRoutePath) {
       _setNewDexRoutePath(configurationToSet);
-    } else if (configurationToSet is BridgeRoutePath) {
-      _setNewBridgeRoutePath(configurationToSet);
     } else if (configurationToSet is NftRoutePath) {
       _setNewNftsRoutePath(configurationToSet);
     } else if (configurationToSet is SettingsRoutePath) {
@@ -102,12 +92,6 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
     } else {
       routingState.resetDataForPageContent();
     }
-  }
-
-  void _setNewBridgeRoutePath(BridgeRoutePath path) {
-    routingState.selectedMenu = MainMenuValue.bridge;
-    routingState.bridgeState.action = path.action;
-    routingState.bridgeState.uuid = path.uuid;
   }
 
   void _setNewNftsRoutePath(NftRoutePath path) {
@@ -149,7 +133,6 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
       MainMenuValue.wallet: _currentWalletConfiguration,
       MainMenuValue.fiat: _currentFiatConfiguration,
       MainMenuValue.dex: _currentDexConfiguration,
-      MainMenuValue.bridge: _currentBridgeConfiguration,
       MainMenuValue.marketMakerBot: _currentMarketMakerBotConfiguration,
       MainMenuValue.nft: _currentNftConfiguration,
       MainMenuValue.settings: _currentSettingsConfiguration,
@@ -211,17 +194,6 @@ class AppRouterDelegate extends RouterDelegate<AppRoutePath>
     }
 
     return MarketMakerBotRoutePath.marketMakerBot();
-  }
-
-  AppRoutePath get _currentBridgeConfiguration {
-    if (routingState.bridgeState.action == BridgeAction.tradingDetails) {
-      return BridgeRoutePath.swapDetails(
-        routingState.bridgeState.action,
-        routingState.bridgeState.uuid,
-      );
-    }
-
-    return BridgeRoutePath.bridge();
   }
 
   AppRoutePath get _currentNftConfiguration {

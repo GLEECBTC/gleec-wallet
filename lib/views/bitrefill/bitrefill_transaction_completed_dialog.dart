@@ -25,9 +25,7 @@ class BitrefillTransactionCompletedDialog extends StatelessWidget {
     final ThemeData themeData = Theme.of(context);
     return AlertDialog(
       title: Text(title),
-      content: SingleChildScrollView(
-        child: Text(message),
-      ),
+      content: SingleChildScrollView(child: Text(message)),
       actions: <Widget>[
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -59,10 +57,13 @@ class BitrefillTransactionCompletedDialog extends StatelessWidget {
                     height: 16,
                   ),
                 ),
-                textStyle: themeData.textTheme.labelLarge
-                    ?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+                textStyle: themeData.textTheme.labelLarge?.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
                 backgroundColor: themeData.colorScheme.tertiary,
-                onPressed: onPositiveButtonPressed ??
+                onPressed:
+                    onPositiveButtonPressed ??
                     () => Navigator.of(context).pop(),
                 text: LocaleKeys.ok.tr(),
               ),

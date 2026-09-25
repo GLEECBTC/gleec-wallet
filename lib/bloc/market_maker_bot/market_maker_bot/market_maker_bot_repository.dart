@@ -7,6 +7,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/market_maker_bot_reques
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error_type.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class MarketMakerBotRepository {
@@ -36,6 +37,7 @@ class MarketMakerBotRepository {
     if (requestParams.tradeCoinPairs?.isEmpty ?? true) {
       throw ArgumentError('No trade pairs configured');
     }
+    _assertTradePairsAllowed(requestParams.tradeCoinPairs!.values);
 
     await _startStopBotWithExponentialBackoff(
       request,
@@ -86,6 +88,7 @@ class MarketMakerBotRepository {
     // yield MarketMakerBotStatus.stopped;
 
     final requestParams = await loadStoredConfig();
+    _assertTradePairAllowed(tradePair);
     if (requestParams.tradeCoinPairs?.containsKey(tradePair.name) == false) {
       requestParams.tradeCoinPairs?.addEntries([
         MapEntry(tradePair.name, tradePair),
@@ -95,6 +98,7 @@ class MarketMakerBotRepository {
     if (requestParams.tradeCoinPairs?.isEmpty ?? true) {
       yield MarketMakerBotStatus.stopped;
     } else {
+      _assertTradePairsAllowed(requestParams.tradeCoinPairs!.values);
       yield MarketMakerBotStatus.starting;
       final request = MarketMakerBotRequest(
         id: botId,
@@ -132,6 +136,7 @@ class MarketMakerBotRepository {
     if (requestParams.tradeCoinPairs?.isEmpty ?? true) {
       yield MarketMakerBotStatus.stopped;
     } else {
+      _assertTradePairsAllowed(requestParams.tradeCoinPairs!.values);
       // yield MarketMakerBotStatus.starting;
       final request = MarketMakerBotRequest(
         id: botId,
@@ -220,10 +225,12 @@ class MarketMakerBotRepository {
   Future<void> addTradePairToStoredSettings(
     TradeCoinPairConfig tradePair,
   ) async {
+    _assertTradePairAllowed(tradePair);
     final allSettings = await _settingsRepository.loadSettings();
     final settings = allSettings.marketMakerBotSettings;
-    final tradePairs =
-        List<TradeCoinPairConfig>.from(settings.tradeCoinPairConfigs);
+    final tradePairs = List<TradeCoinPairConfig>.from(
+      settings.tradeCoinPairConfigs,
+    );
 
     // remove any existing pairs
     tradePairs.removeWhere(
@@ -239,6 +246,20 @@ class MarketMakerBotRepository {
     );
   }
 
+  void _assertTradePairsAllowed(Iterable<TradeCoinPairConfig> tradePairs) {
+    for (final tradePair in tradePairs.where((pair) => pair.enable)) {
+      _assertTradePairAllowed(tradePair);
+    }
+  }
+
+  void _assertTradePairAllowed(TradeCoinPairConfig tradePair) {
+    if (!canTradeAssetPair(tradePair.baseCoinId, tradePair.relCoinId)) {
+      throw ArgumentError(
+        'Wallet-only assets cannot be used by the market maker bot.',
+      );
+    }
+  }
+
   /// Removes the given trade pair from the stored market maker bot settings.
   /// The settings are updated in the settings repository.
   /// Throws an [Exception] if the settings cannot be updated.
@@ -249,8 +270,9 @@ class MarketMakerBotRepository {
   ) async {
     final allSettings = await _settingsRepository.loadSettings();
     final settings = allSettings.marketMakerBotSettings;
-    final tradePairs =
-        List<TradeCoinPairConfig>.from(settings.tradeCoinPairConfigs);
+    final tradePairs = List<TradeCoinPairConfig>.from(
+      settings.tradeCoinPairConfigs,
+    );
 
     for (final pair in tradePairsToRemove) {
       tradePairs.removeWhere((e) => e.name == pair.name);

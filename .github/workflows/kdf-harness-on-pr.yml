@@ -1,0 +1,127 @@
+# Wallet-load performance gate.
+#
+# Lives in the app repo rather than the SDK submodule because only this repo has
+# the `generate-assets` composite action, which the harness needs: booting a
+# real KomodoDefiSdk reads the bundled coins config.
+#
+# Replay tier only. It spawns no KDF binary, opens no chain connection, and
+# holds no port, so it is safe to run on every PR. The real-KDF tier is a
+# nightly job (kdf-harness-nightly.yml) and never gates.
+name: KDF harness (wallet load)
+run-name: ${{ github.actor }} is checking wallet load performance ⏱️
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  replay_tier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # HD and iguana take genuinely different paths - HD pays an address scan
+      # that iguana does not - and before this harness the HD branch had no
+      # coverage anywhere in either repo. A shared failure must not hide the
+      # other mode's result.
+      fail-fast: false
+      matrix:
+        wallet_type: [hd, iguana]
+
+    steps:
+      - name: Setup GH Actions
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Flutter and dependencies
+        uses: ./.github/actions/flutter-deps
+
+      - name: Fetch packages and generate assets
+        uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run the harness (${{ matrix.wallet_type }})
+        working-directory: sdk/packages/komodo_defi_harness
+        timeout-minutes: 10
+        env:
+          # `flutter test` re-runs the asset build transformer, which reads the
+          # coins repo over the GitHub API. Unauthenticated it shares the
+          # runner's 60 req/hr IP budget and fails with `403 rate limit
+          # exceeded` - intermittently, so it looks like flake rather than a
+          # missing token.
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Never set here. The process tier must not start in this job: it
+          # would spawn a 120 MB binary and bind the fixed port 7783.
+          KDF_HARNESS: ""
+          # Makes the matrix real. Without it both legs would run both
+          # derivation modes and report the same result twice, and a failure
+          # would not say which mode broke.
+          KDF_HARNESS_WALLET_TYPE: ${{ matrix.wallet_type }}
+        run: flutter test --exclude-tags bench
+
+      - name: Benchmark
+        working-directory: sdk/packages/komodo_defi_harness
+        timeout-minutes: 10
+        env:
+          # Same reason as the step above - this also runs the transformer.
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BENCH_OUT: build/bench_result.json
+          KDF_HARNESS_WALLET_TYPE: ${{ matrix.wallet_type }}
+        run: flutter test --tags bench
+
+      - name: Compare against the committed baseline
+        working-directory: sdk/packages/komodo_defi_harness
+        run: |
+          dart run tool/compare_bench.dart \
+            --baseline tool/bench_baseline.json \
+            --current build/bench_result.json \
+            --max-regression 0.30
+
+      - name: Upload bench result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.wallet_type }}
+          # ONLY the JSON. Never the harness workspace: on the process tier it
+          # contains a real wallet database, and making "upload the run
+          # directory" a habit here is how that leaks later.
+          path: sdk/packages/komodo_defi_harness/build/bench_result.json
+          if-no-files-found: warn
+
+      # `flutter test` rewrites pubspec.lock and the framework's
+      # app_build/build_config.json (bundled_coins_repo_commit). Those edits are
+      # a side effect of running tests, not a result, and a PR that silently
+      # carries them is a PR nobody reviewed properly.
+      - name: Fail if the tree is dirty
+        run: |
+          # Paths inside a submodule must be reset INSIDE it. The parent tracks
+          # `sdk` as a gitlink, so `git checkout -- sdk/pubspec.lock` fails with
+          # "pathspec did not match any file(s) known to git" - which the old
+          # `|| true` swallowed, leaving both SDK files modified and unreset.
+          git checkout -- pubspec.lock 2>/dev/null || true
+          git -C sdk checkout -- \
+            packages/komodo_defi_framework/app_build/build_config.json \
+            2>/dev/null || true
+          # `sdk/pubspec.lock` is deliberately absent above: the SDK gitignores
+          # it (sdk/.gitignore:34 `/pubspec.lock`), so it is untracked there,
+          # nothing can reset it, and `ignore = untracked` means rewriting it
+          # never trips this gate. Only the root pubspec.lock is tracked.
+
+          # Check the submodule explicitly. The parent only ever reports a bare
+          # ` M sdk`, which does not say which file drifted; and until
+          # .gitmodules moved from `ignore = dirty` to `untracked` it reported
+          # nothing at all, so this gate could not see the very files above.
+          # `--untracked-files=no` keeps this consistent with the submodule's
+          # `ignore = untracked` policy: a fresh status inside the submodule
+          # does NOT inherit the parent's ignore setting, so without this an
+          # untracked build dropping would fail a gate that is meant to catch
+          # modified tracked files.
+          parent_dirty=$(git status --porcelain)
+          sdk_dirty=$(git -C sdk status --porcelain --untracked-files=no)
+          if [ -n "$parent_dirty" ] || [ -n "$sdk_dirty" ]; then
+            echo "::error::The test run left the working tree dirty:"
+            [ -n "$parent_dirty" ] && echo "$parent_dirty"
+            [ -n "$sdk_dirty" ] && echo "$sdk_dirty" | sed 's|^\(...\)|\1sdk/|'
+            exit 1
+          fi

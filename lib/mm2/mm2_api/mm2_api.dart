@@ -57,7 +57,7 @@ class Mm2Api {
   Mm2Api({required MM2 mm2, required KomodoDefiSdk sdk})
     : _sdk = sdk,
       _mm2 = mm2 {
-    nft = Mm2ApiNft(_mm2.call, sdk);
+    nft = Mm2ApiNft(_mm2.call);
   }
 
   final MM2 _mm2;

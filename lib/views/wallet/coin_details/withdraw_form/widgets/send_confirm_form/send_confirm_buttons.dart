@@ -18,11 +18,8 @@ class SendConfirmButtons extends StatelessWidget {
   final VoidCallback onBackTap;
   @override
   Widget build(BuildContext context) {
-    if (isMobile) {
-      return _MobileButtons(
-        hasError: hasSendError,
-        onBackTap: onBackTap,
-      );
+    if (isMobile || MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+      return _MobileButtons(hasError: hasSendError, onBackTap: onBackTap);
     }
     return _DesktopButtons(hasError: hasSendError, onBackTap: onBackTap);
   }
@@ -34,34 +31,45 @@ class _MobileButtons extends StatelessWidget {
   final VoidCallback onBackTap;
   @override
   Widget build(BuildContext context) {
-    const height = 52.0;
+    final useLargeTextLayout = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    final height = useLargeTextLayout ? 72.0 : 52.0;
+    final backButton = AppDefaultButton(
+      key: const Key('confirm-back-button'),
+      height: height + 6,
+      padding: const EdgeInsets.symmetric(vertical: 0),
+      onPressed: onBackTap,
+      text: LocaleKeys.back.tr(),
+    );
+    final confirmButton = UiPrimaryButton(
+      key: const Key('confirm-agree-button'),
+      height: height,
+      onPressed: () =>
+          context.read<WithdrawFormBloc>().add(const WithdrawFormSubmitted()),
+      text: LocaleKeys.confirm.tr(),
+    );
 
-    return Row(
-      children: [
-        Expanded(
-          child: AppDefaultButton(
-            key: const Key('confirm-back-button'),
-            height: height + 6,
-            padding: const EdgeInsets.symmetric(vertical: 0),
-            onPressed: onBackTap,
-            text: LocaleKeys.back.tr(),
-          ),
-        ),
-        if (!hasError)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16.0),
-              child: UiPrimaryButton(
-                key: const Key('confirm-agree-button'),
-                height: height,
-                onPressed: () => context
-                    .read<WithdrawFormBloc>()
-                    .add(const WithdrawFormSubmitted()),
-                text: LocaleKeys.confirm.tr(),
-              ),
-            ),
-          ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stackButtons =
+            useLargeTextLayout || constraints.maxWidth < 360 || hasError;
+        if (stackButtons) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              backButton,
+              if (!hasError) ...[const SizedBox(height: 12), confirmButton],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: backButton),
+            const SizedBox(width: 16),
+            Expanded(child: confirmButton),
+          ],
+        );
+      },
     );
   }
 }
@@ -72,7 +80,7 @@ class _DesktopButtons extends StatelessWidget {
   final VoidCallback onBackTap;
   @override
   Widget build(BuildContext context) {
-    const double height = 40.0;
+    const double height = 48.0;
     const double space = 16.0;
 
     final width = hasError ? withdrawWidth : (withdrawWidth - space) / 2;
@@ -95,9 +103,9 @@ class _DesktopButtons extends StatelessWidget {
               key: const Key('confirm-agree-button'),
               width: width,
               height: height,
-              onPressed: () => context
-                  .read<WithdrawFormBloc>()
-                  .add(const WithdrawFormSubmitted()),
+              onPressed: () => context.read<WithdrawFormBloc>().add(
+                const WithdrawFormSubmitted(),
+              ),
               text: LocaleKeys.confirm.tr(),
             ),
           ),

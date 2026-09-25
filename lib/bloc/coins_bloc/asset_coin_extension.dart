@@ -104,7 +104,7 @@ extension CoinTypeExtension on CoinSubClass {
         return CoinType.ubiq;
       case CoinSubClass.bep20:
         return CoinType.bep20;
-      case CoinSubClass.matic:
+      case CoinSubClass.polygon:
         return CoinType.plg20;
       case CoinSubClass.utxo:
         return CoinType.utxo;
@@ -138,7 +138,7 @@ extension CoinTypeExtension on CoinSubClass {
       case CoinSubClass.avx20:
       case CoinSubClass.bep20:
       case CoinSubClass.ftm20:
-      case CoinSubClass.matic:
+      case CoinSubClass.polygon:
       case CoinSubClass.hrc20:
       case CoinSubClass.arbitrum:
       case CoinSubClass.moonriver:
@@ -202,7 +202,7 @@ extension CoinSubClassExtension on CoinType {
       case CoinType.bep20:
         return CoinSubClass.bep20;
       case CoinType.plg20:
-        return CoinSubClass.matic;
+        return CoinSubClass.polygon;
       case CoinType.utxo:
         return CoinSubClass.utxo;
       case CoinType.sbch:
@@ -298,6 +298,29 @@ extension CoinSupportOps on Iterable<Coin> {
   }
 
   static Future<bool> _alwaysSupported(Coin _) async => true;
+
+  /// Waits until at least [threshold] of these coins are enabled.
+  ///
+  /// Thin adapter over [KomodoDefiSdk.waitForEnabledAssetsToPassThreshold] -
+  /// the app deals in [Coin], the SDK in [AssetId]. Replaces an app-side poll
+  /// loop that had drifted from the SDK's semantics: its deadline was checked
+  /// *after* an unbounded read, so it could never fire.
+  ///
+  /// Returns true when the threshold is met, false on timeout, and true
+  /// immediately for an empty list.
+  Future<bool> waitForActivationThreshold(
+    KomodoDefiSdk sdk, {
+    double threshold = 0.5,
+    Duration timeout = const Duration(seconds: 30),
+  }) {
+    final ids = map((coin) => coin.id).toSet();
+    if (ids.isEmpty) return Future.value(true);
+    return sdk.waitForEnabledAssetsToPassThreshold(
+      ids,
+      threshold: threshold,
+      timeout: timeout,
+    );
+  }
 
   Future<List<Coin>> removeInactiveCoins(KomodoDefiSdk sdk) async {
     final activeIds = await sdk.activatedAssetsCache.getActivatedAssetIds();

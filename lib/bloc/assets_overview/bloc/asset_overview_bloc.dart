@@ -8,10 +8,8 @@ import 'package:web_dex/bloc/assets_overview/investment_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/fiat_value.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/profit_loss.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
-import 'package:web_dex/bloc/cex_market_data/sdk_auth_activation_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/model/coin.dart';
-import 'package:web_dex/shared/constants.dart';
 
 part 'asset_overview_event.dart';
 part 'asset_overview_state.dart';
@@ -101,10 +99,7 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
         return;
       }
 
-      await _sdk.waitForEnabledCoinsToPassThreshold(
-        supportedCoins,
-        delay: kActivationPollingInterval,
-      );
+      await supportedCoins.waitForActivationThreshold(_sdk);
 
       final activeCoins = await supportedCoins.removeInactiveCoins(_sdk);
       if (activeCoins.isEmpty) {

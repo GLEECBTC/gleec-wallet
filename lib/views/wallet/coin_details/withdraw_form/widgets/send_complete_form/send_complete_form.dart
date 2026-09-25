@@ -25,6 +25,7 @@ class SendCompleteForm extends StatelessWidget {
     return BlocBuilder<WithdrawFormBloc, WithdrawFormState>(
       builder: (context, WithdrawFormState state) {
         final feeValue = state.result?.fee;
+        final txHash = state.result?.txHash;
 
         if (state.result == null) return const SizedBox.shrink();
 
@@ -74,11 +75,11 @@ class SendCompleteForm extends StatelessWidget {
                 ],
               ),
             ),
-            if (state.result?.txHash != null)
+            if (txHash != null && txHash.isNotEmpty)
               _TransactionHash(
                 feeValue: feeValue!.totalFee.toString(),
                 feeCoin: feeValue.coin,
-                txHash: state.result!.txHash,
+                txHash: txHash,
                 usdFeePrice: state.usdFeePrice,
                 isFeePriceExpensive: state.isFeePriceExpensive,
               ),

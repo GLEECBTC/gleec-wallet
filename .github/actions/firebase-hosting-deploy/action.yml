@@ -42,6 +42,7 @@ runs:
         EXPIRES: ${{ inputs.expires }}
         PROJECT_ID: ${{ inputs.projectId }}
         FIREBASE_TOOLS_VERSION: ${{ inputs.firebaseToolsVersion }}
+        URL_READER: ${{ github.action_path }}/../../scripts/hosting_deploy_url.sh
       run: |
         set -euo pipefail
 
@@ -62,10 +63,8 @@ runs:
         if [ "$CHANNEL_ID" = "live" ]; then
           if [ -n "$TARGET" ]; then
             deploy_args=(deploy --only "hosting:$TARGET")
-            details_url="https://$TARGET.web.app/"
           else
             deploy_args=(deploy --only hosting)
-            details_url="https://$PROJECT_ID.web.app/"
           fi
           is_preview=false
         else
@@ -81,7 +80,6 @@ runs:
           if [ -n "$EXPIRES" ]; then
             deploy_args+=(--expires "$EXPIRES")
           fi
-          details_url=""
           is_preview=true
         fi
 
@@ -131,20 +129,17 @@ runs:
           exit "$deploy_status"
         done
 
-        if [ "$is_preview" = "true" ]; then
-          set +e
-          channel_output=$(npx "firebase-tools@$FIREBASE_TOOLS_VERSION" hosting:channel:open "$safe_channel_id" --site "$TARGET" --project "$PROJECT_ID" 2>&1)
-          open_status=$?
-          set -e
-
-          printf '%s\n' "$channel_output"
-
-          details_url=$(printf '%s\n%s\n' "$(cat "$deploy_log")" "$channel_output" \
-            | grep -Eo 'https://[^"[:space:]]+\.web\.app[^"[:space:]]*' \
-            | tail -n 1 || true)
-
-          if [ "$open_status" -ne 0 ] && [ -z "$details_url" ]; then
-            exit "$open_status"
+        # Read the deployed URL out of what the CLI actually did, rather than
+        # building it from the target name -- a deploy target is not a site ID.
+        # See the script for why, and .github/scripts/test_hosting_deploy_url.sh
+        # for the output formats it depends on.
+        if ! details_url=$("$URL_READER" "$deploy_log"); then
+          echo "Deploy succeeded but no URL was found in the Firebase CLI output."
+          details_url=""
+          if [ "$is_preview" = "true" ]; then
+            # The preview URL is consumed downstream to comment on the PR, so a
+            # missing one is a failure rather than a cosmetic gap.
+            exit 1
           fi
         fi
 

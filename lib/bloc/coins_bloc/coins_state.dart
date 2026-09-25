@@ -37,25 +37,40 @@ class CoinsState extends Equatable {
     Map<String, AssetPubkeys>? pubkeys,
     Map<String, CexPrice>? prices,
   }) {
-    // Filtering is required to avoid including "NFT_*" assets in the coins
-    // or walletCoins maps. The user should not see these assets, as they are
-    // only needed to support the NFT feature.
-    final walletCoinsWithoutExcludedCoins = _filterExcludedAssets(
-      walletCoins ?? this.walletCoins,
-    );
-    final coinsWithoutExcludedCoins = _filterExcludedAssets(
-      coins ?? this.coins,
-    );
-
+    // Filtering out "NFT_*" assets is done by the constructor. It used to be
+    // repeated here as well, so every copyWith rebuilt both maps twice - four
+    // O(coins) allocations per emission over an ~800-entry catalogue, on a
+    // path that emits dozens of times during login.
     return CoinsState(
-      coins: coinsWithoutExcludedCoins,
-      walletCoins: walletCoinsWithoutExcludedCoins,
+      coins: coins ?? this.coins,
+      walletCoins: walletCoins ?? this.walletCoins,
       pubkeys: pubkeys ?? this.pubkeys,
       prices: prices ?? this.prices,
     );
   }
 
   static Map<String, Coin> _filterExcludedAssets(Map<String, Coin> coins) {
+    // Return the input untouched when there is nothing to strip.
+    //
+    // `Map.fromEntries` always allocated a new map, so every state carried maps
+    // that were never `identical` to the previous state's - which defeats
+    // `Bloc.emit`'s identity short-circuit and forces Equatable into a deep
+    // walk of both ~800-entry catalogues (each `Coin` recursing into its
+    // `parentCoin`) on every emission, dozens of times during login, only to
+    // conclude "unchanged".
+    //
+    // `excludedAssetList` is a const set and callers pass maps that have
+    // already been through this filter, so the common case is a pure scan with
+    // no allocation.
+    var hasExcluded = false;
+    for (final coinId in coins.keys) {
+      if (excludedAssetList.contains(coinId)) {
+        hasExcluded = true;
+        break;
+      }
+    }
+    if (!hasExcluded) return coins;
+
     return Map.fromEntries(
       coins.entries.where((entry) {
         final coinId = entry.key;

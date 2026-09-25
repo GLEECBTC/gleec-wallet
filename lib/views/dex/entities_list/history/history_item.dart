@@ -112,7 +112,7 @@ class _HistoryItemState extends State<HistoryItem> {
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              color: Theme.of(context).colorScheme.onSurface,
+              color: Theme.of(context).scaffoldBackgroundColor,
             ),
             child: isMobile
                 ? _HistoryItemMobile(

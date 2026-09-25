@@ -1,8 +1,11 @@
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
+    show ActivationPolicyStatus;
 import 'package:web_dex/bloc/trading_status/disallowed_feature.dart';
 import 'package:web_dex/bloc/trading_status/app_geo_status.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'trading_status_service.dart';
 
 part 'trading_status_event.dart';
@@ -39,25 +42,17 @@ class TradingStatusBloc extends Bloc<TradingStatusEvent, TradingStatusState> {
     Emitter<TradingStatusState> emit,
   ) async {
     emit(TradingStatusLoadInProgress());
-    // Seed immediately with cached status if available; continue with stream.
-    try {
-      final status = _service.currentStatus;
-      emit(
-        TradingStatusLoadSuccess(
+    emit(_stateFor(_service.currentStatus));
+    await emit.forEach(_service.statusStream, onData: _stateFor);
+  }
+
+  TradingStatusState _stateFor(AppGeoStatus status) =>
+      switch (status.lookupStatus) {
+        ActivationPolicyStatus.loading => TradingStatusLoadInProgress(),
+        ActivationPolicyStatus.unavailable => TradingStatusLoadFailure(),
+        ActivationPolicyStatus.ready => TradingStatusLoadSuccess(
           disallowedAssets: status.disallowedAssets,
           disallowedFeatures: status.disallowedFeatures,
         ),
-      );
-    } catch (_) {
-      // Service not initialized yet; will emit once stream produces data.
-    }
-    await emit.forEach(
-      _service.statusStream,
-      onData: (AppGeoStatus status) => TradingStatusLoadSuccess(
-        disallowedAssets: status.disallowedAssets,
-        disallowedFeatures: status.disallowedFeatures,
-      ),
-      onError: (error, stackTrace) => TradingStatusLoadFailure(),
-    );
-  }
+      };
 }

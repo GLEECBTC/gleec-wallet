@@ -12,6 +12,8 @@ import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.da
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:web_dex/analytics/frame_timing_recorder.dart';
+import 'package:web_dex/analytics/wallet_load_timeline.dart';
 import 'package:web_dex/analytics/widgets/analytics_lifecycle_handler.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/app_config/package_information.dart';
@@ -37,6 +39,7 @@ import 'package:web_dex/services/feedback/app_feedback_wrapper.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
 import 'package:web_dex/services/initializer/legacy_app_settings_migration_service.dart';
+import 'package:web_dex/services/initializer/app_error_handling.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -51,15 +54,16 @@ PerformanceMode? get appDemoPerformanceMode =>
     _appDemoPerformanceMode ?? _getPerformanceModeFromUrl();
 
 Future<void> main() async {
-  await runZonedGuarded(() async {
+  Future<void> startApp() async {
+    WalletLoadTimeline.instance.markProcessStart();
     usePathUrlStrategy();
     WidgetsFlutterBinding.ensureInitialized();
     Bloc.observer = AppBlocObserver();
     PerformanceAnalytics.init();
-
-    FlutterError.onError = (FlutterErrorDetails details) {
-      catchUnhandledExceptions(details.exception, details.stack);
-    };
+    initFrameTimingCapture();
+    if (kIsWeb) {
+      log(tronGaslessBuildPolicyMarker, path: 'GasFree build policy').ignore();
+    }
 
     // Foundational dependencies / setup - everything else builds on these 3.
     // The current focus is migrating mm2Api to the new sdk, so that the sdk
@@ -82,8 +86,22 @@ Future<void> main() async {
     );
 
     final tradingStatusRepository = TradingStatusRepository(komodoDefiSdk);
-    final tradingStatusService = TradingStatusService(tradingStatusRepository);
-    await tradingStatusService.initialize();
+    final tradingStatusService = TradingStatusService(
+      tradingStatusRepository,
+      activationPolicy: komodoDefiSdk.activationPolicy,
+    );
+    // Keep startup responsive while the SDK's loading policy defers activation.
+    // Consumers observe policy changes and resume eligible work after lookup.
+    unawaited(
+      tradingStatusService.initialize().catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        // `initialize()` swallows fetch failures itself, so reaching here means
+        // the watcher setup failed - worth a line, not worth a crash.
+        log('Trading status initialization failed: $error').ignore();
+      }),
+    );
     final arrrActivationService = ArrrActivationService(komodoDefiSdk, mm2);
 
     final coinsRepo = CoinsRepo(
@@ -99,21 +117,16 @@ Future<void> main() async {
       legacyNativeWalletMigration: legacyNativeWalletMigration,
     );
 
-    // Start FD monitoring on iOS (works in both Debug and Release)
+    // Start FD monitoring on iOS (works in both Debug and Release).
+    // A diagnostic, so it is bounded and never awaited: a method channel that
+    // does not answer must not hold the first frame.
     if (PlatformTuner.isIOS) {
-      try {
-        final result = await FdMonitorService().start(intervalSeconds: 60.0);
-        if (result['success'] == true) {
-          log(
-            'FD Monitor started successfully in ${kDebugMode ? "DEBUG" : "RELEASE"} mode',
-          );
-        } else {
-          log('FD Monitor failed to start: ${result['message']}');
-        }
-      } catch (e) {
-        log('Failed to start FD Monitor: $e');
-      }
+      unawaited(_startFdMonitor());
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WalletLoadTimeline.instance.mark(WalletLoadMark.appFirstFrame);
+    });
 
     runApp(
       EasyLocalization(
@@ -141,7 +154,34 @@ Future<void> main() async {
         ),
       ),
     );
-  }, catchUnhandledExceptions);
+  }
+
+  await runWithAppErrorHandling(
+    startApp,
+    isTestMode: isTestMode,
+    onError: catchUnhandledExceptions,
+  );
+}
+
+/// iOS file-descriptor monitoring. Bounded so a silent method channel costs a
+/// log line rather than the startup path it used to sit on.
+Future<void> _startFdMonitor() async {
+  try {
+    final result = await FdMonitorService()
+        .start(intervalSeconds: 60.0)
+        .timeout(const Duration(seconds: 2));
+    if (result['success'] == true) {
+      log(
+        'FD Monitor started successfully in ${kDebugMode ? "DEBUG" : "RELEASE"} mode',
+      ).ignore();
+    } else {
+      log('FD Monitor failed to start: ${result['message']}').ignore();
+    }
+  } on TimeoutException {
+    log('FD Monitor did not start within 2s; continuing without it').ignore();
+  } catch (e) {
+    log('Failed to start FD Monitor: $e').ignore();
+  }
 }
 
 void catchUnhandledExceptions(Object error, StackTrace? stack) {
@@ -182,8 +222,46 @@ PerformanceMode? _getPerformanceModeFromUrl() {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final _sensitivityController = ScreenshotSensitivityController();
+  LegalDocumentsRepository? _legalDocuments;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repository = context.read<LegalDocumentsRepository>();
+    if (!identical(repository, _legalDocuments)) {
+      _legalDocuments = repository;
+      unawaited(repository.refreshConsentDocuments());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_legalDocuments?.refreshConsentDocuments());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sensitivityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +271,6 @@ class MyApp extends StatelessWidget {
       context,
     );
 
-    final sensitivityController = ScreenshotSensitivityController();
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthBloc>(
@@ -209,11 +286,11 @@ class MyApp extends StatelessWidget {
           },
         ),
       ],
-      child: AppFeedbackWrapper(
-        child: AnalyticsLifecycleHandler(
-          child: WindowCloseHandler(
-            child: ScreenshotSensitivity(
-              controller: sensitivityController,
+      child: ScreenshotSensitivity(
+        controller: _sensitivityController,
+        child: AppFeedbackWrapper(
+          child: AnalyticsLifecycleHandler(
+            child: WindowCloseHandler(
               child: app_bloc_root.AppBlocRoot(
                 storedPrefs: _storedSettings!,
                 komodoDefiSdk: komodoDefiSdk,

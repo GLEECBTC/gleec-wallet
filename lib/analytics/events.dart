@@ -162,6 +162,65 @@ class PageInteractiveDelayEventData extends AnalyticsEventData {
   };
 }
 
+/// E45: Delay from sign-in until the wallet total in USD can first be shown.
+///
+/// The metric users were actually complaining about, and the one nothing here
+/// measured. [PageInteractiveDelayEventData] stops when the loading logo is
+/// hidden and [WalletListHalfViewportReachedEventData] only fires on scroll -
+/// both can be green while every balance row still shows a placeholder.
+///
+/// Stops at the first non-null `computeWalletTotalUsd`, i.e. the first frame in
+/// which at least one asset has both a balance and a price. Fired once per
+/// session; see `WalletLoadTimeline`.
+///
+/// [assetCount] and [pricedAssetCount] are carried because the timing is only
+/// interpretable next to them: one priced asset out of forty is a very
+/// different result from forty out of forty at the same millisecond count.
+class TimeToFirstBalanceEventData extends AnalyticsEventData {
+  const TimeToFirstBalanceEventData({
+    required this.timeToFirstBalanceMs,
+    required this.assetCount,
+    required this.pricedAssetCount,
+    required this.walletType,
+  });
+
+  final int timeToFirstBalanceMs;
+  final int assetCount;
+  final int pricedAssetCount;
+
+  /// `hd` or `iguana`. HD pays an address-scan cost that iguana does not, and
+  /// without this the two populations average into a number describing neither.
+  final String walletType;
+
+  @override
+  String get name => 'time_to_first_balance';
+
+  @override
+  Map<String, Object> get parameters => {
+    'time_to_first_balance_ms': timeToFirstBalanceMs,
+    'asset_count': assetCount,
+    'priced_asset_count': pricedAssetCount,
+    'wallet_type': walletType,
+  };
+}
+
+/// E45: Delay from sign-in until the wallet total in USD can first be shown.
+class AnalyticsTimeToFirstBalanceEvent extends AnalyticsSendDataEvent {
+  AnalyticsTimeToFirstBalanceEvent({
+    required int timeToFirstBalanceMs,
+    required int assetCount,
+    required int pricedAssetCount,
+    required String walletType,
+  }) : super(
+         TimeToFirstBalanceEventData(
+           timeToFirstBalanceMs: timeToFirstBalanceMs,
+           assetCount: assetCount,
+           pricedAssetCount: pricedAssetCount,
+           walletType: walletType,
+         ),
+       );
+}
+
 /// E44: Delay from page open until interactive (Loading logo hidden)
 class AnalyticsPageInteractiveDelayEvent extends AnalyticsSendDataEvent {
   AnalyticsPageInteractiveDelayEvent({

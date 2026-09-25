@@ -9,12 +9,10 @@ import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
 import 'package:web_dex/bloc/cex_market_data/common/update_frequency_backoff_strategy.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
-import 'package:web_dex/bloc/cex_market_data/sdk_auth_activation_extension.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/text_error.dart';
-import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/kdf_error_display.dart';
 
 part 'profit_loss_event.dart';
@@ -81,10 +79,7 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
 
       // Fetch the un-cached version of the chart to update the cache.
       if (supportedCoins.isNotEmpty) {
-        await _sdk.waitForEnabledCoinsToPassThreshold(
-          supportedCoins,
-          delay: kActivationPollingInterval,
-        );
+        await supportedCoins.waitForActivationThreshold(_sdk);
       }
       final activeCoins = await supportedCoins.removeInactiveCoins(_sdk);
       if (activeCoins.isNotEmpty) {

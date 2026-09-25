@@ -20,6 +20,22 @@ class TransactionHistoryStartedLoading extends TransactionHistoryEvent {
   const TransactionHistoryStartedLoading();
 }
 
+/// The wallet's own addresses, which arrive after the list does.
+///
+/// They only affect how recipients are ordered for display, so the list is
+/// rendered without them and re-sorted once they resolve. [assetId] guards
+/// against a late resolution from a previous subscription landing on the
+/// current one.
+class TransactionHistoryAddressesUpdated extends TransactionHistoryEvent {
+  const TransactionHistoryAddressesUpdated({
+    required this.assetId,
+    required this.addresses,
+  });
+
+  final AssetId assetId;
+  final Set<String> addresses;
+}
+
 class TransactionHistoryFailure extends TransactionHistoryEvent {
   TransactionHistoryFailure({required this.error});
   final BaseError error;

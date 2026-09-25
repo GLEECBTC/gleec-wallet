@@ -24,18 +24,19 @@ class FiatPaymentMethodGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: EdgeInsets.zero,
-      color: Theme.of(context).colorScheme.onSurface,
+      color: Theme.of(context).scaffoldBackgroundColor,
       elevation: 4,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
           color: Theme.of(context).primaryColor.withValues(
-                alpha: selectedPaymentMethod != null &&
-                        selectedPaymentMethod!.providerId == providerId
-                    ? 1
-                    : 0.25,
-              ),
+            alpha:
+                selectedPaymentMethod != null &&
+                    selectedPaymentMethod!.providerId == providerId
+                ? 1
+                : 0.25,
+          ),
         ),
       ),
       child: Padding(
@@ -60,8 +61,8 @@ class FiatPaymentMethodGroup extends StatelessWidget {
                   paymentMethodData: method,
                   selectedPaymentMethod: selectedPaymentMethod,
                   onSelect: (method) => context.read<FiatFormBloc>().add(
-                        FiatFormPaymentMethodSelected(method),
-                      ),
+                    FiatFormPaymentMethodSelected(method),
+                  ),
                 );
               },
             ),

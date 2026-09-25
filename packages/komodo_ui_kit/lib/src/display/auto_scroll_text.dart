@@ -52,7 +52,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // TODO: Possible future refactoring to only run animation if the text
       //  animation is shown (`isTextAnimatable`).
-      unawaited(runAnimation());
+      if (mounted) unawaited(runAnimation());
     });
   }
 
@@ -179,9 +179,45 @@ class _AutoScrollTextState extends State<AutoScrollText>
     return _textWidth!;
   }
 
+  /// The pause the animation is currently sitting on.
+  ///
+  /// [Future.delayed] cannot be cancelled, so a pause left running outlives the
+  /// widget it belongs to. Holding it here lets [dispose] drop it, rather than
+  /// leave a timer that keeps the animation alive past the widget - which is
+  /// also what fails a widget test rendering this widget, on the test
+  /// binding's pending-timer check.
+  Timer? _pauseTimer;
+
+  Completer<bool>? _pauseCompleter;
+
+  /// Waits [duration] and answers whether the animation should carry on, which
+  /// it should not if the widget was disposed of while waiting.
+  Future<bool> _pauseFor(Duration duration) {
+    _cancelPause();
+
+    final completer = _pauseCompleter = Completer<bool>();
+
+    _pauseTimer = Timer(duration, () {
+      _pauseTimer = null;
+      _pauseCompleter = null;
+      completer.complete(mounted);
+    });
+
+    return completer.future;
+  }
+
+  void _cancelPause() {
+    _pauseTimer?.cancel();
+    _pauseTimer = null;
+
+    // Answering the waiter rather than dropping it lets the animation loop
+    // exit, instead of leaving it suspended on a future that never completes.
+    _pauseCompleter?.complete(false);
+    _pauseCompleter = null;
+  }
+
   Future<void> runAnimation() async {
-    await Future.delayed(_kInitialPause);
-    if (!mounted) return;
+    if (!await _pauseFor(_kInitialPause)) return;
 
     computeAnimation(_lastAvailableSize!);
 
@@ -189,13 +225,11 @@ class _AutoScrollTextState extends State<AutoScrollText>
       try {
         await _controller.animateTo(1, duration: _kMovingDuration);
 
-        await Future.delayed(_kPauseBeforeReverse);
-
-        if (!mounted) break;
+        if (!await _pauseFor(_kPauseBeforeReverse)) break;
 
         await _controller.animateBack(0, duration: _kMovingDuration);
 
-        await Future.delayed(_kPauseBeforeRepeat);
+        if (!await _pauseFor(_kPauseBeforeRepeat)) break;
       } catch (e) {
         // There may be a brief period after the widget is unmounted and/or
         // the conttoller is disposed of, but before the animation is stopped.
@@ -293,6 +327,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
 
   @override
   void dispose() {
+    _cancelPause();
     _controller.dispose();
     super.dispose();
   }

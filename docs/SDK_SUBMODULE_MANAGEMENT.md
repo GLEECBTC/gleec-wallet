@@ -13,7 +13,7 @@ The Gleec Wallet project uses the komodo-defi-sdk-flutter repository as a git su
 
 ## Initial Setup
 
-The `sdk/` submodule is configured to track the `dev` branch but stays pinned to a specific commit in this repository. Cloning should initialize it to the recorded (pinned) commit, not the latest.
+The `sdk/` submodule is configured to track the `main` branch (see `.gitmodules`) but stays pinned to a specific commit in this repository. Cloning should initialize it to the recorded (pinned) commit, not the latest.
 
 Recommended (initializes submodules at the pinned commits while cloning):
 
@@ -27,21 +27,21 @@ If you already cloned without submodules:
 git submodule update --init --recursive
 ```
 
-Either approach ensures the SDK in `sdk/` is checked out at the pinned commit recorded by the wallet repository (the submodule tracks `dev`, but does not auto-advance).
+Either approach ensures the SDK in `sdk/` is checked out at the pinned commit recorded by the wallet repository (the submodule tracks `main`, but does not auto-advance).
 
 ## Working with the SDK Submodule
 
 ### Updating to Latest SDK Changes (explicit)
 
-The SDK submodule only updates when explicitly requested. To advance the pinned commit to the latest on the tracked `dev` branch:
+The SDK submodule only updates when explicitly requested. To advance the pinned commit to the latest on the tracked `main` branch:
 
 ```bash
 git submodule update --remote --checkout sdk
 git add sdk
-git commit -m "chore(sdk): update submodule to latest dev"
+git commit -m "chore(sdk): update submodule to latest main"
 ```
 
-This updates the submodule to the latest remote `dev` commit and records that pinned commit in the wallet repo. It does not merge or rebase inside the submodule.
+This updates the submodule to the latest remote `main` commit and records that pinned commit in the wallet repo. It does not merge or rebase inside the submodule.
 
 ### Making SDK Changes (Hotfix Workflow)
 
@@ -134,7 +134,7 @@ With these settings, `git switch`/`git checkout` and `git pull` will recurse int
 - **Always commit submodule changes** in the wallet repository when updating the SDK
 - **Test thoroughly** before pushing submodule updates
 - **Use descriptive commit messages** when updating the submodule (e.g., "Update SDK to v2.4.0 with new trading features")
-- **Keep the submodule on `dev` branch** for production builds
+- **Pin the submodule to an SDK `main` commit** for release builds, so the pin stays reachable from a branch
 - **Use hotfix branches** for urgent SDK fixes
 - **Document breaking changes** when updating the SDK
 
@@ -224,3 +224,23 @@ Do not run `git submodule update --remote` in CI, as that would advance the subm
 - [PROJECT_SETUP.md](PROJECT_SETUP.md) - Initial project setup including submodule initialization
 - [CLONE_REPOSITORY.md](CLONE_REPOSITORY.md) - Repository cloning instructions
 - [SDK_DEPENDENCY_MANAGEMENT.md](SDK_DEPENDENCY_MANAGEMENT.md) - General dependency management guidelines
+
+## Consuming a KDF engine artifact
+
+The SDK's `packages/komodo_defi_framework/app_build/build_config.json` selects
+the engine artifact. Engine builds and publication belong to their source/build
+repositories. To consume an already published artifact:
+
+1. Read its manifest and confirm the intended source commit and branch.
+2. Update `api.api_commit_hash`, `api.branch`, the platform ZIP checksums and
+   `api.source_urls` together. Each supported platform needs a matching artifact.
+3. Keep `bundled_coins_repo_commit` unchanged unless coin definitions are part of
+   the intended change. Asset transformers can rewrite this independent pin.
+4. Build with the pinned Flutter version. Confirm the native binary's `--version`
+   and the Wasm artifact's embedded version identify the intended commit.
+5. Run [TESTING.md](TESTING.md): SDK suites, both replay modes, the benchmark
+   comparison, browser regressions and the wallet unit/integration suites.
+
+Rollback restores the previous complete artifact reference and rebuilds. Do not
+mix a commit from one manifest with checksums from another. Keep captured
+validation results and build-publication logs outside the release tree.

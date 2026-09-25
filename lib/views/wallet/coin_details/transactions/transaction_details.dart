@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
+import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart';
@@ -164,27 +165,45 @@ class TransactionDetails extends StatelessWidget {
   }
 
   Widget _buildBalanceChanges(BuildContext context) {
-    final String formatted = formatDexAmt(transaction.amount.toDouble().abs());
-    final String sign = transaction.amount.toDouble() > 0 ? '+' : '-';
+    // Internal transfers (e.g. an EOA→custody consolidation) net to zero;
+    // show the unsigned moved magnitude + a label instead of '- 0'.
+    final bool isInternal = transaction.isInternalTransfer;
+    final double amount = isInternal
+        ? transaction.balanceChanges.spentByMe.toDouble()
+        : transaction.amount.toDouble().abs();
+    final String formatted = formatDexAmt(amount);
+    final String sign = isInternal
+        ? ''
+        : transaction.amount.toDouble() > 0
+        ? '+ '
+        : '- ';
     final double? usd =
-        usdPriceResolver?.call(
-          transaction.amount.toDouble().abs(),
-          transaction.assetId.id,
-        ) ??
-        RepositoryProvider.of<CoinsRepo>(context).getUsdPriceForAmount(
-          transaction.amount.toDouble().abs(),
-          transaction.assetId.id,
-        );
+        usdPriceResolver?.call(amount, transaction.assetId.id) ??
+        RepositoryProvider.of<CoinsRepo>(
+          context,
+        ).getUsdPriceForAmount(amount, transaction.assetId.id);
     final String formattedUsd = formatAmt(usd ?? 0);
     final String value =
-        '$sign $formatted ${Coin.normalizeAbbr(transaction.assetId.id)} (\$$formattedUsd)';
+        '$sign$formatted ${Coin.normalizeAbbr(transaction.assetId.id)} (\$$formattedUsd)';
 
-    return SelectableText(
-      value,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        fontSize: 22,
-        color: theme.custom.balanceColor,
-      ),
+    return Column(
+      children: [
+        SelectableText(
+          value,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: 22,
+            color: theme.custom.balanceColor,
+          ),
+        ),
+        if (isInternal)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              LocaleKeys.txInternalTransfer.tr(),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
     );
   }
 

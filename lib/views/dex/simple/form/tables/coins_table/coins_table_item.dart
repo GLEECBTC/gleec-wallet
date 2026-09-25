@@ -12,6 +12,7 @@ class CoinsTableItem<T> extends StatelessWidget {
     required this.data,
     required this.onSelect,
     required this.coin,
+    required this.itemKeyPrefix,
     this.isGroupHeader = false,
     this.subtitleText,
     this.trailing,
@@ -20,6 +21,16 @@ class CoinsTableItem<T> extends StatelessWidget {
   final T? data;
   final Coin coin;
   final Function(T) onSelect;
+
+  /// Names the table this row belongs to, for the row's widget key.
+  ///
+  /// Spelled out by the caller rather than taken from `T.toString()`: dart2js
+  /// minifies type names in a release build, so the type answered
+  /// `minified:c9` there and `Coin` everywhere else. The key silently changed
+  /// shape between build modes, which is why the DEX coin row was unreachable
+  /// in the release web build while every other mode found it.
+  final String itemKeyPrefix;
+
   final bool isGroupHeader;
   final String? subtitleText;
   final Widget? trailing;
@@ -68,7 +79,7 @@ class CoinsTableItem<T> extends StatelessWidget {
       child: isGroupHeader
           ? child
           : InkWell(
-              key: Key('${T.toString()}-table-item-${coin.abbr}'),
+              key: Key('$itemKeyPrefix-table-item-${coin.abbr}'),
               borderRadius: BorderRadius.circular(18),
               onTap: () => onSelect(data as T),
               child: child,

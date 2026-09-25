@@ -298,9 +298,7 @@ class TradingEntitiesBloc implements BlocBase {
   }
 
   bool get _isTradingMenuActive {
-    final currentMenu = routingState.selectedMenu;
-    return currentMenu == MainMenuValue.dex ||
-        currentMenu == MainMenuValue.bridge;
+    return routingState.selectedMenu == MainMenuValue.dex;
   }
 
   List<Swap> _mergeSwaps(List<Swap> existing, List<Swap> incoming) {

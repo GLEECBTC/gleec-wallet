@@ -1,136 +1,99 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 
+/// These tests used to assert that [PasswordTextField] auto-submits when a
+/// multi-character burst arrives. It no longer does, and these assert the
+/// absence: the field submits only on an explicit user action, and it never
+/// touches the system clipboard.
+///
+/// The removed heuristic auto-submitted 300ms after any >=3-character change,
+/// and distinguished "autofill" from "human paste" by reading the clipboard -
+/// so every fast-typing burst sampled whatever the user had last copied.
 void main() {
-  group('PasswordTextField Auto-Submit Tests', () {
+  group('PasswordTextField', () {
     late TextEditingController controller;
-    bool submitCalled = false;
+    late bool submitCalled;
+    late List<MethodCall> clipboardCalls;
 
     setUp(() {
       controller = TextEditingController();
       submitCalled = false;
+      clipboardCalls = <MethodCall>[];
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.getData') {
+              clipboardCalls.add(call);
+              return <String, dynamic>{'text': 'previously-copied-secret'};
+            }
+            return null;
+          });
     });
 
     tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
       controller.dispose();
     });
 
-    testWidgets(
-      'should auto-submit when quick login is enabled and multi-character input detected',
-      (WidgetTester tester) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: PasswordTextField(
-                controller: controller,
-                onFieldSubmitted: () {
-                  submitCalled = true;
-                },
-                isQuickLoginEnabled: true,
-              ),
-            ),
-          ),
-        );
-        await tester.pump();
-        // Avoid focused-field clipboard paste heuristic so the test does not depend
-        // on platform clipboard async behavior.
-        FocusManager.instance.primaryFocus?.unfocus();
-        await tester.pump();
-
-        // Simulate password manager input (multi-character change)
-        controller.text = 'mypassword123';
-
-        await tester.pump(const Duration(milliseconds: 400));
-        await tester.pump();
-
-        expect(submitCalled, true);
-      },
-    );
-
-    testWidgets('should not auto-submit when quick login is disabled', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: PasswordTextField(
-              controller: controller,
-              onFieldSubmitted: () {
-                submitCalled = true;
-              },
-              isQuickLoginEnabled: false,
-            ),
+    Future<void> pumpField(WidgetTester tester) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PasswordTextField(
+            controller: controller,
+            onFieldSubmitted: () => submitCalled = true,
           ),
         ),
-      );
+      ),
+    );
 
-      // Simulate password manager input
+    testWidgets('does not auto-submit on a multi-character burst', (
+      tester,
+    ) async {
+      await pumpField(tester);
+
+      // What a password manager fill, or a fast typist, looks like.
       controller.text = 'mypassword123';
+      await tester.pump(const Duration(seconds: 1));
 
-      // Wait for potential auto-submit timer
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(submitCalled, false);
+      expect(submitCalled, isFalse);
     });
 
-    testWidgets('should not auto-submit for single character input', (
-      WidgetTester tester,
+    testWidgets('never reads the system clipboard', (tester) async {
+      await pumpField(tester);
+
+      controller.text = 'mypassword123';
+      await tester.pump(const Duration(seconds: 1));
+      controller.text = 'mypassword123-and-more';
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(clipboardCalls, isEmpty);
+    });
+
+    testWidgets('submits when the user completes the field', (tester) async {
+      await pumpField(tester);
+
+      await tester.enterText(find.byType(TextField), 'mypassword123');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      expect(submitCalled, isTrue);
+    });
+
+    testWidgets('does not submit while the user is still typing', (
+      tester,
     ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: PasswordTextField(
-              controller: controller,
-              onFieldSubmitted: () {
-                submitCalled = true;
-              },
-              isQuickLoginEnabled: true,
-            ),
-          ),
-        ),
-      );
+      await pumpField(tester);
 
-      // Simulate typing one character at a time
-      controller.text = 'm';
-      await tester.pump(const Duration(milliseconds: 100));
-      controller.text = 'my';
-      await tester.pump(const Duration(milliseconds: 100));
-      controller.text = 'myp';
-
-      // Wait for potential auto-submit timer
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(submitCalled, false);
-    });
-
-    testWidgets(
-      'should not auto-submit when field is empty after multi-character input',
-      (WidgetTester tester) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: PasswordTextField(
-                controller: controller,
-                onFieldSubmitted: () {
-                  submitCalled = true;
-                },
-                isQuickLoginEnabled: true,
-              ),
-            ),
-          ),
-        );
-
-        // Simulate password manager input then clearing
-        controller.text = 'mypassword123';
+      for (final value in ['m', 'my', 'myp', 'mypa']) {
+        controller.text = value;
         await tester.pump(const Duration(milliseconds: 100));
-        controller.text = '';
+      }
+      await tester.pump(const Duration(seconds: 1));
 
-        // Wait for the auto-submit timer period
-        await tester.pump(const Duration(milliseconds: 400));
-
-        expect(submitCalled, false);
-      },
-    );
+      expect(submitCalled, isFalse);
+    });
   });
 }

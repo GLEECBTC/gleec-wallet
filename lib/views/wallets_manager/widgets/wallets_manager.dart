@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/widgets/hardware_wallets_manager.dart';
 import 'package:web_dex/views/wallets_manager/widgets/iguana_wallets_manager.dart';
@@ -14,6 +15,8 @@ class WalletsManager extends StatelessWidget {
     this.selectedWallet,
     this.initialHdMode = false,
     this.rememberMe = false,
+    this.initialAction = WalletsManagerAction.none,
+    this.initialWalletAction = WalletsManagerExistWalletAction.logIn,
   });
   final WalletsManagerEventType eventType;
   final WalletType walletType;
@@ -22,6 +25,11 @@ class WalletsManager extends StatelessWidget {
   final Wallet? selectedWallet;
   final bool initialHdMode;
   final bool rememberMe;
+
+  /// Which form the iguana branch should open on. Defaults to none so existing
+  /// callers - and `wallets_manager_test` - compile unchanged.
+  final WalletsManagerAction initialAction;
+  final WalletsManagerExistWalletAction initialWalletAction;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +43,8 @@ class WalletsManager extends StatelessWidget {
           initialWallet: selectedWallet,
           initialHdMode: initialHdMode,
           rememberMe: rememberMe,
+          initialAction: initialAction,
+          initialWalletAction: initialWalletAction,
         );
 
       case WalletType.trezor:

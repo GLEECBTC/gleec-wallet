@@ -40,9 +40,11 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   final Finder addAssetsButton = find.byKey(const Key('add-assets-button'));
   final Finder removeAssetsButton =
       find.byKey(const Key('remove-assets-button'));
-  final coinsList = find.byKey(const Key('wallet-page-coins-list'));
-  final Finder coinListItemKmd =
-      find.byKey(const Key('wallet-coin-list-item-kmd'));
+  final Finder walletPageScrollView =
+      find.byKey(const Key('wallet-page-scroll-view'));
+  // Logged out, the assets tab renders AssetsList in its grouped view, which
+  // keys each row by bare ticker.
+  final Finder coinListItemKmd = find.byKey(const Key('KMD'));
 
   await tester.tap(walletMenuButton);
   await tester.pumpAndSettle();
@@ -52,7 +54,7 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   expect(removeAssetsButton, findsNothing);
   await tester.dragUntilVisible(
     coinListItemKmd,
-    coinsList,
+    walletPageScrollView,
     const Offset(0, -15),
   );
   await tester.pumpAndSettle();
@@ -94,25 +96,6 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
   expect(walletsManagerWrapper, findsOneWidget);
   await _closeWalletManagerPopup(tester);
   expect(walletsManagerWrapper, findsNothing);
-
-  // Bridge page
-  print('TEST ACCESS FROM BRIDGE PAGE');
-  final Finder connectWalletBridge =
-      find.byKey(const Key('connect-wallet-bridge'));
-  final Finder bridgeMenuButton = find.byKey(const Key('main-menu-bridge'));
-  final Finder bridgePageTabBar = find.byKey(const Key('bridge-page-tab-bar'));
-
-  await tester.tap(bridgeMenuButton);
-  await tester.pumpAndSettle();
-
-  expect(connectWalletBridge, findsOneWidget);
-
-  await _openWalletManagerPopupByKey(connectWalletBridge, tester);
-  expect(walletsManagerWrapper, findsOneWidget);
-  await _closeWalletManagerPopup(tester);
-  expect(walletsManagerWrapper, findsNothing);
-
-  expect(bridgePageTabBar, findsNothing);
 
   // Settings page
   print('TEST ACCESS TO SETTINGS PAGE');

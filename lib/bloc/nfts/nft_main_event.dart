@@ -25,6 +25,15 @@ class NftMainTabChanged extends NftMainEvent {
   final NftBlockchains chain;
 }
 
+/// Asks the bloc to enable [chain]'s parent coin so its NFTs become fetchable.
+///
+/// Raised by a tap on an inactive tab and by the explicit retry button - never
+/// by the periodic refresh, which must not activate anything.
+class NftMainChainActivationRequested extends NftMainEvent {
+  const NftMainChainActivationRequested(this.chain);
+  final NftBlockchains chain;
+}
+
 class NftMainChainNftsRefreshed extends NftMainEvent {
   const NftMainChainNftsRefreshed(this.chain);
   final NftBlockchains chain;

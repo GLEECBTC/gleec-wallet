@@ -32,18 +32,37 @@ class TakerValidator {
   }) : _bloc = bloc,
        _coinsRepo = coinsRepo,
        _dexRepo = dexRepo,
-       _sdk = sdk,
-       add = bloc.add;
+       _sdk = sdk;
 
   final TakerBloc _bloc;
   final CoinsRepo _coinsRepo;
   final DexRepository _dexRepo;
   final KomodoDefiSdk _sdk;
 
-  final Function(TakerEvent) add;
+  final List<DexFormError> _raisedErrors = [];
+
+  /// The errors raised since the last time they were cleared.
+  ///
+  /// [TakerAddError] is an event, so the errors this validator raises reach
+  /// `TakerState.errors` only once the bloc has reduced them - which has not
+  /// necessarily happened by the time [validate] returns. A caller that wants
+  /// to report why validation failed has to read them from here.
+  List<DexFormError> get raisedErrors => List.unmodifiable(_raisedErrors);
+
+  /// Forwards [event] to the bloc, mirroring error events into [raisedErrors].
+  void add(TakerEvent event) {
+    if (event is TakerAddError) {
+      _raisedErrors.add(event.error);
+    } else if (event is TakerClearErrors) {
+      _raisedErrors.clear();
+    }
+    _bloc.add(event);
+  }
+
   TakerState get state => _bloc.state;
 
   Future<bool> validate() async {
+    _raisedErrors.clear();
     final bool isFormValid = await validateForm();
     if (!isFormValid) return false;
 

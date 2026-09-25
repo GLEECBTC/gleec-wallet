@@ -155,7 +155,7 @@ class NftReceiveCard extends StatelessWidget {
         return NftBlockchains.bsc;
       case 'AVAX':
         return NftBlockchains.avalanche;
-      case 'MATIC':
+      case 'POL':
         return NftBlockchains.polygon;
       case 'FTM':
         return NftBlockchains.fantom;

@@ -14,6 +14,7 @@ class IntegrationTestArguments {
     required this.concurrent,
     required this.keepRunning,
     required this.driverPort,
+    this.dartDefines = const [],
   });
 
   factory IntegrationTestArguments.fromArgs(ArgResults results) {
@@ -30,6 +31,7 @@ class IntegrationTestArguments {
       concurrent: results['concurrent'] as bool? ?? false,
       keepRunning: results['keep-running'] as bool? ?? false,
       driverPort: int.tryParse(results['driver-port'] as String? ?? '') ?? 4444,
+      dartDefines: List.unmodifiable(results['dart-define'] as List<String>),
     );
   }
 
@@ -45,6 +47,7 @@ class IntegrationTestArguments {
   final bool concurrent;
   final bool keepRunning;
   final int driverPort;
+  final List<String> dartDefines;
 
   bool get isChrome => browserName == 'chrome';
   bool get isWeb => device == 'web-server';
@@ -62,6 +65,7 @@ class IntegrationTestArguments {
     bool? concurrent,
     bool? keepRunning,
     int? driverPort,
+    List<String>? dartDefines,
   }) {
     return IntegrationTestArguments(
       runHelp: runHelp ?? this.runHelp,
@@ -76,6 +80,7 @@ class IntegrationTestArguments {
       concurrent: concurrent ?? this.concurrent,
       keepRunning: keepRunning ?? this.keepRunning,
       driverPort: driverPort ?? this.driverPort,
+      dartDefines: dartDefines ?? this.dartDefines,
     );
   }
 }

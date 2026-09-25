@@ -16,11 +16,15 @@ class LegalDocumentView extends StatefulWidget {
     required this.document,
     this.padding = const EdgeInsets.all(16),
     this.scrollable = false,
+    this.content,
   });
 
   final LegalDocumentType document;
   final EdgeInsetsGeometry padding;
   final bool scrollable;
+
+  /// When supplied by a consent form, display its exact accepted snapshot.
+  final LegalDocumentContent? content;
 
   @override
   State<LegalDocumentView> createState() => _LegalDocumentViewState();
@@ -42,7 +46,8 @@ class _LegalDocumentViewState extends State<LegalDocumentView> {
   @override
   void didUpdateWidget(covariant LegalDocumentView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.document != widget.document) {
+    if (oldWidget.document != widget.document ||
+        oldWidget.content != widget.content) {
       _loadDocument();
     }
   }
@@ -131,6 +136,15 @@ class _LegalDocumentViewState extends State<LegalDocumentView> {
   }
 
   Future<void> _loadDocument() async {
+    if (widget.content case final content?) {
+      _requestId++;
+      setState(() {
+        _content = content;
+        _loadingError = null;
+        _isRefreshing = false;
+      });
+      return;
+    }
     final requestId = ++_requestId;
     setState(() {
       _loadingError = null;

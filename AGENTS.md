@@ -23,32 +23,40 @@ dart format [files]
 
 ## Running Tests
 
-Unit tests and integration tests are currently failing. Instead of running tests to validate fixes, do a thorough code review of the changes and static analysis
+Unit tests pass and gate every PR. Run them:
+
+```bash
+flutter test test_units/main.dart \
+  --dart-define=TRON_GASLESS_ENABLED=true \
+  --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+  --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+  --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+```
+
+All four dart-defines are mandatory: without them ~36 GasFree tests hang rather than fail and wedge the whole run. CI runs *only* `test_units/main.dart`, so a new test file must be imported there or it never runs.
+
+Integration/GUI tests (`dart run_integration_tests.dart`), the KDF harness, the SDK package suites, and the full CI map are documented in `docs/TESTING.md`. If a suite is red, name the failing test — do not generalise it to the others.
 
 ## Additional Documentation
 
 ### Code Styles/Standards
 
-Ensure you follow the existing architecture and style of the codebase. The codebase uses BLoC where applicable and follows general OOP/SOLID coding guidelines. Familiarise yourself with the BLoC conventions and Conventional Commits standards included at the end of this document.
+Follow the existing architecture and style of the codebase: BLoC where applicable, general OOP/SOLID guidelines. Commit messages and PR titles follow Conventional Commits (`type(scope): summary`).
 
 ### Gleec Wallet
 
-This section is only relevant if you are working in the `gleec-wallet` repository:
-
-Detailed instructions for building and running the app can be found in `docs/BUILD_RUN_APP.md` and other files in the `docs/` directory. See `README.md` for an overview of available documentation.
+Detailed instructions for building and running the app can be found in `docs/BUILD_RUN_APP.md` and other files in the `docs/` directory. See `README.md` for an overview of available documentation, and `docs/TESTING.md` for every test surface.
 
 The majority of the crypto/API-related operations are abstracted out to the `komodo_defi_sdk` and its associated packages e.g. `komodo_defi_types`.
 
-# Komodo DeFi Flutter SDK
+### Komodo DeFi Flutter SDK
 
-This section is only relevant if you are working in the `komodo-defi-sdk-flutter` repository:
+The SDK is vendored into this repo as the `sdk/` submodule (upstream: `komodo-defi-sdk-flutter`). Its packages live in `sdk/packages/` — `komodo_defi_sdk`, `komodo_defi_types`, `komodo_defi_framework`, `komodo_defi_rpc_methods` and others. The top-level `packages/` directory is *not* the SDK; it holds app-owned packages (`komodo_ui_kit`, `komodo_persistence_layer`).
 
-The repository consists of a suite of packages (in the `packages` directory) which make up a Flutter SDK package `komodo_defi_sdk` used for implementing Komodo DeFi into Flutter apps.
-
-The KDF API documentation can be found in the root folder at `/KDF_API_DOCUMENTATION.md`. For any features involving RPC requests, ensure you reference and understand all applicable RPCs, data structure and general notes needed to implement the feature in the SDK.
+For features involving RPC requests, the typed request/response classes in `sdk/packages/komodo_defi_rpc_methods/lib/src/rpc_methods/` are the reference — they are grouped by domain (`activation/`, `hd_wallet/`, `transaction_history/`, `trading/`, …). Read the applicable request, its response shape, and its existing callers before adding one.
 
 ## PR Guidance
 
-Commit messages should be clear and descriptive. When opening a pull request, summarize the purpose of the change and reference related issues when appropriate. Ensure commit messages and PR title follow the Conventional Commits standard as described in the standards section below.
+Commit messages should be clear and descriptive. When opening a pull request, summarize the purpose of the change and reference related issues when appropriate. Ensure commit messages and PR title follow the Conventional Commits standard.
 
 <!-- The following sections are automatically generated during environment setup -->

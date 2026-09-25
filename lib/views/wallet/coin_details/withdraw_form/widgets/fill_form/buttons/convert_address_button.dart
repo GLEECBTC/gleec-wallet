@@ -20,9 +20,9 @@ class ConvertAddressButton extends StatelessWidget {
         fontSize: 12,
         color: theme.custom.defaultGradientButtonTextColor,
       ),
-      onPressed: () => context
-          .read<WithdrawFormBloc>()
-          .add(const WithdrawFormConvertAddressRequested()),
+      onPressed: () => context.read<WithdrawFormBloc>().add(
+        const WithdrawFormConvertAddressRequested(),
+      ),
     );
   }
 }

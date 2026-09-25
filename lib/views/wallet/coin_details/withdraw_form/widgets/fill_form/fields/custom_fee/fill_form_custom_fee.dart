@@ -31,9 +31,9 @@ class _FillFormCustomFeeState extends State<FillFormCustomFee> {
       radius: 18,
       onTap: () {
         final bool newOpenState = !_isOpen;
-        context
-            .read<WithdrawFormBloc>()
-            .add(WithdrawFormCustomFeeEnabled(_isOpen));
+        context.read<WithdrawFormBloc>().add(
+          WithdrawFormCustomFeeEnabled(_isOpen),
+        );
         setState(() {
           _isOpen = newOpenState;
         });
@@ -64,9 +64,7 @@ class _Collapsed extends StatelessWidget {
           ),
           child: const Padding(
             padding: EdgeInsets.only(left: 13, right: 13),
-            child: _Header(
-              DexSvgImage(path: Assets.chevronDown),
-            ),
+            child: _Header(DexSvgImage(path: Assets.chevronDown)),
           ),
         ),
       ],
@@ -128,10 +126,7 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.only(top: 9),
-          child: chevron,
-        ),
+        Padding(padding: const EdgeInsets.only(top: 9), child: chevron),
       ],
     );
   }

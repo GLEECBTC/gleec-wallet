@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:web_dex/app_config/app_config.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_bloc.dart';
-import 'package:web_dex/bloc/bridge_form/bridge_event.dart';
 import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
 import 'package:web_dex/bloc/taker_form/taker_event.dart';
 import 'package:web_dex/common/screen.dart';
@@ -88,7 +86,6 @@ class _ConnectWalletButtonState extends State<ConnectWalletButton> {
 
   Future<void> onButtonPressed() async {
     final TakerBloc takerBloc = context.read<TakerBloc>();
-    final BridgeBloc bridgeBloc = context.read<BridgeBloc>();
     final BuildContext dialogContext = scaffoldKey.currentContext ?? context;
 
     await AppDialog.showWithCallback<void>(
@@ -101,7 +98,6 @@ class _ConnectWalletButtonState extends State<ConnectWalletButton> {
         onCancel: closeDialog,
         onSuccess: (_) async {
           takerBloc.add(TakerReInit());
-          bridgeBloc.add(const BridgeReInit());
           await reInitTradingForms(dialogContext);
           closeDialog();
         },

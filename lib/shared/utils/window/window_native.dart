@@ -62,3 +62,7 @@ void showMessageBeforeUnload(String message) {
   _observer ??= _BeforeUnloadObserver(message);
   WidgetsBinding.instance.addObserver(_observer!);
 }
+
+/// No-op. Native builds install an update by downloading a release rather than
+/// reloading a page; see [UpdateBloc.update].
+Future<void> hardReloadPage() async {}

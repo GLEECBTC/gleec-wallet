@@ -53,23 +53,23 @@ class _AnimatedPortfolioChartsState extends State<AnimatedPortfolioCharts> {
         if (growthState is PortfolioGrowthChartLoadSuccess) {
           final period = _formatDuration(growthState.selectedPeriod);
           context.read<AnalyticsBloc>().logEvent(
-                PortfolioGrowthViewedEventData(
-                  period: period,
-                  growthPct: growthState.percentageIncrease,
-                ),
-              );
+            PortfolioGrowthViewedEventData(
+              period: period,
+              growthPct: growthState.percentageIncrease,
+            ),
+          );
         }
       } else if (widget.tabController.index == 1) {
         final profitLossState = context.read<ProfitLossBloc>().state;
         if (profitLossState is PortfolioProfitLossChartLoadSuccess) {
           final timeframe = _formatDuration(profitLossState.selectedPeriod);
           context.read<AnalyticsBloc>().logEvent(
-                PortfolioPnlViewedEventData(
-                  timeframe: timeframe,
-                  realizedPnl: profitLossState.totalValue,
-                  unrealizedPnl: 0,
-                ),
-              );
+            PortfolioPnlViewedEventData(
+              timeframe: timeframe,
+              realizedPnl: profitLossState.totalValue,
+              unrealizedPnl: 0,
+            ),
+          );
         }
       }
     }
@@ -130,9 +130,7 @@ class _AnimatedPortfolioChartsState extends State<AnimatedPortfolioCharts> {
                   ),
                   if (state is! PortfolioGrowthChartLoadSuccess &&
                       _userHasInteracted)
-                    const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    const Center(child: CircularProgressIndicator()),
                 ],
               ),
             ),

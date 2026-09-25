@@ -144,3 +144,22 @@ class AnalyticsThemeSelectedEvent extends AnalyticsSendDataEvent {
   AnalyticsThemeSelectedEvent({required String themeName})
     : super(ThemeSelectedEventData(themeName: themeName));
 }
+
+/// Whether the browser agreed to keep this origin's storage.
+///
+/// One event name with a `result` dimension rather than separate granted and
+/// denied names: this is a capability probe, not the outcome of a user action,
+/// and it is read as a rate. Emitted only when the probe actually ran - a
+/// session that skipped it must not dilute those rates.
+class StoragePersistenceResultEventData extends AnalyticsEventData {
+  const StoragePersistenceResultEventData({required this.result});
+
+  /// One of `already_persistent`, `granted`, `denied`, `unsupported`.
+  final String result;
+
+  @override
+  String get name => 'storage_persistence_result';
+
+  @override
+  JsonMap get parameters => {'result': result};
+}

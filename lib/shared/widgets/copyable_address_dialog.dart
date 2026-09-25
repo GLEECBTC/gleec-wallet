@@ -1,6 +1,9 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart' show showAddressSearch;
+import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/truncate_middle_text.dart';
 
@@ -119,6 +122,14 @@ class CopyableAddressDialog extends StatelessWidget {
     );
   }
 
+  String _receiveAddressStatus(PubkeyInfo address) {
+    final args = [
+      formatDexAmt(address.balance.spendable),
+      asset.id.symbol.configSymbol,
+    ];
+    return LocaleKeys.addressBalanceAvailable.tr(args: args);
+  }
+
   Future<void> _showAddressSearch(BuildContext context) async {
     if (!context.mounted) return;
 
@@ -126,6 +137,7 @@ class CopyableAddressDialog extends StatelessWidget {
       context,
       addresses: pubkeys.keys,
       assetNameLabel: asset.id.id,
+      balanceLabel: _receiveAddressStatus,
     );
 
     if (selectedAddress != null) {

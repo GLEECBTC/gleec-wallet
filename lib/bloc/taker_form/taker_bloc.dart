@@ -128,6 +128,18 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
       return;
     }
 
+    final buyCoin = _coinsRepo.getCoin(selectedOrder.coin);
+    if (sellCoin.walletOnly || buyCoin == null || buyCoin.walletOnly) {
+      _log.warning('Blocked wallet-only asset at swap submission');
+      emit(state.copyWith(inProgress: () => false));
+      add(
+        TakerAddError(
+          DexFormError(error: LocaleKeys.dexUnableToStartSwap.tr()),
+        ),
+      );
+      return;
+    }
+
     emit(state.copyWith(inProgress: () => true));
 
     final int callStart = DateTime.now().millisecondsSinceEpoch;
@@ -189,12 +201,37 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
 
     final bool isValid = await _validator.validate();
 
+    if (!isValid) {
+      // The form stays on [TakerStep.form], so the confirmation page simply
+      // never renders. Without this the only evidence is its absence - which
+      // is what made the integration failure unreadable: the driver log showed
+      // a finder matching zero widgets and nothing about why the form said no.
+      _log.warning(
+        'Taker form submission rejected: ${_describeErrors(_validator.raisedErrors)}',
+      );
+    }
+
     emit(
       state.copyWith(
         inProgress: () => false,
         step: () => isValid ? TakerStep.confirm : TakerStep.form,
       ),
     );
+  }
+
+  /// Renders [errors] for a log line, keeping any technical detail attached.
+  ///
+  /// An empty list is itself worth reporting: it means validation rejected the
+  /// form without raising anything the UI could show.
+  String _describeErrors(List<DexFormError> errors) {
+    if (errors.isEmpty) return 'no error was raised';
+    return errors
+        .map(
+          (e) => e.technicalDetails == null
+              ? e.error
+              : '${e.error} (${e.technicalDetails})',
+        )
+        .join('; ');
   }
 
   void _onAmountButtonClick(
@@ -266,6 +303,16 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
     TakerSelectOrder event,
     Emitter<TakerState> emit,
   ) async {
+    final orderCoin = event.order == null
+        ? null
+        : _coinsRepo.getCoin(event.order!.coin);
+    if (orderCoin?.walletOnly ?? false) {
+      _log.warning(
+        'Ignoring wallet-only buy coin selection: ${orderCoin?.abbr}',
+      );
+      return;
+    }
+
     final bool switchingCoin =
         state.selectedOrder != null &&
         event.order != null &&
@@ -318,6 +365,17 @@ class TakerBloc extends Bloc<TakerEvent, TakerState> {
     Emitter<TakerState> emit,
   ) async {
     if (event.setOnlyIfNotSet && state.sellCoin != null) return;
+
+    // Wallet-only assets (e.g. TRX/TRC-20, whose gasless balance lives at the
+    // GasFree custody address) are filtered out of every DEX picker; ignore
+    // programmatic/deep-link selections too so trading validation can never
+    // demand gas for them.
+    if (event.coin?.walletOnly ?? false) {
+      _log.warning(
+        'Ignoring wallet-only sell coin selection: ${event.coin?.abbr}',
+      );
+      return;
+    }
 
     emit(
       state.copyWith(

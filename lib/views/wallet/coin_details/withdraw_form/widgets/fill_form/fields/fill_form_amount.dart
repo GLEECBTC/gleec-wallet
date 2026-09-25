@@ -17,8 +17,9 @@ class FillFormAmount extends StatefulWidget {
 
 class _FillFormAmountState extends State<FillFormAmount> {
   final TextEditingController _amountController = TextEditingController();
-  TextSelection _previousTextSelection =
-      const TextSelection.collapsed(offset: 0);
+  TextSelection _previousTextSelection = const TextSelection.collapsed(
+    offset: 0,
+  );
   @override
   void initState() {
     _amountController.text = context.read<WithdrawFormBloc>().state.amount;
@@ -41,16 +42,18 @@ class _FillFormAmountState extends State<FillFormAmount> {
           controller: _amountController,
           filteringRegExp: numberRegExp.pattern,
           hintText: LocaleKeys.amountToSend.tr(),
-          hintTextStyle:
-              const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          hintTextStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
           suffixIcon: const SellMaxButton(),
           onChanged: (String? amount) {
             setState(() {
               _previousTextSelection = _amountController.selection;
             });
-            context
-                .read<WithdrawFormBloc>()
-                .add(WithdrawFormAmountChanged(amount ?? ''));
+            context.read<WithdrawFormBloc>().add(
+              WithdrawFormAmountChanged(amount ?? ''),
+            );
           },
           validationMode: InputValidationMode.aggressive,
           validator: (_) => state.amountError?.message,

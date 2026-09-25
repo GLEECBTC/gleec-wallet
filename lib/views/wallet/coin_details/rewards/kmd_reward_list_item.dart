@@ -8,10 +8,7 @@ import 'package:web_dex/shared/ui/custom_tooltip.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 
 class KmdRewardListItem extends StatelessWidget {
-  const KmdRewardListItem({
-    Key? key,
-    required this.reward,
-  }) : super(key: key);
+  const KmdRewardListItem({Key? key, required this.reward}) : super(key: key);
 
   final KmdRewardItem reward;
 
@@ -35,10 +32,9 @@ class KmdRewardListItem extends StatelessWidget {
             alignment: const Alignment(-1, 0),
             child: SelectableText(
               cutTrailingZeros(formatAmt(double.parse(reward.amount))),
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontSize: 14),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(fontSize: 14),
             ),
           ),
         ),
@@ -52,8 +48,9 @@ class KmdRewardListItem extends StatelessWidget {
         Flexible(
           flex: 3,
           child: Align(
-              alignment: const Alignment(-1, 0),
-              child: _buildTimeLeft(context)),
+            alignment: const Alignment(-1, 0),
+            child: _buildTimeLeft(context),
+          ),
         ),
         Flexible(
           flex: 1,
@@ -68,73 +65,77 @@ class KmdRewardListItem extends StatelessWidget {
 
   Widget _buildMobileItem(BuildContext context) {
     return Container(
-        padding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15),
-        decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(15.0)),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiary,
-                  borderRadius: BorderRadius.circular(20)),
-              child: Icon(
-                Icons.arrow_downward,
-                size: 15,
-                color: theme.custom.increaseColor,
+      padding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 15),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(15.0),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.tertiary,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              Icons.arrow_downward,
+              size: 15,
+              color: theme.custom.increaseColor,
+            ),
+          ),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                LocaleKeys.reward.tr(),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const SizedBox(
-              width: 15,
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  LocaleKeys.reward.tr(),
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500),
+              _buildTimeLeft(context),
+            ],
+          ),
+          const Spacer(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              SelectableText(
+                '+KMD '
+                '${cutTrailingZeros(formatAmt(double.parse(reward.amount)))}',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: theme.custom.increaseColor,
                 ),
-                _buildTimeLeft(context)
-              ],
-            ),
-            const Spacer(),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                SelectableText(
-                  '+KMD '
-                  '${cutTrailingZeros(formatAmt(double.parse(reward.amount)))}',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: theme.custom.increaseColor),
+              ),
+              SelectableText(
+                '+KMD '
+                '${cutTrailingZeros(formatAmt(double.parse(reward.amount)))}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
-                SelectableText(
-                  '+KMD '
-                  '${cutTrailingZeros(formatAmt(double.parse(reward.amount)))}',
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ],
-        ));
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildReward(BuildContext context) {
     final String text = _isThereReward
         ? '+ ${cutTrailingZeros(formatAmt(reward.reward!))}'
         : '-';
-    final TextStyle? style =
-        Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14);
-    return SelectableText(
-      text,
-      style: style,
-    );
+    final TextStyle? style = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontSize: 14);
+    return SelectableText(text, style: style);
   }
 
   Widget _buildStatus(BuildContext context) {
@@ -146,8 +147,9 @@ class KmdRewardListItem extends StatelessWidget {
         children: [
           SelectableText(
             rewardError.short,
-            style:
-                Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontSize: 14),
           ),
           if (rewardError.long.isNotEmpty)
             CustomTooltip(
@@ -157,10 +159,7 @@ class KmdRewardListItem extends StatelessWidget {
                 rewardError.long,
                 style: const TextStyle(fontSize: 13),
               ),
-              child: const Icon(
-                Icons.info_outlined,
-                size: 16,
-              ),
+              child: const Icon(Icons.info_outlined, size: 16),
             ),
         ],
       );
@@ -169,11 +168,7 @@ class KmdRewardListItem extends StatelessWidget {
     if (_isThereReward) {
       return const Padding(
         padding: EdgeInsets.fromLTRB(0, 0, 20, 0),
-        child: Icon(
-          Icons.check_circle,
-          color: Colors.green,
-          size: 14,
-        ),
+        child: Icon(Icons.check_circle, color: Colors.green, size: 14),
       );
     }
 
@@ -183,20 +178,22 @@ class KmdRewardListItem extends StatelessWidget {
   Widget _buildTimeLeft(BuildContext context) {
     final Duration? timeLeft = reward.timeLeft;
     return timeLeft == null
-        ? SelectableText('-',
-            style:
-                Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14))
+        ? SelectableText(
+            '-',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontSize: 14),
+          )
         : SelectableText(
             _formatTimeLeft(timeLeft),
             style: timeLeft.inDays <= 2
-                ? Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontSize: 14, color: Colors.orange)
-                : Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontSize: 14),
+                ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    color: Colors.orange,
+                  )
+                : Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontSize: 14),
           );
   }
 

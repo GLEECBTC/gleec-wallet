@@ -13,7 +13,7 @@ Future<void> openWalletSection(WidgetTester tester) async {
   await tester.tap(walletMenuItem);
   await tester.pumpAndSettle();
 
-  final Finder totalAmount = find.byKey(const Key('overview-total-balance'));
+  final Finder totalAmount = find.byKey(const Key('overview-current-value'));
   expect(
     totalAmount,
     findsOneWidget,

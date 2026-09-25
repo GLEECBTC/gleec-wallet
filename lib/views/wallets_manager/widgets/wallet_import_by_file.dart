@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
@@ -13,7 +14,7 @@ import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/shared/ui/ui_gradient_icon.dart';
 import 'package:web_dex/shared/utils/encryption_tool.dart';
-import 'package:web_dex/shared/widgets/disclaimer/eula_tos_checkboxes.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/wallets_manager/widgets/custom_seed_checkbox.dart';
@@ -56,7 +57,6 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   bool _isObscured = true;
   bool _isHdMode = true;
   bool _isHdOptionEnabled = true;
-  bool _eulaAndTosChecked = false;
   bool _rememberMe = false;
   bool _allowCustomSeed = false;
   bool _showCustomSeedToggle = false;
@@ -70,7 +70,22 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
 
   // Intentionally do not check wallet name here, because it is done on button
   // click and a dialog is shown to rename the wallet if there are issues.
-  bool get _isButtonEnabled => _eulaAndTosChecked;
+  //
+  // This used to be gated on the EULA checkbox alone, so the button was live
+  // with an empty password and the flow failed later at decryption. With
+  // consent now implicit, the password being present is the real precondition.
+  bool get _isButtonEnabled => _filePasswordController.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    // The field has no onChanged, so the button needs a listener to re-enable.
+    _filePasswordController.addListener(_onFilePasswordChanged);
+  }
+
+  void _onFilePasswordChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -171,16 +186,6 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                       },
                     ),
                   const SizedBox(height: 15),
-                  EulaTosCheckboxes(
-                    key: const Key('import-wallet-eula-checks'),
-                    isChecked: _eulaAndTosChecked,
-                    onCheck: (isChecked) {
-                      setState(() {
-                        _eulaAndTosChecked = isChecked;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
                   QuickLoginSwitch(
                     value: _rememberMe,
                     onChanged: (value) {
@@ -188,6 +193,8 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                     },
                   ),
                   const SizedBox(height: 30),
+                  TermsConsentText(actionLabel: LocaleKeys.import.tr()),
+                  const SizedBox(height: 12),
                   UiPrimaryButton(
                     key: const Key('confirm-password-button'),
                     height: 50,
@@ -210,6 +217,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
 
   @override
   void dispose() {
+    _filePasswordController.removeListener(_onFilePasswordChanged);
     _filePasswordController.dispose();
 
     super.dispose();
@@ -248,6 +256,12 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
         json.decode(fileData),
       );
       walletConfig.type = _isHdMode ? WalletType.hdwallet : WalletType.iguana;
+      // Holding an encrypted file is not the same as holding the recovery
+      // phrase, and `has_backup` in that file is whatever a previous session
+      // self-reported. Importing one is evidence of a file, so the backup
+      // prompt stays on until the phrase itself is confirmed. The typed-phrase
+      // import path keeps `true` - there the user demonstrably has the words.
+      walletConfig.hasBackup = false;
 
       final String? decryptedSeed = await encryptionTool.decryptData(
         _filePasswordController.text,
@@ -317,6 +331,10 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
       }
       // Close autofill context after successfully validating password & before import
       TextInput.finishAutofillContext(shouldSave: false);
+      if (!mounted) return;
+      context.read<LegalAgreementBloc>().add(
+        const LegalAgreementSubmitted('wallet-import-file'),
+      );
       widget.onImport(
         name: name,
         password: _filePasswordController.text,

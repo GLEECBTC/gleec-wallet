@@ -5,7 +5,12 @@ import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show AuthException, AuthExceptionType, CoinSubClass;
+    show
+        AuthException,
+        AuthExceptionType,
+        CoinSubClass,
+        WalletId,
+        WalletChangedDisconnectException;
 import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
@@ -248,7 +253,16 @@ class WalletsRepository {
     }
   }
 
-  Future<void> deleteWallet(Wallet wallet, {required String password}) async {
+  Future<WalletDeletionReview?> prepareWalletDeletion(Wallet wallet) async =>
+      wallet.isLegacyWallet || wallet.isNativeLegacyWallet
+      ? null
+      : _kdfSdk.walletDeletion.prepare(wallet.name);
+
+  Future<WalletDeletionResult> deleteWallet(
+    Wallet wallet, {
+    required String password,
+    WalletDeletionReview? acknowledgedReview,
+  }) async {
     log(
       'Deleting a wallet ${wallet.id}',
       path: 'wallet_bloc => deleteWallet',
@@ -275,7 +289,7 @@ class WalletsRepository {
         );
         _emitCachedWalletsIfAvailable();
       }
-      return;
+      return const WalletDeletionResult(WalletDeletionStatus.deleted);
     }
 
     if (wallet.isLegacyWallet) {
@@ -289,17 +303,22 @@ class WalletsRepository {
             candidate.legacySource?.kind == wallet.legacySource?.kind,
       );
       _emitCachedWalletsIfAvailable();
-      return;
+      return const WalletDeletionResult(WalletDeletionStatus.deleted);
     }
 
     try {
-      await _kdfSdk.auth.deleteWallet(
-        walletName: wallet.name,
+      if (acknowledgedReview == null ||
+          acknowledgedReview.walletId.name != wallet.name) {
+        throw const WalletDeletionReviewRequiredException();
+      }
+      final result = await _kdfSdk.walletDeletion.delete(
+        acknowledgedReview: acknowledgedReview,
         password: password,
       );
+      if (result.status != WalletDeletionStatus.deleted) return result;
       _cachedWallets?.removeWhere((w) => w.name == wallet.name);
       _emitCachedWalletsIfAvailable();
-      return;
+      return result;
     } catch (e) {
       log(
         'Failed to delete wallet: $e',
@@ -494,6 +513,7 @@ class WalletsRepository {
   }
 
   Future<LegacySpecialCaseImportResult> importPreparedLegacySpecialCases({
+    required WalletId expectedWalletId,
     required PreparedLegacyMigration migration,
     required Iterable<String> baseActivatedCoinIds,
   }) async {
@@ -548,7 +568,10 @@ class WalletsRepository {
         _legacyPendingZhtlcAssetsExtrasKey: pendingZhtlcAssets,
     };
     if (legacyWalletExtras.isNotEmpty) {
-      await _kdfSdk.setLegacyWalletExtras(legacyWalletExtras);
+      await _kdfSdk.setLegacyWalletExtras(
+        legacyWalletExtras,
+        expectedWalletId: expectedWalletId,
+      );
     }
 
     return LegacySpecialCaseImportResult(
@@ -653,11 +676,28 @@ class WalletsRepository {
   }
 
   @Deprecated('Use the KomodoDefiSdk.auth.getMnemonicEncrypted method instead.')
-  Future<void> downloadEncryptedWallet(Wallet wallet, String password) async {
+  Future<void> downloadEncryptedWallet(
+    Wallet wallet,
+    String password, {
+    required WalletId expectedWalletId,
+  }) async {
+    Future<void> ensureOriginalWallet() async {
+      final currentWalletId = (await _kdfSdk.auth.currentUser)?.walletId;
+      if (expectedWalletId.pubkeyHash?.trim().isNotEmpty != true ||
+          currentWalletId?.pubkeyHash?.trim().isNotEmpty != true ||
+          currentWalletId != expectedWalletId) {
+        throw const WalletChangedDisconnectException(
+          'Wallet changed or identity unavailable while preparing wallet export',
+        );
+      }
+    }
+
     try {
+      await ensureOriginalWallet();
       Wallet workingWallet = wallet.copy();
       if (wallet.config.seedPhrase.isEmpty) {
         final mnemonic = await _kdfSdk.auth.getMnemonicPlainText(password);
+        await ensureOriginalWallet();
         final String encryptedSeed = await _encryptionTool.encryptData(
           password,
           mnemonic.plaintextMnemonic ?? '',
@@ -672,11 +712,14 @@ class WalletsRepository {
         data,
       );
       final String sanitizedFileName = _sanitizeFileName(workingWallet.name);
+      await ensureOriginalWallet();
       await _fileLoader.save(
         fileName: sanitizedFileName,
         data: encryptedData,
         type: LoadFileType.text,
       );
+    } on WalletChangedDisconnectException {
+      rethrow;
     } catch (e) {
       throw Exception('Failed to download encrypted wallet: $e');
     }

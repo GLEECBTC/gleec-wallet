@@ -23,8 +23,8 @@ class SendConfirmFooter extends StatelessWidget {
               : SendConfirmButtons(
                   hasSendError: state.hasTransactionError,
                   onBackTap: () => context.read<WithdrawFormBloc>().add(
-                        const WithdrawFormStepReverted(),
-                      ),
+                    const WithdrawFormStepReverted(),
+                  ),
                 ),
         );
       },

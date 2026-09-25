@@ -32,6 +32,9 @@ class MatomoAnalyticsApi implements AnalyticsApi {
 
     // User Acquisition
     'onboarding_start': 'User Acquisition',
+    'onboarding_step_viewed': 'User Acquisition',
+    'onboarding_step_completed': 'User Acquisition',
+    'onboarding_step_abandoned': 'User Acquisition',
     'wallet_created': 'User Acquisition',
     'wallet_imported': 'User Acquisition',
 
@@ -168,6 +171,11 @@ class MatomoAnalyticsApi implements AnalyticsApi {
     'scroll_delta': 49,
     'page_name': 50,
     'expected_reward_amount': 51,
+    'step': 52,
+    'step_index': 53,
+    'flow': 54,
+    'entry_point': 55,
+    'existing_wallet_count': 56,
   };
 
   static const Set<String> _assetDimensionRequiredEvents = {

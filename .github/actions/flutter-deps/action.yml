@@ -3,11 +3,54 @@ description: "Installs Flutter and any other dependencies required for the build
 runs:
   using: "composite"
   steps:
+    # `.fvmrc` is what developers resolve locally (`fvm flutter ...`), and the
+    # version below is what CI installs. They MUST agree: a lockfile generated
+    # on a newer Flutter resolves packages this one cannot satisfy, and
+    # `flutter pub get --enforce-lockfile` then fails every job before it does
+    # any work. Guarded rather than derived because subosito/flutter-action has
+    # no `flutter-version-file` input.
+    - name: Check every Flutter pin agrees with .fvmrc
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -f .fvmrc ]; then
+          echo "::error::.fvmrc is missing; it is the source of truth for the Flutter version."
+          exit 1
+        fi
+        want=$(python3 -c 'import json;print(json.load(open(".fvmrc"))["flutter"])')
+        echo ".fvmrc pins Flutter $want"
+
+        status=0
+        # Every `flutter-version:` across the workflows, not just this action -
+        # any one of them installing a different version reintroduces the drift.
+        while IFS= read -r line; do
+          file="${line%%:*}"
+          got=$(printf '%s' "$line" | sed -E 's/.*flutter-version:[[:space:]]*"?([0-9][^"[:space:]]*)"?.*/\1/')
+          if [ "$got" != "$want" ]; then
+            echo "::error file=$file::pins Flutter $got but .fvmrc pins $want"
+            status=1
+          fi
+        done < <(grep -rn 'flutter-version:[[:space:]]*"' .github --include='*.yml' --include='*.yaml')
+
+        # The human-facing doc too: a stale number here is how someone
+        # regenerates a lockfile on the wrong version.
+        if [ -f docs/FLUTTER_VERSION.md ] && ! grep -qF "\`$want\`" docs/FLUTTER_VERSION.md; then
+          echo "::error file=docs/FLUTTER_VERSION.md::does not mention Flutter $want"
+          status=1
+        fi
+
+        if [ "$status" -ne 0 ]; then
+          echo "Update every pin together, then regenerate pubspec.lock with that version:"
+          echo "  fvm use \$VERSION && fvm flutter pub get"
+          exit 1
+        fi
+        echo "All Flutter pins agree."
+
     - name: Get stable flutter
       id: setup_flutter
       uses: subosito/flutter-action@v2
       with:
-        # NB! Keep up-to-date with the flutter version used for development
+        # NB! Must match `.fvmrc` - the step above enforces it.
         flutter-version: "3.41.4"
         channel: "stable"
 

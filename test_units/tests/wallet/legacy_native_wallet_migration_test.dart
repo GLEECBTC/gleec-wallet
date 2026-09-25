@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_framework/komodo_defi_framework.dart';
 import 'package:komodo_legacy_wallet_migration/komodo_legacy_wallet_migration.dart';
 import 'package:komodo_legacy_wallet_migration/src/adapters/legacy_password_verifier.dart';
@@ -27,7 +30,6 @@ const _legacySeedPhrase =
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
   group('WalletsRepository legacy migration', () {
     test(
       'getWallets hides linked legacy leftovers and prunes shared-preferences storage',
@@ -677,6 +679,13 @@ void main() {
         );
         expect(
           terminalState.currentUser?.wallet.migratedLegacySource?.cleanupStatus,
+          LegacyMigrationCleanupStatus.incomplete,
+        );
+        await auth.waitForMetadata(
+          (user) => user.metadata[legacyCleanupStatusMetadataKey] == 'complete',
+        );
+        expect(
+          auth.currentUserValue?.wallet.migratedLegacySource?.cleanupStatus,
           LegacyMigrationCleanupStatus.complete,
         );
         expect(metadataStore.deletedWalletIds, contains('native-1'));
@@ -727,7 +736,60 @@ void main() {
     );
 
     test(
-      'legacy migration signs in to an existing target wallet when the same password can be reused',
+      'a stale migration linkage write cannot sign out the replacement wallet',
+      () async {
+        final auth = _FakeAuth(users: const <KdfUser>[]);
+        final writeStarted = Completer<void>();
+        final writeGate = Completer<void>();
+        auth.beforeMetadataWrite = (_) async {
+          writeStarted.complete();
+          await writeGate.future;
+        };
+        final sdk = _FakeSdk(auth: auth);
+        final bloc = AuthBloc(
+          sdk,
+          WalletsRepository(sdk, _FakeMm2Api(), _FakeStorage()),
+          SettingsRepository(storage: _FakeStorage()),
+          _FakeTradingStatusService(),
+        );
+        addTearDown(bloc.close);
+
+        bloc.add(
+          AuthLegacyMigrationRequested(
+            sourceWallet: _sharedPrefsLegacyWallet(),
+            legacyPassword: 'Strong1!A',
+            kdfPassword: 'Strong1!A',
+            targetWalletName: 'Legacy_Wallet_',
+            seedPhrase: _legacySeedPhrase,
+          ),
+        );
+        await writeStarted.future.timeout(const Duration(seconds: 2));
+        final originalWalletId = auth.currentUserValue!.walletId;
+        final replacement = _buildUser(
+          walletName: 'Replacement Wallet',
+          derivationMethod: DerivationMethod.hdWallet,
+        );
+        auth.currentUserValue = replacement;
+        final replacementSelected = bloc.stream.firstWhere(
+          (state) => state.currentUser?.walletId == replacement.walletId,
+        );
+        bloc.add(
+          AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
+        );
+        await replacementSelected;
+        final replacementState = bloc.state;
+        writeGate.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(auth.metadataWriteWalletIds, [originalWalletId]);
+        expect(auth.signOutCalls, 0);
+        expect(auth.currentUserValue, same(replacement));
+        expect(bloc.state, same(replacementState));
+      },
+    );
+
+    test(
+      'legacy migration rejects an existing target even with the same password',
       () async {
         final auth = _FakeAuth(
           users: <KdfUser>[
@@ -763,9 +825,12 @@ void main() {
         );
         final terminalState = await terminalStateFuture;
 
-        expect(terminalState.isError, isFalse);
+        expect(
+          terminalState.authError?.type,
+          AuthExceptionType.walletAlreadyExists,
+        );
         expect(auth.registeredWalletName, isNull);
-        expect(auth.signedInWalletName, 'Legacy_Wallet_');
+        expect(auth.signedInWalletName, isNull);
       },
     );
 
@@ -808,8 +873,8 @@ void main() {
 
         expect(terminalState.isError, isTrue);
         expect(
-          terminalState.authError?.message,
-          contains('already been migrated'),
+          terminalState.authError?.type,
+          AuthExceptionType.walletAlreadyExists,
         );
         expect(auth.registeredWalletName, isNull);
         expect(auth.signedInWalletName, isNull);
@@ -817,7 +882,7 @@ void main() {
     );
 
     test('legacy migration saves ZHTLC activation config and preserved extras '
-        'before auto-activation', () async {
+        'before selecting those assets', () async {
       final auth = _FakeAuth(users: const <KdfUser>[]);
       final sdk = _FakeSdk(
         auth: auth,
@@ -877,6 +942,13 @@ void main() {
         ),
       );
       final terminalState = await terminalStateFuture;
+      expect(
+        terminalState.currentUser?.metadata['activated_coins'],
+        isNot(contains('ARRR')),
+      );
+      await auth.waitForMetadata(
+        (user) => user.metadata[legacyCleanupStatusMetadataKey] == 'complete',
+      );
       final savedConfig = await sdk.activationConfigService.getSavedZhtlc(
         _buildZhtlcAsset('ARRR').id,
       );
@@ -895,15 +967,15 @@ void main() {
       expect(oneShotSync?.isEarliest, isTrue);
       expect(consumedOneShot, isNull);
       expect(
-        terminalState.currentUser?.metadata[legacyWalletExtrasMetadataKey],
+        auth.currentUserValue?.metadata[legacyWalletExtrasMetadataKey],
         containsPair('activate_pin_protection', true),
       );
       expect(
-        terminalState.currentUser?.metadata[legacyWalletExtrasMetadataKey],
+        auth.currentUserValue?.metadata[legacyWalletExtrasMetadataKey],
         containsPair('requested_zhtlc_coin_ids', <String>['ARRR']),
       );
       expect(
-        terminalState.currentUser?.metadata['activated_coins'],
+        auth.currentUserValue?.metadata['activated_coins'],
         contains('ARRR'),
       );
     });
@@ -968,22 +1040,21 @@ void main() {
           ),
         );
         final terminalState = await terminalStateFuture;
+        await auth.waitForMetadata(
+          (user) => user.metadata[legacyCleanupStatusMetadataKey] == 'complete',
+        );
         final savedConfig = await sdk.activationConfigService.getSavedZhtlc(
           _buildZhtlcAsset('ARRR').id,
         );
 
         expect(terminalState.isError, isFalse);
-        expect(
-          terminalState.authenticationState?.message,
-          contains('ZHTLC assets still need Zcash parameters'),
-        );
         expect(savedConfig, isNull);
         expect(
           terminalState.currentUser?.metadata['activated_coins'],
           isNot(contains('ARRR')),
         );
         expect(
-          terminalState.currentUser?.metadata[legacyWalletExtrasMetadataKey],
+          auth.currentUserValue?.metadata[legacyWalletExtrasMetadataKey],
           containsPair('pending_zhtlc_assets', <String>['ARRR']),
         );
       },
@@ -1177,9 +1248,10 @@ KdfUser _buildUser({
   Map<String, dynamic> metadata = const <String, dynamic>{},
 }) {
   return KdfUser(
-    walletId: WalletId.fromName(
+    walletId: WalletId.withPubkeyHash(
       walletName,
       AuthOptions(derivationMethod: derivationMethod),
+      'pubkey-$walletName',
     ),
     isBip39Seed: derivationMethod == DerivationMethod.hdWallet,
     metadata: <String, dynamic>{'activated_coins': <String>[], ...metadata},
@@ -1294,7 +1366,54 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   _FakeAuth({required List<KdfUser> users}) : users = List<KdfUser>.from(users);
 
   final List<KdfUser> users;
-  KdfUser? currentUserValue;
+  final _changes = StreamController<KdfUser>.broadcast();
+  Future<KdfUser> waitForMetadata(bool Function(KdfUser) predicate) async {
+    final current = currentUserValue;
+    if (current != null && predicate(current)) return current;
+    return _changes.stream
+        .firstWhere(predicate)
+        .timeout(const Duration(seconds: 2));
+  }
+
+  final sessions = AuthSessionTracker();
+  KdfUser? _currentUserValue;
+  KdfUser? get currentUserValue => _currentUserValue;
+  set currentUserValue(KdfUser? value) {
+    _currentUserValue = value;
+    sessions.observe(value);
+  }
+
+  @override
+  Future<AuthSessionContext> captureSessionContext() async =>
+      sessions.current ?? (throw const AuthSessionChangedException());
+  @override
+  bool isSessionContextCurrent(AuthSessionContext context) =>
+      sessions.isCurrent(context);
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!isSessionContextCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  @override
+  Stream<AuthSessionContext?> watchSessionContext() => sessions.changes;
+  @override
+  Future<KdfUser> updateMetadataForSession(
+    AuthSessionContext context,
+    Map<String, dynamic> updates,
+  ) async {
+    ensureSessionContextCurrent(context);
+    metadataWriteWalletIds.add(context.walletId);
+    await beforeMetadataWrite?.call(context.walletId);
+    ensureSessionContextCurrent(context);
+    currentUserValue = currentUserValue!.copyWith(
+      metadata: {...currentUserValue!.metadata, ...updates},
+    );
+    _upsertCurrentUser(currentUserValue!);
+    return currentUserValue!;
+  }
+
   String? registeredWalletName;
   String? registeredPassword;
   Mnemonic? registeredMnemonic;
@@ -1302,6 +1421,20 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   String? signedInWalletName;
   String? signedInPassword;
   AuthOptions? signedInOptions;
+  Future<void> Function(WalletId expectedWalletId)? beforeMetadataWrite;
+  final List<WalletId> metadataWriteWalletIds = [];
+  int signOutCalls = 0;
+
+  @override
+  Future<bool> ensureKdfHealthy() async => true;
+  @override
+  Future<bool> isSignedIn() async => currentUserValue != null;
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+    currentUserValue = null;
+  }
 
   @override
   Future<KdfUser?> get currentUser async => currentUserValue;
@@ -1317,7 +1450,15 @@ class _FakeAuth implements KomodoDefiLocalAuth {
       derivationMethod: DerivationMethod.hdWallet,
     ),
     Mnemonic? mnemonic,
+    Map<String, dynamic> initialMetadata = const {},
   }) async {
+    if (users.any((user) => user.walletId.name == walletName)) {
+      throw AuthException(
+        'Wallet already exists',
+        type: AuthExceptionType.walletAlreadyExists,
+      );
+    }
+    sessions.invalidate();
     registeredWalletName = walletName;
     registeredPassword = password;
     registeredMnemonic = mnemonic;
@@ -1325,6 +1466,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
     currentUserValue = _buildUser(
       walletName: walletName,
       derivationMethod: options.derivationMethod,
+      metadata: initialMetadata,
     );
     _upsertCurrentUser(currentUserValue!);
     return currentUserValue!;
@@ -1352,10 +1494,19 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   }
 
   @override
-  Future<void> setOrRemoveActiveUserKeyValue(String key, dynamic value) async {
+  Future<void> setOrRemoveActiveUserKeyValue(
+    String key,
+    dynamic value, {
+    required WalletId expectedWalletId,
+  }) async {
+    metadataWriteWalletIds.add(expectedWalletId);
+    await beforeMetadataWrite?.call(expectedWalletId);
     final currentUser = currentUserValue;
     if (currentUser == null) {
       throw StateError('No active user');
+    }
+    if (currentUser.walletId != expectedWalletId) {
+      throw const WalletChangedDisconnectException('Wallet changed');
     }
 
     final metadata = Map<String, dynamic>.from(currentUser.metadata);
@@ -1372,11 +1523,15 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   @override
   Future<void> updateActiveUserKeyValue(
     String key,
-    dynamic Function(dynamic currentValue) transform,
-  ) async {
+    dynamic Function(dynamic currentValue) transform, {
+    required WalletId expectedWalletId,
+  }) async {
     final currentUser = currentUserValue;
     if (currentUser == null) {
       throw StateError('No active user');
+    }
+    if (currentUser.walletId != expectedWalletId) {
+      throw const WalletChangedDisconnectException('Wallet changed');
     }
 
     final metadata = Map<String, dynamic>.from(currentUser.metadata);
@@ -1392,6 +1547,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   }
 
   void _upsertCurrentUser(KdfUser user) {
+    _changes.add(user);
     final index = users.indexWhere(
       (candidate) => candidate.walletId.name == user.walletId.name,
     );
@@ -1403,7 +1559,7 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   }
 
   @override
-  Stream<KdfUser?> watchCurrentUser() => const Stream<KdfUser?>.empty();
+  Stream<KdfUser?> watchCurrentUser() => _changes.stream;
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
@@ -1430,7 +1586,7 @@ class _FakeStreamingManager implements KdfEventStreamingService {
   void connectIfNeeded() {}
 
   @override
-  void disconnect() {}
+  Future<void> disconnect() async {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
@@ -1441,10 +1597,16 @@ class _FakeStreamingManager implements KdfEventStreamingService {
 class _FakeSdk implements KomodoDefiSdk {
   _FakeSdk({required this.auth, Set<Asset> assets = const <Asset>{}})
     : _assets = _FakeAssetManager(assets),
+      walletAssets = WalletAssetSelection(auth),
       activationConfigService = ActivationConfigService(
         JsonActivationConfigRepository(InMemoryKeyValueStore()),
         walletIdResolver: () async => (await auth.currentUser)?.walletId,
-      );
+      ) {
+    addTearDown(walletAssets.dispose);
+  }
+
+  @override
+  final WalletAssetSelection walletAssets;
 
   @override
   final KomodoDefiLocalAuth auth;
@@ -1456,6 +1618,10 @@ class _FakeSdk implements KomodoDefiSdk {
   AssetManager get assets => _assets;
   final AssetManager _assets;
 
+  @override
+  void connectStreaming() {}
+  @override
+  Future<void> disconnectStreaming() async {}
   @override
   KdfEventStreamingService get streaming => _streaming;
   final KdfEventStreamingService _streaming = _FakeStreamingManager();
