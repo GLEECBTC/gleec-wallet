@@ -22,6 +22,15 @@ double _width = 0;
 double get screenHeight => _height;
 double _height = 0;
 
+/// Returns the screen type to its default. A widget test that sets another
+/// must call this, or every later test in the isolate inherits it.
+@visibleForTesting
+void resetScreenType() {
+  _screenType = ScreenType.mobile;
+  _width = 0;
+  _height = 0;
+}
+
 void updateScreenType(BuildContext context) {
   final size = MediaQuery.of(context).size;
   _width = size.width;

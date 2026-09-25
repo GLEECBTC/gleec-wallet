@@ -280,6 +280,17 @@ import 'tests/swap/swap_common_ui_status_test.dart'
     as swap_common_ui_status_test;
 import 'tests/swap/swap_common_ui_timeline_test.dart'
     as swap_common_ui_timeline_test;
+import 'tests/swap/swap_wiring_app_root_test.dart' as swap_wiring_app_root_test;
+import 'tests/swap/swap_wiring_coin_page_test.dart'
+    as swap_wiring_coin_page_test;
+import 'tests/swap/swap_wiring_desktop_menu_test.dart'
+    as swap_wiring_desktop_menu_test;
+import 'tests/swap/swap_wiring_layout_test.dart' as swap_wiring_layout_test;
+import 'tests/swap/swap_wiring_mobile_menu_test.dart'
+    as swap_wiring_mobile_menu_test;
+import 'tests/swap/swap_wiring_router_test.dart' as swap_wiring_router_test;
+import 'tests/swap/swap_wiring_swap_data_test.dart'
+    as swap_wiring_swap_data_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -620,6 +631,13 @@ void main() {
   swap_common_ui_sheet_test.main();
   swap_common_ui_status_test.main();
   swap_common_ui_timeline_test.main();
+  swap_wiring_app_root_test.main();
+  swap_wiring_coin_page_test.main();
+  swap_wiring_desktop_menu_test.main();
+  swap_wiring_layout_test.main();
+  swap_wiring_mobile_menu_test.main();
+  swap_wiring_router_test.main();
+  swap_wiring_swap_data_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
