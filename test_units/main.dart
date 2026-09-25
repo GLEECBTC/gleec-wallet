@@ -180,6 +180,21 @@ import 'tests/swap/swap_exec_routed_failure_test.dart'
 import 'tests/swap/swap_exec_routed_snapshot_test.dart'
     as swap_exec_routed_snapshot_test;
 import 'tests/swap/swap_exec_values_test.dart' as swap_exec_values_test;
+import 'tests/swap/swap_bloc_activity_test.dart' as swap_bloc_activity_test;
+import 'tests/swap/swap_bloc_alternatives_test.dart'
+    as swap_bloc_alternatives_test;
+import 'tests/swap/swap_bloc_evaluation_test.dart' as swap_bloc_evaluation_test;
+import 'tests/swap/swap_bloc_execution_test.dart' as swap_bloc_execution_test;
+import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
+import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
+import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
+import 'tests/swap/swap_bloc_intent_test.dart' as swap_bloc_intent_test;
+import 'tests/swap/swap_bloc_opening_test.dart' as swap_bloc_opening_test;
+import 'tests/swap/swap_bloc_review_test.dart' as swap_bloc_review_test;
+import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
+import 'tests/swap/swap_bloc_timers_test.dart' as swap_bloc_timers_test;
+import 'tests/swap/swap_bloc_validation_test.dart' as swap_bloc_validation_test;
+import 'tests/swap/swap_bloc_values_test.dart' as swap_bloc_values_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -459,6 +474,20 @@ void main() {
   swap_exec_routed_failure_test.main();
   swap_exec_routed_snapshot_test.main();
   swap_exec_values_test.main();
+  swap_bloc_activity_test.main();
+  swap_bloc_alternatives_test.main();
+  swap_bloc_evaluation_test.main();
+  swap_bloc_execution_test.main();
+  swap_bloc_fix_doubt_test.main();
+  swap_bloc_fix_review_test.main();
+  swap_bloc_fix_timers_test.main();
+  swap_bloc_intent_test.main();
+  swap_bloc_opening_test.main();
+  swap_bloc_review_test.main();
+  swap_bloc_start_test.main();
+  swap_bloc_timers_test.main();
+  swap_bloc_validation_test.main();
+  swap_bloc_values_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
