@@ -153,6 +153,33 @@ import 'tests/swap/swap_src_services_assets_test.dart'
 import 'tests/swap/swap_src_services_session_test.dart'
     as swap_src_services_session_test;
 import 'tests/swap/swap_src_storage_test.dart' as swap_src_storage_test;
+import 'tests/swap/swap_exec_atomic_engine_test.dart'
+    as swap_exec_atomic_engine_test;
+import 'tests/swap/swap_exec_atomic_executor_test.dart'
+    as swap_exec_atomic_executor_test;
+import 'tests/swap/swap_exec_atomic_snapshot_test.dart'
+    as swap_exec_atomic_snapshot_test;
+import 'tests/swap/swap_exec_atomic_tracking_test.dart'
+    as swap_exec_atomic_tracking_test;
+import 'tests/swap/swap_exec_fix_maker_test.dart' as swap_exec_fix_maker_test;
+import 'tests/swap/swap_exec_fix_orders_test.dart' as swap_exec_fix_orders_test;
+import 'tests/swap/swap_exec_fix_registry_test.dart'
+    as swap_exec_fix_registry_test;
+import 'tests/swap/swap_exec_fix_services_test.dart'
+    as swap_exec_fix_services_test;
+import 'tests/swap/swap_exec_fix_start_test.dart' as swap_exec_fix_start_test;
+import 'tests/swap/swap_exec_fix_tracking_test.dart'
+    as swap_exec_fix_tracking_test;
+import 'tests/swap/swap_exec_handle_test.dart' as swap_exec_handle_test;
+import 'tests/swap/swap_exec_history_test.dart' as swap_exec_history_test;
+import 'tests/swap/swap_exec_registry_test.dart' as swap_exec_registry_test;
+import 'tests/swap/swap_exec_routed_executor_test.dart'
+    as swap_exec_routed_executor_test;
+import 'tests/swap/swap_exec_routed_failure_test.dart'
+    as swap_exec_routed_failure_test;
+import 'tests/swap/swap_exec_routed_snapshot_test.dart'
+    as swap_exec_routed_snapshot_test;
+import 'tests/swap/swap_exec_values_test.dart' as swap_exec_values_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -415,6 +442,23 @@ void main() {
   swap_src_services_assets_test.main();
   swap_src_services_session_test.main();
   swap_src_storage_test.main();
+  swap_exec_atomic_engine_test.main();
+  swap_exec_atomic_executor_test.main();
+  swap_exec_atomic_snapshot_test.main();
+  swap_exec_atomic_tracking_test.main();
+  swap_exec_fix_maker_test.main();
+  swap_exec_fix_orders_test.main();
+  swap_exec_fix_registry_test.main();
+  swap_exec_fix_services_test.main();
+  swap_exec_fix_start_test.main();
+  swap_exec_fix_tracking_test.main();
+  swap_exec_handle_test.main();
+  swap_exec_history_test.main();
+  swap_exec_registry_test.main();
+  swap_exec_routed_executor_test.main();
+  swap_exec_routed_failure_test.main();
+  swap_exec_routed_snapshot_test.main();
+  swap_exec_values_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();
