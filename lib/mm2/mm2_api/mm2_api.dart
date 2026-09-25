@@ -256,7 +256,7 @@ class Mm2Api {
         },
         maxAttempts: 4,
         backoffStrategy: const LinearBackoff(
-          initialDelay: Duration(milliseconds:  500),
+          initialDelay: Duration(milliseconds: 500),
           increment: Duration(milliseconds: 250),
           maxDelay: Duration(seconds: 3),
         ),
@@ -286,6 +286,11 @@ class Mm2Api {
       return <String, dynamic>{'error': e};
     }
   }
+
+  /// [sell] without turning a call that got no answer into an error answer:
+  /// KDF's answer, error or not, and a throw when none arrived.
+  Future<Map<String, dynamic>> sellOrThrow(SellRequest request) =>
+      _mm2.call(request);
 
   Future<Map<String, dynamic>?> setprice(SetPriceRequest request) async {
     try {
@@ -401,6 +406,11 @@ class Mm2Api {
       return null;
     }
   }
+
+  /// The `order_status` answer as KDF gave it, error or not; throws when none
+  /// arrived.
+  Future<Map<String, dynamic>> orderStatusOrThrow(String uuid) =>
+      _mm2.call(OrderStatusRequest(uuid: uuid));
 
   Future<ImportSwapsResponse?> importSwaps(ImportSwapsRequest request) async {
     try {

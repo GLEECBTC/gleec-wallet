@@ -228,12 +228,13 @@ class SwapServices {
     }
     try {
       final page = await _atomicHistory(limit: 50, page: 1);
-      // Swaps that never logged Finished can sit in the list for years;
+      // Only Finished ends a swap: after an error it may still be refunding.
+      // Swaps that never logged it can sit in the list for years, though, and
       // following every one of them would poll forever.
       final since = DateTime.now().subtract(_atomicResumeWindow);
       refs.addAll([
         for (final swap in page.swaps)
-          if (!swap.isCompleted &&
+          if (swap.events.every((e) => e.event.type != 'Finished') &&
               swap.events.isNotEmpty &&
               DateTime.fromMillisecondsSinceEpoch(
                 swap.events.last.timestamp,

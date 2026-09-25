@@ -7,6 +7,7 @@ import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
 import 'package:web_dex/model/swap.dart';
+import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -54,7 +55,7 @@ class AtomicSwapExecutor implements SwapExecutor {
     }
 
     final response = await _dex
-        .sell(
+        .sellOrThrow(
           SellRequest(
             base: plan.base.id,
             rel: plan.rel.id,
@@ -82,32 +83,29 @@ class AtomicSwapExecutor implements SwapExecutor {
       );
     }
 
-    return _track(uuid, accepted: quote, placed: true);
+    return _track(uuid, accepted: quote);
   }
 
   @override
   Future<SwapExecutionHandle?> resume(String id) async {
+    Swap? swap;
     try {
-      await _dex.getSwapStatus(id);
+      swap = await _dex.getSwapStatus(id);
     } on Object {
       final status = await _orders.getStatus(id);
       if (status?.takerOrderStatus == null) return null;
     }
-    return _track(id);
+    return _track(id, swap: swap);
   }
 
-  SwapExecutionHandle _track(
-    String uuid, {
-    SwapQuote? accepted,
-    bool placed = false,
-  }) {
+  SwapExecutionHandle _track(String uuid, {SwapQuote? accepted, Swap? swap}) {
     final tracker = _AtomicSwapTracker(
       uuid: uuid,
       executor: this,
       accepted: accepted,
     );
     final handle = StreamSwapExecutionHandle(
-      initial: tracker.initial(placed: placed),
+      initial: tracker.initial(placed: accepted != null, swap: swap),
       source: tracker.stream,
       cancel: tracker.cancel,
       onClose: tracker.dispose,
@@ -139,12 +137,19 @@ class _AtomicSwapTracker {
 
   Stream<SwapExecutionSnapshot> get stream => _controller.stream;
 
-  SwapExecutionSnapshot initial({required bool placed}) => _last = _snapshot(
-    stage: placed ? SwapProgressStage.matching : SwapProgressStage.preparing,
-    canCancel: placed,
-  );
+  SwapExecutionSnapshot initial({required bool placed, Swap? swap}) {
+    _matched = swap != null;
+    if (swap != null) return _last = _fromSwap(swap);
+    return _last = _snapshot(
+      stage: placed ? SwapProgressStage.matching : SwapProgressStage.preparing,
+      canCancel: placed,
+    );
+  }
 
-  void start() => _schedule(Duration.zero);
+  /// Polls until the swap ends; a record found already ended is final.
+  void start() => _last?.isTerminal ?? false
+      ? unawaited(_controller.close())
+      : _schedule(Duration.zero);
 
   void _schedule(Duration delay) {
     _timer?.cancel();
@@ -159,25 +164,31 @@ class _AtomicSwapTracker {
       _matched = true;
       _misses = 0;
       _emit(_fromSwap(swap));
-    } on Object {
+    } on Object catch (error) {
       // No swap yet: the taker order is still looking for its counterparty,
       // or it expired without one.
-      if (!_matched) await _checkOrder();
+      if (!_matched) await _checkOrder(error);
     }
     if (!(_last?.isTerminal ?? false)) _schedule(_executor._pollInterval);
   }
 
-  Future<void> _checkOrder() async {
-    final status = await _executor._orders.getStatus(uuid);
-    final taker = status?.takerOrderStatus;
-    if (taker == null) {
+  Future<void> _checkOrder(Object swapError) async {
+    final OrderStatus status;
+    try {
+      status = await _executor._orders.getStatusOrThrow(uuid);
+    } on Object catch (error) {
       // Neither an order nor a swap. A fill-or-kill order that never matched
-      // is removed; give the engine a few polls before concluding that.
-      if (++_misses >= _executor._missesBeforeNoMatch) {
+      // is removed; give the engine a few polls before concluding that, and
+      // count only KDF saying so: a read that failed proves nothing.
+      if (_answered(swapError, 'No swap with uuid $uuid') &&
+          _answered(error, 'Order with uuid $uuid is not found') &&
+          ++_misses >= _executor._missesBeforeNoMatch) {
         _emit(_terminal(SwapOutcomeKind.noMatch));
       }
       return;
     }
+    final taker = status.takerOrderStatus;
+    if (taker == null) return;
     _misses = 0;
     switch (taker.cancellationReason) {
       case TakerOrderCancellationReason.timedOut:
@@ -185,11 +196,18 @@ class _AtomicSwapTracker {
       case TakerOrderCancellationReason.cancelled:
         _emit(_terminal(SwapOutcomeKind.cancelled));
       case TakerOrderCancellationReason.fulfilled:
+        // Matched: the swap is being set up and can no longer be recalled.
+        _matched = true;
+        _emit(_snapshot(stage: SwapProgressStage.preparing));
       case TakerOrderCancellationReason.toMaker:
       case TakerOrderCancellationReason.none:
         _emit(_snapshot(stage: SwapProgressStage.matching, canCancel: true));
     }
   }
+
+  /// Whether [error] is KDF answering [words], not a read that failed.
+  static bool _answered(Object error, String words) =>
+      error is TextError && error.error.contains(words);
 
   Future<void> cancel() async {
     final last = _last;
@@ -253,6 +271,48 @@ class _AtomicSwapTracker {
   );
 }
 
+/// The events marking one side's steps through an atomic swap's log.
+typedef _AtomicSide = ({
+  String? fee,
+  String sending,
+  List<String> confirming,
+  String sent,
+  String received,
+  List<String> refunding,
+  List<String> refunded,
+});
+
+const _AtomicSide _taker = (
+  fee: 'TakerFeeSent',
+  sending: 'TakerFeeSent',
+  confirming: [
+    'MakerPaymentReceived',
+    'MakerPaymentWaitConfirmStarted',
+    'MakerPaymentValidatedAndConfirmed',
+  ],
+  sent: 'TakerPaymentSent',
+  received: 'MakerPaymentSpent',
+  refunding: ['TakerPaymentWaitRefundStarted', 'TakerPaymentRefundStarted'],
+  refunded: [
+    'TakerPaymentRefunded',
+    'TakerPaymentRefundedByWatcher',
+    'TakerPaymentRefundFinished',
+  ],
+);
+
+/// A maker pays no fee, and pays first: once the taker's fee checks out.
+const _AtomicSide _maker = (
+  fee: null,
+  sending: 'TakerFeeValidated',
+  confirming: [],
+  sent: 'MakerPaymentSent',
+  received: 'TakerPaymentSpent',
+  refunding: ['MakerPaymentWaitRefundStarted', 'MakerPaymentRefundStarted'],
+  refunded: ['MakerPaymentRefunded', 'MakerPaymentRefundFinished'],
+);
+
+_AtomicSide _sideOf(Swap swap) => swap.isTaker ? _taker : _maker;
+
 /// Describes an atomic swap at [stage], before or without its event log.
 SwapExecutionSnapshot atomicSnapshot({
   required String uuid,
@@ -268,7 +328,8 @@ SwapExecutionSnapshot atomicSnapshot({
   final from =
       accepted?.from ?? (swap == null ? null : resolveAsset(swap.sellCoin));
   final to = accepted?.to ?? (swap == null ? null : resolveAsset(swap.buyCoin));
-  String? hashOf(String type) => swap?.events
+  final side = swap == null ? null : _sideOf(swap);
+  String? hashOf(String? type) => swap?.events
       .where((e) => e.event.type == type)
       .map((e) => e.event.data?.txHash)
       .whereType<String>()
@@ -329,8 +390,8 @@ SwapExecutionSnapshot atomicSnapshot({
     finishedAt: outcome == null ? null : at(events.lastOrNull?.timestamp),
     evidence: SwapEvidence(
       executionId: uuid,
-      sourceTxHash: hashOf('TakerPaymentSent'),
-      destinationTxHash: hashOf('MakerPaymentSpent'),
+      sourceTxHash: hashOf(side?.sent),
+      destinationTxHash: hashOf(side?.received),
       rawState: events.lastOrNull?.event.type,
       errorType: events
           .map((e) => e.event.type)
@@ -344,7 +405,9 @@ SwapExecutionSnapshot atomicSnapshot({
 ///
 /// A taker's log runs Started, Negotiated, TakerFeeSent, MakerPaymentReceived
 /// (then its confirmation), TakerPaymentSent, MakerPaymentSpent, Finished; a
-/// failure adds error events and, once the payment has left, the refund
+/// maker's runs Started, Negotiated, TakerFeeValidated, MakerPaymentSent,
+/// TakerPaymentReceived (then its confirmation), TakerPaymentSpent, Finished.
+/// A failure adds error events and, once the payment has left, the refund
 /// events. KDF closes every swap, successful or not, with Finished.
 SwapExecutionSnapshot atomicSnapshotFromSwap(
   Swap swap, {
@@ -352,20 +415,17 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
   required AssetId? Function(String ticker) resolveAsset,
   SwapQuote? accepted,
 }) {
+  final side = _sideOf(swap);
   final types = swap.events.map((e) => e.event.type).toList();
-  bool has(String type) => types.contains(type);
+  bool has(String? type) => types.contains(type);
   final failed = types.any(swap.errorEvents.contains);
-  final paid = has('TakerPaymentSent');
-  final refunded =
-      has('TakerPaymentRefunded') ||
-      has('TakerPaymentRefundedByWatcher') ||
-      has('TakerPaymentRefundFinished');
-  final refunding =
-      has('TakerPaymentWaitRefundStarted') || has('TakerPaymentRefundStarted');
+  final paid = has(side.sent);
+  final refunded = side.refunded.any(has);
+  final refunding = side.refunding.any(has);
 
   final movement = paid
       ? SwapFundsMovement.sent
-      : has('TakerFeeSent')
+      : has(side.fee)
       ? SwapFundsMovement.feesOnly
       : SwapFundsMovement.none;
 
@@ -425,13 +485,11 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
 
   final stage = refunding
       ? SwapProgressStage.refunding
-      : has('MakerPaymentSpent') || paid
+      : has(side.received) || paid
       ? SwapProgressStage.exchanging
-      : has('MakerPaymentReceived') ||
-            has('MakerPaymentWaitConfirmStarted') ||
-            has('MakerPaymentValidatedAndConfirmed')
+      : side.confirming.any(has)
       ? SwapProgressStage.confirming
-      : has('TakerFeeSent')
+      : has(side.sending)
       ? SwapProgressStage.sending
       : SwapProgressStage.preparing;
   return snapshot(stage);

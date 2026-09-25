@@ -112,9 +112,11 @@ class SwapExecutionRegistry {
     if (executor == null) {
       throw const SwapStartRejectedException(SwapStartRejection.unknown);
     }
+    final generation = _generation;
     final handle = await executor.start(quote);
-    _follow(handle);
-    if (!_started.isClosed) _started.add(handle.latest);
+    if (_follow(handle, generation) != null && !_started.isClosed) {
+      _started.add(handle.latest);
+    }
     return handle.latest;
   }
 
@@ -194,16 +196,14 @@ class SwapExecutionRegistry {
     String id, {
     SwapLiquiditySource? source,
   }) async {
+    final generation = _generation;
     final candidates = source == null
         ? _executors.values
         : [?_executors[source]];
     for (final executor in candidates) {
       try {
         final handle = await executor.resume(id);
-        if (handle != null) {
-          _follow(handle);
-          return handle;
-        }
+        if (handle != null) return _follow(handle, generation);
       } on Object {
         // Try the next source.
       }
@@ -211,11 +211,18 @@ class SwapExecutionRegistry {
     return null;
   }
 
-  void _follow(SwapExecutionHandle handle) {
-    final id = handle.id;
-    if (_handles.containsKey(id)) {
+  /// Follows [handle], opened in session [generation]: the handle now followed
+  /// for its swap, or null, with [handle] closed, once that session has ended.
+  SwapExecutionHandle? _follow(SwapExecutionHandle handle, int generation) {
+    if (generation != _generation) {
       unawaited(handle.close());
-      return;
+      return null;
+    }
+    final id = handle.id;
+    final followed = _handles[id];
+    if (followed != null) {
+      if (!identical(followed, handle)) unawaited(handle.close());
+      return followed;
     }
     _handles[id] = handle;
     _latest[id] = handle.latest;
@@ -224,6 +231,7 @@ class SwapExecutionRegistry {
       onError: (Object _) {},
     );
     _publish();
+    return handle;
   }
 
   void _update(String id, SwapExecutionSnapshot snapshot) {
