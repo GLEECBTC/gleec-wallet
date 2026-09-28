@@ -12,6 +12,7 @@ import 'package:easy_localization/easy_localization.dart';
 // ignore: implementation_imports
 import 'package:easy_localization/src/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -30,6 +31,7 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
@@ -460,6 +462,35 @@ void main() {
         expect(find.text('Status update delayed'), findsOneWidget);
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
+
+      for (final (name, url, details) in [
+        (
+          'a link',
+          'https://etherscan.io/tx/'
+              '0x5520d7f51c8e3108fa2d9c6220bf4aa8f9c17b91e4c3a1b2c3d4e5f6a7b8c9d0',
+          null,
+        ),
+        (
+          'support by email',
+          'mailto:info@gleec.com?subject=GLEEC%20Wallet%20Support',
+          'Swap ID: swap-1',
+        ),
+      ]) {
+        testWidgets('link: the device cannot open $name', (tester) async {
+          await pump(
+            tester,
+            layout,
+            SwapLinkFailedDialog(url: url, details: details),
+          );
+          await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+
+          _acceptClipboard(tester);
+          await tester.tap(find.text('Copy'));
+          await tester.pumpAndSettle();
+          expect(find.textContaining('copied'), findsWidgets);
+          await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+        });
+      }
     });
   }
 }

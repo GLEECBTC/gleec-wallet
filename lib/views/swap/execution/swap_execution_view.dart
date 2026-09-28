@@ -9,9 +9,9 @@ import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
-import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
@@ -194,7 +194,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         final url = hash == null
             ? null
             : _services.explorerTxUrl(snapshot.from, hash);
-        if (url != null) launchURLString(url.toString());
+        if (url != null) openSwapLink(context, url.toString());
       case SwapOutcomeAction.contactSupport:
         showSwapEvidenceSheet(context, snapshot: snapshot, services: _services);
     }
@@ -353,7 +353,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         SwapButton(
           label: LocaleKeys.swapOpenRoutePage.tr(),
           icon: Icons.open_in_new_rounded,
-          onPressed: () => launchURLString(routeUrl),
+          onPressed: () => openSwapLink(context, routeUrl),
         ),
         const SizedBox(height: 10),
       ],

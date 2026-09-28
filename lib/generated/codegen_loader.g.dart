@@ -1768,6 +1768,12 @@ abstract class LocaleKeys {
   static const swapAnnounceMax = 'swapAnnounceMax';
   static const swapEvidenceNoTransactions = 'swapEvidenceNoTransactions';
   static const swapEvidenceRouteLink = 'swapEvidenceRouteLink';
+  static const swapLinkFailedTitle = 'swapLinkFailedTitle';
+  static const swapLinkFailedBody = 'swapLinkFailedBody';
+  static const swapLinkLabel = 'swapLinkLabel';
+  static const swapEmailFailedTitle = 'swapEmailFailedTitle';
+  static const swapEmailFailedBody = 'swapEmailFailedBody';
+  static const swapEmailLabel = 'swapEmailLabel';
   static const swapEvidenceFrom = 'swapEvidenceFrom';
   static const swapEvidenceTo = 'swapEvidenceTo';
   static const swapReviewSummaryA11y = 'swapReviewSummaryA11y';

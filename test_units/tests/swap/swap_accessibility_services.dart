@@ -58,3 +58,15 @@ class _Services implements SwapServices {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// Lets the clipboard accept copies in the current test.
+void _acceptClipboard(WidgetTester tester) {
+  final messenger = tester.binding.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (_) async => null,
+  );
+  addTearDown(
+    () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+  );
+}

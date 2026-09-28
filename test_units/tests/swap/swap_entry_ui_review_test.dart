@@ -272,6 +272,25 @@ void main() {
       expect(launched, [SwapTermsRepository.termsUrl]);
     });
 
+    testWidgets('a link the device cannot open is offered to copy', (
+      tester,
+    ) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async => false);
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      await pump(
+        tester,
+        reviewing(SwapReviewStatus.ready, termsRequired: true),
+      );
+
+      await tester.tap(find.byKey(const Key('swap-terms-link')));
+      await tester.pumpAndSettle();
+
+      expect(find.text("Couldn't open the link"), findsOneWidget);
+      expect(find.text(SwapTermsRepository.termsUrl), findsOneWidget);
+    });
+
     testWidgets('are not presented for an order-book swap', (tester) async {
       await pump(
         tester,

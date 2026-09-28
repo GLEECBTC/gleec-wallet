@@ -301,7 +301,8 @@ class _TermsNotice extends StatelessWidget {
                 link: true,
                 child: InkWell(
                   key: const Key('swap-terms-link'),
-                  onTap: () => launchURLString(SwapTermsRepository.termsUrl),
+                  onTap: () =>
+                      openSwapLink(context, SwapTermsRepository.termsUrl),
                   // WidgetSpan scales its child with the paragraph already.
                   child: Text(
                     linkLabel,

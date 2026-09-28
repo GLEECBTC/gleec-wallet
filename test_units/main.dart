@@ -231,6 +231,8 @@ import 'tests/swap/swap_surface_ui_evidence_test.dart'
     as swap_surface_ui_evidence_test;
 import 'tests/swap/swap_surface_ui_failures_test.dart'
     as swap_surface_ui_failures_test;
+import 'tests/swap/swap_surface_ui_link_errors_test.dart'
+    as swap_surface_ui_link_errors_test;
 import 'tests/swap/swap_surface_ui_links_test.dart'
     as swap_surface_ui_links_test;
 import 'tests/swap/swap_surface_ui_notices_test.dart'
@@ -607,6 +609,7 @@ void main() {
   swap_surface_ui_cancel_test.main();
   swap_surface_ui_evidence_test.main();
   swap_surface_ui_failures_test.main();
+  swap_surface_ui_link_errors_test.main();
   swap_surface_ui_links_test.main();
   swap_surface_ui_notices_test.main();
   swap_surface_ui_outcomes_test.main();
