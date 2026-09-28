@@ -12,7 +12,8 @@ const double _fullScreenBelow = 768;
 ///
 /// One presentation for pickers, options and evidence keeps focus handling
 /// and dismissal identical everywhere: Escape, the close button and a tap on
-/// the scrim all pop with null.
+/// the scrim all pop with null. A snack bar raised inside a sheet, such as a
+/// copy confirmation, shows on the sheet rather than on the page beneath.
 Future<T?> showSwapSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -33,9 +34,22 @@ Future<T?> showSwapSheet<T>({
         ? Duration.zero
         : const Duration(milliseconds: 220),
     pageBuilder: (dialogContext, _, _) {
-      final content = Material(
-        color: fullScreen ? palette.canvas : palette.surfaceRaised,
-        child: SafeArea(child: Builder(builder: builder)),
+      final content = ScaffoldMessenger(
+        child: Scaffold(
+          backgroundColor: fullScreen ? palette.canvas : palette.surfaceRaised,
+          resizeToAvoidBottomInset: false,
+          body: Actions(
+            // Scaffold binds Escape to its drawer and, having none, drops it;
+            // pass it on so Escape still closes the sheet.
+            actions: {
+              DismissIntent: CallbackAction<DismissIntent>(
+                onInvoke: (intent) =>
+                    Actions.maybeInvoke(dialogContext, intent),
+              ),
+            },
+            child: SafeArea(child: Builder(builder: builder)),
+          ),
+        ),
       );
       if (fullScreen) return content;
       return Align(

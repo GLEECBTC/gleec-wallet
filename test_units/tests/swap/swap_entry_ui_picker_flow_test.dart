@@ -2,6 +2,8 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
@@ -97,6 +99,31 @@ void main() {
     await open(tester, payPill);
 
     await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('What you pay with'), findsNothing);
+    expect(swap.events, isEmpty);
+  });
+
+  testWidgets('Escape from the search field closes it, changing nothing', (
+    tester,
+  ) async {
+    swap.emit(swapPricedForm());
+    // Wide enough for the search field to take focus as the picker opens.
+    await pumpSwapUi(
+      tester,
+      const SwapEntryView(),
+      bloc: swap,
+      services: services,
+      size: const Size(1024, 768),
+    );
+    await open(tester, payPill);
+    expect(
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<TextField>(),
+      isNotNull,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('What you pay with'), findsNothing);
     expect(swap.events, isEmpty);

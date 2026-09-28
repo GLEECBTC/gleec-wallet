@@ -272,5 +272,50 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Swap evidence'), findsNothing);
     });
+
+    // The page under the sheet has a Scaffold, as the app's does, so
+    // find.text alone also finds a confirmation hidden beneath the sheet.
+    for (final (device, size) in [
+      ('a phone', const Size(390, 844)),
+      ('a wide screen', const Size(1024, 768)),
+    ]) {
+      for (final (action, confirmation) in [
+        ('Copy', 'Swap ID copied'),
+        ('Copy details for support', 'Swap details copied'),
+        ('Contact Gleec support', 'Swap details copied'),
+      ]) {
+        testWidgets('on $device, "$action" confirms on the sheet', (
+          tester,
+        ) async {
+          recordClipboard();
+          recordUrlLaunches();
+          await pumpSurface(
+            tester,
+            Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showSwapEvidenceSheet(
+                  context,
+                  snapshot: proven(),
+                  services: services,
+                ),
+                child: const Text('open'),
+              ),
+            ),
+            services: services,
+            size: size,
+          );
+          await tapText(tester, 'open');
+
+          await tapText(tester, action);
+
+          final shown = find.text(confirmation);
+          expect(
+            ModalRoute.of(tester.element(shown)),
+            same(ModalRoute.of(tester.element(find.byType(SwapEvidenceSheet)))),
+          );
+          expect(shown.hitTestable(), findsOneWidget);
+        });
+      }
+    }
   });
 }
