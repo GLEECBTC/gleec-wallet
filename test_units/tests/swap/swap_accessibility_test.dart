@@ -12,6 +12,7 @@ import 'package:easy_localization/easy_localization.dart';
 // ignore: implementation_imports
 import 'package:easy_localization/src/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -29,6 +30,7 @@ import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
@@ -36,6 +38,8 @@ import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
+
+part 'swap_accessibility_sheets.dart';
 
 class _EnglishAssetLoader extends AssetLoader {
   const _EnglishAssetLoader();
@@ -409,6 +413,7 @@ void main() {
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 
+      _sheetCases(layout, pump: pump, services: () => services);
       testWidgets('comparison with the slippage setting', (tester) async {
         swap.emit(form());
         await pump(tester, layout, const SwapOptionsSheet());

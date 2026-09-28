@@ -171,7 +171,75 @@ void main() {
         expect(fade.opacity.value, 1);
         expect(routeOf(tester).transitionDuration, Duration.zero);
       });
+
+      for (final (name, control) in [
+        (
+          'button',
+          TextButton(autofocus: true, onPressed: () {}, child: const Text('X')),
+        ),
+        ('field', const TextField(autofocus: true)),
+      ]) {
+        testWidgets('Escape dismisses it from a focused $name', (tester) async {
+          await open(
+            tester,
+            builder: (_) => SwapSheetScaffold(
+              key: content,
+              title: 'You pay',
+              body: control,
+            ),
+          );
+          expect(
+            FocusManager.instance.primaryFocus?.context
+                ?.findAncestorWidgetOfExactType<SwapSheetScaffold>(),
+            isNotNull,
+          );
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await tester.pumpAndSettle();
+
+          expect(find.byKey(content), findsNothing);
+          expect(results, [null]);
+        });
+      }
+
+      testWidgets('leaves the keyboard to its content', (tester) async {
+        tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+        addTearDown(tester.view.resetViewInsets);
+        await open(tester);
+
+        expect(tester.getRect(find.byKey(content)), Offset.zero & phone);
+        expect(
+          MediaQuery.viewInsetsOf(tester.element(find.byKey(content))).bottom,
+          300,
+        );
+      });
     });
+
+    for (final (name, size) in [('a phone', phone), ('a wide screen', wide)]) {
+      testWidgets('on $name, shows a snack bar raised inside it on top', (
+        tester,
+      ) async {
+        await open(
+          tester,
+          size: size,
+          builder: (context) => SwapSheetScaffold(
+            key: content,
+            title: 'Swap evidence',
+            body: TextButton(
+              onPressed: () => ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Swap ID copied'))),
+              child: const Text('Copy'),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Copy'));
+        await tester.pumpAndSettle();
+
+        final shown = find.text('Swap ID copied');
+        expect(ModalRoute.of(tester.element(shown)), same(routeOf(tester)));
+        expect(shown.hitTestable(), findsOneWidget);
+      });
+    }
 
     group('on a wide screen', () {
       testWidgets('slides in as a bordered panel on the right', (tester) async {
