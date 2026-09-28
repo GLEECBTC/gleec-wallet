@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/system_health/system_health_bloc.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/router/state/routing_state.dart';
@@ -135,14 +136,25 @@ class _SwapShellState extends State<SwapShell> {
       ),
     );
     if (widget.destinationBuilder != null) return shell;
-    return _SwapScope(controller: _controller, child: shell);
+    // The form reads its catalog and default pair at start, so signing in or
+    // out needs a new one.
+    final signedIn = context.select<AuthBloc?, bool>(_isSignedIn);
+    return _SwapScope(
+      key: ValueKey(signedIn),
+      controller: _controller,
+      child: shell,
+    );
   }
 }
+
+// Tests show the surface without the app's sign-in above it.
+bool _isSignedIn(AuthBloc? auth) =>
+    auth == null || auth.state.mode == AuthorizeMode.logIn;
 
 /// Owns the swap surface's state and keeps it in step with the app: trading
 /// availability, the device clock, deep links, and requests from elsewhere.
 class _SwapScope extends StatefulWidget {
-  const _SwapScope({required this.controller, required this.child});
+  const _SwapScope({required this.controller, required this.child, super.key});
 
   final SwapShellController controller;
   final Widget child;
@@ -163,10 +175,6 @@ class _SwapScopeState extends State<_SwapScope> {
 
   bool _clockValid(SystemHealthState state) =>
       state is! SystemHealthLoadSuccess || state.isValid;
-
-  // Tests show the surface without the app's sign-in above it.
-  bool _signedIn(AuthBloc? auth) =>
-      auth == null || auth.state.mode == AuthorizeMode.logIn;
 
   @override
   void initState() {
@@ -194,7 +202,7 @@ class _SwapScopeState extends State<_SwapScope> {
             UnifiedSwapCapabilitiesChanged(
               tradingEnabled: _tradingEnabled(tradingStatus.state),
               clockValid: _clockValid(systemHealth.state),
-              signedIn: _signedIn(auth),
+              signedIn: _isSignedIn(auth),
             ),
           )
           ..add(const UnifiedSwapStarted());
@@ -263,7 +271,7 @@ class _SwapScopeState extends State<_SwapScope> {
           context.read<TradingStatusBloc>().state,
         ),
         clockValid: _clockValid(context.read<SystemHealthBloc>().state),
-        signedIn: _signedIn(context.read<AuthBloc?>()),
+        signedIn: _isSignedIn(context.read<AuthBloc?>()),
       ),
     );
   }
@@ -301,6 +309,7 @@ class _SwapScopeState extends State<_SwapScope> {
         pay: intent.pay,
         receive: intent.receive,
         amount: intent.amount,
+        amountMode: intent.fiat ? SwapAmountMode.fiat : SwapAmountMode.token,
       ),
     );
     widget.controller.show(SwapDestination.swap);

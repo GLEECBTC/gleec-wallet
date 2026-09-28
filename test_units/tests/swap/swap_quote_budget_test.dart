@@ -155,6 +155,7 @@ int _run(
               pricing: SwapPricingService(
                 FakePriceSource({eth: d('3000'), usdc: d('1')}),
               ),
+              activatedAssets: () async => {eth, usdc},
             ),
             registry: registry,
             terms: SwapTermsRepository(

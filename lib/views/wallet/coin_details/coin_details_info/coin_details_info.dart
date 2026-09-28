@@ -1175,6 +1175,7 @@ void _goToSwap(BuildContext context, Coin coin) {
     pay: coin.abbr,
     receive: null,
     amount: null,
+    fiat: false,
   ));
   context.read<TakerBloc>().add(TakerSetSellCoin(coin));
   routingState.selectedMenu = MainMenuValue.dex;

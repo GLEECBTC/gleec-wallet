@@ -129,8 +129,11 @@ class UnifiedSwapRepository {
   SwapPricingService get pricing => _pricing;
 
   /// Reads what every source can trade, and remembers it for [quote].
-  Future<SwapCatalog> catalog() async {
-    final activated = await _readActivated();
+  ///
+  /// Signed out, nothing is active, and reading that would still queue for
+  /// the wallet's sign-in lock.
+  Future<SwapCatalog> catalog({bool signedIn = true}) async {
+    final activated = signedIn ? await _readActivated() : const <AssetId>{};
     final known = {..._knownAssets(), ...?activated};
     final lists = await Future.wait(
       _sources.map(

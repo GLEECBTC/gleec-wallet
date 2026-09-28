@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
 /// Base type for swap screen events.
@@ -15,9 +16,14 @@ final class UnifiedSwapStarted extends UnifiedSwapEvent {
   const UnifiedSwapStarted();
 }
 
-/// Prefill the form from a deep link or another screen's "Swap" action.
+/// Prefill the form from a deep link, another screen, or across a sign-in.
 final class UnifiedSwapIntentApplied extends UnifiedSwapEvent {
-  const UnifiedSwapIntentApplied({this.pay, this.receive, this.amount});
+  const UnifiedSwapIntentApplied({
+    this.pay,
+    this.receive,
+    this.amount,
+    this.amountMode = SwapAmountMode.token,
+  });
 
   /// Ticker to pay with.
   final String? pay;
@@ -25,11 +31,14 @@ final class UnifiedSwapIntentApplied extends UnifiedSwapEvent {
   /// Ticker to receive.
   final String? receive;
 
-  /// Amount to pay, in pay-asset units.
+  /// Amount to pay, in [amountMode].
   final String? amount;
 
+  /// What [amount] is counted in.
+  final SwapAmountMode amountMode;
+
   @override
-  List<Object?> get props => [pay, receive, amount];
+  List<Object?> get props => [pay, receive, amount, amountMode];
 }
 
 /// The user picked the asset to pay with.

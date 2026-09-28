@@ -39,7 +39,12 @@ void main() {
   List<String> followed() => [for (final s in services.registry.current) s.id];
 
   group('asking the Swap surface', () {
-    const intent = (pay: 'ETH', receive: 'USDC-ERC20', amount: '1');
+    const intent = (
+      pay: 'ETH',
+      receive: 'USDC-ERC20',
+      amount: '1',
+      fiat: false,
+    );
     const ref = (id: 'swap-1', source: SwapLiquiditySource.routed);
 
     test(

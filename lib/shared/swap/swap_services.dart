@@ -24,8 +24,14 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
-/// A request to open the swap form on a pair, as tickers.
-typedef SwapIntent = ({String? pay, String? receive, String? amount});
+/// A request to open the swap form on a pair, as tickers. The amount is in
+/// pay-asset units, or in US dollars when `fiat` is set.
+typedef SwapIntent = ({
+  String? pay,
+  String? receive,
+  String? amount,
+  bool fiat,
+});
 
 /// Everything the swap surface needs from the rest of the app, built once.
 ///
@@ -110,6 +116,24 @@ class SwapServices {
     final pending = _pendingIntent;
     _pendingIntent = null;
     return pending;
+  }
+
+  SwapIntent? _signInIntent;
+
+  /// Whether a sign-in started from the swap form is under way.
+  bool get signInFromSwap => _signInIntent != null;
+
+  /// Holds the swap form's [intent] for the form a sign-in rebuilds. Not
+  /// announced: the signed-out form, still mounted, would take it first.
+  void beginSignIn(SwapIntent intent) {
+    _signInIntent = intent;
+    _pendingIntent = intent;
+  }
+
+  /// Without a wallet, drops the intent so a later visit does not reopen on it.
+  void endSignIn({required bool signedIn}) {
+    if (!signedIn && _pendingIntent == _signInIntent) _pendingIntent = null;
+    _signInIntent = null;
   }
 
   /// Asks the Swap surface to show a swap — from a notice, say, while the
