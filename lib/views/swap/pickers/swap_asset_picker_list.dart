@@ -138,3 +138,15 @@ extension _PickerList on _SwapAssetPickerState {
     );
   }
 }
+
+/// Room after the list for the keyboard, so its end can be scrolled above
+/// it. Shrinking the picker instead could unpin the header mid-typing and
+/// move the search into the list, which drops its focus.
+class _KeyboardSpace extends StatelessWidget {
+  const _KeyboardSpace();
+
+  @override
+  Widget build(BuildContext context) => SliverToBoxAdapter(
+    child: SizedBox(height: MediaQuery.viewInsetsOf(context).bottom),
+  );
+}
