@@ -164,7 +164,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     _catalogLoading = true;
     final SwapCatalog catalog;
     try {
-      catalog = await _repository.catalog();
+      catalog = await _repository.catalog(signedIn: state.signedIn);
     } finally {
       _catalogLoading = false;
     }
@@ -177,6 +177,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       }
       return;
     }
+    // Signed out there is no pair to find, and looking queues on the sign-in
+    // lock.
+    if (!state.signedIn) return;
 
     final pair = await _defaultPair({
       for (final source in catalog.sources) ...source.quotable,
@@ -186,7 +189,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   }
 
   Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
-    final catalog = await _repository.catalog();
+    final catalog = await _repository.catalog(signedIn: state.signedIn);
     emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
   }
 

@@ -65,6 +65,11 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         if (_isCandidate(asset)) asset,
     };
     final onceActive = candidates.difference(activated);
+    // KDF lists active coins only, and its first call waits on the provider's
+    // network list with no deadline of its own: with nothing active, don't ask.
+    if (activated.isEmpty) {
+      return SwapSourceAssets(source: source, onceActive: onceActive);
+    }
     try {
       final eligible = await manager.eligibleAssets().timeout(_catalogTimeout);
       _lastEligible = eligible;
