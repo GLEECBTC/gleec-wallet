@@ -30,6 +30,10 @@ class FakeDex implements DexRepository {
 
   /// Swaps KDF knows, by uuid. An unknown uuid answers as KDF does: an error.
   final Map<String, Swap> swaps = {};
+
+  /// Swaps KDF has a row for but no saved event yet, as between a fill and
+  /// the swap's first event.
+  final Set<String> unrecorded = {};
   int statusCalls = 0;
 
   /// Thrown by every status read while set: an engine that cannot be read.
@@ -52,6 +56,9 @@ class FakeDex implements DexRepository {
     await statusGate?.future;
     final error = statusError;
     if (error != null) throw error;
+    if (unrecorded.contains(swapUuid)) {
+      throw TextError(error: 'swap data is not found');
+    }
     final swap = swaps[swapUuid];
     if (swap == null) {
       throw TextError(error: 'lp_swap:1140] No swap with uuid $swapUuid');
@@ -78,6 +85,9 @@ class FakeOrders implements MyOrdersService {
   /// read. The lenient read answers null instead, as the real one does.
   Object? statusError;
 
+  /// Holds every strict status read until completed.
+  Completer<void>? statusGate;
+
   @override
   Future<OrderStatus?> getStatus(String uuid) async {
     statusCalls++;
@@ -87,6 +97,7 @@ class FakeOrders implements MyOrdersService {
   @override
   Future<OrderStatus> getStatusOrThrow(String uuid) async {
     statusCalls++;
+    await statusGate?.future;
     final error = statusError;
     if (error != null) throw error;
     return _statusOf(uuid) ??
@@ -178,12 +189,14 @@ const makerErrorEvents = [
 ];
 
 /// An atomic swap as KDF reports it, selling 1 [sell] for 3000 [buy] — as the
-/// taker unless [maker]. [txHashes] attaches a transaction hash to an event.
+/// taker unless [maker]. [txHashes] attaches a transaction hash to an event,
+/// and [data] any other fields, such as the deadlines Started records.
 Swap atomicSwapOf(
   String uuid,
   List<String> events, {
   bool maker = false,
   Map<String, String> txHashes = const {},
+  Map<String, Map<String, Object?>> data = const {},
   DateTime? at,
   String sell = 'ETH',
   String buy = 'USDC-ERC20',
@@ -199,7 +212,11 @@ Swap atomicSwapOf(
           'timestamp': start + index * 1000,
           'event': {
             'type': type,
-            if (txHashes[type] != null) 'data': {'tx_hash': txHashes[type]},
+            if (txHashes[type] != null || data[type] != null)
+              'data': {
+                ...?data[type],
+                if (txHashes[type] != null) 'tx_hash': txHashes[type],
+              },
           },
         },
     ],
@@ -232,12 +249,15 @@ SwapQuote atomicQuoteOf({String volume = '1', String price = '3000'}) =>
 /// An atomic executor over a scripted DEX on a fake clock, recording what
 /// the handle it hands out reports.
 class AtomicRig {
-  AtomicRig(this.async, {this.misses = 3});
+  AtomicRig(this.async, {this.misses = 3, this.delayedAfter = 3});
 
   static const pollInterval = Duration(seconds: 3);
 
+  static final startedAt = DateTime.utc(2026, 9);
+
   final FakeAsync async;
   final int misses;
+  final int delayedAfter;
   final dex = FakeDex();
   final orders = FakeOrders();
   late final executor = AtomicSwapExecutor(
@@ -247,7 +267,11 @@ class AtomicRig {
     resolveAsset: resolveTicker,
     pollInterval: pollInterval,
     missesBeforeNoMatch: misses,
+    delayedAfterFailures: delayedAfter,
+    now: () => now,
   );
+
+  DateTime get now => startedAt.add(async.elapsed);
   final List<SwapExecutionSnapshot> seen = [];
   var done = false;
   SwapExecutionHandle? handle;
@@ -289,9 +313,14 @@ class AtomicRig {
 Future<AtomicRig> onFakeClock(
   void Function(AtomicRig rig) body, {
   int misses = 3,
+  int delayedAfter = 3,
 }) async {
   late AtomicRig rig;
-  fakeAsync((async) => body(rig = AtomicRig(async, misses: misses)));
+  fakeAsync(
+    (async) => body(
+      rig = AtomicRig(async, misses: misses, delayedAfter: delayedAfter),
+    ),
+  );
   await pumpEventQueue();
   return rig;
 }

@@ -259,8 +259,9 @@ class SwapExecutionSnapshot extends Equatable {
   /// When it finished.
   final DateTime? finishedAt;
 
-  /// Set while status reads are failing; the snapshot may be out of date. A
-  /// delay is not a failure.
+  /// Set while the snapshot may be out of date: status reads are failing, or
+  /// an atomic swap's log is past a deadline KDF wrote into it. A delay is
+  /// not a failure.
   final DateTime? delayedSince;
 
   /// Identifiers, hashes and links.

@@ -53,6 +53,7 @@ SwapExecutionSnapshot atomicSnapshot({
   SwapExecutionOutcome? outcome,
   SwapQuote? accepted,
   Swap? swap,
+  DateTime? delayedSince,
 }) {
   final from =
       accepted?.from ?? (swap == null ? null : resolveAsset(swap.sellCoin));
@@ -117,6 +118,7 @@ SwapExecutionSnapshot atomicSnapshot({
     createdAt: at(events.firstOrNull?.timestamp),
     updatedAt: at(events.lastOrNull?.timestamp),
     finishedAt: outcome == null ? null : at(events.lastOrNull?.timestamp),
+    delayedSince: outcome == null ? delayedSince : null,
     evidence: SwapEvidence(
       executionId: uuid,
       sourceTxHash: hashOf(side?.sent),
@@ -138,11 +140,15 @@ SwapExecutionSnapshot atomicSnapshot({
 /// TakerPaymentReceived (then its confirmation), TakerPaymentSpent, Finished.
 /// A failure adds error events and, once the payment has left, the refund
 /// events. KDF closes every swap, successful or not, with Finished.
+///
+/// Given [now], an overdue log reads as delayed; see [_overdueSince].
 SwapExecutionSnapshot atomicSnapshotFromSwap(
   Swap swap, {
   required SwapNetworks networks,
   required AssetId? Function(String ticker) resolveAsset,
   SwapQuote? accepted,
+  DateTime? now,
+  DateTime? delayedSince,
 }) {
   final side = _sideOf(swap);
   final types = swap.events.map((e) => e.event.type).toList();
@@ -157,6 +163,10 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
       : has(side.fee)
       ? SwapFundsMovement.feesOnly
       : SwapFundsMovement.none;
+  final delay = _earlier(
+    delayedSince,
+    now == null ? null : _overdueSince(swap, now),
+  );
 
   SwapExecutionSnapshot snapshot(
     SwapProgressStage stage, {
@@ -171,6 +181,7 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
     swap: swap,
     networks: networks,
     resolveAsset: resolveAsset,
+    delayedSince: delay,
   );
 
   if (has('Finished')) {
@@ -223,6 +234,43 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
       : SwapProgressStage.preparing;
   return snapshot(stage);
 }
+
+/// How long after a deadline KDF has to log the event that ends the wait:
+/// it checks every 10–15 s, and a node can be slow to answer.
+const _overdueGrace = Duration(minutes: 10);
+
+/// The deadline a taker's [swap] has passed without moving on, if any.
+///
+/// Its Started event records when its two long waits end: for the maker's
+/// payment to arrive and confirm (`maker_payment_wait`), then for its own
+/// payment to be spent (`taker_payment_lock`). KDF ends each by then with an
+/// event either way, so a log still waiting is one KDF is not running — after
+/// a restart it holds a swap until both coins are enabled. The gap since the
+/// last event proves nothing alone: a confirmation can take hours.
+DateTime? _overdueSince(Swap swap, DateTime now) {
+  final types = swap.events.map((e) => e.event.type).toSet();
+  if (!swap.isTaker ||
+      types.contains('Finished') ||
+      types.any(swap.errorEvents.contains)) {
+    return null;
+  }
+  final started = swap.events
+      .where((e) => e.event.type == 'Started')
+      .firstOrNull
+      ?.event
+      .data;
+  final seconds = !types.contains('MakerPaymentValidatedAndConfirmed')
+      ? started?.makerPaymentWait
+      : !types.contains('TakerPaymentSpent')
+      ? started?.takerPaymentLock
+      : null;
+  if (seconds == null || seconds == 0) return null;
+  final deadline = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+  return now.isAfter(deadline.add(_overdueGrace)) ? deadline : null;
+}
+
+DateTime? _earlier(DateTime? a, DateTime? b) =>
+    a == null || (b != null && b.isBefore(a)) ? b : a;
 
 Decimal _decimalOf(Rational value) =>
     value.toDecimal(scaleOnInfinitePrecision: 18);

@@ -17,6 +17,14 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 
 part 'atomic_swap_snapshot.dart';
 
+/// How long a status read may take before it counts as unanswered; no
+/// transport to KDF sets a limit of its own.
+const _readTimeout = Duration(seconds: 15);
+
+/// How long KDF may take to log a matched swap's first event, which waits on
+/// fee and balance checks on both chains: seconds, normally.
+const _unrecordedGrace = Duration(minutes: 5);
+
 /// Executes atomic swaps by placing a fill-or-kill taker order, and follows
 /// them to a terminal outcome.
 ///
@@ -32,12 +40,16 @@ class AtomicSwapExecutor implements SwapExecutor {
     required AssetId? Function(String ticker) resolveAsset,
     Duration pollInterval = const Duration(seconds: 3),
     int missesBeforeNoMatch = 3,
+    int delayedAfterFailures = 3,
+    DateTime Function()? now,
   }) : _dex = dexRepository,
        _orders = orders,
        _networks = networks,
        _resolveAsset = resolveAsset,
        _pollInterval = pollInterval,
-       _missesBeforeNoMatch = missesBeforeNoMatch;
+       _missesBeforeNoMatch = missesBeforeNoMatch,
+       _delayedAfterFailures = delayedAfterFailures,
+       _now = now ?? DateTime.now;
 
   final DexRepository _dex;
   final MyOrdersService _orders;
@@ -45,6 +57,8 @@ class AtomicSwapExecutor implements SwapExecutor {
   final AssetId? Function(String ticker) _resolveAsset;
   final Duration _pollInterval;
   final int _missesBeforeNoMatch;
+  final int _delayedAfterFailures;
+  final DateTime Function() _now;
 
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.atomic;
@@ -137,10 +151,20 @@ class _AtomicSwapTracker {
   var _disposed = false;
   SwapExecutionSnapshot? _last;
 
+  Swap? _swap;
+
+  /// Polls in a row that KDF left unanswered, and when the first ran.
+  var _unanswered = 0;
+  DateTime? _unansweredSince;
+
+  /// When KDF first said the matched swap was not recorded yet.
+  DateTime? _unrecordedSince;
+
   Stream<SwapExecutionSnapshot> get stream => _controller.stream;
 
   SwapExecutionSnapshot initial({required bool placed, Swap? swap}) {
     _matched = swap != null;
+    _swap = swap;
     if (swap != null) return _last = _fromSwap(swap);
     return _last = _snapshot(
       stage: placed ? SwapProgressStage.matching : SwapProgressStage.preparing,
@@ -161,34 +185,57 @@ class _AtomicSwapTracker {
 
   Future<void> _poll() async {
     if (_disposed) return;
+    final polledAt = _executor._now();
     try {
-      final swap = await _executor._dex.getSwapStatus(uuid);
+      _swap = await _executor._dex.getSwapStatus(uuid).timeout(_readTimeout);
       _matched = true;
       _misses = 0;
-      _emit(_fromSwap(swap));
+      _heard();
     } on Object catch (error) {
-      // No swap yet: the taker order is still looking for its counterparty,
-      // or it expired without one.
-      if (!_matched) await _checkOrder(error);
+      if (!_matched) {
+        // No swap yet: the taker order is still looking for its counterparty,
+        // or it expired without one.
+        await _checkOrder(error, polledAt);
+      } else if (_swap == null && _unrecorded(error)) {
+        _awaitRecord(polledAt);
+      } else {
+        _unheard(polledAt);
+      }
     }
-    if (!(_last?.isTerminal ?? false)) _schedule(_executor._pollInterval);
+    try {
+      _emit(_current());
+    } finally {
+      if (!(_last?.isTerminal ?? false)) _schedule(_executor._pollInterval);
+    }
   }
 
-  Future<void> _checkOrder(Object swapError) async {
+  Future<void> _checkOrder(Object swapError, DateTime polledAt) async {
     final OrderStatus status;
     try {
-      status = await _executor._orders.getStatusOrThrow(uuid);
+      status = await _executor._orders
+          .getStatusOrThrow(uuid)
+          .timeout(_readTimeout);
     } on Object catch (error) {
-      // Neither an order nor a swap. A fill-or-kill order that never matched
-      // is removed; give the engine a few polls before concluding that, and
-      // count only KDF saying so: a read that failed proves nothing.
-      if (_answered(swapError, 'No swap with uuid $uuid') &&
-          _answered(error, 'Order with uuid $uuid is not found') &&
-          ++_misses >= _executor._missesBeforeNoMatch) {
-        _emit(_terminal(SwapOutcomeKind.noMatch));
+      if (_answered(swapError, 'swap data is not found')) {
+        // KDF has the swap but has yet to log it, so the order matched.
+        _matched = true;
+        _awaitRecord(polledAt);
+        _emit(_snapshot(stage: SwapProgressStage.preparing));
+      } else if (_answered(swapError, 'No swap with uuid $uuid') &&
+          _answered(error, 'Order with uuid $uuid is not found')) {
+        // Neither an order nor a swap. A fill-or-kill order that never matched
+        // is removed; give the engine a few polls before concluding that, and
+        // count only KDF saying so: a read that failed proves nothing.
+        _heard();
+        if (++_misses >= _executor._missesBeforeNoMatch) {
+          _emit(_terminal(SwapOutcomeKind.noMatch));
+        }
+      } else {
+        _unheard(polledAt);
       }
       return;
     }
+    _heard();
     final taker = status.takerOrderStatus;
     if (taker == null) return;
     _misses = 0;
@@ -211,6 +258,43 @@ class _AtomicSwapTracker {
   static bool _answered(Object error, String words) =>
       error is TextError && error.error.contains(words);
 
+  /// Whether [error] is KDF saying it has yet to record this swap: no row at
+  /// all, or a row whose first event is not saved yet.
+  bool _unrecorded(Object error) =>
+      _answered(error, 'No swap with uuid $uuid') ||
+      _answered(error, 'swap data is not found');
+
+  DateTime? get _delayedSince =>
+      _unanswered >= _executor._delayedAfterFailures ? _unansweredSince : null;
+
+  void _heard() {
+    _unanswered = 0;
+    _unansweredSince = null;
+  }
+
+  void _unheard(DateTime polledAt) {
+    _unansweredSince ??= polledAt;
+    _unanswered++;
+  }
+
+  /// Counts KDF saying the matched swap is not recorded yet as an answer,
+  /// until [_unrecordedGrace] has passed.
+  void _awaitRecord(DateTime polledAt) {
+    _unrecordedSince ??= polledAt;
+    polledAt.difference(_unrecordedSince!) < _unrecordedGrace
+        ? _heard()
+        : _unheard(polledAt);
+  }
+
+  /// [_last] rebuilt with the current delay.
+  SwapExecutionSnapshot _current() {
+    final last = _last!;
+    final swap = _swap;
+    if (last.isTerminal) return last;
+    if (swap != null) return _fromSwap(swap);
+    return _snapshot(stage: last.stage!, canCancel: last.canCancel);
+  }
+
   Future<void> cancel() async {
     final last = _last;
     if (last != null && last.isTerminal) {
@@ -229,7 +313,8 @@ class _AtomicSwapTracker {
   }
 
   void _emit(SwapExecutionSnapshot snapshot) {
-    if (_disposed || snapshot == _last) return;
+    // A swap reported finished stays finished, whatever a late read says.
+    if (_disposed || snapshot == _last || (_last?.isTerminal ?? false)) return;
     _last = snapshot;
     if (!_controller.isClosed) _controller.add(snapshot);
     if (snapshot.isTerminal) {
@@ -258,6 +343,7 @@ class _AtomicSwapTracker {
     accepted: accepted,
     networks: _executor._networks(),
     resolveAsset: _executor._resolveAsset,
+    delayedSince: _delayedSince,
   );
 
   SwapExecutionSnapshot _terminal(SwapOutcomeKind kind) => _snapshot(
@@ -270,5 +356,7 @@ class _AtomicSwapTracker {
     accepted: accepted,
     networks: _executor._networks(),
     resolveAsset: _executor._resolveAsset,
+    now: _executor._now(),
+    delayedSince: _delayedSince,
   );
 }

@@ -18,8 +18,10 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
+import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
@@ -29,6 +31,7 @@ import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
@@ -417,6 +420,44 @@ void main() {
         );
         await tester.enterText(find.byType(TextField), '9');
         await tester.pumpAndSettle();
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
+      testWidgets('progress: an order-book swap whose status is delayed', (
+        tester,
+      ) async {
+        await pump(
+          tester,
+          layout,
+          SwapExecutionView(
+            id: 'a-1',
+            context: SwapExecutionContext.flow,
+            source: SwapLiquiditySource.atomic,
+            initial: atomicSnapshot(
+              uuid: 'a-1',
+              stage: SwapProgressStage.exchanging,
+              movement: SwapFundsMovement.sent,
+              accepted: quoteOf(
+                source: SwapLiquiditySource.atomic,
+                routeKind: SwapRouteKind.direct,
+                order: null,
+                stages: [
+                  const SwapRouteStage(kind: SwapRouteStageKind.prepare),
+                  SwapRouteStage(kind: SwapRouteStageKind.send, asset: eth),
+                  SwapRouteStage(
+                    kind: SwapRouteStageKind.exchange,
+                    asset: usdc,
+                  ),
+                  SwapRouteStage(kind: SwapRouteStageKind.receive, asset: usdc),
+                ],
+              ),
+              networks: services.networks(),
+              resolveAsset: (_) => null,
+              delayedSince: DateTime(2026, 9, 28),
+            ),
+          ),
+        );
+        expect(find.text('Status update delayed'), findsOneWidget);
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
     });

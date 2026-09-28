@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 
 import 'swap_exec_atomic_fakes.dart';
@@ -208,6 +209,38 @@ void main() {
       });
     },
   );
+
+  test('a read that lands after the swap ended cannot reopen it', () async {
+    await onFakeClock((rig) {
+      rig.orders.takers['a-1'] = TakerOrderCancellationReason.none;
+      rig.start();
+      rig.dex.statusGate = Completer<void>();
+      rig.firstPoll();
+      rig.handle!.cancel();
+      rig.async.flushMicrotasks();
+      expect(rig.latest.outcome!.kind, SwapOutcomeKind.cancelled);
+
+      rig.dex.statusGate!.complete();
+      rig.dex.statusGate = null;
+      rig.async.flushMicrotasks();
+      final reads = rig.dex.statusCalls;
+      rig.polls(3);
+      expect(rig.dex.statusCalls, reads);
+
+      Object? error;
+      rig.handle!.cancel().catchError((Object e) => error = e);
+      rig.async.flushMicrotasks();
+      expect(
+        error,
+        isA<SwapCancelRefusedException>().having(
+          (e) => e.reason,
+          'reason',
+          SwapCancelRefusal.alreadyFinished,
+        ),
+      );
+      expect(rig.orders.cancelled, ['a-1']);
+    });
+  });
 
   group('closing', () {
     // Closing awaits a subscription cancel that completes through the real
