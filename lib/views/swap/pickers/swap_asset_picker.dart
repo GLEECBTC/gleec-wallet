@@ -361,6 +361,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
                   ),
                 ),
                 content,
+                const _KeyboardSpace(),
               ],
             );
           }
@@ -368,7 +369,11 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ...header,
-              Expanded(child: CustomScrollView(slivers: [content])),
+              Expanded(
+                child: CustomScrollView(
+                  slivers: [content, const _KeyboardSpace()],
+                ),
+              ),
             ],
           );
         },

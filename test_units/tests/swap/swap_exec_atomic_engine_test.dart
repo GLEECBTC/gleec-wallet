@@ -70,19 +70,18 @@ void main() {
     },
   );
 
-  test(
-    'an engine that stops answering is not proof the order never matched',
-    () {
-      fakeAsync((async) {
-        SwapExecutionHandle? handle;
-        executor.start(atomicQuoteOf()).then((h) => handle = h);
-        async.flushMicrotasks();
-        async.elapse(const Duration(seconds: 30));
+  test('an engine that stops answering is not proof the order never matched, '
+      'but its status is delayed', () {
+    fakeAsync((async) {
+      SwapExecutionHandle? handle;
+      executor.start(atomicQuoteOf()).then((h) => handle = h);
+      async.flushMicrotasks();
+      async.elapse(const Duration(seconds: 30));
 
-        expect(handle!.latest.isTerminal, isFalse);
-      });
-    },
-  );
+      expect(handle!.latest.isTerminal, isFalse);
+      expect(handle!.latest.delayedSince, isNotNull);
+    });
+  });
 }
 
 /// The RPC layer, with KDF unreachable once the order is placed: status reads

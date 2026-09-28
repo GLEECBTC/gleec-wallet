@@ -7,6 +7,7 @@ import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -40,7 +41,12 @@ Future<void> contactSwapSupport(
     payload,
     LocaleKeys.swapEvidenceCopiedAll.tr(),
   );
-  await launchURLString(discordSupportChannelUrl.toString());
+  if (!context.mounted) return;
+  await openSwapLink(
+    context,
+    discordSupportChannelUrl.toString(),
+    details: payload,
+  );
 }
 
 /// Everything a swap left behind as proof.
@@ -153,7 +159,7 @@ class SwapEvidenceSheet extends StatelessWidget {
                   label: LocaleKeys.swapEvidenceRouteLink.tr(),
                   icon: Icons.open_in_new_rounded,
                   onPressed: () =>
-                      launchURLString(evidence.providerExplorerUrl!),
+                      openSwapLink(context, evidence.providerExplorerUrl!),
                 ),
               ),
             ),
@@ -265,7 +271,7 @@ class _TxField extends StatelessWidget {
             SwapLinkButton(
               label: LocaleKeys.viewOnExplorer.tr(),
               icon: Icons.open_in_new_rounded,
-              onPressed: () => launchURLString(explorer.toString()),
+              onPressed: () => openSwapLink(context, explorer.toString()),
             ),
         ],
       ),

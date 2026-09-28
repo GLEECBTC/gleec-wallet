@@ -156,6 +156,8 @@ import 'tests/swap/swap_src_services_assets_test.dart'
 import 'tests/swap/swap_src_services_session_test.dart'
     as swap_src_services_session_test;
 import 'tests/swap/swap_src_storage_test.dart' as swap_src_storage_test;
+import 'tests/swap/swap_exec_atomic_delay_test.dart'
+    as swap_exec_atomic_delay_test;
 import 'tests/swap/swap_exec_atomic_engine_test.dart'
     as swap_exec_atomic_engine_test;
 import 'tests/swap/swap_exec_atomic_executor_test.dart'
@@ -232,6 +234,8 @@ import 'tests/swap/swap_surface_ui_evidence_test.dart'
     as swap_surface_ui_evidence_test;
 import 'tests/swap/swap_surface_ui_failures_test.dart'
     as swap_surface_ui_failures_test;
+import 'tests/swap/swap_surface_ui_link_errors_test.dart'
+    as swap_surface_ui_link_errors_test;
 import 'tests/swap/swap_surface_ui_links_test.dart'
     as swap_surface_ui_links_test;
 import 'tests/swap/swap_surface_ui_notices_test.dart'
@@ -558,6 +562,7 @@ void main() {
   swap_src_services_assets_test.main();
   swap_src_services_session_test.main();
   swap_src_storage_test.main();
+  swap_exec_atomic_delay_test.main();
   swap_exec_atomic_engine_test.main();
   swap_exec_atomic_executor_test.main();
   swap_exec_atomic_snapshot_test.main();
@@ -609,6 +614,7 @@ void main() {
   swap_surface_ui_cancel_test.main();
   swap_surface_ui_evidence_test.main();
   swap_surface_ui_failures_test.main();
+  swap_surface_ui_link_errors_test.main();
   swap_surface_ui_links_test.main();
   swap_surface_ui_notices_test.main();
   swap_surface_ui_outcomes_test.main();

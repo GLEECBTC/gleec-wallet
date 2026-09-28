@@ -19,8 +19,10 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
+import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
@@ -29,8 +31,10 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
+import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
@@ -39,16 +43,8 @@ import 'package:web_dex/views/swap/swap_shell_controller.dart';
 import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
 
+part 'swap_accessibility_services.dart';
 part 'swap_accessibility_sheets.dart';
-
-class _EnglishAssetLoader extends AssetLoader {
-  const _EnglishAssetLoader();
-
-  @override
-  Future<Map<String, dynamic>> load(String path, Locale locale) async =>
-      jsonDecode(File('$path/en.json').readAsStringSync())
-          as Map<String, dynamic>;
-}
 
 typedef _Layout = ({String name, Size size, bool dark, double textScale});
 
@@ -431,56 +427,73 @@ void main() {
         await tester.pumpAndSettle();
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
+
+      testWidgets('progress: an order-book swap whose status is delayed', (
+        tester,
+      ) async {
+        await pump(
+          tester,
+          layout,
+          SwapExecutionView(
+            id: 'a-1',
+            context: SwapExecutionContext.flow,
+            source: SwapLiquiditySource.atomic,
+            initial: atomicSnapshot(
+              uuid: 'a-1',
+              stage: SwapProgressStage.exchanging,
+              movement: SwapFundsMovement.sent,
+              accepted: quoteOf(
+                source: SwapLiquiditySource.atomic,
+                routeKind: SwapRouteKind.direct,
+                order: null,
+                stages: [
+                  const SwapRouteStage(kind: SwapRouteStageKind.prepare),
+                  SwapRouteStage(kind: SwapRouteStageKind.send, asset: eth),
+                  SwapRouteStage(
+                    kind: SwapRouteStageKind.exchange,
+                    asset: usdc,
+                  ),
+                  SwapRouteStage(kind: SwapRouteStageKind.receive, asset: usdc),
+                ],
+              ),
+              networks: services.networks(),
+              resolveAsset: (_) => null,
+              delayedSince: DateTime(2026, 9, 28),
+            ),
+          ),
+        );
+        expect(find.text('Status update delayed'), findsOneWidget);
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
+      for (final (name, url, details) in [
+        (
+          'a link',
+          'https://etherscan.io/tx/'
+              '0x5520d7f51c8e3108fa2d9c6220bf4aa8f9c17b91e4c3a1b2c3d4e5f6a7b8c9d0',
+          null,
+        ),
+        (
+          'support by email',
+          'mailto:info@gleec.com?subject=GLEEC%20Wallet%20Support',
+          'Swap ID: swap-1',
+        ),
+      ]) {
+        testWidgets('link: the device cannot open $name', (tester) async {
+          await pump(
+            tester,
+            layout,
+            SwapLinkFailedDialog(url: url, details: details),
+          );
+          await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+
+          _acceptClipboard(tester);
+          await tester.tap(find.text('Copy'));
+          await tester.pumpAndSettle();
+          expect(find.textContaining('copied'), findsWidgets);
+          await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+        });
+      }
     });
   }
-}
-
-class _Services implements SwapServices {
-  _Services(this.registry, this._activated);
-
-  @override
-  final SwapExecutionRegistry registry;
-
-  final Set<AssetId> _activated;
-  Map<AssetId, Decimal> balances = {};
-
-  @override
-  final Set<String> viewing = {};
-
-  @override
-  late final SwapPreferences preferences = SwapPreferences(
-    walletKey: () async => 'w',
-    storage: MemoryStorage(),
-  );
-
-  @override
-  SwapNetworks networks() => SwapNetworks([eth, usdc, btc]);
-
-  @override
-  Future<Set<AssetId>> activatedAssets() async => _activated;
-
-  /// Never finishes, so a test sees the picker mid-activation.
-  @override
-  Future<void> activate(AssetId id) => Completer<void>().future;
-
-  @override
-  bool isTestnet(AssetId id) => false;
-
-  @override
-  AssetId? resolveAsset(String ticker) => null;
-
-  @override
-  Decimal? usdPrice(AssetId id) => id == eth ? d('3000') : null;
-
-  @override
-  Decimal? lastKnownBalance(AssetId id) => balances[id];
-
-  @override
-  String? contractOf(AssetId id) => null;
-
-  @override
-  Uri? explorerTxUrl(AssetId? asset, String hash) => null;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

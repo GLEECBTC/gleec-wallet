@@ -55,6 +55,7 @@ void main() {
     List<Swap> atomic = const [],
     bool atomicFails = false,
     bool atomicHasMore = false,
+    DateTime Function()? now,
   }) => SwapHistoryRepository(
     routedSwaps: routedSwaps ?? _FakeRouted(),
     atomicHistory: ({required int limit, required int page}) async {
@@ -63,6 +64,7 @@ void main() {
     },
     networks: () => SwapNetworks([eth, usdc, btc, gleec]),
     resolveAsset: resolve,
+    now: now,
   );
 
   test('merges both sources, newest first', () async {
@@ -125,6 +127,29 @@ void main() {
     expect(page.entries.map((e) => e.id), containsAll(['r-live', 'a-live']));
     expect(routedSwaps.historyCalls, 0);
   });
+
+  test(
+    'Active reads an atomic swap past its own deadline as delayed',
+    () async {
+      final lock = DateTime.utc(2026, 9, 1, 2);
+      final repo = repoOf(
+        atomic: [
+          _atomicSwap(
+            'a-stuck',
+            _takerSuccess.take(8).toList(),
+            started: {
+              'taker_payment_lock': lock.millisecondsSinceEpoch ~/ 1000,
+            },
+          ),
+        ],
+        now: () => DateTime.utc(2026, 9, 2),
+      );
+
+      final page = await repo.load(filter: SwapActivityFilter.active);
+
+      expect(page.entries.single.delayedSince, lock.toLocal());
+    },
+  );
 
   test('puts a failure after funds moved under Needs attention', () async {
     final repo = repoOf(
@@ -264,7 +289,12 @@ const _takerErrors = [
   'TakerPaymentRefundFinished',
 ];
 
-Swap _atomicSwap(String uuid, List<String> events, {DateTime? at}) {
+Swap _atomicSwap(
+  String uuid,
+  List<String> events, {
+  DateTime? at,
+  Map<String, Object?>? started,
+}) {
   final start = (at ?? DateTime.utc(2026, 9)).millisecondsSinceEpoch;
   return Swap.fromJson({
     'type': 'Taker',
@@ -274,7 +304,10 @@ Swap _atomicSwap(String uuid, List<String> events, {DateTime? at}) {
       for (final (index, type) in events.indexed)
         {
           'timestamp': start + index * 1000,
-          'event': {'type': type},
+          'event': {
+            'type': type,
+            if (type == 'Started' && started != null) 'data': started,
+          },
         },
     ],
     'maker_amount': '3000',

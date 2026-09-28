@@ -76,15 +76,18 @@ class SwapHistoryRepository {
     required AtomicSwapHistoryReader atomicHistory,
     required SwapNetworks Function() networks,
     required AssetId? Function(String ticker) resolveAsset,
+    DateTime Function()? now,
   }) : _routedSwaps = routedSwaps,
        _atomicHistory = atomicHistory,
        _networks = networks,
-       _resolveAsset = resolveAsset;
+       _resolveAsset = resolveAsset,
+       _now = now ?? DateTime.now;
 
   final RoutedSwapManager _routedSwaps;
   final AtomicSwapHistoryReader _atomicHistory;
   final SwapNetworks Function() _networks;
   final AssetId? Function(String ticker) _resolveAsset;
+  final DateTime Function() _now;
 
   /// Swaps matching [filter], newest first: the most recent [limit] from each
   /// source, merged.
@@ -175,6 +178,7 @@ class SwapHistoryRepository {
     SwapNetworks networks,
   ) async {
     final page = await _atomicHistory(limit: limit, page: 1);
+    final now = _now();
     return (
       entries: [
         for (final swap in page.swaps)
@@ -182,6 +186,7 @@ class SwapHistoryRepository {
             swap,
             networks: networks,
             resolveAsset: _resolveAsset,
+            now: now,
           ),
       ],
       hasMore: page.hasMore,
