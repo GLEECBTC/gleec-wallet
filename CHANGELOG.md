@@ -6,7 +6,7 @@
 
 ## 🔧 Technical Improvements
 
-- **Trading Engine With Routed Swaps** ([@CharlVS], [#3507](https://github.com/GLEECBTC/gleec-wallet/pull/3507)) - The trading engine artefact moves from `f3efd2c` to `feat/lifi-integration` `4872ef2`, which adds the `routed_swap` RPCs on top of everything in `f3efd2c`. Routed quotes use the provider's public API without an API key for now, so each network address is limited to 75 quotes every two hours.
+- **Trading Engine With Routed Swaps** ([@CharlVS], [#3507](https://github.com/GLEECBTC/gleec-wallet/pull/3507)) - The trading engine artefact moves from `f3efd2c` to `feat/lifi-integration` `4872ef2`, which adds the `routed_swap` RPCs on top of everything in `f3efd2c`. Routed quotes use the provider's public API without an API key for now, so each network address is limited to 75 quotes every two hours. A build can send them to a proxy that holds a key instead, with `--dart-define=LIFI_API_URL=…` (see `docs/BUILD_RUN_APP.md`).
 
 # Gleec Wallet v0.9.7 Release Notes
 

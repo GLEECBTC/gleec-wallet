@@ -307,6 +307,39 @@ bool get isTronGaslessConfigured => tronGaslessConfiguredAssetIds.isNotEmpty;
 bool get isTronGaslessReceiveConfigured =>
     tronGaslessReceiveConfiguredAssetIds.isNotEmpty;
 
+/// LI.FI API base URL for routed swaps, handed to KDF as `lifi_api`. Empty
+/// keeps LI.FI's rate-limited public API; see `docs/BUILD_RUN_APP.md`.
+///
+/// Override at build time via `--dart-define=LIFI_API_URL=...`.
+const String lifiApiUrl = String.fromEnvironment(
+  'LIFI_API_URL',
+  defaultValue: '',
+);
+
+/// [rawUrl] trimmed, or null when KDF should stay on the public API.
+///
+/// Whoever serves this URL chooses the transactions KDF signs, so it must be
+/// HTTPS (plain HTTP only to loopback in debug builds). The other checks
+/// mirror `KdfStartupConfig`, so a bad define falls back instead of throwing.
+String? validatedLifiApiUrl(String rawUrl) {
+  final url = rawUrl.trim();
+  final uri = Uri.tryParse(url);
+  final isSecureEndpoint = uri?.scheme == 'https';
+  final isLoopbackDebugEndpoint =
+      kDebugMode &&
+      uri?.scheme == 'http' &&
+      const {'localhost', '127.0.0.1', '::1'}.contains(uri?.host);
+  if (uri == null ||
+      (!isSecureEndpoint && !isLoopbackDebugEndpoint) ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    return null;
+  }
+  return url;
+}
+
 const String geoBlockerApiUrl = 'https://gleec-wallet-bouncer.gleec.com/v1';
 const String tradingBlacklistUrl =
     'https://defistats.gleec.com/api/v3/utils/blacklist';
