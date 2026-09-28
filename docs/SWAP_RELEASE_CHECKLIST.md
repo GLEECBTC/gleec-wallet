@@ -37,7 +37,7 @@ Do these in order. Each needs a go.
 | Gate | How | Last result |
 |---|---|---|
 | App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 2,739 passed, 4 skipped (2026-09-28) |
-| SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | #389 at `404d5ff9`, after its sync with SDK 0.8.1, run locally (2026-09-28): sdk 1,132 (1 skipped), local_auth 124, harness 222 (4 skipped), framework 91, rpc 337, cex_market_data 340 (6 skipped). CI to confirm |
+| SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | #389 at `1d24da8d` (desktop KDF error text, UTF-8 on native transports, routed-swap `toJson`), run locally (2026-09-28): sdk 1,132 (1 skipped), local_auth 124, harness 224 (4 skipped), framework 98, rpc 343, cex_market_data 340 (6 skipped), and the other 10 packages green. The framework's 6 web-transport tests passed in Chrome (JS and WebAssembly); CI does not run them. CI to confirm |
 | KDF `routed_swap` tests | KDF team's CI on #29. The `Test` workflow runs only when dispatched by hand. | 36 `routed_swap` + 18 LI.FI client tests passed locally at `4872ef2` |
 | Live engine check, no funds | `routed_swap_live_capture_test.dart` holds the recorded responses | Native and WebAssembly agree; 9 of the day's 75 keyless quotes used |
 | Quote budget | `swap_quote_budget_test.dart` | Idle form 42 → 10 requests per 10 minutes, then none; typing 2 → 1; native Max 3 → 1; start 1 → 0 |
