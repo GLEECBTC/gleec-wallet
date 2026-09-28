@@ -300,6 +300,11 @@ import 'tests/swap/swap_wiring_swap_data_test.dart'
     as swap_wiring_swap_data_test;
 import 'tests/swap/swap_catalog_signed_out_test.dart'
     as swap_catalog_signed_out_test;
+import 'tests/swap/swap_sign_in_form_test.dart' as swap_sign_in_form_test;
+import 'tests/swap/swap_sign_in_layout_test.dart' as swap_sign_in_layout_test;
+import 'tests/swap/swap_sign_in_services_test.dart'
+    as swap_sign_in_services_test;
+import 'tests/swap/swap_sign_in_surface_test.dart' as swap_sign_in_surface_test;
 import 'tests/swaps/my_recent_swaps_response_tests.dart';
 import 'tests/system_health/http_head_time_provider_tests.dart';
 import 'tests/system_health/http_time_provider_tests.dart';
@@ -652,6 +657,10 @@ void main() {
   swap_wiring_router_test.main();
   swap_wiring_swap_data_test.main();
   swap_catalog_signed_out_test.main();
+  swap_sign_in_form_test.main();
+  swap_sign_in_layout_test.main();
+  swap_sign_in_services_test.main();
+  swap_sign_in_surface_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
   gasless_pending_transfer_panel_test.main();

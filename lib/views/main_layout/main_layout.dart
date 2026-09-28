@@ -27,6 +27,7 @@ import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile.dart';
 import 'package:web_dex/bloc/coins_manager/coins_manager_bloc.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/model/main_menu_value.dart';
+import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
 import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
@@ -110,6 +111,7 @@ class _MainLayoutState extends State<MainLayout> {
         if (state.mode == AuthorizeMode.logIn) {
           QuickLoginSwitch.trackUserLoggedIn();
           unawaited(_requestStoragePersistence());
+          if (context.read<SwapServices?>()?.signInFromSwap ?? false) return;
           routingState.selectedMenu = MainMenuValue.wallet;
           return;
         }

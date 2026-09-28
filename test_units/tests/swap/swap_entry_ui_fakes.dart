@@ -124,6 +124,18 @@ class FakeSwapServices implements SwapServices {
 
   final List<AssetId> activations = [];
 
+  /// What the form carried into each sign-in it started.
+  final List<SwapIntent> signIns = [];
+
+  /// How each of those ended: whether a wallet signed in.
+  final List<bool> signInsEnded = [];
+
+  @override
+  void beginSignIn(SwapIntent intent) => signIns.add(intent);
+
+  @override
+  void endSignIn({required bool signedIn}) => signInsEnded.add(signedIn);
+
   @override
   late final SwapPreferences preferences = SwapPreferences(
     walletKey: () async => 'w',

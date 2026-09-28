@@ -14,7 +14,6 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
-import 'package:web_dex/shared/widgets/connect_wallet/connect_wallet_button.dart';
 import 'package:web_dex/views/swap/common/swap_card_pair.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
@@ -22,9 +21,9 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
+import 'package:web_dex/views/swap/entry/swap_sign_in.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
-import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 
 part 'swap_entry_messages.dart';
 
@@ -111,9 +110,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     }
   }
 
-  void _openWalletManager() => unawaited(
-    showConnectWalletDialog(context, eventType: WalletsManagerEventType.dex),
-  );
+  void _openWalletManager() => unawaited(connectWalletFromSwap(context));
 
   @override
   Widget build(BuildContext context) {

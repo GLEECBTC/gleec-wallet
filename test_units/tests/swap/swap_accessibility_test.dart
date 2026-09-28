@@ -269,6 +269,15 @@ void main() {
           clearBalance: true,
           catalog: SwapCatalog(sources: catalog.sources, activated: {}),
         ),
+    'just signed in, the dollar amount kept': () =>
+        form(
+          issue: SwapFormIssue.assetInactive,
+          evaluation: SwapEvaluationStatus.idle,
+        ).copyWith(
+          inputText: '250',
+          amountMode: SwapAmountMode.fiat,
+          catalog: SwapCatalog(sources: catalog.sources, activated: {eth}),
+        ),
   };
 
   for (final layout in _layouts) {

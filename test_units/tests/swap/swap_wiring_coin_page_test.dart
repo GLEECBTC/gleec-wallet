@@ -126,7 +126,7 @@ void main() {
         await tester.pump();
 
         expect(services.requestedIntents, [
-          (pay: 'DOC', receive: null, amount: null),
+          (pay: 'DOC', receive: null, amount: null, fiat: false),
         ]);
         // Advanced's taker form is seeded too.
         expect(taker.events.single, isA<TakerSetSellCoin>());

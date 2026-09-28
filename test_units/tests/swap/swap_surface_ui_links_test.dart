@@ -88,6 +88,7 @@ void main() {
           pay: 'ETH',
           receive: 'USDC-ERC20',
           amount: '1',
+          fiat: false,
         ));
         await show(tester, initial: SwapDestination.activity);
 
@@ -108,7 +109,12 @@ void main() {
         await show(tester, initial: SwapDestination.activity);
         expect(intents(), isEmpty);
 
-        services.requestIntent((pay: 'BTC', receive: null, amount: null));
+        services.requestIntent((
+          pay: 'BTC',
+          receive: null,
+          amount: null,
+          fiat: false,
+        ));
         await tester.pumpAndSettle();
 
         expect(intents(), [const UnifiedSwapIntentApplied(pay: 'BTC')]);

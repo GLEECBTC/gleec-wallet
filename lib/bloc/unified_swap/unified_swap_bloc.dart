@@ -227,6 +227,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       pay: pay ?? state.pay,
       receive: receive == pay ? null : (receive ?? state.receive),
       amount: event.amount,
+      amountMode: event.amountMode,
     );
   }
 
@@ -235,11 +236,18 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     AssetId? pay,
     AssetId? receive,
     String? amount,
+    SwapAmountMode amountMode = SwapAmountMode.token,
   }) async {
     if (_startInDoubt) return;
     _settingPair++;
     try {
-      await _applyPair(emit, pay: pay, receive: receive, amount: amount);
+      await _applyPair(
+        emit,
+        pay: pay,
+        receive: receive,
+        amount: amount,
+        amountMode: amountMode,
+      );
     } finally {
       _settingPair--;
     }
@@ -250,6 +258,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     AssetId? pay,
     AssetId? receive,
     String? amount,
+    required SwapAmountMode amountMode,
   }) async {
     _invalidate();
     emit(
@@ -261,7 +270,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
           clearPay: pay == null,
           clearReceive: receive == null,
           inputText: amount ?? state.inputText,
-          amountMode: amount == null ? null : SwapAmountMode.token,
+          amountMode: amount == null ? null : amountMode,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,

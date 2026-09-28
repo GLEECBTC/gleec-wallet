@@ -152,6 +152,9 @@ class FakeSwapServices implements SwapServices {
   final List<SwapExecutionRef> requestedOpens = [];
 
   @override
+  bool signInFromSwap = false;
+
+  @override
   void requestIntent(SwapIntent intent) => requestedIntents.add(intent);
 
   @override
