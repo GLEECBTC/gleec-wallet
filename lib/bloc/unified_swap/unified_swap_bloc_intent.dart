@@ -138,12 +138,14 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       return;
     }
 
+    final epoch = _walletEpoch;
     final maxes = await _repository.maxAmounts(
       from: pay,
       to: receive,
       balance: balance,
     );
     if (state.pay != pay || state.receive != receive) return;
+    if (epoch != _walletEpoch) return;
     if (maxes.isEmpty) return;
 
     // Keep what the selected route needs; with no selection, take the larger

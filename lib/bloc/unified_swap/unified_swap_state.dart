@@ -40,8 +40,8 @@ enum SwapFormIssue {
   /// No source can trade this pair; see [UnifiedSwapState.pairSupport].
   pairUnsupported,
 
-  /// No wallet is signed in, so nothing is active or priced. The way on is
-  /// connecting one, not activating an asset.
+  /// No wallet is signed in, so nothing is active and only wallet-free
+  /// sources price. The way on is connecting one, not activating an asset.
   signedOut,
 
   /// An asset in the pair is not active in the wallet yet. It is activated
@@ -77,8 +77,10 @@ enum SwapFormIssue {
   fiatUnavailable;
 
   /// Whether the form still prices the swap. It cannot be reviewed, but
-  /// people look up a price before they hold enough to pay.
-  bool get stillPriced => this == insufficient || this == insufficientForFees;
+  /// people look up a price before they hold enough to pay, or before they
+  /// sign in.
+  bool get stillPriced =>
+      this == insufficient || this == insufficientForFees || this == signedOut;
 }
 
 /// What the quote evaluation is doing.

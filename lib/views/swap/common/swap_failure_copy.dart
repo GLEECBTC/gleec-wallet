@@ -26,6 +26,7 @@ class SwapFailureCopy {
   static SwapFailureCopy of(
     SwapQuoteFailure failure,
     AssetId? pay, {
+    AssetId? receive,
     List<SwapQuoteFailure> all = const [],
     SwapPairSupport? support,
     SwapNetworks? networks,
@@ -71,7 +72,14 @@ class SwapFailureCopy {
         ),
         action: SwapEntryAction.none,
       ),
-      SwapQuoteFailureKind.noRoute => _noRoute(failure, all, support),
+      SwapQuoteFailureKind.noRoute => _noRoute(
+        failure,
+        all,
+        support,
+        pay: pay,
+        receive: receive,
+        networks: networks,
+      ),
       SwapQuoteFailureKind.rateLimited => SwapFailureCopy(
         message: LocaleKeys.swapErrorRateLimited.tr(),
         action: SwapEntryAction.wait,
@@ -108,6 +116,10 @@ class SwapFailureCopy {
         message: LocaleKeys.swapErrorClock.tr(),
         action: SwapEntryAction.none,
       ),
+      SwapQuoteFailureKind.signedOut => SwapFailureCopy(
+        message: LocaleKeys.swapErrorSignedOutRoutes.tr(),
+        action: SwapEntryAction.connect,
+      ),
       SwapQuoteFailureKind.unknown => SwapFailureCopy(
         message: LocaleKeys.swapErrorUnknown.tr(),
       ),
@@ -117,16 +129,23 @@ class SwapFailureCopy {
   static SwapFailureCopy _noRoute(
     SwapQuoteFailure failure,
     List<SwapQuoteFailure> all,
-    SwapPairSupport? support,
-  ) {
-    final unanswered = all.any(
-      (other) => other.source != failure.source && other.isTransient,
-    );
-    if (unanswered) {
+    SwapPairSupport? support, {
+    AssetId? pay,
+    AssetId? receive,
+    SwapNetworks? networks,
+  }) {
+    final others = all.where((other) => other.source != failure.source);
+    if (others.any((other) => other.isTransient)) {
       return SwapFailureCopy(
         message: failure.source == SwapLiquiditySource.atomic
             ? LocaleKeys.swapErrorNoRouteOrderBook.tr()
             : LocaleKeys.swapErrorNoRouteCrossNetwork.tr(),
+      );
+    }
+    if (others.any((other) => other.kind == SwapQuoteFailureKind.signedOut)) {
+      return SwapFailureCopy(
+        message: LocaleKeys.swapErrorNoRouteSignedOut.tr(),
+        action: SwapEntryAction.connect,
       );
     }
     final String? detail;
@@ -135,8 +154,20 @@ class SwapFailureCopy {
         args: [failure.reasons.join(' · ')],
       );
     } else if (support?.routesUnavailableFor case final AssetId asset) {
+      final other = asset == pay ? receive : pay;
+      final ticker = SwapFormat.ticker(asset);
+      // "1INCH trades only on the order book" says nothing when both sides
+      // are 1INCH.
+      final sameTicker = other != null && SwapFormat.ticker(other) == ticker;
       detail = LocaleKeys.swapHelperOrderBookOnly.tr(
-        args: [SwapFormat.ticker(asset)],
+        args: [
+          if (sameTicker && networks != null)
+            LocaleKeys.swapAssetOnNetwork.tr(
+              args: [ticker, networks.networkOf(asset)],
+            )
+          else
+            ticker,
+        ],
       );
     } else {
       detail = null;
@@ -181,6 +212,9 @@ enum SwapEntryAction {
 
   /// Wait out a rate limit.
   wait,
+
+  /// Connect a wallet, which the source that could answer needs.
+  connect,
 
   /// Nothing to do but change the amount.
   none,

@@ -130,6 +130,13 @@ import 'tests/swap/swap_history_repository_test.dart'
     as swap_history_repository_test;
 import 'tests/swap/swap_indicative_quote_test.dart'
     as swap_indicative_quote_test;
+import 'tests/swap/swap_signed_out_cta_test.dart' as swap_signed_out_cta_test;
+import 'tests/swap/swap_signed_out_entry_test.dart'
+    as swap_signed_out_entry_test;
+import 'tests/swap/swap_signed_out_pricing_test.dart'
+    as swap_signed_out_pricing_test;
+import 'tests/swap/swap_signed_out_repository_test.dart'
+    as swap_signed_out_repository_test;
 import 'tests/swap/swap_shell_test.dart' as swap_shell_test;
 import 'tests/swap/swap_slippage_test.dart' as swap_slippage_test;
 import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
@@ -541,6 +548,10 @@ void main() {
   swap_asset_picker_test.main();
   swap_quote_budget_test.main();
   swap_indicative_quote_test.main();
+  swap_signed_out_repository_test.main();
+  swap_signed_out_pricing_test.main();
+  swap_signed_out_entry_test.main();
+  swap_signed_out_cta_test.main();
   swap_slippage_test.main();
   swap_route_alias_test.main();
   swap_widgets_test.main();
