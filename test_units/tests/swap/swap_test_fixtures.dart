@@ -204,13 +204,20 @@ class FakeQuoteSource implements SwapQuoteSource {
     this.max,
     this.delay,
     this.respond,
-  }) : tradable = tradable ?? {eth, usdc, btc, gleec};
+    bool? pricesSignedOut,
+  }) : tradable = tradable ?? {eth, usdc, btc, gleec},
+       pricesSignedOut =
+           pricesSignedOut ?? source == SwapLiquiditySource.atomic;
 
   /// Answers per request, when set; otherwise [results].
   List<SwapQuoteResult> Function(SwapQuoteRequest request)? respond;
 
   @override
   final SwapLiquiditySource source;
+
+  /// As in the app: only the order book prices without a wallet.
+  @override
+  final bool pricesSignedOut;
   Set<AssetId> tradable;
   List<SwapQuoteResult> results;
   SwapQuoteResult? requoteResult;

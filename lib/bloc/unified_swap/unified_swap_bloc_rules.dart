@@ -23,14 +23,14 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     if (next.pairSupport case final support? when !support.isSupported) {
       return SwapFormIssue.pairUnsupported;
     }
-    if (!next.signedIn && (pay != null || next.receive != null)) {
-      return SwapFormIssue.signedOut;
-    }
-    if (next.inactiveAsset != null) return SwapFormIssue.assetInactive;
-    // No source can price the swap, and asking would only spend the
-    // aggregator's request budget on a failure.
-    if (pay?.parentId != null && next.feeBalance == Decimal.zero) {
-      return SwapFormIssue.noFeeBalance;
+    // Signed out, nothing is active or funded, so only the amount is checked.
+    if (next.signedIn) {
+      if (next.inactiveAsset != null) return SwapFormIssue.assetInactive;
+      // No source can price the swap, and asking would only spend the
+      // aggregator's request budget on a failure.
+      if (pay?.parentId != null && next.feeBalance == Decimal.zero) {
+        return SwapFormIssue.noFeeBalance;
+      }
     }
 
     final text = next.inputText.trim();
@@ -51,6 +51,7 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
         amount.scale > decimals) {
       return SwapFormIssue.tooManyDecimals;
     }
+    if (!next.signedIn) return SwapFormIssue.signedOut;
 
     final balance = next.balance;
     if (balance != null && amount > balance) return SwapFormIssue.insufficient;

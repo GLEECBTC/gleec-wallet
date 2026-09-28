@@ -1425,6 +1425,8 @@ abstract class LocaleKeys {
   static const swapErrorNoFeeBalance = 'swapErrorNoFeeBalance';
   static const swapErrorNoRouteOrderBook = 'swapErrorNoRouteOrderBook';
   static const swapErrorNoRouteCrossNetwork = 'swapErrorNoRouteCrossNetwork';
+  static const swapErrorNoRouteSignedOut = 'swapErrorNoRouteSignedOut';
+  static const swapErrorSignedOutRoutes = 'swapErrorSignedOutRoutes';
   static const swapErrorServiceToken = 'swapErrorServiceToken';
   static const swapErrorInactive = 'swapErrorInactive';
   static const swapErrorUnsupportedSigner = 'swapErrorUnsupportedSigner';
@@ -1440,6 +1442,7 @@ abstract class LocaleKeys {
   static const swapHelperChecking = 'swapHelperChecking';
   static const swapHelperLoadingAssets = 'swapHelperLoadingAssets';
   static const swapHelperSignedOut = 'swapHelperSignedOut';
+  static const swapHelperSignedOutPriced = 'swapHelperSignedOutPriced';
   static const swapHelperBalance = 'swapHelperBalance';
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxToken = 'swapHelperMaxToken';
@@ -1447,11 +1450,13 @@ abstract class LocaleKeys {
   static const swapHelperStructural = 'swapHelperStructural';
   static const swapHelperNoRouteReasons = 'swapHelperNoRouteReasons';
   static const swapHelperOrderBookOnly = 'swapHelperOrderBookOnly';
+  static const swapAssetOnNetwork = 'swapAssetOnNetwork';
   static const swapHelperRoutesNoNetwork = 'swapHelperRoutesNoNetwork';
   static const swapHelperRoutesEvmOnly = 'swapHelperRoutesEvmOnly';
   static const swapHelperRoutedUnavailable = 'swapHelperRoutedUnavailable';
   static const swapHelperAtomicUnavailable = 'swapHelperAtomicUnavailable';
   static const swapHelperRoutedPaused = 'swapHelperRoutedPaused';
+  static const swapHelperRoutedSignedOut = 'swapHelperRoutedSignedOut';
   static const swapWarningHighImpact = 'swapWarningHighImpact';
   static const swapWarningPriceUnavailable = 'swapWarningPriceUnavailable';
   static const swapMinimumReceived = 'swapMinimumReceived';

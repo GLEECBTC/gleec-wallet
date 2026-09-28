@@ -74,6 +74,8 @@ class UnifiedSwapQuotes extends Equatable {
       SwapQuoteFailureKind.notConfigured,
       SwapQuoteFailureKind.pairUnsupported,
       SwapQuoteFailureKind.unknown,
+      // Whatever a source that was asked said explains more.
+      SwapQuoteFailureKind.signedOut,
     ];
     final sorted = [...failures]
       ..sort(
@@ -173,12 +175,37 @@ class UnifiedSwapRepository {
     if (request.amount <= Decimal.zero) {
       return const UnifiedSwapQuotes(ranked: [], unrankable: [], failures: []);
     }
-    final local = _localFailures(request.from, request.to);
+    final local = _localFailures(
+      request.from,
+      request.to,
+      signedOut: request.signedOut,
+    );
     if (local != null) {
       return UnifiedSwapQuotes(
         ranked: const [],
         unrankable: const [],
         failures: local,
+      );
+    }
+    final able = _sourcesFor(request.from, request.to);
+    final asked = [
+      for (final source in able)
+        if (!request.signedOut || source.pricesSignedOut) source,
+    ];
+    // Not asked, but reported, so the form can say a wallet adds them.
+    final waiting = [
+      for (final source in able)
+        if (!asked.contains(source))
+          SwapQuoteFailure(
+            source: source.source,
+            kind: SwapQuoteFailureKind.signedOut,
+          ),
+    ];
+    if (asked.isEmpty) {
+      return UnifiedSwapQuotes(
+        ranked: const [],
+        unrankable: const [],
+        failures: waiting,
       );
     }
     await _pricing.prices.warm([
@@ -188,7 +215,7 @@ class UnifiedSwapRepository {
     ]);
 
     final results = await Future.wait(
-      _sourcesFor(request.from, request.to).map(
+      asked.map(
         (source) => source
             .quote(request)
             .catchError(
@@ -216,6 +243,7 @@ class UnifiedSwapRepository {
           failures.add(failure);
       }
     }
+    failures.addAll(waiting);
 
     // Fee tokens can differ from either side of the swap; price them too.
     await _pricing.prices.warm([
@@ -309,7 +337,11 @@ class UnifiedSwapRepository {
   }
 
   /// Failures known without asking any source; null means ask the sources.
-  List<SwapQuoteFailure>? _localFailures(AssetId from, AssetId to) {
+  List<SwapQuoteFailure>? _localFailures(
+    AssetId from,
+    AssetId to, {
+    bool signedOut = false,
+  }) {
     final catalog = _catalog;
     if (catalog == null) return null;
     final support = catalog.support(from, to);
@@ -322,6 +354,8 @@ class UnifiedSwapRepository {
           ),
       ];
     }
+    // The sources asked signed out need no active coin.
+    if (signedOut) return null;
     for (final asset in [from, to]) {
       if (!catalog.isActive(asset)) {
         return [

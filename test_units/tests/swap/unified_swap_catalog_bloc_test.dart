@@ -228,6 +228,7 @@ void main() {
     Future<UnifiedSwapBloc> openSignedOut({
       String? pay,
       String? receive,
+      String? amount,
     }) async {
       activated = {};
       routed.inactive = {...routed.tradable};
@@ -236,25 +237,30 @@ void main() {
         ..add(signedOut)
         ..add(const UnifiedSwapStarted());
       if (pay != null) {
-        bloc.add(UnifiedSwapIntentApplied(pay: pay, receive: receive));
+        bloc.add(
+          UnifiedSwapIntentApplied(pay: pay, receive: receive, amount: amount),
+        );
       }
       await settle();
       addTearDown(bloc.close);
       return bloc;
     }
 
-    test('a pair asks for a wallet, and nothing is priced', () async {
-      final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
+    test(
+      'a pair asks for a wallet, and only the order book prices it',
+      () async {
+        final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
 
-      expect(bloc.state.inactiveAsset, eth);
-      expect(bloc.state.issue, SwapFormIssue.signedOut);
+        expect(bloc.state.inactiveAsset, eth);
+        expect(bloc.state.issue, SwapFormIssue.amountMissing);
 
-      bloc.add(const UnifiedSwapAmountChanged('1'));
-      await settle();
-      expect(bloc.state.issue, SwapFormIssue.signedOut);
-      expect(routed.requests, isEmpty);
-      expect(atomic.requests, isEmpty);
-    });
+        bloc.add(const UnifiedSwapAmountChanged('1'));
+        await settle();
+        expect(bloc.state.issue, SwapFormIssue.signedOut);
+        expect(routed.requests, isEmpty);
+        expect(atomic.requests.single.signedOut, isTrue);
+      },
+    );
 
     test('a pair no source trades still says so', () async {
       final bloc = await openSignedOut(pay: 'GLEEC', receive: 'PAXG-ERC20');
@@ -270,7 +276,11 @@ void main() {
     });
 
     test('choosing an asset does not read the catalog again', () async {
-      final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
+      final bloc = await openSignedOut(
+        pay: 'ETH',
+        receive: 'USDC-ERC20',
+        amount: '1',
+      );
       final reads = routed.assetsCalls;
 
       bloc.add(UnifiedSwapReceiveAssetChanged(btc));
@@ -282,7 +292,11 @@ void main() {
     });
 
     test('signing in asks for activation instead, and out again', () async {
-      final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
+      final bloc = await openSignedOut(
+        pay: 'ETH',
+        receive: 'USDC-ERC20',
+        amount: '1',
+      );
 
       bloc.add(signedIn);
       await settle();
