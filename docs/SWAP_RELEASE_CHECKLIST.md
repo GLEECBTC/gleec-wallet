@@ -36,7 +36,7 @@ Do these in order. Each needs a go.
 
 | Gate | How | Last result |
 |---|---|---|
-| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 2,613 passed, 4 skipped (2026-09-25) |
+| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 2,640 passed, 4 skipped (2026-09-28) |
 | SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | #389 at `8c1a073d`, run locally (2026-09-25): sdk 1,117 (1 skipped), rpc 337, harness 220 (4 skipped), framework 72. CI to confirm |
 | KDF `routed_swap` tests | KDF team's CI on #29. The `Test` workflow runs only when dispatched by hand. | 36 `routed_swap` + 18 LI.FI client tests passed locally at `4872ef2` |
 | Live engine check, no funds | `routed_swap_live_capture_test.dart` holds the recorded responses | Native and WebAssembly agree; 9 of the day's 75 keyless quotes used |
