@@ -22,7 +22,9 @@ env:
 jobs:
   unit_tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Setup plus two full suite runs (tests, then coverage) took 14-15 minutes
+    # by 2026-09-28. Each step keeps its own 15-minute bound against a wedge.
+    timeout-minutes: 25
 
     steps:
       - name: Setup GH Actions
