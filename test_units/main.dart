@@ -44,6 +44,8 @@ import 'bloc/cex_market_data/common/update_frequency_backoff_strategy_test.dart'
 import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
+import 'shared/widgets/connect_wallet_button_test.dart'
+    as connect_wallet_button_test;
 import 'shared/widgets/quick_login_switch_test.dart' as quick_login_switch_test;
 import 'shared/widgets/terms_consent_text_test.dart' as terms_consent_text_test;
 import 'tests/analytics/firebase_config_test.dart' as firebase_config_test;
@@ -515,6 +517,7 @@ void main() {
   legacy_app_settings_migration_service_test.main();
   formatters_test.main();
   quick_login_switch_test.main();
+  connect_wallet_button_test.main();
   analytics_test.main();
   firebase_config_test.main();
   firebase_analytics_api_test.main();
