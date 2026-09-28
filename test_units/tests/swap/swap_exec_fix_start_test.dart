@@ -122,7 +122,8 @@ void main() {
     });
 
     test('KDF refusing with an HTTP error status is still a refusal', () async {
-      // The SDK's HTTP transport keeps only the status of a legacy refusal.
+      // The SDK's HTTP transport reports only the status of a non-200 whose
+      // body is not one of KDF's error envelopes.
       const httpError = '{"error":"HTTP Error","status":500}';
       rpc.answer = {
         'code': 500,
