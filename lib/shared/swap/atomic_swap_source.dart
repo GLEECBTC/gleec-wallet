@@ -72,6 +72,11 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.atomic;
 
+  /// KDF reads the orderbook from the coins' configs, with no coin active and
+  /// no wallet loaded.
+  @override
+  bool get pricesSignedOut => true;
+
   /// Whether the orderbook can trade [asset] at all.
   bool canTrade(AssetId asset) => canTradeWith(asset, _isWalletOnly);
 

@@ -6,9 +6,6 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
     final pay = state.pay;
     final issue = state.issue;
-    if (issue == SwapFormIssue.signedOut) {
-      return [SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr())];
-    }
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(
         issue,
@@ -58,7 +55,13 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         ),
       );
     }
-    if (partial != null) messages.add(SwapHelperLine(text: partial));
+    if (partial != null) {
+      messages.add(SwapHelperLine(text: partial));
+    } else if (!state.signedIn && quote != null) {
+      messages.add(
+        SwapHelperLine(text: LocaleKeys.swapHelperSignedOutPriced.tr()),
+      );
+    }
     if (messages.isNotEmpty) return messages;
 
     if (state.evaluation == SwapEvaluationStatus.checking) {
@@ -73,6 +76,10 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         SwapHelperLine(text: LocaleKeys.swapWarningPriceUnavailable.tr()),
       ];
     }
+    // Signed out, "Checking what this wallet can swap" would name no wallet.
+    if (!state.signedIn) {
+      return [SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr())];
+    }
     if (state.loadingAssets) {
       return [SwapHelperLine(text: LocaleKeys.swapHelperLoadingAssets.tr())];
     }
@@ -85,6 +92,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   ) => SwapFailureCopy.of(
     failure,
     state.pay,
+    receive: state.receive,
     all: state.failures,
     support: state.pairSupport,
     networks: _services.networks(),
@@ -96,9 +104,11 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       return const [];
     }
     final copy = _failureCopy(state, failure);
-    final tone = failure.kind == SwapQuoteFailureKind.rateLimited
-        ? SwapTone.warning
-        : SwapTone.danger;
+    final tone = switch (failure.kind) {
+      SwapQuoteFailureKind.rateLimited => SwapTone.warning,
+      SwapQuoteFailureKind.signedOut => SwapTone.neutral,
+      _ => SwapTone.danger,
+    };
     return [
       SwapHelperLine(text: copy.message, tone: tone),
       if (copy.detail != null) SwapHelperLine(text: copy.detail!),
@@ -107,8 +117,13 @@ extension _SwapEntryMessages on _SwapEntryViewState {
 
   String? _partialNote(UnifiedSwapState state) {
     if (state.evaluation != SwapEvaluationStatus.ready) return null;
-    final missing = state.failures.where((f) => f.isTransient).firstOrNull;
+    final missing = state.failures
+        .where((f) => f.isTransient || f.kind == SwapQuoteFailureKind.signedOut)
+        .firstOrNull;
     if (missing == null) return null;
+    if (missing.kind == SwapQuoteFailureKind.signedOut) {
+      return LocaleKeys.swapHelperRoutedSignedOut.tr();
+    }
     if (missing.source == SwapLiquiditySource.atomic) {
       return LocaleKeys.swapHelperAtomicUnavailable.tr();
     }

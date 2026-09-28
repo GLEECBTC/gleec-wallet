@@ -55,6 +55,11 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
 
+  /// KDF quotes a route from the source coin's enabled address, which only an
+  /// active coin in a signed-in wallet has.
+  @override
+  bool get pricesSignedOut => false;
+
   @override
   Future<SwapSourceAssets> assets({
     required Set<AssetId> known,

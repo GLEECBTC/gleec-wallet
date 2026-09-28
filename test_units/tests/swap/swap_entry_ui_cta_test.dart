@@ -159,7 +159,7 @@ void main() {
   });
 
   group('without a wallet', () {
-    const hint = 'Connect a wallet to see balances and prices.';
+    const hint = 'Connect a wallet to see balances and swap.';
     final signedOut = swapBaseForm().copyWith(
       signedIn: false,
       issue: SwapFormIssue.signedOut,

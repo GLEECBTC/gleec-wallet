@@ -250,12 +250,25 @@ class _SwapEntryViewState extends State<SwapEntryView> {
       );
     }
     final issue = state.issue;
-    if (issue == SwapFormIssue.signedOut) {
+    if (issue == SwapFormIssue.pairUnsupported ||
+        issue == SwapFormIssue.sameAsset) {
       return (
-        LocaleKeys.swapCtaConnectWallet.tr(),
-        widget.onConnectWallet ?? _openWalletManager,
+        LocaleKeys.swapCtaChooseAnother.tr(),
+        () => _pick(SwapPickerSide.receive),
         false,
       );
+    }
+    final connect = (
+      LocaleKeys.swapCtaConnectWallet.tr(),
+      widget.onConnectWallet ?? _openWalletManager,
+      false,
+    );
+    // Signed out, connecting takes the review's place. A price that expired
+    // or could not be checked is still offered again.
+    if (!state.signedIn &&
+        state.evaluation != SwapEvaluationStatus.expired &&
+        state.evaluation != SwapEvaluationStatus.failed) {
+      return connect;
     }
     if (issue == SwapFormIssue.assetInactive) {
       final asset = state.inactiveAsset!;
@@ -263,14 +276,6 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         LocaleKeys.swapCtaActivateAsset.tr(args: [SwapFormat.ticker(asset)]),
         _activating ? null : () => _activate(asset),
         _activating,
-      );
-    }
-    if (issue == SwapFormIssue.pairUnsupported ||
-        issue == SwapFormIssue.sameAsset) {
-      return (
-        LocaleKeys.swapCtaChooseAnother.tr(),
-        () => _pick(SwapPickerSide.receive),
-        false,
       );
     }
     if (issue == SwapFormIssue.amountMissing) {
@@ -326,6 +331,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                 : () => _bloc.add(const UnifiedSwapEvaluationRequested()),
             false,
           ),
+          SwapEntryAction.connect => connect,
           SwapEntryAction.none => (review, null, false),
         };
       case SwapEvaluationStatus.ready:

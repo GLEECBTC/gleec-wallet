@@ -36,13 +36,13 @@ Do these in order. Each needs a go.
 
 | Gate | How | Last result |
 |---|---|---|
-| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 2,739 passed, 4 skipped (2026-09-28) |
+| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 2,785 passed, 4 skipped (2026-09-28, with signed-out order-book prices) |
 | SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | #389 at `404d5ff9`, after its sync with SDK 0.8.1, run locally (2026-09-28): sdk 1,132 (1 skipped), local_auth 124, harness 222 (4 skipped), framework 91, rpc 337, cex_market_data 340 (6 skipped). CI to confirm |
 | KDF `routed_swap` tests | KDF team's CI on #29. The `Test` workflow runs only when dispatched by hand. | 36 `routed_swap` + 18 LI.FI client tests passed locally at `4872ef2` |
 | Live engine check, no funds | `routed_swap_live_capture_test.dart` holds the recorded responses | Native and WebAssembly agree; 9 of the day's 75 keyless quotes used |
 | Quote budget | `swap_quote_budget_test.dart` | Idle form 42 → 10 requests per 10 minutes, then none; typing 2 → 1; native Max 3 → 1; start 1 → 0 |
 | Accessibility and layout | `swap_accessibility_test.dart`; `swap_widgets_test.dart` runs the same checks on review, outcomes and Activity | Every new and changed state at 375, 390, 768, 1024 and 1440 px, light and dark, and at 200% text, measured in Manrope: no overflow, no text cut short or split mid-word, 48 dp targets, every control labelled and pressable by a screen reader. Passing (2026-09-25) |
-| Test coverage | `flutter test --coverage` over the app suite and the SDK packages; new files count whole, existing files only for the lines this branch changed | App (2026-09-28): 6,789 of 6,793 lines in the 71 new files (the other 4 are private event `props`) and 158 of 160 changed lines in 20 existing files (the other 2 log a refused `LIFI_API_URL`, a define the suite runs without). SDK: 1,510 of 1,510 changed routed-swap lines at `8c1a073d` (2026-09-25) |
+| Test coverage | `flutter test --coverage` over the app suite and the SDK packages; new files count whole, existing files only for the lines this branch changed | App (2026-09-28): 6,789 of 6,793 lines in the 71 new files (the other 4 are private event `props`) and 158 of 160 changed lines in 20 existing files (the other 2 log a refused `LIFI_API_URL`, a define the suite runs without). SDK (2026-09-28, #389 at `404d5ff9`): 1,510 of 1,510 changed routed-swap lines, in the RPCs and the manager; 1,554 of 1,563 of all the lines #389 changes outside its test harness (the other 9 register the manager at start-up, or belong to a gas-free fix #389 carries) |
 | UI tests | `ui-tests-on-pr` | Red only at `fiat_onramp_tests`, an external Ramp key issue |
 | Live swaps with funds | [`SWAP_LIVE_TEST_BRIEF.md`](SWAP_LIVE_TEST_BRIEF.md) — the release owner runs them with small amounts | Not run |
 | Moderated usability session | [`SWAP_USABILITY_SESSION.md`](SWAP_USABILITY_SESSION.md) — five users | Not run |

@@ -153,15 +153,23 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         _comparing == _intentKey(state) ||
         state.selectedQuote?.order == SwapQuoteOrder.fastest;
     final balance = state.balance;
+    final signedOut = !state.signedIn;
     return SwapQuoteRequest(
       from: state.pay!,
       to: state.receive!,
       amount: amount,
       orders: {SwapQuoteOrder.cheapest, if (comparing) SwapQuoteOrder.fastest},
       slippage: state.slippage,
-      indicative: balance != null && amount > balance,
+      indicative: signedOut || (balance != null && amount > balance),
+      signedOut: signedOut,
     );
   }
+
+  /// Whether the selected price is kept fresh. A look the balance blocks is
+  /// priced once, to spare the aggregator's budget; a signed-out look asks
+  /// only the order book, which spends none.
+  bool get _keepsFresh =>
+      state.issue == null || state.issue == SwapFormIssue.signedOut;
 
   Object _intentKey(UnifiedSwapState state) =>
       (state.pay, state.receive, amountOf(state));
@@ -225,9 +233,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     _refresh?.cancel();
     _expiry?.cancel();
     if (selected == null) return;
-    // A price the balance keeps from starting is a look, priced once: keeping
-    // it fresh would spend the aggregator's budget on nothing to act on.
-    if (state.issue == null) {
+    if (_keepsFresh) {
       // Shown again late, a price would expire before its refresh: renew now.
       final renewNow =
           shownAgain &&

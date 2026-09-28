@@ -53,6 +53,9 @@ enum SwapQuoteFailureKind {
   /// The device clock is off, which peer-to-peer swaps cannot tolerate.
   clockInvalid,
 
+  /// This source prices only for a signed-in wallet, and none is.
+  signedOut,
+
   /// Something else.
   unknown,
 }
@@ -159,6 +162,9 @@ final class SwapQuoteRejected extends SwapQuoteResult {
 abstract interface class SwapQuoteSource {
   /// Which source this is.
   SwapLiquiditySource get source;
+
+  /// Whether this source can price a swap with no wallet signed in.
+  bool get pricesSignedOut;
 
   /// What this source can trade among the wallet's [known] assets, of which
   /// [activated] are active.
