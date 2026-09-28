@@ -270,8 +270,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       ),
     );
     // An asset the catalog thinks inactive may have been activated since —
-    // by the picker a moment ago, or elsewhere in the app.
-    if (!state.loadingAssets && state.inactiveAsset != null) {
+    // by the picker a moment ago, or elsewhere in the app. Signed out,
+    // nothing can have been.
+    if (state.signedIn && !state.loadingAssets && state.inactiveAsset != null) {
       await _refreshCatalog(emit);
     }
     await _loadBalances(emit);
@@ -336,15 +337,16 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     Emitter<UnifiedSwapState> emit,
   ) {
     if (event.tradingEnabled == state.tradingEnabled &&
-        event.clockValid == state.clockValid) {
+        event.clockValid == state.clockValid &&
+        event.signedIn == state.signedIn) {
       return;
     }
-    emit(
-      state.copyWith(
-        tradingEnabled: event.tradingEnabled,
-        clockValid: event.clockValid,
-      ),
+    final next = state.copyWith(
+      tradingEnabled: event.tradingEnabled,
+      clockValid: event.clockValid,
+      signedIn: event.signedIn,
     );
+    emit(event.signedIn == state.signedIn ? next : _validated(next));
     if (event.tradingEnabled && state.view == UnifiedSwapView.form) {
       _scheduleEvaluation(immediate: true);
     }

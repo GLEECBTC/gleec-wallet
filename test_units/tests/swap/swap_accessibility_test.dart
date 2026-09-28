@@ -260,6 +260,15 @@ void main() {
     ),
     'priced, but more than the balance': () =>
         form(issue: SwapFormIssue.insufficient),
+    'signed out': () =>
+        form(
+          issue: SwapFormIssue.signedOut,
+          evaluation: SwapEvaluationStatus.idle,
+        ).copyWith(
+          signedIn: false,
+          clearBalance: true,
+          catalog: SwapCatalog(sources: catalog.sources, activated: {}),
+        ),
   };
 
   for (final layout in _layouts) {
@@ -346,6 +355,24 @@ void main() {
               )
               .first,
         );
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
+      testWidgets('picker: signed out', (tester) async {
+        await pump(
+          tester,
+          layout,
+          SwapAssetPicker(
+            side: SwapPickerSide.pay,
+            catalog: catalog,
+            selected: eth,
+            other: null,
+            services: services,
+            isBlocked: (_) => false,
+            signedIn: false,
+          ),
+        );
+        expect(find.text('Activate'), findsNothing);
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 

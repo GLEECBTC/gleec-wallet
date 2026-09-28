@@ -49,7 +49,8 @@ const _popularTickers = [
   'AVAX',
 ];
 
-/// Opens the asset picker and returns the chosen asset, activated.
+/// Opens the asset picker and returns the chosen asset, activated if a wallet
+/// is signed in.
 Future<AssetId?> showSwapAssetPicker({
   required BuildContext context,
   required SwapPickerSide side,
@@ -60,6 +61,7 @@ Future<AssetId?> showSwapAssetPicker({
   required bool Function(AssetId asset) isBlocked,
 }) {
   final showTestCoins = _testCoinsEnabled(context);
+  final signedIn = bloc.state.signedIn;
   return showSwapSheet<AssetId>(
     context: context,
     label: LocaleKeys.swapPickerTitle.tr(),
@@ -72,6 +74,7 @@ Future<AssetId?> showSwapAssetPicker({
           side: side,
           catalog: state.catalog,
           loading: state.loadingAssets,
+          signedIn: signedIn,
           selected: selected,
           other: other,
           services: services,
@@ -106,6 +109,7 @@ class SwapAssetPicker extends StatefulWidget {
     required this.services,
     required this.isBlocked,
     this.loading = false,
+    this.signedIn = true,
     this.showTestCoins = true,
     this.onRetryCatalog,
     super.key,
@@ -118,6 +122,9 @@ class SwapAssetPicker extends StatefulWidget {
   final AssetId? other;
   final SwapServices services;
   final bool Function(AssetId asset) isBlocked;
+
+  /// Whether a wallet is signed in. Without one, nothing is activated.
+  final bool signedIn;
 
   /// Whether inactive test-network assets are offered.
   final bool showTestCoins;
@@ -154,7 +161,9 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     setState(() => _failed = false);
     try {
       final preferences = widget.services.preferences;
-      final activated = await widget.services.activatedAssets();
+      final activated = widget.signedIn
+          ? await widget.services.activatedAssets()
+          : const <AssetId>{};
       final recentTickers = await preferences.recentAssets();
       final hideZero =
           widget.side == SwapPickerSide.pay &&
@@ -270,7 +279,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
   Future<void> _choose(AssetId id) async {
     if (widget.isBlocked(id)) return;
     final activated = _activated ?? const {};
-    if (activated.contains(id)) {
+    if (!widget.signedIn || activated.contains(id)) {
       Navigator.of(context).pop(id);
       return;
     }

@@ -198,7 +198,8 @@ class SwapIssueCopy {
   final String? detail;
   final SwapEntryAction action;
 
-  /// The copy for [issue] in [state], or null for "not finished yet".
+  /// The copy for [issue] in [state], or null for "not finished yet": no
+  /// amount, or no wallet.
   static SwapIssueCopy? of(
     SwapFormIssue issue,
     UnifiedSwapState state, {
@@ -209,7 +210,7 @@ class SwapIssueCopy {
     final pay = state.pay;
     final ticker = pay == null ? '' : SwapFormat.ticker(pay);
     return switch (issue) {
-      SwapFormIssue.amountMissing => null,
+      SwapFormIssue.amountMissing || SwapFormIssue.signedOut => null,
       SwapFormIssue.pairUnsupported => _pairUnsupported(
         state.pairSupport,
         networks,

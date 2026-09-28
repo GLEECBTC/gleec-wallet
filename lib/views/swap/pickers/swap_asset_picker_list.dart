@@ -61,6 +61,7 @@ extension _PickerList on _SwapAssetPickerState {
                 widget.other != id &&
                 SwapFormat.ticker(widget.other!) == SwapFormat.ticker(id),
             active: _activated?.contains(id) ?? false,
+            signedIn: widget.signedIn,
             blocked: widget.isBlocked(id),
             unreachableWith: unreachable ? widget.other : null,
             activating: _activating == id,

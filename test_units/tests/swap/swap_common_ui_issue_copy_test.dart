@@ -79,6 +79,10 @@ void main() {
       expect(issueOf(SwapFormIssue.amountMissing, stateFor(eth, usdc)), isNull);
     });
 
+    test('no wallet is not an error: the form asks for one', () {
+      expect(issueOf(SwapFormIssue.signedOut, stateFor(eth, usdc)), isNull);
+    });
+
     group('unsupported pair', () {
       test('without a known reason, asks for another asset', () {
         expectCopy(
@@ -205,9 +209,12 @@ void main() {
       );
     });
 
-    test('every issue but a missing amount reads as English', () {
+    test('every issue but a missing amount or wallet reads as English', () {
       for (final issue in SwapFormIssue.values) {
-        if (issue == SwapFormIssue.amountMissing) continue;
+        if (issue == SwapFormIssue.amountMissing ||
+            issue == SwapFormIssue.signedOut) {
+          continue;
+        }
         final copy = issueOf(issue, stateFor(usdc, eth, balance: d('1')));
         expect(copy!.message, isNot(startsWith('swap')), reason: issue.name);
       }

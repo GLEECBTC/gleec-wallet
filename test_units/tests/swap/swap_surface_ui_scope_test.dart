@@ -5,12 +5,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/swap_activity/swap_activity_bloc.dart';
 import 'package:web_dex/bloc/system_health/system_health_bloc.dart';
 import 'package:web_dex/bloc/trading_status/disallowed_feature.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
+import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -64,6 +66,7 @@ void main() {
     Future<void> show(
       WidgetTester tester, {
       SwapDestination initial = SwapDestination.swap,
+      AuthBloc? auth,
     }) => pumpSurface(
       tester,
       SwapShell(initialDestination: initial),
@@ -77,6 +80,8 @@ void main() {
           value: systemHealth,
           child: child,
         ),
+        if (auth != null)
+          (child) => BlocProvider<AuthBloc>.value(value: auth, child: child),
       ],
     );
 
@@ -160,6 +165,33 @@ void main() {
           clockValid: false,
         ),
       );
+    });
+
+    testWidgets('tells the form whether a wallet is signed in', (tester) async {
+      final auth = _FakeAuthBloc(AuthBlocState.initial());
+      addTearDown(auth.close);
+      await show(tester, auth: auth);
+
+      expect(
+        capabilities().first,
+        const UnifiedSwapCapabilitiesChanged(
+          tradingEnabled: true,
+          clockValid: true,
+          signedIn: false,
+        ),
+      );
+      expect(form(tester).state.signedIn, isFalse);
+
+      auth.push(const AuthBlocState(mode: AuthorizeMode.logIn));
+      await tester.pumpAndSettle();
+      expect(
+        capabilities().last,
+        const UnifiedSwapCapabilitiesChanged(
+          tradingEnabled: true,
+          clockValid: true,
+        ),
+      );
+      expect(form(tester).state.signedIn, isTrue);
     });
 
     testWidgets('pauses re-pricing only while the app is out of sight', (
@@ -267,4 +299,14 @@ void main() {
       expect(services.takePendingOpen()?.id, 'late');
     });
   });
+}
+
+/// Sign-in the test sets.
+class _FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
+  _FakeAuthBloc(super.initialState);
+
+  void push(AuthBlocState state) => emit(state);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

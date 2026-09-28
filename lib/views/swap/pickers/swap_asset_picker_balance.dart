@@ -7,8 +7,10 @@ typedef _Listed = ({List<AssetId> rows, int hidden});
 /// receive assets they do not hold. Hidden assets stay one tap away, so a
 /// price can still be looked up for something the wallet does not hold.
 extension _PickerBalance on _SwapAssetPickerState {
-  /// Whether the switch applies here. "My assets" lists holdings only.
+  /// Whether the switch applies here. "My assets" lists holdings only, and
+  /// without a wallet there are none.
   bool get _filterable =>
+      widget.signedIn &&
       widget.side == SwapPickerSide.pay &&
       (_tab != _PickerTab.mine || _search.text.trim().isNotEmpty);
 

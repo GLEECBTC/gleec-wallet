@@ -10,6 +10,7 @@ class _PickerRow extends StatelessWidget {
     required this.selected,
     required this.sameTicker,
     required this.active,
+    required this.signedIn,
     required this.blocked,
     required this.activating,
     this.unreachableWith,
@@ -25,6 +26,7 @@ class _PickerRow extends StatelessWidget {
   final bool selected;
   final bool sameTicker;
   final bool active;
+  final bool signedIn;
   final bool blocked;
 
   final AssetId? unreachableWith;
@@ -70,7 +72,7 @@ class _PickerRow extends StatelessWidget {
         ],
       );
       trailingWidth = 16 + 8 + SwapText.widthOf(context, label, small);
-    } else if (!active && !blocked && unreachableWith == null) {
+    } else if (signedIn && !active && !blocked && unreachableWith == null) {
       final label = LocaleKeys.swapPickerActivate.tr();
       final style = SwapText.strong(
         context,
@@ -114,7 +116,7 @@ class _PickerRow extends StatelessWidget {
           label: LocaleKeys.swapPickerBlocked.tr(),
           tone: SwapTone.warning,
         )
-      else if (!active)
+      else if (signedIn && !active)
         SwapBadge(label: LocaleKeys.swapPickerInactive.tr()),
     ];
 

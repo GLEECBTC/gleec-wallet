@@ -23,6 +23,9 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     if (next.pairSupport case final support? when !support.isSupported) {
       return SwapFormIssue.pairUnsupported;
     }
+    if (!next.signedIn && (pay != null || next.receive != null)) {
+      return SwapFormIssue.signedOut;
+    }
     if (next.inactiveAsset != null) return SwapFormIssue.assetInactive;
     // No source can price the swap, and asking would only spend the
     // aggregator's request budget on a failure.

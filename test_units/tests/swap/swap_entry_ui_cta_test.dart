@@ -5,13 +5,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/bloc/taker_form/taker_bloc.dart';
+import 'package:web_dex/bloc/taker_form/taker_state.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -36,11 +40,12 @@ void main() {
     WidgetTester tester,
     UnifiedSwapState state, {
     bool settle = true,
+    Widget view = const SwapEntryView(),
   }) async {
     swap.emit(state);
     await pumpSwapUi(
       tester,
-      const SwapEntryView(),
+      view,
       bloc: swap,
       services: services,
       settle: settle,
@@ -150,6 +155,89 @@ void main() {
       await press(tester);
       expect(services.activations, [usdc, usdc]);
       expect(swap.events, [UnifiedSwapAssetActivated(usdc)]);
+    });
+  });
+
+  group('without a wallet', () {
+    const hint = 'Connect a wallet to see balances and prices.';
+    final signedOut = swapBaseForm().copyWith(
+      signedIn: false,
+      issue: SwapFormIssue.signedOut,
+      catalog: SwapCatalog(sources: swapTestCatalog.sources, activated: {}),
+    );
+
+    testWidgets('asks for a wallet, not an activation', (tester) async {
+      var connects = 0;
+      await pump(
+        tester,
+        signedOut,
+        view: SwapEntryView(onConnectWallet: () => connects++),
+      );
+
+      expect(swapPrimaryLabel(tester), 'Connect wallet');
+      expect(find.text(hint), findsOneWidget);
+      expect(find.textContaining('Activate'), findsNothing);
+
+      await press(tester);
+      expect(connects, 1);
+      expect(services.activations, isEmpty);
+      expect(swap.events, isEmpty);
+    });
+
+    testWidgets("opens the app's wallet manager by default", (tester) async {
+      final taker = _FakeTakerBloc();
+      addTearDown(taker.close);
+      swap.emit(signedOut);
+      await pumpSwapUi(
+        tester,
+        const SwapEntryView(),
+        bloc: swap,
+        services: services,
+        providers: [BlocProvider<TakerBloc>.value(value: taker)],
+      );
+
+      await tester.tap(swapPrimaryAction);
+      await tester.pump();
+      await tester.pump();
+
+      // Only the manager's own dependencies are missing here: the form
+      // handed the sign-in to it.
+      expect(
+        tester.takeException(),
+        isA<ProviderNotFoundException>().having(
+          (error) => error.widgetType,
+          'widgetType',
+          WalletsManagerWrapper,
+        ),
+      );
+    });
+
+    testWidgets('still asks for both assets first', (tester) async {
+      await pump(tester, signedOut.copyWith(clearReceive: true));
+
+      expect(swapPrimaryLabel(tester), 'Select asset');
+      expect(find.text(hint), findsOneWidget);
+    });
+
+    testWidgets('picks an asset without activating it', (tester) async {
+      services.activated = {};
+      await pump(
+        tester,
+        signedOut.copyWith(
+          clearPay: true,
+          clearReceive: true,
+          clearIssue: true,
+        ),
+      );
+
+      await tester.tap(find.byType(SwapAssetPill).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Activate'), findsNothing);
+
+      await tester.tap(find.text('BTC').first);
+      await tester.pumpAndSettle();
+      expect(swap.events, [UnifiedSwapPayAssetChanged(btc)]);
+      expect(services.activations, isEmpty);
     });
   });
 
@@ -319,4 +407,12 @@ void main() {
       expect(enabled(tester), isFalse);
     });
   });
+}
+
+/// The trading form's bloc, which the wallet manager's success path resets.
+class _FakeTakerBloc extends Cubit<TakerState> implements TakerBloc {
+  _FakeTakerBloc() : super(TakerState.initial());
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

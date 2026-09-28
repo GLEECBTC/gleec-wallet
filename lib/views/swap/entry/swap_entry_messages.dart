@@ -6,6 +6,9 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
     final pay = state.pay;
     final issue = state.issue;
+    if (issue == SwapFormIssue.signedOut) {
+      return [SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr())];
+    }
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(
         issue,

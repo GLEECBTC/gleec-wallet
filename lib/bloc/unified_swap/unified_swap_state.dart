@@ -40,6 +40,10 @@ enum SwapFormIssue {
   /// No source can trade this pair; see [UnifiedSwapState.pairSupport].
   pairUnsupported,
 
+  /// No wallet is signed in, so nothing is active or priced. The way on is
+  /// connecting one, not activating an asset.
+  signedOut,
+
   /// An asset in the pair is not active in the wallet yet. It is activated
   /// only when the user asks — activation is never a side effect of looking.
   assetInactive,
@@ -210,6 +214,7 @@ class UnifiedSwapState extends Equatable {
     this.structuralNotice = false,
     this.tradingEnabled = true,
     this.clockValid = true,
+    this.signedIn = true,
   });
 
   /// Which screen is showing.
@@ -299,6 +304,9 @@ class UnifiedSwapState extends Equatable {
   /// Whether the device clock is accurate enough for peer-to-peer swaps.
   final bool clockValid;
 
+  /// Whether a wallet is signed in.
+  final bool signedIn;
+
   /// The selected option.
   SwapQuote? get selectedQuote {
     final id = selectedId;
@@ -362,6 +370,7 @@ class UnifiedSwapState extends Equatable {
     structuralNotice,
     tradingEnabled,
     clockValid,
+    signedIn,
   ];
 
   /// A copy with the given fields replaced. Nullable fields take explicit
@@ -395,6 +404,7 @@ class UnifiedSwapState extends Equatable {
     bool? structuralNotice,
     bool? tradingEnabled,
     bool? clockValid,
+    bool? signedIn,
     bool clearPay = false,
     bool clearReceive = false,
     bool clearPayAddress = false,
@@ -444,6 +454,7 @@ class UnifiedSwapState extends Equatable {
       structuralNotice: structuralNotice ?? this.structuralNotice,
       tradingEnabled: tradingEnabled ?? this.tradingEnabled,
       clockValid: clockValid ?? this.clockValid,
+      signedIn: signedIn ?? this.signedIn,
     );
   }
 }

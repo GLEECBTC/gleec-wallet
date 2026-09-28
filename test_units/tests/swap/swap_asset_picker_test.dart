@@ -230,6 +230,44 @@ void main() {
     expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
   });
 
+  group('signed out', () {
+    SwapAssetPicker picker() => SwapAssetPicker(
+      side: SwapPickerSide.pay,
+      catalog: catalog(),
+      selected: null,
+      other: null,
+      services: services,
+      isBlocked: (_) => false,
+      signedIn: false,
+    );
+
+    testWidgets('lists every asset, with nothing to activate or hide', (
+      tester,
+    ) async {
+      services.balances = {eth: d('1.5')};
+      await open(tester, picker());
+
+      // Nothing is held without a wallet, so it opens on All.
+      expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
+      expect(find.text('Not active'), findsNothing);
+      expect(find.text('Activate'), findsNothing);
+      expect(find.text('Hide 0 balance assets'), findsNothing);
+      // A balance still cached from a wallet is not shown as this one's.
+      expect(find.text('1.5'), findsNothing);
+      expect(services.activatedReads, 0);
+    });
+
+    testWidgets('returns a chosen asset without activating it', (tester) async {
+      final popped = await open(tester, picker());
+
+      await tester.tap(find.text(SwapFormat.ticker(btc)).first);
+      await tester.pumpAndSettle();
+
+      expect(popped, [btc]);
+      expect(services.activated, isEmpty);
+    });
+  });
+
   group('hide 0 balance assets', () {
     const hideZero = 'Hide 0 balance assets';
 
@@ -340,6 +378,7 @@ class _PickerServices implements SwapServices {
   final List<AssetId> activated = [];
   Set<AssetId> testnets = {};
   Map<AssetId, Decimal> balances = {};
+  int activatedReads = 0;
 
   @override
   late final SwapPreferences preferences = SwapPreferences(
@@ -348,7 +387,10 @@ class _PickerServices implements SwapServices {
   );
 
   @override
-  Future<Set<AssetId>> activatedAssets() async => _activated();
+  Future<Set<AssetId>> activatedAssets() async {
+    activatedReads++;
+    return _activated();
+  }
 
   @override
   Future<void> activate(AssetId id) async => activated.add(id);

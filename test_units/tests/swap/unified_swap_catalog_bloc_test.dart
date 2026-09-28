@@ -213,4 +213,85 @@ void main() {
     expect(bloc.state.catalog.isActive(btc), isTrue);
     expect(bloc.state.issue, isNot(SwapFormIssue.assetInactive));
   });
+
+  group('without a wallet', () {
+    const signedOut = UnifiedSwapCapabilitiesChanged(
+      tradingEnabled: true,
+      clockValid: true,
+      signedIn: false,
+    );
+    const signedIn = UnifiedSwapCapabilitiesChanged(
+      tradingEnabled: true,
+      clockValid: true,
+    );
+
+    Future<UnifiedSwapBloc> openSignedOut({
+      String? pay,
+      String? receive,
+    }) async {
+      activated = {};
+      routed.inactive = {...routed.tradable};
+      atomic.inactive = {...atomic.tradable};
+      final bloc = build()
+        ..add(signedOut)
+        ..add(const UnifiedSwapStarted());
+      if (pay != null) {
+        bloc.add(UnifiedSwapIntentApplied(pay: pay, receive: receive));
+      }
+      await settle();
+      addTearDown(bloc.close);
+      return bloc;
+    }
+
+    test('a pair asks for a wallet, and nothing is priced', () async {
+      final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
+
+      expect(bloc.state.inactiveAsset, eth);
+      expect(bloc.state.issue, SwapFormIssue.signedOut);
+
+      bloc.add(const UnifiedSwapAmountChanged('1'));
+      await settle();
+      expect(bloc.state.issue, SwapFormIssue.signedOut);
+      expect(routed.requests, isEmpty);
+      expect(atomic.requests, isEmpty);
+    });
+
+    test('a pair no source trades still says so', () async {
+      final bloc = await openSignedOut(pay: 'GLEEC', receive: 'PAXG-ERC20');
+
+      expect(bloc.state.issue, SwapFormIssue.pairUnsupported);
+    });
+
+    test('an empty form waits for an asset, as when signed in', () async {
+      final bloc = await openSignedOut();
+
+      expect(bloc.state.signedIn, isFalse);
+      expect(bloc.state.issue, SwapFormIssue.amountMissing);
+    });
+
+    test('choosing an asset does not read the catalog again', () async {
+      final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
+      final reads = routed.assetsCalls;
+
+      bloc.add(UnifiedSwapReceiveAssetChanged(btc));
+      await settle();
+
+      expect(bloc.state.receive, btc);
+      expect(bloc.state.issue, SwapFormIssue.signedOut);
+      expect(routed.assetsCalls, reads);
+    });
+
+    test('signing in asks for activation instead, and out again', () async {
+      final bloc = await openSignedOut(pay: 'ETH', receive: 'USDC-ERC20');
+
+      bloc.add(signedIn);
+      await settle();
+      expect(bloc.state.signedIn, isTrue);
+      expect(bloc.state.issue, SwapFormIssue.assetInactive);
+
+      bloc.add(signedOut);
+      await settle();
+      expect(bloc.state.issue, SwapFormIssue.signedOut);
+    });
+  });
 }

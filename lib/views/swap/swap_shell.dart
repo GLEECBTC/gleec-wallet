@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/swap_activity/swap_activity_bloc.dart';
 import 'package:web_dex/bloc/system_health/system_health_bloc.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
@@ -162,11 +164,16 @@ class _SwapScopeState extends State<_SwapScope> {
   bool _clockValid(SystemHealthState state) =>
       state is! SystemHealthLoadSuccess || state.isValid;
 
+  // Tests show the surface without the app's sign-in above it.
+  bool _signedIn(AuthBloc? auth) =>
+      auth == null || auth.state.mode == AuthorizeMode.logIn;
+
   @override
   void initState() {
     super.initState();
     final tradingStatus = context.read<TradingStatusBloc>();
     final systemHealth = context.read<SystemHealthBloc>();
+    final auth = context.read<AuthBloc?>();
 
     _swap =
         UnifiedSwapBloc(
@@ -187,6 +194,7 @@ class _SwapScopeState extends State<_SwapScope> {
             UnifiedSwapCapabilitiesChanged(
               tradingEnabled: _tradingEnabled(tradingStatus.state),
               clockValid: _clockValid(systemHealth.state),
+              signedIn: _signedIn(auth),
             ),
           )
           ..add(const UnifiedSwapStarted());
@@ -200,6 +208,9 @@ class _SwapScopeState extends State<_SwapScope> {
       ..add(systemHealth.stream.listen((_) => _publishCapabilities()))
       ..add(_services.intents.listen((_) => _applyPendingIntent()))
       ..add(_services.openRequests.listen((_) => _openPending()));
+    if (auth != null) {
+      _subscriptions.add(auth.stream.listen((_) => _publishCapabilities()));
+    }
 
     // `inactive` counts as shown: a window that lost focus is still on screen.
     _lifecycle = AppLifecycleListener(
@@ -252,6 +263,7 @@ class _SwapScopeState extends State<_SwapScope> {
           context.read<TradingStatusBloc>().state,
         ),
         clockValid: _clockValid(context.read<SystemHealthBloc>().state),
+        signedIn: _signedIn(context.read<AuthBloc?>()),
       ),
     );
   }
