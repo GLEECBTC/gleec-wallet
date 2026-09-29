@@ -272,8 +272,12 @@ void main() {
         tradingAllowed: (_, _) => true,
         clockValid: () => true,
       );
+      final listed = repo.arrivals.first;
 
-      final catalog = await repo.catalog();
+      await repo.catalog();
+      // KDF's own routed list follows the first read.
+      await listed;
+      final catalog = repo.current!;
 
       expect(catalog.activated, {eth, btc, walletOnly});
       expect(catalog.of(SwapLiquiditySource.atomic)!.quotable, {eth, btc});

@@ -234,6 +234,9 @@ class FakeQuoteSource implements SwapQuoteSource {
   /// How current the list reads, for outage tests.
   SwapCatalogStatus status = SwapCatalogStatus.fresh;
 
+  /// The source's own list, arriving after a read, when set.
+  Future<SwapSourceAssets>? update;
+
   int assetsCalls = 0;
 
   @override
@@ -247,6 +250,7 @@ class FakeQuoteSource implements SwapQuoteSource {
       quotable: tradable.difference(inactive),
       onceActive: tradable.intersection(inactive),
       status: status,
+      update: update,
     );
   }
 

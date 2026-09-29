@@ -42,7 +42,8 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   final bool Function(AssetId asset) _isCandidate;
   final Duration _timeout;
 
-  /// Shorter than a quote's: the form waits on the catalog before pricing.
+  /// Shorter than a quote's: once KDF has answered, the form waits on the
+  /// catalog before pricing.
   final Duration _catalogTimeout;
 
   Set<AssetId>? _lastEligible;
@@ -71,10 +72,26 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     };
     final onceActive = candidates.difference(activated);
     // KDF lists active coins only, and its first call waits on the provider's
-    // network list with no deadline of its own: with nothing active, don't ask.
+    // network list with no deadline of its own. With nothing active it is not
+    // asked; until it first answers, the network rule stands in.
     if (activated.isEmpty) {
       return SwapSourceAssets(source: source, onceActive: onceActive);
     }
+    final guess = candidates.intersection(activated);
+    final listed = _listed(guess, onceActive);
+    if (_lastEligible != null) return listed;
+    return SwapSourceAssets(
+      source: source,
+      quotable: guess,
+      onceActive: onceActive,
+      update: listed,
+    );
+  }
+
+  Future<SwapSourceAssets> _listed(
+    Set<AssetId> guess,
+    Set<AssetId> onceActive,
+  ) async {
     try {
       final eligible = await manager.eligibleAssets().timeout(_catalogTimeout);
       _lastEligible = eligible;
@@ -89,7 +106,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       final last = _lastEligible;
       return SwapSourceAssets(
         source: source,
-        quotable: last ?? candidates.intersection(activated),
+        quotable: last ?? guess,
         onceActive: onceActive,
         status: last == null
             ? SwapCatalogStatus.unavailable

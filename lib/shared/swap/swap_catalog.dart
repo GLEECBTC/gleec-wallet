@@ -21,6 +21,7 @@ class SwapSourceAssets extends Equatable {
     this.quotable = const {},
     this.onceActive = const {},
     this.status = SwapCatalogStatus.fresh,
+    this.update,
   });
 
   /// Which source this is.
@@ -37,6 +38,10 @@ class SwapSourceAssets extends Equatable {
 
   /// How current [quotable] is.
   final SwapCatalogStatus status;
+
+  /// The source's own list, still on its way. Until it arrives, [quotable]
+  /// is the wallet's estimate.
+  final Future<SwapSourceAssets>? update;
 
   /// Whether the source can trade [asset], now or once it is active.
   bool supports(AssetId asset) =>
@@ -119,6 +124,15 @@ class SwapCatalog extends Equatable {
     }
     return null;
   }
+
+  /// This catalog with [list] in place of its source's.
+  SwapCatalog replacing(SwapSourceAssets list) => SwapCatalog(
+    sources: [
+      for (final assets in sources)
+        assets.source == list.source ? list : assets,
+    ],
+    activated: activated,
+  );
 
   /// Every asset some source can trade, active or not.
   Set<AssetId> get assets => {

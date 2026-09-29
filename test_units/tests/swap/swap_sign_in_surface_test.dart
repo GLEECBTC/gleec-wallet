@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/model/authorize_mode.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
@@ -161,6 +162,26 @@ void main() {
     expect(state.catalog.activated, isEmpty);
     expect(state.catalog.isIncomplete, isFalse);
     expect(state.catalog.assets, {eth, usdc});
+  });
+
+  testWidgets('signed in, it lists what it can swap before KDF does', (
+    tester,
+  ) async {
+    sdk.routedSwaps.hangEligible = true;
+    auth.push(const AuthBlocState(mode: AuthorizeMode.logIn));
+    await show(tester);
+
+    var routes = form(tester).state.catalog.of(SwapLiquiditySource.routed)!;
+    expect(form(tester).state.loadingAssets, isFalse);
+    // ETH is active, on a network the provider serves.
+    expect(routes.quotable, {eth});
+    expect(routes.status, SwapCatalogStatus.fresh);
+
+    // KDF never lists: past its deadline the guess stays, marked unconfirmed.
+    await tester.pump(const Duration(seconds: 11));
+    routes = form(tester).state.catalog.of(SwapLiquiditySource.routed)!;
+    expect(routes.quotable, {eth});
+    expect(routes.status, SwapCatalogStatus.unavailable);
   });
 }
 

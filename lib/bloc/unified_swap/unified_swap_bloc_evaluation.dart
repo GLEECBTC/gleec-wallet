@@ -5,11 +5,15 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
   void _scheduleEvaluation({bool immediate = false}) {
     _debounce?.cancel();
     if (!_evaluable(state)) return;
-    _debounce = Timer(
+    _debounce = _after(
       immediate ? Duration.zero : _debounceDelay,
-      () => add(const UnifiedSwapEvaluationRequested()),
+      const UnifiedSwapEvaluationRequested(),
     );
   }
+
+  /// Adds [event] after [delay]; nothing once the bloc is closing.
+  Timer? _after(Duration delay, UnifiedSwapEvent event) =>
+      _closing ? null : Timer(delay, () => add(event));
 
   bool _evaluable(UnifiedSwapState state) =>
       state.hasPair &&
@@ -141,10 +145,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     _refresh?.cancel();
     _rateLimit?.cancel();
     final wait = until.difference(_now());
-    _rateLimit = Timer(
+    _rateLimit = _after(
       wait.isNegative ? Duration.zero : wait,
-      () =>
-          add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.rateLimitOver)),
+      const UnifiedSwapTimerFired(UnifiedSwapTimerKind.rateLimitOver),
     );
   }
 
@@ -238,9 +241,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       final renewNow =
           shownAgain &&
           selected.expiresAt.difference(_now()) <= _refreshInterval;
-      _refresh = Timer(
+      _refresh = _after(
         renewNow ? Duration.zero : _refreshInterval,
-        () => add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh)),
+        const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh),
       );
     }
     _armExpiry(selected);
@@ -249,9 +252,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
   void _armExpiry(SwapQuote quote) {
     _expiry?.cancel();
     final untilExpiry = quote.expiresAt.difference(_now());
-    _expiry = Timer(
+    _expiry = _after(
       untilExpiry.isNegative ? Duration.zero : untilExpiry,
-      () => add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.expiry)),
+      const UnifiedSwapTimerFired(UnifiedSwapTimerKind.expiry),
     );
   }
 

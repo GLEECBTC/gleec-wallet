@@ -222,19 +222,36 @@ void main() {
       activated: {eth, usdc, gleecEvm},
     );
 
-    test('lists what KDF lists, and guesses the rest by network', () async {
-      script.coins = ['ETH', 'USDC-ERC20'];
+    test(
+      'guesses by network until KDF lists, then lists what KDF lists',
+      () async {
+        script.coins = ['ETH'];
+        final assets = await read();
+        // Every active asset on a served network, until KDF answers.
+        expect(assets.status, SwapCatalogStatus.fresh);
+        expect(assets.quotable, {eth, usdc});
+        // An inactive token on a served network may be routed once active;
+        // GLEEC's network is not served and BTC is not EVM.
+        expect(assets.onceActive, {paxg});
+
+        final listed = await assets.update!;
+        expect(listed.status, SwapCatalogStatus.fresh);
+        expect(listed.quotable, {eth});
+        expect(listed.onceActive, {paxg});
+      },
+    );
+
+    test('once KDF has listed, a read waits for its list', () async {
+      script.coins = ['ETH'];
+      await (await read()).update;
       final assets = await read();
-      expect(assets.status, SwapCatalogStatus.fresh);
-      expect(assets.quotable, {eth, usdc});
-      // An inactive token on a served network may be routed once active;
-      // GLEEC's network is not served and BTC is not EVM.
-      expect(assets.onceActive, {paxg});
+      expect(assets.update, isNull);
+      expect(assets.quotable, {eth});
     });
 
     test('an outage keeps the last list instead of emptying it', () async {
       script.coins = ['ETH', 'USDC-ERC20'];
-      await read();
+      await (await read()).update;
       script.coins = null;
       final assets = await read();
       expect(assets.status, SwapCatalogStatus.stale);
@@ -243,9 +260,9 @@ void main() {
 
     test('with nothing ever loaded, it falls back to the network', () async {
       script.coins = null;
-      final assets = await read();
-      expect(assets.status, SwapCatalogStatus.unavailable);
-      expect(assets.quotable, {eth, usdc});
+      final update = await (await read()).update!;
+      expect(update.status, SwapCatalogStatus.unavailable);
+      expect(update.quotable, {eth, usdc});
     });
   });
 }

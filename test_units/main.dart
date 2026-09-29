@@ -309,6 +309,8 @@ import 'tests/swap/swap_wiring_mobile_menu_test.dart'
 import 'tests/swap/swap_wiring_router_test.dart' as swap_wiring_router_test;
 import 'tests/swap/swap_wiring_swap_data_test.dart'
     as swap_wiring_swap_data_test;
+import 'tests/swap/swap_catalog_arrivals_test.dart'
+    as swap_catalog_arrivals_test;
 import 'tests/swap/swap_catalog_signed_out_test.dart'
     as swap_catalog_signed_out_test;
 import 'tests/swap/swap_sign_in_form_test.dart' as swap_sign_in_form_test;
@@ -673,6 +675,7 @@ void main() {
   swap_wiring_mobile_menu_test.main();
   swap_wiring_router_test.main();
   swap_wiring_swap_data_test.main();
+  swap_catalog_arrivals_test.main();
   swap_catalog_signed_out_test.main();
   swap_sign_in_form_test.main();
   swap_sign_in_layout_test.main();

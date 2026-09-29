@@ -88,14 +88,19 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapCapabilitiesChanged>(_onCapabilitiesChanged);
     on<UnifiedSwapBalancesRefreshed>(_onBalancesRefreshed);
     on<UnifiedSwapCatalogRefreshRequested>(_onCatalogRefreshRequested);
+    on<UnifiedSwapCatalogArrived>(_onCatalogArrived);
     on<UnifiedSwapAssetActivated>(_onAssetActivated);
     on<UnifiedSwapAlternativesRequested>(_onAlternativesRequested);
     on<UnifiedSwapSlippageChanged>(_onSlippageChanged);
     on<UnifiedSwapForegroundChanged>(_onForegroundChanged);
     on<UnifiedSwapTimerFired>(_onTimerFired);
+    _arrivals = repository.arrivals.listen((_) {
+      if (!isClosed) add(const UnifiedSwapCatalogArrived());
+    });
   }
 
   final UnifiedSwapRepository _repository;
+  late final StreamSubscription<void> _arrivals;
   final SwapExecutionRegistry _registry;
   final SwapTermsRepository _terms;
   final SwapPreferences _preferences;
@@ -144,6 +149,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   Timer? _expiry;
   Timer? _rateLimit;
 
+  /// Set when [close] starts: a price still in flight can land after the
+  /// timers are cancelled, and must not start new ones.
+  var _closing = false;
+
   /// The amount in pay-asset units, parsed from the field.
   Decimal? amountOf(UnifiedSwapState state) {
     final text = state.inputText.trim();
@@ -166,12 +175,14 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     Emitter<UnifiedSwapState> emit,
   ) async {
     _catalogLoading = true;
-    final SwapCatalog catalog;
+    final SwapCatalog read;
     try {
-      catalog = await _repository.catalog(signedIn: state.signedIn);
+      read = await _repository.catalog(signedIn: state.signedIn);
     } finally {
       _catalogLoading = false;
     }
+    // A later read may have returned first; the repository keeps the latest.
+    final catalog = _repository.current ?? read;
     emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
     if (state.pay != null || _intentApplied) {
       // A pair set while the catalog loaded could not be priced then; one
@@ -193,7 +204,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   }
 
   Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
-    final catalog = await _repository.catalog(signedIn: state.signedIn);
+    final read = await _repository.catalog(signedIn: state.signedIn);
+    final catalog = _repository.current ?? read;
     emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
   }
 
@@ -203,6 +215,20 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   ) async {
     await _refreshCatalog(emit);
     _scheduleEvaluation(immediate: true);
+  }
+
+  void _onCatalogArrived(
+    UnifiedSwapCatalogArrived event,
+    Emitter<UnifiedSwapState> emit,
+  ) {
+    final catalog = _repository.current;
+    if (catalog == null || catalog == state.catalog) return;
+    final support = state.pairSupport;
+    emit(_validated(state.copyWith(catalog: catalog)));
+    // Only a change in who can price the pair is worth a request.
+    if (state.view == UnifiedSwapView.form && state.pairSupport != support) {
+      _scheduleEvaluation(immediate: true);
+    }
   }
 
   Future<void> _onAssetActivated(
@@ -304,6 +330,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final interaction = switch (event) {
       UnifiedSwapTimerFired() ||
       UnifiedSwapBalancesRefreshed() ||
+      UnifiedSwapCatalogArrived() ||
       UnifiedSwapCapabilitiesChanged() => false,
       UnifiedSwapEvaluationRequested(:final quiet) => !quiet,
       UnifiedSwapVisibilityChanged(:final visible) => visible,
@@ -465,10 +492,12 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
 
   @override
   Future<void> close() {
+    _closing = true;
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();
     _rateLimit?.cancel();
+    unawaited(_arrivals.cancel());
     return super.close();
   }
 }

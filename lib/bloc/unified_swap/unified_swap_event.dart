@@ -218,6 +218,11 @@ final class UnifiedSwapCatalogRefreshRequested extends UnifiedSwapEvent {
   const UnifiedSwapCatalogRefreshRequested();
 }
 
+/// A source's list arrived after the catalog was read without it.
+final class UnifiedSwapCatalogArrived extends UnifiedSwapEvent {
+  const UnifiedSwapCatalogArrived();
+}
+
 /// The user activated [asset] from the swap form.
 final class UnifiedSwapAssetActivated extends UnifiedSwapEvent {
   const UnifiedSwapAssetActivated(this.asset);

@@ -182,10 +182,11 @@ void main() {
         known: {eth, usdc, btc},
         activated: {btc},
       );
+      final listed = await assets.update!;
 
       expect(kdf.calls, 1);
-      expect(assets.quotable, {eth});
-      expect(assets.onceActive, {eth, usdc});
+      expect(listed.quotable, {eth});
+      expect(listed.onceActive, {eth, usdc});
     });
   });
 }

@@ -108,6 +108,23 @@ void main() {
       expect(h.routed.requests, hasLength(2));
     });
 
+    swapBlocTest('a price that lands after the form closes starts no timer', (
+      h,
+    ) {
+      final bloc = h.open(
+        bloc: h.build(refreshInterval: const Duration(seconds: 10)),
+      );
+      h.routed.gate = Completer<void>();
+      h.elapse(const Duration(seconds: 10));
+      expect(h.routed.requests, hasLength(2));
+
+      unawaited(bloc.close());
+      h.routed.gate!.complete();
+      h.settle();
+      // A refresh or expiry timer started now would add to the closed bloc.
+      h.elapse(const Duration(minutes: 5));
+    });
+
     swapBlocTest('the review is never re-priced behind the user', (h) {
       final bloc = h.inReview();
       h.elapse(const Duration(seconds: 59));

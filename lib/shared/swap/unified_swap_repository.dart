@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -124,15 +126,24 @@ class UnifiedSwapRepository {
   final Set<AssetId> Function() _knownAssets;
   final Future<Set<AssetId>> Function()? _activatedAssets;
   SwapCatalog? _catalog;
+  var _reads = 0;
+  final _arrivals = StreamController<void>.broadcast();
 
   /// The pricing service, for callers that value amounts themselves.
   SwapPricingService get pricing => _pricing;
+
+  /// The latest catalog: the last read, with any list that arrived after it.
+  SwapCatalog? get current => _catalog;
+
+  /// Fires when a list that arrived after its read changes [current].
+  Stream<void> get arrivals => _arrivals.stream;
 
   /// Reads what every source can trade, and remembers it for [quote].
   ///
   /// Signed out, nothing is active, and reading that would still queue for
   /// the wallet's sign-in lock.
   Future<SwapCatalog> catalog({bool signedIn = true}) async {
+    final read = ++_reads;
     final activated = signedIn ? await _readActivated() : const <AssetId>{};
     final known = {..._knownAssets(), ...?activated};
     final lists = await Future.wait(
@@ -147,7 +158,28 @@ class UnifiedSwapRepository {
             ),
       ),
     );
-    return _catalog = SwapCatalog(sources: lists, activated: activated);
+    final catalog = SwapCatalog(sources: lists, activated: activated);
+    // A read that returns after a later one must not replace it.
+    if (read == _reads) _catalog = catalog;
+    for (final list in lists) {
+      if (list.update case final update?) unawaited(_arrive(read, update));
+    }
+    return catalog;
+  }
+
+  Future<void> _arrive(int read, Future<SwapSourceAssets> update) async {
+    final SwapSourceAssets list;
+    try {
+      list = await update;
+    } on Object {
+      return;
+    }
+    final current = _catalog;
+    if (read != _reads || current == null) return;
+    final next = current.replacing(list);
+    if (next == current) return;
+    _catalog = next;
+    _arrivals.add(null);
   }
 
   Future<Set<AssetId>?> _readActivated() async {
