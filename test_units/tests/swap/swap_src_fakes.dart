@@ -8,12 +8,15 @@ import 'package:rational/rational.dart';
 
 import 'swap_test_fixtures.dart';
 
-/// One order-book bid; a null field is missing from KDF's answer.
-OrderInfo bidOf(String? price, String? min, String? max) => OrderInfo(
-  price: price == null ? null : NumericValue(decimal: price),
-  baseMinVolume: min == null ? null : NumericValue(decimal: min),
-  baseMaxVolume: max == null ? null : NumericValue(decimal: max),
-);
+/// One order-book bid; a null field is missing from KDF's answer. [mine] is
+/// one of the wallet's own orders.
+OrderInfo bidOf(String? price, String? min, String? max, {bool mine = false}) =>
+    OrderInfo(
+      price: price == null ? null : NumericValue(decimal: price),
+      baseMinVolume: min == null ? null : NumericValue(decimal: min),
+      baseMaxVolume: max == null ? null : NumericValue(decimal: max),
+      isMine: mine,
+    );
 
 /// One fee line of a trade preimage.
 PreimageCoinFee coinFeeOf(
@@ -53,6 +56,20 @@ class SrcTrading implements TradingManager {
   Object? bookError;
   TradePreimageResponse preimage = preimageOf();
   Object? preimageError;
+
+  /// Bids per `(base, rel)` for `orderbook_depth`; a pair left out has none.
+  Map<(String, String), int> depths = {};
+  Object? depthError;
+
+  /// Calls, by index, that fail as [depthError] or a relay timeout would.
+  Set<int> failingDepthCalls = {};
+
+  /// Pairs KDF leaves out of its answer.
+  Set<(String, String)> unansweredDepths = {};
+
+  /// Entries KDF adds, such as a pair it trades under another ticker.
+  List<OrderbookPairDepth> extraDepths = [];
+  final List<List<OrderbookPair>> depthCalls = [];
 
   final List<({String coin, String? tradeWith})> maxCalls = [];
   final List<({String base, String rel})> books = [];
@@ -95,6 +112,31 @@ class SrcTrading implements TradingManager {
       numBids: bids.length,
       numAsks: 0,
       timestamp: 0,
+    );
+  }
+
+  @override
+  Future<OrderbookDepthResponse> orderbookDepth({
+    required List<OrderbookPair> pairs,
+  }) async {
+    final call = depthCalls.length;
+    depthCalls.add(pairs);
+    final error = depthError;
+    if (error != null) throw error;
+    if (failingDepthCalls.contains(call)) throw StateError('no relay');
+    return OrderbookDepthResponse(
+      mmrpc: null,
+      depth: [
+        for (final pair in pairs)
+          if (!unansweredDepths.contains((pair.base, pair.rel)))
+            OrderbookPairDepth(
+              base: pair.base,
+              rel: pair.rel,
+              asks: 0,
+              bids: depths[(pair.base, pair.rel)] ?? 0,
+            ),
+        ...extraDepths,
+      ],
     );
   }
 

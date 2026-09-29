@@ -5,6 +5,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/trading/trading_asset_policy.dart';
@@ -43,7 +44,7 @@ class AtomicSwapPlan {
 /// a fill-or-kill order larger than every maker order never matches at all.
 /// The guarantee is exactly what the placed order enforces — volume × price,
 /// less any receive-side fee paid out of the traded amount.
-class AtomicSwapQuoteSource implements SwapQuoteSource {
+class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// Creates a source backed by the SDK's trading manager.
   AtomicSwapQuoteSource({
     required TradingManager trading,
@@ -141,18 +142,25 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
     try {
       // KDF's own answer, which already keeps the trading fee and the
       // transaction fees back.
-      final response = await _trading.maxTakerVolume(
-        coin: from.id,
-        tradeWith: to.id,
-      );
-      final max = Decimal.tryParse(response.amount);
+      final response = _trading
+          .maxTakerVolume(coin: from.id, tradeWith: to.id)
+          .then<Decimal?>(
+            (response) => Decimal.tryParse(response.amount),
+            onError: (Object _) => null,
+          );
+      final book = await offers(from, to);
+      final max = await response;
       if (max == null) return null;
       final capped = max > balance ? balance : max;
-      final amount = capped < Decimal.zero ? Decimal.zero : capped;
+      final sellable = capped < Decimal.zero ? Decimal.zero : capped;
+      // More than the largest offer never fills; with no offers, Max still
+      // shows what could be sold.
+      final fillable = book?.largestUpTo(sellable);
       return SwapMaxAmount(
-        amount: amount,
-        reservedForFees: balance > amount ? balance - amount : Decimal.zero,
+        amount: fillable ?? sellable,
+        reservedForFees: balance > sellable ? balance - sellable : Decimal.zero,
         feeAsset: from,
+        offerLimit: fillable != null && fillable < sellable,
       );
     } on Object {
       return null;
@@ -173,6 +181,87 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
   Future<SwapQuoteResult> requote(SwapQuote quote) =>
       _quote(quote.from, quote.to, quote.sellAmount);
 
+  /// Reads only the pair's own book: KDF follows every pair it is asked for
+  /// from then on, so this is never fanned out over candidates.
+  @override
+  Future<SwapOrderBookOffers?> offers(AssetId from, AssetId to) async {
+    if (!canTrade(from) || !canTrade(to)) return null;
+    try {
+      final minimum = minimumAmount(from: from);
+      final book = await _trading.getOrderbook(base: from.id, rel: to.id);
+      return SwapOrderBookOffers.fromBids(book.bids, floor: await minimum);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Counts orders with `orderbook_depth`, which follows no pair and whose
+  /// relay answers every pair, so an asset nobody trades reads as none rather
+  /// than as no answer. The user's own orders count here.
+  @override
+  Future<Map<AssetId, bool>?> offered(
+    AssetId anchor,
+    Iterable<AssetId> candidates, {
+    required bool anchorPays,
+  }) async {
+    if (!canTrade(anchor)) return null;
+    final pairs = [
+      for (final id in candidates)
+        // One wallet-only coin fails KDF's whole request.
+        if (id != anchor && canTrade(id))
+          (
+            id,
+            anchorPays
+                ? OrderbookPair(base: anchor.id, rel: id.id)
+                : OrderbookPair(base: id.id, rel: anchor.id),
+          ),
+    ];
+    if (pairs.isEmpty) return const {};
+
+    Future<Map<AssetId, bool>?> count(
+      List<(AssetId, OrderbookPair)> batch,
+    ) async {
+      try {
+        final response = await _trading
+            .orderbookDepth(pairs: [for (final (_, pair) in batch) pair])
+            .timeout(offeredTimeout);
+        // Answers are matched to the requested tickers; KDF also echoes a
+        // pair it trades under another ticker.
+        final bids = {
+          for (final depth in response.depth)
+            (depth.base, depth.rel): depth.bids,
+        };
+        return {
+          for (final (id, pair) in batch)
+            if (bids[(pair.base, pair.rel)] case final int count) id: count > 0,
+        };
+      } on Object {
+        return null;
+      }
+    }
+
+    final answers = await Future.wait([
+      for (var i = 0; i < pairs.length; i += offeredBatch)
+        count(
+          pairs.sublist(
+            i,
+            i + offeredBatch < pairs.length ? i + offeredBatch : pairs.length,
+          ),
+        ),
+    ]);
+    if (answers.every((answer) => answer == null)) return null;
+    return {for (final answer in answers) ...?answer};
+  }
+
+  /// Pairs per `orderbook_depth` request.
+  @visibleForTesting
+  static const offeredBatch = 200;
+
+  /// How long one `orderbook_depth` request may take; a relay that does not
+  /// answer leaves its pairs unknown.
+  @visibleForTesting
+  static const offeredTimeout = Duration(seconds: 15);
+
   Future<SwapQuoteResult> _quote(
     AssetId from,
     AssetId to,
@@ -183,14 +272,18 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       SwapQuoteFailureKind kind, {
       AssetId? asset,
       Decimal? minimum,
+      Decimal? maximum,
       String? detail,
+      SwapOrderBookOffers? offers,
     }) => SwapQuoteRejected(
       SwapQuoteFailure(
         source: SwapLiquiditySource.atomic,
         kind: kind,
         asset: asset,
         minimum: minimum,
+        maximum: maximum,
         detail: detail,
+        offers: offers,
       ),
     );
 
@@ -204,11 +297,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
       return reject(SwapQuoteFailureKind.clockInvalid);
     }
 
-    final minimum = await minimumAmount(from: from);
-    if (minimum != null && amount < minimum) {
-      return reject(SwapQuoteFailureKind.belowMinimum, minimum: minimum);
-    }
-
+    // Read together; an empty book says more than the coin's minimum does.
+    final coinMinimum = minimumAmount(from: from);
     final OrderbookResponse book;
     try {
       book = await _trading.getOrderbook(base: from.id, rel: to.id);
@@ -218,10 +308,29 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
         detail: error.toString(),
       );
     }
+    final minimum = await coinMinimum;
 
+    final offers = SwapOrderBookOffers.fromBids(book.bids, floor: minimum);
+    if (!offers.fits(amount)) {
+      if (!offers.isEmpty && amount > offers.maximum!) {
+        return reject(
+          SwapQuoteFailureKind.aboveMaximum,
+          maximum: offers.maximum,
+          offers: offers,
+        );
+      }
+      if (!offers.isEmpty && amount < offers.minimum!) {
+        return reject(
+          SwapQuoteFailureKind.belowMinimum,
+          minimum: offers.minimum,
+          offers: offers,
+        );
+      }
+      return reject(SwapQuoteFailureKind.noRoute, offers: offers);
+    }
     final order = bestFillingBid(book.bids, amount);
     if (order == null) {
-      return reject(SwapQuoteFailureKind.noRoute);
+      return reject(SwapQuoteFailureKind.noRoute, offers: offers);
     }
 
     // KDF's preimage refuses an amount the wallet cannot pay, which would hide
@@ -296,7 +405,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
     );
   }
 
-  /// The best-priced single order that can absorb [amount] whole.
+  /// The best-priced single order that can absorb [amount] whole. The
+  /// wallet's own orders are not counterparties.
   @visibleForTesting
   static ({Decimal price, Decimal maxVolume})? bestFillingBid(
     List<OrderInfo> bids,
@@ -304,6 +414,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource {
   ) {
     ({Decimal price, Decimal maxVolume})? best;
     for (final bid in bids) {
+      if (bid.isMine ?? false) continue;
       final price = _decimalOf(bid.price);
       final max = _decimalOf(bid.baseMaxVolume);
       if (price == null || max == null || price <= Decimal.zero) continue;

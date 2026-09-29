@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
@@ -80,10 +81,40 @@ class UnifiedSwapQuotes extends Equatable {
       SwapQuoteFailureKind.signedOut,
     ];
     final sorted = [...failures]
-      ..sort(
-        (a, b) => priority.indexOf(a.kind).compareTo(priority.indexOf(b.kind)),
-      );
+      ..sort((a, b) {
+        final byKind = priority
+            .indexOf(a.kind)
+            .compareTo(priority.indexOf(b.kind));
+        return byKind != 0 ? byKind : _moreHelpful(a, b);
+      });
     return sorted.first;
+  }
+
+  /// Between two failures of one kind, the one whose next step reaches a swap
+  /// soonest: the lower minimum, the higher maximum, a miss that names
+  /// amounts that do fill, then one that says why.
+  static int _moreHelpful(SwapQuoteFailure a, SwapQuoteFailure b) {
+    int nullsLast(Decimal? x, Decimal? y, {bool highFirst = false}) {
+      if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+      return highFirst ? y.compareTo(x) : x.compareTo(y);
+    }
+
+    int rank(SwapQuoteFailure f) => !(f.offers?.isEmpty ?? true)
+        ? 0
+        : f.reasons.isNotEmpty
+        ? 1
+        : 2;
+
+    return switch (a.kind) {
+      SwapQuoteFailureKind.belowMinimum => nullsLast(a.minimum, b.minimum),
+      SwapQuoteFailureKind.aboveMaximum => nullsLast(
+        a.maximum,
+        b.maximum,
+        highFirst: true,
+      ),
+      SwapQuoteFailureKind.noRoute => rank(a).compareTo(rank(b)),
+      _ => 0,
+    };
   }
 
   /// Whether every source agrees this pair simply cannot be traded here.
@@ -198,6 +229,54 @@ class UnifiedSwapRepository {
       for (final source in _sources)
         if (able.contains(source.source)) source,
     ];
+  }
+
+  /// Whether only the order book can price [from] for [to], by the latest
+  /// catalog.
+  bool orderBookOnly(AssetId from, AssetId to) {
+    final sources = _catalog?.support(from, to).sources;
+    return sources != null &&
+        sources.length == 1 &&
+        sources.single == SwapLiquiditySource.atomic;
+  }
+
+  SwapOfferSource? get _offerSource {
+    for (final source in _sources) {
+      if (source is SwapOfferSource) return source as SwapOfferSource;
+    }
+    return null;
+  }
+
+  /// What the order book offers for [from] → [to]; null when unknown.
+  Future<SwapOrderBookOffers?> offers(AssetId from, AssetId to) async {
+    try {
+      return await _offerSource?.offers(from, to);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// For each asset only the order book trades with [anchor], whether anyone
+  /// offers it: bought with [anchor] when [anchorPays], sold for it otherwise.
+  /// Null when nothing could be checked.
+  Future<Map<AssetId, bool>?> offeredWith(
+    AssetId anchor, {
+    required bool anchorPays,
+  }) async {
+    final source = _offerSource;
+    final catalog = _catalog;
+    if (source == null || catalog == null) return null;
+    final candidates = [
+      for (final id in catalog.assets)
+        if (id != anchor &&
+            orderBookOnly(anchorPays ? anchor : id, anchorPays ? id : anchor))
+          id,
+    ];
+    try {
+      return await source.offered(anchor, candidates, anchorPays: anchorPays);
+    } on Object {
+      return null;
+    }
   }
 
   /// Prices a swap everywhere it can be priced, at once.

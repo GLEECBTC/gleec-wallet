@@ -66,6 +66,7 @@ class SwapMaxAmount extends Equatable {
     required this.amount,
     required this.reservedForFees,
     this.feeAsset,
+    this.offerLimit = false,
   });
 
   /// What may be sold.
@@ -78,6 +79,10 @@ class SwapMaxAmount extends Equatable {
   /// The coin the reserve is held in.
   final AssetId? feeAsset;
 
+  /// Whether [amount] is the largest order-book offer, below what the wallet
+  /// could sell.
+  final bool offerLimit;
+
   @override
-  List<Object?> get props => [amount, reservedForFees, feeAsset];
+  List<Object?> get props => [amount, reservedForFees, feeAsset, offerLimit];
 }

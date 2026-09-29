@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
 /// Why a source could not price a swap.
@@ -72,6 +73,7 @@ class SwapQuoteFailure extends Equatable {
     this.providerRequestId,
     this.detail,
     this.retryAt,
+    this.offers,
   });
 
   /// Which source could not price it.
@@ -105,6 +107,10 @@ class SwapQuoteFailure extends Equatable {
   /// For [SwapQuoteFailureKind.rateLimited]: when asking again is worth it.
   final DateTime? retryAt;
 
+  /// For an order-book miss: the amounts its orders do take, empty when no
+  /// one is offering anything.
+  final SwapOrderBookOffers? offers;
+
   /// Whether retrying the same request later may succeed.
   bool get isTransient => switch (kind) {
     SwapQuoteFailureKind.rateLimited ||
@@ -134,6 +140,7 @@ class SwapQuoteFailure extends Equatable {
     providerRequestId,
     detail,
     retryAt,
+    offers,
   ];
 }
 

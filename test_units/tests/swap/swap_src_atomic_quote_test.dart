@@ -288,7 +288,17 @@ void main() {
 
       expect(reason.kind, SwapQuoteFailureKind.belowMinimum);
       expect(reason.minimum, d('0.5'));
-      expect(trading.books, isEmpty);
+    });
+
+    test('an empty book outranks the coin minimum', () async {
+      trading
+        ..minimum = '0.5'
+        ..bids = [];
+
+      final reason = failure(await ask(source(), amount: '0.1'));
+
+      expect(reason.kind, SwapQuoteFailureKind.noRoute);
+      expect(reason.offers!.isEmpty, isTrue);
     });
 
     test('a minimum that cannot be read does not block pricing', () async {
