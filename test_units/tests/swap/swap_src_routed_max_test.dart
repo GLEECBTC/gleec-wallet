@@ -234,9 +234,12 @@ void main() {
       ).assets(known: {eth, usdc, paxg, btc}, activated: {eth, usdc, btc});
 
       expect(assets.source, SwapLiquiditySource.routed);
-      expect(assets.status, SwapCatalogStatus.unavailable);
       expect(assets.quotable, {eth, usdc});
       expect(assets.onceActive, {paxg});
+      final update = await assets.update!;
+      expect(update.status, SwapCatalogStatus.unavailable);
+      expect(update.quotable, {eth, usdc});
+      expect(update.onceActive, {paxg});
     },
   );
 }
