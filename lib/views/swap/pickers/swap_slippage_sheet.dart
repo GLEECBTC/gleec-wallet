@@ -164,58 +164,65 @@ class _SwapSlippageSheetState extends State<SwapSlippageSheet> {
         _custom.text.trim().isNotEmpty &&
         value == null;
 
-    return SwapSheetScaffold(
-      title: LocaleKeys.swapSlippageTitle.tr(),
-      subtitle: LocaleKeys.swapSlippageBody.tr(),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SwapFilterBar<_Choice>(
-            values: _Choice.values,
-            selected: _choice,
-            semanticLabel: LocaleKeys.swapSlippageTitle.tr(),
-            labelOf: (choice) => switch (choice) {
-              _Choice.custom => LocaleKeys.swapSlippageCustom.tr(),
-              _ => slippageText(_presets[choice]!),
-            },
-            onChanged: (choice) => setState(() => _choice = choice),
-          ),
-          if (_choice == _Choice.custom) ...[
-            const SizedBox(height: 14),
-            TextField(
-              controller: _custom,
-              autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: LocaleKeys.swapSlippageCustomLabel.tr(),
-                suffixText: '%',
-                errorText: invalid ? LocaleKeys.swapSlippageInvalid.tr() : null,
-                errorMaxLines: 4,
-              ),
-            ),
-          ],
-          if (warning != null) ...[
-            const SizedBox(height: 14),
-            SwapCallout(tone: SwapTone.warning, message: warning),
-          ],
-        ],
-      ),
-      footer: SwapButton(
-        label: value == null
-            ? LocaleKeys.swapSlippageSaveNone.tr()
-            : LocaleKeys.swapSlippageSave.tr(args: [slippageText(value)]),
-        onPressed: value == null
-            ? null
-            : () {
-                widget.onSave(value);
-                Navigator.of(context).maybePop();
+    // iOS's decimal pad has no key that closes it and a touch outside the
+    // field leaves it open, so the footer rides above it to stay reachable.
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SwapSheetScaffold(
+        title: LocaleKeys.swapSlippageTitle.tr(),
+        subtitle: LocaleKeys.swapSlippageBody.tr(),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SwapFilterBar<_Choice>(
+              values: _Choice.values,
+              selected: _choice,
+              semanticLabel: LocaleKeys.swapSlippageTitle.tr(),
+              labelOf: (choice) => switch (choice) {
+                _Choice.custom => LocaleKeys.swapSlippageCustom.tr(),
+                _ => slippageText(_presets[choice]!),
               },
+              onChanged: (choice) => setState(() => _choice = choice),
+            ),
+            if (_choice == _Choice.custom) ...[
+              const SizedBox(height: 14),
+              TextField(
+                controller: _custom,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: LocaleKeys.swapSlippageCustomLabel.tr(),
+                  suffixText: '%',
+                  errorText: invalid
+                      ? LocaleKeys.swapSlippageInvalid.tr()
+                      : null,
+                  errorMaxLines: 4,
+                ),
+              ),
+            ],
+            if (warning != null) ...[
+              const SizedBox(height: 14),
+              SwapCallout(tone: SwapTone.warning, message: warning),
+            ],
+          ],
+        ),
+        footer: SwapButton(
+          label: value == null
+              ? LocaleKeys.swapSlippageSaveNone.tr()
+              : LocaleKeys.swapSlippageSave.tr(args: [slippageText(value)]),
+          onPressed: value == null
+              ? null
+              : () {
+                  widget.onSave(value);
+                  Navigator.of(context).maybePop();
+                },
+        ),
       ),
     );
   }

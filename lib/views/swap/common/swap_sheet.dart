@@ -37,6 +37,8 @@ Future<T?> showSwapSheet<T>({
       final content = ScaffoldMessenger(
         child: Scaffold(
           backgroundColor: fullScreen ? palette.canvas : palette.surfaceRaised,
+          // A sheet makes its own room for the keyboard: resizing here would
+          // unpin the asset picker's search mid-typing and drop its focus.
           resizeToAvoidBottomInset: false,
           body: Actions(
             // Scaffold binds Escape to its drawer and, having none, drops it;

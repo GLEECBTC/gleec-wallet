@@ -10,8 +10,9 @@ import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 import 'swap_entry_ui_fakes.dart';
 
 /// Covers the slippage setting: it opens on the value in use, warns at
-/// either end of the range, refuses what is not a number in range, and
-/// sits beside or above its Change link as the space allows.
+/// either end of the range, refuses what is not a number in range, saves
+/// from above the keyboard, and sits beside or above its Change link as the
+/// space allows.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpSwapUi();
@@ -133,6 +134,61 @@ void main() {
     expect(find.textContaining('Above 1%'), findsOneWidget);
     await tapText(tester, 'Use 1.5%');
     expect(saved.single, closeTo(0.015, 1e-12));
+  });
+
+  group('with the keyboard up', () {
+    final use = find
+        .ancestor(of: find.text('Use 3%'), matching: find.byType(TextButton))
+        .first;
+
+    // Nothing closes iOS's decimal pad, so the value is saved with it up.
+    for (final (name, size, keyboard, scale) in [
+      ('on a phone', const Size(390, 844), 336.0, 1.0),
+      ('at 200% text', const Size(375, 812), 336.0, 2.0),
+      ('on a phone on its side', const Size(812, 375), 200.0, 1.0),
+      ('on its side at 200% text', const Size(812, 375), 200.0, 2.0),
+    ]) {
+      testWidgets('saves from above it $name', (tester) async {
+        await pumpSwapUi(
+          tester,
+          Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showSwapSlippageSheet(context, swap),
+              child: const Text('open'),
+            ),
+          ),
+          bloc: swap,
+          services: services,
+          size: size,
+          textScale: scale,
+        );
+        await tapText(tester, 'open');
+        await tapText(tester, 'Custom');
+        tester.view.viewInsets = FakeViewPadding(bottom: keyboard);
+        addTearDown(tester.view.resetViewInsets);
+        await type(tester, '3');
+
+        expect(
+          tester.getBottomLeft(use).dy,
+          lessThanOrEqualTo(size.height - keyboard),
+        );
+        await tester.tap(use);
+        await tester.pumpAndSettle();
+        expect(swap.events, [const UnifiedSwapSlippageChanged(0.03)]);
+      });
+    }
+
+    testWidgets('adds nothing where the page already made room for it', (
+      tester,
+    ) async {
+      // This page's Scaffold resizes for the keyboard itself.
+      await pumpSheet(tester, 0.03);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 336);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+
+      expect(tester.getBottomLeft(use).dy, 1600 - 336 - 16);
+    });
   });
 
   group('the summary', () {

@@ -107,4 +107,39 @@ void _sheetCases(
     );
     await expectSwapAccessible(tester, largeText: layout.textScale > 1);
   });
+
+  testWidgets('slippage: a custom value typed with the keyboard up', (
+    tester,
+  ) async {
+    const keyboard = 336.0;
+    await pump(
+      tester,
+      layout,
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () =>
+              showSwapSlippageSheet(context, context.read<UnifiedSwapBloc>()),
+          child: const Text('Open'),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.enterText(find.byType(TextField), '3');
+    await tester.pumpAndSettle();
+
+    final use = find.ancestor(
+      of: find.text('Use 3%'),
+      matching: find.byType(TextButton),
+    );
+    expect(
+      tester.getBottomLeft(use).dy,
+      lessThanOrEqualTo(layout.size.height - keyboard),
+    );
+    await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+  });
 }
