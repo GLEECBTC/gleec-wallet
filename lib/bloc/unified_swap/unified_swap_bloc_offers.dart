@@ -104,24 +104,34 @@ extension _UnifiedSwapOffers on UnifiedSwapBloc {
   }
 
   /// Keeps checking a pair no one offers while someone is looking, and says
-  /// when it has stopped.
+  /// when it has stopped. Offers not read yet are asked for again sooner:
+  /// the engine may still be finding its peers.
   void _watchOffers(Emitter<UnifiedSwapState> emit) {
     _offersWatch?.cancel();
     final idle = _now().difference(_lastInteraction) >= _idleLimit;
-    final watching =
-        state.issue == SwapFormIssue.noOffers &&
-        state.view == UnifiedSwapView.form &&
-        _present &&
-        !idle;
-    if (watching) {
+    final looking = state.view == UnifiedSwapView.form && _present && !idle;
+    final none = state.issue == SwapFormIssue.noOffers;
+    if (looking && (none || _offersUnknown(state))) {
       _offersWatch = _after(
-        _offersInterval,
+        none ? _offersInterval : _offersInterval ~/ 3,
         const UnifiedSwapTimerFired(UnifiedSwapTimerKind.offers),
       );
     }
+    final watching = looking && none;
     if (state.hints.watching != watching) {
       emit(state.copyWith(hints: state.hints.copyWith(watching: watching)));
     }
+  }
+
+  /// Whether [next]'s pair is one only the order book trades, not priced
+  /// yet, whose offers could not be read.
+  bool _offersUnknown(UnifiedSwapState next) {
+    final pay = next.pay;
+    final receive = next.receive;
+    if (pay == null || receive == null || pay == receive) return false;
+    if (!next.tradingEnabled || next.quotes != null) return false;
+    return _repository.orderBookOnly(pay, receive) &&
+        next.hints.offersFor(pay, receive) == null;
   }
 
   /// Whether only the order book trades [next]'s pair, and no one offers it.

@@ -67,6 +67,21 @@ void main() {
       expect(both(highMax, lowMax).primaryFailure, highMax);
     });
 
+    test('a bound that is known wins over one that is not', () {
+      final known = of(
+        SwapLiquiditySource.atomic,
+        SwapQuoteFailureKind.belowMinimum,
+        minimum: '2',
+      );
+      final unknown = of(
+        SwapLiquiditySource.routed,
+        SwapQuoteFailureKind.belowMinimum,
+      );
+
+      expect(both(unknown, known).primaryFailure, known);
+      expect(both(known, unknown).primaryFailure, known);
+    });
+
     test('a miss naming amounts that fill wins, then one saying why', () {
       final gap = of(
         SwapLiquiditySource.atomic,

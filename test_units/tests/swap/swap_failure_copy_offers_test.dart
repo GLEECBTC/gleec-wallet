@@ -76,6 +76,15 @@ void main() {
       expect(copy.amount, d('0.13'));
     });
 
+    test('a bound too small to show is not offered', () {
+      final copy = SwapFailureCopy.of(
+        orderBook(SwapQuoteFailureKind.aboveMaximum, maximum: '0.000000001'),
+        btc,
+      );
+
+      expect(copy.action, SwapEntryAction.none);
+    });
+
     test('an amount the wallet cannot pay is not offered', () {
       final copy = SwapFailureCopy.of(
         orderBook(SwapQuoteFailureKind.belowMinimum, minimum: '0.5'),

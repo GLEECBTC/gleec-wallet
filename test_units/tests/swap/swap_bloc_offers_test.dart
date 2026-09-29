@@ -81,9 +81,49 @@ void main() {
       orderBookOnly(h);
 
       final bloc = h.open(receive: 'GLEEC');
+      final reads = h.atomic.offersCalls.length;
 
       expect(bloc.state.issue, isNull);
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+      // Priced, so there is nothing to ask again.
+      h.elapse(const Duration(minutes: 1));
+      expect(h.atomic.offersCalls.length, reads);
+    });
+
+    swapBlocTest('offers not read yet are asked for once shown again', (h) {
+      orderBookOnly(h);
+      h.atomic.offersError = StateError('No response from any peer');
+      final bloc = h.open(receive: 'GLEEC', amount: '')
+        ..add(const UnifiedSwapVisibilityChanged(visible: false));
+      h.settle();
+      final reads = h.atomic.offersCalls.length;
+      h.elapse(const Duration(minutes: 1));
+      expect(h.atomic.offersCalls.length, reads);
+
+      h.atomic
+        ..offersError = null
+        ..pairOffers = {(eth, gleec): none};
+      bloc.add(const UnifiedSwapVisibilityChanged(visible: true));
+      h.settle();
+
+      expect(h.atomic.offersCalls.length, reads + 1);
+      expect(bloc.state.issue, SwapFormIssue.noOffers);
+    });
+
+    swapBlocTest('offers not read yet are asked for again, sooner', (h) {
+      orderBookOnly(h);
+      h.atomic.offersError = StateError('No response from any peer');
+      final bloc = h.open(receive: 'GLEEC', amount: '');
+      final reads = h.atomic.offersCalls.length;
+      expect(bloc.state.issue, SwapFormIssue.amountMissing);
+
+      h.atomic
+        ..offersError = null
+        ..pairOffers = {(eth, gleec): none};
+      h.elapse(const Duration(seconds: 10));
+
+      expect(h.atomic.offersCalls.length, reads + 1);
+      expect(bloc.state.issue, SwapFormIssue.noOffers);
     });
 
     swapBlocTest('offers are kept to say what they take', (h) {
@@ -272,6 +312,13 @@ void main() {
 
       expect(h.atomic.offersCalls.length, reads);
     });
+  });
+
+  test('a read by hand is told apart from the watch', () {
+    expect(
+      const UnifiedSwapOffersRequested(recount: true),
+      isNot(const UnifiedSwapOffersRequested(quiet: true)),
+    );
   });
 
   swapBlocTest('with trading unavailable, nothing is read', (h) {

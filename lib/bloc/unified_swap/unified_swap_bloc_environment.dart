@@ -27,7 +27,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       return;
     }
     if (state.view != UnifiedSwapView.form) return;
-    if (state.issue == SwapFormIssue.noOffers) {
+    if (state.issue == SwapFormIssue.noOffers || _offersUnknown(state)) {
       add(const UnifiedSwapOffersRequested(quiet: true));
       return;
     }

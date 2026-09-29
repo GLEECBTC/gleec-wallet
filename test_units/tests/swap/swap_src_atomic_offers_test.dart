@@ -2,6 +2,9 @@
 // members read as violations here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -153,6 +156,25 @@ void main() {
 
       expect(offers!.bands, [SwapOfferBand(d('0.5'), d('2'))]);
       expect(trading.books.single, (base: 'BTC', rel: 'ETH'));
+    });
+
+    test('are unknown when the book takes too long', () {
+      fakeAsync((async) {
+        trading.bookGate = Completer<void>();
+        SwapOrderBookOffers? offers;
+        var answered = false;
+        unawaited(
+          source().offers(btc, eth).then((value) {
+            offers = value;
+            answered = true;
+          }),
+        );
+
+        async.elapse(AtomicSwapQuoteSource.offeredTimeout);
+
+        expect(answered, isTrue);
+        expect(offers, isNull);
+      });
     });
 
     test('are unknown when the book cannot be read or traded', () async {

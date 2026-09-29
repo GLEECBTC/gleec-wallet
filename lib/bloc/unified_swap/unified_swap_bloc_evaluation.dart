@@ -295,7 +295,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           emit(state.copyWith(evaluation: SwapEvaluationStatus.expired));
         }
       case UnifiedSwapTimerKind.offers:
-        if (state.issue != SwapFormIssue.noOffers) return;
+        if (state.issue != SwapFormIssue.noOffers && !_offersUnknown(state)) {
+          return;
+        }
         final idle = _now().difference(_lastInteraction) >= _idleLimit;
         if (idle || !_present) {
           _watchOffers(emit);

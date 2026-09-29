@@ -198,8 +198,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   @visibleForTesting
   static const offeredBatch = 200;
 
-  /// How long one `orderbook_depth` request may take; a relay that does not
-  /// answer leaves its pairs unknown.
+  /// How long reading a pair's book, or one `orderbook_depth` request, may
+  /// take; a relay that does not answer leaves the offers unknown.
   @visibleForTesting
   static const offeredTimeout = Duration(seconds: 15);
 
@@ -252,7 +252,10 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     final minimum = await coinMinimum;
 
     final offers = SwapOrderBookOffers.fromBids(book.bids, floor: minimum);
-    if (!offers.fits(amount)) {
+    final order = offers.fits(amount)
+        ? bestFillingBid(book.bids, amount)
+        : null;
+    if (order == null) {
       if (!offers.isEmpty && amount > offers.maximum!) {
         return reject(
           SwapQuoteFailureKind.aboveMaximum,
@@ -267,10 +270,6 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
           offers: offers,
         );
       }
-      return reject(SwapQuoteFailureKind.noRoute, offers: offers);
-    }
-    final order = bestFillingBid(book.bids, amount);
-    if (order == null) {
       return reject(SwapQuoteFailureKind.noRoute, offers: offers);
     }
 

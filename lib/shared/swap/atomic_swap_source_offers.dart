@@ -8,7 +8,9 @@ extension _AtomicSwapOffers on AtomicSwapQuoteSource {
     if (!canTrade(from) || !canTrade(to)) return null;
     try {
       final minimum = minimumAmount(from: from);
-      final book = await _trading.getOrderbook(base: from.id, rel: to.id);
+      final book = await _trading
+          .getOrderbook(base: from.id, rel: to.id)
+          .timeout(AtomicSwapQuoteSource.offeredTimeout);
       return SwapOrderBookOffers.fromBids(book.bids, floor: await minimum);
     } on Object {
       return null;

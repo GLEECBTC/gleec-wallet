@@ -54,6 +54,9 @@ class SrcTrading implements TradingManager {
   Object? maxTakerError;
   List<OrderInfo> bids = [bidOf('20', '0.01', '5')];
   Object? bookError;
+
+  /// Holds `orderbook` open until completed.
+  Completer<void>? bookGate;
   TradePreimageResponse preimage = preimageOf();
   Object? preimageError;
 
@@ -101,6 +104,7 @@ class SrcTrading implements TradingManager {
     required String rel,
   }) async {
     books.add((base: base, rel: rel));
+    await bookGate?.future;
     final error = bookError;
     if (error != null) throw error;
     return OrderbookResponse(
