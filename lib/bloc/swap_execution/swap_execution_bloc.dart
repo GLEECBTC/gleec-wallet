@@ -69,12 +69,17 @@ final class _SwapExecutionEnded extends SwapExecutionEvent {
   const _SwapExecutionEnded();
 }
 
+final class _SwapExecutionUnanswered extends SwapExecutionEvent {
+  const _SwapExecutionUnanswered();
+}
+
 /// State for [SwapExecutionBloc].
 class SwapExecutionState extends Equatable {
   const SwapExecutionState({
     this.snapshot,
     this.loading = true,
     this.notFound = false,
+    this.unanswered = false,
     this.cancelStatus = SwapCancelStatus.idle,
   });
 
@@ -87,6 +92,9 @@ class SwapExecutionState extends Equatable {
   /// Whether no source knows the swap.
   final bool notFound;
 
+  /// Whether the engine has yet to answer for the swap; the watch keeps asking.
+  final bool unanswered;
+
   /// What a cancel request is doing.
   final SwapCancelStatus cancelStatus;
 
@@ -94,16 +102,24 @@ class SwapExecutionState extends Equatable {
     SwapExecutionSnapshot? snapshot,
     bool? loading,
     bool? notFound,
+    bool? unanswered,
     SwapCancelStatus? cancelStatus,
   }) => SwapExecutionState(
     snapshot: snapshot ?? this.snapshot,
     loading: loading ?? this.loading,
     notFound: notFound ?? this.notFound,
+    unanswered: unanswered ?? this.unanswered,
     cancelStatus: cancelStatus ?? this.cancelStatus,
   );
 
   @override
-  List<Object?> get props => [snapshot, loading, notFound, cancelStatus];
+  List<Object?> get props => [
+    snapshot,
+    loading,
+    notFound,
+    unanswered,
+    cancelStatus,
+  ];
 }
 
 /// Follows one swap for the progress and outcome screens.
@@ -118,6 +134,7 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
     on<SwapExecutionCancelRequested>(_onCancelRequested);
     on<_SwapExecutionUpdated>(_onUpdated);
     on<_SwapExecutionEnded>(_onEnded);
+    on<_SwapExecutionUnanswered>(_onUnanswered);
   }
 
   final SwapExecutionRegistry _registry;
@@ -138,7 +155,11 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
         .listen(
           (snapshot) => add(_SwapExecutionUpdated(snapshot)),
           onDone: () => add(const _SwapExecutionEnded()),
-          onError: (Object _) => add(const _SwapExecutionEnded()),
+          onError: (Object error) => add(
+            error is SwapResumeUnconfirmedException
+                ? const _SwapExecutionUnanswered()
+                : const _SwapExecutionEnded(),
+          ),
         );
     _registry.acknowledge(event.id);
   }
@@ -147,14 +168,31 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
     _SwapExecutionUpdated event,
     Emitter<SwapExecutionState> emit,
   ) {
-    emit(state.copyWith(snapshot: event.snapshot, loading: false));
+    emit(
+      state.copyWith(
+        snapshot: event.snapshot,
+        loading: false,
+        unanswered: false,
+      ),
+    );
     if (event.snapshot.isTerminal) _registry.acknowledge(event.snapshot.id);
   }
 
   void _onEnded(_SwapExecutionEnded event, Emitter<SwapExecutionState> emit) {
-    if (state.snapshot == null) {
-      emit(state.copyWith(loading: false, notFound: true));
-    }
+    emit(
+      state.copyWith(
+        loading: false,
+        notFound: state.snapshot == null,
+        unanswered: false,
+      ),
+    );
+  }
+
+  void _onUnanswered(
+    _SwapExecutionUnanswered event,
+    Emitter<SwapExecutionState> emit,
+  ) {
+    emit(state.copyWith(unanswered: true));
   }
 
   Future<void> _onCancelRequested(

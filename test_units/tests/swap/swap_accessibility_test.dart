@@ -43,6 +43,7 @@ import 'package:web_dex/views/swap/swap_shell_controller.dart';
 import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
 
+part 'swap_accessibility_progress.dart';
 part 'swap_accessibility_services.dart';
 part 'swap_accessibility_sheets.dart';
 
@@ -474,6 +475,7 @@ void main() {
         expect(find.text('Status update delayed'), findsOneWidget);
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
+      _progressCases(layout, pump: pump);
 
       for (final (name, url, details) in [
         (

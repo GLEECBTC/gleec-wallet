@@ -17,13 +17,17 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 
 part 'atomic_swap_snapshot.dart';
 
-/// How long a status read may take before it counts as unanswered; no
+/// How long a call to KDF may take before it counts as unanswered; no
 /// transport to KDF sets a limit of its own.
 const _readTimeout = Duration(seconds: 15);
 
 /// How long KDF may take to log a matched swap's first event, which waits on
 /// fee and balance checks on both chains: seconds, normally.
 const _unrecordedGrace = Duration(minutes: 5);
+
+/// Whether [error] is KDF answering [words], not a read that failed.
+bool _answered(Object error, String words) =>
+    error is TextError && error.error.contains(words);
 
 /// Executes atomic swaps by placing a fill-or-kill taker order, and follows
 /// them to a terminal outcome.
@@ -106,10 +110,23 @@ class AtomicSwapExecutor implements SwapExecutor {
   Future<SwapExecutionHandle?> resume(String id) async {
     Swap? swap;
     try {
-      swap = await _dex.getSwapStatus(id);
-    } on Object {
-      final status = await _orders.getStatus(id);
-      if (status?.takerOrderStatus == null) return null;
+      swap = await _dex.getSwapStatus(id).timeout(_readTimeout);
+    } on Object catch (swapError) {
+      // KDF has the swap, but has yet to log its first event.
+      if (_answered(swapError, 'swap data is not found')) return _track(id);
+      // A read that failed or went unanswered proves nothing. Only KDF saying
+      // it has no swap leaves a taker order that has yet to match.
+      if (!_answered(swapError, 'No swap with uuid $id')) rethrow;
+      final OrderStatus status;
+      try {
+        status = await _orders.getStatusOrThrow(id).timeout(_readTimeout);
+      } on Object catch (orderError) {
+        if (_answered(orderError, 'Order with uuid $id is not found')) {
+          return null;
+        }
+        rethrow;
+      }
+      if (status.takerOrderStatus == null) return null;
     }
     return _track(id, swap: swap);
   }
@@ -254,10 +271,6 @@ class _AtomicSwapTracker {
     }
   }
 
-  /// Whether [error] is KDF answering [words], not a read that failed.
-  static bool _answered(Object error, String words) =>
-      error is TextError && error.error.contains(words);
-
   /// Whether [error] is KDF saying it has yet to record this swap: no row at
   /// all, or a row whose first event is not saved yet.
   bool _unrecorded(Object error) =>
@@ -305,7 +318,12 @@ class _AtomicSwapTracker {
       // takes over if the counterparty does not complete.
       throw const SwapCancelRefusedException(SwapCancelRefusal.notSupported);
     }
-    final error = await _executor._orders.cancelOrder(uuid);
+    final String? error;
+    try {
+      error = await _executor._orders.cancelOrder(uuid).timeout(_readTimeout);
+    } on Object catch (lost) {
+      throw SwapCancelUnconfirmedException(lost);
+    }
     if (error != null) {
       throw SwapCancelUnconfirmedException(error);
     }

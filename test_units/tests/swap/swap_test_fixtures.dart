@@ -330,6 +330,8 @@ class FakeExecutor implements SwapExecutor {
   Object? startError;
   FakeHandle? lastStarted;
   var _next = 0;
+  Object? resumeError;
+  int resumeCalls = 0;
 
   @override
   Future<SwapExecutionHandle> start(SwapQuote quote) async {
@@ -350,7 +352,12 @@ class FakeExecutor implements SwapExecutor {
   }
 
   @override
-  Future<SwapExecutionHandle?> resume(String id) async => resumable[id];
+  Future<SwapExecutionHandle?> resume(String id) async {
+    resumeCalls++;
+    final error = resumeError;
+    if (error != null) throw error;
+    return resumable[id];
+  }
 }
 
 /// Storage in memory.

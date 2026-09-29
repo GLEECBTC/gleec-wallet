@@ -22,6 +22,14 @@ class SwapHeroCopy {
     this.tone = SwapTone.brand,
   });
 
+  /// The status may be out of date; not a failure.
+  factory SwapHeroCopy.delayed() => SwapHeroCopy(
+    title: LocaleKeys.swapProgressDelayedTitle.tr(),
+    body: LocaleKeys.swapProgressDelayedBody.tr(),
+    icon: Icons.hourglass_bottom_rounded,
+    tone: SwapTone.warning,
+  );
+
   final String title;
   final String? body;
   final IconData icon;
@@ -167,14 +175,7 @@ class SwapExecutionCopy {
   SwapHeroCopy get hero {
     final outcome = snapshot.outcome;
     if (outcome != null) return _outcomeHero(outcome);
-    if (snapshot.delayedSince != null) {
-      return SwapHeroCopy(
-        title: LocaleKeys.swapProgressDelayedTitle.tr(),
-        body: LocaleKeys.swapProgressDelayedBody.tr(),
-        icon: Icons.hourglass_bottom_rounded,
-        tone: SwapTone.warning,
-      );
-    }
+    if (snapshot.delayedSince != null) return SwapHeroCopy.delayed();
     return _stageHero(snapshot.stage ?? SwapProgressStage.unknown);
   }
 

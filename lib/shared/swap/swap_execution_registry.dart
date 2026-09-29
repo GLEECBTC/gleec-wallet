@@ -39,15 +39,20 @@ typedef SwapExecutionRef = ({String id, SwapLiquiditySource source});
 /// the app never loses the live view of a running swap, and swaps still
 /// running when the wallet was last closed are picked back up at sign-in.
 class SwapExecutionRegistry {
-  /// Creates the registry over one executor per source.
+  /// Creates the registry over one executor per source. A lookup that ends in
+  /// a [SwapResumeUnconfirmedException] is tried again after [retryDelay].
   SwapExecutionRegistry({
     required List<SwapExecutor> executors,
     required Future<List<SwapExecutionRef>> Function() inFlight,
+    Duration retryDelay = const Duration(seconds: 10),
   }) : _executors = {for (final e in executors) e.source: e},
-       _inFlight = inFlight;
+       _inFlight = inFlight,
+       _retryDelay = retryDelay;
 
   final Map<SwapLiquiditySource, SwapExecutor> _executors;
   final Future<List<SwapExecutionRef>> Function() _inFlight;
+  final Duration _retryDelay;
+  Timer? _inFlightRetry;
 
   final Map<String, SwapExecutionHandle> _handles = {};
   final Map<String, StreamSubscription<SwapExecutionSnapshot>> _subscriptions =
@@ -123,15 +128,54 @@ class SwapExecutionRegistry {
   /// Live snapshots of [id], replaying the latest first. Re-attaches through
   /// the executors when the swap is not followed yet; empty when no source
   /// knows it.
+  ///
+  /// While the lookup is unconfirmed, reports a
+  /// [SwapResumeUnconfirmedException] and tries again, for as long as it is
+  /// listened to in this session.
   Stream<SwapExecutionSnapshot> watch(
     String id, {
     SwapLiquiditySource? source,
-  }) async* {
-    var handle = _handles[id];
-    handle ??= await _resume(id, source: source);
-    if (handle == null) return;
-    yield* handle.updates;
-  }
+  }) => Stream.multi((out) {
+    final generation = _generation;
+    StreamSubscription<SwapExecutionSnapshot>? updates;
+    Timer? retry;
+    var listening = true;
+
+    Future<void> attach() async {
+      if (generation != _generation) {
+        unawaited(out.close());
+        return;
+      }
+      var handle = _handles[id];
+      if (handle == null) {
+        try {
+          handle = await _resume(id, source: source, generation: generation);
+        } on SwapResumeUnconfirmedException catch (error, trace) {
+          if (!listening) return;
+          out.addError(error, trace);
+          retry = Timer(_retryDelay, () => unawaited(attach()));
+          return;
+        }
+      }
+      if (!listening) return;
+      if (handle == null) {
+        unawaited(out.close());
+        return;
+      }
+      updates = handle.updates.listen(
+        out.add,
+        onError: out.addError,
+        onDone: out.close,
+      );
+    }
+
+    out.onCancel = () {
+      listening = false;
+      retry?.cancel();
+      return updates?.cancel();
+    };
+    unawaited(attach());
+  });
 
   /// Stops [id] if that is still possible. See [SwapExecutionHandle.cancel].
   Future<void> cancel(String id) async {
@@ -147,7 +191,8 @@ class SwapExecutionRegistry {
     if (_acknowledged.add(id)) _publish();
   }
 
-  /// Picks up swaps still running from a previous session.
+  /// Picks up swaps still running from a previous session, trying again later
+  /// for those whose lookup is unconfirmed.
   Future<void> resumeInFlight() async {
     final generation = _generation;
     final List<SwapExecutionRef> running;
@@ -156,18 +201,32 @@ class SwapExecutionRegistry {
     } on Object {
       return;
     }
-    if (generation != _generation) return;
-    for (final ref in running) {
-      if (_handles.containsKey(ref.id)) continue;
-      await _resume(ref.id, source: ref.source);
+    await _resumeAll(running, generation);
+  }
+
+  Future<void> _resumeAll(List<SwapExecutionRef> refs, int generation) async {
+    final unanswered = <SwapExecutionRef>[];
+    for (final ref in refs) {
       if (generation != _generation) return;
+      if (_handles.containsKey(ref.id)) continue;
+      try {
+        await _resume(ref.id, source: ref.source, generation: generation);
+      } on SwapResumeUnconfirmedException {
+        unanswered.add(ref);
+      }
     }
+    if (unanswered.isEmpty || generation != _generation) return;
+    _inFlightRetry = Timer(
+      _retryDelay,
+      () => unawaited(_resumeAll(unanswered, generation)),
+    );
   }
 
   /// Forgets everything — on sign-out, so one wallet's swaps never show in
   /// another's session. The swaps themselves keep running in the engine.
   Future<void> reset() async {
     _generation++;
+    _inFlightRetry?.cancel();
     final handles = _handles.values.toList();
     final subscriptions = _subscriptions.values.toList();
     _handles.clear();
@@ -192,22 +251,28 @@ class SwapExecutionRegistry {
     await _updates.close();
   }
 
+  /// Looks [id] up for session [generation]: the handle now followed, or null
+  /// when no source has the swap or that session has ended. Throws
+  /// [SwapResumeUnconfirmedException] when none has it and one could not
+  /// tell.
   Future<SwapExecutionHandle?> _resume(
     String id, {
-    SwapLiquiditySource? source,
+    required SwapLiquiditySource? source,
+    required int generation,
   }) async {
-    final generation = _generation;
     final candidates = source == null
         ? _executors.values
         : [?_executors[source]];
+    Object? unanswered;
     for (final executor in candidates) {
       try {
         final handle = await executor.resume(id);
         if (handle != null) return _follow(handle, generation);
-      } on Object {
-        // Try the next source.
+      } on Object catch (error) {
+        unanswered ??= error;
       }
     }
+    if (unanswered != null) throw SwapResumeUnconfirmedException(unanswered);
     return null;
   }
 

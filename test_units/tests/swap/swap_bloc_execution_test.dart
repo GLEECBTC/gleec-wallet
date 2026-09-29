@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/swap_execution/swap_execution_bloc.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -71,6 +72,65 @@ void main() {
     expect(bloc.state.notFound, isTrue);
     expect(bloc.state.loading, isFalse);
     expect(bloc.state.snapshot, isNull);
+  });
+
+  group('a swap the engine has yet to answer for', () {
+    const retryDelay = Duration(seconds: 10);
+
+    setUp(() => executor.resumeError = TimeoutException('no answer'));
+
+    void onFakeClock(
+      void Function(FakeAsync async, SwapExecutionBloc bloc) body, {
+      SwapExecutionSnapshot? initial,
+    }) => fakeAsync((async) {
+      final slow = SwapExecutionRegistry(
+        executors: [executor],
+        inFlight: () async => const [],
+        retryDelay: retryDelay,
+      );
+      final bloc = SwapExecutionBloc(registry: slow)
+        ..add(SwapExecutionWatched('slow', initial: initial));
+      async.flushMicrotasks();
+      body(async, bloc);
+      unawaited(bloc.close());
+      unawaited(slow.dispose());
+      async.flushMicrotasks();
+    });
+
+    test('reads as delayed, never as not found, and is followed once the '
+        'engine answers', () {
+      onFakeClock((async, bloc) {
+        expect(bloc.state.unanswered, isTrue);
+        expect(bloc.state.notFound, isFalse);
+        expect(bloc.state.snapshot, isNull);
+
+        executor.resumeError = null;
+        executor.resumable['slow'] = FakeHandle(snapshotOf(id: 'slow'));
+        async.elapse(retryDelay);
+
+        expect(bloc.state.unanswered, isFalse);
+        expect(bloc.state.snapshot!.id, 'slow');
+      });
+    });
+
+    test('keeps a snapshot from history on screen', () {
+      final initial = snapshotOf(id: 'slow');
+      onFakeClock((async, bloc) {
+        expect(bloc.state.unanswered, isTrue);
+        expect(bloc.state.snapshot, same(initial));
+        expect(bloc.state.loading, isFalse);
+      }, initial: initial);
+    });
+
+    test('is not found once the engine says it does not know it', () {
+      onFakeClock((async, bloc) {
+        executor.resumeError = null;
+        async.elapse(retryDelay);
+
+        expect(bloc.state.notFound, isTrue);
+        expect(bloc.state.unanswered, isFalse);
+      });
+    });
   });
 
   group('cancelling', () {

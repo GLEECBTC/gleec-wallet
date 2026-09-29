@@ -200,6 +200,13 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
     }
   }
 
+  static Widget _hero(SwapHeroCopy hero) => SwapStatusHero(
+    icon: hero.icon,
+    tone: hero.tone,
+    title: hero.title,
+    body: hero.body,
+  );
+
   static String _actionLabel(
     SwapOutcomeAction action,
     SwapExecutionCopy copy,
@@ -243,6 +250,8 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
                   title: LocaleKeys.swapProgressUnknownTitle.tr(),
                   body: LocaleKeys.swapProgressUnknownBody.tr(),
                 )
+              : state.unanswered
+              ? _hero(SwapHeroCopy.delayed())
               : const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Column(
@@ -280,8 +289,11 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
   ) {
     final networks = _services.networks();
     final copy = SwapExecutionCopy(snapshot, networks);
-    final hero = copy.hero;
     final terminal = snapshot.isTerminal;
+    // Until the engine answers, this is Activity's possibly stale snapshot.
+    final hero = state.unanswered && !terminal
+        ? SwapHeroCopy.delayed()
+        : copy.hero;
 
     final children = <Widget>[
       if (!_inFlow) ...[
@@ -291,12 +303,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
           textAlign: TextAlign.center,
         ),
       ],
-      SwapStatusHero(
-        icon: hero.icon,
-        tone: hero.tone,
-        title: hero.title,
-        body: hero.body,
-      ),
+      _hero(hero),
       if (copy.priceMoveComparison case final String comparison)
         SwapCallout(
           tone: SwapTone.warning,

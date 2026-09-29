@@ -38,6 +38,8 @@ abstract interface class SwapExecutor {
 
   /// Re-attaches to a swap by its durable id, or null when this source does
   /// not know it.
+  ///
+  /// Throws when it cannot tell, as when the engine does not answer.
   Future<SwapExecutionHandle?> resume(String id);
 }
 
@@ -117,6 +119,18 @@ class SwapCancelUnconfirmedException implements Exception {
 
   @override
   String toString() => 'Could not confirm cancelling the swap: $cause';
+}
+
+/// No source has a swap, and at least one could not tell whether it does, as
+/// when the engine does not answer. The swap may still exist.
+class SwapResumeUnconfirmedException implements Exception {
+  const SwapResumeUnconfirmedException(this.cause);
+
+  /// What went wrong.
+  final Object cause;
+
+  @override
+  String toString() => 'Could not confirm whether the swap exists: $cause';
 }
 
 /// A handle over a stream of snapshots, shared by both executors.

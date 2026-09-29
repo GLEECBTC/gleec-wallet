@@ -42,6 +42,9 @@ class FakeDex implements DexRepository {
   /// Holds every status read until completed.
   Completer<void>? statusGate;
 
+  /// Holds the status reads of one swap until its gate completes.
+  final Map<String, Completer<void>> gates = {};
+
   @override
   Future<SellResponse> sellOrThrow(SellRequest request) async {
     sells.add(request);
@@ -54,6 +57,7 @@ class FakeDex implements DexRepository {
   Future<Swap> getSwapStatus(String swapUuid) async {
     statusCalls++;
     await statusGate?.future;
+    await gates[swapUuid]?.future;
     final error = statusError;
     if (error != null) throw error;
     if (unrecorded.contains(swapUuid)) {
@@ -79,6 +83,9 @@ class FakeOrders implements MyOrdersService {
   final Set<String> makers = {};
   final List<String> cancelled = [];
   String? cancelError;
+
+  /// Holds every cancel until completed.
+  Completer<void>? cancelGate;
   int statusCalls = 0;
 
   /// Thrown by every strict status read while set: an engine that cannot be
@@ -133,6 +140,7 @@ class FakeOrders implements MyOrdersService {
     Future<void> Function()? beforeMutation,
   }) async {
     cancelled.add(uuid);
+    await cancelGate?.future;
     return cancelError;
   }
 
@@ -287,7 +295,7 @@ class AtomicRig {
 
   /// Re-attaches to [id]; its first poll has not run yet.
   void resume(String id) {
-    executor.resume(id).then((h) {
+    executor.resume(id).then<void>((h) {
       if (h != null) _follow(h);
     }, onError: _fail);
     async.flushMicrotasks();

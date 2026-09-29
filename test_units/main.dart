@@ -171,6 +171,8 @@ import 'tests/swap/swap_exec_atomic_executor_test.dart'
     as swap_exec_atomic_executor_test;
 import 'tests/swap/swap_exec_atomic_snapshot_test.dart'
     as swap_exec_atomic_snapshot_test;
+import 'tests/swap/swap_exec_atomic_timeouts_test.dart'
+    as swap_exec_atomic_timeouts_test;
 import 'tests/swap/swap_exec_atomic_tracking_test.dart'
     as swap_exec_atomic_tracking_test;
 import 'tests/swap/swap_exec_fix_maker_test.dart' as swap_exec_fix_maker_test;
@@ -185,6 +187,8 @@ import 'tests/swap/swap_exec_fix_tracking_test.dart'
 import 'tests/swap/swap_exec_handle_test.dart' as swap_exec_handle_test;
 import 'tests/swap/swap_exec_history_test.dart' as swap_exec_history_test;
 import 'tests/swap/swap_exec_registry_test.dart' as swap_exec_registry_test;
+import 'tests/swap/swap_exec_registry_unanswered_test.dart'
+    as swap_exec_registry_unanswered_test;
 import 'tests/swap/swap_exec_routed_executor_test.dart'
     as swap_exec_routed_executor_test;
 import 'tests/swap/swap_exec_routed_failure_test.dart'
@@ -584,6 +588,7 @@ void main() {
   swap_exec_atomic_engine_test.main();
   swap_exec_atomic_executor_test.main();
   swap_exec_atomic_snapshot_test.main();
+  swap_exec_atomic_timeouts_test.main();
   swap_exec_atomic_tracking_test.main();
   swap_exec_fix_maker_test.main();
   swap_exec_fix_orders_test.main();
@@ -594,6 +599,7 @@ void main() {
   swap_exec_handle_test.main();
   swap_exec_history_test.main();
   swap_exec_registry_test.main();
+  swap_exec_registry_unanswered_test.main();
   swap_exec_routed_executor_test.main();
   swap_exec_routed_failure_test.main();
   swap_exec_routed_snapshot_test.main();

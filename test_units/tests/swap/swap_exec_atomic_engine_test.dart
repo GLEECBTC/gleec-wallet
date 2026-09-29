@@ -6,6 +6,7 @@ import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_swap_status/my_swap_status_req.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
+import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -81,6 +82,11 @@ void main() {
       expect(handle!.latest.isTerminal, isFalse);
       expect(handle!.latest.delayedSince, isNotNull);
     });
+  });
+
+  test('a swap the engine cannot be asked about is never taken for one it '
+      'does not know', () async {
+    await expectLater(executor.resume('a-9'), throwsA(isA<TextError>()));
   });
 }
 
