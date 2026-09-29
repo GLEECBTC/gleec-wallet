@@ -149,6 +149,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   Timer? _expiry;
   Timer? _rateLimit;
 
+  /// Set when [close] starts: a price still in flight can land after the
+  /// timers are cancelled, and must not start new ones.
+  var _closing = false;
+
   /// The amount in pay-asset units, parsed from the field.
   Decimal? amountOf(UnifiedSwapState state) {
     final text = state.inputText.trim();
@@ -488,6 +492,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
 
   @override
   Future<void> close() {
+    _closing = true;
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();
