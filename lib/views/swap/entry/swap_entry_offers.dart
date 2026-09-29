@@ -58,7 +58,64 @@ extension _SwapEntryOffers on _SwapEntryViewState {
                 _bloc.add(const UnifiedSwapOffersRequested(recount: true)),
           ),
         ),
+      if (_offerAlternatives(state) case final alternatives
+          when alternatives.isNotEmpty)
+        SwapOfferAlternatives(
+          label: _keepsPay(state)
+              ? LocaleKeys.swapOffersSwapFor.tr(args: [SwapFormat.ticker(pay)])
+              : LocaleKeys.swapOffersGetWith.tr(
+                  args: [SwapFormat.ticker(receive)],
+                ),
+          assets: alternatives,
+          balanceOf: _services.lastKnownBalance,
+          onChosen: (asset) => _edit(
+            _keepsPay(state)
+                ? UnifiedSwapReceiveAssetChanged(asset)
+                : UnifiedSwapPayAssetChanged(asset),
+          ),
+        ),
     ];
+  }
+
+  /// Up to three assets someone trades against the asset the pair keeps:
+  /// held ones first, by value, then popular ones.
+  List<AssetId> _offerAlternatives(UnifiedSwapState state) {
+    final keepsPay = _keepsPay(state);
+    final kept = keepsPay ? state.pay : state.receive;
+    final replaced = keepsPay ? state.receive : state.pay;
+    final counts = keepsPay ? state.hints.payCounts : state.hints.receiveCounts;
+    if (counts == null || counts.anchor != kept) return const [];
+
+    final balance = <AssetId, Decimal>{};
+    Decimal value(AssetId id) =>
+        (balance[id] ?? Decimal.zero) *
+        (_services.usdPrice(id) ?? Decimal.zero);
+    int popularity(AssetId id) {
+      final rank = swapPopularTickers.indexOf(
+        SwapFormat.ticker(id).toUpperCase(),
+      );
+      return rank < 0 ? swapPopularTickers.length : rank;
+    }
+
+    final offered = [
+      for (final MapEntry(key: id, value: offers) in counts.offered.entries)
+        if (offers && id != replaced && !_isBlocked(id)) id,
+    ];
+    for (final id in offered) {
+      balance[id] = _services.lastKnownBalance(id) ?? Decimal.zero;
+    }
+    offered.sort((a, b) {
+      final held = (balance[b]! > Decimal.zero ? 1 : 0).compareTo(
+        balance[a]! > Decimal.zero ? 1 : 0,
+      );
+      if (held != 0) return held;
+      final byValue = value(b).compareTo(value(a));
+      if (byValue != 0) return byValue;
+      final byRank = popularity(a).compareTo(popularity(b));
+      if (byRank != 0) return byRank;
+      return SwapFormat.ticker(a).compareTo(SwapFormat.ticker(b));
+    });
+    return offered.take(3).toList();
   }
 
   /// What the pair's offers take, before the pair is priced.

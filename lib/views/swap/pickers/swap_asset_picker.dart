@@ -35,7 +35,7 @@ enum _PickerTab { mine, recent, popular, all }
 const _pinnedHeaderMinHeight = 420.0;
 
 /// Tickers offered under "Popular", most traded first.
-const _popularTickers = [
+const swapPopularTickers = [
   'BTC',
   'ETH',
   'USDT',
@@ -232,7 +232,8 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
 
   List<AssetId> _popular() {
     final rank = {
-      for (var i = 0; i < _popularTickers.length; i++) _popularTickers[i]: i,
+      for (var i = 0; i < swapPopularTickers.length; i++)
+        swapPopularTickers[i]: i,
     };
     final list = [
       for (final id in _offered())

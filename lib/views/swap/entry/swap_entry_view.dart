@@ -20,6 +20,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
+import 'package:web_dex/views/swap/entry/swap_offer_alternatives.dart';
 import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/entry/swap_sign_in.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';

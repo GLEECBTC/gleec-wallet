@@ -262,6 +262,7 @@ void main() {
             pair: (eth, gleecEvm),
             offers: const SwapOrderBookOffers(),
             watching: true,
+            receiveCounts: SwapOfferCounts(gleecEvm, {btc: true, usdc: true}),
           ),
         ),
     'no one offering it, and no longer checking': () =>

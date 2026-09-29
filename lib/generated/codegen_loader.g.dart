@@ -1458,6 +1458,9 @@ abstract class LocaleKeys {
   static const swapHelperOffersDetail = 'swapHelperOffersDetail';
   static const swapHelperOffersWatching = 'swapHelperOffersWatching';
   static const swapHelperOffersRange = 'swapHelperOffersRange';
+  static const swapOffersGetWith = 'swapOffersGetWith';
+  static const swapOffersSwapFor = 'swapOffersSwapFor';
+  static const swapOffersHeld = 'swapOffersHeld';
   static const swapHelperStructural = 'swapHelperStructural';
   static const swapHelperNoRouteReasons = 'swapHelperNoRouteReasons';
   static const swapHelperOrderBookOnly = 'swapHelperOrderBookOnly';
