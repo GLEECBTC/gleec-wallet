@@ -68,6 +68,7 @@ extension _SwapEntryOffers on _SwapEntryViewState {
                 ),
           assets: alternatives,
           balanceOf: _services.lastKnownBalance,
+          networkOf: _services.networks().networkOf,
           onChosen: (asset) => _edit(
             _keepsPay(state)
                 ? UnifiedSwapReceiveAssetChanged(asset)
@@ -77,8 +78,8 @@ extension _SwapEntryOffers on _SwapEntryViewState {
     ];
   }
 
-  /// Up to three assets someone trades against the asset the pair keeps:
-  /// held ones first, by value, then popular ones.
+  /// Up to three assets someone trades against the asset the pair keeps, one
+  /// per ticker: held ones first, by value, then popular ones.
   List<AssetId> _offerAlternatives(UnifiedSwapState state) {
     final keepsPay = _keepsPay(state);
     final kept = keepsPay ? state.pay : state.receive;
@@ -113,9 +114,14 @@ extension _SwapEntryOffers on _SwapEntryViewState {
       if (byValue != 0) return byValue;
       final byRank = popularity(a).compareTo(popularity(b));
       if (byRank != 0) return byRank;
-      return SwapFormat.ticker(a).compareTo(SwapFormat.ticker(b));
+      final byTicker = SwapFormat.ticker(a).compareTo(SwapFormat.ticker(b));
+      return byTicker != 0 ? byTicker : a.id.compareTo(b.id);
     });
-    return offered.take(3).toList();
+    final tickers = <String>{};
+    return [
+      for (final id in offered)
+        if (tickers.add(SwapFormat.ticker(id))) id,
+    ].take(3).toList();
   }
 
   /// What the pair's offers take, before the pair is priced.

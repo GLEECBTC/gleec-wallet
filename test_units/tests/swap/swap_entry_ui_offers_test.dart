@@ -11,6 +11,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/entry/swap_offer_alternatives.dart';
 import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
@@ -173,6 +174,8 @@ void main() {
     final kmd = coin('KMD');
     final ltc = coin('LTC');
     final doge = coin('DOGE');
+    final arrr = coin('ARRR');
+    final avn = coin('AVN');
 
     List<String> chips(WidgetTester tester) => [
       for (final chip in tester.widgetList<SwapButtonSemantics>(
@@ -228,6 +231,42 @@ void main() {
       await tester.tap(find.text('BTC'));
       await tester.pumpAndSettle();
       expect(swap.events, [UnifiedSwapReceiveAssetChanged(btc)]);
+    });
+
+    testWidgets('offer one of each ticker, naming a token\'s network', (
+      tester,
+    ) async {
+      final pol = assetOf('POL', chainId: 137);
+      final usdcOnPolygon = assetOf(
+        'USDC-PLG20',
+        parent: pol,
+        chainId: 137,
+        decimals: 6,
+      );
+      await pump(
+        tester,
+        noOffers(
+          receiveCounts: SwapOfferCounts(gleec, {
+            usdcOnPolygon: true,
+            usdc: true,
+            btc: true,
+          }),
+        ),
+      );
+
+      expect(chips(tester), ['BTC', 'USDC on Ethereum']);
+      expect(find.text('USDC · Ethereum'), findsOneWidget);
+    });
+
+    testWidgets('otherwise go alphabetically', (tester) async {
+      await pump(
+        tester,
+        noOffers(
+          receiveCounts: SwapOfferCounts(gleec, {avn: true, arrr: true}),
+        ),
+      );
+
+      expect(chips(tester), ['ARRR', 'AVN']);
     });
 
     testWidgets('leave out assets unavailable here', (tester) async {
@@ -334,6 +373,28 @@ void main() {
       expect(find.text('No offers'), findsNothing);
     });
 
+    testWidgets('set rows apart when counts arrive while open', (tester) async {
+      final form = swapBaseForm(
+        input: '',
+      ).copyWith(issue: SwapFormIssue.amountMissing);
+      await pump(tester, form);
+      await tester.tap(find.byType(SwapAssetPill).last);
+      await tester.pumpAndSettle();
+      expect(find.text('What you receive'), findsOneWidget);
+      expect(find.text('No offers with ETH right now'), findsNothing);
+
+      swap.emit(
+        form.copyWith(
+          hints: SwapOrderBookHints(
+            payCounts: SwapOfferCounts(eth, {gleec: false}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No offers with ETH right now'), findsOneWidget);
+    });
+
     testWidgets('open from the form with the counts it read', (tester) async {
       await pump(
         tester,
@@ -362,5 +423,25 @@ void main() {
     );
 
     expect(lines(tester), ['Offers take 0.5 ETH to 2 ETH.']);
+  });
+
+  testWidgets('signed out, says what the offers take, then asks for a wallet', (
+    tester,
+  ) async {
+    final some = SwapOrderBookOffers([SwapOfferBand(d('0.5'), d('2'))]);
+
+    await pump(
+      tester,
+      swapBaseForm(receive: gleec, input: '').copyWith(
+        issue: SwapFormIssue.amountMissing,
+        signedIn: false,
+        hints: SwapOrderBookHints(pair: (eth, gleec), offers: some),
+      ),
+    );
+
+    expect(lines(tester), [
+      'Offers take 0.5 ETH to 2 ETH.',
+      'Connect a wallet to see balances and swap.',
+    ]);
   });
 }

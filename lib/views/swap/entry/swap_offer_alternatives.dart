@@ -14,6 +14,7 @@ class SwapOfferAlternatives extends StatelessWidget {
     required this.label,
     required this.assets,
     required this.balanceOf,
+    required this.networkOf,
     required this.onChosen,
     super.key,
   });
@@ -21,6 +22,7 @@ class SwapOfferAlternatives extends StatelessWidget {
   final String label;
   final List<AssetId> assets;
   final Decimal? Function(AssetId asset) balanceOf;
+  final String Function(AssetId asset) networkOf;
   final ValueChanged<AssetId> onChosen;
 
   @override
@@ -39,6 +41,8 @@ class SwapOfferAlternatives extends StatelessWidget {
               _Alternative(
                 asset: asset,
                 balance: balanceOf(asset),
+                // A token's ticker alone does not say which network it is on.
+                network: asset.parentId == null ? null : networkOf(asset),
                 onTap: () => onChosen(asset),
               ),
           ],
@@ -52,11 +56,13 @@ class _Alternative extends StatelessWidget {
   const _Alternative({
     required this.asset,
     required this.balance,
+    required this.network,
     required this.onTap,
   });
 
   final AssetId asset;
   final Decimal? balance;
+  final String? network;
   final VoidCallback onTap;
 
   @override
@@ -69,9 +75,13 @@ class _Alternative extends StatelessWidget {
         : LocaleKeys.swapOffersHeld.tr(
             args: [SwapFormat.amount(balance, rounding: SwapRounding.down)],
           );
+    final network = this.network;
+    final name = network == null
+        ? ticker
+        : LocaleKeys.swapAssetOnNetwork.tr(args: [ticker, network]);
     final shape = StadiumBorder(side: BorderSide(color: palette.controlBorder));
     return SwapButtonSemantics(
-      label: held == null ? ticker : '$ticker, $held',
+      label: held == null ? name : '$name, $held',
       onTap: onTap,
       child: Material(
         color: palette.surfaceHigh,
@@ -91,9 +101,18 @@ class _Alternative extends StatelessWidget {
                   SwapTokenIcon(asset: asset, size: 20),
                   const SizedBox(width: 6),
                   Flexible(
-                    child: Text(
-                      held == null ? ticker : '$ticker · $held',
-                      style: SwapText.strong(context).copyWith(fontSize: 14),
+                    child: Text.rich(
+                      TextSpan(
+                        text: ticker,
+                        style: SwapText.strong(context).copyWith(fontSize: 14),
+                        children: [
+                          for (final detail in [?network, ?held])
+                            TextSpan(
+                              text: ' · $detail',
+                              style: SwapText.small(context),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
