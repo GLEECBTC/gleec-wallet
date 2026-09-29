@@ -8,9 +8,17 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 
 ## What changed since the last brief
 
-- **GLEEC and GRC-20 pairs no longer read as an outage.** They trade on the order book only, and the aggregator does not serve their network. They were being sent to it anyway, and the form said "We couldn't check swap options". Now:
-  - only sources that can price a pair are asked;
-  - with no order-book offer, the form says "No swap is available…", adding that GLEEC trades only on the order book.
+- **An order-book pair no one offers says so before an amount, and keeps checking.** Choosing a pair only the order book trades, such as USDT for AVN, reads the book straight away, signed in or out. With no offer:
+  - the form says "No one is offering AVN for USDT right now." and that AVN trades only on the order book, where offers come and go. It prices nothing; the button is **Choose another asset**, which opens the side worth changing;
+  - up to three shortcuts sit above it ("Get AVN with:"), holdings first, each switching that side in one tap;
+  - it checks again every 30 seconds while you're using it, and prices as soon as someone offers; after five minutes untouched it stops and offers **Check again**.
+  - Just after the app starts, the engine may still be finding its peers and can't read the book yet. The form then asks again after 10 seconds, so the message can take a little while to appear.
+
+  This replaces "No swap is available for this amount and pair right now." with **Try again**, which only asked the same book again.
+- **The pickers set apart what no one offers.** With the other side chosen, assets no one on the order book offers for it sit under "No offers with {asset} right now", badged **No offers**, between the ones that trade now and "Not available with {asset}". They can still be chosen, because offers come and go.
+- **An amount no single offer takes names the offers.** Too little: "The smallest offer right now takes 10 USDT." Too much: "The largest offer right now takes 4,500 USDT." Between two offers: "No single offer takes 600 USDT. Offers take up to 500 USDT, or from 900 USDT." The button offers **Use {amount}** when you can pay it. The same button appears for a cross-network minimum or maximum. Before you type, a pair with offers says "Offers take 10 USDT to 4,500 USDT."
+- **Max works on order-book pairs again,** and stops at the largest offer ("Max uses 4,500 USDT, the largest offer right now."). It did nothing before, and the coin's minimum trade was never checked, because the SDK asked the engine for both the wrong way. Your own orders no longer count as offers.
+- **GLEEC and GRC-20 pairs no longer read as an outage.** They trade on the order book only, and the aggregator does not serve their network. They were being sent to it anyway, and the form said "We couldn't check swap options". Now only sources that can price a pair are asked, and with no order-book offer the form says no one is offering it (see above).
 
   The same fix covers KCC, ETC, TAO and the other networks the aggregator doesn't serve.
 - **A pair nobody can swap says why, and what to do.** For example, an asset only reachable across networks paired with one that trades only on the order book. Each message names the network reason and offers **Choose another asset**.
@@ -60,7 +68,7 @@ Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum
 3. **Across networks:** USDC on Polygon → USDC on Arbitrum. Expect the bridge step and "You can leave this screen". Leave, and come back through Activity or the notice.
 4. **Max on a native coin:** Max on ETH (Arbitrum) → USDC. Check the kept-back amount the form states, and that the swap starts.
 5. **Cancel before anything is sent:** start a token sale and cancel while it says "Checking…" or while approving. The result should say whether an approval went out.
-6. **Order book:** a small GLEEC or GRC-20 swap, if an offer exists. With no offer, check the "No swap is available" message and its GLEEC line.
+6. **Order book:** a small GLEEC or GRC-20 swap, if an offer exists. With no offer, the form should say no one is offering it before you type an amount, and offer **Choose another asset**.
 
 ## What to try
 
@@ -78,7 +86,8 @@ For each item, note what the screen said before you confirmed and what actually 
    - Open a coin page's **Swap** for an inactive coin, or a `/swap?from_currency=…` link: the form should show **Activate {asset}**, and nothing is priced until you do.
 8. **GLEEC as what you pay:**
    - Open the receive picker: order-book assets appear normally; cross-network-only tokens appear under "Not available with GLEEC", with the reason.
-   - With no offer on the order book, the form should say no swap is available, not that it couldn't check.
+   - With no offer on the order book, the form should say no one is offering it, not that it couldn't check, and **Choose another asset** should open the picker for what you receive.
+   - In that picker, assets no one offers for GLEEC should sit under "No offers with GLEEC right now", and still be choosable.
 9. **Hide 0 balance assets:** choose what to pay with, open **All** and turn the switch on. Only assets with a balance should remain, with "{n} hidden" under the switch. Search for an asset you don't hold: the picker should say it is hidden and offer **Show all assets**. Close and reopen the picker: the switch should keep its setting.
 10. **A price for an asset you don't hold:** pay with a coin you hold none of and enter a small amount. ETH on Base is priced by cross-network routes, and BTC by the order book when an order can fill the amount. The form should show a price and options, say how much is spendable, and the button should read **Not enough ETH** (or **BTC**). After a minute the price should expire and offer **Refresh quote**, without refreshing by itself.
 
@@ -93,7 +102,7 @@ For each item, note what the screen said before you confirmed and what actually 
 16. **Same-chain routed swap:** the timeline, the hero text on each step, and the result.
 17. **Cross-chain routed swap:** the bridge step; leave and come back.
 18. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
-19. **Atomic swap:** the matching step, and the result. An amount larger than any single order should say no swap is available instead of hanging.
+19. **Atomic swap:** the matching step, and the result. An amount larger than any single order should name the largest offer and offer **Use {amount}**, which should price at once. **Max** should stop at the largest offer.
 
 ### Activity and recovery
 20. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
