@@ -39,6 +39,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off. In the asset picker, the search, groups and switch scroll with the list, and a row whose badges and balance don't fit side by side puts the balance under the name.
 - **The asset picker's last results scroll clear of the keyboard.** On a phone, the end of a search's results used to stay under the keyboard until you closed it, and so could **Clear search** when nothing matched. Now you can scroll them above it and keep typing.
 - **Copying from the evidence sheet says so on the sheet.** **Copy**, **Copy details for support** and **Contact Gleec support** show "… copied" at the bottom of the sheet. The message used to appear on the page underneath, so a phone never showed it and a wider screen dimmed it.
+- **A custom slippage can be saved with the keyboard open.** **Use {value}** now sits just above the keyboard while you type. It used to stay under it, and an iPhone's number pad has no key that closes it, so on an iPhone there was no way to tap it.
 
 Unchanged from the last brief:
 - the atomic "receive at least" figure is what the order enforces;
@@ -83,7 +84,7 @@ For each item, note what the screen said before you confirmed and what actually 
 
 ### Options and review
 11. **Compare options:** a cross-network price shows **Compare options**. Opening it prices the fastest route ("Checking for a faster route…"). **Best net return** appears only when at least two options can be compared.
-12. **Slippage:** in the comparison, change it to 1% and 2%, then set a custom value. Every price should update. Above 1% there should be a warning. The review's **Costs & protection** should show the new value.
+12. **Slippage:** in the comparison, change it to 1% and 2%, then set a custom value. On a phone, **Use {value}** should stay above the keyboard as you type. Every price should update. Above 1% there should be a warning. The review's **Costs & protection** should show the new value.
 13. **Leave the form alone for six minutes.** Refreshing should stop, the quote expire, and **Refresh quote** appear. Switching to another app or tab should stop refreshing at once.
 14. **Selling ERC-20 tokens:** the review should ask for an exact amount, never unlimited. A token that needs its permission reset first should say "Continue with reset".
 15. **Leave the review while "Checking…"**. Nothing should start.
