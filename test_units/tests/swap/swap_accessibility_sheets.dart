@@ -10,6 +10,54 @@ void _sheetCases(
   required Future<void> Function(WidgetTester, _Layout, Widget) pump,
   required SwapServices Function() services,
 }) {
+  testWidgets('picker: assets no one offers set apart', (tester) async {
+    final catalog = SwapCatalog(
+      sources: [
+        SwapSourceAssets(
+          source: SwapLiquiditySource.atomic,
+          quotable: {eth, btc, gleec},
+        ),
+        SwapSourceAssets(source: SwapLiquiditySource.routed, quotable: {eth}),
+      ],
+    );
+    final open = find.text('Open');
+    await pump(
+      tester,
+      layout,
+      Builder(
+        builder: (context) => TextButton(
+          onPressed: () => showSwapAssetPicker(
+            context: context,
+            side: SwapPickerSide.receive,
+            bloc: context.read<UnifiedSwapBloc>(),
+            selected: null,
+            other: eth,
+            services: services(),
+            isBlocked: (_) => false,
+          ),
+          child: const Text('Open'),
+        ),
+      ),
+    );
+    tester
+        .element(open)
+        .read<UnifiedSwapBloc>()
+        .emit(
+          UnifiedSwapState(
+            loadingAssets: false,
+            catalog: catalog,
+            hints: SwapOrderBookHints(
+              payCounts: SwapOfferCounts(eth, {gleec: false, btc: true}),
+            ),
+          ),
+        );
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No offers with ETH right now'), findsOneWidget);
+    await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+  });
+
   testWidgets('picker: searching with the keyboard up', (tester) async {
     const keyboard = 336.0;
     final catalog = SwapCatalog(

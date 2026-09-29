@@ -49,27 +49,30 @@ extension _PickerList on _SwapAssetPickerState {
             context,
             anchor,
           ),
-          _AssetEntry(asset: final id, :final unreachable) => _PickerRow(
-            asset: id,
-            network: widget.services.networks().networkOf(id),
-            contract: widget.services.contractOf(id),
-            balance: widget.services.lastKnownBalance(id),
-            usdPrice: widget.services.usdPrice(id),
-            selected: id == selected,
-            sameTicker:
-                widget.other != null &&
-                widget.other != id &&
-                SwapFormat.ticker(widget.other!) == SwapFormat.ticker(id),
-            active: _activated?.contains(id) ?? false,
-            signedIn: widget.signedIn,
-            blocked: widget.isBlocked(id),
-            unreachableWith: unreachable ? widget.other : null,
-            activating: _activating == id,
-            activationFailed: _activationFailed == id,
-            onTap: _activating == null && !unreachable
-                ? () => _choose(id)
-                : null,
-          ),
+          _NoOffersHeader(:final anchor) => _noOffersHeader(context, anchor),
+          _AssetEntry(asset: final id, :final unreachable, :final noOffers) =>
+            _PickerRow(
+              asset: id,
+              network: widget.services.networks().networkOf(id),
+              contract: widget.services.contractOf(id),
+              balance: widget.services.lastKnownBalance(id),
+              usdPrice: widget.services.usdPrice(id),
+              selected: id == selected,
+              sameTicker:
+                  widget.other != null &&
+                  widget.other != id &&
+                  SwapFormat.ticker(widget.other!) == SwapFormat.ticker(id),
+              active: _activated?.contains(id) ?? false,
+              signedIn: widget.signedIn,
+              blocked: widget.isBlocked(id),
+              unreachableWith: unreachable ? widget.other : null,
+              noOffers: noOffers,
+              activating: _activating == id,
+              activationFailed: _activationFailed == id,
+              onTap: _activating == null && !unreachable
+                  ? () => _choose(id)
+                  : null,
+            ),
         },
       ),
     );

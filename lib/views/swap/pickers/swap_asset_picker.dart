@@ -11,6 +11,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/views/swap/common/swap_failure_copy.dart';
@@ -69,11 +70,16 @@ Future<AssetId?> showSwapAssetPicker({
       value: bloc,
       child: BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
         buildWhen: (a, b) =>
-            a.catalog != b.catalog || a.loadingAssets != b.loadingAssets,
+            a.catalog != b.catalog ||
+            a.loadingAssets != b.loadingAssets ||
+            a.hints != b.hints,
         builder: (context, state) => SwapAssetPicker(
           side: side,
           catalog: state.catalog,
           loading: state.loadingAssets,
+          offered: side == SwapPickerSide.receive
+              ? state.hints.payCounts
+              : state.hints.receiveCounts,
           signedIn: signedIn,
           selected: selected,
           other: other,
@@ -112,6 +118,7 @@ class SwapAssetPicker extends StatefulWidget {
     this.signedIn = true,
     this.showTestCoins = true,
     this.onRetryCatalog,
+    this.offered,
     super.key,
   });
 
@@ -130,6 +137,10 @@ class SwapAssetPicker extends StatefulWidget {
   final bool showTestCoins;
 
   final VoidCallback? onRetryCatalog;
+
+  /// Which assets anyone on the order book trades against [other]. Rows it
+  /// knows have no offers are set apart; unknown ones are not.
+  final SwapOfferCounts? offered;
 
   @override
   State<SwapAssetPicker> createState() => _SwapAssetPickerState();

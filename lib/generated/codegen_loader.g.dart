@@ -1803,6 +1803,11 @@ abstract class LocaleKeys {
       'swapPickerUnreachableOrderBookOnly';
   static const swapPickerUnreachableRoutesOnly =
       'swapPickerUnreachableRoutesOnly';
+  static const swapPickerNoOffersTitle = 'swapPickerNoOffersTitle';
+  static const swapPickerNoOffersTitlePay = 'swapPickerNoOffersTitlePay';
+  static const swapPickerNoOffersBody = 'swapPickerNoOffersBody';
+  static const swapPickerNoOffersBodyPay = 'swapPickerNoOffersBodyPay';
+  static const swapPickerBadgeNoOffers = 'swapPickerBadgeNoOffers';
   static const swapPickerIncomplete = 'swapPickerIncomplete';
   static const swapPickerHideZero = 'swapPickerHideZero';
   static const swapPickerHiddenCount = 'swapPickerHiddenCount';

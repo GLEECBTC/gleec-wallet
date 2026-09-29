@@ -14,6 +14,7 @@ class _PickerRow extends StatelessWidget {
     required this.blocked,
     required this.activating,
     this.unreachableWith,
+    this.noOffers = false,
     required this.activationFailed,
     required this.onTap,
   });
@@ -30,6 +31,10 @@ class _PickerRow extends StatelessWidget {
   final bool blocked;
 
   final AssetId? unreachableWith;
+
+  /// No one is offering it for the other side's asset right now. It can
+  /// still be chosen: orders come and go.
+  final bool noOffers;
   final bool activating;
   final bool activationFailed;
   final VoidCallback? onTap;
@@ -111,6 +116,7 @@ class _PickerRow extends StatelessWidget {
           label: LocaleKeys.swapPickerSameTicker.tr(),
           tone: SwapTone.info,
         ),
+      if (noOffers) SwapBadge(label: LocaleKeys.swapPickerBadgeNoOffers.tr()),
       if (blocked)
         SwapBadge(
           label: LocaleKeys.swapPickerBlocked.tr(),

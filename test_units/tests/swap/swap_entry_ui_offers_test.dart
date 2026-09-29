@@ -10,6 +10,7 @@ import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -153,6 +154,103 @@ void main() {
       await tester.tap(find.text('Check again'));
       await tester.pumpAndSettle();
       expect(swap.events, [const UnifiedSwapOffersRequested(recount: true)]);
+    });
+  });
+
+  group('the pickers', () {
+    Future<List<Object?>> openPicker(
+      WidgetTester tester, {
+      required SwapPickerSide side,
+      required AssetId other,
+      SwapOfferCounts? offered,
+    }) => openSwapRoute(
+      tester,
+      SwapAssetPicker(
+        side: side,
+        catalog: swapTestCatalog,
+        selected: null,
+        other: other,
+        services: services,
+        isBlocked: (_) => false,
+        offered: offered,
+      ),
+      bloc: swap,
+      services: services,
+    );
+
+    double top(WidgetTester tester, String text) =>
+        tester.getTopLeft(find.text(text).first).dy;
+
+    testWidgets('set apart what no one offers for the pay asset', (
+      tester,
+    ) async {
+      final popped = await openPicker(
+        tester,
+        side: SwapPickerSide.receive,
+        other: eth,
+        offered: SwapOfferCounts(eth, {gleec: false, btc: true}),
+      );
+
+      const title = 'No offers with ETH right now';
+      expect(find.text(title), findsOneWidget);
+      expect(
+        find.text(
+          'No one is offering these for ETH right now. Offers come and go, '
+          'so you can still pick one.',
+        ),
+        findsOneWidget,
+      );
+      expect(top(tester, 'GLEEC'), greaterThan(top(tester, title)));
+      expect(top(tester, 'BTC'), lessThan(top(tester, title)));
+      expect(find.text('No offers'), findsOneWidget);
+
+      // Orders come and go, so it can still be chosen.
+      await tester.tap(find.text('GLEEC').first);
+      await tester.pumpAndSettle();
+      expect(popped, [gleec]);
+    });
+
+    testWidgets('when paying, set apart what cannot buy the other asset', (
+      tester,
+    ) async {
+      await openPicker(
+        tester,
+        side: SwapPickerSide.pay,
+        other: gleec,
+        offered: SwapOfferCounts(gleec, {eth: false, usdc: true}),
+      );
+
+      const title = 'No GLEEC offers for these right now';
+      expect(find.text(title), findsOneWidget);
+      expect(top(tester, 'ETH'), greaterThan(top(tester, title)));
+      expect(top(tester, 'USDC'), lessThan(top(tester, title)));
+    });
+
+    testWidgets('counts for another asset set nothing apart', (tester) async {
+      await openPicker(
+        tester,
+        side: SwapPickerSide.receive,
+        other: eth,
+        offered: SwapOfferCounts(usdc, {gleec: false}),
+      );
+
+      expect(find.text('No offers with ETH right now'), findsNothing);
+      expect(find.text('No offers'), findsNothing);
+    });
+
+    testWidgets('open from the form with the counts it read', (tester) async {
+      await pump(
+        tester,
+        noOffers(
+          pay: usdc,
+          receiveCounts: SwapOfferCounts(gleec, {usdc: false, btc: true}),
+        ),
+      );
+
+      await press(tester);
+
+      expect(find.text('What you pay with'), findsOneWidget);
+      expect(find.text('No GLEEC offers for these right now'), findsOneWidget);
     });
   });
 
