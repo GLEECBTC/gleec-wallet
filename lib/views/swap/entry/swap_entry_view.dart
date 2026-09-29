@@ -332,6 +332,15 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             false,
           ),
           SwapEntryAction.connect => connect,
+          SwapEntryAction.useAmount => (
+            LocaleKeys.swapCtaUseAmount.tr(
+              args: [
+                SwapFormat.tokens(copy.amount!, SwapFormat.ticker(state.pay!)),
+              ],
+            ),
+            () => _bloc.add(UnifiedSwapAmountSuggested(copy.amount!)),
+            false,
+          ),
           SwapEntryAction.none => (review, null, false),
         };
       case SwapEvaluationStatus.ready:

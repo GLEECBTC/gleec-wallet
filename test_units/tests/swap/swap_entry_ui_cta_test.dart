@@ -12,6 +12,9 @@ import 'package:web_dex/bloc/taker_form/taker_state.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
@@ -337,6 +340,41 @@ void main() {
     expect(swapPrimaryLabel(tester), 'Try again');
     await press(tester);
     expect(swap.events, [const UnifiedSwapEvaluationRequested()]);
+  });
+
+  group('an amount no offer takes', () {
+    UnifiedSwapState failedWith(SwapQuoteFailure failure) =>
+        swapBaseForm(input: '1.9').copyWith(
+          evaluation: SwapEvaluationStatus.failed,
+          failure: failure,
+          failures: [failure],
+        );
+
+    SwapQuoteFailure above(String maximum) => SwapQuoteFailure(
+      source: SwapLiquiditySource.atomic,
+      kind: SwapQuoteFailureKind.aboveMaximum,
+      maximum: d(maximum),
+      offers: SwapOrderBookOffers([SwapOfferBand(d('0.1'), d(maximum))]),
+    );
+
+    testWidgets('offers the largest offer, and uses it', (tester) async {
+      await pump(tester, failedWith(above('1.5')));
+
+      expect(swapPrimaryLabel(tester), 'Use 1.5 ETH');
+      expect(
+        find.text('The largest offer right now takes 1.5 ETH.'),
+        findsOneWidget,
+      );
+      await press(tester);
+      expect(swap.events, [UnifiedSwapAmountSuggested(d('1.5'))]);
+    });
+
+    testWidgets('offers nothing the wallet cannot pay', (tester) async {
+      await pump(tester, failedWith(above('3')));
+
+      expect(swapPrimaryLabel(tester), 'Review swap');
+      expect(enabled(tester), isFalse);
+    });
   });
 
   testWidgets('options that cannot be ranked ask for one to be chosen', (

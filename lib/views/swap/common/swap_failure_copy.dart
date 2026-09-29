@@ -15,14 +15,20 @@ class SwapFailureCopy {
     required this.message,
     this.detail,
     this.action = SwapEntryAction.retry,
+    this.amount,
   });
 
   final String message;
   final String? detail;
   final SwapEntryAction action;
 
+  /// For [SwapEntryAction.useAmount]: the amount of the pay asset to use.
+  final Decimal? amount;
+
   /// The copy for [failure], the evaluation's primary failure; [all] is every
   /// source's, so a firm answer can say another source could not answer.
+  /// [amount] is what was asked and [balance] what the wallet can spend, so
+  /// an amount that would fill is offered only when it can be paid.
   static SwapFailureCopy of(
     SwapQuoteFailure failure,
     AssetId? pay, {
@@ -30,6 +36,8 @@ class SwapFailureCopy {
     List<SwapQuoteFailure> all = const [],
     SwapPairSupport? support,
     SwapNetworks? networks,
+    Decimal? amount,
+    Decimal? balance,
   }) {
     String ticker(AssetId? asset) =>
         asset == null ? '' : SwapFormat.ticker(asset);
@@ -44,33 +52,17 @@ class SwapFailureCopy {
         message: LocaleKeys.swapErrorPairUnsupported.tr(),
         action: SwapEntryAction.chooseAnother,
       ),
-      SwapQuoteFailureKind.belowMinimum => SwapFailureCopy(
-        message: failure.minimum == null
-            ? LocaleKeys.swapErrorTooSmall.tr()
-            : LocaleKeys.swapErrorBelowMinimum.tr(
-                args: [
-                  SwapFormat.tokens(
-                    failure.minimum!,
-                    ticker(pay),
-                    rounding: SwapRounding.up,
-                  ),
-                ],
-              ),
-        action: SwapEntryAction.none,
+      SwapQuoteFailureKind.belowMinimum => _bound(
+        failure,
+        pay,
+        above: false,
+        balance: balance,
       ),
-      SwapQuoteFailureKind.aboveMaximum => SwapFailureCopy(
-        message: LocaleKeys.swapErrorAboveMaximum.tr(
-          args: [
-            failure.maximum == null
-                ? ''
-                : SwapFormat.tokens(
-                    failure.maximum!,
-                    ticker(pay),
-                    rounding: SwapRounding.down,
-                  ),
-          ],
-        ),
-        action: SwapEntryAction.none,
+      SwapQuoteFailureKind.aboveMaximum => _bound(
+        failure,
+        pay,
+        above: true,
+        balance: balance,
       ),
       SwapQuoteFailureKind.noRoute => _noRoute(
         failure,
@@ -79,6 +71,8 @@ class SwapFailureCopy {
         pay: pay,
         receive: receive,
         networks: networks,
+        amount: amount,
+        balance: balance,
       ),
       SwapQuoteFailureKind.rateLimited => SwapFailureCopy(
         message: LocaleKeys.swapErrorRateLimited.tr(),
@@ -126,6 +120,68 @@ class SwapFailureCopy {
     };
   }
 
+  /// The minimum or maximum the amount crossed, and a switch to it.
+  static SwapFailureCopy _bound(
+    SwapQuoteFailure failure,
+    AssetId? pay, {
+    required bool above,
+    Decimal? balance,
+  }) {
+    final bound = above ? failure.maximum : failure.minimum;
+    if (bound == null || pay == null) {
+      return SwapFailureCopy(
+        message: above
+            ? LocaleKeys.swapErrorAboveMaximum.tr(args: [''])
+            : LocaleKeys.swapErrorTooSmall.tr(),
+        action: SwapEntryAction.none,
+      );
+    }
+    final rounding = above ? SwapRounding.down : SwapRounding.up;
+    final text = SwapFormat.tokens(
+      bound,
+      SwapFormat.ticker(pay),
+      rounding: rounding,
+    );
+    // An order-book bound is one trader's order, not a limit of the venue.
+    final byOffers = failure.offers != null;
+    final message = above
+        ? (byOffers
+                  ? LocaleKeys.swapErrorOffersAbove
+                  : LocaleKeys.swapErrorAboveMaximum)
+              .tr(args: [text])
+        : (byOffers
+                  ? LocaleKeys.swapErrorOffersBelow
+                  : LocaleKeys.swapErrorBelowMinimum)
+              .tr(args: [text]);
+    final usable = _usable(bound, pay, rounding: rounding, balance: balance);
+    return SwapFailureCopy(
+      message: message,
+      action: usable == null ? SwapEntryAction.none : SwapEntryAction.useAmount,
+      amount: usable,
+    );
+  }
+
+  /// [value] as the amount a button offers: at the precision it is shown
+  /// with, rounded towards filling, within the asset's decimals. Null when
+  /// that is nothing or more than [balance].
+  static Decimal? _usable(
+    Decimal value,
+    AssetId pay, {
+    required SwapRounding rounding,
+    Decimal? balance,
+  }) {
+    var usable = SwapFormat.shown(value, rounding: rounding);
+    final decimals = pay.chainId.decimals;
+    if (decimals != null && usable.scale > decimals) {
+      usable = rounding == SwapRounding.up
+          ? usable.ceil(scale: decimals)
+          : usable.floor(scale: decimals);
+    }
+    if (usable <= Decimal.zero) return null;
+    if (balance != null && usable > balance) return null;
+    return usable;
+  }
+
   static SwapFailureCopy _noRoute(
     SwapQuoteFailure failure,
     List<SwapQuoteFailure> all,
@@ -133,6 +189,8 @@ class SwapFailureCopy {
     AssetId? pay,
     AssetId? receive,
     SwapNetworks? networks,
+    Decimal? amount,
+    Decimal? balance,
   }) {
     final others = all.where((other) => other.source != failure.source);
     if (others.any((other) => other.isTransient)) {
@@ -147,6 +205,35 @@ class SwapFailureCopy {
         message: LocaleKeys.swapErrorNoRouteSignedOut.tr(),
         action: SwapEntryAction.connect,
       );
+    }
+    final offers = failure.offers;
+    if (offers != null && !offers.isEmpty && amount != null && pay != null) {
+      final below = offers.largestUpTo(amount);
+      final above = offers.smallestFrom(amount);
+      if (below != null && above != null) {
+        final ticker = SwapFormat.ticker(pay);
+        final usable =
+            _usable(
+              below,
+              pay,
+              rounding: SwapRounding.down,
+              balance: balance,
+            ) ??
+            _usable(above, pay, rounding: SwapRounding.up, balance: balance);
+        return SwapFailureCopy(
+          message: LocaleKeys.swapErrorOffersGap.tr(
+            args: [
+              SwapFormat.tokens(amount, ticker),
+              SwapFormat.tokens(below, ticker, rounding: SwapRounding.down),
+              SwapFormat.tokens(above, ticker, rounding: SwapRounding.up),
+            ],
+          ),
+          action: usable == null
+              ? SwapEntryAction.none
+              : SwapEntryAction.useAmount,
+          amount: usable,
+        );
+      }
     }
     final String? detail;
     if (failure.reasons.isNotEmpty) {
@@ -212,6 +299,9 @@ enum SwapEntryAction {
 
   /// Wait out a rate limit.
   wait,
+
+  /// Switch to an amount that fills.
+  useAmount,
 
   /// Connect a wallet, which the source that could answer needs.
   connect,

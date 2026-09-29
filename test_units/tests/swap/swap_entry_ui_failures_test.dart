@@ -232,9 +232,7 @@ void main() {
   });
 
   group('an amount outside what a source accepts', () {
-    testWidgets('gives the bound, and leaves the amount to change', (
-      tester,
-    ) async {
+    testWidgets('gives the bound, and offers to use it', (tester) async {
       await pump(
         tester,
         failedWith(
@@ -247,8 +245,9 @@ void main() {
       );
 
       expect(find.text('Minimum swap: 0.5 ETH'), findsOneWidget);
-      expect(swapPrimaryLabel(tester), 'Review swap');
-      expect(enabled(tester), isFalse);
+      expect(swapPrimaryLabel(tester), 'Use 0.5 ETH');
+      await press(tester);
+      expect(swap.events, [UnifiedSwapAmountSuggested(d('0.5'))]);
     });
 
     testWidgets('more than the balance is also named on the button', (

@@ -39,6 +39,19 @@ void main() {
         expect(SwapFormat.amount(d('0.00000001')), '0.00000001');
       });
 
+      test('an amount as shown is the value the text reads', () {
+        expect(
+          SwapFormat.shown(d('4500.129'), rounding: SwapRounding.down),
+          d('4500.12'),
+        );
+        expect(
+          SwapFormat.shown(d('0.123411'), rounding: SwapRounding.up),
+          d('0.1235'),
+        );
+        expect(SwapFormat.shown(d('12.5')), d('12.5'));
+        expect(SwapFormat.shown(d('0')), d('0'));
+      });
+
       test('a received amount rounds down, a cost rounds up', () {
         expect(
           SwapFormat.amount(d('0.123456'), rounding: SwapRounding.down),

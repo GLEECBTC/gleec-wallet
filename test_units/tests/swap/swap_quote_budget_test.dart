@@ -59,6 +59,14 @@ void main() {
     expect(calls, 1);
   });
 
+  test('using an amount the form offered prices it once', () {
+    final calls = _run(amount: '', (bloc, async) {
+      bloc.add(UnifiedSwapAmountSuggested(Decimal.parse('0.5')));
+      async.elapse(const Duration(seconds: 2));
+    });
+    expect(calls, 1);
+  });
+
   test('Max on a native coin reuses the route it just priced', () {
     // Before: 3 — a probe at the full balance, then both routes.
     final calls = _run((bloc, async) {

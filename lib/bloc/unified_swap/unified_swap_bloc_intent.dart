@@ -114,6 +114,28 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     _scheduleEvaluation(immediate: true);
   }
 
+  void _onAmountSuggested(
+    UnifiedSwapAmountSuggested event,
+    Emitter<UnifiedSwapState> emit,
+  ) {
+    _invalidate();
+    emit(
+      _validated(
+        state.copyWith(
+          inputText: event.amount.toString(),
+          amountMode: SwapAmountMode.token,
+          clearMaxApplied: true,
+          clearQuotes: true,
+          clearSelectedId: true,
+          clearFailure: true,
+          evaluation: SwapEvaluationStatus.idle,
+          structuralNotice: false,
+        ),
+      ),
+    );
+    _scheduleEvaluation(immediate: true);
+  }
+
   Future<void> _onMaxRequested(
     UnifiedSwapMaxRequested event,
     Emitter<UnifiedSwapState> emit,

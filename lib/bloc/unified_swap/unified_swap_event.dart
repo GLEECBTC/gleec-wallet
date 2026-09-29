@@ -1,3 +1,4 @@
+import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
@@ -87,6 +88,16 @@ final class UnifiedSwapAmountModeToggled extends UnifiedSwapEvent {
 /// Fill the amount with everything sellable, keeping what fees need.
 final class UnifiedSwapMaxRequested extends UnifiedSwapEvent {
   const UnifiedSwapMaxRequested();
+}
+
+/// Use [amount] of the pay asset: one the form offered because it fills.
+final class UnifiedSwapAmountSuggested extends UnifiedSwapEvent {
+  const UnifiedSwapAmountSuggested(this.amount);
+
+  final Decimal amount;
+
+  @override
+  List<Object?> get props => [amount];
 }
 
 /// Evaluate options now: a retry, a refresh, or the debounce firing.

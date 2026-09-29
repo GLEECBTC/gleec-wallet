@@ -122,6 +122,8 @@ import 'tests/swap/swap_asset_picker_test.dart' as swap_asset_picker_test;
 import 'tests/swap/swap_catalog_test.dart' as swap_catalog_test;
 import 'tests/swap/swap_copy_test.dart' as swap_copy_test;
 import 'tests/swap/swap_failure_copy_test.dart' as swap_failure_copy_test;
+import 'tests/swap/swap_failure_copy_offers_test.dart'
+    as swap_failure_copy_offers_test;
 import 'tests/swap/swap_execution_bloc_test.dart' as swap_execution_bloc_test;
 import 'tests/swap/swap_execution_registry_test.dart'
     as swap_execution_registry_test;
@@ -564,6 +566,7 @@ void main() {
   unified_swap_catalog_bloc_test.main();
   swap_catalog_test.main();
   swap_failure_copy_test.main();
+  swap_failure_copy_offers_test.main();
   swap_asset_picker_test.main();
   swap_quote_budget_test.main();
   swap_indicative_quote_test.main();

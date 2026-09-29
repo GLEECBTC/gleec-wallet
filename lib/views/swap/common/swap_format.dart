@@ -33,19 +33,27 @@ abstract final class SwapFormat {
   }) {
     final abs = value.abs();
     if (abs == Decimal.zero) return '0';
-    final int decimals;
-    if (abs >= _thousand) {
-      decimals = 2;
-    } else if (abs >= Decimal.one) {
-      decimals = 4;
-    } else {
-      decimals = (_leadingFractionZeros(abs) + 4).clamp(0, 8);
-    }
+    final decimals = _decimalsFor(abs);
     final rounded = _round(value, decimals, rounding);
     if (rounded == Decimal.zero) {
       return '< ${_trim(Decimal.one.shift(-decimals).toStringAsFixed(decimals))}';
     }
     return _group(_trim(rounded.toStringAsFixed(decimals)));
+  }
+
+  /// [value] at the precision [amount] shows it with, so an amount offered as
+  /// a label is exactly the one used.
+  static Decimal shown(
+    Decimal value, {
+    SwapRounding rounding = SwapRounding.nearest,
+  }) => value == Decimal.zero
+      ? value
+      : _round(value, _decimalsFor(value.abs()), rounding);
+
+  static int _decimalsFor(Decimal abs) {
+    if (abs >= _thousand) return 2;
+    if (abs >= Decimal.one) return 4;
+    return (_leadingFractionZeros(abs) + 4).clamp(0, 8);
   }
 
   /// A token amount followed by its ticker.

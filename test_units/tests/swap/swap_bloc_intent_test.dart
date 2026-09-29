@@ -119,6 +119,21 @@ void main() {
     });
   });
 
+  swapBlocTest('an amount the form offered is used in tokens at once', (h) {
+    final bloc = h.open(amount: '0.1')
+      ..add(const UnifiedSwapAmountModeToggled());
+    h.settle();
+    expect(bloc.state.amountMode, SwapAmountMode.fiat);
+
+    bloc.add(UnifiedSwapAmountSuggested(d('0.5')));
+    h.settle();
+
+    expect(bloc.state.inputText, '0.5');
+    expect(bloc.state.amountMode, SwapAmountMode.token);
+    expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+    expect(h.routed.requests.last.amount, d('0.5'));
+  });
+
   swapBlocTest('the slippage already in use does not price again', (h) {
     final bloc = h.open()
       ..add(const UnifiedSwapSlippageChanged(swapDefaultSlippage));

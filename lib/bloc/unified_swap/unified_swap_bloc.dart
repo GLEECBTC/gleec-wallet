@@ -76,6 +76,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapAmountChanged>(_onAmountChanged);
     on<UnifiedSwapAmountModeToggled>(_onAmountModeToggled);
     on<UnifiedSwapMaxRequested>(_onMaxRequested);
+    on<UnifiedSwapAmountSuggested>(_onAmountSuggested);
     on<UnifiedSwapEvaluationRequested>(_onEvaluationRequested);
     on<UnifiedSwapOptionSelected>(_onOptionSelected);
     on<UnifiedSwapReviewOpened>(_onReviewOpened);

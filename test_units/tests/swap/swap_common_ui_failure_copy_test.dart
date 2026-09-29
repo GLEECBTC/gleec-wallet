@@ -67,27 +67,33 @@ void main() {
       );
     });
 
-    test('limits name the bound in the pay asset, rounded to stay valid', () {
-      expectCopy(
-        SwapFailureCopy.of(
-          failure(
-            SwapQuoteFailureKind.belowMinimum,
-            minimum: '0.123401',
-            maximum: '5',
-          ),
-          eth,
+    test('limits name the bound in the pay asset and offer it, rounded to '
+        'stay valid', () {
+      final below = SwapFailureCopy.of(
+        failure(
+          SwapQuoteFailureKind.belowMinimum,
+          minimum: '0.123401',
+          maximum: '5',
         ),
+        eth,
+      );
+      final above = SwapFailureCopy.of(
+        failure(SwapQuoteFailureKind.aboveMaximum, maximum: '5.123456'),
+        eth,
+      );
+
+      expectCopy(
+        below,
         'Minimum swap: 0.1235 ETH',
-        action: SwapEntryAction.none,
+        action: SwapEntryAction.useAmount,
       );
+      expect(below.amount, d('0.1235'));
       expectCopy(
-        SwapFailureCopy.of(
-          failure(SwapQuoteFailureKind.aboveMaximum, maximum: '5.123456'),
-          eth,
-        ),
+        above,
         'Maximum swap: 5.1234 ETH',
-        action: SwapEntryAction.none,
+        action: SwapEntryAction.useAmount,
       );
+      expect(above.amount, d('5.1234'));
     });
 
     test('a missing minimum is never filled in with the maximum', () {

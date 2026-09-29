@@ -265,6 +265,24 @@ void main() {
         'Max uses 0.5 BTC. Trading and network fees are kept back.',
       ]);
     });
+
+    testWidgets('an amount capped at the largest offer says so', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        maxed(
+          SwapMaxAmount(
+            amount: d('0.5'),
+            reservedForFees: d('0.01'),
+            offerLimit: true,
+          ),
+          pay: btc,
+        ),
+      );
+
+      expect(lines(tester), ['Max uses 0.5 BTC, the largest offer right now.']);
+    });
   });
 
   testWidgets('without a market price, what is still known is said', (

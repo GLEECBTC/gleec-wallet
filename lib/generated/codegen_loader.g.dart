@@ -1408,6 +1408,7 @@ abstract class LocaleKeys {
   static const swapCtaConnectWallet = 'swapCtaConnectWallet';
   static const swapCtaSelectOption = 'swapCtaSelectOption';
   static const swapCtaNotEnough = 'swapCtaNotEnough';
+  static const swapCtaUseAmount = 'swapCtaUseAmount';
   static const swapErrorMalformed = 'swapErrorMalformed';
   static const swapErrorZero = 'swapErrorZero';
   static const swapErrorTooManyDecimals = 'swapErrorTooManyDecimals';
@@ -1418,6 +1419,9 @@ abstract class LocaleKeys {
   static const swapErrorBelowMinimum = 'swapErrorBelowMinimum';
   static const swapErrorTooSmall = 'swapErrorTooSmall';
   static const swapErrorAboveMaximum = 'swapErrorAboveMaximum';
+  static const swapErrorOffersBelow = 'swapErrorOffersBelow';
+  static const swapErrorOffersAbove = 'swapErrorOffersAbove';
+  static const swapErrorOffersGap = 'swapErrorOffersGap';
   static const swapErrorNoRoute = 'swapErrorNoRoute';
   static const swapErrorPairUnsupported = 'swapErrorPairUnsupported';
   static const swapErrorPairDisjoint = 'swapErrorPairDisjoint';
@@ -1447,6 +1451,7 @@ abstract class LocaleKeys {
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxToken = 'swapHelperMaxToken';
   static const swapHelperMaxAtomic = 'swapHelperMaxAtomic';
+  static const swapHelperMaxOffer = 'swapHelperMaxOffer';
   static const swapHelperStructural = 'swapHelperStructural';
   static const swapHelperNoRouteReasons = 'swapHelperNoRouteReasons';
   static const swapHelperOrderBookOnly = 'swapHelperOrderBookOnly';

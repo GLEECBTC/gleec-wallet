@@ -96,6 +96,8 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     all: state.failures,
     support: state.pairSupport,
     networks: _services.networks(),
+    amount: _bloc.amountOf(state),
+    balance: state.signedIn ? state.balance : null,
   );
 
   List<Widget> _failureLines(UnifiedSwapState state) {
@@ -135,6 +137,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   String _maxHint(SwapMaxAmount max, AssetId pay) {
     final ticker = SwapFormat.ticker(pay);
     final amount = SwapFormat.tokens(max.amount, ticker);
+    if (max.offerLimit) return LocaleKeys.swapHelperMaxOffer.tr(args: [amount]);
     if (max.reservedForFees > Decimal.zero) {
       final feeTicker = max.feeAsset == null
           ? ticker
