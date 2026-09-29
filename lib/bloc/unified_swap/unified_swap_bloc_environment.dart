@@ -23,9 +23,14 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   void _onPresenceChanged() {
     if (!_present) {
       _refresh?.cancel();
+      _offersWatch?.cancel();
       return;
     }
     if (state.view != UnifiedSwapView.form) return;
+    if (state.issue == SwapFormIssue.noOffers) {
+      add(const UnifiedSwapOffersRequested(quiet: true));
+      return;
+    }
     final quote = state.selectedQuote;
     final stale =
         state.evaluation == SwapEvaluationStatus.expired ||
@@ -86,6 +91,9 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       await _loadAddresses(emit);
     }
     if (event.tradingEnabled && state.view == UnifiedSwapView.form) {
+      // Signing in makes the wallet's own orders known, and those are no
+      // counterparty.
+      add(const UnifiedSwapOffersRequested());
       _scheduleEvaluation(immediate: true);
     }
   }

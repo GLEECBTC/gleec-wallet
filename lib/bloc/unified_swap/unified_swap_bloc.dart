@@ -7,6 +7,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
@@ -16,6 +17,7 @@ import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 part 'unified_swap_bloc_environment.dart';
 part 'unified_swap_bloc_evaluation.dart';
 part 'unified_swap_bloc_intent.dart';
+part 'unified_swap_bloc_offers.dart';
 part 'unified_swap_bloc_review.dart';
 part 'unified_swap_bloc_rules.dart';
 
@@ -53,6 +55,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     Duration refreshInterval = const Duration(seconds: 30),
     Duration rateLimitPause = const Duration(seconds: 30),
     Duration idleLimit = const Duration(minutes: 5),
+    Duration offersInterval = const Duration(seconds: 30),
   }) : _repository = repository,
        _registry = registry,
        _terms = terms,
@@ -67,6 +70,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
        _refreshInterval = refreshInterval,
        _rateLimitPause = rateLimitPause,
        _idleLimit = idleLimit,
+       _offersInterval = offersInterval,
        super(const UnifiedSwapState()) {
     on<UnifiedSwapStarted>(_onStarted);
     on<UnifiedSwapIntentApplied>(_onIntentApplied);
@@ -96,6 +100,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapSlippageChanged>(_onSlippageChanged);
     on<UnifiedSwapForegroundChanged>(_onForegroundChanged);
     on<UnifiedSwapTimerFired>(_onTimerFired);
+    on<UnifiedSwapOffersRequested>(_onOffersRequested);
     _arrivals = repository.arrivals.listen((_) {
       if (!isClosed) add(const UnifiedSwapCatalogArrived());
     });
@@ -120,6 +125,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// that the quote is left to expire, and refreshing is one tap away.
   final Duration _idleLimit;
 
+  /// How often a pair no one offers is checked again.
+  final Duration _offersInterval;
+
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
 
@@ -130,6 +138,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped when a wallet signs in or out, so reads for the previous one are
   /// dropped.
   var _walletEpoch = 0;
+
+  /// Bumped by every read of the order book's offers; only the latest lands.
+  var _offersVersion = 0;
 
   var _visible = true;
   var _foreground = true;
@@ -150,6 +161,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   Timer? _refresh;
   Timer? _expiry;
   Timer? _rateLimit;
+  Timer? _offersWatch;
 
   /// Set when [close] starts: a price still in flight can land after the
   /// timers are cancelled, and must not start new ones.
@@ -186,6 +198,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     // A later read may have returned first; the repository keeps the latest.
     final catalog = _repository.current ?? read;
     emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
+    // Which pairs only the order book trades was unknown until now.
+    if (state.pay != null || state.receive != null) {
+      add(const UnifiedSwapOffersRequested());
+    }
     if (state.pay != null || _intentApplied) {
       // A pair set while the catalog loaded could not be priced then; one
       // still being set prices itself when it finishes.
@@ -229,6 +245,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     emit(_validated(state.copyWith(catalog: catalog)));
     // Only a change in who can price the pair is worth a request.
     if (state.view == UnifiedSwapView.form && state.pairSupport != support) {
+      add(const UnifiedSwapOffersRequested());
       _scheduleEvaluation(immediate: true);
     }
   }
@@ -313,6 +330,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
         ),
       ),
     );
+    _offersWatch?.cancel();
+    add(const UnifiedSwapOffersRequested());
     // An asset the catalog thinks inactive may have been activated since —
     // by the picker a moment ago, or elsewhere in the app. Signed out,
     // nothing can have been.
@@ -335,6 +354,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       UnifiedSwapCatalogArrived() ||
       UnifiedSwapCapabilitiesChanged() => false,
       UnifiedSwapEvaluationRequested(:final quiet) => !quiet,
+      UnifiedSwapOffersRequested(:final quiet) => !quiet,
       UnifiedSwapVisibilityChanged(:final visible) => visible,
       UnifiedSwapForegroundChanged(:final foreground) => foreground,
       _ => true,
@@ -349,6 +369,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     _refresh?.cancel();
     _expiry?.cancel();
     _rateLimit?.cancel();
+    _offersWatch?.cancel();
     unawaited(_arrivals.cancel());
     return super.close();
   }

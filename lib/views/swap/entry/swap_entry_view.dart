@@ -26,6 +26,7 @@ import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 
 part 'swap_entry_messages.dart';
+part 'swap_entry_offers.dart';
 
 /// The swap form: what to pay, what to receive, and the best way to do it.
 class SwapEntryView extends StatefulWidget {
@@ -255,6 +256,14 @@ class _SwapEntryViewState extends State<SwapEntryView> {
       return (
         LocaleKeys.swapCtaChooseAnother.tr(),
         () => _pick(SwapPickerSide.receive),
+        false,
+      );
+    }
+    // Before connecting a wallet too: one would not bring an offer.
+    if (issue == SwapFormIssue.noOffers) {
+      return (
+        LocaleKeys.swapCtaChooseAnother.tr(),
+        () => _pick(_offerSideToChange(state)),
         false,
       );
     }

@@ -118,6 +118,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       }
       return;
     }
+    final failures = all.isEmpty ? [failure] : all;
     // Re-checked, because an issue read from the cleared option's fees no
     // longer has the numbers its message needs.
     emit(
@@ -125,12 +126,14 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         state.copyWith(
           evaluation: SwapEvaluationStatus.failed,
           failure: failure,
-          failures: all.isEmpty ? [failure] : all,
+          failures: failures,
           clearQuotes: true,
           clearSelectedId: true,
+          hints: _hintsFrom(failures),
         ),
       ),
     );
+    if (state.issue == SwapFormIssue.noOffers) _watchOffers(emit);
     if (failure.kind == SwapQuoteFailureKind.rateLimited) {
       _pauseForRateLimit(emit, failure);
     }
@@ -290,6 +293,14 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         if (state.view == UnifiedSwapView.form &&
             state.evaluation == SwapEvaluationStatus.ready) {
           emit(state.copyWith(evaluation: SwapEvaluationStatus.expired));
+        }
+      case UnifiedSwapTimerKind.offers:
+        if (state.issue != SwapFormIssue.noOffers) return;
+        final idle = _now().difference(_lastInteraction) >= _idleLimit;
+        if (idle || !_present) {
+          _watchOffers(emit);
+        } else {
+          add(const UnifiedSwapOffersRequested(quiet: true));
         }
       case UnifiedSwapTimerKind.rateLimitOver:
         emit(state.copyWith(clearRateLimit: true));

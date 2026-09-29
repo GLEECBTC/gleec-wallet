@@ -6,11 +6,8 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 
 import 'swap_test_fixtures.dart';
 
-/// An order-book source whose offers the test scripts.
-class FakeOfferSource extends FakeQuoteSource implements SwapOfferSource {
-  FakeOfferSource({super.tradable, super.results})
-    : super(SwapLiquiditySource.atomic);
-
+/// Order-book offers a test scripts. Unscripted, every answer is unknown.
+mixin ScriptedOffers implements SwapOfferSource {
   /// Offers per `(from, to)`; a pair left out is unknown.
   Map<(AssetId, AssetId), SwapOrderBookOffers> pairOffers = {};
 
@@ -53,4 +50,10 @@ class FakeOfferSource extends FakeQuoteSource implements SwapOfferSource {
         if (answer[id] case final bool offered) id: offered,
     };
   }
+}
+
+/// An order-book source whose offers the test scripts.
+class FakeOfferSource extends FakeQuoteSource with ScriptedOffers {
+  FakeOfferSource({super.tradable, super.results})
+    : super(SwapLiquiditySource.atomic);
 }

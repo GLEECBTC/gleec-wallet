@@ -16,6 +16,7 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
+import 'swap_offer_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 /// Runs [body] with a fresh [SwapBlocHarness] on a fake clock: no timer fires
@@ -70,7 +71,7 @@ class SwapBlocHarness {
     SwapLiquiditySource.routed,
     respond: priced,
   );
-  late final ScriptedQuoteSource atomic = ScriptedQuoteSource(
+  late final ScriptedOfferSource atomic = ScriptedOfferSource(
     SwapLiquiditySource.atomic,
     results: [
       rejected(
@@ -125,6 +126,7 @@ class SwapBlocHarness {
     Duration debounce = Duration.zero,
     Duration refreshInterval = const Duration(seconds: 30),
     Duration idleLimit = const Duration(minutes: 5),
+    Duration offersInterval = const Duration(seconds: 30),
   }) {
     final bloc = UnifiedSwapBloc(
       repository: UnifiedSwapRepository(
@@ -166,6 +168,7 @@ class SwapBlocHarness {
       debounce: debounce,
       refreshInterval: refreshInterval,
       idleLimit: idleLimit,
+      offersInterval: offersInterval,
     );
     _blocs.add(bloc);
     return bloc;
@@ -239,6 +242,11 @@ class ScriptedQuoteSource extends FakeQuoteSource {
     await maxGate?.future;
     return max;
   }
+}
+
+/// The order book: a [ScriptedQuoteSource] whose offers are scripted too.
+class ScriptedOfferSource extends ScriptedQuoteSource with ScriptedOffers {
+  ScriptedOfferSource(super.source, {super.respond, super.results});
 }
 
 /// A [FakeExecutor] that holds each start until [gate] completes, when set.

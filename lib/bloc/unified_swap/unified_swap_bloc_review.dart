@@ -276,6 +276,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       ),
     );
     add(const UnifiedSwapBalancesRefreshed());
+    // The swap just made may have taken the last offer.
+    if (keepPair) add(const UnifiedSwapOffersRequested(recount: true));
   }
 
   Future<void> _onFollowUpRequested(

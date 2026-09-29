@@ -339,6 +339,15 @@ class SwapIssueCopy {
         state.pairSupport,
         networks,
       ),
+      SwapFormIssue.noOffers => SwapIssueCopy(
+        message: LocaleKeys.swapErrorNoOffers.tr(
+          args: [
+            if (state.receive case final receive?) SwapFormat.ticker(receive),
+            ticker,
+          ],
+        ),
+        action: SwapEntryAction.chooseAnother,
+      ),
       SwapFormIssue.assetInactive => SwapIssueCopy(
         message: LocaleKeys.swapErrorInactive.tr(
           args: [SwapFormat.ticker(state.inactiveAsset ?? pay!)],

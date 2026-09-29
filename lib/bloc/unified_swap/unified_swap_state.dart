@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
@@ -39,6 +40,10 @@ const swapMaxSlippage = 0.05;
 enum SwapFormIssue {
   /// No source can trade this pair; see [UnifiedSwapState.pairSupport].
   pairUnsupported,
+
+  /// Only the order book trades this pair, and no one is offering it; see
+  /// [UnifiedSwapState.hints]. Nothing is priced until an offer appears.
+  noOffers,
 
   /// No wallet is signed in, so nothing is active and only wallet-free
   /// sources price. The way on is connecting one, not activating an asset.
@@ -217,6 +222,7 @@ class UnifiedSwapState extends Equatable {
     this.tradingEnabled = true,
     this.clockValid = true,
     this.signedIn = true,
+    this.hints = const SwapOrderBookHints(),
   });
 
   /// Which screen is showing.
@@ -309,6 +315,9 @@ class UnifiedSwapState extends Equatable {
   /// Whether a wallet is signed in.
   final bool signedIn;
 
+  /// What the order book offers for the chosen assets.
+  final SwapOrderBookHints hints;
+
   /// The selected option.
   SwapQuote? get selectedQuote {
     final id = selectedId;
@@ -373,6 +382,7 @@ class UnifiedSwapState extends Equatable {
     tradingEnabled,
     clockValid,
     signedIn,
+    hints,
   ];
 
   /// A copy with the given fields replaced. Nullable fields take explicit
@@ -407,6 +417,7 @@ class UnifiedSwapState extends Equatable {
     bool? tradingEnabled,
     bool? clockValid,
     bool? signedIn,
+    SwapOrderBookHints? hints,
     bool clearPay = false,
     bool clearReceive = false,
     bool clearPayAddress = false,
@@ -457,6 +468,7 @@ class UnifiedSwapState extends Equatable {
       tradingEnabled: tradingEnabled ?? this.tradingEnabled,
       clockValid: clockValid ?? this.clockValid,
       signedIn: signedIn ?? this.signedIn,
+      hints: hints ?? this.hints,
     );
   }
 }

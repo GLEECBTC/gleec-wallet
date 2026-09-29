@@ -6,6 +6,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
     final pay = state.pay;
     final issue = state.issue;
+    if (issue == SwapFormIssue.noOffers) return _noOffersLines(state);
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(
         issue,
@@ -76,14 +77,18 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         SwapHelperLine(text: LocaleKeys.swapWarningPriceUnavailable.tr()),
       ];
     }
+    final range = _offerRange(state);
     // Signed out, "Checking what this wallet can swap" would name no wallet.
     if (!state.signedIn) {
-      return [SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr())];
+      return [
+        ?range,
+        SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr()),
+      ];
     }
     if (state.loadingAssets) {
       return [SwapHelperLine(text: LocaleKeys.swapHelperLoadingAssets.tr())];
     }
-    return const [];
+    return [?range];
   }
 
   SwapFailureCopy _failureCopy(

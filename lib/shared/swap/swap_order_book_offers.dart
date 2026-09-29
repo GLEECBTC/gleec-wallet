@@ -108,3 +108,73 @@ abstract interface class SwapOfferSource {
     required bool anchorPays,
   });
 }
+
+/// Which assets anyone trades against [anchor] on the order book.
+class SwapOfferCounts extends Equatable {
+  const SwapOfferCounts(this.anchor, this.offered);
+
+  final AssetId anchor;
+
+  /// Per asset, whether any order trades it against [anchor]. An asset left
+  /// out is unknown.
+  final Map<AssetId, bool> offered;
+
+  /// Whether [asset] is known to have no offers.
+  bool lacks(AssetId asset) => offered[asset] == false;
+
+  /// Whether nothing is known to trade against [anchor] at all.
+  bool get none => offered.isNotEmpty && !offered.containsValue(true);
+
+  @override
+  List<Object?> get props => [anchor, offered];
+}
+
+/// What the swap form knows of the order book for its assets.
+///
+/// Hints only: orders come and go, and a quote stays the answer.
+class SwapOrderBookHints extends Equatable {
+  const SwapOrderBookHints({
+    this.pair,
+    this.offers,
+    this.payCounts,
+    this.receiveCounts,
+    this.watching = false,
+  });
+
+  /// The pair [offers] were read for.
+  final (AssetId, AssetId)? pair;
+
+  /// The offers for [pair], a pair only the order book trades.
+  final SwapOrderBookOffers? offers;
+
+  /// What the pay asset can buy on the order book.
+  final SwapOfferCounts? payCounts;
+
+  /// What can buy the receive asset on the order book.
+  final SwapOfferCounts? receiveCounts;
+
+  /// Whether the form keeps checking a pair no one is offering.
+  final bool watching;
+
+  /// The offers for [pay] → [receive], when those were read.
+  SwapOrderBookOffers? offersFor(AssetId pay, AssetId receive) =>
+      pair == (pay, receive) ? offers : null;
+
+  SwapOrderBookHints copyWith({
+    (AssetId, AssetId)? pair,
+    SwapOrderBookOffers? offers,
+    SwapOfferCounts? payCounts,
+    SwapOfferCounts? receiveCounts,
+    bool? watching,
+    bool clearOffers = false,
+  }) => SwapOrderBookHints(
+    pair: clearOffers ? null : (pair ?? this.pair),
+    offers: clearOffers ? null : (offers ?? this.offers),
+    payCounts: payCounts ?? this.payCounts,
+    receiveCounts: receiveCounts ?? this.receiveCounts,
+    watching: watching ?? this.watching,
+  );
+
+  @override
+  List<Object?> get props => [pair, offers, payCounts, receiveCounts, watching];
+}

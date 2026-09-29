@@ -111,6 +111,20 @@ final class UnifiedSwapEvaluationRequested extends UnifiedSwapEvent {
   List<Object?> get props => [quiet];
 }
 
+/// Read what the order book offers for the chosen assets.
+final class UnifiedSwapOffersRequested extends UnifiedSwapEvent {
+  const UnifiedSwapOffersRequested({this.quiet = false, this.recount = false});
+
+  /// The watch asking again, not the user.
+  final bool quiet;
+
+  /// Count again who trades each asset, not only the pair's offers.
+  final bool recount;
+
+  @override
+  List<Object?> get props => [quiet, recount];
+}
+
 /// The user chose one of the options.
 final class UnifiedSwapOptionSelected extends UnifiedSwapEvent {
   const UnifiedSwapOptionSelected(this.id);
@@ -293,4 +307,7 @@ enum UnifiedSwapTimerKind {
 
   /// A rate-limit pause is over.
   rateLimitOver,
+
+  /// Check again whether anyone offers a pair that had no offers.
+  offers,
 }

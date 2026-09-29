@@ -23,6 +23,7 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     if (next.pairSupport case final support? when !support.isSupported) {
       return SwapFormIssue.pairUnsupported;
     }
+    if (_offersNone(next)) return SwapFormIssue.noOffers;
     // Signed out, nothing is active or funded, so only the amount is checked.
     if (next.signedIn) {
       if (next.inactiveAsset != null) return SwapFormIssue.assetInactive;

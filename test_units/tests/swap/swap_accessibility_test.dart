@@ -24,6 +24,7 @@ import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -251,6 +252,29 @@ void main() {
         ),
       ],
     ),
+    'no one offering an order-book pair': () =>
+        form(
+          receive: gleecEvm,
+          issue: SwapFormIssue.noOffers,
+          evaluation: SwapEvaluationStatus.idle,
+        ).copyWith(
+          hints: SwapOrderBookHints(
+            pair: (eth, gleecEvm),
+            offers: const SwapOrderBookOffers(),
+            watching: true,
+          ),
+        ),
+    'no one offering it, and no longer checking': () =>
+        form(
+          receive: gleecEvm,
+          issue: SwapFormIssue.noOffers,
+          evaluation: SwapEvaluationStatus.idle,
+        ).copyWith(
+          hints: SwapOrderBookHints(
+            pair: (eth, gleecEvm),
+            offers: const SwapOrderBookOffers(),
+          ),
+        ),
     'options with a paused source': () => form(
       failures: const [
         SwapQuoteFailure(
@@ -294,6 +318,27 @@ void main() {
           );
         });
       }
+
+      // Apart from the states above: with no amount typed, the field also
+      // announces its placeholder.
+      testWidgets('entry: an order-book pair before an amount', (tester) async {
+        swap.emit(
+          form(
+            receive: gleecEvm,
+            issue: SwapFormIssue.amountMissing,
+            evaluation: SwapEvaluationStatus.idle,
+          ).copyWith(
+            inputText: '',
+            hints: SwapOrderBookHints(
+              pair: (eth, gleecEvm),
+              offers: SwapOrderBookOffers([SwapOfferBand(d('0.5'), d('2'))]),
+            ),
+          ),
+        );
+        await pump(tester, layout, const SwapEntryView());
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+        expect(find.text('Offers take 0.5 ETH to 2 ETH.'), findsOneWidget);
+      });
 
       testWidgets('picker: paying, with a held asset selected', (tester) async {
         services.balances[eth] = d('1.5');
