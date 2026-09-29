@@ -14,7 +14,7 @@ import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class ImportSwaps extends StatefulWidget {
-  const ImportSwaps({Key? key}) : super(key: key);
+  const ImportSwaps({super.key});
 
   @override
   State<ImportSwaps> createState() => _ImportSwapsState();
@@ -63,8 +63,9 @@ class _ImportSwapsState extends State<ImportSwaps> {
         _showData ? Icons.arrow_drop_up : Icons.arrow_drop_down,
         size: 14,
       ),
-      onPressed:
-          _inProgress ? null : () => setState(() => _showData = !_showData),
+      onPressed: _inProgress
+          ? null
+          : () => setState(() => _showData = !_showData),
     );
   }
 
@@ -80,10 +81,7 @@ class _ImportSwapsState extends State<ImportSwaps> {
           ),
         ),
         const SizedBox(height: 10),
-        UiLightButton(
-          text: LocaleKeys.import.tr(),
-          onPressed: _onImport,
-        ),
+        UiLightButton(text: LocaleKeys.import.tr(), onPressed: _onImport),
         const SizedBox(width: 10),
       ],
     );
@@ -101,8 +99,8 @@ class _ImportSwapsState extends State<ImportSwaps> {
           color: _success
               ? theme.custom.successColor
               : _error == null
-                  ? null
-                  : theme.currentGlobal.colorScheme.error,
+              ? null
+              : theme.currentGlobal.colorScheme.error,
         ),
       ),
     );
@@ -132,14 +130,13 @@ class _ImportSwapsState extends State<ImportSwaps> {
       _success = false;
     });
 
-    List<dynamic>? swaps;
+    late final List<dynamic> swaps;
     try {
-      swaps = jsonDecode(_controller.text) as List;
-      if (swaps.isEmpty) throw Exception('The list is empty');
+      swaps = _parseSwapImportPayload(_controller.text);
     } catch (e) {
       setState(() {
         _inProgress = false;
-        _error = e.toString();
+        _error = _formatImportError(e);
       });
       return;
     }
@@ -162,4 +159,67 @@ class _ImportSwapsState extends State<ImportSwaps> {
       _success = true;
     });
   }
+}
+
+List<dynamic> _parseSwapImportPayload(String payload) {
+  final dynamic decoded;
+  try {
+    decoded = jsonDecode(payload);
+  } on FormatException catch (e) {
+    throw FormatException('Invalid JSON: ${e.message}');
+  }
+
+  final List<dynamic>? swaps = _normalizeSwapImportPayload(decoded);
+  if (swaps == null) {
+    throw const FormatException(
+      'Expected a swap list, a single swap object, {"swaps": [...]}, '
+      '{"swap": {...}}, or {"result": {"swaps": [...]}}.',
+    );
+  }
+
+  if (swaps.isEmpty) {
+    throw const FormatException('The swap list is empty.');
+  }
+
+  if (swaps.any((dynamic swap) => swap is! Map)) {
+    throw const FormatException('Each swap entry must be a JSON object.');
+  }
+
+  return swaps;
+}
+
+List<dynamic>? _normalizeSwapImportPayload(dynamic decoded) {
+  if (decoded is List) return List<dynamic>.from(decoded);
+
+  if (decoded is Map) {
+    if (decoded.isEmpty) return null;
+
+    if (decoded.containsKey('swap')) {
+      final dynamic swap = decoded['swap'];
+      return swap is Map ? <dynamic>[swap] : null;
+    }
+
+    if (decoded.containsKey('swaps')) {
+      final dynamic swaps = decoded['swaps'];
+      return swaps is List ? List<dynamic>.from(swaps) : null;
+    }
+
+    if (decoded.containsKey('result')) {
+      final dynamic result = decoded['result'];
+      if (result is Map) {
+        final dynamic swaps = result['swaps'];
+        if (swaps is List) return List<dynamic>.from(swaps);
+      }
+
+      return null;
+    }
+
+    return <dynamic>[decoded];
+  }
+
+  return null;
+}
+
+String _formatImportError(Object error) {
+  return error is FormatException ? error.message : error.toString();
 }
