@@ -76,6 +76,17 @@ void main() {
       expect(copy.amount, d('0.13'));
     });
 
+    test('a maximum is rounded down within the asset\'s decimals', () {
+      final cents = assetOf('CENT', decimals: 2);
+
+      final copy = SwapFailureCopy.of(
+        orderBook(SwapQuoteFailureKind.aboveMaximum, maximum: '0.1239'),
+        cents,
+      );
+
+      expect(copy.amount, d('0.12'));
+    });
+
     test('a bound too small to show is not offered', () {
       final copy = SwapFailureCopy.of(
         orderBook(SwapQuoteFailureKind.aboveMaximum, maximum: '0.000000001'),
