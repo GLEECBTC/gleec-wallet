@@ -1,3 +1,27 @@
+# Gleec Wallet v0.9.8 Release Notes
+
+This is a hotfix release. A fresh install of the macOS app could not start its trading engine, and the engine helper bundled with the app could not pass Apple notarization. It also stops a failed engine start from being reported as a wrong password, keeps KMD's price from dropping out for minutes after launch, restores prices from the CoinPaprika fallback, and stops signing out from raising an uncaught error.
+
+## 🐛 Bug Fixes
+
+- **macOS App Could Not Start on a Fresh Install** ([@DeckerSU], [SDK#395](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/395)) - On a fresh install the app never got past launch: the trading engine was never started, and the error was misreported as "Incorrect password or invalid seed" before any wallet was opened. The trading engine reads its coin list from a file the app writes to a temporary folder. Since the `path_provider_foundation` 2.6.0 update, that folder is `Library/Caches/<bundle id>` inside the app's sandbox container, which is named but never created, so on a fresh install the file could not be written and the engine was never launched. The folder is now created before it is used.
+- **Engine Start Failures No Longer Reported as a Wrong Password** ([@CharlVS], [SDK#396](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/396)) - Any failure to start the trading engine surfaced as "Incorrect password or invalid seed", including at launch, before registering a wallet and while deleting one, where no password is sent. A wrong password is now reported only when a password was sent; other failures report that the wallet process failed to start. An engine that could not be launched is logged with the kind of failure and its OS error code.
+- **KMD's Price No Longer Drops Out After Launch** ([@CharlVS], [SDK#390](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/390)) - The price feed request only accepted tickers updated in the last 10 minutes, and KMD's entry is sometimes older than that before the feed refreshes it, so KMD could show no price for minutes at a time. The window is now 30 minutes, and the web app's preloaded price request uses the same address so the preload is still used.
+- **Prices From CoinPaprika Load Again** ([@CharlVS], [SDK#391](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/391)) - CoinPaprika, one of the fallback price sources, never returned a current price for the default USDT quote: it answers stablecoin requests in USD, and the lookup asked for USDT. Its 24-hour change and volume also always read as 0. Both now come through.
+- **Signing Out No Longer Raises an Uncaught Error** ([@CharlVS], [SDK#394](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/394)) - A sign-out or a dropped engine event connection could reach a balance or history watcher before it had attached its handlers, raising an uncaught "KDF event connection was disconnected" error and leaving the watcher on a dead stream. The watcher now receives the error and falls back to polling.
+
+## 💻 Platform-Specific Changes
+
+- **Notarizable macOS Engine Helper** ([@DeckerSU], #3541) - The bundled `kdf` helper is now signed with the hardened runtime and a secure timestamp, which Apple requires for notarization. It needs no extra entitlements.
+
+## 🔧 Technical Improvements
+
+- **SDK 0.8.1** ([@CharlVS], #3542) - Pins the SDK's 0.8.1 patch release, [`a96398ba`](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/commit/a96398ba9ae72efbe654de7c3edc0bfe2b05dda0) on SDK `main` ([SDK#398](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/398)), with `komodo_defi_sdk` 0.8.1 and `komodo_defi_framework` and `komodo_defi_local_auth` 0.6.1. It carries the fixes above. It has no API changes, and the trading engine version is unchanged.
+
+**Full Changelog**: [0.9.7...0.9.8](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7...0.9.8)
+
+---
+
 # Gleec Wallet v0.9.7 Release Notes
 
 This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a fresh HD sign-in, makes transaction history survive a restart, and reworks wallet setup so the create-or-import decision, the terms you agree to, and the prompt to save your recovery phrase all happen where they belong. It gives every supported NFT chain its own tab that enables the chain on tap, and rolls the native trading engine to the `3.1.0-beta` line, which reprices EVM swap gas under the Amsterdam/Bogota fork rules and is visible in DEX fee estimates.
