@@ -19,6 +19,7 @@ import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 part 'swap_review_details.dart';

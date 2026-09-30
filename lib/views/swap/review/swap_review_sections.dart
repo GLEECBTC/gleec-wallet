@@ -338,18 +338,24 @@ class _ReviewFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final bloc = context.read<UnifiedSwapBloc>();
     void start() => bloc.add(const UnifiedSwapStartRequested());
+    // Committing funds gets a firm tap on phones; retries do not.
+    void commit() {
+      SwapHaptics.medium();
+      start();
+    }
+
     final quote = review.quote;
 
     return switch (review.status) {
       SwapReviewStatus.ready => SwapButton(
         key: const Key('swap-start'),
         label: _startLabel(quote),
-        onPressed: start,
+        onPressed: commit,
       ),
       SwapReviewStatus.materialUpdate => SwapButton(
         key: const Key('swap-start'),
         label: LocaleKeys.swapAcceptUpdated.tr(),
-        onPressed: start,
+        onPressed: commit,
       ),
       SwapReviewStatus.expired => SwapButton(
         label: LocaleKeys.swapCtaRefresh.tr(),
@@ -374,12 +380,15 @@ class _ReviewFooter extends StatelessWidget {
         label: LocaleKeys.tryAgain.tr(),
         onPressed: start,
       ),
+      // Keyed like Start, so one button carries on through its checks.
       SwapReviewStatus.revalidating => SwapButton(
+        key: const Key('swap-start'),
         label: LocaleKeys.swapCtaChecking.tr(),
         onPressed: null,
         busy: true,
       ),
       SwapReviewStatus.starting => SwapButton(
+        key: const Key('swap-start'),
         label: _startLabel(quote),
         onPressed: null,
         busy: true,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 /// How a [SwapButton] is drawn.
 enum SwapButtonVariant { primary, secondary, danger }
@@ -78,28 +79,44 @@ class SwapButton extends StatelessWidget {
         SwapText.strong(context).copyWith(fontWeight: FontWeight.w800),
       ),
     );
-    return TextButton(
-      style: style,
-      onPressed: enabled ? onPressed : null,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (busy) ...[
-            SizedBox.square(
-              dimension: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: foreground,
+    final leading = busy
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwapPop(
+                trigger: busy,
+                onMount: true,
+                from: 0.5,
+                child: SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: foreground,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-          ] else if (icon != null) ...[
-            Icon(icon, size: 18),
-            const SizedBox(width: 8),
+              const SizedBox(width: 10),
+            ],
+          )
+        : icon != null
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [Icon(icon, size: 18), const SizedBox(width: 8)],
+          )
+        : const SizedBox.shrink();
+    return SwapPressScale(
+      enabled: enabled,
+      child: TextButton(
+        style: style,
+        onPressed: enabled ? onPressed : null,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SwapSmoothSize(alignment: Alignment.centerLeft, child: leading),
+            Flexible(child: Text(label, textAlign: TextAlign.center)),
           ],
-          Flexible(child: Text(label, textAlign: TextAlign.center)),
-        ],
+        ),
       ),
     );
   }

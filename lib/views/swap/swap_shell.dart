@@ -20,6 +20,7 @@ import 'package:web_dex/views/dex/dex_page.dart';
 import 'package:web_dex/views/swap/activity/swap_activity_view.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 

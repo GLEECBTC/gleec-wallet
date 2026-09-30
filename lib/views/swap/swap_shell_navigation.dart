@@ -144,9 +144,17 @@ class _NavItem extends StatelessWidget {
                       ),
                       if (badge > 0) ...[
                         const SizedBox(width: 6),
-                        SwapCountDot(
-                          count: badge,
-                          tone: attention > 0 ? SwapTone.warning : null,
+                        // Pops as a swap starts or starts needing a look, which
+                        // shows where a closed swap went.
+                        SwapPop(
+                          trigger: (badge, attention > 0),
+                          onMount: true,
+                          from: 0.6,
+                          curve: SwapMotion.success,
+                          child: SwapCountDot(
+                            count: badge,
+                            tone: attention > 0 ? SwapTone.warning : null,
+                          ),
                         ),
                       ],
                     ],

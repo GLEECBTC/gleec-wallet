@@ -11,6 +11,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 /// Every swap, from both sources: running, needing attention, or done.
@@ -24,6 +25,7 @@ class SwapActivityView extends StatelessWidget {
       listenable: shell,
       builder: (context, _) {
         final detail = shell.detail;
+        final Widget screen;
         if (detail != null) {
           final known = context
               .read<SwapActivityBloc>()
@@ -31,15 +33,21 @@ class SwapActivityView extends StatelessWidget {
               .entries
               .where((entry) => entry.id == detail.id)
               .firstOrNull;
-          return SwapExecutionView(
+          screen = SwapExecutionView(
             key: ValueKey('activity-${detail.id}'),
             id: detail.id,
             source: detail.source,
             initial: known,
             context: SwapExecutionContext.activity,
           );
+        } else {
+          screen = const _ActivityList();
         }
-        return const _ActivityList();
+        return SwapReveal.screen(
+          revealKey: detail?.id,
+          forward: detail != null,
+          child: screen,
+        );
       },
     );
   }
@@ -58,6 +66,8 @@ class _ActivityList extends StatelessWidget {
         return RefreshIndicator(
           onRefresh: () async => bloc.add(const SwapActivityRefreshed()),
           child: SingleChildScrollView(
+            // Back from a swap returns to where the list was.
+            key: const PageStorageKey('swap-activity-list'),
             physics: const AlwaysScrollableScrollPhysics(),
             child: SwapColumn(
               child: Column(
