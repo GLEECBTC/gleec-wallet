@@ -103,7 +103,7 @@ class AtomicSwapExecutor implements SwapExecutor {
       );
     }
 
-    return _track(uuid, accepted: quote);
+    return _track(uuid, accepted: quote, placedAt: _now());
   }
 
   @override
@@ -131,11 +131,17 @@ class AtomicSwapExecutor implements SwapExecutor {
     return _track(id, swap: swap);
   }
 
-  SwapExecutionHandle _track(String uuid, {SwapQuote? accepted, Swap? swap}) {
+  SwapExecutionHandle _track(
+    String uuid, {
+    SwapQuote? accepted,
+    Swap? swap,
+    DateTime? placedAt,
+  }) {
     final tracker = _AtomicSwapTracker(
       uuid: uuid,
       executor: this,
       accepted: accepted,
+      placedAt: placedAt,
     );
     final handle = StreamSwapExecutionHandle(
       initial: tracker.initial(placed: accepted != null, swap: swap),
@@ -154,11 +160,16 @@ class _AtomicSwapTracker {
     required this.uuid,
     required AtomicSwapExecutor executor,
     this.accepted,
+    this.placedAt,
   }) : _executor = executor;
 
   final String uuid;
   final AtomicSwapExecutor _executor;
   final SwapQuote? accepted;
+
+  /// When this session placed the order; KDF's log dates the swap only once
+  /// it has matched.
+  final DateTime? placedAt;
 
   final StreamController<SwapExecutionSnapshot> _controller =
       StreamController<SwapExecutionSnapshot>.broadcast();
@@ -352,6 +363,7 @@ class _AtomicSwapTracker {
     bool canCancel = false,
     SwapFundsMovement movement = SwapFundsMovement.none,
     SwapExecutionOutcome? outcome,
+    DateTime? finishedAt,
   }) => atomicSnapshot(
     uuid: uuid,
     stage: stage,
@@ -362,11 +374,14 @@ class _AtomicSwapTracker {
     networks: _executor._networks(),
     resolveAsset: _executor._resolveAsset,
     delayedSince: _delayedSince,
+    placedAt: placedAt,
+    finishedAt: finishedAt,
   );
 
   SwapExecutionSnapshot _terminal(SwapOutcomeKind kind) => _snapshot(
     stage: SwapProgressStage.matching,
     outcome: SwapExecutionOutcome(kind: kind),
+    finishedAt: _executor._now(),
   );
 
   SwapExecutionSnapshot _fromSwap(Swap swap) => atomicSnapshotFromSwap(
@@ -376,5 +391,6 @@ class _AtomicSwapTracker {
     resolveAsset: _executor._resolveAsset,
     now: _executor._now(),
     delayedSince: _delayedSince,
+    placedAt: placedAt,
   );
 }

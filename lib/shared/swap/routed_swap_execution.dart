@@ -11,12 +11,17 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 /// outcome.
 class RoutedSwapExecutor implements SwapExecutor {
   /// Creates an executor over [manager].
-  RoutedSwapExecutor(this.manager, {required SwapNetworks Function() networks})
-    : _networks = networks;
+  RoutedSwapExecutor(
+    this.manager, {
+    required SwapNetworks Function() networks,
+    DateTime Function()? now,
+  }) : _networks = networks,
+       _now = now ?? DateTime.now;
 
   /// The SDK manager.
   final RoutedSwapManager manager;
   final SwapNetworks Function() _networks;
+  final DateTime Function() _now;
 
   @override
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
@@ -27,6 +32,7 @@ class RoutedSwapExecutor implements SwapExecutor {
     if (offer is! RoutedSwapOffer) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
     }
+    final startedAt = _now();
     final RoutedSwapHandle handle;
     try {
       handle = await manager.start(offer);
@@ -41,7 +47,7 @@ class RoutedSwapExecutor implements SwapExecutor {
         _ => SwapStartRejection.unknown,
       }, detail: '${error.errorType}: ${error.message}');
     }
-    return _handleFor(handle, accepted: quote);
+    return _handleFor(handle, accepted: quote, startedAt: startedAt);
   }
 
   @override
@@ -53,12 +59,34 @@ class RoutedSwapExecutor implements SwapExecutor {
     }
   }
 
+  static bool _finished(RoutedSwapProgress progress) =>
+      progress.receipt != null || progress.failure != null;
+
   SwapExecutionHandle _handleFor(
     RoutedSwapHandle handle, {
     SwapQuote? accepted,
+    DateTime? startedAt,
   }) {
-    SwapExecutionSnapshot map(RoutedSwapProgress progress) =>
-        routedSnapshotFrom(progress, networks: _networks(), accepted: accepted);
+    // The record dates a swap only after a history read. Until then this
+    // session's own times stand in: when it started the swap, and when it saw
+    // the swap finish. A finish it did not see happen is never dated now.
+    var sawRunning = !_finished(handle.latest);
+    DateTime? finishedAt;
+    SwapExecutionSnapshot map(RoutedSwapProgress progress) {
+      if (!_finished(progress)) {
+        sawRunning = true;
+      } else if (sawRunning) {
+        finishedAt ??= _now();
+      }
+      return routedSnapshotFrom(
+        progress,
+        networks: _networks(),
+        accepted: accepted,
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+      );
+    }
+
     return StreamSwapExecutionHandle(
       initial: map(handle.latest),
       source: handle.progress.map(map),
@@ -86,11 +114,13 @@ class RoutedSwapExecutor implements SwapExecutor {
 ///
 /// [accepted] is the quote the user consented to, when the swap was started in
 /// this session; its figures stand in for fields the durable record does not
-/// carry.
+/// carry, as [startedAt] and [finishedAt] stand in for its times.
 SwapExecutionSnapshot routedSnapshotFrom(
   RoutedSwapProgress progress, {
   required SwapNetworks networks,
   SwapQuote? accepted,
+  DateTime? startedAt,
+  DateTime? finishedAt,
 }) {
   final offer = progress.offer;
   final plan = offer == null
@@ -205,9 +235,9 @@ SwapExecutionSnapshot routedSnapshotFrom(
     approvalRemains: approvalRemains,
     stages: plan?.stages ?? const [],
     estimatedDuration: progress.estimatedDuration ?? plan?.estimatedDuration,
-    createdAt: progress.createdAt,
+    createdAt: progress.createdAt ?? startedAt,
     updatedAt: progress.updatedAt,
-    finishedAt: progress.finishedAt,
+    finishedAt: progress.finishedAt ?? (outcome == null ? null : finishedAt),
     delayedSince: progress.delayedSince,
     evidence: SwapEvidence(
       executionId: progress.uuid,

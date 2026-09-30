@@ -187,6 +187,7 @@ class SwapExecutionSnapshot extends Equatable {
     this.updatedAt,
     this.finishedAt,
     this.delayedSince,
+    this.refundUnlocksAt,
   });
 
   /// The durable id.
@@ -264,6 +265,10 @@ class SwapExecutionSnapshot extends Equatable {
   /// not a failure.
   final DateTime? delayedSince;
 
+  /// For an atomic swap on its way back: when its own payment's lock ends and
+  /// the refund can be sent. Null otherwise.
+  final DateTime? refundUnlocksAt;
+
   /// Identifiers, hashes and links.
   final SwapEvidence evidence;
 
@@ -318,6 +323,7 @@ class SwapExecutionSnapshot extends Equatable {
     updatedAt,
     finishedAt,
     delayedSince,
+    refundUnlocksAt,
     evidence,
   ];
 }

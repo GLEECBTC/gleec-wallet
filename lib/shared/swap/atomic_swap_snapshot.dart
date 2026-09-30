@@ -54,6 +54,8 @@ SwapExecutionSnapshot atomicSnapshot({
   SwapQuote? accepted,
   Swap? swap,
   DateTime? delayedSince,
+  DateTime? placedAt,
+  DateTime? finishedAt,
 }) {
   final from =
       accepted?.from ?? (swap == null ? null : resolveAsset(swap.sellCoin));
@@ -115,10 +117,15 @@ SwapExecutionSnapshot atomicSnapshot({
             ),
           ],
         ],
-    createdAt: at(events.firstOrNull?.timestamp),
+    createdAt: at(events.firstOrNull?.timestamp) ?? placedAt,
     updatedAt: at(events.lastOrNull?.timestamp),
-    finishedAt: outcome == null ? null : at(events.lastOrNull?.timestamp),
+    finishedAt: outcome == null
+        ? null
+        : at(events.lastOrNull?.timestamp) ?? finishedAt,
     delayedSince: outcome == null ? delayedSince : null,
+    refundUnlocksAt: outcome == null && stage == SwapProgressStage.refunding
+        ? _refundLock(swap)
+        : null,
     evidence: SwapEvidence(
       executionId: uuid,
       sourceTxHash: hashOf(side?.sent),
@@ -149,6 +156,7 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
   SwapQuote? accepted,
   DateTime? now,
   DateTime? delayedSince,
+  DateTime? placedAt,
 }) {
   final side = _sideOf(swap);
   final types = swap.events.map((e) => e.event.type).toList();
@@ -182,6 +190,7 @@ SwapExecutionSnapshot atomicSnapshotFromSwap(
     networks: networks,
     resolveAsset: resolveAsset,
     delayedSince: delay,
+    placedAt: placedAt,
   );
 
   if (has('Finished')) {
@@ -267,6 +276,22 @@ DateTime? _overdueSince(Swap swap, DateTime now) {
   if (seconds == null || seconds == 0) return null;
   final deadline = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
   return now.isAfter(deadline.add(_overdueGrace)) ? deadline : null;
+}
+
+/// When [swap]'s own payment can be refunded: the lock its Started event
+/// records, in seconds, for whichever side this wallet took.
+DateTime? _refundLock(Swap? swap) {
+  if (swap == null) return null;
+  final started = swap.events
+      .where((e) => e.event.type == 'Started')
+      .firstOrNull
+      ?.event
+      .data;
+  final seconds = swap.isTaker
+      ? started?.takerPaymentLock
+      : started?.makerPaymentLock;
+  if (seconds == null || seconds == 0) return null;
+  return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
 }
 
 DateTime? _earlier(DateTime? a, DateTime? b) =>
