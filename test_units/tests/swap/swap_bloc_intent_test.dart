@@ -171,7 +171,38 @@ void main() {
       expect(bloc.state.maxApplied, isNull);
     });
 
-    swapBlocTest('keeps back what the selected route needs', (h) {
+    /// Holds the routed answer, [amount] or none, until the gate completes.
+    Completer<void> holdMax(SwapBlocHarness h, {String? amount = '1.99'}) {
+      final gate = Completer<void>();
+      h.routed
+        ..max = amount == null ? null : maxOf(amount)
+        ..maxGate = gate;
+      return gate;
+    }
+
+    swapBlocTest('shows the whole balance at once, and prices the answer', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+
+      expect(bloc.state.inputText, '2');
+      expect(bloc.state.checkingMax, isTrue);
+      expect(bloc.state.quotes, isNull);
+      // Not even a retry prices the whole balance meanwhile.
+      bloc.add(const UnifiedSwapEvaluationRequested());
+      h.settle();
+      expect(h.routed.requests, hasLength(1));
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.inputText, '1.99');
+      expect(bloc.state.checkingMax, isFalse);
+      expect(bloc.state.maxApplied, maxOf('1.99'));
+      expect(h.routed.requests.last.amount, d('1.99'));
+    });
+
+    swapBlocTest('asks only the selected route what it needs kept', (h) {
       h.routed.max = maxOf('1.99');
       h.atomic.max = maxOf('1.995');
       final bloc = h.open()..add(const UnifiedSwapMaxRequested());
@@ -180,6 +211,7 @@ void main() {
       expect(bloc.state.inputText, '1.99');
       expect(bloc.state.maxApplied, maxOf('1.99'));
       expect(h.routed.requests.last.amount, d('1.99'));
+      expect(h.atomic.maxCalls, 0);
     });
 
     swapBlocTest('with no route selected takes the larger allowance', (h) {
@@ -198,30 +230,189 @@ void main() {
       expect(bloc.state.maxApplied, maxOf('1.995'));
     });
 
-    swapBlocTest('leaves the amount when no source can tell', (h) {
+    swapBlocTest('keeps the whole balance when no source can tell', (h) {
       final bloc = h.open()..add(const UnifiedSwapMaxRequested());
       h.settle();
 
-      expect(bloc.state.inputText, '1');
+      expect(bloc.state.inputText, '2');
+      expect(bloc.state.checkingMax, isFalse);
       expect(bloc.state.maxApplied, isNull);
-      expect(h.routed.requests, hasLength(1));
+      expect(h.routed.requests.last.amount, d('2'));
     });
 
-    swapBlocTest('an allowance for a pair since changed is dropped', (h) {
-      h.routed
-        ..max = maxOf('1.99')
-        ..maxGate = Completer<void>();
+    swapBlocTest('stops waiting when pricing would have timed out', (h) {
+      holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.elapse(const Duration(seconds: 25));
+
+      expect(bloc.state.checkingMax, isFalse);
+      expect(bloc.state.inputText, '2');
+      expect(h.routed.requests.last.amount, d('2'));
+    });
+
+    for (final (name, edit) in [
+      ('typed', const UnifiedSwapAmountChanged('0.5')),
+      ('the form offered', UnifiedSwapAmountSuggested(d('0.5'))),
+    ]) {
+      swapBlocTest('an amount $name meanwhile wins', (h) {
+        final gate = holdMax(h);
+        final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+        h.settle();
+        bloc.add(edit);
+        h.settle();
+        expect(bloc.state.checkingMax, isFalse);
+
+        gate.complete();
+        h.settle();
+
+        expect(bloc.state.inputText, '0.5');
+        expect(bloc.state.maxApplied, isNull);
+        expect(h.routed.requests.last.amount, d('0.5'));
+      });
+    }
+
+    swapBlocTest('a second press while it works asks once', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()
+        ..add(const UnifiedSwapMaxRequested())
+        ..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      gate.complete();
+      h.settle();
+
+      expect(h.routed.maxCalls, 1);
+      expect(bloc.state.inputText, '1.99');
+    });
+
+    swapBlocTest('only the latest press lands', (h) {
+      final first = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapAmountChanged('0.5'));
+      h.settle();
+      final second = holdMax(h, amount: '1.98');
+      bloc.add(const UnifiedSwapMaxRequested());
+      h.settle();
+
+      first.complete();
+      h.settle();
+      expect(bloc.state.checkingMax, isTrue);
+      expect(bloc.state.inputText, '2');
+
+      second.complete();
+      h.settle();
+      expect(bloc.state.checkingMax, isFalse);
+      expect(bloc.state.inputText, '1.98');
+    });
+
+    swapBlocTest('an answer for a pair since changed is dropped', (h) {
+      final gate = holdMax(h);
       final bloc = h.open()..add(const UnifiedSwapMaxRequested());
       h.settle();
       bloc.add(UnifiedSwapPayAssetChanged(btc));
       h.settle();
 
-      h.routed.maxGate!.complete();
+      gate.complete();
       h.settle();
 
       expect(bloc.state.pay, btc);
       expect(bloc.state.inputText, isEmpty);
       expect(bloc.state.maxApplied, isNull);
+      expect(bloc.state.checkingMax, isFalse);
+    });
+
+    swapBlocTest('a new asset to receive asks again for the new pair', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(UnifiedSwapReceiveAssetChanged(btc));
+      h.settle();
+      expect(bloc.state.checkingMax, isTrue);
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.receive, btc);
+      expect(bloc.state.inputText, '1.99');
+      expect(bloc.state.maxApplied, maxOf('1.99'));
+      expect(h.routed.maxCalls, 2);
+      expect(h.routed.requests.last.to, btc);
+    });
+
+    swapBlocTest('a link to pay with another asset does not ask again', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapIntentApplied(pay: 'BTC'));
+      h.settle();
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.pay, btc);
+      expect(bloc.state.checkingMax, isFalse);
+      expect(bloc.state.maxApplied, isNull);
+      expect(h.routed.maxCalls, 1);
+    });
+
+    swapBlocTest('a link with an amount of its own drops it', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapIntentApplied(receive: 'BTC', amount: '0.5'));
+      h.settle();
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.inputText, '0.5');
+      expect(bloc.state.checkingMax, isFalse);
+      expect(h.routed.maxCalls, 1);
+    });
+
+    swapBlocTest('an answer after the form was reset is dropped', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapResetRequested());
+      h.settle();
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.inputText, isEmpty);
+      expect(bloc.state.maxApplied, isNull);
+      expect(bloc.state.checkingMax, isFalse);
+    });
+
+    swapBlocTest('the answer switches a dollar amount back to tokens', (h) {
+      final gate = holdMax(h);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapAmountModeToggled());
+      h.settle();
+      expect(bloc.state.inputText, '6000');
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.amountMode, SwapAmountMode.token);
+      expect(bloc.state.inputText, '1.99');
+    });
+
+    swapBlocTest('with no answer, a switch to dollars meanwhile stays', (h) {
+      final gate = holdMax(h, amount: null);
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapAmountModeToggled());
+      h.settle();
+
+      gate.complete();
+      h.settle();
+
+      expect(bloc.state.amountMode, SwapAmountMode.fiat);
+      expect(bloc.state.inputText, '6000');
+      expect(h.routed.requests.last.amount, d('2'));
     });
   });
 }

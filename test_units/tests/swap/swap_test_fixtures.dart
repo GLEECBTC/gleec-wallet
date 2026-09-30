@@ -238,6 +238,7 @@ class FakeQuoteSource implements SwapQuoteSource {
   Future<SwapSourceAssets>? update;
 
   int assetsCalls = 0;
+  int maxCalls = 0;
 
   @override
   Future<SwapSourceAssets> assets({
@@ -274,7 +275,10 @@ class FakeQuoteSource implements SwapQuoteSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
-  }) async => max;
+  }) async {
+    maxCalls++;
+    return max;
+  }
 
   @override
   Future<Decimal?> minimumAmount({required AssetId from}) async => null;

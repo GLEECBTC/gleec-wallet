@@ -111,6 +111,7 @@ class SwapLinkButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.icon,
+    this.busy = false,
     super.key,
   });
 
@@ -118,11 +119,15 @@ class SwapLinkButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final IconData? icon;
 
+  /// Shows a spinner, and ignores presses until the work is done. It stays
+  /// enabled: disabling a focused button moves keyboard focus elsewhere.
+  final bool busy;
+
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
     return TextButton(
-      onPressed: onPressed,
+      onPressed: busy && onPressed != null ? () {} : onPressed,
       style: TextButton.styleFrom(
         minimumSize: const Size(SwapGeometry.touchTarget, 48),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -133,7 +138,19 @@ class SwapLinkButton extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, size: 16), const SizedBox(width: 6)],
+          if (busy) ...[
+            SizedBox.square(
+              dimension: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: palette.brandHover,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ] else if (icon != null) ...[
+            Icon(icon, size: 16),
+            const SizedBox(width: 6),
+          ],
           Flexible(child: Text(label)),
         ],
       ),

@@ -83,6 +83,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
             clearSelectedId: true,
             clearFailure: true,
             clearMaxApplied: true,
+            checkingMax: false,
             clearBalance: true,
             clearFeeBalance: true,
             clearPayAddress: true,

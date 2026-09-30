@@ -363,6 +363,45 @@ void main() {
       expect(maxes[SwapLiquiditySource.routed]!.amount, d('0.99'));
     });
 
+    test('asks a preferred source alone', () async {
+      final routed = FakeQuoteSource(
+        SwapLiquiditySource.routed,
+        max: SwapMaxAmount(amount: d('0.99'), reservedForFees: d('0.01')),
+      );
+      final atomic = FakeQuoteSource(
+        SwapLiquiditySource.atomic,
+        max: SwapMaxAmount(amount: d('1'), reservedForFees: Decimal.zero),
+      );
+
+      final maxes = await repoOf([routed, atomic]).maxAmounts(
+        from: eth,
+        to: usdc,
+        balance: d('1'),
+        preferred: SwapLiquiditySource.routed,
+      );
+
+      expect(maxes.keys, [SwapLiquiditySource.routed]);
+      expect(atomic.maxCalls, 0);
+    });
+
+    test('asks the others when the preferred source cannot tell', () async {
+      final routed = FakeQuoteSource(SwapLiquiditySource.routed);
+      final atomic = FakeQuoteSource(
+        SwapLiquiditySource.atomic,
+        max: SwapMaxAmount(amount: d('1'), reservedForFees: Decimal.zero),
+      );
+
+      final maxes = await repoOf([routed, atomic]).maxAmounts(
+        from: eth,
+        to: usdc,
+        balance: d('1'),
+        preferred: SwapLiquiditySource.routed,
+      );
+
+      expect(maxes.keys, [SwapLiquiditySource.atomic]);
+      expect((routed.maxCalls, atomic.maxCalls), (1, 1));
+    });
+
     test('re-prices on the same source and prices the result', () async {
       final routed = FakeQuoteSource(
         SwapLiquiditySource.routed,

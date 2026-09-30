@@ -268,6 +268,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           clearSelectedId: true,
           clearFailure: true,
           clearMaxApplied: true,
+          checkingMax: false,
           clearPay: !keepPair,
           clearReceive: !keepPair,
           evaluation: SwapEvaluationStatus.idle,

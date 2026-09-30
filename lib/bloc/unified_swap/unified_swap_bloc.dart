@@ -153,6 +153,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped by every read of the order book's offers; only the latest lands.
   var _offersVersion = 0;
 
+  /// Bumped by every Max; only the latest answer lands.
+  var _maxVersion = 0;
+
   var _visible = true;
   var _foreground = true;
   var _intentApplied = false;
@@ -321,6 +324,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     String? amount,
     required SwapAmountMode amountMode,
   }) async {
+    // Max still asking asks again for a new asset to receive, rather than
+    // leave the whole balance it shows as the amount.
+    final remax = state.checkingMax && amount == null && pay == state.pay;
     _invalidate();
     emit(
       _validated(
@@ -336,6 +342,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
           clearSelectedId: true,
           clearFailure: true,
           clearMaxApplied: true,
+          checkingMax: false,
           clearReview: true,
           evaluation: SwapEvaluationStatus.idle,
           structuralNotice: false,
@@ -344,6 +351,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     );
     _offersWatch?.cancel();
     add(const UnifiedSwapOffersRequested());
+    if (remax) add(const UnifiedSwapMaxRequested());
     // An asset the catalog thinks inactive may have been activated since —
     // by the picker a moment ago, or elsewhere in the app. Signed out,
     // nothing can have been.

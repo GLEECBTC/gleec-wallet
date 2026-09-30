@@ -224,6 +224,22 @@ void main() {
         );
         expect(find.byType(Icon), findsNothing);
       });
+
+      testWidgets('busy without an action still cannot be pressed', (
+        tester,
+      ) async {
+        await pumpSwapUi(
+          tester,
+          const SwapLinkButton(label: 'Details', onPressed: null, busy: true),
+          settle: false,
+        );
+
+        expect(
+          tester.widget<TextButton>(find.byType(TextButton)).onPressed,
+          isNull,
+        );
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      });
     });
 
     group('icon button', () {

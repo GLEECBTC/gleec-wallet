@@ -237,6 +237,41 @@ void main() {
       expect(find.text('Max'), findsNothing);
       expect(find.textContaining('Balance'), findsNothing);
     });
+
+    testWidgets('spins, keeping focus, and ignores presses while it works', (
+      tester,
+    ) async {
+      await pump(tester, priced);
+      final max = find.widgetWithText(TextButton, 'Max');
+      final spinner = find.descendant(
+        of: max,
+        matching: find.byType(CircularProgressIndicator),
+      );
+      final palette = SwapPalette.of(tester.element(field));
+      Color? amountColour() => tester.widget<TextField>(field).style!.color;
+      // Where a keyboard press leaves it.
+      final focus = Focus.of(tester.element(find.text('Max')))..requestFocus();
+      await tester.pump();
+
+      await emitSwapState(
+        tester,
+        swap,
+        swapBaseForm(input: '2').copyWith(checkingMax: true),
+      );
+
+      expect(spinner, findsOneWidget);
+      expect(focus.hasFocus, isTrue);
+      expect(amountColour(), palette.textSecondary);
+      await tester.tap(max);
+      expect(swap.events, isEmpty);
+
+      await emitSwapState(tester, swap, swapBaseForm(input: '1.99'));
+
+      expect(spinner, findsNothing);
+      expect(amountColour(), palette.text);
+      await tester.tap(max);
+      expect(swap.events, [const UnifiedSwapMaxRequested()]);
+    });
   });
 
   group('the switch', () {

@@ -348,6 +348,27 @@ void main() {
         expect(find.text('Offers take 0.5 ETH to 2 ETH.'), findsOneWidget);
       });
 
+      testWidgets('entry: Max still asking what fees need', (tester) async {
+        swap.emit(form());
+        await pump(tester, layout, const SwapEntryView());
+        swap.emit(
+          form(
+            evaluation: SwapEvaluationStatus.idle,
+          ).copyWith(inputText: '2', checkingMax: true),
+        );
+        // The spinners never settle: one pump delivers the state, one draws.
+        await tester.pump();
+        await tester.pump();
+        expect(
+          find.descendant(
+            of: find.widgetWithText(TextButton, 'Max'),
+            matching: find.byType(CircularProgressIndicator),
+          ),
+          findsOneWidget,
+        );
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
       testWidgets('picker: paying, with a held asset selected', (tester) async {
         services.balances[eth] = d('1.5');
         await pump(
