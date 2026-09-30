@@ -34,7 +34,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
   - Each refresh prices the cheapest route only. The fastest is priced when you open **Compare options**, and kept fresh while you compare.
   - A price is renewed when it is 50 seconds old (a quote lasts 60), while the form is on screen and the app is in front. Renewing stops after two minutes without a touch; the quote then expires, and **Refresh quote** brings it back.
   - Returning to the same pair and amount within 15 seconds reuses the last price. That includes starting a quote you reviewed moments ago.
-  - A rate limit is waited out quietly, for longer each time.
+  - After a rate limit, nothing is asked of the aggregator until a pause ends: 30 seconds, doubling each time to 10 minutes. Max doesn't probe during a pause either. Automatic refreshes then wait until you next ask.
 - **A token with none of its network's own coin is stopped at the form.** For example, USDC on Polygon with no POL: "You need some POL on Polygon to pay the network fees." Such a quote used to fail as an unexplained service error.
 - **Max on a network's own coin keeps back three times the quoted gas.** The engine checks the balance at start against a higher figure than the quote shows. If the check still fails, nothing is sent and the result screen shows the shortfall.
 - **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
@@ -54,6 +54,13 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Max responds at once.** It used to do nothing visible for a second or more while the form asked what to keep back for fees. Now your whole balance appears straight away, greyed, with a spinner on **Max**, and then drops to what can be sold. With a route selected, only that route's source is asked, so Max no longer waits on the other. Choosing another asset to receive meanwhile asks again for the new pair. Typing meanwhile keeps what you typed. If no source can say what fees need, the whole balance stays and is priced as it is.
 - **A new asset to pay with no longer shows the old balance.** Just after you chose another asset to pay with, the form showed the previous asset's balance under the new ticker until the new one was read, and **Max** pressed then used it. Now the balance and **Max** appear once the new asset's balance is read.
 - **Screen readers hear what Max did.** "Maximum amount applied with network fees kept back" is now spoken when the figure lands, not when **Max** is pressed. When the whole balance is used and nothing is kept back, it says "Whole balance applied". Typing or changing the pair while Max works announces nothing.
+- **A rate-limited price service says so, and for how long.** When the cross-network price service refuses more quotes for a while, the form used to say cross-network prices "couldn't be checked. Try again in a moment", and its **Try again** re-read only the order book. Now:
+  - It says cross-network prices are paused, and that this can take up to two hours.
+  - **Try again** stays disabled until the pause ends.
+  - What the order book found comes first, with any amount it would fill.
+  - Order-book prices shown during a pause say order-book swaps still work.
+  - **Compare options** says why no cross-network option is listed.
+  - In the review, a price the service won't confirm says the same and holds **Try again**. A route that's gone offers **Back to swap**, which prices the form again. It used to offer a retry that could only fail again.
 
 Unchanged from the last brief:
 - the atomic "receive at least" figure is what the order enforces;
