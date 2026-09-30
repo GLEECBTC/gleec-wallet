@@ -44,7 +44,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     final UnifiedSwapQuotes result;
     try {
       result = await _repository
-          .quote(_request(state, amount))
+          .quote(_request(state, amount, automatic: event.quiet))
           .timeout(_evaluationTimeout);
     } on TimeoutException {
       if (version != _evaluationVersion) return;
@@ -154,7 +154,11 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     );
   }
 
-  SwapQuoteRequest _request(UnifiedSwapState state, Decimal amount) {
+  SwapQuoteRequest _request(
+    UnifiedSwapState state,
+    Decimal amount, {
+    bool automatic = false,
+  }) {
     final comparing =
         _comparing == _intentKey(state) ||
         state.selectedQuote?.order == SwapQuoteOrder.fastest;
@@ -168,6 +172,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       slippage: state.slippage,
       indicative: signedOut || (balance != null && amount > balance),
       signedOut: signedOut,
+      automatic: automatic,
     );
   }
 
@@ -235,17 +240,35 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     );
   }
 
+  void _onAlternativesDismissed(
+    UnifiedSwapAlternativesDismissed event,
+    Emitter<UnifiedSwapState> emit,
+  ) {
+    // A chosen alternative stays priced: it is what the user will start.
+    _comparing = null;
+  }
+
   void _armTimers(SwapQuote? selected, {bool shownAgain = false}) {
     _refresh?.cancel();
     _expiry?.cancel();
     if (selected == null) return;
     if (_keepsFresh) {
-      // Shown again late, a price would expire before its refresh: renew now.
-      final renewNow =
-          shownAgain &&
-          selected.expiresAt.difference(_now()) <= _refreshInterval;
+      // Renewed at the same age however it got here: reused from moments
+      // ago, or shown again after a while.
+      final due = _refreshInterval - _now().difference(selected.quotedAt);
+      final Duration wait;
+      if (due > _refreshInterval) {
+        wait = _refreshInterval;
+      } else if (due > Duration.zero) {
+        wait = due;
+      } else {
+        // Shown again late, a price would expire before its refresh: renew
+        // now. One priced already this old waits a full interval, so a
+        // source whose clock runs behind cannot set off a loop.
+        wait = shownAgain ? Duration.zero : _refreshInterval;
+      }
       _refresh = _after(
-        renewNow ? Duration.zero : _refreshInterval,
+        wait,
         const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh),
       );
     }
@@ -298,19 +321,16 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         if (state.issue != SwapFormIssue.noOffers && !_offersUnknown(state)) {
           return;
         }
-        final idle = _now().difference(_lastInteraction) >= _idleLimit;
+        final idle = _now().difference(_lastInteraction) >= _offersIdleLimit;
         if (idle || !_present) {
           _watchOffers(emit);
         } else {
           add(const UnifiedSwapOffersRequested(quiet: true));
         }
       case UnifiedSwapTimerKind.rateLimitOver:
+        // Only lets the user ask again. The limit can outlast this pause by
+        // up to two hours, and asking into it is refused too.
         emit(state.copyWith(clearRateLimit: true));
-        if (_present &&
-            state.view == UnifiedSwapView.form &&
-            state.failure?.kind == SwapQuoteFailureKind.rateLimited) {
-          add(const UnifiedSwapEvaluationRequested());
-        }
     }
   }
 

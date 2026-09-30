@@ -15,14 +15,21 @@ import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 
 /// Opens the options comparison over [bloc]'s live evaluation.
-Future<void> showSwapOptionsSheet(BuildContext context, UnifiedSwapBloc bloc) {
+Future<void> showSwapOptionsSheet(
+  BuildContext context,
+  UnifiedSwapBloc bloc,
+) async {
   bloc.add(const UnifiedSwapAlternativesRequested());
-  return showSwapSheet<void>(
-    context: context,
-    label: LocaleKeys.swapOptionsTitle.tr(),
-    builder: (_) =>
-        BlocProvider.value(value: bloc, child: const SwapOptionsSheet()),
-  );
+  try {
+    await showSwapSheet<void>(
+      context: context,
+      label: LocaleKeys.swapOptionsTitle.tr(),
+      builder: (_) =>
+          BlocProvider.value(value: bloc, child: const SwapOptionsSheet()),
+    );
+  } finally {
+    if (!bloc.isClosed) bloc.add(const UnifiedSwapAlternativesDismissed());
+  }
 }
 
 /// Every option on offer, compared on what each actually promises.

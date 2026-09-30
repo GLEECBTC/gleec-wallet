@@ -200,21 +200,32 @@ void main() {
 
       h.routed.respond = h.priced;
       h.elapse(const Duration(seconds: 89));
-      expect(h.routed.requests, hasLength(1));
+      expect(bloc.state.rateLimitedUntil, retryAt);
 
       h.elapse(const Duration(seconds: 1));
+      expect(bloc.state.rateLimitedUntil, isNull);
+      // The limit can outlast the pause, so only the user asks again.
+      expect(h.routed.requests, hasLength(1));
+      expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
+
+      bloc.add(const UnifiedSwapEvaluationRequested());
+      h.settle();
       expect(h.routed.requests, hasLength(2));
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
-      expect(bloc.state.rateLimitedUntil, isNull);
     });
 
-    swapBlocTest('whose retry time has passed is retried at once', (h) {
+    swapBlocTest('whose retry time has passed can be retried at once', (h) {
       final past = h.start.subtract(const Duration(seconds: 1));
       var calls = 0;
       h.routed.respond = (request) =>
           calls++ == 0 ? [rateLimited(retryAt: past)] : h.priced(request);
       final bloc = h.open();
 
+      expect(h.routed.requests, hasLength(1));
+      expect(bloc.state.rateLimitedUntil, isNull);
+
+      bloc.add(const UnifiedSwapEvaluationRequested());
+      h.settle();
       expect(h.routed.requests, hasLength(2));
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
     });

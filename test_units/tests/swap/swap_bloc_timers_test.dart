@@ -43,14 +43,70 @@ void main() {
     swapBlocTest('a hidden form waits, and resumes when shown again', (h) {
       final bloc = h.open()
         ..add(const UnifiedSwapVisibilityChanged(visible: false));
+      h.elapse(const Duration(seconds: 40));
+      expect(h.routed.requests, hasLength(1));
+
+      bloc.add(const UnifiedSwapVisibilityChanged(visible: true));
+      h.settle();
+      expect(h.routed.requests, hasLength(2));
+      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+    });
+
+    swapBlocTest('a price shown again is renewed at its refresh age', (h) {
+      final bloc = h.open()
+        ..add(const UnifiedSwapVisibilityChanged(visible: false));
       h.elapse(const Duration(seconds: 10));
       bloc.add(const UnifiedSwapVisibilityChanged(visible: true));
-      h.elapse(const Duration(seconds: 29));
+      h.elapse(const Duration(seconds: 19));
       expect(h.routed.requests, hasLength(1));
 
       h.elapse(const Duration(seconds: 1));
       expect(h.routed.requests, hasLength(2));
-      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+    });
+
+    swapBlocTest('a price reused from moments ago is renewed on time', (h) {
+      // A reused answer keeps the time it was priced at, so it is renewed
+      // when that price reaches the refresh age.
+      var age = const Duration(seconds: 10);
+      h.routed.respond = (request) => [
+        SwapQuoteAvailable(
+          quoteOf(
+            id: 'routed-${request.amount}',
+            from: request.from,
+            to: request.to,
+            sell: request.amount.toString(),
+            quotedAt: h.now().subtract(age),
+          ),
+        ),
+      ];
+      h.open();
+      age = Duration.zero;
+      h.elapse(const Duration(seconds: 19));
+      expect(h.routed.requests, hasLength(1));
+
+      h.elapse(const Duration(seconds: 1));
+      expect(h.routed.requests, hasLength(2));
+    });
+
+    swapBlocTest('a price already past its refresh age is not re-asked', (h) {
+      // A source whose clock runs behind: every answer looks old. Renewing
+      // each one at once would ask again and again.
+      h.routed.respond = (request) => [
+        SwapQuoteAvailable(
+          quoteOf(
+            id: 'routed-${request.amount}',
+            from: request.from,
+            to: request.to,
+            sell: request.amount.toString(),
+            quotedAt: h.now().subtract(const Duration(seconds: 40)),
+          ),
+        ),
+      ];
+      final bloc = h.open();
+      h.elapse(const Duration(minutes: 1));
+
+      expect(h.routed.requests, hasLength(1));
+      expect(bloc.state.evaluation, SwapEvaluationStatus.expired);
     });
 
     swapBlocTest(

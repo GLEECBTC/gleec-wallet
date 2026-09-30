@@ -256,20 +256,28 @@ void main() {
       await bloc.close();
     });
 
-    test('a rate limit pauses, then retries the default route only', () async {
-      routed.respond = null;
-      routed.results = [rejected(SwapQuoteFailureKind.rateLimited)];
-      final bloc = await ready();
-      expect(bloc.state.rateLimitedUntil, isNotNull);
+    test(
+      'a rate limit pauses, then the default route is retried on request',
+      () async {
+        routed.respond = null;
+        routed.results = [rejected(SwapQuoteFailureKind.rateLimited)];
+        final bloc = await ready();
+        expect(bloc.state.rateLimitedUntil, isNotNull);
+        final asked = routed.requests.length;
 
-      routed.respond = pricedFor;
-      await Future<void>.delayed(const Duration(milliseconds: 60));
-      await settle();
+        routed.respond = pricedFor;
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+        await settle();
+        expect(bloc.state.rateLimitedUntil, isNull);
+        expect(routed.requests, hasLength(asked));
 
-      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
-      expect(routed.requests.last.orders, {SwapQuoteOrder.cheapest});
-      await bloc.close();
-    });
+        bloc.add(const UnifiedSwapEvaluationRequested());
+        await settle();
+        expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+        expect(routed.requests.last.orders, {SwapQuoteOrder.cheapest});
+        await bloc.close();
+      },
+    );
 
     test('an old quote expires instead of being reviewed', () async {
       final bloc = build()

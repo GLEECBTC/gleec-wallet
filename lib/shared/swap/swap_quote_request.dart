@@ -10,6 +10,7 @@ class SwapQuoteRequest extends Equatable {
     this.slippage,
     this.indicative = false,
     this.signedOut = false,
+    this.automatic = false,
   });
 
   /// The asset being sold.
@@ -37,6 +38,10 @@ class SwapQuoteRequest extends Equatable {
   /// Whether no wallet is signed in, so only wallet-free sources are asked.
   final bool signedOut;
 
+  /// Whether the form is re-pricing on its own rather than for someone's
+  /// action. A source waiting out a rate limit answers these without asking.
+  final bool automatic;
+
   /// This request, for [orders] instead.
   SwapQuoteRequest withOrders(Set<SwapQuoteOrder> orders) => SwapQuoteRequest(
     from: from,
@@ -46,6 +51,7 @@ class SwapQuoteRequest extends Equatable {
     slippage: slippage,
     indicative: indicative,
     signedOut: signedOut,
+    automatic: automatic,
   );
 
   @override
@@ -57,6 +63,7 @@ class SwapQuoteRequest extends Equatable {
     slippage,
     indicative,
     signedOut,
+    automatic,
   ];
 }
 

@@ -83,7 +83,9 @@ void main() {
       final bloc = h.inReview();
       h.elapse(const Duration(seconds: 10));
       bloc.add(const UnifiedSwapReviewClosed());
-      h.elapse(const Duration(seconds: 29));
+      // Renewed when the price reaches the refresh age, not an interval after
+      // the review closed.
+      h.elapse(const Duration(seconds: 19));
 
       expect(bloc.state.view, UnifiedSwapView.form);
       expect(bloc.state.review, isNull);

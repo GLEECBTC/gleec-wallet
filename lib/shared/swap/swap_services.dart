@@ -85,6 +85,10 @@ class SwapServices {
   late final SwapTermsRepository terms;
   late final SwapPreferences preferences;
 
+  /// Outlives each visit to the form: the aggregator limits the network
+  /// address or the proxy's key, not the screen.
+  final RoutedSwapRateLimit _routedRateLimit = RoutedSwapRateLimit();
+
   StreamSubscription<KdfUser?>? _userSubscription;
   KdfUser? _user;
   final StreamController<SwapExecutionRef> _openRequests =
@@ -299,6 +303,7 @@ class SwapServices {
           _sdk.routedSwaps,
           networks: networks,
           tradingAllowed: tradingAllowed,
+          rateLimit: _routedRateLimit,
         ),
         AtomicSwapQuoteSource(
           trading: _sdk.trading,

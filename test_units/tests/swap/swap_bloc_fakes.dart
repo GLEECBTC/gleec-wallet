@@ -127,6 +127,7 @@ class SwapBlocHarness {
     Duration refreshInterval = const Duration(seconds: 30),
     Duration idleLimit = const Duration(minutes: 5),
     Duration offersInterval = const Duration(seconds: 30),
+    Duration offersIdleLimit = const Duration(minutes: 5),
   }) {
     final bloc = UnifiedSwapBloc(
       repository: UnifiedSwapRepository(
@@ -169,6 +170,7 @@ class SwapBlocHarness {
       refreshInterval: refreshInterval,
       idleLimit: idleLimit,
       offersInterval: offersInterval,
+      offersIdleLimit: offersIdleLimit,
     );
     _blocs.add(bloc);
     return bloc;

@@ -129,8 +129,33 @@ void main() {
     );
 
     await tapText(tester, 'Use this option');
-    expect(swap.events.last, const UnifiedSwapOptionSelected('fast'));
+    expect(swap.events, [
+      const UnifiedSwapAlternativesRequested(),
+      const UnifiedSwapOptionSelected('fast'),
+      // Closed, the comparison stops pricing what nobody looks at.
+      const UnifiedSwapAlternativesDismissed(),
+    ]);
     expect(find.text('Use this option'), findsNothing);
+  });
+
+  testWidgets('closing the comparison stops pricing its alternatives', (
+    tester,
+  ) async {
+    swap.emit(swapPricedForm(ranked: [best, fast]));
+    await pumpSwapUi(
+      tester,
+      const SwapEntryView(),
+      bloc: swap,
+      services: services,
+    );
+    await tapText(tester, 'Compare options');
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    expect(swap.events, [
+      const UnifiedSwapAlternativesRequested(),
+      const UnifiedSwapAlternativesDismissed(),
+    ]);
   });
 
   testWidgets('a choice a refresh withdrew falls back to the selected one', (

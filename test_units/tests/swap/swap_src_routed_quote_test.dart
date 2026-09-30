@@ -24,24 +24,28 @@ void main() {
   RoutedSwapQuoteSource source({
     bool Function(AssetId from, AssetId to)? tradingAllowed,
     Duration timeout = const Duration(seconds: 20),
+    RoutedSwapRateLimit? rateLimit,
   }) => RoutedSwapQuoteSource(
     manager,
     networks: () => SwapNetworks([eth, usdc]),
     tradingAllowed: tradingAllowed,
     timeout: timeout,
     now: () => clock,
+    rateLimit: rateLimit,
   );
 
   SwapQuoteRequest request({
     String amount = '1',
     Set<SwapQuoteOrder> orders = const {SwapQuoteOrder.cheapest},
     double? slippage,
+    bool automatic = false,
   }) => SwapQuoteRequest(
     from: eth,
     to: usdc,
     amount: d(amount),
     orders: orders,
     slippage: slippage,
+    automatic: automatic,
   );
 
   SwapQuote available(SwapQuoteResult result) =>
@@ -264,6 +268,39 @@ void main() {
       final [result] = await routed.quote(request(amount: '2'));
 
       expect(failure(result).retryAt, clock.add(const Duration(seconds: 30)));
+    });
+
+    test('after a limit, re-pricing on its own waits for a user', () async {
+      final routed = source();
+      manager.quoteError = const RoutedSwapRateLimitedException(message: 'x');
+      await routed.quote(request());
+      clock = clock.add(const Duration(seconds: 30));
+      manager.quoteError = null;
+
+      final [held] = await routed.quote(request(automatic: true));
+      expect(failure(held).kind, SwapQuoteFailureKind.rateLimited);
+      expect(failure(held).retryAt, isNull);
+      expect(manager.quotes, hasLength(1));
+
+      final [asked] = await routed.quote(request());
+      expect(asked, isA<SwapQuoteAvailable>());
+      final [again] = await routed.quote(request(amount: '2', automatic: true));
+      expect(again, isA<SwapQuoteAvailable>());
+      expect(manager.quotes, hasLength(3));
+    });
+
+    test('sources sharing a limit wait it out together', () async {
+      final limit = RoutedSwapRateLimit();
+      manager.quoteError = const RoutedSwapRateLimitedException(message: 'x');
+      await source(rateLimit: limit).quote(request());
+      manager.quoteError = null;
+
+      // The form closed and opened again: a new source, the same limit.
+      final [result] = await source(rateLimit: limit).quote(request());
+
+      expect(failure(result).kind, SwapQuoteFailureKind.rateLimited);
+      expect(failure(result).retryAt, clock.add(const Duration(seconds: 30)));
+      expect(manager.quotes, hasLength(1));
     });
   });
 

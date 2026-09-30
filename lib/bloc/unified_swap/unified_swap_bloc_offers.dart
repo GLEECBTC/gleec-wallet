@@ -108,7 +108,7 @@ extension _UnifiedSwapOffers on UnifiedSwapBloc {
   /// the engine may still be finding its peers.
   void _watchOffers(Emitter<UnifiedSwapState> emit) {
     _offersWatch?.cancel();
-    final idle = _now().difference(_lastInteraction) >= _idleLimit;
+    final idle = _now().difference(_lastInteraction) >= _offersIdleLimit;
     final looking = state.view == UnifiedSwapView.form && _present && !idle;
     final none = state.issue == SwapFormIssue.noOffers;
     if (looking && (none || _offersUnknown(state))) {

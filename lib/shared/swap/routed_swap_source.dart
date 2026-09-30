@@ -19,7 +19,8 @@ part 'routed_swap_budget.dart';
 /// into [SwapQuoteFailure]s, so the UI can compare and explain them next to
 /// an atomic quote.
 class RoutedSwapQuoteSource implements SwapQuoteSource {
-  /// Creates a source backed by [manager].
+  /// Creates a source backed by [manager]. Sources given the same [rateLimit]
+  /// wait out a refusal together.
   RoutedSwapQuoteSource(
     this.manager, {
     required SwapNetworks Function() networks,
@@ -28,12 +29,16 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Duration timeout = const Duration(seconds: 20),
     Duration catalogTimeout = const Duration(seconds: 10),
     DateTime Function()? now,
+    RoutedSwapRateLimit? rateLimit,
   }) : _networks = networks,
        _tradingAllowed = tradingAllowed,
        _isCandidate = isCandidate,
        _timeout = timeout,
        _catalogTimeout = catalogTimeout,
-       _budget = _QuoteBudget(now ?? DateTime.now);
+       _budget = _QuoteBudget(
+         now ?? DateTime.now,
+         rateLimit ?? RoutedSwapRateLimit(),
+       );
 
   /// The SDK manager doing the real work.
   final RoutedSwapManager manager;
@@ -160,6 +165,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
           request.amount,
           order,
           request.slippage ?? _defaultSlippage,
+          automatic: request.automatic,
         ),
     ]);
     if (results.length < 2) return results;
@@ -195,11 +201,15 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     AssetId to,
     Decimal amount,
     SwapQuoteOrder order,
-    double slippage,
-  ) async {
+    double slippage, {
+    bool automatic = false,
+  }) async {
     final pausedUntil = _budget.pausedUntil;
     if (pausedUntil != null) {
       return _rejected(SwapQuoteFailureKind.rateLimited, retryAt: pausedUntil);
+    }
+    if (automatic && _budget.holdsAutomatic) {
+      return _rejected(SwapQuoteFailureKind.rateLimited);
     }
     final key = (
       from: from,

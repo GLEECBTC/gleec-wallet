@@ -284,6 +284,11 @@ final class UnifiedSwapAlternativesRequested extends UnifiedSwapEvent {
   const UnifiedSwapAlternativesRequested();
 }
 
+/// The comparison closed: stop pricing the alternatives nobody is looking at.
+final class UnifiedSwapAlternativesDismissed extends UnifiedSwapEvent {
+  const UnifiedSwapAlternativesDismissed();
+}
+
 /// Whether the app is on screen at all. Re-pricing pauses while it is not.
 final class UnifiedSwapForegroundChanged extends UnifiedSwapEvent {
   const UnifiedSwapForegroundChanged({required this.foreground});
@@ -314,7 +319,7 @@ enum UnifiedSwapTimerKind {
   /// The quote is too old to review.
   expiry,
 
-  /// A rate-limit pause is over.
+  /// A rate-limit pause is over, so asking again is allowed.
   rateLimitOver,
 
   /// Check again whether anyone offers a pair that had no offers.

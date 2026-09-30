@@ -52,10 +52,11 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     DateTime Function()? now,
     Duration debounce = const Duration(milliseconds: 500),
     Duration evaluationTimeout = const Duration(seconds: 25),
-    Duration refreshInterval = const Duration(seconds: 30),
+    Duration refreshInterval = const Duration(seconds: 50),
     Duration rateLimitPause = const Duration(seconds: 30),
-    Duration idleLimit = const Duration(minutes: 5),
+    Duration idleLimit = const Duration(minutes: 2),
     Duration offersInterval = const Duration(seconds: 30),
+    Duration offersIdleLimit = const Duration(minutes: 5),
   }) : _repository = repository,
        _registry = registry,
        _terms = terms,
@@ -71,6 +72,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
        _rateLimitPause = rateLimitPause,
        _idleLimit = idleLimit,
        _offersInterval = offersInterval,
+       _offersIdleLimit = offersIdleLimit,
        super(const UnifiedSwapState()) {
     on<UnifiedSwapStarted>(_onStarted);
     on<UnifiedSwapIntentApplied>(_onIntentApplied);
@@ -97,6 +99,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapCatalogArrived>(_onCatalogArrived);
     on<UnifiedSwapAssetActivated>(_onAssetActivated);
     on<UnifiedSwapAlternativesRequested>(_onAlternativesRequested);
+    on<UnifiedSwapAlternativesDismissed>(_onAlternativesDismissed);
     on<UnifiedSwapSlippageChanged>(_onSlippageChanged);
     on<UnifiedSwapForegroundChanged>(_onForegroundChanged);
     on<UnifiedSwapTimerFired>(_onTimerFired);
@@ -118,6 +121,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   final DateTime Function() _now;
   final Duration _debounceDelay;
   final Duration _evaluationTimeout;
+
+  /// How old a price gets before it is renewed: close to its lifetime, since
+  /// every renewal spends the aggregator's request budget.
   final Duration _refreshInterval;
   final Duration _rateLimitPause;
 
@@ -127,6 +133,11 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
 
   /// How often a pair no one offers is checked again.
   final Duration _offersInterval;
+
+  /// How long a pair no one offers is watched without anyone touching the
+  /// form. Longer than [_idleLimit]: reading the order book spends no
+  /// aggregator budget.
+  final Duration _offersIdleLimit;
 
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
@@ -147,8 +158,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   var _intentApplied = false;
   late DateTime _lastInteraction = _now();
 
-  /// The intent someone opened a comparison for: its alternatives stay
-  /// priced on every refresh until the intent changes.
+  /// The intent someone has a comparison open for: its alternatives are
+  /// priced on every refresh until the comparison closes or the intent
+  /// changes.
   Object? _comparing;
 
   var _settingPair = 0;

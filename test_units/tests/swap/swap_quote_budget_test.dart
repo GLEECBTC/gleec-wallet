@@ -25,17 +25,28 @@ import 'swap_test_fixtures.dart';
 /// Each scenario runs the real bloc, repository and routed source over a
 /// manager that counts provider calls, on a fake clock.
 void main() {
-  test('an idle form stops re-pricing after five minutes', () {
-    // Before: 2 routes every 30 s for as long as the form stayed open —
-    // 42 requests in these ten minutes, and 4.2 more every minute after.
+  test('an idle form stops re-pricing after two minutes', () {
+    // Before: every 30 s until five idle minutes, 11 requests in these ten
+    // minutes. Before that, 2 routes every 30 s for as long as it was open.
     final early = _run((bloc, async) {
-      async.elapse(const Duration(minutes: 5));
+      async.elapse(const Duration(minutes: 2));
     });
     final total = _run((bloc, async) {
       async.elapse(const Duration(minutes: 10));
     });
-    expect(total, lessThanOrEqualTo(11));
+    expect(total, 3);
     expect(total, early, reason: 'nothing after the idle limit');
+  });
+
+  test('a form in use re-prices as its price nears expiry', () {
+    // Before: every 30 s.
+    final calls = _run((bloc, async) {
+      for (var minute = 0; minute < 10; minute++) {
+        async.elapse(const Duration(minutes: 1));
+        bloc.add(const UnifiedSwapVisibilityChanged(visible: true));
+      }
+    });
+    expect(calls, 13, reason: 'at 0 s, then every 50 s');
   });
 
   test('a hidden app stops re-pricing at once', () {
@@ -76,17 +87,25 @@ void main() {
     expect(calls, 1);
   });
 
-  test('comparing prices the alternative once, then keeps it fresh', () {
+  test('comparing prices the alternative only while it is open', () {
     final compare = _run((bloc, async) {
       bloc.add(const UnifiedSwapAlternativesRequested());
       async.elapse(const Duration(seconds: 3));
     }, skipOpening: true);
     expect(compare, 1);
-    final refreshed = _run((bloc, async) {
+    final open = _run((bloc, async) {
       bloc.add(const UnifiedSwapAlternativesRequested());
-      async.elapse(const Duration(seconds: 31));
+      async.elapse(const Duration(seconds: 51));
     }, skipOpening: true);
-    expect(refreshed, 3, reason: 'one alternative, then both routes');
+    expect(open, 3, reason: 'one alternative, then both routes');
+    // Before: both routes on every refresh until the pair or amount changed.
+    final closed = _run((bloc, async) {
+      bloc.add(const UnifiedSwapAlternativesRequested());
+      async.elapse(const Duration(seconds: 3));
+      bloc.add(const UnifiedSwapAlternativesDismissed());
+      async.elapse(const Duration(seconds: 48));
+    }, skipOpening: true);
+    expect(closed, 2, reason: 'one alternative, then the default route');
   });
 
   test('starting a quote seen moments ago re-prices from memory', () {
@@ -112,13 +131,40 @@ void main() {
     expect(calls, 1, reason: 'no refresh, and no re-price on coming back');
   });
 
-  test('a rate limit is waited out, longer each time', () {
+  test('a rate limit is never asked into again on its own', () {
+    // Before: asked at 0 s, then after pauses of 30 s, 60 s, 120 s and on,
+    // for as long as the form stayed open.
     final calls = _run(rateLimited: true, (bloc, async) {
-      async.elapse(const Duration(minutes: 5));
+      async.elapse(const Duration(minutes: 30));
     });
-    // Asked at 0 s, then after pauses of 30 s, 60 s and 120 s: a request
-    // made while limited is refused and still counts.
-    expect(calls, lessThanOrEqualTo(4));
+    expect(calls, 1);
+  });
+
+  test('an order-book price kept fresh does not re-ask a rate limit', () {
+    final calls = _run(rateLimited: true, atomicPriced: true, (bloc, async) {
+      async.elapse(const Duration(minutes: 2));
+    });
+    expect(calls, 1, reason: 'the order book is re-priced, the aggregator not');
+  });
+
+  test('someone acting asks again once the pause is over', () {
+    final calls = _run(rateLimited: true, atomicPriced: true, (bloc, async) {
+      async.elapse(const Duration(minutes: 1));
+      bloc.add(const UnifiedSwapAmountChanged('0.5'));
+      async.elapse(const Duration(seconds: 2));
+    });
+    expect(calls, 2);
+  });
+
+  test('a rate limit outlives leaving the form and coming back', () {
+    final limit = RoutedSwapRateLimit();
+    expect(_run(rateLimited: true, rateLimit: limit, (bloc, async) {}), 1);
+    final back = _run(rateLimit: limit, (bloc, async) {
+      async.elapse(const Duration(minutes: 5));
+      bloc.add(const UnifiedSwapEvaluationRequested());
+      async.elapse(const Duration(seconds: 2));
+    });
+    expect(back, 1, reason: 'none on opening or when the pause ends');
   });
 }
 
@@ -130,6 +176,8 @@ int _run(
   String amount = '1',
   bool skipOpening = false,
   bool rateLimited = false,
+  bool atomicPriced = false,
+  RoutedSwapRateLimit? rateLimit,
 }) {
   late int count;
   fakeAsync((async) {
@@ -149,6 +197,7 @@ int _run(
                   manager,
                   networks: () => SwapNetworks([eth, usdc]),
                   now: now,
+                  rateLimit: rateLimit,
                 ),
                 FakeQuoteSource(
                   SwapLiquiditySource.atomic,
@@ -158,6 +207,18 @@ int _run(
                       source: SwapLiquiditySource.atomic,
                     ),
                   ],
+                  respond: atomicPriced
+                      ? (request) => [
+                          SwapQuoteAvailable(
+                            quoteOf(
+                              id: 'atomic',
+                              source: SwapLiquiditySource.atomic,
+                              sell: request.amount.toString(),
+                              quotedAt: now(),
+                            ),
+                          ),
+                        ]
+                      : null,
                 ),
               ],
               pricing: SwapPricingService(
