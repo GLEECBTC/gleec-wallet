@@ -3,8 +3,13 @@ import 'package:web_dex/shared/constants.dart';
 
 void main() {
   group('validatedLifiApiUrl', () {
-    test('leaves KDF on the public API when the define is unset', () {
+    test('leaves KDF on the public API when the define is empty', () {
       expect(validatedLifiApiUrl(''), isNull);
+    });
+
+    test('the built-in endpoint is one KDF can use', () {
+      // One refused here would silently fall back to the public API.
+      expect(validatedLifiApiUrl(lifiApiUrl), lifiApiUrl);
     });
 
     test('passes an HTTPS proxy URL through, trimmed', () {

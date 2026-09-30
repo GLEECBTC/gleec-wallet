@@ -310,10 +310,14 @@ bool get isTronGaslessReceiveConfigured =>
 /// LI.FI API base URL for routed swaps, handed to KDF as `lifi_api`. Empty
 /// keeps LI.FI's rate-limited public API; see `docs/BUILD_RUN_APP.md`.
 ///
+/// The default is an interim proxy holding a partner key. It must be
+/// replaced with the KDF team's managed proxy before release; see
+/// `docs/SWAP_RELEASE_CHECKLIST.md`.
+///
 /// Override at build time via `--dart-define=LIFI_API_URL=...`.
 const String lifiApiUrl = String.fromEnvironment(
   'LIFI_API_URL',
-  defaultValue: '',
+  defaultValue: 'https://kdf-proxy.nitride.app/lifi/v1',
 );
 
 /// [rawUrl] trimmed, or null when KDF should stay on the public API.

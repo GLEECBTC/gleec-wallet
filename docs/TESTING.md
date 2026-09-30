@@ -329,7 +329,7 @@ fortnight. The chart flow additionally needs keys added to
 | A BLoC or its states/events | unit | integration, if it drives a screen a suite touches |
 | A widget carrying a `Key` a test uses | unit **and** integration | grep `test_integration/` for the key first |
 | Anything GasFree / TRON | unit **with all four defines** | integration requires explicit defines and a GasFree-specific scenario |
-| The LI.FI endpoint (`LIFI_API_URL`, [BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_api_url)) | unit, plus the `komodo_defi_framework`, `komodo_defi_local_auth`, `komodo_defi_sdk` and harness replay suites | a routed quote through the proxy: `fvm flutter run --dart-define=LIFI_API_URL=<proxy URL>`. KDF reads the URL only when it calls LI.FI, so a wrong one shows up as failed quotes, not a failed start |
+| The LI.FI endpoint (`LIFI_API_URL`, [BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_api_url)) | unit, plus the `komodo_defi_framework`, `komodo_defi_local_auth`, `komodo_defi_sdk` and harness replay suites | a routed quote through the proxy, the default, or another one with `fvm flutter run --dart-define=LIFI_API_URL=<proxy URL>`. KDF reads the URL only when it calls LI.FI, so a wrong one shows up as failed quotes, not a failed start |
 | Auth, activation, pubkeys, balances, storage | SDK **and** harness replay | nightly process tier if it touches the real binary |
 | Anything that could move wallet-load timing | harness replay + bench | update `tool/bench_baseline.json` by hand in the same PR |
 | An RPC request/response type | SDK + harness replay | serialisation bugs surface only on transports that `jsonEncode` |
