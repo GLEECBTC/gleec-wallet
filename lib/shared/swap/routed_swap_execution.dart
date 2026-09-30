@@ -37,8 +37,7 @@ class RoutedSwapExecutor implements SwapExecutor {
         RoutedSwapCoinNotActiveException() ||
         RoutedSwapPairNotSupportedException() ||
         RoutedSwapAmountOutOfBoundsException() ||
-        RoutedSwapInvalidParamException() ||
-        RoutedSwapMyAddressException() => SwapStartRejection.notAvailable,
+        RoutedSwapInvalidParamException() => SwapStartRejection.notAvailable,
         _ => SwapStartRejection.unknown,
       }, detail: '${error.errorType}: ${error.message}');
     }

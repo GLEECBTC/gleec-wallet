@@ -1436,7 +1436,6 @@ abstract class LocaleKeys {
   static const swapErrorSignedOutRoutes = 'swapErrorSignedOutRoutes';
   static const swapErrorServiceToken = 'swapErrorServiceToken';
   static const swapErrorInactive = 'swapErrorInactive';
-  static const swapErrorUnsupportedSigner = 'swapErrorUnsupportedSigner';
   static const swapErrorRateLimited = 'swapErrorRateLimited';
   static const swapErrorService = 'swapErrorService';
   static const swapErrorTimeout = 'swapErrorTimeout';

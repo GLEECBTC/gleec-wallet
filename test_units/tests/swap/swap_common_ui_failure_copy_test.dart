@@ -266,11 +266,6 @@ void main() {
           SwapEntryAction.none,
         ),
         (
-          failure(SwapQuoteFailureKind.unsupportedSigner),
-          "This address can't sign every step required for this swap.",
-          SwapEntryAction.chooseAnother,
-        ),
-        (
           failure(SwapQuoteFailureKind.notConfigured),
           "This route isn't available right now. Your selections are "
               'preserved.',

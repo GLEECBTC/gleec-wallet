@@ -308,14 +308,7 @@ void main() {
       expect(invalid('amount').kind, SwapQuoteFailureKind.invalidAmount);
     });
 
-    test('a signer or node that cannot route sends the user elsewhere', () {
-      final signer = classify(
-        const RoutedSwapMyAddressException(
-          coin: 'ETH',
-          detail: 'hardware wallet',
-          message: 'no single address',
-        ),
-      );
+    test('a node that cannot route sends the user elsewhere', () {
       final config = classify(
         const RoutedSwapInvalidConfigException(
           detail: 'no provider',
@@ -323,10 +316,23 @@ void main() {
         ),
       );
 
-      expect(signer.kind, SwapQuoteFailureKind.unsupportedSigner);
       expect(config.kind, SwapQuoteFailureKind.notConfigured);
       expect(config.isPermanent, isTrue);
       expect(config.detail, 'InvalidConfig: invalid config');
+    });
+
+    test('no address to send from is an engine fault, offered again', () {
+      final address = classify(
+        const RoutedSwapMyAddressException(
+          coin: 'ETH',
+          detail: 'hd',
+          message: 'no single address',
+        ),
+      );
+
+      expect(address.kind, SwapQuoteFailureKind.unknown);
+      expect(address.isTransient, isTrue);
+      expect(address.detail, 'MyAddressError: no single address');
     });
 
     test('bounds read as above or below, whichever the amount broke', () {

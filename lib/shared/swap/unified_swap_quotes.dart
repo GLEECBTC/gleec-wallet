@@ -58,7 +58,6 @@ class UnifiedSwapQuotes extends Equatable {
       SwapQuoteFailureKind.belowMinimum,
       SwapQuoteFailureKind.aboveMaximum,
       SwapQuoteFailureKind.invalidAmount,
-      SwapQuoteFailureKind.unsupportedSigner,
       // A source that looked and found nothing is a firmer answer than one
       // that could not look; the copy adds the other's failure to it.
       SwapQuoteFailureKind.noRoute,

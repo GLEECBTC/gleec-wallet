@@ -42,9 +42,6 @@ enum SwapQuoteFailureKind {
   /// by what [minimum] requires.
   insufficientFunds,
 
-  /// The selected address cannot sign every step this source requires.
-  unsupportedSigner,
-
   /// The node is not configured for this source. Operator-side.
   notConfigured,
 

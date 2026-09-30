@@ -94,10 +94,6 @@ class SwapFailureCopy {
         ),
         action: SwapEntryAction.none,
       ),
-      SwapQuoteFailureKind.unsupportedSigner => SwapFailureCopy(
-        message: LocaleKeys.swapErrorUnsupportedSigner.tr(),
-        action: SwapEntryAction.chooseAnother,
-      ),
       SwapQuoteFailureKind.notConfigured => SwapFailureCopy(
         message: LocaleKeys.swapErrorNotConfigured.tr(),
         action: SwapEntryAction.chooseAnother,

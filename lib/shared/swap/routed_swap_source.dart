@@ -329,9 +329,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         param == 'amount'
             ? _bounds(value, min, max, failure)
             : failure(SwapQuoteFailureKind.unknown),
-      RoutedSwapMyAddressException() => failure(
-        SwapQuoteFailureKind.unsupportedSigner,
-      ),
+      // KDF derives the one address it sends from for every active coin, so
+      // its absence is an engine fault: no asset the user picks changes it.
+      RoutedSwapMyAddressException() => failure(SwapQuoteFailureKind.unknown),
       RoutedSwapInvalidConfigException() => failure(
         SwapQuoteFailureKind.notConfigured,
       ),

@@ -92,11 +92,6 @@ void main() {
           reason: 'decimals',
           message: 'bad amount',
         ),
-        RoutedSwapMyAddressException(
-          coin: 'ETH',
-          detail: 'hd',
-          message: 'no address',
-        ),
       ];
       for (final refusal in refusals) {
         manager.startError = refusal;
@@ -130,6 +125,11 @@ void main() {
           RoutedSwapTransportException(detail: 'x', message: 'transport'),
           RoutedSwapInternalException(detail: 'x', message: 'internal'),
           RoutedSwapInvalidConfigException(detail: 'x', message: 'config'),
+          RoutedSwapMyAddressException(
+            coin: 'ETH',
+            detail: 'hd',
+            message: 'no address',
+          ),
           RoutedSwapNoSuchTaskException(message: 'no task'),
           RoutedSwapTaskFinishedException(message: 'finished'),
           RoutedSwapTaskAlreadyBroadcastException(message: 'broadcast'),

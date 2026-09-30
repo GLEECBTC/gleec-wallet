@@ -174,7 +174,7 @@ void main() {
     });
   });
 
-  testWidgets('an address that cannot sign every step steers elsewhere', (
+  testWidgets('an engine fault is offered again, its detail kept back', (
     tester,
   ) async {
     await pump(
@@ -182,18 +182,20 @@ void main() {
       failedWith(
         const SwapQuoteFailure(
           source: SwapLiquiditySource.routed,
-          kind: SwapQuoteFailureKind.unsupportedSigner,
+          kind: SwapQuoteFailureKind.unknown,
+          detail: 'MyAddressError: Cannot use ETH source address',
         ),
       ),
     );
 
     expect(
-      find.text("This address can't sign every step required for this swap."),
+      find.text("We couldn't check swap options. Try again."),
       findsOneWidget,
     );
-    expect(swapPrimaryLabel(tester), 'Choose another asset');
+    expect(find.textContaining('MyAddressError'), findsNothing);
+    expect(swapPrimaryLabel(tester), 'Try again');
     await press(tester);
-    expect(find.text('What you receive'), findsOneWidget);
+    expect(swap.events, [const UnifiedSwapEvaluationRequested()]);
   });
 
   group('a rate limit', () {

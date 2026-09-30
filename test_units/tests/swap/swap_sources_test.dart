@@ -132,7 +132,7 @@ void main() {
             message: 'x',
           ),
         ).kind,
-        SwapQuoteFailureKind.unsupportedSigner,
+        SwapQuoteFailureKind.unknown,
       );
       expect(
         classify(

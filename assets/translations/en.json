@@ -1269,7 +1269,6 @@
   "swapErrorSignedOutRoutes": "Connect a wallet to see cross-network prices for this pair.",
   "swapErrorServiceToken": "We couldn't check swap options. If this keeps happening, check you have enough {} on {} for network fees.",
   "swapErrorInactive": "{} isn't active in this wallet yet. Activate it to see its balance and prices.",
-  "swapErrorUnsupportedSigner": "This address can't sign every step required for this swap.",
   "swapErrorRateLimited": "We're checking too often. Wait a moment, then try again. Your selections are preserved.",
   "swapErrorService": "We couldn't check swap options. Your selections are preserved and nothing was signed or sent.",
   "swapErrorTimeout": "Checking options took too long. Your selections are preserved and nothing was signed or sent.",
