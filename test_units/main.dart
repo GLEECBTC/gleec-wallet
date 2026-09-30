@@ -217,6 +217,8 @@ import 'tests/swap/swap_motion_effects_test.dart' as swap_motion_effects_test;
 import 'tests/swap/swap_motion_ambient_test.dart' as swap_motion_ambient_test;
 import 'tests/swap/swap_timeline_motion_test.dart' as swap_timeline_motion_test;
 import 'tests/swap/swap_step_pulse_test.dart' as swap_step_pulse_test;
+import 'tests/swap/swap_status_hero_motion_test.dart'
+    as swap_status_hero_motion_test;
 import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
 import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
 import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
@@ -643,6 +645,7 @@ void main() {
   swap_motion_ambient_test.main();
   swap_timeline_motion_test.main();
   swap_step_pulse_test.main();
+  swap_status_hero_motion_test.main();
   swap_bloc_fix_doubt_test.main();
   swap_bloc_fix_review_test.main();
   swap_bloc_fix_timers_test.main();

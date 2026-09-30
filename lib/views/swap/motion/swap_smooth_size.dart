@@ -133,7 +133,7 @@ class _RenderSmoothSize extends RenderAligningShiftedBox {
       return;
     }
     child.layout(constraints, parentUsesSize: true);
-    final target = child.size;
+    final target = Size.copy(child.size);
     if (_sizes.end == null || _duration == Duration.zero) {
       _controller.stop();
       _sizes

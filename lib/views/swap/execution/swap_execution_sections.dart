@@ -2,7 +2,20 @@ part of 'swap_execution_view.dart';
 
 /// What sits below the timeline: controls while running, the answers once it
 /// has stopped, and the evidence either way.
+/// When the sections below the timeline start arriving after a live change:
+/// once the hero has begun to settle.
+const _sectionDelay = Duration(milliseconds: 160);
+
 extension _ExecutionSections on _ExecutionBodyState {
+  /// Brings in the [order]th section that arrived with a live change.
+  Widget _arrive(Widget child, {required bool live, int order = 0}) =>
+      SwapReveal(
+        onMount: live,
+        animate: live,
+        delay: _sectionDelay + SwapMotion.stagger * order,
+        child: child,
+      );
+
   List<Widget> _running(
     BuildContext context,
     SwapExecutionState state,
@@ -25,19 +38,26 @@ extension _ExecutionSections on _ExecutionBodyState {
       ),
       if (cancelMessage != null) ...[
         const SizedBox(height: 12),
-        SwapCallout(
-          tone: SwapTone.warning,
-          message: cancelMessage,
-          liveRegion: true,
+        // Only a cancel pressed on this screen gets an answer here.
+        _arrive(
+          SwapCallout(
+            tone: SwapTone.warning,
+            message: cancelMessage,
+            liveRegion: true,
+          ),
+          live: true,
         ),
       ],
       const SizedBox(height: 16),
       if (snapshot.stage == SwapProgressStage.actionRequired &&
           routeUrl != null) ...[
-        SwapButton(
-          label: LocaleKeys.swapOpenRoutePage.tr(),
-          icon: Icons.open_in_new_rounded,
-          onPressed: () => openSwapLink(context, routeUrl),
+        _arrive(
+          SwapButton(
+            label: LocaleKeys.swapOpenRoutePage.tr(),
+            icon: Icons.open_in_new_rounded,
+            onPressed: () => openSwapLink(context, routeUrl),
+          ),
+          live: state.live,
         ),
         const SizedBox(height: 10),
       ],
@@ -65,51 +85,68 @@ extension _ExecutionSections on _ExecutionBodyState {
   List<Widget> _recovery(
     BuildContext context,
     SwapExecutionSnapshot snapshot,
-    SwapExecutionCopy copy,
-  ) {
+    SwapExecutionCopy copy, {
+    required bool live,
+  }) {
     final hero = copy.hero;
     final actions = copy.actions;
     final success = snapshot.isSuccess;
+    var order = 0;
+    Widget arrive(Widget child) => _arrive(child, live: live, order: order++);
     return [
       if (!success) ...[
-        SwapQuestion(
-          eyebrow: LocaleKeys.swapQuestionWhat.tr(),
-          title: hero.title,
-          body: hero.body,
-          divider: false,
+        arrive(
+          SwapQuestion(
+            eyebrow: LocaleKeys.swapQuestionWhat.tr(),
+            title: hero.title,
+            body: hero.body,
+            divider: false,
+          ),
         ),
-        SwapQuestion(
-          eyebrow: LocaleKeys.swapQuestionWhere.tr(),
-          body: copy.fundsLocation,
+        arrive(
+          SwapQuestion(
+            eyebrow: LocaleKeys.swapQuestionWhere.tr(),
+            body: copy.fundsLocation,
+          ),
         ),
-        SwapQuestion(
-          eyebrow: LocaleKeys.swapQuestionNext.tr(),
-          body: LocaleKeys.swapQuestionNextBody.tr(),
+        arrive(
+          SwapQuestion(
+            eyebrow: LocaleKeys.swapQuestionNext.tr(),
+            body: LocaleKeys.swapQuestionNextBody.tr(),
+          ),
         ),
       ],
       const SizedBox(height: 8),
       for (final (index, action) in actions.indexed) ...[
-        SwapButton(
-          label: _ExecutionBodyState._actionLabel(action, copy),
-          variant: index == 0
-              ? SwapButtonVariant.primary
-              : SwapButtonVariant.secondary,
-          onPressed: () => _onAction(action, snapshot),
+        arrive(
+          SwapButton(
+            label: _ExecutionBodyState._actionLabel(action, copy),
+            variant: index == 0
+                ? SwapButtonVariant.primary
+                : SwapButtonVariant.secondary,
+            onPressed: () => _onAction(action, snapshot),
+          ),
         ),
         const SizedBox(height: 10),
       ],
       if (_inFlow)
-        SwapButton(
-          label: success
-              ? LocaleKeys.done.tr()
-              : LocaleKeys.swapViewInActivity.tr(),
-          variant: SwapButtonVariant.secondary,
-          onPressed: success ? _leave : () => _viewInActivity(snapshot),
+        arrive(
+          SwapButton(
+            label: success
+                ? LocaleKeys.done.tr()
+                : LocaleKeys.swapViewInActivity.tr(),
+            variant: SwapButtonVariant.secondary,
+            onPressed: success ? _leave : () => _viewInActivity(snapshot),
+          ),
         ),
     ];
   }
 
-  Widget _evidence(BuildContext context, SwapExecutionSnapshot snapshot) {
+  Widget _evidence(
+    BuildContext context,
+    SwapExecutionSnapshot snapshot, {
+    required bool live,
+  }) {
     final palette = SwapPalette.of(context);
     final updated = snapshot.updatedAt ?? snapshot.finishedAt;
     return Container(
@@ -128,7 +165,17 @@ extension _ExecutionSections on _ExecutionBodyState {
               style: SwapText.eyebrow(context),
             ),
             const SizedBox(height: 2),
-            Text(SwapFormat.time(updated), style: SwapText.body(context)),
+            SwapReveal(
+              revealKey: updated,
+              onMount: false,
+              animate: live,
+              offset: Offset.zero,
+              duration: SwapMotion.colour,
+              child: Text(
+                SwapFormat.time(updated),
+                style: SwapText.body(context),
+              ),
+            ),
             const SizedBox(height: 8),
           ],
           Text(

@@ -63,6 +63,26 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('keeps growing when its content is replaced outright', (
+      tester,
+    ) async {
+      Widget replaced(Key key, double height) => motionApp(
+        Align(
+          alignment: Alignment.topCenter,
+          child: SwapSmoothSize(
+            child: SizedBox(key: key, width: 100, height: height),
+          ),
+        ),
+      );
+      await tester.pumpWidget(replaced(const ValueKey(1), 40));
+      await tester.pumpWidget(replaced(const ValueKey(2), 100));
+      await tester.pump(SwapMotion.grow ~/ 2);
+      await tester.pumpWidget(replaced(const ValueKey(3), 60));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(heightOf(tester), 60);
+    });
+
     testWidgets('follows the content exactly when asked to', (tester) async {
       await tester.pumpWidget(sized(40, animate: false));
       await tester.pumpWidget(sized(100, animate: false));

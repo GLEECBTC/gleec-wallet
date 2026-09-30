@@ -16,6 +16,7 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
 import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 part 'swap_execution_sections.dart';
@@ -211,12 +212,50 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
     }
   }
 
-  static Widget _hero(SwapHeroCopy hero) => SwapStatusHero(
-    icon: hero.icon,
-    tone: hero.tone,
-    title: hero.title,
-    body: hero.body,
-  );
+  static Widget _hero(SwapHeroCopy hero, {SwapHeroMotion? motion}) =>
+      SwapStatusHero(
+        icon: hero.icon,
+        tone: hero.tone,
+        title: hero.title,
+        body: hero.body,
+        motion: motion,
+      );
+
+  /// How the hero moves into [hero]: a success settles with a little
+  /// overshoot, a refund's icon unwinds, a delay's hourglass turns over, and
+  /// an error arrives without any bounce.
+  static SwapHeroMotion _heroMotion(
+    SwapExecutionState state,
+    SwapExecutionSnapshot snapshot,
+    SwapHeroCopy hero, {
+    required bool delayed,
+  }) {
+    final (curve, from, turns, duration) = switch (snapshot.outcome?.kind) {
+      null when delayed => (SwapMotion.enter, 0.9, 0.5, SwapMotion.settle),
+      null => (SwapMotion.enter, 0.8, 0.0, SwapMotion.pop),
+      SwapOutcomeKind.completed => (
+        SwapMotion.success,
+        0.6,
+        0.0,
+        SwapMotion.settle,
+      ),
+      SwapOutcomeKind.refunded => (SwapMotion.enter, 0.8, 1.0, SwapMotion.ring),
+      _ when hero.tone == SwapTone.danger => (
+        SwapMotion.error,
+        0.9,
+        0.0,
+        SwapMotion.pop,
+      ),
+      _ => (SwapMotion.warning, 0.7, 0.0, SwapMotion.settle),
+    };
+    return SwapHeroMotion(
+      animate: state.live,
+      iconFrom: from,
+      iconTurns: turns,
+      iconCurve: curve,
+      iconDuration: duration,
+    );
+  }
 
   static String _actionLabel(
     SwapOutcomeAction action,
@@ -302,9 +341,9 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
     final copy = SwapExecutionCopy(snapshot, networks);
     final terminal = snapshot.isTerminal;
     // Until the engine answers, this is Activity's possibly stale snapshot.
-    final hero = state.unanswered && !terminal
-        ? SwapHeroCopy.delayed()
-        : copy.hero;
+    final unanswered = state.unanswered && !terminal;
+    final hero = unanswered ? SwapHeroCopy.delayed() : copy.hero;
+    final delayed = unanswered || (!terminal && snapshot.delayedSince != null);
 
     final children = <Widget>[
       if (!_inFlow) ...[
@@ -314,12 +353,17 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
           textAlign: TextAlign.center,
         ),
       ],
-      _hero(hero),
+      _hero(hero, motion: _heroMotion(state, snapshot, hero, delayed: delayed)),
       if (copy.priceMoveComparison case final String comparison)
-        SwapCallout(
-          tone: SwapTone.warning,
-          icon: Icons.compare_arrows_rounded,
-          message: comparison,
+        SwapReveal(
+          onMount: state.live,
+          animate: state.live,
+          delay: _sectionDelay,
+          child: SwapCallout(
+            tone: SwapTone.warning,
+            icon: Icons.compare_arrows_rounded,
+            message: comparison,
+          ),
         ),
       SwapTimelineView(
         steps: SwapTimeline.of(snapshot, networks),
@@ -334,13 +378,20 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
       ),
     ];
 
-    if (terminal) {
-      children.addAll(_recovery(context, snapshot, copy));
-    } else {
-      children.addAll(_running(context, state, snapshot));
-    }
-
-    children.add(_evidence(context, snapshot));
+    children
+      ..add(
+        SwapSmoothSize(
+          animate: state.live,
+          child: Column(
+            key: ValueKey(terminal),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: terminal
+                ? _recovery(context, snapshot, copy, live: state.live)
+                : _running(context, state, snapshot),
+          ),
+        ),
+      )
+      ..add(_evidence(context, snapshot, live: state.live));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,

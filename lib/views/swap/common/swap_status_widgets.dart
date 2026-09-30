@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 /// A small pill label: "Best net return", "Expires in 18s".
 class SwapBadge extends StatelessWidget {
@@ -187,7 +188,38 @@ class SwapHelperLine extends StatelessWidget {
   }
 }
 
+/// How a [SwapStatusHero] moves when what it shows changes.
+class SwapHeroMotion {
+  const SwapHeroMotion({
+    this.animate = true,
+    this.iconFrom = 0.8,
+    this.iconTurns = 0,
+    this.iconCurve = SwapMotion.enter,
+    this.iconDuration = SwapMotion.pop,
+    this.ring,
+    this.ringColor,
+  });
+
+  /// Whether a change animates; otherwise it shows at once.
+  final bool animate;
+
+  /// How a new icon arrives: from this share of its size, unwinding
+  /// [iconTurns] (anticlockwise), along [iconCurve].
+  final double iconFrom;
+  final double iconTurns;
+  final Curve iconCurve;
+  final Duration iconDuration;
+
+  /// A ring spreads once from the tile, in [ringColor], each time this
+  /// changes to something other than null.
+  final Object? ring;
+  final Color? ringColor;
+}
+
 /// A large centred status: an icon tile, a heading and a line of copy.
+///
+/// With [motion], a new tone blends in, a new icon pops in and new copy rises
+/// in; without it, the hero is still.
 class SwapStatusHero extends StatelessWidget {
   const SwapStatusHero({
     required this.icon,
@@ -196,6 +228,7 @@ class SwapStatusHero extends StatelessWidget {
     this.tone = SwapTone.brand,
     this.liveRegion = true,
     this.action,
+    this.motion,
     super.key,
   });
 
@@ -205,6 +238,7 @@ class SwapStatusHero extends StatelessWidget {
   final SwapTone tone;
   final bool liveRegion;
   final Widget? action;
+  final SwapHeroMotion? motion;
 
   @override
   Widget build(BuildContext context) {
@@ -215,6 +249,39 @@ class SwapStatusHero extends StatelessWidget {
       _ => (palette.toneBackground(tone), palette.toneColor(tone)),
     };
     final body = this.body;
+    final motion = this.motion;
+    final glyph = Icon(icon, size: 30, color: foreground);
+    final Widget titleText = Text(
+      title,
+      style: SwapText.heading(context),
+      textAlign: TextAlign.center,
+    );
+    final Widget? bodyText = body == null
+        ? null
+        : Text(
+            body,
+            style: SwapText.body(context),
+            textAlign: TextAlign.center,
+          );
+    final copy = [
+      Semantics(
+        header: true,
+        child: motion == null ? titleText : _rise(title, motion, titleText),
+      ),
+      if (bodyText != null) ...[
+        const SizedBox(height: 8),
+        if (motion == null)
+          bodyText
+        else
+          _rise(
+            body,
+            motion,
+            bodyText,
+            delay: const Duration(milliseconds: 40),
+          ),
+      ],
+      if (action != null) ...[const SizedBox(height: 16), action!],
+    ];
     return Semantics(
       liveRegion: liveRegion,
       container: true,
@@ -222,39 +289,84 @@ class SwapStatusHero extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
         child: Column(
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Icon(icon, size: 30, color: foreground),
-            ),
+            if (motion == null)
+              Container(
+                width: 64,
+                height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: glyph,
+              )
+            else
+              _movingTile(context, motion, palette, background, glyph),
             const SizedBox(height: 14),
-            Semantics(
-              header: true,
-              child: Text(
-                title,
-                style: SwapText.heading(context),
-                textAlign: TextAlign.center,
+            if (motion == null)
+              ...copy
+            else
+              SwapSmoothSize(
+                animate: motion.animate,
+                alignment: Alignment.topCenter,
+                child: Column(children: copy),
               ),
-            ),
-            if (body != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                body,
-                style: SwapText.body(context),
-                textAlign: TextAlign.center,
-              ),
-            ],
-            if (action != null) ...[const SizedBox(height: 16), action!],
           ],
         ),
       ),
     );
   }
+
+  static Widget _rise(
+    Object? key,
+    SwapHeroMotion motion,
+    Widget child, {
+    Duration delay = Duration.zero,
+  }) => SwapReveal(
+    revealKey: key,
+    onMount: false,
+    animate: motion.animate,
+    delay: delay,
+    child: child,
+  );
+
+  Widget _movingTile(
+    BuildContext context,
+    SwapHeroMotion motion,
+    SwapPalette palette,
+    Color background,
+    Widget glyph,
+  ) => SwapPulse(
+    trigger: motion.ring,
+    active: motion.animate && motion.ring != null,
+    color: motion.ringColor ?? palette.success,
+    beat: SwapMotion.ring,
+    spread: 28,
+    opacity: 0.45,
+    borderRadius: BorderRadius.circular(22),
+    child: AnimatedContainer(
+      duration: motion.animate
+          ? SwapMotion.of(context, SwapMotion.colour)
+          : Duration.zero,
+      curve: SwapMotion.standard,
+      width: 64,
+      height: 64,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: SwapPop(
+        trigger: icon,
+        animate: motion.animate,
+        from: motion.iconFrom,
+        turns: motion.iconTurns,
+        curve: motion.iconCurve,
+        duration: motion.iconDuration,
+        child: glyph,
+      ),
+    ),
+  );
 }
 
 /// One of the recovery questions: "What happened?", "Where are the funds?".
