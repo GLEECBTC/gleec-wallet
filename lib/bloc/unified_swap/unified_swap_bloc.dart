@@ -338,6 +338,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
           clearReceive: receive == null,
           inputText: amount ?? state.inputText,
           amountMode: amount == null ? null : amountMode,
+          // Until the new asset's own is read, the old balance would show
+          // under its ticker and be what Max fills in.
+          clearBalance: pay != state.pay,
+          clearFeeBalance: pay != state.pay,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,

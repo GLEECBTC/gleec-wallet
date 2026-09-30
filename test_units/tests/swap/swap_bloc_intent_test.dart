@@ -37,6 +37,28 @@ void main() {
       expect(h.resolve(h.preferences.recentAssets()), ['BTC']);
     });
 
+    swapBlocTest("a new pay asset hides the old one's balance until read", (h) {
+      final bloc = h.open(pay: 'USDC-ERC20', receive: 'ETH');
+      expect((bloc.state.balance, bloc.state.feeBalance), (d('5000'), d('2')));
+      final read = h.balanceGate = Completer<void>();
+      bloc.add(UnifiedSwapPayAssetChanged(btc));
+      h.settle();
+
+      expect(bloc.state.pay, btc);
+      expect(bloc.state.balance, isNull);
+      expect(bloc.state.feeBalance, isNull);
+      // A press already on its way does nothing with the old balance.
+      bloc.add(const UnifiedSwapMaxRequested());
+      h.settle();
+      expect(bloc.state.inputText, isEmpty);
+      expect(h.routed.maxCalls, 0);
+      expect(h.atomic.maxCalls, 0);
+
+      read.complete();
+      h.settle();
+      expect(bloc.state.balance, d('1'));
+    });
+
     swapBlocTest('paying with the asset being received swaps the sides', (h) {
       final bloc = h.open()..add(UnifiedSwapPayAssetChanged(usdc));
       h.settle();
@@ -55,6 +77,23 @@ void main() {
       expect(h.routed.requests.last.to, btc);
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
       expect(h.resolve(h.preferences.recentAssets()), ['BTC']);
+    });
+
+    swapBlocTest('a new receive asset keeps the balance throughout', (h) {
+      final bloc = h.open(pay: 'USDC-ERC20', receive: 'ETH');
+      final states = h.record(bloc);
+      final read = h.balanceGate = Completer<void>();
+      bloc.add(UnifiedSwapReceiveAssetChanged(btc));
+      h.settle();
+      expect(bloc.state.receive, btc);
+
+      read.complete();
+      h.settle();
+
+      expect(states, isNotEmpty);
+      for (final state in states) {
+        expect((state.balance, state.feeBalance), (d('5000'), d('2')));
+      }
     });
 
     swapBlocTest('receiving the asset being paid swaps the sides', (h) {
