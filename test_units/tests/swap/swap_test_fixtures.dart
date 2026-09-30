@@ -15,13 +15,14 @@ Decimal d(String value) => Decimal.parse(value);
 /// A test asset. Pass [parent] for a token.
 AssetId assetOf(
   String id, {
+  String? name,
   CoinSubClass subClass = CoinSubClass.erc20,
   AssetId? parent,
   int chainId = 1,
   int? decimals = 18,
 }) => AssetId(
   id: id,
-  name: id,
+  name: name ?? id,
   symbol: AssetSymbol(assetConfigId: id),
   chainId: AssetChainId(chainId: chainId, decimalsValue: decimals),
   derivationPath: null,

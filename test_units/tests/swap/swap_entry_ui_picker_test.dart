@@ -55,6 +55,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// The rows among [tickers], top to bottom, by ticker.
+  List<String> listed(WidgetTester tester, List<String> tickers) {
+    final rows = [
+      for (final ticker in tickers)
+        for (var i = 0; i < find.text(ticker).evaluate().length; i++)
+          (ticker, tester.getTopLeft(find.text(ticker).at(i)).dy),
+    ]..sort((a, b) => a.$2.compareTo(b.$2));
+    return [for (final (ticker, _) in rows) ticker];
+  }
+
   testWidgets('a wallet that cannot be read says so, and is read again', (
     tester,
   ) async {
@@ -95,6 +105,63 @@ void main() {
 
       expect(find.text('USDC'), findsOneWidget);
       expect(find.text('ETH'), findsNothing);
+    });
+
+    testWidgets('lists what a ticker names before what shares its network', (
+      tester,
+    ) async {
+      final ethOnArbitrum = assetOf(
+        'ETH-ARB20',
+        name: 'Ethereum',
+        subClass: CoinSubClass.arbitrum,
+        chainId: 42161,
+      );
+      final etc = assetOf(
+        'ETC',
+        name: 'Ethereum Classic',
+        subClass: CoinSubClass.ethereumClassic,
+        chainId: 61,
+      );
+      final all = {
+        eth,
+        ethOnArbitrum,
+        etc,
+        btc,
+        assetOf('1INCH-ERC20', name: '1inch', parent: eth),
+        assetOf('AAVE-ERC20', name: 'Aave', parent: eth),
+        assetOf('ENA-ERC20', name: 'Ethena', parent: eth),
+        assetOf('USDT-ERC20', name: 'Tether USD', parent: eth),
+      };
+      services
+        ..known = all.toList()
+        ..activated = all;
+      await open(
+        tester,
+        catalog: SwapCatalog(
+          sources: [
+            SwapSourceAssets(source: SwapLiquiditySource.routed, quotable: all),
+          ],
+        ),
+      );
+      await search(tester, 'eth');
+
+      // Every token on Ethereum matches "eth" through its network, and most
+      // come before ETH alphabetically. The coin itself leads, then its other
+      // networks, then names starting with the word.
+      expect(listed(tester, ['ETH', 'ETC', 'ENA', '1INCH', 'AAVE', 'USDT']), [
+        'ETH',
+        'ETH',
+        'ENA',
+        'ETC',
+        '1INCH',
+        'AAVE',
+        'USDT',
+      ]);
+      expect(
+        above(tester, find.text('Ethereum').first, find.text('Arbitrum')),
+        isTrue,
+      );
+      expect(find.text('BTC'), findsNothing);
     });
 
     testWidgets('with no match says so, and clears from there', (tester) async {

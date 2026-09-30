@@ -259,7 +259,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
 
   List<AssetId> _all() => _offered().toList()..sort(_byName);
 
-  bool _matches(AssetId id, String query) {
+  bool _matches(AssetId id, List<String> terms) {
     final networks = widget.services.networks();
     final haystack = [
       SwapFormat.ticker(id),
@@ -268,17 +268,45 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
       networks.networkOf(id),
       widget.services.contractOf(id) ?? '',
     ].join(' ').toLowerCase();
-    return query
-        .split(RegExp(r'\s+'))
-        .where((t) => t.isNotEmpty)
-        .every(haystack.contains);
+    return terms.every(haystack.contains);
+  }
+
+  /// How closely [id] answers [terms], best first: its id or ticker is a word
+  /// typed, its ticker starts with one, or a word of its id or name does. The
+  /// rest matched mid-word or on the network, and a network matches every
+  /// asset on it: "eth" finds every token on Ethereum, and Tether.
+  int _relevance(AssetId id, List<String> terms) {
+    final assetId = id.id.toLowerCase();
+    final ticker = SwapFormat.ticker(id).toLowerCase();
+    final words = '$assetId ${id.name.toLowerCase()}'.split(
+      RegExp('[^a-z0-9]+'),
+    );
+    int rank(String term) {
+      if (assetId == term) return 0;
+      if (ticker == term) return 1;
+      if (ticker.startsWith(term)) return 2;
+      if (words.any((word) => word.startsWith(term))) return 3;
+      return 4;
+    }
+
+    return terms.map(rank).reduce((a, b) => a < b ? a : b);
+  }
+
+  List<AssetId> _searched(String query) {
+    final terms = query.split(RegExp(r'\s+'));
+    final ranks = {
+      for (final id in _offered())
+        if (_matches(id, terms)) id: _relevance(id, terms),
+    };
+    return ranks.keys.toList()..sort((a, b) {
+      final byRank = ranks[a]!.compareTo(ranks[b]!);
+      return byRank != 0 ? byRank : _byName(a, b);
+    });
   }
 
   List<AssetId> _rows() {
     final query = _search.text.trim().toLowerCase();
-    if (query.isNotEmpty) {
-      return _all().where((id) => _matches(id, query)).toList();
-    }
+    if (query.isNotEmpty) return _searched(query);
     final activated = _activated ?? const {};
     return switch (_tab) {
       _PickerTab.mine => _mine(activated),
