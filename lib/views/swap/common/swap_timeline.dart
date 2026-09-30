@@ -1,4 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -8,33 +9,62 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 /// The status of one step in a swap's timeline.
 enum SwapStepStatus { done, current, error, cancelled, notStarted }
 
+/// Where a step can be checked: its transaction on an explorer, or the
+/// route's own status page.
+class SwapTimelineLink {
+  const SwapTimelineLink.transaction(this.url) : route = false;
+  const SwapTimelineLink.route(this.url) : route = true;
+
+  final Uri url;
+  final bool route;
+}
+
 /// One step of the timeline, ready to draw.
 class SwapTimelineStep {
   const SwapTimelineStep({
     required this.title,
     required this.detail,
     required this.status,
+    this.link,
   });
 
   final String title;
   final String detail;
   final SwapStepStatus status;
+  final SwapTimelineLink? link;
 }
+
+/// A transaction's page on the explorer for [asset]'s network, when known.
+typedef SwapExplorerTx = Uri? Function(AssetId? asset, String hash);
 
 /// Turns a swap's stages and progress into the timeline the prototype draws.
 abstract final class SwapTimeline {
   /// The steps of [snapshot], or of a quote's [stages] before it starts.
+  /// With [explorer], a step links to its transaction once it has one.
   static List<SwapTimelineStep> of(
     SwapExecutionSnapshot snapshot,
-    SwapNetworks networks,
-  ) {
+    SwapNetworks networks, {
+    SwapExplorerTx? explorer,
+  }) {
     final stages = snapshot.stages.isEmpty
         ? _fallbackStages(snapshot)
         : snapshot.stages;
     final statuses = _statuses(snapshot, stages);
+    final routeStep = stages.indexWhere(
+      (s) =>
+          s.kind == SwapRouteStageKind.bridge ||
+          s.kind == SwapRouteStageKind.convert,
+    );
     return [
       for (var i = 0; i < stages.length; i++)
-        _step(stages[i], statuses[i], networks: networks, snapshot: snapshot),
+        _step(
+          stages[i],
+          statuses[i],
+          networks: networks,
+          snapshot: snapshot,
+          explorer: explorer,
+          routeStep: i == routeStep,
+        ),
     ];
   }
 
@@ -173,6 +203,8 @@ abstract final class SwapTimeline {
     SwapStepStatus status, {
     required SwapNetworks networks,
     required SwapExecutionSnapshot snapshot,
+    SwapExplorerTx? explorer,
+    bool routeStep = false,
   }) {
     final received = status == SwapStepStatus.done;
     return SwapTimelineStep(
@@ -184,7 +216,51 @@ abstract final class SwapTimeline {
       ),
       detail: _detail(stage, networks: networks, snapshot: snapshot),
       status: status,
+      link: _link(stage, snapshot, explorer, routeStep: routeStep),
     );
+  }
+
+  /// The proof a step links to, once it exists, on the networks the evidence
+  /// sheet uses. A reset's hash comes first, as [_position] reads it. The
+  /// route's page goes on its first leg only, and not while the route waits
+  /// on the user: the page already offers it below the timeline then.
+  static SwapTimelineLink? _link(
+    SwapRouteStage stage,
+    SwapExecutionSnapshot s,
+    SwapExplorerTx? explorer, {
+    required bool routeStep,
+  }) {
+    SwapTimelineLink? transaction(AssetId? asset, String? hash) {
+      final url = hash == null ? null : explorer?.call(asset, hash);
+      return url == null ? null : SwapTimelineLink.transaction(url);
+    }
+
+    final evidence = s.evidence;
+    final approvals = evidence.approvalTxHashes;
+    final resets = s.approval?.resetsFirst ?? false;
+    final route = Uri.tryParse(evidence.providerExplorerUrl ?? '');
+    return switch (stage.kind) {
+      SwapRouteStageKind.resetApproval when resets => transaction(
+        s.from,
+        approvals.firstOrNull,
+      ),
+      SwapRouteStageKind.approve => transaction(
+        s.from,
+        approvals.length > (resets ? 1 : 0) ? approvals.last : null,
+      ),
+      SwapRouteStageKind.send => transaction(s.from, evidence.sourceTxHash),
+      SwapRouteStageKind.bridge || SwapRouteStageKind.convert
+          when routeStep &&
+              route != null &&
+              route.isScheme('https') &&
+              s.stage != SwapProgressStage.actionRequired =>
+        SwapTimelineLink.route(route),
+      SwapRouteStageKind.receive => transaction(
+        s.outcome?.receivedAsset ?? s.to,
+        evidence.destinationTxHash,
+      ),
+      _ => null,
+    };
   }
 
   /// A stage without an asset names its side of [s] as the swap's copy does:

@@ -4,7 +4,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 part 'swap_step_line.dart';
@@ -203,6 +205,32 @@ class _SwapTimelineViewState extends State<SwapTimelineView>
   }
 }
 
+/// Where a step can be checked. Screen readers hear the timeline's steps as
+/// one block, so the link names its step.
+class _StepLink extends StatelessWidget {
+  const _StepLink({required this.link, required this.step});
+
+  final SwapTimelineLink link;
+  final String step;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = link.route
+        ? LocaleKeys.swapEvidenceRouteLink.tr()
+        : LocaleKeys.viewOnExplorer.tr();
+    void open() => openSwapLink(context, link.url.toString());
+    return SwapButtonSemantics(
+      label: '$label: $step',
+      onTap: open,
+      child: SwapLinkButton(
+        label: label,
+        icon: Icons.open_in_new_rounded,
+        onPressed: open,
+      ),
+    );
+  }
+}
+
 /// The pulse a step shows while the swap is on it.
 typedef _Pulse = ({Object trigger, int beats, Duration delay, bool active});
 
@@ -276,84 +304,96 @@ class _StepRow extends StatelessWidget {
         step.status == SwapStepStatus.error;
     final beat = this.beat;
     final done = step.status == SwapStepStatus.done;
+    final link = step.link;
 
-    return Semantics(
-      label: '$statusLabel. ${step.detail}',
-      excludeSemantics: true,
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 32,
-              child: Column(
-                children: [
-                  SwapPulse(
-                    trigger: pulse.trigger,
-                    active: pulse.active,
-                    onMount: true,
-                    beats: pulse.beats,
-                    delay: pulse.delay,
-                    color: palette.brand,
-                    child: SwapPulse(
-                      trigger: done,
-                      active: animate && beat != null,
-                      color: palette.success,
-                      beat: SwapMotion.ring,
-                      spread: 10,
-                      opacity: 0.4,
-                      delay: beat == null
-                          ? Duration.zero
-                          : duration * beat.start,
-                      child: _node(palette, icon, beat),
+    // The label sits on the words, not the row, so a link stays a button a
+    // screen reader can press.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 32,
+            child: Column(
+              children: [
+                SwapPulse(
+                  trigger: pulse.trigger,
+                  active: pulse.active,
+                  onMount: true,
+                  beats: pulse.beats,
+                  delay: pulse.delay,
+                  color: palette.brand,
+                  child: SwapPulse(
+                    trigger: done,
+                    active: animate && beat != null,
+                    color: palette.success,
+                    beat: SwapMotion.ring,
+                    spread: 10,
+                    opacity: 0.4,
+                    delay: beat == null ? Duration.zero : duration * beat.start,
+                    child: _node(palette, icon, beat),
+                  ),
+                ),
+                if (!last)
+                  Expanded(
+                    child: SwapStepLine(
+                      fill: beat != null && done && from != step.status
+                          ? window(
+                              beat.fillStart,
+                              beat.fillEnd,
+                              SwapMotion.standard,
+                            )
+                          : AlwaysStoppedAnimation(done ? 1 : 0),
+                      color: palette.border,
+                      fillColor: palette.success,
                     ),
                   ),
-                  if (!last)
-                    Expanded(
-                      child: SwapStepLine(
-                        fill: beat != null && done && from != step.status
-                            ? window(
-                                beat.fillStart,
-                                beat.fillEnd,
-                                SwapMotion.standard,
-                              )
-                            : AlwaysStoppedAnimation(done ? 1 : 0),
-                        color: palette.border,
-                        fillColor: palette.success,
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 70),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        step.title,
-                        style: SwapText.strong(context).copyWith(
-                          color: step.status == SwapStepStatus.notStarted
-                              ? palette.textSecondary
-                              : palette.text,
-                          fontWeight: emphasised
-                              ? FontWeight.w800
-                              : FontWeight.w700,
-                        ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 70),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      label: '$statusLabel. ${step.detail}',
+                      excludeSemantics: true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            step.title,
+                            style: SwapText.strong(context).copyWith(
+                              color: step.status == SwapStepStatus.notStarted
+                                  ? palette.textSecondary
+                                  : palette.text,
+                              fontWeight: emphasised
+                                  ? FontWeight.w800
+                                  : FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(step.detail, style: SwapText.small(context)),
+                        ],
                       ),
-                      const SizedBox(height: 3),
-                      Text(step.detail, style: SwapText.small(context)),
-                    ],
-                  ),
+                    ),
+                    if (link != null)
+                      SwapReveal(
+                        onMount: animate,
+                        animate: animate,
+                        child: _StepLink(link: link, step: step.title),
+                      ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -378,7 +378,11 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
           ),
         ),
       SwapTimelineView(
-        steps: SwapTimeline.of(snapshot, networks),
+        steps: SwapTimeline.of(
+          snapshot,
+          networks,
+          explorer: _services.explorerTxUrl,
+        ),
         animate: state.live,
         tracking:
             !terminal &&

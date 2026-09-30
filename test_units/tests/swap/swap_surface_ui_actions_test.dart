@@ -4,6 +4,7 @@ import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/views/swap/common/swap_buttons.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -211,6 +212,12 @@ void main() {
         outcome: failed(SwapFailureReason.reverted),
       );
 
+      // The next step, not the send step's own link in the timeline.
+      Future<void> viewOnExplorer(WidgetTester tester) async {
+        await tester.tap(find.widgetWithText(SwapButton, 'View on Explorer'));
+        await tester.pumpAndSettle();
+      }
+
       testWidgets('opens the source transaction on its network', (
         tester,
       ) async {
@@ -220,7 +227,7 @@ void main() {
         );
         await show(tester, reverted());
 
-        await choose(tester, 'View on Explorer');
+        await viewOnExplorer(tester);
 
         expect(launcher.launched, ['https://etherscan.io/tx/0x1']);
         expect(services.explorerAsked, {'0xsource': eth});
@@ -232,7 +239,7 @@ void main() {
         final launcher = recordUrlLaunches();
         await show(tester, reverted());
 
-        await choose(tester, 'View on Explorer');
+        await viewOnExplorer(tester);
 
         expect(launcher.launched, isEmpty);
         expect(services.explorerAsked.keys, ['0xsource']);
