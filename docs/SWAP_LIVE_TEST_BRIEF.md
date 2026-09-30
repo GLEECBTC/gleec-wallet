@@ -49,6 +49,8 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **Copying from the evidence sheet says so on the sheet.** **Copy**, **Copy details for support** and **Contact Gleec support** show "… copied" at the bottom of the sheet. The message used to appear on the page underneath, so a phone never showed it and a wider screen dimmed it.
 - **A custom slippage can be saved with the keyboard open.** **Use {value}** now sits just above the keyboard while you type. It used to stay under it, and an iPhone's number pad has no key that closes it, so on an iPhone there was no way to tap it.
 - **Choose another asset replaces an asset this wallet can't swap.** When the form says "{asset} can't be swapped in this wallet" about what you pay with, the button now opens the picker for what you pay with. It used to open the picker for what you receive, where no choice could make the pair work.
+- **A hardware wallet is told it can't swap.** Opening Swap from a link with a Trezor now shows "Trezor currently supports wallet-only mode. Trading and swaps are unavailable for now." Nothing is priced, and the button reads **Swaps unavailable**. The menu already kept Trezor out; from a link, the form used to show prices that could only fail at Start.
+- **Funds at other addresses are named.** An HD wallet swaps from its first address only. When an amount is more than that address holds, the form now also says how much the wallet's other addresses hold, and to move funds to this one first.
 
 Unchanged from the last brief:
 - the atomic "receive at least" figure is what the order enforces;
