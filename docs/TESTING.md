@@ -41,6 +41,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 | Browser-only unit | `test/` | `flutter test --platform chrome test/…` | — | No |
 | Skyvern QA | `automated_testing/` | `python -m runner.runner` | — | No |
 | Frame timing | `test_integration/tests/perf_tests/` | `-t perf_tests/perf_tests.dart -D macos -m profile` | — | No |
+| Live swaps with funds | the PR's Firebase preview | manual: [SWAP_LIVE_TEST_BRIEF.md](SWAP_LIVE_TEST_BRIEF.md), "How a round runs" | `firebase-hosting-pull-request.yml` deploys the preview | Release checklist only |
 
 ## 2. Unit and widget tests
 

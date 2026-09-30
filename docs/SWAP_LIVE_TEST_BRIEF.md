@@ -62,6 +62,15 @@ Unchanged from the last brief:
 
 What remains out of scope, and why, is in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md).
 
+## How a round runs
+
+- **Where:** on the pull request's preview, the "Firebase Hosting Preview" link CI posts on the PR. For #3507 it is https://walletrc--pull-3507-merge-xoq0z90i.web.app. CI rebuilds it at the same address about seven minutes after each push, with the production geo check. Before each run, note the commit it serves; the PR's `build_and_preview` check links the deploy.
+- **Wallet:** create a fresh wallet for the round on the preview itself, and write down its seed phrase. The wallet is stored in the browser for that address only, and a preview expires seven days after its last deploy. Fund it with the kit below.
+- **Who presses what:** a person presses every control that commits funds: **Start**, **Approve exactly … & start**, and **Cancel swap** while an approval may be going out. They also sign in, type any seed phrase, and accept the provider's terms. An AI agent can drive everything else: amounts, pickers, quotes, **Compare options**, slippage, Activity, evidence, explorers and export. It doesn't press those controls, even with permission. Instead it leaves each swap open at its review, notifies the person, and carries on with other checks.
+- **The browser tab:** keep it open and in front while an order-book swap runs, because on web the engine runs in the tab. Don't reload during a swap unless you're testing resume; a reload can also load a newer deploy.
+- **Failure paths:** try refunds, delayed status and resume on the DOC and MARTY test coins, not with real funds. Use a local build with test coins turned on, and `tool/dex_counterparty.dart` as the other side. Stopping it after the taker pays forces a refund.
+- **Results:** report each swap as in "How to report", then update the "Live swaps with funds" row in [`SWAP_RELEASE_CHECKLIST.md`](SWAP_RELEASE_CHECKLIST.md) with the commit tested and the outcome. Re-test a fix on the redeployed preview before the row says it passed.
+
 ## What to run with real funds
 
 Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum, Base and Polygon. Run these in order, and stop at the first surprise.
