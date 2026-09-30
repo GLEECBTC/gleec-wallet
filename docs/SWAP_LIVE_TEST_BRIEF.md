@@ -12,6 +12,8 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 
   Under the hero, a line says when the swap started and how long it has run ("Started 14:02 · 12 min"), how long a cross-network swap usually takes, when an order-book refund unlocks, and, at the end, when it finished and how long it took ("Finished 14:06 · took 4 min"). Screens now arrive from the direction you are going, and **Back** in Activity returns to where the list was.
 - **Each step links to its proof.** Once a step has a transaction, **View on Explorer** sits under it: the permission reset and approval, the transaction you sent, and the delivery. The first step the route itself handles, moving between networks or converting, opens the route's status page, except while the route waits on you, when the button under the timeline already does. After **Start**, the button reads **Starting…** until the swap is under way.
+- **A running swap says whether Gleec must stay open.** An order-book swap runs on this device until it finishes, a refund included, so its note asks you to keep Gleec open and signed in (on web, open in this tab). A routed swap needs that only until its transaction is sent; after that the note says you can leave. An order-book refund now says your payment is locked until it unlocks, instead of naming a route.
+- **The keyboard and screen readers follow you between swap screens.** Starting a swap, opening one in Activity, or going back puts keyboard focus on the new screen's heading, and screen readers hear the screen arrive by name. Escape leaves the progress screen, as Close or Back does. Back from a swap in Activity returns focus to its row. Switching tabs leaves focus on the tab.
 - **Reduced motion is honoured everywhere.** iOS **Reduce Motion**, the browser's reduced-motion setting, and the macOS and Windows switches now stop the app's animations, as Android's **Remove animations** already did. Before, only Android and Linux were heard.
 - **An order-book pair no one offers says so before an amount, and keeps checking.** Choosing a pair only the order book trades, such as USDT for AVN, reads the book straight away, signed in or out. With no offer:
   - the form says "No one is offering AVN for USDT right now." and that AVN trades only on the order book, where offers come and go. It prices nothing; the button is **Choose another asset**, which opens the side worth changing;
@@ -136,10 +138,10 @@ For each item, note what the screen said before you confirmed and what actually 
 15. **Leave the review while "Checking…"**. Nothing should start.
 
 ### Execution
-16. **Same-chain routed swap:** **Start** should read **Starting…** until the progress screen opens. Then the timeline, the hero text on each step, and the result.
+16. **Same-chain routed swap:** **Start** should read **Starting…** until the progress screen opens. Then the timeline, the hero text on each step, and the result. Until the swap is sent, the note under the timeline should ask you to keep Gleec open; after that, it should say you can leave this screen.
 17. **Cross-chain routed swap:** the bridge step; leave and come back.
 18. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
-19. **Atomic swap:** the matching step, and the result. An amount larger than any single order should name the largest offer and offer **Use {amount}**, which should price at once. **Max** should stop at the largest offer.
+19. **Atomic swap:** the matching step, and the result. The note under the timeline should ask you to keep Gleec open and signed in until the swap finishes. An amount larger than any single order should name the largest offer and offer **Use {amount}**, which should price at once. **Max** should stop at the largest offer.
 20. **Motion while you watch:** keep the progress screen open through a swap. Each step should hand on to the next in order; the current step should pulse briefly when there is news and otherwise sit still; a completed swap should ring once. Leave the screen and reopen the swap from Activity: nothing should replay.
 21. **Times:** the line under the hero should say when the swap started and how long it has run, a minute at a time. A cross-network swap adds how long it usually takes, then "Taking longer than usual" once past it. When the swap ends, the line should say when, and how long it took.
 22. **Reduce motion:** turn on iOS **Reduce Motion**, Android **Remove animations**, the browser's reduced-motion setting, macOS **System Settings → Accessibility → Display → Reduce motion**, or Windows **Settings → Accessibility → Visual effects → Animation effects** (off), then run a swap. Nothing should slide, pulse or ring, and a phone should still tap on the result.
@@ -152,6 +154,7 @@ For each item, note what the screen said before you confirmed and what actually 
 ### Accessibility
 26. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
 27. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
+28. **Keyboard only:** start a swap with the keyboard. Focus should land on "Swap progress", Tab should move on through its controls, and Escape should return to the form. In Activity, open a swap with Enter and press Escape: focus should be back on that swap's row.
 
 ## How to report
 
