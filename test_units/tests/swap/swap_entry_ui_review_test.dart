@@ -125,7 +125,7 @@ void main() {
 
     for (final (status, label) in [
       (SwapReviewStatus.revalidating, 'Checking…'),
-      (SwapReviewStatus.starting, 'Start swap'),
+      (SwapReviewStatus.starting, 'Starting…'),
     ]) {
       testWidgets('waits on "$label" while ${status.name}', (tester) async {
         await pump(tester, reviewing(status));

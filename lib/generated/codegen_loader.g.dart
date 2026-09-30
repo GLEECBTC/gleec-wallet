@@ -1401,6 +1401,7 @@ abstract class LocaleKeys {
   static const swapCtaEnterAmount = 'swapCtaEnterAmount';
   static const swapCtaSelectAsset = 'swapCtaSelectAsset';
   static const swapCtaChecking = 'swapCtaChecking';
+  static const swapCtaStarting = 'swapCtaStarting';
   static const swapCtaReview = 'swapCtaReview';
   static const swapCtaRefresh = 'swapCtaRefresh';
   static const swapCtaChooseAnother = 'swapCtaChooseAnother';

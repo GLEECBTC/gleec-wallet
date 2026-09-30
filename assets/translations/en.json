@@ -1234,6 +1234,7 @@
   "swapCtaEnterAmount": "Enter amount",
   "swapCtaSelectAsset": "Select asset",
   "swapCtaChecking": "Checking…",
+  "swapCtaStarting": "Starting…",
   "swapCtaReview": "Review swap",
   "swapCtaRefresh": "Refresh quote",
   "swapCtaChooseAnother": "Choose another asset",

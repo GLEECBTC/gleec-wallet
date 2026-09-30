@@ -389,7 +389,7 @@ class _ReviewFooter extends StatelessWidget {
       ),
       SwapReviewStatus.starting => SwapButton(
         key: const Key('swap-start'),
-        label: _startLabel(quote),
+        label: LocaleKeys.swapCtaStarting.tr(),
         onPressed: null,
         busy: true,
       ),
