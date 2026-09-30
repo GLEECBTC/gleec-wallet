@@ -11,6 +11,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **The progress screen moves with the swap, and puts the wait in time.** Watched live, a change passes down the timeline in order: each step's circle turns and its tick pops in, and the line below a step fills as the step completes. The step the swap is on pulses a few times when the screen opens, when the app comes back, and when there is news, and otherwise sits still; while the status may be out of date it does not pulse at all. A swap that completes on screen gets one ring around its tick and, on a phone, one success tap. Every other ending gets a tap that matches it and no ring. Reopening a swap from Activity plays none of this.
 
   Under the hero, a line says when the swap started and how long it has run ("Started 14:02 · 12 min"), how long a cross-network swap usually takes, when an order-book refund unlocks, and, at the end, when it finished and how long it took ("Finished 14:06 · took 4 min"). Screens now arrive from the direction you are going, and **Back** in Activity returns to where the list was.
+- **Each step links to its proof.** Once a step has a transaction, **View on Explorer** sits under it: the permission reset and approval, the transaction you sent, and the delivery. The first step the route itself handles, moving between networks or converting, opens the route's status page, except while the route waits on you, when the button under the timeline already does. After **Start**, the button reads **Starting…** until the swap is under way.
 - **Reduced motion is honoured everywhere.** iOS **Reduce Motion**, the browser's reduced-motion setting, and the macOS and Windows switches now stop the app's animations, as Android's **Remove animations** already did. Before, only Android and Linux were heard.
 - **An order-book pair no one offers says so before an amount, and keeps checking.** Choosing a pair only the order book trades, such as USDT for AVN, reads the book straight away, signed in or out. With no offer:
   - the form says "No one is offering AVN for USDT right now." and that AVN trades only on the order book, where offers come and go. It prices nothing; the button is **Choose another asset**, which opens the side worth changing;
@@ -135,21 +136,22 @@ For each item, note what the screen said before you confirmed and what actually 
 15. **Leave the review while "Checking…"**. Nothing should start.
 
 ### Execution
-16. **Same-chain routed swap:** the timeline, the hero text on each step, and the result.
+16. **Same-chain routed swap:** **Start** should read **Starting…** until the progress screen opens. Then the timeline, the hero text on each step, and the result.
 17. **Cross-chain routed swap:** the bridge step; leave and come back.
 18. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
 19. **Atomic swap:** the matching step, and the result. An amount larger than any single order should name the largest offer and offer **Use {amount}**, which should price at once. **Max** should stop at the largest offer.
 20. **Motion while you watch:** keep the progress screen open through a swap. Each step should hand on to the next in order; the current step should pulse briefly when there is news and otherwise sit still; a completed swap should ring once. Leave the screen and reopen the swap from Activity: nothing should replay.
 21. **Times:** the line under the hero should say when the swap started and how long it has run, a minute at a time. A cross-network swap adds how long it usually takes, then "Taking longer than usual" once past it. When the swap ends, the line should say when, and how long it took.
 22. **Reduce motion:** turn on iOS **Reduce Motion**, Android **Remove animations**, the browser's reduced-motion setting, macOS **System Settings → Accessibility → Display → Reduce motion**, or Windows **Settings → Accessibility → Visual effects → Animation effects** (off), then run a swap. Nothing should slide, pulse or ring, and a phone should still tap on the result.
+23. **Step links:** as a swap runs, each step with a transaction should gain **View on Explorer**, opening that transaction on its own network's explorer; on a routed swap, the first step the route handles should offer **Open route status page**, once. A screen reader should read each link with its step's name.
 
 ### Activity and recovery
-23. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
-24. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses. On web, a provider error has no provider reference; the engine can't read it there.
+24. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
+25. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses. On web, a provider error has no provider reference; the engine can't read it there.
 
 ### Accessibility
-25. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
-26. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
+26. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
+27. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
 
 ## How to report
 
