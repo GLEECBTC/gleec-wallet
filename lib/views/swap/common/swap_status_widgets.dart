@@ -357,7 +357,8 @@ class SwapStatusHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
       ),
       child: SwapPop(
-        trigger: icon,
+        // A refund keeps its icon as it lands, so a new tone pops it too.
+        trigger: (icon, tone),
         animate: motion.animate,
         from: motion.iconFrom,
         turns: motion.iconTurns,

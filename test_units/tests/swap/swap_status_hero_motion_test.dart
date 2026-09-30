@@ -150,6 +150,29 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('pops its icon again when only the tone changes, as a refund '
+        'lands', (tester) async {
+      await show(
+        tester,
+        icon: Icons.undo_rounded,
+        tone: SwapTone.warning,
+        settle: true,
+      );
+      await show(
+        tester,
+        icon: Icons.undo_rounded,
+        tone: SwapTone.success,
+        motion: const SwapHeroMotion(
+          iconTurns: 1,
+          iconDuration: SwapMotion.ring,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(SwapMotion.ring ~/ 5);
+      expect(effectTransform(tester), isNotNull);
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('spreads its ring once, when asked, and not on first show', (
       tester,
     ) async {

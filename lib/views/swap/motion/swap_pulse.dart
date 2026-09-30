@@ -168,7 +168,8 @@ class _PulsePainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth + (0.5 - strokeWidth) * eased
-          ..color = color.withValues(alpha: opacity * (1 - eased)),
+          // It spreads fast and fades evenly, so it stays in view all beat.
+          ..color = color.withValues(alpha: opacity * (1 - t)),
       );
     }
   }
