@@ -11,6 +11,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
@@ -256,7 +257,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         issue == SwapFormIssue.sameAsset) {
       return (
         LocaleKeys.swapCtaChooseAnother.tr(),
-        () => _pick(SwapPickerSide.receive),
+        () => _pick(_sideToChange(state)),
         false,
       );
     }
@@ -369,6 +370,16 @@ class _SwapEntryViewState extends State<SwapEntryView> {
           false,
         );
     }
+  }
+
+  /// The side to change: the pay side when nothing here swaps its asset, as
+  /// no other asset to receive would help; else the receive side.
+  SwapPickerSide _sideToChange(UnifiedSwapState state) {
+    final support = state.pairSupport;
+    return support?.gap == SwapPairGap.notTradable &&
+            support?.limitingAsset == state.pay
+        ? SwapPickerSide.pay
+        : SwapPickerSide.receive;
   }
 
   /// The ticker the wallet is short of, when that is what stops the swap.
