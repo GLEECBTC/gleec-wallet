@@ -18,6 +18,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
   bool _evaluable(UnifiedSwapState state) =>
       state.hasPair &&
       !_catalogLoading &&
+      !state.checkingMax &&
       state.tradingEnabled &&
       (state.issue?.stillPriced ?? true) &&
       (amountOf(state) ?? Decimal.zero) > Decimal.zero;

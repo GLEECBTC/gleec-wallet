@@ -204,7 +204,10 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final balance = state.balance;
     final address = state.selectedQuote?.fromAddress ?? state.payAddress;
 
-    final amountStyle = SwapText.amount(context);
+    // While Max asks, the whole balance shown may still change.
+    final amountStyle = state.checkingMax
+        ? SwapText.amount(context).copyWith(color: palette.textSecondary)
+        : SwapText.amount(context);
     final field = TextField(
       key: const Key('swap-amount'),
       controller: _controller,
@@ -289,7 +292,11 @@ class _SwapPayCardState extends State<SwapPayCard> {
             ),
           ),
           if (pay != null && balance != null)
-            SwapLinkButton(label: LocaleKeys.max.tr(), onPressed: widget.onMax),
+            SwapLinkButton(
+              label: LocaleKeys.max.tr(),
+              onPressed: widget.onMax,
+              busy: state.checkingMax,
+            ),
         ],
       ),
     );

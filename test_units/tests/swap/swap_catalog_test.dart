@@ -187,6 +187,16 @@ void main() {
         balance: d('1'),
       );
       expect(maxes.keys, [SwapLiquiditySource.atomic]);
+
+      // Even preferred, a source that can't sell the pair is not asked.
+      final preferred = await repo.maxAmounts(
+        from: gleecEvm,
+        to: usdc,
+        balance: d('1'),
+        preferred: SwapLiquiditySource.routed,
+      );
+      expect(preferred.keys, [SwapLiquiditySource.atomic]);
+      expect(routed.maxCalls, 0);
     });
   });
 

@@ -340,7 +340,9 @@ void main() {
       await settle();
 
       expect(bloc.state.maxApplied, isNull);
-      expect(bloc.state.inputText, '1');
+      expect(bloc.state.checkingMax, isFalse);
+      // The whole balance shown meanwhile is not replaced.
+      expect(bloc.state.inputText, '10');
     });
 
     test('a balance read in flight at sign-out is dropped', () async {

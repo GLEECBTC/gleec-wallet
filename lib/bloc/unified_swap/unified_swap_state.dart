@@ -206,6 +206,7 @@ class UnifiedSwapState extends Equatable {
     this.balance,
     this.feeBalance,
     this.maxApplied,
+    this.checkingMax = false,
     this.issue,
     this.evaluation = SwapEvaluationStatus.idle,
     this.quotes,
@@ -263,6 +264,10 @@ class UnifiedSwapState extends Equatable {
 
   /// The Max last applied, so the form can say what was kept back.
   final SwapMaxAmount? maxApplied;
+
+  /// Whether Max is still asking what fees need. Meanwhile the amount is the
+  /// whole balance, and nothing is priced.
+  final bool checkingMax;
 
   /// Why the form cannot proceed, if it cannot.
   final SwapFormIssue? issue;
@@ -371,6 +376,7 @@ class UnifiedSwapState extends Equatable {
     balance,
     feeBalance,
     maxApplied,
+    checkingMax,
     issue,
     evaluation,
     quotes,
@@ -407,6 +413,7 @@ class UnifiedSwapState extends Equatable {
     Decimal? balance,
     Decimal? feeBalance,
     SwapMaxAmount? maxApplied,
+    bool? checkingMax,
     SwapFormIssue? issue,
     SwapEvaluationStatus? evaluation,
     UnifiedSwapQuotes? quotes,
@@ -455,6 +462,7 @@ class UnifiedSwapState extends Equatable {
       balance: clearBalance ? null : (balance ?? this.balance),
       feeBalance: clearFeeBalance ? null : (feeBalance ?? this.feeBalance),
       maxApplied: clearMaxApplied ? null : (maxApplied ?? this.maxApplied),
+      checkingMax: checkingMax ?? this.checkingMax,
       issue: clearIssue ? null : (issue ?? this.issue),
       evaluation: evaluation ?? this.evaluation,
       quotes: clearQuotes ? null : (quotes ?? this.quotes),

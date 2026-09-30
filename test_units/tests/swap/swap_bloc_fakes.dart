@@ -240,7 +240,7 @@ class ScriptedQuoteSource extends FakeQuoteSource {
     required Decimal balance,
   }) async {
     await maxGate?.future;
-    return max;
+    return super.maxAmount(from: from, to: to, balance: balance);
   }
 }
 

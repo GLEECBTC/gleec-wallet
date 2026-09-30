@@ -308,24 +308,37 @@ class UnifiedSwapRepository {
   /// The largest amount of [from] that can be sold for [to], per source.
   ///
   /// Each source keeps back what its own fees need; the caller picks which to
-  /// apply.
+  /// apply. A [preferred] source is asked alone, and the others only if it
+  /// cannot tell.
   Future<Map<SwapLiquiditySource, SwapMaxAmount>> maxAmounts({
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapLiquiditySource? preferred,
   }) async {
-    final entries = await Future.wait(
-      _sourcesFor(from, to).map((source) async {
-        final max = await source
-            .maxAmount(from: from, to: to, balance: balance)
-            .catchError((Object _) => null);
-        return MapEntry(source.source, max);
-      }),
-    );
-    return {
-      for (final entry in entries)
-        if (entry.value != null) entry.key: entry.value!,
-    };
+    Future<Map<SwapLiquiditySource, SwapMaxAmount>> ask(
+      Iterable<SwapQuoteSource> sources,
+    ) async {
+      final entries = await Future.wait(
+        sources.map((source) async {
+          final max = await source
+              .maxAmount(from: from, to: to, balance: balance)
+              .catchError((Object _) => null);
+          return MapEntry(source.source, max);
+        }),
+      );
+      return {
+        for (final entry in entries)
+          if (entry.value != null) entry.key: entry.value!,
+      };
+    }
+
+    final able = _sourcesFor(from, to);
+    if (preferred != null) {
+      final own = await ask(able.where((s) => s.source == preferred));
+      if (own.isNotEmpty) return own;
+    }
+    return ask(able.where((s) => s.source != preferred));
   }
 
   /// Failures known without asking any source; null means ask the sources.

@@ -61,6 +61,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
         state.copyWith(
           inputText: event.text,
           clearMaxApplied: true,
+          checkingMax: false,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,
@@ -125,6 +126,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
           inputText: event.amount.toString(),
           amountMode: SwapAmountMode.token,
           clearMaxApplied: true,
+          checkingMax: false,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,
@@ -143,7 +145,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final pay = state.pay;
     final receive = state.receive;
     final balance = state.balance;
-    if (pay == null || balance == null) return;
+    if (pay == null || balance == null || state.checkingMax) return;
     if (receive == null) {
       // Without a destination no source can say what fees to keep; the whole
       // balance is the honest upper bound until one is chosen.
@@ -160,34 +162,55 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       return;
     }
 
-    final epoch = _walletEpoch;
-    final maxes = await _repository.maxAmounts(
-      from: pay,
-      to: receive,
-      balance: balance,
-    );
-    if (state.pay != pay || state.receive != receive) return;
-    if (epoch != _walletEpoch) return;
-    if (maxes.isEmpty) return;
-
-    // Keep what the selected route needs; with no selection, take the larger
-    // so at least one source can still fill it.
-    final selected = state.selectedQuote?.source;
-    final max =
-        (selected != null ? maxes[selected] : null) ??
-        maxes.values.reduce((a, b) => a.amount >= b.amount ? a : b);
-
+    // Keep what the selected route needs, read before its options clear.
+    final preferred = state.selectedQuote?.source;
+    final version = ++_maxVersion;
+    // The whole balance shows at once, and stays if no source can say what
+    // fees need.
     _invalidate();
     emit(
       _validated(
         state.copyWith(
-          inputText: max.amount.toString(),
+          inputText: balance.toString(),
           amountMode: SwapAmountMode.token,
-          maxApplied: max,
+          checkingMax: true,
+          clearMaxApplied: true,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,
           evaluation: SwapEvaluationStatus.idle,
+        ),
+      ),
+    );
+
+    Map<SwapLiquiditySource, SwapMaxAmount> maxes;
+    try {
+      maxes = await _repository
+          .maxAmounts(
+            from: pay,
+            to: receive,
+            balance: balance,
+            preferred: preferred,
+          )
+          .timeout(_evaluationTimeout);
+    } on TimeoutException {
+      maxes = const {};
+    }
+    // Typing, another pair or wallet, or a later Max has taken over.
+    if (version != _maxVersion || !state.checkingMax) return;
+
+    // Take the larger, so at least one source can fill it.
+    final max = maxes.isEmpty
+        ? null
+        : maxes.values.reduce((a, b) => a.amount >= b.amount ? a : b);
+    emit(
+      _validated(
+        state.copyWith(
+          inputText: max?.amount.toString(),
+          // The balance kept is in dollars if the unit was switched meanwhile.
+          amountMode: max == null ? null : SwapAmountMode.token,
+          maxApplied: max,
+          checkingMax: false,
         ),
       ),
     );
