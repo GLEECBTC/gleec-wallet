@@ -4,7 +4,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 
 **Status:** unit-tested, and checked live against the pinned engine (KDF `feat/lifi-integration@4872ef2`, native and WebAssembly) with a throwaway wallet holding no funds. Quotes, the supported-coin list and every quote error the engine can raise locally were recorded and parse correctly (`komodo_defi_harness/test/routed_swap_live_capture_test.dart`). **No real swap has run on mainnet yet.** Start with small amounts, and move to larger ones only after the small ones behave as described below.
 
-**Quote limit while you test.** Cross-network prices come from the aggregator's public API without a key: **75 quotes every two hours for your network address**, shared by every device behind it. The form now spends about one quote per price, a comparison costs one more, and refreshing stops when you leave it alone. If you do hit the limit, cross-network prices pause and come back on their own, while order-book prices keep working. Note when it happened.
+**Quote limit while you test.** Cross-network prices now go through an interim proxy that holds a partner key, instead of the public API's 75 quotes every two hours per network address. The key allows **12,000 quotes every two hours, shared by every tester**. The form spends about one quote per price, a comparison costs one more, and refreshing stops when you leave it alone. If you do hit a limit, cross-network prices pause while order-book prices keep working, and nothing asks again until you do. Note when it happened.
 
 ## What changed since the last brief
 
@@ -32,7 +32,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 - **If part of the asset list can't load,** the picker says the list may be incomplete and offers **Try again**. It keeps the last list rather than dropping assets.
 - **Quotes are spent carefully** (see the limit above):
   - Each refresh prices the cheapest route only. The fastest is priced when you open **Compare options**, and kept fresh while you compare.
-  - Refreshing runs every 30 seconds while the form is on screen and the app is in front. It stops after five minutes without a touch; the quote then expires, and **Refresh quote** brings it back.
+  - A price is renewed when it is 50 seconds old (a quote lasts 60), while the form is on screen and the app is in front. Renewing stops after two minutes without a touch; the quote then expires, and **Refresh quote** brings it back.
   - Returning to the same pair and amount within 15 seconds reuses the last price. That includes starting a quote you reviewed moments ago.
   - A rate limit is waited out quietly, for longer each time.
 - **A token with none of its network's own coin is stopped at the form.** For example, USDC on Polygon with no POL: "You need some POL on Polygon to pay the network fees." Such a quote used to fail as an unexplained service error.
@@ -114,7 +114,7 @@ For each item, note what the screen said before you confirmed and what actually 
 ### Options and review
 11. **Compare options:** a cross-network price shows **Compare options**. Opening it prices the fastest route ("Checking for a faster route…"). **Best net return** appears only when at least two options can be compared.
 12. **Slippage:** in the comparison, change it to 1% and 2%, then set a custom value. On a phone, **Use {value}** should stay above the keyboard as you type. Every price should update. Above 1% there should be a warning. The review's **Costs & protection** should show the new value.
-13. **Leave the form alone for six minutes.** Refreshing should stop, the quote expire, and **Refresh quote** appear. Switching to another app or tab should stop refreshing at once.
+13. **Leave the form alone for three minutes.** Refreshing should stop, the quote expire, and **Refresh quote** appear. Switching to another app or tab should stop refreshing at once.
 14. **Selling ERC-20 tokens:** the review should ask for an exact amount, never unlimited. A token that needs its permission reset first should say "Continue with reset".
 15. **Leave the review while "Checking…"**. Nothing should start.
 
