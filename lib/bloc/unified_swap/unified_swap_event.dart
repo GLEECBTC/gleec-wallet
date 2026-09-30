@@ -218,9 +218,10 @@ final class UnifiedSwapCapabilitiesChanged extends UnifiedSwapEvent {
     required this.tradingEnabled,
     required this.clockValid,
     this.signedIn = true,
+    this.hardwareWallet = false,
   });
 
-  /// Whether trading is available here.
+  /// Whether trading is available here, to this wallet.
   final bool tradingEnabled;
 
   /// Whether the device clock is accurate enough.
@@ -229,8 +230,16 @@ final class UnifiedSwapCapabilitiesChanged extends UnifiedSwapEvent {
   /// Whether a wallet is signed in.
   final bool signedIn;
 
+  /// Whether that wallet is a hardware wallet.
+  final bool hardwareWallet;
+
   @override
-  List<Object?> get props => [tradingEnabled, clockValid, signedIn];
+  List<Object?> get props => [
+    tradingEnabled,
+    clockValid,
+    signedIn,
+    hardwareWallet,
+  ];
 }
 
 /// Re-read balances, e.g. after a swap changed them.

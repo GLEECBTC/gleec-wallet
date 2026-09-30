@@ -24,6 +24,7 @@ import 'package:web_dex/views/swap/swap_shell.dart';
 import 'swap_accessibility_checks.dart';
 import 'swap_surface_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
+import 'swap_wiring_fakes.dart' show trezorUser;
 
 /// The Swap surface's own state: the form and Activity blocs it owns, kept
 /// in step with trading availability, the clock, the app's lifecycle and
@@ -192,6 +193,32 @@ void main() {
         ),
       );
       expect(form(tester).state.signedIn, isTrue);
+    });
+
+    testWidgets('keeps a hardware wallet to its wallet features', (
+      tester,
+    ) async {
+      final auth = _FakeAuthBloc(AuthBlocState.loggedIn(trezorUser()));
+      addTearDown(auth.close);
+      await show(tester, auth: auth);
+
+      expect(
+        capabilities().first,
+        const UnifiedSwapCapabilitiesChanged(
+          tradingEnabled: false,
+          clockValid: true,
+          hardwareWallet: true,
+        ),
+      );
+      expect(form(tester).state.hardwareWallet, isTrue);
+      expect(
+        find.text(
+          'Trezor currently supports wallet-only mode. Trading and swaps are '
+          'unavailable for now.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Swaps unavailable'), findsOneWidget);
     });
 
     testWidgets('pauses re-pricing only while the app is out of sight', (

@@ -317,6 +317,35 @@ void main() {
       expect(bloc.state.canReview, isFalse);
       await bloc.close();
     });
+
+    test('a hardware wallet is told apart from a location', () async {
+      const location = UnifiedSwapCapabilitiesChanged(
+        tradingEnabled: false,
+        clockValid: true,
+      );
+      final bloc = build()
+        ..add(location)
+        ..add(
+          const UnifiedSwapCapabilitiesChanged(
+            tradingEnabled: false,
+            clockValid: true,
+            hardwareWallet: true,
+          ),
+        );
+      await settle();
+      expect(bloc.state.hardwareWallet, isTrue);
+
+      bloc.add(
+        const UnifiedSwapCapabilitiesChanged(
+          tradingEnabled: false,
+          clockValid: true,
+          signedIn: false,
+        ),
+      );
+      await settle();
+      expect(bloc.state.hardwareWallet, isFalse);
+      await bloc.close();
+    });
   });
 
   group('amount entry', () {

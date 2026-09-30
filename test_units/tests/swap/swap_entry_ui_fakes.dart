@@ -109,6 +109,7 @@ class FakeSwapServices implements SwapServices {
   Set<AssetId> activated;
   List<AssetId> known = [eth, usdc, btc, gleec];
   Map<AssetId, Decimal> balances = {};
+  Map<AssetId, Decimal> elsewhere = {};
   Map<AssetId, Decimal> prices = {eth: d('3000')};
   Map<AssetId, String> contracts = {};
   Set<AssetId> testnets = {};
@@ -174,6 +175,9 @@ class FakeSwapServices implements SwapServices {
 
   @override
   Decimal? lastKnownBalance(AssetId id) => balances[id];
+
+  @override
+  Decimal? spendableElsewhere(AssetId id) => elsewhere[id];
 
   @override
   String? contractOf(AssetId id) => contracts[id];

@@ -477,6 +477,9 @@ class _FakeServices implements SwapServices {
   Decimal? usdPrice(AssetId id) => id == eth ? d('3000') : null;
 
   @override
+  Decimal? spendableElsewhere(AssetId id) => null;
+
+  @override
   String? contractOf(AssetId id) => null;
 
   @override

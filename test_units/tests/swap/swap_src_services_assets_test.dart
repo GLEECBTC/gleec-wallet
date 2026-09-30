@@ -236,6 +236,23 @@ void main() {
       sdk.balances.broken = true;
       expect(services.lastKnownBalance(eth), isNull);
     });
+
+    test('what the other addresses hold is kept apart from a swap', () {
+      sdk.pubkeys
+        ..known[eth] = pubkeysOf(eth, [
+          keyOf('0xsecond', path: "m/44'/60'/0'/0/1", spendable: '2'),
+          keyOf('0xfirst', path: "m/44'/60'/0'/0/0", spendable: '1.5'),
+          keyOf('0xthird', path: "m/44'/60'/0'/0/2", spendable: '0.9'),
+        ])
+        ..known[btc] = pubkeysOf(btc, [keyOf('bc1-single', spendable: '3')]);
+
+      expect(services.spendableElsewhere(eth), d('2.9'));
+      expect(services.spendableElsewhere(btc), d('0'));
+      expect(services.spendableElsewhere(usdc), isNull);
+
+      sdk.pubkeys.broken = true;
+      expect(services.spendableElsewhere(eth), isNull);
+    });
   });
 
   group('prices', () {

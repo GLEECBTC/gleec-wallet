@@ -12,6 +12,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/authorize_mode.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
@@ -198,13 +199,7 @@ class _SwapScopeState extends State<_SwapScope> {
             resolveAsset: _services.resolveAsset,
             holdings: _services.holdings,
           )
-          ..add(
-            UnifiedSwapCapabilitiesChanged(
-              tradingEnabled: _tradingEnabled(tradingStatus.state),
-              clockValid: _clockValid(systemHealth.state),
-              signedIn: _isSignedIn(auth),
-            ),
-          )
+          ..add(_capabilities())
           ..add(const UnifiedSwapStarted());
     _activity = SwapActivityBloc(
       history: _services.history,
@@ -264,15 +259,20 @@ class _SwapScopeState extends State<_SwapScope> {
     super.dispose();
   }
 
-  void _publishCapabilities() {
-    _swap.add(
-      UnifiedSwapCapabilitiesChanged(
-        tradingEnabled: _tradingEnabled(
-          context.read<TradingStatusBloc>().state,
-        ),
-        clockValid: _clockValid(context.read<SystemHealthBloc>().state),
-        signedIn: _isSignedIn(context.read<AuthBloc?>()),
-      ),
+  void _publishCapabilities() => _swap.add(_capabilities());
+
+  /// A hardware wallet can't sign a swap, so trading is off for it wherever
+  /// it is, as the main menu already has it.
+  UnifiedSwapCapabilitiesChanged _capabilities() {
+    final auth = context.read<AuthBloc?>();
+    final hardwareWallet = auth?.state.currentUser?.wallet.isHW ?? false;
+    return UnifiedSwapCapabilitiesChanged(
+      tradingEnabled:
+          !hardwareWallet &&
+          _tradingEnabled(context.read<TradingStatusBloc>().state),
+      clockValid: _clockValid(context.read<SystemHealthBloc>().state),
+      signedIn: _isSignedIn(auth),
+      hardwareWallet: hardwareWallet,
     );
   }
 

@@ -286,6 +286,13 @@ void main() {
     ),
     'priced, but more than the balance': () =>
         form(issue: SwapFormIssue.insufficient),
+    'more than this address holds, with more at others': () {
+      services.elsewhere[eth] = d('2.9');
+      return form(issue: SwapFormIssue.insufficient);
+    },
+    'a hardware wallet': () => form(
+      evaluation: SwapEvaluationStatus.idle,
+    ).copyWith(tradingEnabled: false, hardwareWallet: true),
     'signed out': () =>
         form(
           issue: SwapFormIssue.signedOut,

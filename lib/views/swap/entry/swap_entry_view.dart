@@ -192,7 +192,9 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                 if (!state.tradingEnabled) ...[
                   SwapCallout(
                     tone: SwapTone.warning,
-                    message: LocaleKeys.tradingDisabled.tr(),
+                    message: state.hardwareWallet
+                        ? LocaleKeys.trezorWalletOnlyNotice.tr()
+                        : LocaleKeys.tradingDisabled.tr(),
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -236,7 +238,13 @@ class _SwapEntryViewState extends State<SwapEntryView> {
 
   (String, VoidCallback?, bool) _cta(UnifiedSwapState state) {
     if (!state.tradingEnabled) {
-      return (LocaleKeys.tradingDisabled.tr(), null, false);
+      return (
+        state.hardwareWallet
+            ? LocaleKeys.swapCtaUnavailable.tr()
+            : LocaleKeys.tradingDisabled.tr(),
+        null,
+        false,
+      );
     }
     if (state.pay == null) {
       return (

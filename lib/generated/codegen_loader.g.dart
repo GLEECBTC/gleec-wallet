@@ -1410,6 +1410,7 @@ abstract class LocaleKeys {
   static const swapCtaNotEnough = 'swapCtaNotEnough';
   static const swapCtaUseAmount = 'swapCtaUseAmount';
   static const swapCtaCheckAgain = 'swapCtaCheckAgain';
+  static const swapCtaUnavailable = 'swapCtaUnavailable';
   static const swapErrorMalformed = 'swapErrorMalformed';
   static const swapErrorZero = 'swapErrorZero';
   static const swapErrorTooManyDecimals = 'swapErrorTooManyDecimals';
@@ -1450,6 +1451,7 @@ abstract class LocaleKeys {
   static const swapHelperSignedOut = 'swapHelperSignedOut';
   static const swapHelperSignedOutPriced = 'swapHelperSignedOutPriced';
   static const swapHelperBalance = 'swapHelperBalance';
+  static const swapHelperHeldElsewhere = 'swapHelperHeldElsewhere';
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxToken = 'swapHelperMaxToken';
   static const swapHelperMaxAtomic = 'swapHelperMaxAtomic';

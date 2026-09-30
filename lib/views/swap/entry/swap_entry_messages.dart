@@ -14,6 +14,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         networks: _services.networks(),
         feeNeeded: _feeNeeded(state),
         feeHeld: _feeHeld(state),
+        heldElsewhere: _heldElsewhere(state),
       );
       if (copy != null) {
         return [
@@ -194,6 +195,18 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     return SwapFormat.tokens(
       held,
       SwapFormat.ticker(parent),
+      rounding: SwapRounding.down,
+    );
+  }
+
+  String? _heldElsewhere(UnifiedSwapState state) {
+    final pay = state.pay;
+    if (pay == null || state.issue != SwapFormIssue.insufficient) return null;
+    final held = _services.spendableElsewhere(pay);
+    if (held == null || held <= Decimal.zero) return null;
+    return SwapFormat.tokens(
+      held,
+      SwapFormat.ticker(pay),
       rounding: SwapRounding.down,
     );
   }

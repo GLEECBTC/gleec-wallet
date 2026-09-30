@@ -319,13 +319,15 @@ class SwapIssueCopy {
   final SwapEntryAction action;
 
   /// The copy for [issue] in [state], or null for "not finished yet": no
-  /// amount, or no wallet.
+  /// amount, or no wallet. [heldElsewhere] is what the pay asset's other
+  /// addresses hold.
   static SwapIssueCopy? of(
     SwapFormIssue issue,
     UnifiedSwapState state, {
     required SwapNetworks networks,
     String? feeNeeded,
     String? feeHeld,
+    String? heldElsewhere,
   }) {
     final pay = state.pay;
     final ticker = pay == null ? '' : SwapFormat.ticker(pay);
@@ -378,6 +380,9 @@ class SwapIssueCopy {
               ticker,
           ],
         ),
+        detail: heldElsewhere == null
+            ? null
+            : LocaleKeys.swapHelperHeldElsewhere.tr(args: [heldElsewhere]),
       ),
       SwapFormIssue.insufficientForFees => SwapIssueCopy(
         message: LocaleKeys.swapErrorInsufficientForFees.tr(

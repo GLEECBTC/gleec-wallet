@@ -45,6 +45,11 @@ void main() {
       tradingEnabled: true,
       clockValid: flags[i],
     ),
+    'hardware wallet': (i) => UnifiedSwapCapabilitiesChanged(
+      tradingEnabled: false,
+      clockValid: true,
+      hardwareWallet: flags[i],
+    ),
     'activated asset': (i) => UnifiedSwapAssetActivated(assets[i]),
     'slippage': (i) => UnifiedSwapSlippageChanged([0.005, 0.01][i]),
     'foreground': (i) => UnifiedSwapForegroundChanged(foreground: flags[i]),

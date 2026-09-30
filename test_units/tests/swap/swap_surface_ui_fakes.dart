@@ -255,6 +255,9 @@ class SurfaceServices implements SwapServices {
   Decimal? lastKnownBalance(AssetId id) => null;
 
   @override
+  Decimal? spendableElsewhere(AssetId id) => null;
+
+  @override
   String? contractOf(AssetId id) => null;
 
   @override

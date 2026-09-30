@@ -245,6 +245,7 @@ import 'tests/swap/swap_entry_ui_review_test.dart' as swap_entry_ui_review_test;
 import 'tests/swap/swap_entry_ui_slippage_test.dart'
     as swap_entry_ui_slippage_test;
 import 'tests/swap/swap_entry_ui_strip_test.dart' as swap_entry_ui_strip_test;
+import 'tests/swap/swap_entry_ui_wallet_test.dart' as swap_entry_ui_wallet_test;
 import 'tests/swap/swap_surface_ui_actions_test.dart'
     as swap_surface_ui_actions_test;
 import 'tests/swap/swap_surface_ui_activity_more_test.dart'
@@ -653,6 +654,7 @@ void main() {
   swap_entry_ui_review_test.main();
   swap_entry_ui_slippage_test.main();
   swap_entry_ui_strip_test.main();
+  swap_entry_ui_wallet_test.main();
   swap_surface_ui_actions_test.main();
   swap_surface_ui_activity_more_test.main();
   swap_surface_ui_activity_test.main();

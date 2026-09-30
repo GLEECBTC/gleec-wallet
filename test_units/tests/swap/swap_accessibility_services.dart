@@ -17,6 +17,7 @@ class _Services implements SwapServices {
 
   final Set<AssetId> _activated;
   Map<AssetId, Decimal> balances = {};
+  Map<AssetId, Decimal> elsewhere = {};
 
   @override
   final Set<String> viewing = {};
@@ -48,6 +49,9 @@ class _Services implements SwapServices {
 
   @override
   Decimal? lastKnownBalance(AssetId id) => balances[id];
+
+  @override
+  Decimal? spendableElsewhere(AssetId id) => elsewhere[id];
 
   @override
   String? contractOf(AssetId id) => null;

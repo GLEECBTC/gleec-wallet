@@ -222,6 +222,7 @@ class UnifiedSwapState extends Equatable {
     this.tradingEnabled = true,
     this.clockValid = true,
     this.signedIn = true,
+    this.hardwareWallet = false,
     this.hints = const SwapOrderBookHints(),
   });
 
@@ -315,6 +316,10 @@ class UnifiedSwapState extends Equatable {
   /// Whether a wallet is signed in.
   final bool signedIn;
 
+  /// Whether that wallet is a hardware wallet. If so, [tradingEnabled] is
+  /// false whatever the location allows.
+  final bool hardwareWallet;
+
   /// What the order book offers for the chosen assets.
   final SwapOrderBookHints hints;
 
@@ -382,6 +387,7 @@ class UnifiedSwapState extends Equatable {
     tradingEnabled,
     clockValid,
     signedIn,
+    hardwareWallet,
     hints,
   ];
 
@@ -417,6 +423,7 @@ class UnifiedSwapState extends Equatable {
     bool? tradingEnabled,
     bool? clockValid,
     bool? signedIn,
+    bool? hardwareWallet,
     SwapOrderBookHints? hints,
     bool clearPay = false,
     bool clearReceive = false,
@@ -468,6 +475,7 @@ class UnifiedSwapState extends Equatable {
       tradingEnabled: tradingEnabled ?? this.tradingEnabled,
       clockValid: clockValid ?? this.clockValid,
       signedIn: signedIn ?? this.signedIn,
+      hardwareWallet: hardwareWallet ?? this.hardwareWallet,
       hints: hints ?? this.hints,
     );
   }

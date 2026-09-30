@@ -48,7 +48,8 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   ) async {
     if (event.tradingEnabled == state.tradingEnabled &&
         event.clockValid == state.clockValid &&
-        event.signedIn == state.signedIn) {
+        event.signedIn == state.signedIn &&
+        event.hardwareWallet == state.hardwareWallet) {
       return;
     }
     final signingChanged = event.signedIn != state.signedIn;
@@ -57,6 +58,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         state.copyWith(
           tradingEnabled: event.tradingEnabled,
           clockValid: event.clockValid,
+          hardwareWallet: event.hardwareWallet,
         ),
       );
     } else {
@@ -73,6 +75,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
             tradingEnabled: event.tradingEnabled,
             clockValid: event.clockValid,
             signedIn: event.signedIn,
+            hardwareWallet: event.hardwareWallet,
             view: leaveReview ? UnifiedSwapView.form : null,
             clearReview: leaveReview,
             evaluation: SwapEvaluationStatus.idle,

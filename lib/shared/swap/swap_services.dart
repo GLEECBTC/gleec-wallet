@@ -397,6 +397,25 @@ class SwapServices {
     }
   }
 
+  /// What [id]'s other addresses in this wallet can spend, as last read:
+  /// swaps spend from [addressOf] alone. Null when no address was read.
+  Decimal? spendableElsewhere(AssetId id) {
+    try {
+      final pubkeys = _sdk.pubkeys.lastKnown(id);
+      final swapAddress = _swapKey(pubkeys)?.address;
+      if (pubkeys == null || swapAddress == null) return null;
+      var total = Decimal.zero;
+      for (final key in pubkeys.keys) {
+        if (key.address == swapAddress) continue;
+        total +=
+            Decimal.tryParse(key.balance.spendable.toString()) ?? Decimal.zero;
+      }
+      return total;
+    } on Object {
+      return null;
+    }
+  }
+
   /// The USD price of [id], if known.
   Decimal? usdPrice(AssetId id) => pricing.prices.usdPrice(id);
 

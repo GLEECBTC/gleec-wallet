@@ -52,12 +52,14 @@ void main() {
     UnifiedSwapState state, {
     String? feeNeeded,
     String? feeHeld,
+    String? heldElsewhere,
   }) => SwapIssueCopy.of(
     issue,
     state,
     networks: networks,
     feeNeeded: feeNeeded,
     feeHeld: feeHeld,
+    heldElsewhere: heldElsewhere,
   );
 
   group('swap form issue copy', () {
@@ -178,6 +180,20 @@ void main() {
       expectCopy(
         issueOf(SwapFormIssue.insufficient, stateFor(eth, usdc)),
         'Only ETH is spendable at this address.',
+      );
+    });
+
+    test('too much says what other addresses hold, which swaps skip', () {
+      expectCopy(
+        issueOf(
+          SwapFormIssue.insufficient,
+          stateFor(eth, usdc, balance: d('0.1')),
+          heldElsewhere: '2.9 ETH',
+        ),
+        'Only 0.1 ETH is spendable at this address.',
+        detail:
+            'This wallet holds another 2.9 ETH at other addresses. Swaps '
+            'spend only from this one, so move funds here first.',
       );
     });
 
