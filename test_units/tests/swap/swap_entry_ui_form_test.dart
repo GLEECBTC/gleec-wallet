@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 
@@ -218,17 +219,98 @@ void main() {
   });
 
   group('Max', () {
-    testWidgets('asks for everything sellable, and says so', (tester) async {
+    // Asking what fees need, the whole balance filled meanwhile.
+    final asking = swapBaseForm(input: '2').copyWith(checkingMax: true);
+    final landed = swapBaseForm(input: '1.99').copyWith(
+      maxApplied: SwapMaxAmount(amount: d('1.99'), reservedForFees: d('0.01')),
+    );
+
+    testWidgets('asks for everything sellable, and says so once it lands', (
+      tester,
+    ) async {
       await pump(tester, priced);
       expect(find.text('Balance 2 ETH'), findsOneWidget);
 
       await tester.tap(find.text('Max'));
       expect(swap.events, [const UnifiedSwapMaxRequested()]);
+      await emitSwapState(tester, swap, asking);
+      expect(tester.takeAnnouncements(), isEmpty);
+
+      await emitSwapState(tester, swap, landed);
+      await emitSwapState(
+        tester,
+        swap,
+        landed.copyWith(evaluation: SwapEvaluationStatus.checking),
+      );
       expect(tester.takeAnnouncements(), [
         isAccessibilityAnnouncement(
           'Maximum amount applied with network fees kept back',
         ),
       ]);
+    });
+
+    testWidgets('with nothing to receive uses the whole balance, and says so', (
+      tester,
+    ) async {
+      final open = swapBaseForm(input: '').copyWith(clearReceive: true);
+      await pump(tester, open);
+      await tester.tap(find.text('Max'));
+
+      expect(swap.events, [const UnifiedSwapMaxRequested()]);
+      expect(tester.takeAnnouncements(), [
+        isAccessibilityAnnouncement('Whole balance applied'),
+      ]);
+      await emitSwapState(tester, swap, open.copyWith(inputText: '2'));
+      expect(tester.takeAnnouncements(), isEmpty);
+    });
+
+    testWidgets('without an answer says the whole balance stays', (
+      tester,
+    ) async {
+      await pump(tester, priced);
+      await tester.tap(find.text('Max'));
+      await emitSwapState(tester, swap, asking);
+      await emitSwapState(tester, swap, asking.copyWith(checkingMax: false));
+      expect(tester.takeAnnouncements(), [
+        isAccessibilityAnnouncement('Whole balance applied'),
+      ]);
+
+      // Switched to dollars while Max asked, it stays in dollars.
+      final dollars = asking.copyWith(
+        inputText: '6000',
+        amountMode: SwapAmountMode.fiat,
+      );
+      await tester.tap(find.text('Max'));
+      await emitSwapState(tester, swap, asking);
+      await emitSwapState(tester, swap, dollars);
+      await emitSwapState(tester, swap, dollars.copyWith(checkingMax: false));
+      expect(tester.takeAnnouncements(), [
+        isAccessibilityAnnouncement('Whole balance applied'),
+      ]);
+    });
+
+    testWidgets('says nothing when something else drops it', (tester) async {
+      final takeovers = {
+        'typing': swapBaseForm(input: '1.5'),
+        'another asset to pay': swapBaseForm(pay: btc, input: ''),
+        'switching sides': swapBaseForm(pay: usdc, receive: eth, input: ''),
+        'a reset': swapBaseForm(input: ''),
+        'signing out': asking.copyWith(
+          checkingMax: false,
+          signedIn: false,
+          clearBalance: true,
+        ),
+        // Before Max asks again, for the new pair.
+        'another asset to receive': swapBaseForm(receive: btc, input: '2'),
+      };
+      await pump(tester, swapBaseForm(), settle: false);
+      for (final MapEntry(key: takeover, value: state) in takeovers.entries) {
+        await emitSwapState(tester, swap, swapBaseForm());
+        await tester.tap(find.text('Max'));
+        await emitSwapState(tester, swap, asking);
+        await emitSwapState(tester, swap, state);
+        expect(tester.takeAnnouncements(), isEmpty, reason: takeover);
+      }
     });
 
     testWidgets('is not offered before the balance is known', (tester) async {

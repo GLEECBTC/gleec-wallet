@@ -1611,6 +1611,7 @@
   "swapAnnounceReady": "Updated swap options are ready",
   "swapAnnounceSwitched": "Pay and receive assets switched",
   "swapAnnounceMax": "Maximum amount applied with network fees kept back",
+  "swapAnnounceWholeBalance": "Whole balance applied",
   "swapEvidenceNoTransactions": "No transaction was signed or broadcast.",
   "swapEvidenceRouteLink": "Open route status page",
   "swapLinkFailedTitle": "Couldn't open the link",

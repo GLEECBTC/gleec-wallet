@@ -117,6 +117,34 @@ class _SwapEntryViewState extends State<SwapEntryView> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocListener<UnifiedSwapBloc, UnifiedSwapState>(
+      listenWhen: _maxEnded,
+      listener: (context, state) => swapAnnounce(
+        context,
+        state.maxApplied == null
+            ? LocaleKeys.swapAnnounceWholeBalance.tr()
+            : LocaleKeys.swapAnnounceMax.tr(),
+      ),
+      child: _form(),
+    );
+  }
+
+  /// Whether Max just ended on its own: its answer landed, or none came and
+  /// the whole balance stayed. Whatever else drops a Max still asking
+  /// changes the pair, the wallet or the amount at the same time.
+  bool _maxEnded(UnifiedSwapState previous, UnifiedSwapState current) {
+    final max = current.maxApplied;
+    if (max != null) return max != previous.maxApplied;
+    return previous.checkingMax &&
+        !current.checkingMax &&
+        current.pay == previous.pay &&
+        current.receive == previous.receive &&
+        current.signedIn == previous.signedIn &&
+        current.inputText == previous.inputText &&
+        current.amountMode == previous.amountMode;
+  }
+
+  Widget _form() {
     return BlocConsumer<UnifiedSwapBloc, UnifiedSwapState>(
       listenWhen: (previous, current) =>
           previous.evaluation != current.evaluation,
@@ -148,7 +176,14 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                     _edit(const UnifiedSwapAmountModeToggled()),
                 onMax: () {
                   _edit(const UnifiedSwapMaxRequested());
-                  swapAnnounce(context, LocaleKeys.swapAnnounceMax.tr());
+                  // With nothing to receive the whole balance fills at once;
+                  // otherwise Max is announced when its answer lands.
+                  if (receive == null) {
+                    swapAnnounce(
+                      context,
+                      LocaleKeys.swapAnnounceWholeBalance.tr(),
+                    );
+                  }
                 },
                 onPickAsset: () => _pick(SwapPickerSide.pay),
               ),

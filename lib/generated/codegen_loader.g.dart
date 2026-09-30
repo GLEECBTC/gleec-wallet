@@ -1786,6 +1786,7 @@ abstract class LocaleKeys {
   static const swapAnnounceReady = 'swapAnnounceReady';
   static const swapAnnounceSwitched = 'swapAnnounceSwitched';
   static const swapAnnounceMax = 'swapAnnounceMax';
+  static const swapAnnounceWholeBalance = 'swapAnnounceWholeBalance';
   static const swapEvidenceNoTransactions = 'swapEvidenceNoTransactions';
   static const swapEvidenceRouteLink = 'swapEvidenceRouteLink';
   static const swapLinkFailedTitle = 'swapLinkFailedTitle';
