@@ -331,11 +331,14 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
           body = _content(context, state, snapshot);
         }
 
-        return SingleChildScrollView(
-          child: SwapColumn(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [heading, body],
+        return SwapScreen(
+          onEscape: _leave,
+          child: SingleChildScrollView(
+            child: SwapColumn(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [heading, body],
+              ),
             ),
           ),
         );

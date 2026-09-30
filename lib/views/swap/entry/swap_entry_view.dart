@@ -218,42 +218,44 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             state.evaluation == SwapEvaluationStatus.checking &&
             state.quotes == null;
 
-        return SingleChildScrollView(
-          child: SwapColumn(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SwapPageHeading(title: LocaleKeys.swap.tr()),
-                if (!state.tradingEnabled) ...[
-                  SwapCallout(
-                    tone: SwapTone.warning,
-                    message: state.hardwareWallet
-                        ? LocaleKeys.trezorWalletOnlyNotice.tr()
-                        : LocaleKeys.tradingDisabled.tr(),
-                  ),
+        return SwapScreen(
+          child: SingleChildScrollView(
+            child: SwapColumn(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SwapPageHeading(title: LocaleKeys.swap.tr()),
+                  if (!state.tradingEnabled) ...[
+                    SwapCallout(
+                      tone: SwapTone.warning,
+                      message: state.hardwareWallet
+                          ? LocaleKeys.trezorWalletOnlyNotice.tr()
+                          : LocaleKeys.tradingDisabled.tr(),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  cards,
+                  ..._messages(context, state),
+                  if (checking) ...[
+                    const SizedBox(height: 14),
+                    const SwapSkeleton(widthFactor: 0.68),
+                    const SizedBox(height: 8),
+                    const SwapSkeleton(widthFactor: 0.45),
+                  ],
+                  if (quote != null) ...[
+                    SwapQuoteStrip(
+                      state: state,
+                      onCompare: () => showSwapOptionsSheet(context, _bloc),
+                    ),
+                    SwapRateLine(quote: quote),
+                  ],
                   const SizedBox(height: 14),
+                  if (widget.panelOpen)
+                    SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr())
+                  else
+                    _primaryAction(context, state),
                 ],
-                cards,
-                ..._messages(context, state),
-                if (checking) ...[
-                  const SizedBox(height: 14),
-                  const SwapSkeleton(widthFactor: 0.68),
-                  const SizedBox(height: 8),
-                  const SwapSkeleton(widthFactor: 0.45),
-                ],
-                if (quote != null) ...[
-                  SwapQuoteStrip(
-                    state: state,
-                    onCompare: () => showSwapOptionsSheet(context, _bloc),
-                  ),
-                  SwapRateLine(quote: quote),
-                ],
-                const SizedBox(height: 14),
-                if (widget.panelOpen)
-                  SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr())
-                else
-                  _primaryAction(context, state),
-              ],
+              ),
             ),
           ),
         );

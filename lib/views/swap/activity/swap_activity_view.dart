@@ -63,7 +63,7 @@ class _ActivityList extends StatelessWidget {
     return BlocBuilder<SwapActivityBloc, SwapActivityState>(
       builder: (context, state) {
         final bloc = context.read<SwapActivityBloc>();
-        return RefreshIndicator(
+        final list = RefreshIndicator(
           onRefresh: () async => bloc.add(const SwapActivityRefreshed()),
           child: SingleChildScrollView(
             // Back from a swap returns to where the list was.
@@ -118,6 +118,7 @@ class _ActivityList extends StatelessWidget {
             ),
           ),
         );
+        return SwapScreen(child: list);
       },
     );
   }
@@ -128,6 +129,7 @@ class _ActivityList extends StatelessWidget {
     SwapServices services,
   ) {
     final bloc = context.read<SwapActivityBloc>();
+    final shell = SwapShellScope.of(context);
     switch (state.status) {
       case SwapActivityStatus.loading:
         return [
@@ -166,9 +168,10 @@ class _ActivityList extends StatelessWidget {
             _ActivityRow(
               snapshot: entry,
               copy: SwapExecutionCopy(entry, networks),
-              onTap: () => SwapShellScope.of(
-                context,
-              ).showActivity(swap: (id: entry.id, source: entry.source)),
+              returning: entry.id == shell.lastDetail?.id,
+              onTap: () => shell.showActivity(
+                swap: (id: entry.id, source: entry.source),
+              ),
             ),
             const SizedBox(height: 8),
           ],
@@ -217,19 +220,48 @@ class _ActivityList extends StatelessWidget {
   }
 }
 
-class _ActivityRow extends StatelessWidget {
+class _ActivityRow extends StatefulWidget {
   const _ActivityRow({
     required this.snapshot,
     required this.copy,
+    required this.returning,
     required this.onTap,
   });
 
   final SwapExecutionSnapshot snapshot;
   final SwapExecutionCopy copy;
+
+  /// Whether this swap's detail was the last one open, so that coming back
+  /// from it puts the keyboard back on this row.
+  final bool returning;
   final VoidCallback onTap;
 
   @override
+  State<_ActivityRow> createState() => _ActivityRowState();
+}
+
+class _ActivityRowState extends State<_ActivityRow> {
+  final FocusNode _focus = FocusNode(debugLabel: 'Activity row');
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.returning) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && swapFocusLost()) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final snapshot = widget.snapshot;
+    final copy = widget.copy;
     final palette = SwapPalette.of(context);
     final time =
         snapshot.updatedAt ?? snapshot.finishedAt ?? snapshot.createdAt;
@@ -244,8 +276,9 @@ class _ActivityRow extends StatelessWidget {
           side: BorderSide(color: palette.controlBorder),
         ),
         child: InkWell(
+          focusNode: _focus,
           borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
+          onTap: widget.onTap,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 76),
             child: Padding(

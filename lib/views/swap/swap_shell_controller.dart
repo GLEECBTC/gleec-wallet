@@ -21,12 +21,17 @@ class SwapShellController extends ChangeNotifier {
 
   SwapDestination _destination;
   SwapExecutionRef? _detail;
+  SwapExecutionRef? _lastDetail;
 
   /// The destination on screen.
   SwapDestination get destination => _destination;
 
   /// The swap whose detail Activity shows, if any.
   SwapExecutionRef? get detail => _detail;
+
+  /// The swap whose detail Activity showed last, for its row to take focus
+  /// back when the list returns.
+  SwapExecutionRef? get lastDetail => _lastDetail;
 
   /// Shows [destination].
   void show(SwapDestination destination) {
@@ -39,6 +44,7 @@ class SwapShellController extends ChangeNotifier {
   void showActivity({SwapExecutionRef? swap}) {
     _destination = SwapDestination.activity;
     _detail = swap;
+    if (swap != null) _lastDetail = swap;
     notifyListeners();
   }
 

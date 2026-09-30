@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/swap/common/swap_screen.dart';
 
 /// Centres swap content in the readable column.
 class SwapColumn extends StatelessWidget {
@@ -74,13 +75,20 @@ class SwapPageHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = this.subtitle;
+    final focus = SwapScreen.focusOf(context);
+    Widget name = Semantics(
+      header: true,
+      namesRoute: true,
+      child: Text(title, style: SwapText.title(context)),
+    );
+    // Where the keyboard lands as the screen arrives; never a Tab stop.
+    if (focus != null) {
+      name = Focus(focusNode: focus, skipTraversal: true, child: name);
+    }
     final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Semantics(
-          header: true,
-          child: Text(title, style: SwapText.title(context)),
-        ),
+        name,
         if (subtitle != null) ...[
           const SizedBox(height: 4),
           Text(subtitle, style: SwapText.small(context)),

@@ -1,7 +1,6 @@
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
@@ -61,29 +60,26 @@ class SwapReviewView extends StatelessWidget {
           paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
         );
 
-        return CallbackShortcuts(
-          bindings: {const SingleActivator(LogicalKeyboardKey.escape): back},
-          child: Focus(
-            autofocus: true,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: inPanel
-                        ? Padding(
-                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-                            child: content,
-                          )
-                        : SwapColumn(
-                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                            child: content,
-                          ),
-                  ),
+        return SwapScreen(
+          onEscape: back,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: inPanel
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                          child: content,
+                        )
+                      : SwapColumn(
+                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                          child: content,
+                        ),
                 ),
-                _StickyFooter(inPanel: inPanel, child: footer),
-              ],
-            ),
+              ),
+              _StickyFooter(inPanel: inPanel, child: footer),
+            ],
           ),
         );
       },
