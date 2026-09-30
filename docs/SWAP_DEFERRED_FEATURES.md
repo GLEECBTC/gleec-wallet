@@ -65,7 +65,16 @@ KDF changes are out of scope for this release, so the wallet compensates for the
 
 ## Phase 2 change points
 
-Phase 2 (BTC as the source coin, and Tron) is KDF's to add (contract l.12). The provider already serves Solana, Bitcoin, Sui and Tron. These wallet and SDK parts assume EVM and must change with it:
+Phase 2 (BTC as the source coin, and Tron) is KDF's to add (contract l.12). The provider already serves Solana, Bitcoin and Sui, and Tron only across networks. It refuses a TRX → USDT-TRC20 quote with "Same-chain operations on Tron are not yet supported" (code 1002, checked 2026-09-29).
+
+Until Phase 2, KDF leaves Tron out at every step, so no source lists TRX or TRC-20 tokens and the picker cannot offer them. This was checked on the pinned build with TRX, USDT-TRC20, ETH and USDC-ERC20 active. `supported_coins` listed only the two EVM coins. Every Tron pair, in either direction, failed with `PairNotSupported` ("TRX is not on a supported EVM chain", `routed_swap/quote.rs:416`). These KDF parts assume EVM:
+
+- **The provider's network list** is fetched with `chainTypes=EVM` (`mm2src/trading_api/src/lifi_api/client.rs:173`), so Tron's chain id (728126428) and its execution target never load.
+- **Chain ids.** `EthCoin::chain_id()` is `None` for Tron (`mm2src/coins/eth.rs:1031`). That drops TRX and TRC-20 tokens from `supported_coins` (`routed_swap/supported_coins.rs:64`) and fails them at quote.
+- **Addresses.** The request to the provider formats both tokens as EVM, and sends the source coin's address as the recipient too (`routed_swap/quote.rs:112-116`). The provider refuses a `0x` recipient on Tron with HTTP 400, code 1011 ("Invalid toAddress"). A route to or from Tron needs the Tron coin's own base58 address. In an HD wallet that is a different key (`m/44'/195'`), not the EVM address re-encoded.
+- **Signing.** A route from Tron arrives as a prebuilt `TriggerSmartContract` transaction in `transactionRequest.customData`, sent to a base58 target. KDF's `TransactionRequest` has no `customData` (`mm2src/trading_api/src/lifi_api/types.rs:288`), and KDF parses targets as EVM addresses (`routed_swap/context.rs:113`). A TRC-20 source also needs an approval on Tron. A route from an EVM network to Tron is an ordinary EVM transaction.
+
+These wallet and SDK parts assume EVM and must change with it:
 
 - **Network names for route legs** (`lib/shared/swap/swap_networks.dart`). Legs are named from EVM chain ids only (`networkOfEvmChain`, and `evmChainIdOf` checks an EVM subclass list). A non-EVM leg falls back to the route's source or destination network name, so a hop through Bitcoin or Tron would be mislabelled.
 - **Which assets are routable before activation** (`lib/shared/swap/routed_swap_chains.dart`). The bundled list is `chainTypes=EVM`, keyed by integer chain id.
