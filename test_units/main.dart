@@ -25,6 +25,8 @@ import 'support/contrast_test.dart' as contrast_test;
 import 'theme/theme_color_roles_test.dart' as theme_color_roles_test;
 import 'shared/widgets/auto_scroll_text_test.dart' as auto_scroll_text_test;
 import 'shared/widgets/notice_banner_test.dart' as notice_banner_test;
+import 'shared/widgets/reduced_motion_scope_test.dart'
+    as reduced_motion_scope_test;
 import 'bloc/legal_agreement/legal_agreement_bloc_test.dart'
     as legal_agreement_bloc_test;
 import 'views/wallets_manager/widgets/inline_legal_acceptance_test.dart'
@@ -423,6 +425,7 @@ void main() {
   contrast_test.main();
   theme_color_roles_test.main();
   notice_banner_test.main();
+  reduced_motion_scope_test.main();
   auto_scroll_text_test.main();
   app_error_handling_test.main();
   wallet_simple_import_test.main();

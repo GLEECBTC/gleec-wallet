@@ -66,3 +66,11 @@ void showMessageBeforeUnload(String message) {
 /// No-op. Native builds install an update by downloading a release rather than
 /// reloading a page; see [UpdateBloc.update].
 Future<void> hardReloadPage() async {}
+
+/// Web only: native platforms report reduced motion through the engine or
+/// `ReducedMotionSignal`'s method channel.
+bool prefersReducedMotion() => false;
+
+/// Web only; see [prefersReducedMotion].
+void Function() watchReducedMotion(void Function(bool reduce) onChange) =>
+    () {};

@@ -72,3 +72,19 @@ Future<void> _clearClientSideCaches() async {
     }
   } catch (_) {}
 }
+
+const _reducedMotionQuery = '(prefers-reduced-motion: reduce)';
+
+/// Whether the browser asks for less motion. Flutter 3.41's web engine does
+/// not pass this to `MediaQuery`.
+bool prefersReducedMotion() =>
+    web.window.matchMedia(_reducedMotionQuery).matches;
+
+/// Calls [onChange] whenever the browser's reduced-motion preference changes,
+/// and returns a function that stops listening.
+void Function() watchReducedMotion(void Function(bool reduce) onChange) {
+  final query = web.window.matchMedia(_reducedMotionQuery);
+  final listener = ((web.Event _) => onChange(query.matches)).toJS;
+  query.addEventListener('change', listener);
+  return () => query.removeEventListener('change', listener);
+}
