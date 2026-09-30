@@ -116,6 +116,42 @@ void main() {
           '0.1235 ETH',
         );
       });
+
+      test('two different amounts never read the same', () {
+        expect(
+          SwapFormat.tokensApart(
+            d('0.000198094'),
+            d('0.000198051'),
+            'ETH',
+            rounding: SwapRounding.down,
+          ),
+          ('0.00019809 ETH', '0.00019805 ETH'),
+        );
+        expect(
+          SwapFormat.tokensApart(
+            d('0.000198090000000001'),
+            d('0.00019809'),
+            'ETH',
+            rounding: SwapRounding.down,
+          ),
+          ('0.000198090000000001 ETH', '0.00019809 ETH'),
+        );
+      });
+
+      test('amounts already apart, or equal, keep their precision', () {
+        expect(SwapFormat.tokensApart(d('2985.129'), d('950.51234'), 'USDC'), (
+          '2,985.13 USDC',
+          '950.5123 USDC',
+        ));
+        expect(
+          SwapFormat.tokensApart(d('0.000198094'), d('0.000198094'), 'ETH'),
+          ('0.0001981 ETH', '0.0001981 ETH'),
+        );
+        expect(SwapFormat.tokensApart(d('0'), d('0.5'), 'ETH'), (
+          '0 ETH',
+          '0.5 ETH',
+        ));
+      });
     });
 
     group('dollars', () {

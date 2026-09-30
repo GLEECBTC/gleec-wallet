@@ -9,16 +9,13 @@ extension SwapRecoveryCopy on SwapExecutionCopy {
     final fresh = failure?.freshQuote;
     final before = snapshot.minimumReceive;
     if (fresh == null || before == null) return null;
-    return LocaleKeys.swapFailPriceMovedCompare.tr(
-      args: [
-        SwapFormat.tokens(before, toTicker, rounding: SwapRounding.down),
-        SwapFormat.tokens(
-          fresh.guaranteedReceive,
-          toTicker,
-          rounding: SwapRounding.down,
-        ),
-      ],
+    final (was, now) = SwapFormat.tokensApart(
+      before,
+      fresh.guaranteedReceive,
+      toTicker,
+      rounding: SwapRounding.down,
     );
+    return LocaleKeys.swapFailPriceMovedCompare.tr(args: [was, now]);
   }
 
   /// The answer to "Where are the funds?".

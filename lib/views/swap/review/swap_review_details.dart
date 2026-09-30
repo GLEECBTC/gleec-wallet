@@ -200,34 +200,24 @@ extension _ReviewContentDetails on _ReviewContent {
         final lines = <String>[];
         if (previous != null) {
           if (previous.guaranteedReceive != quote.guaranteedReceive) {
-            lines.add(
-              LocaleKeys.swapReviewUpdatedMinimum.tr(
-                args: [
-                  SwapFormat.tokens(
-                    previous.guaranteedReceive,
-                    toTicker,
-                    rounding: SwapRounding.down,
-                  ),
-                  SwapFormat.tokens(
-                    quote.guaranteedReceive,
-                    toTicker,
-                    rounding: SwapRounding.down,
-                  ),
-                ],
-              ),
+            final (was, now) = SwapFormat.tokensApart(
+              previous.guaranteedReceive,
+              quote.guaranteedReceive,
+              toTicker,
+              rounding: SwapRounding.down,
             );
+            lines.add(LocaleKeys.swapReviewUpdatedMinimum.tr(args: [was, now]));
           }
           final before = previous.pricing.totalCostUsd;
           final after = quote.pricing.totalCostUsd;
-          if (before != null && after != null && before != after) {
-            lines.add(
-              LocaleKeys.swapReviewUpdatedCost.tr(
-                args: [
-                  SwapFormat.usd(before, rounding: SwapRounding.up),
-                  SwapFormat.usd(after, rounding: SwapRounding.up),
-                ],
-              ),
-            );
+          if (before != null && after != null) {
+            final was = SwapFormat.usd(before, rounding: SwapRounding.up);
+            final now = SwapFormat.usd(after, rounding: SwapRounding.up);
+            // Cents are the finest a cost is worth showing: a smaller change
+            // would read "from $0.54 to $0.54".
+            if (was != now) {
+              lines.add(LocaleKeys.swapReviewUpdatedCost.tr(args: [was, now]));
+            }
           }
         }
         return [

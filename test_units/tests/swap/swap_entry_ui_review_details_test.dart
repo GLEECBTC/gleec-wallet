@@ -351,6 +351,29 @@ void main() {
       );
     });
 
+    testWidgets('a change too small for the usual precision still reads '
+        'as one', (tester) async {
+      await pump(
+        tester,
+        quoteOf(
+          guaranteed: '2985.1234',
+          pricing: pricingOf(network: '3.004'),
+        ),
+        status: SwapReviewStatus.materialUpdate,
+        previous: quoteOf(
+          guaranteed: '2985.1291',
+          pricing: pricingOf(network: '3.001'),
+        ),
+      );
+
+      // The minimum gets the decimals that tell it apart; a cost is shown
+      // in cents, so a change within one is left out.
+      expect(
+        find.text('Minimum changed from 2,985.129 USDC to 2,985.123 USDC.'),
+        findsOneWidget,
+      );
+    });
+
     for (final (status, title, body) in [
       (
         SwapReviewStatus.expired,

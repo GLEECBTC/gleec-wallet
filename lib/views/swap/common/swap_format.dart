@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -30,15 +32,40 @@ abstract final class SwapFormat {
   static String amount(
     Decimal value, {
     SwapRounding rounding = SwapRounding.nearest,
-  }) {
-    final abs = value.abs();
-    if (abs == Decimal.zero) return '0';
-    final decimals = _decimalsFor(abs);
+  }) => value == Decimal.zero
+      ? '0'
+      : _amountAt(value, _decimalsFor(value.abs()), rounding);
+
+  static String _amountAt(Decimal value, int decimals, SwapRounding rounding) {
+    if (value == Decimal.zero) return '0';
     final rounded = _round(value, decimals, rounding);
     if (rounded == Decimal.zero) {
       return '< ${_trim(Decimal.one.shift(-decimals).toStringAsFixed(decimals))}';
     }
     return _group(_trim(rounded.toStringAsFixed(decimals)));
+  }
+
+  /// [before] and [after] as [tokens] writes them, with as many more decimals
+  /// as it takes for two different amounts not to read the same.
+  static (String, String) tokensApart(
+    Decimal before,
+    Decimal after,
+    String ticker, {
+    SwapRounding rounding = SwapRounding.nearest,
+  }) {
+    var first = amount(before, rounding: rounding);
+    var second = amount(after, rounding: rounding);
+    var decimals = math.max(
+      _decimalsFor(before.abs()),
+      _decimalsFor(after.abs()),
+    );
+    final exact = math.max(before.scale, after.scale);
+    while (first == second && before != after && decimals < exact) {
+      decimals++;
+      first = _amountAt(before, decimals, rounding);
+      second = _amountAt(after, decimals, rounding);
+    }
+    return ('$first $ticker', '$second $ticker');
   }
 
   /// [value] at the precision [amount] shows it with, so an amount offered as

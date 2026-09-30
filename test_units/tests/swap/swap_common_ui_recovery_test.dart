@@ -35,6 +35,23 @@ void main() {
         );
       });
 
+      test('a move too small for the usual precision still reads as one', () {
+        final copy = copyOf(
+          snap(
+            minimum: '2985.1291',
+            fundsMovement: SwapFundsMovement.none,
+            outcome: failed(
+              SwapFailureReason.priceMoved,
+              freshQuote: quoteOf(guaranteed: '2985.1234'),
+            ),
+          ),
+        );
+        expect(
+          copy.priceMoveComparison,
+          'Minimum was 2,985.129 USDC. Now 2,985.123 USDC.',
+        );
+      });
+
       test('says nothing without a fresh quote or an old minimum', () {
         expect(
           copyOf(
