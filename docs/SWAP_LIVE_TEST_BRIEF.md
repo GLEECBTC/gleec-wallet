@@ -61,6 +61,8 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
   - Order-book prices shown during a pause say order-book swaps still work.
   - **Compare options** says why no cross-network option is listed.
   - In the review, a price the service won't confirm says the same and holds **Try again**. A route that's gone offers **Back to swap**, which prices the form again. It used to offer a retry that could only fail again.
+- **Searching for a ticker finds that asset first.** Typing "ETH" in a picker used to list about 200 assets alphabetically. Every token on Ethereum matches through its network's name, and so does Tether, so ETH itself sat around row 50, below 1INCH, AAVE and the rest, and looked missing. Now ETH on Ethereum comes first, then ETH on the other networks, then tickers and names that start with what you typed, then everything else.
+- **A price change too small to see is shown.** When a cross-network swap stopped because the minimum dropped, the result could read "Minimum was 0.000198 ETH. Now 0.000198 ETH.", because both figures were rounded to the same digits. They now get as many decimals as it takes to differ. The review's "Minimum changed from … to …" does the same, and it leaves out "Total cost changed" when the cost moved by less than a cent.
 
 Unchanged from the last brief:
 - the atomic "receive at least" figure is what the order enforces;
