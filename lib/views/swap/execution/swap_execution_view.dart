@@ -19,6 +19,7 @@ import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
+part 'swap_execution_moments.dart';
 part 'swap_execution_sections.dart';
 
 /// Where a swap screen was opened from, which decides where leaving goes.
@@ -75,9 +76,13 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
   late final AppLifecycleListener _lifecycle;
   int _resumes = 0;
 
+  /// The snapshot the screen last showed, to tell what is news.
+  SwapExecutionSnapshot? _heard;
+
   @override
   void initState() {
     super.initState();
+    _heard = context.read<SwapExecutionBloc>().state.snapshot;
     _services.viewing.add(widget.id);
     _lifecycle = AppLifecycleListener(
       onResume: () {
@@ -254,6 +259,9 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
       iconTurns: turns,
       iconCurve: curve,
       iconDuration: duration,
+      ring: snapshot.outcome?.kind == SwapOutcomeKind.completed
+          ? snapshot.id
+          : null,
     );
   }
 
@@ -277,7 +285,9 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SwapExecutionBloc, SwapExecutionState>(
+    return BlocConsumer<SwapExecutionBloc, SwapExecutionState>(
+      listenWhen: (previous, next) => previous.snapshot != next.snapshot,
+      listener: _onNews,
       builder: (context, state) {
         final snapshot = state.snapshot;
         final heading = SwapPageHeading(

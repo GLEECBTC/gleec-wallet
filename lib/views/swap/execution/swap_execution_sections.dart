@@ -51,11 +51,22 @@ extension _ExecutionSections on _ExecutionBodyState {
       const SizedBox(height: 16),
       if (snapshot.stage == SwapProgressStage.actionRequired &&
           routeUrl != null) ...[
+        // The swap is waiting on the user: two pulses say so, then stop.
         _arrive(
-          SwapButton(
-            label: LocaleKeys.swapOpenRoutePage.tr(),
-            icon: Icons.open_in_new_rounded,
-            onPressed: () => openSwapLink(context, routeUrl),
+          SwapPulse(
+            trigger: SwapProgressStage.actionRequired,
+            active: state.live,
+            onMount: true,
+            beats: 2,
+            delay: SwapMotion.screen,
+            color: SwapPalette.of(context).warning,
+            spread: 10,
+            borderRadius: BorderRadius.circular(16),
+            child: SwapButton(
+              label: LocaleKeys.swapOpenRoutePage.tr(),
+              icon: Icons.open_in_new_rounded,
+              onPressed: () => openSwapLink(context, routeUrl),
+            ),
           ),
           live: state.live,
         ),
