@@ -72,7 +72,8 @@ void main() {
       debounce: Duration.zero,
       evaluationTimeout: const Duration(seconds: 2),
       refreshInterval: const Duration(hours: 1),
-      rateLimitPause: const Duration(milliseconds: 30),
+      // Long enough that no real timer ends a pause mid-test; a test ends it.
+      rateLimitPause: const Duration(hours: 1),
     );
   }
 
@@ -266,7 +267,9 @@ void main() {
         final asked = routed.requests.length;
 
         routed.respond = pricedFor;
-        await Future<void>.delayed(const Duration(milliseconds: 60));
+        bloc.add(
+          const UnifiedSwapTimerFired(UnifiedSwapTimerKind.rateLimitOver),
+        );
         await settle();
         expect(bloc.state.rateLimitedUntil, isNull);
         expect(routed.requests, hasLength(asked));
