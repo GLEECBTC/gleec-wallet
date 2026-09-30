@@ -397,4 +397,12 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     unawaited(_arrivals.cancel());
     return super.close();
   }
+
+  @override
+  void add(UnifiedSwapEvent event) {
+    // Events queued before closing are still handled, and running handlers
+    // still finish, after the event stream has closed: an add there throws.
+    if (_closing) return;
+    super.add(event);
+  }
 }

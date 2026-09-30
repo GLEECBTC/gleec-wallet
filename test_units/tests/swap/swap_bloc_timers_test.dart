@@ -181,6 +181,16 @@ void main() {
       h.elapse(const Duration(minutes: 5));
     });
 
+    swapBlocTest(
+      'a refresh already queued when the form closes asks for no price',
+      (h) {
+        final bloc = h.open()
+          ..add(const UnifiedSwapTimerFired(UnifiedSwapTimerKind.refresh));
+        unawaited(bloc.close());
+        h.settle();
+      },
+    );
+
     swapBlocTest('the review is never re-priced behind the user', (h) {
       final bloc = h.inReview();
       h.elapse(const Duration(seconds: 59));
@@ -245,6 +255,26 @@ void main() {
       expect(bloc.state.clockValid, isFalse);
       expect(h.routed.requests, hasLength(1));
     });
+
+    swapBlocTest(
+      'a sign-out still reading balances as the form closes asks for no offers',
+      (h) {
+        final bloc = h.open();
+        h.balanceGate = Completer<void>();
+        bloc.add(
+          const UnifiedSwapCapabilitiesChanged(
+            tradingEnabled: true,
+            clockValid: true,
+            signedIn: false,
+          ),
+        );
+        h.settle();
+
+        unawaited(bloc.close());
+        h.balanceGate!.complete();
+        h.settle();
+      },
+    );
   });
 
   group('balances and addresses', () {
