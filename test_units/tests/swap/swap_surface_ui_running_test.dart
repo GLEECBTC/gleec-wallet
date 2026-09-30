@@ -216,6 +216,24 @@ void main() {
           ),
         };
 
+    // Until its transaction is out, a routed swap needs Gleec open; a
+    // peer-to-peer one needs it to the end.
+    String leaveNote(String name) => switch (name) {
+      'preparing' ||
+      'matching' ||
+      'approving' ||
+      'resetting a permission first' ||
+      'signing' ||
+      'sending' =>
+        'You can leave this screen, but keep Gleec open and signed in until '
+            'the swap is sent. Closing it before then stops the swap.',
+      'exchanging' =>
+        'You can leave this screen, but keep Gleec open and signed in until '
+            'the swap finishes. The swap runs on this device, and pauses '
+            'while Gleec is closed.',
+      _ => 'You can leave this screen. The swap continues in Activity.',
+    };
+
     for (final MapEntry(key: name, value: (snapshot, title, body, step))
         in stages.entries) {
       testWidgets('$name: says "$title" and marks the step it is on', (
@@ -226,12 +244,7 @@ void main() {
         expect(hero(title), findsOneWidget);
         expect(hero(body), findsOneWidget);
         expect(timeline(tester), contains(step));
-        expect(
-          find.text(
-            'You can leave this screen. The swap continues in Activity.',
-          ),
-          findsOneWidget,
-        );
+        expect(find.text(leaveNote(name)), findsOneWidget);
         await expectSwapAccessible(tester);
       });
     }

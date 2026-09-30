@@ -1,4 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/swap_execution/swap_execution_bloc.dart';
@@ -406,7 +407,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: terminal
                 ? _recovery(context, snapshot, copy, live: state.live)
-                : _running(context, state, snapshot),
+                : _running(context, state, snapshot, copy),
           ),
         ),
       )

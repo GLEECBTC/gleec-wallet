@@ -179,6 +179,55 @@ class SwapExecutionCopy {
     return _stageHero(snapshot.stage ?? SwapProgressStage.unknown);
   }
 
+  /// What leaving the screen, or Gleec itself, means while the swap runs.
+  ///
+  /// A peer-to-peer swap runs on this device from start to finish, a refund
+  /// included. A routed swap needs Gleec only until its transaction is out:
+  /// the engine drops one that restarts before then, and follows one that
+  /// restarts after.
+  ({String message, IconData icon}) leaveNote({required bool web}) {
+    final device = web ? Icons.web_asset_rounded : Icons.devices_rounded;
+    if (snapshot.source == SwapLiquiditySource.atomic) {
+      final refunding = snapshot.stage == SwapProgressStage.refunding;
+      return (
+        message: switch ((refunding, web)) {
+          (true, true) => LocaleKeys.swapProgressKeepOpenRefundWeb,
+          (true, false) => LocaleKeys.swapProgressKeepOpenRefund,
+          (false, true) => LocaleKeys.swapProgressKeepOpenWeb,
+          (false, false) => LocaleKeys.swapProgressKeepOpen,
+        }.tr(),
+        icon: device,
+      );
+    }
+    if (!_sent) {
+      return (
+        message: web
+            ? LocaleKeys.swapProgressKeepOpenUntilSentWeb.tr()
+            : LocaleKeys.swapProgressKeepOpenUntilSent.tr(),
+        icon: device,
+      );
+    }
+    return (
+      message: LocaleKeys.swapProgressLeaveNote.tr(),
+      icon: Icons.schedule_rounded,
+    );
+  }
+
+  /// Whether the source transaction is out, by its hash or the stage.
+  bool get _sent =>
+      snapshot.evidence.sourceTxHash != null ||
+      switch (snapshot.stage) {
+        SwapProgressStage.preparing ||
+        SwapProgressStage.matching ||
+        SwapProgressStage.approving ||
+        SwapProgressStage.signing ||
+        SwapProgressStage.sending ||
+        null => false,
+        SwapProgressStage.unknown =>
+          snapshot.fundsMovement == SwapFundsMovement.sent,
+        _ => true,
+      };
+
   SwapHeroCopy _stageHero(SwapProgressStage stage) {
     switch (stage) {
       case SwapProgressStage.preparing:
@@ -249,7 +298,9 @@ class SwapExecutionCopy {
       case SwapProgressStage.refunding:
         return SwapHeroCopy(
           title: LocaleKeys.swapProgressRefundingTitle.tr(),
-          body: LocaleKeys.swapProgressRefundingBody.tr(),
+          body: snapshot.source == SwapLiquiditySource.atomic
+              ? LocaleKeys.swapProgressRefundingBodyAtomic.tr()
+              : LocaleKeys.swapProgressRefundingBody.tr(),
           icon: Icons.undo_rounded,
           tone: SwapTone.warning,
         );

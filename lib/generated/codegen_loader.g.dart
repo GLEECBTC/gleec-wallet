@@ -1646,6 +1646,8 @@ abstract class LocaleKeys {
   static const swapProgressDeliveryBody = 'swapProgressDeliveryBody';
   static const swapProgressRefundingTitle = 'swapProgressRefundingTitle';
   static const swapProgressRefundingBody = 'swapProgressRefundingBody';
+  static const swapProgressRefundingBodyAtomic =
+      'swapProgressRefundingBodyAtomic';
   static const swapProgressActionTitle = 'swapProgressActionTitle';
   static const swapProgressActionBody = 'swapProgressActionBody';
   static const swapProgressExchangingTitle = 'swapProgressExchangingTitle';
@@ -1657,6 +1659,13 @@ abstract class LocaleKeys {
   static const swapProgressDelayedTitle = 'swapProgressDelayedTitle';
   static const swapProgressDelayedBody = 'swapProgressDelayedBody';
   static const swapProgressLeaveNote = 'swapProgressLeaveNote';
+  static const swapProgressKeepOpenUntilSent = 'swapProgressKeepOpenUntilSent';
+  static const swapProgressKeepOpenUntilSentWeb =
+      'swapProgressKeepOpenUntilSentWeb';
+  static const swapProgressKeepOpen = 'swapProgressKeepOpen';
+  static const swapProgressKeepOpenWeb = 'swapProgressKeepOpenWeb';
+  static const swapProgressKeepOpenRefund = 'swapProgressKeepOpenRefund';
+  static const swapProgressKeepOpenRefundWeb = 'swapProgressKeepOpenRefundWeb';
   static const swapOpenRoutePage = 'swapOpenRoutePage';
   static const swapCancelSwap = 'swapCancelSwap';
   static const swapCancelling = 'swapCancelling';

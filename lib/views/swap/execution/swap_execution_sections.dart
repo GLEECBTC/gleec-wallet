@@ -20,6 +20,7 @@ extension _ExecutionSections on _ExecutionBodyState {
     BuildContext context,
     SwapExecutionState state,
     SwapExecutionSnapshot snapshot,
+    SwapExecutionCopy copy,
   ) {
     final routeUrl = snapshot.evidence.providerExplorerUrl;
     final cancelMessage = switch (state.cancelStatus) {
@@ -30,12 +31,9 @@ extension _ExecutionSections on _ExecutionBodyState {
       SwapCancelStatus.unconfirmed => LocaleKeys.swapCancelUnconfirmed.tr(),
       _ => null,
     };
+    final note = copy.leaveNote(web: kIsWeb);
     return [
-      SwapCallout(
-        tone: SwapTone.info,
-        icon: Icons.schedule_rounded,
-        message: LocaleKeys.swapProgressLeaveNote.tr(),
-      ),
+      SwapCallout(tone: SwapTone.info, icon: note.icon, message: note.message),
       if (cancelMessage != null) ...[
         const SizedBox(height: 12),
         // Only a cancel pressed on this screen gets an answer here.

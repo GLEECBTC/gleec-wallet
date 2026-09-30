@@ -461,7 +461,10 @@ void main() {
       );
 
       expect(
-        find.text('You can leave this screen. The swap continues in Activity.'),
+        find.text(
+          'You can leave this screen, but keep Gleec open and signed in until '
+          'the swap is sent. Closing it before then stops the swap.',
+        ),
         findsOneWidget,
       );
       expect(find.byKey(const Key('swap-cancel')), findsOneWidget);
