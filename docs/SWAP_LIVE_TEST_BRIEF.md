@@ -69,7 +69,15 @@ Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum
 3. **Across networks:** USDC on Polygon → USDC on Arbitrum. Expect the bridge step and "You can leave this screen". Leave, and come back through Activity or the notice.
 4. **Max on a native coin:** Max on ETH (Arbitrum) → USDC. Check the kept-back amount the form states, and that the swap starts.
 5. **Cancel before anything is sent:** start a token sale and cancel while it says "Checking…" or while approving. The result should say whether an approval went out.
-6. **Order book:** a small GLEEC or GRC-20 swap, if an offer exists. With no offer, the form should say no one is offering it before you type an amount, and offer **Choose another asset**.
+6. **Order book:** ETC → USDC on Polygon. It stands in for GLEEC: both are EVM coins on networks the aggregator doesn't serve, so only the order book can price them. Claiming the USDC spends a little POL; ETC → LTC needs no second coin. Expect the matching step, then each step to the result. With no offer, the form should say no one is offering it before you type an amount, and offer **Choose another asset**.
+
+**Funding from Bitvavo.** Bitvavo pays out ETH, USDC and POL on Ethereum mainnet only, so it can't fund the Arbitrum and Polygon runs. It pays out BNB on Binance Smart Chain and ETC on Ethereum Classic, and those two cover all six runs (checked 2026-09-30):
+- Runs 1, 2, 4 and 5 on Binance Smart Chain, with BNB in place of ETH.
+- Run 3 as USDC on Binance Smart Chain → USDC on Base. It lands with no ETH on Base, which sets up item 3 under What to try.
+- Run 6 as ETC → USDC on Binance Smart Chain. Claiming the USDC spends a little BNB.
+- Run Max (run 4) last. It keeps back only three times the quoted gas, and runs 5 and 6 still pay their fees in BNB.
+
+**Still to run: GLEEC.** Run 6 stands in for a GLEEC swap until a tester can get GLEEC on the Gleec chain, at a `0x` address. HitBTC and FMFW.io, the exchanges that list GLEEC, pay out only on the old chain, whose addresses start with `R`. The wallet shows that coin as **Gleec (OLD)**, and no one offers it on the order book. Whoever has GLEEC should repeat run 6 as GLEEC → USDC on Polygon. On 2026-09-30 one maker offered that for 9.4 to 114 GLEEC, so about 20 GLEEC covers a swap and its fees; no GRC-20 token had an offer.
 
 ## What to try
 
@@ -85,7 +93,7 @@ For each item, note what the screen said before you confirmed and what actually 
 7. **An asset that isn't active:**
    - Pick one from **All**: it should activate, then take its place in the form.
    - Open a coin page's **Swap** for an inactive coin, or a `/swap?from_currency=…` link: the form should show **Activate {asset}**, and nothing is priced until you do.
-8. **GLEEC as what you pay:**
+8. **GLEEC as what you pay** (no GLEEC needed):
    - Open the receive picker: order-book assets appear normally; cross-network-only tokens appear under "Not available with GLEEC", with the reason.
    - With no offer on the order book, the form should say no one is offering it, not that it couldn't check, and **Choose another asset** should open the picker for what you receive.
    - In that picker, assets no one offers for GLEEC should sit under "No offers with GLEEC right now", and still be choosable.
