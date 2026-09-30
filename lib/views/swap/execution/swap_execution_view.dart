@@ -71,15 +71,23 @@ class _ExecutionBody extends StatefulWidget {
 
 class _ExecutionBodyState extends State<_ExecutionBody> {
   late final SwapServices _services = context.read<SwapServices>();
+  late final AppLifecycleListener _lifecycle;
+  int _resumes = 0;
 
   @override
   void initState() {
     super.initState();
     _services.viewing.add(widget.id);
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (mounted) setState(() => _resumes++);
+      },
+    );
   }
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _services.viewing.remove(widget.id);
     super.dispose();
   }
@@ -316,6 +324,13 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
       SwapTimelineView(
         steps: SwapTimeline.of(snapshot, networks),
         animate: state.live,
+        tracking:
+            !terminal &&
+            !state.unanswered &&
+            snapshot.delayedSince == null &&
+            snapshot.stage != SwapProgressStage.actionRequired,
+        event: snapshot,
+        resumes: _resumes,
       ),
     ];
 

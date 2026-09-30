@@ -15,15 +15,32 @@ import 'package:web_dex/views/swap/motion/swap_motion.dart';
 /// many steps change at once, this takes at most [SwapMotion.cascadeLimit],
 /// which also paces a jump of several steps. Without [animate], or with less
 /// motion, a change shows at once.
+///
+/// While [tracking], the step the swap is on pulses: three times when it first
+/// appears and at each of [resumes], twice after the steps move on, and once
+/// for any other [event]. Every burst ends within five seconds, and the step
+/// stays still between them.
 class SwapTimelineView extends StatefulWidget {
   const SwapTimelineView({
     required this.steps,
     this.animate = false,
+    this.tracking = false,
+    this.event,
+    this.resumes = 0,
     super.key,
   });
 
   final List<SwapTimelineStep> steps;
   final bool animate;
+
+  /// Whether the engine is answering for the swap.
+  final bool tracking;
+
+  /// Changes whenever something new is heard of the swap.
+  final Object? event;
+
+  /// How many times the app has come back to the foreground.
+  final int resumes;
 
   @override
   State<SwapTimelineView> createState() => _SwapTimelineViewState();
@@ -37,6 +54,9 @@ class _SwapTimelineViewState extends State<SwapTimelineView>
   late final AnimationController _cascade;
   List<SwapStepStatus> _from = const [];
   List<_Beat?> _beats = const [];
+  int _pulse = 0;
+  int _pulseBeats = 3;
+  Duration _pulseDelay = SwapMotion.screen;
 
   @override
   void initState() {
@@ -58,6 +78,24 @@ class _SwapTimelineViewState extends State<SwapTimelineView>
   @override
   void didUpdateWidget(SwapTimelineView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final moved = _update(oldWidget);
+    if (widget.resumes != oldWidget.resumes) {
+      _beatAfter(Duration.zero, beats: 3);
+    } else if (widget.animate && widget.event != oldWidget.event) {
+      moved
+          ? _beatAfter(_cascade.duration ?? Duration.zero, beats: 2)
+          : _beatAfter(Duration.zero, beats: 1);
+    }
+  }
+
+  void _beatAfter(Duration delay, {required int beats}) {
+    _pulse++;
+    _pulseBeats = beats;
+    _pulseDelay = delay;
+  }
+
+  /// Plays or shows the change from [oldWidget]'s steps; whether it played.
+  bool _update(SwapTimelineView oldWidget) {
     final from = _statuses(oldWidget.steps);
     final to = _statuses(widget.steps);
     final changed = [
@@ -67,13 +105,14 @@ class _SwapTimelineViewState extends State<SwapTimelineView>
     ];
     if (changed.isEmpty) {
       if (from.length != to.length) _snap(to);
-      return;
+      return false;
     }
     if (!widget.animate || !SwapMotion.enabled(context)) {
       _snap(to);
-      return;
+      return false;
     }
     _play(from, to, changed);
+    return true;
   }
 
   void _snap(List<SwapStepStatus> to) {
@@ -146,6 +185,14 @@ class _SwapTimelineViewState extends State<SwapTimelineView>
                 window: _window,
                 duration: _cascade.duration ?? Duration.zero,
                 animate: widget.animate,
+                pulse: (
+                  trigger: _pulse,
+                  beats: _pulseBeats,
+                  delay: _pulseDelay,
+                  active:
+                      widget.tracking &&
+                      steps[i].status == SwapStepStatus.current,
+                ),
               ),
           ],
         ),
@@ -153,6 +200,9 @@ class _SwapTimelineViewState extends State<SwapTimelineView>
     );
   }
 }
+
+/// The pulse a step shows while the swap is on it.
+typedef _Pulse = ({Object trigger, int beats, Duration delay, bool active});
 
 /// A step's colours: fill, outline and glyph.
 typedef _Colours = (Color background, Color border, Color foreground);
@@ -189,6 +239,7 @@ class _StepRow extends StatelessWidget {
     required this.window,
     required this.duration,
     required this.animate,
+    required this.pulse,
   });
 
   final SwapTimelineStep step;
@@ -199,6 +250,7 @@ class _StepRow extends StatelessWidget {
   window;
   final Duration duration;
   final bool animate;
+  final _Pulse pulse;
 
   @override
   Widget build(BuildContext context) {
@@ -235,14 +287,24 @@ class _StepRow extends StatelessWidget {
               child: Column(
                 children: [
                   SwapPulse(
-                    trigger: done,
-                    active: animate && beat != null,
-                    color: palette.success,
-                    beat: SwapMotion.ring,
-                    spread: 10,
-                    opacity: 0.4,
-                    delay: beat == null ? Duration.zero : duration * beat.start,
-                    child: _node(palette, icon, beat),
+                    trigger: pulse.trigger,
+                    active: pulse.active,
+                    onMount: true,
+                    beats: pulse.beats,
+                    delay: pulse.delay,
+                    color: palette.brand,
+                    child: SwapPulse(
+                      trigger: done,
+                      active: animate && beat != null,
+                      color: palette.success,
+                      beat: SwapMotion.ring,
+                      spread: 10,
+                      opacity: 0.4,
+                      delay: beat == null
+                          ? Duration.zero
+                          : duration * beat.start,
+                      child: _node(palette, icon, beat),
+                    ),
                   ),
                   if (!last)
                     Expanded(
