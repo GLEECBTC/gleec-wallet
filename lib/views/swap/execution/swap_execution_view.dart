@@ -313,7 +313,10 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
           icon: Icons.compare_arrows_rounded,
           message: comparison,
         ),
-      SwapTimelineView(steps: SwapTimeline.of(snapshot, networks)),
+      SwapTimelineView(
+        steps: SwapTimeline.of(snapshot, networks),
+        animate: state.live,
+      ),
     ];
 
     if (terminal) {

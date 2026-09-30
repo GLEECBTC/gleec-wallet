@@ -108,6 +108,36 @@ class SwapPop extends StatelessWidget {
   );
 }
 
+/// Paints [child] part of the way from a start to itself as [progress] runs
+/// from 0 to 1, for motion another controller drives. Like every effect here,
+/// it changes painting only.
+class SwapPaintEffect extends StatelessWidget {
+  const SwapPaintEffect({
+    required this.progress,
+    required this.child,
+    this.opacity = 1,
+    this.offset = Offset.zero,
+    this.scale = 1,
+    this.alignment = Alignment.center,
+    super.key,
+  });
+
+  final Animation<double> progress;
+  final Widget child;
+  final double opacity;
+  final Offset offset;
+  final double scale;
+  final AlignmentGeometry alignment;
+
+  @override
+  Widget build(BuildContext context) => _SwapEffect(
+    progress: progress,
+    start: _EffectStart(opacity: opacity, offset: offset, scale: scale),
+    alignment: alignment,
+    child: child,
+  );
+}
+
 class _EffectPlayer extends StatefulWidget {
   const _EffectPlayer({
     required this.trigger,

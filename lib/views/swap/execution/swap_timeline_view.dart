@@ -1,17 +1,135 @@
+import 'dart:math' as math;
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 /// How a swap completes, step by step, with where it has got to.
-class SwapTimelineView extends StatelessWidget {
-  const SwapTimelineView({required this.steps, super.key});
+///
+/// With [animate], a change passes down the steps in order: each changed step
+/// blends to its new colours as its icon pops in, the line below a step fills
+/// as the step completes, and a completed step sends out one ripple. However
+/// many steps change at once, this takes at most [SwapMotion.cascadeLimit],
+/// which also paces a jump of several steps. Without [animate], or with less
+/// motion, a change shows at once.
+class SwapTimelineView extends StatefulWidget {
+  const SwapTimelineView({
+    required this.steps,
+    this.animate = false,
+    super.key,
+  });
 
   final List<SwapTimelineStep> steps;
+  final bool animate;
+
+  @override
+  State<SwapTimelineView> createState() => _SwapTimelineViewState();
+}
+
+/// Where one step's change sits in the cascade, as fractions of it.
+typedef _Beat = ({double start, double end, double fillStart, double fillEnd});
+
+class _SwapTimelineViewState extends State<SwapTimelineView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _cascade;
+  List<SwapStepStatus> _from = const [];
+  List<_Beat?> _beats = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cascade = AnimationController(vsync: this, value: 1);
+    _from = _statuses(widget.steps);
+  }
+
+  static List<SwapStepStatus> _statuses(List<SwapTimelineStep> steps) => [
+    for (final step in steps) step.status,
+  ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!SwapMotion.enabled(context)) _cascade.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(SwapTimelineView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final from = _statuses(oldWidget.steps);
+    final to = _statuses(widget.steps);
+    final changed = [
+      if (from.length == to.length)
+        for (var i = 0; i < to.length; i++)
+          if (from[i] != to[i]) i,
+    ];
+    if (changed.isEmpty) {
+      if (from.length != to.length) _snap(to);
+      return;
+    }
+    if (!widget.animate || !SwapMotion.enabled(context)) {
+      _snap(to);
+      return;
+    }
+    _play(from, to, changed);
+  }
+
+  void _snap(List<SwapStepStatus> to) {
+    _from = to;
+    _beats = const [];
+    _cascade.value = 1;
+  }
+
+  void _play(
+    List<SwapStepStatus> from,
+    List<SwapStepStatus> to,
+    List<int> changed,
+  ) {
+    final step = SwapMotion.step.inMicroseconds;
+    final stride = step - SwapMotion.stepOverlap.inMicroseconds;
+    final fill = SwapMotion.fill.inMicroseconds;
+    final windows = <int, (int, int, int, int)>{};
+    var total = 0;
+    for (final (order, index) in changed.indexed) {
+      final start = order * stride;
+      final fillStart = start + step ~/ 2;
+      windows[index] = (start, start + step, fillStart, fillStart + fill);
+      total = math.max(total, fillStart + fill);
+    }
+    // A longer cascade is compressed, never cut short.
+    final length = math.min(total, SwapMotion.cascadeLimit.inMicroseconds);
+    _from = from;
+    _beats = [
+      for (var i = 0; i < to.length; i++)
+        if (windows[i] case (final a, final b, final c, final d))
+          (
+            start: a / total,
+            end: b / total,
+            fillStart: c / total,
+            fillEnd: d / total,
+          )
+        else
+          null,
+    ];
+    _cascade
+      ..duration = Duration(microseconds: length)
+      ..forward(from: 0);
+  }
+
+  Animation<double> _window(double start, double end, Curve curve) =>
+      _cascade.drive(CurveTween(curve: Interval(start, end, curve: curve)));
+
+  @override
+  void dispose() {
+    _cascade.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final steps = widget.steps;
     return Semantics(
       container: true,
       label: LocaleKeys.swapProgressTitle.tr(),
@@ -20,7 +138,15 @@ class SwapTimelineView extends StatelessWidget {
         child: Column(
           children: [
             for (var i = 0; i < steps.length; i++)
-              _StepRow(step: steps[i], last: i == steps.length - 1),
+              _StepRow(
+                step: steps[i],
+                last: i == steps.length - 1,
+                from: i < _from.length ? _from[i] : steps[i].status,
+                beat: i < _beats.length ? _beats[i] : null,
+                window: _window,
+                duration: _cascade.duration ?? Duration.zero,
+                animate: widget.animate,
+              ),
           ],
         ),
       ),
@@ -28,46 +154,61 @@ class SwapTimelineView extends StatelessWidget {
   }
 }
 
+/// A step's colours: fill, outline and glyph.
+typedef _Colours = (Color background, Color border, Color foreground);
+
+_Colours _coloursOf(
+  SwapStepStatus status,
+  SwapPalette palette,
+) => switch (status) {
+  SwapStepStatus.done => (palette.successBg, palette.success, palette.success),
+  SwapStepStatus.current => (
+    palette.selected,
+    palette.brand,
+    palette.brandHover,
+  ),
+  SwapStepStatus.error => (palette.dangerBg, palette.danger, palette.danger),
+  SwapStepStatus.cancelled => (
+    palette.surfaceHigh,
+    palette.textTertiary,
+    palette.textTertiary,
+  ),
+  SwapStepStatus.notStarted => (
+    palette.surfaceHigh,
+    palette.controlBorder,
+    palette.textTertiary,
+  ),
+};
+
 class _StepRow extends StatelessWidget {
-  const _StepRow({required this.step, required this.last});
+  const _StepRow({
+    required this.step,
+    required this.last,
+    required this.from,
+    required this.beat,
+    required this.window,
+    required this.duration,
+    required this.animate,
+  });
 
   final SwapTimelineStep step;
   final bool last;
+  final SwapStepStatus from;
+  final _Beat? beat;
+  final Animation<double> Function(double start, double end, Curve curve)
+  window;
+  final Duration duration;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final (background, border, foreground, icon) = switch (step.status) {
-      SwapStepStatus.done => (
-        palette.successBg,
-        palette.success,
-        palette.success,
-        Icons.check_rounded,
-      ),
-      SwapStepStatus.current => (
-        palette.selected,
-        palette.brand,
-        palette.brandHover,
-        Icons.more_horiz_rounded,
-      ),
-      SwapStepStatus.error => (
-        palette.dangerBg,
-        palette.danger,
-        palette.danger,
-        Icons.priority_high_rounded,
-      ),
-      SwapStepStatus.cancelled => (
-        palette.surfaceHigh,
-        palette.textTertiary,
-        palette.textTertiary,
-        Icons.close_rounded,
-      ),
-      SwapStepStatus.notStarted => (
-        palette.surfaceHigh,
-        palette.controlBorder,
-        palette.textTertiary,
-        Icons.circle_outlined,
-      ),
+    final icon = switch (step.status) {
+      SwapStepStatus.done => Icons.check_rounded,
+      SwapStepStatus.current => Icons.more_horiz_rounded,
+      SwapStepStatus.error => Icons.priority_high_rounded,
+      SwapStepStatus.cancelled => Icons.close_rounded,
+      SwapStepStatus.notStarted => Icons.circle_outlined,
     };
     final statusLabel = switch (step.status) {
       SwapStepStatus.done => LocaleKeys.swapStepCompleted,
@@ -79,6 +220,8 @@ class _StepRow extends StatelessWidget {
     final emphasised =
         step.status == SwapStepStatus.current ||
         step.status == SwapStepStatus.error;
+    final beat = this.beat;
+    final done = step.status == SwapStepStatus.done;
 
     return Semantics(
       label: '$statusLabel. ${step.detail}',
@@ -91,27 +234,28 @@ class _StepRow extends StatelessWidget {
               width: 32,
               child: Column(
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: background,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: border, width: 2),
-                    ),
-                    child: Icon(
-                      icon,
-                      size: step.status == SwapStepStatus.notStarted ? 10 : 16,
-                      color: foreground,
-                    ),
+                  SwapPulse(
+                    trigger: done,
+                    active: animate && beat != null,
+                    color: palette.success,
+                    beat: SwapMotion.ring,
+                    spread: 10,
+                    opacity: 0.4,
+                    delay: beat == null ? Duration.zero : duration * beat.start,
+                    child: _node(palette, icon, beat),
                   ),
                   if (!last)
                     Expanded(
-                      child: Container(
-                        width: 2,
-                        color: step.status == SwapStepStatus.done
-                            ? palette.success
-                            : palette.border,
+                      child: SwapStepLine(
+                        fill: beat != null && done && from != step.status
+                            ? window(
+                                beat.fillStart,
+                                beat.fillEnd,
+                                SwapMotion.standard,
+                              )
+                            : AlwaysStoppedAnimation(done ? 1 : 0),
+                        color: palette.border,
+                        fillColor: palette.success,
                       ),
                     ),
                 ],
@@ -149,4 +293,102 @@ class _StepRow extends StatelessWidget {
       ),
     );
   }
+
+  Widget _node(SwapPalette palette, IconData icon, _Beat? beat) {
+    final glyph = Icon(
+      icon,
+      size: step.status == SwapStepStatus.notStarted ? 10 : 16,
+      color: _coloursOf(step.status, palette).$3,
+    );
+    if (beat == null) return _circle(_coloursOf(step.status, palette), glyph);
+    final blend = window(beat.start, beat.end, SwapMotion.standard);
+    final (fromBg, fromBorder, _) = _coloursOf(from, palette);
+    final (toBg, toBorder, toFg) = _coloursOf(step.status, palette);
+    return AnimatedBuilder(
+      animation: blend,
+      builder: (context, child) => _circle((
+        Color.lerp(fromBg, toBg, blend.value)!,
+        Color.lerp(fromBorder, toBorder, blend.value)!,
+        toFg,
+      ), child!),
+      child: SwapPaintEffect(
+        progress: window(
+          beat.start,
+          beat.end,
+          step.status == SwapStepStatus.error
+              ? SwapMotion.error
+              : SwapMotion.success,
+        ),
+        opacity: 0,
+        scale: 0.6,
+        child: glyph,
+      ),
+    );
+  }
+
+  static Widget _circle(_Colours colours, Widget glyph) => Container(
+    width: 32,
+    height: 32,
+    decoration: BoxDecoration(
+      color: colours.$1,
+      shape: BoxShape.circle,
+      border: Border.all(color: colours.$2, width: 2),
+    ),
+    child: glyph,
+  );
+}
+
+/// The line joining one step to the next: [color], with [fillColor] drawn
+/// down from the top as far as [fill] has run.
+class SwapStepLine extends StatelessWidget {
+  const SwapStepLine({
+    required this.fill,
+    required this.color,
+    required this.fillColor,
+    super.key,
+  });
+
+  final Animation<double> fill;
+  final Color color;
+  final Color fillColor;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 2,
+    child: CustomPaint(
+      painter: _LinePainter(fill: fill, color: color, fillColor: fillColor),
+    ),
+  );
+}
+
+class _LinePainter extends CustomPainter {
+  _LinePainter({
+    required this.fill,
+    required this.color,
+    required this.fillColor,
+  }) : super(repaint: fill);
+
+  final Animation<double> fill;
+  final Color color;
+  final Color fillColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final filled = size.height * fill.value.clamp(0.0, 1.0);
+    canvas
+      ..drawRect(
+        Rect.fromLTRB(0, filled, size.width, size.height),
+        Paint()..color = color,
+      )
+      ..drawRect(
+        Rect.fromLTWH(0, 0, size.width, filled),
+        Paint()..color = fillColor,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_LinePainter oldDelegate) =>
+      oldDelegate.fill != fill ||
+      oldDelegate.color != color ||
+      oldDelegate.fillColor != fillColor;
 }
