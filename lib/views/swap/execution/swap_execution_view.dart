@@ -50,9 +50,10 @@ class SwapExecutionView extends StatelessWidget {
     final services = context.read<SwapServices>();
     return BlocProvider(
       key: ValueKey(id),
-      create: (_) =>
-          SwapExecutionBloc(registry: services.registry)
-            ..add(SwapExecutionWatched(id, source: source, initial: initial)),
+      create: (_) => SwapExecutionBloc(
+        registry: services.registry,
+        seed: services.registry.snapshotOf(id) ?? initial,
+      )..add(SwapExecutionWatched(id, source: source, initial: initial)),
       child: _ExecutionBody(id: id, executionContext: this.context),
     );
   }

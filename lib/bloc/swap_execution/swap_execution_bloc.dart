@@ -81,6 +81,7 @@ class SwapExecutionState extends Equatable {
     this.notFound = false,
     this.unanswered = false,
     this.cancelStatus = SwapCancelStatus.idle,
+    this.live = false,
   });
 
   /// The latest snapshot.
@@ -98,18 +99,24 @@ class SwapExecutionState extends Equatable {
   /// What a cancel request is doing.
   final SwapCancelStatus cancelStatus;
 
+  /// Whether [snapshot] changed while the screen watched, rather than being
+  /// the one the watch opened with. Only live changes are animated.
+  final bool live;
+
   SwapExecutionState copyWith({
     SwapExecutionSnapshot? snapshot,
     bool? loading,
     bool? notFound,
     bool? unanswered,
     SwapCancelStatus? cancelStatus,
+    bool? live,
   }) => SwapExecutionState(
     snapshot: snapshot ?? this.snapshot,
     loading: loading ?? this.loading,
     notFound: notFound ?? this.notFound,
     unanswered: unanswered ?? this.unanswered,
     cancelStatus: cancelStatus ?? this.cancelStatus,
+    live: live ?? this.live,
   );
 
   @override
@@ -119,6 +126,7 @@ class SwapExecutionState extends Equatable {
     notFound,
     unanswered,
     cancelStatus,
+    live,
   ];
 }
 
@@ -127,9 +135,12 @@ class SwapExecutionState extends Equatable {
 /// The swap lives in the [SwapExecutionRegistry]; this only watches it, so
 /// closing the screen stops the watching and never the swap.
 class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
-  SwapExecutionBloc({required SwapExecutionRegistry registry})
-    : _registry = registry,
-      super(const SwapExecutionState()) {
+  /// [seed] is a snapshot already in hand, shown from the first frame.
+  SwapExecutionBloc({
+    required SwapExecutionRegistry registry,
+    SwapExecutionSnapshot? seed,
+  }) : _registry = registry,
+       super(SwapExecutionState(snapshot: seed, loading: seed == null)) {
     on<SwapExecutionWatched>(_onWatched);
     on<SwapExecutionCancelRequested>(_onCancelRequested);
     on<_SwapExecutionUpdated>(_onUpdated);
@@ -141,12 +152,16 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
   StreamSubscription<SwapExecutionSnapshot>? _subscription;
   String? _id;
 
+  // The watch replays the latest snapshot first; that replay is not live.
+  bool _answered = false;
+
   Future<void> _onWatched(
     SwapExecutionWatched event,
     Emitter<SwapExecutionState> emit,
   ) async {
     if (_id == event.id) return;
     _id = event.id;
+    _answered = false;
     await _subscription?.cancel();
     final known = _registry.snapshotOf(event.id) ?? event.initial;
     emit(SwapExecutionState(snapshot: known, loading: known == null));
@@ -173,8 +188,10 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
         snapshot: event.snapshot,
         loading: false,
         unanswered: false,
+        live: _answered,
       ),
     );
+    _answered = true;
     if (event.snapshot.isTerminal) _registry.acknowledge(event.snapshot.id);
   }
 
