@@ -222,6 +222,7 @@ import 'tests/swap/swap_status_hero_motion_test.dart'
 import 'tests/swap/swap_surface_ui_moments_test.dart'
     as swap_surface_ui_moments_test;
 import 'tests/swap/swap_exec_times_test.dart' as swap_exec_times_test;
+import 'tests/swap/swap_surface_ui_time_test.dart' as swap_surface_ui_time_test;
 import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
 import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
 import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
@@ -651,6 +652,7 @@ void main() {
   swap_status_hero_motion_test.main();
   swap_surface_ui_moments_test.main();
   swap_exec_times_test.main();
+  swap_surface_ui_time_test.main();
   swap_bloc_fix_doubt_test.main();
   swap_bloc_fix_review_test.main();
   swap_bloc_fix_timers_test.main();

@@ -15,6 +15,7 @@ import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
+import 'package:web_dex/views/swap/execution/swap_time_context.dart';
 import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
@@ -364,6 +365,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         ),
       ],
       _hero(hero, motion: _heroMotion(state, snapshot, hero, delayed: delayed)),
+      SwapTimeContext(snapshot: snapshot, delayed: delayed),
       if (copy.priceMoveComparison case final String comparison)
         SwapReveal(
           onMount: state.live,

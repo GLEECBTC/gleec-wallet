@@ -108,6 +108,21 @@ abstract final class SwapFormat {
     return '${_trim(value.toStringAsFixed(1))}%';
   }
 
+  /// How long a swap has run or took: "under a minute", "12 min", "2 h",
+  /// "1 h 5 min". Minutes round down, or up with [roundUp], as an estimate's
+  /// should.
+  static String elapsed(Duration duration, {bool roundUp = false}) {
+    final seconds = duration.isNegative ? 0 : duration.inSeconds;
+    final minutes = roundUp ? (seconds / 60).ceil() : seconds ~/ 60;
+    if (minutes < 1) return LocaleKeys.swapTimeUnderMinute.tr();
+    if (minutes < 60) return LocaleKeys.swapTimeMinutes.tr(args: ['$minutes']);
+    final hours = '${minutes ~/ 60}';
+    final rest = minutes % 60;
+    return rest == 0
+        ? LocaleKeys.swapTimeHours.tr(args: [hours])
+        : LocaleKeys.swapTimeHoursMinutes.tr(args: [hours, '$rest']);
+  }
+
   /// How long something takes, in words.
   static String duration(Duration? duration) {
     if (duration == null || duration <= Duration.zero) {
