@@ -213,6 +213,8 @@ import 'tests/swap/swap_bloc_evaluation_test.dart' as swap_bloc_evaluation_test;
 import 'tests/swap/swap_bloc_execution_test.dart' as swap_bloc_execution_test;
 import 'tests/swap/swap_bloc_execution_live_test.dart'
     as swap_bloc_execution_live_test;
+import 'tests/swap/swap_motion_effects_test.dart' as swap_motion_effects_test;
+import 'tests/swap/swap_motion_ambient_test.dart' as swap_motion_ambient_test;
 import 'tests/swap/swap_bloc_fix_doubt_test.dart' as swap_bloc_fix_doubt_test;
 import 'tests/swap/swap_bloc_fix_review_test.dart' as swap_bloc_fix_review_test;
 import 'tests/swap/swap_bloc_fix_timers_test.dart' as swap_bloc_fix_timers_test;
@@ -635,6 +637,8 @@ void main() {
   swap_bloc_evaluation_test.main();
   swap_bloc_execution_test.main();
   swap_bloc_execution_live_test.main();
+  swap_motion_effects_test.main();
+  swap_motion_ambient_test.main();
   swap_bloc_fix_doubt_test.main();
   swap_bloc_fix_review_test.main();
   swap_bloc_fix_timers_test.main();
