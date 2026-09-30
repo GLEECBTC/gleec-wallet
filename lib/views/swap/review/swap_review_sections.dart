@@ -329,9 +329,10 @@ class _TermsNotice extends StatelessWidget {
 }
 
 class _ReviewFooter extends StatelessWidget {
-  const _ReviewFooter({required this.review});
+  const _ReviewFooter({required this.review, this.paused = false});
 
   final SwapReview review;
+  final bool paused;
 
   @override
   Widget build(BuildContext context) {
@@ -354,8 +355,25 @@ class _ReviewFooter extends StatelessWidget {
         label: LocaleKeys.swapCtaRefresh.tr(),
         onPressed: start,
       ),
-      SwapReviewStatus.revalidationFailed || SwapReviewStatus.rejected =>
-        SwapButton(label: LocaleKeys.tryAgain.tr(), onPressed: start),
+      SwapReviewStatus.revalidationFailed =>
+        switch (review.revalidationRecovery) {
+          SwapRevalidationRecovery.backToForm => SwapButton(
+            label: LocaleKeys.swapCtaBackToSwap.tr(),
+            onPressed: () => bloc.add(const UnifiedSwapReviewClosed()),
+          ),
+          SwapRevalidationRecovery.waitForSource => SwapButton(
+            label: LocaleKeys.tryAgain.tr(),
+            onPressed: paused ? null : start,
+          ),
+          SwapRevalidationRecovery.tryAgain => SwapButton(
+            label: LocaleKeys.tryAgain.tr(),
+            onPressed: start,
+          ),
+        },
+      SwapReviewStatus.rejected => SwapButton(
+        label: LocaleKeys.tryAgain.tr(),
+        onPressed: start,
+      ),
       SwapReviewStatus.revalidating => SwapButton(
         label: LocaleKeys.swapCtaChecking.tr(),
         onPressed: null,

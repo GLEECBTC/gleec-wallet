@@ -230,6 +230,44 @@ void main() {
       expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
     });
 
+    swapBlocTest('behind an order-book miss still holds the retry', (h) {
+      final retryAt = h.start.add(const Duration(seconds: 90));
+      h.atomic.results = [
+        rejected(
+          SwapQuoteFailureKind.noRoute,
+          source: SwapLiquiditySource.atomic,
+        ),
+      ];
+      h.routed.respond = (_) => [rateLimited(retryAt: retryAt)];
+      final bloc = h.open();
+
+      expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
+      expect(bloc.state.failure!.source, SwapLiquiditySource.atomic);
+      expect(bloc.state.rateLimitedUntil, retryAt);
+
+      h.elapse(const Duration(seconds: 90));
+      expect(bloc.state.rateLimitedUntil, isNull);
+      expect(h.routed.requests, hasLength(1));
+    });
+
+    swapBlocTest('on a refresh behind another failure keeps the options', (h) {
+      final bloc = h.open();
+      final shown = bloc.state.selectedQuote;
+      h.atomic.results = [
+        rejected(
+          SwapQuoteFailureKind.noRoute,
+          source: SwapLiquiditySource.atomic,
+        ),
+      ];
+      h.routed.respond = (_) => [rateLimited()];
+
+      h.elapse(const Duration(seconds: 50));
+
+      expect(h.routed.requests, hasLength(2));
+      expect(bloc.state.selectedQuote, shown);
+      expect(bloc.state.rateLimitedUntil, isNotNull);
+    });
+
     swapBlocTest('that ends while the app is hidden waits for the user', (h) {
       h.routed.respond = (_) => [rateLimited()];
       final bloc = h.open()

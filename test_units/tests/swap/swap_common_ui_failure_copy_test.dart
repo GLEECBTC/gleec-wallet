@@ -240,8 +240,9 @@ void main() {
         ),
         (
           failure(SwapQuoteFailureKind.rateLimited),
-          "We're checking too often. Wait a moment, then try again. Your "
-              'selections are preserved.',
+          'Cross-network prices are paused while the price service limits '
+              'requests. This can take up to two hours. Your selections are '
+              'preserved.',
           SwapEntryAction.wait,
         ),
         (

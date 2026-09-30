@@ -134,6 +134,20 @@ enum SwapReviewStatus {
   unconfirmed,
 }
 
+/// What a review whose latest quote could not be confirmed offers next.
+enum SwapRevalidationRecovery {
+  /// Ask again: the failure may pass.
+  tryAgain,
+
+  /// The source refused for its rate limit. Asking again before its pause
+  /// ends is refused too.
+  waitForSource,
+
+  /// Asking again gets the same answer: the route is gone at this amount, or
+  /// the wallet no longer meets what it needs. The form says which.
+  backToForm,
+}
+
 /// The review of one option.
 class SwapReview extends Equatable {
   const SwapReview({
@@ -142,6 +156,7 @@ class SwapReview extends Equatable {
     this.previous,
     this.termsRequired = false,
     this.rejectionDetail,
+    this.revalidationFailure,
   });
 
   /// The option under review — the latest one, after any revalidation.
@@ -160,11 +175,26 @@ class SwapReview extends Equatable {
   /// Diagnostic text for a rejection.
   final String? rejectionDetail;
 
+  /// For [SwapReviewStatus.revalidationFailed]: why the latest quote could
+  /// not be confirmed, which decides whether asking again can help.
+  final SwapQuoteFailure? revalidationFailure;
+
   /// Whether the start action is available.
   bool get canStart => switch (status) {
     SwapReviewStatus.ready || SwapReviewStatus.materialUpdate => true,
     _ => false,
   };
+
+  /// For [SwapReviewStatus.revalidationFailed]: what to offer next.
+  SwapRevalidationRecovery get revalidationRecovery {
+    final failure = revalidationFailure;
+    if (failure?.kind == SwapQuoteFailureKind.rateLimited) {
+      return SwapRevalidationRecovery.waitForSource;
+    }
+    return failure == null || failure.isTransient
+        ? SwapRevalidationRecovery.tryAgain
+        : SwapRevalidationRecovery.backToForm;
+  }
 
   SwapReview copyWith({
     SwapQuote? quote,
@@ -173,12 +203,14 @@ class SwapReview extends Equatable {
     bool clearPrevious = false,
     bool? termsRequired,
     String? rejectionDetail,
+    SwapQuoteFailure? revalidationFailure,
   }) => SwapReview(
     quote: quote ?? this.quote,
     status: status ?? this.status,
     previous: clearPrevious ? null : (previous ?? this.previous),
     termsRequired: termsRequired ?? this.termsRequired,
     rejectionDetail: rejectionDetail ?? this.rejectionDetail,
+    revalidationFailure: revalidationFailure ?? this.revalidationFailure,
   );
 
   @override
@@ -188,6 +220,7 @@ class SwapReview extends Equatable {
     previous,
     termsRequired,
     rejectionDetail,
+    revalidationFailure,
   ];
 }
 

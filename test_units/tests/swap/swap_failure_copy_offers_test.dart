@@ -168,5 +168,24 @@ void main() {
 
       expect(copy.message, LocaleKeys.swapErrorNoRouteOrderBook);
     });
+
+    test('a source held by its rate limit leaves the offers\' fix first', () {
+      final copy = SwapFailureCopy.of(
+        gap,
+        btc,
+        all: [
+          gap,
+          const SwapQuoteFailure(
+            source: SwapLiquiditySource.routed,
+            kind: SwapQuoteFailureKind.rateLimited,
+          ),
+        ],
+        amount: d('3'),
+      );
+
+      expect(copy.message, LocaleKeys.swapErrorOffersGap);
+      expect(copy.action, SwapEntryAction.useAmount);
+      expect(copy.amount, d('2'));
+    });
   });
 }

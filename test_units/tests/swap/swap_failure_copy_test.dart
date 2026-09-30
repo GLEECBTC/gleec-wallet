@@ -51,6 +51,37 @@ void main() {
       expect(copy.action, SwapEntryAction.retry);
     });
 
+    test('a rate limit with the order book unanswered can retry the book', () {
+      final limited = failure(SwapQuoteFailureKind.rateLimited);
+      final copy = SwapFailureCopy.of(
+        limited,
+        eth,
+        all: [
+          limited,
+          failure(
+            SwapQuoteFailureKind.timeout,
+            source: SwapLiquiditySource.atomic,
+          ),
+        ],
+      );
+      expect(copy.message, LocaleKeys.swapErrorRateLimitedBookUnchecked);
+      expect(copy.action, SwapEntryAction.retry);
+      expect(
+        SwapFailureCopy.of(limited, eth, all: [limited]).action,
+        SwapEntryAction.wait,
+      );
+    });
+
+    test('no route while the other source is rate limited waits it out', () {
+      final copy = SwapFailureCopy.of(
+        noRoute,
+        eth,
+        all: [noRoute, failure(SwapQuoteFailureKind.rateLimited)],
+      );
+      expect(copy.message, LocaleKeys.swapErrorNoOrderBookFit);
+      expect(copy.action, SwapEntryAction.wait);
+    });
+
     test('a GLEEC pair with no offer says why there is no other option', () {
       final copy = SwapFailureCopy.of(
         noRoute,

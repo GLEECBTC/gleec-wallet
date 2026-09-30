@@ -141,6 +141,19 @@ class SwapQuoteFailure extends Equatable {
   ];
 }
 
+extension SwapQuoteFailures on Iterable<SwapQuoteFailure> {
+  /// The failure of a source waiting out a rate limit, if one is.
+  SwapQuoteFailure? get rateLimit =>
+      where((f) => f.kind == SwapQuoteFailureKind.rateLimited).firstOrNull;
+
+  /// Whether cross-network prices wait out the aggregator's rate limit.
+  bool get routesPaused => any(
+    (f) =>
+        f.source == SwapLiquiditySource.routed &&
+        f.kind == SwapQuoteFailureKind.rateLimited,
+  );
+}
+
 /// The outcome of asking one source for a price.
 sealed class SwapQuoteResult {
   const SwapQuoteResult();

@@ -376,6 +376,36 @@ void main() {
       );
       expect(find.text('Accept updated quote'), findsOneWidget);
     });
+
+    for (final (kind, title, action) in [
+      (SwapQuoteFailureKind.rateLimited, 'Price check paused', 'Try again'),
+      (
+        SwapQuoteFailureKind.noRoute,
+        'This price is no longer available',
+        'Back to swap',
+      ),
+    ]) {
+      testWidgets('a price not confirmed for ${kind.name} says why', (
+        tester,
+      ) async {
+        swap.emit(
+          reviewState(
+            SwapReview(
+              quote: quoteOf(),
+              status: SwapReviewStatus.revalidationFailed,
+              revalidationFailure: SwapQuoteFailure(
+                source: SwapLiquiditySource.routed,
+                kind: kind,
+              ),
+            ),
+          ).copyWith(rateLimitedUntil: DateTime(2100)),
+        );
+        await pump(tester, const SwapReviewView());
+
+        expect(find.text(title), findsOneWidget);
+        expect(find.text(action), findsOneWidget);
+      });
+    }
   });
 
   group('outcomes', () {

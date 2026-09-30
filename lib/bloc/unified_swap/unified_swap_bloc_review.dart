@@ -44,9 +44,15 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     // closing now would hide a swap that may already be running.
     if (_startInDoubt) return;
     _startVersion++;
+    final review = state.review;
+    // Its source no longer prices the reviewed route: showing it on the form
+    // again would only lead back to the same failure.
+    final gone =
+        review?.status == SwapReviewStatus.revalidationFailed &&
+        review?.revalidationRecovery == SwapRevalidationRecovery.backToForm;
     emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
     final quote = state.selectedQuote;
-    if (quote != null && quote.isExpiredAt(_now())) {
+    if (gone || (quote != null && quote.isExpiredAt(_now()))) {
       add(const UnifiedSwapEvaluationRequested());
     } else {
       _armTimers(quote, shownAgain: true);
@@ -129,9 +135,13 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
             review: review.copyWith(
               status: SwapReviewStatus.revalidationFailed,
               rejectionDetail: failure.detail,
+              revalidationFailure: failure,
             ),
           ),
         );
+        if (failure.kind == SwapQuoteFailureKind.rateLimited) {
+          _pauseForRateLimit(emit, failure);
+        }
         return null;
       case SwapQuoteAvailable(quote: final fresh):
         if (_isStructuralChange(accepted, fresh)) {

@@ -256,12 +256,36 @@ extension _ReviewContentDetails on _ReviewContent {
           SwapHelperLine(text: LocaleKeys.swapReviewRevalidatingBody.tr()),
         ];
       case SwapReviewStatus.revalidationFailed:
+        final (title, message) = switch (review.revalidationRecovery) {
+          SwapRevalidationRecovery.waitForSource => (
+            LocaleKeys.swapReviewPausedTitle.tr(),
+            LocaleKeys.swapReviewPausedBody.tr(),
+          ),
+          SwapRevalidationRecovery.backToForm =>
+            switch (review.revalidationFailure?.kind) {
+              SwapQuoteFailureKind.noRoute ||
+              SwapQuoteFailureKind.belowMinimum ||
+              SwapQuoteFailureKind.aboveMaximum ||
+              SwapQuoteFailureKind.pairUnsupported => (
+                LocaleKeys.swapReviewGoneTitle.tr(),
+                LocaleKeys.swapReviewGoneBody.tr(),
+              ),
+              _ => (
+                LocaleKeys.swapReviewChangedTitle.tr(),
+                LocaleKeys.swapReviewChangedBody.tr(),
+              ),
+            },
+          SwapRevalidationRecovery.tryAgain => (
+            LocaleKeys.swapReviewFailedTitle.tr(),
+            LocaleKeys.swapReviewFailedBody.tr(),
+          ),
+        };
         return [
           const SizedBox(height: 12),
           SwapCallout(
             tone: SwapTone.warning,
-            title: LocaleKeys.swapReviewFailedTitle.tr(),
-            message: LocaleKeys.swapReviewFailedBody.tr(),
+            title: title,
+            message: message,
             liveRegion: true,
           ),
         ];

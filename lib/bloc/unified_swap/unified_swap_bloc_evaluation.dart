@@ -110,16 +110,17 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     required bool quiet,
     List<SwapQuoteFailure> all = const [],
   }) {
+    final failures = all.isEmpty ? [failure] : all;
+    // Whichever failure explains the attempt, a source refused for its rate
+    // limit is not asked again until its pause ends.
+    final limit = failures.rateLimit;
     // A refresh that fails keeps the options it had until they expire:
     // replacing a working quote with an error because one re-price blipped
     // would punish the user for waiting.
     if (quiet && state.selectedQuote != null) {
-      if (failure.kind == SwapQuoteFailureKind.rateLimited) {
-        _pauseForRateLimit(emit, failure);
-      }
+      if (limit != null) _pauseForRateLimit(emit, limit);
       return;
     }
-    final failures = all.isEmpty ? [failure] : all;
     // Re-checked, because an issue read from the cleared option's fees no
     // longer has the numbers its message needs.
     emit(
@@ -135,9 +136,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       ),
     );
     if (state.issue == SwapFormIssue.noOffers) _watchOffers(emit);
-    if (failure.kind == SwapQuoteFailureKind.rateLimited) {
-      _pauseForRateLimit(emit, failure);
-    }
+    if (limit != null) _pauseForRateLimit(emit, limit);
   }
 
   void _pauseForRateLimit(

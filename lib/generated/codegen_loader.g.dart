@@ -1407,6 +1407,7 @@ abstract class LocaleKeys {
   static const swapCtaActivateAsset = 'swapCtaActivateAsset';
   static const swapCtaConnectWallet = 'swapCtaConnectWallet';
   static const swapCtaSelectOption = 'swapCtaSelectOption';
+  static const swapCtaBackToSwap = 'swapCtaBackToSwap';
   static const swapCtaNotEnough = 'swapCtaNotEnough';
   static const swapCtaUseAmount = 'swapCtaUseAmount';
   static const swapCtaCheckAgain = 'swapCtaCheckAgain';
@@ -1433,11 +1434,14 @@ abstract class LocaleKeys {
   static const swapErrorNoFeeBalance = 'swapErrorNoFeeBalance';
   static const swapErrorNoRouteOrderBook = 'swapErrorNoRouteOrderBook';
   static const swapErrorNoRouteCrossNetwork = 'swapErrorNoRouteCrossNetwork';
+  static const swapErrorNoOrderBookFit = 'swapErrorNoOrderBookFit';
   static const swapErrorNoRouteSignedOut = 'swapErrorNoRouteSignedOut';
   static const swapErrorSignedOutRoutes = 'swapErrorSignedOutRoutes';
   static const swapErrorServiceToken = 'swapErrorServiceToken';
   static const swapErrorInactive = 'swapErrorInactive';
   static const swapErrorRateLimited = 'swapErrorRateLimited';
+  static const swapErrorRateLimitedBookUnchecked =
+      'swapErrorRateLimitedBookUnchecked';
   static const swapErrorService = 'swapErrorService';
   static const swapErrorTimeout = 'swapErrorTimeout';
   static const swapErrorExpired = 'swapErrorExpired';
@@ -1471,6 +1475,7 @@ abstract class LocaleKeys {
   static const swapHelperRoutedUnavailable = 'swapHelperRoutedUnavailable';
   static const swapHelperAtomicUnavailable = 'swapHelperAtomicUnavailable';
   static const swapHelperRoutedPaused = 'swapHelperRoutedPaused';
+  static const swapHelperRoutedPausedLine = 'swapHelperRoutedPausedLine';
   static const swapHelperRoutedSignedOut = 'swapHelperRoutedSignedOut';
   static const swapWarningHighImpact = 'swapWarningHighImpact';
   static const swapWarningPriceUnavailable = 'swapWarningPriceUnavailable';
@@ -1560,6 +1565,12 @@ abstract class LocaleKeys {
   static const swapReviewRevalidatingBody = 'swapReviewRevalidatingBody';
   static const swapReviewFailedTitle = 'swapReviewFailedTitle';
   static const swapReviewFailedBody = 'swapReviewFailedBody';
+  static const swapReviewPausedTitle = 'swapReviewPausedTitle';
+  static const swapReviewPausedBody = 'swapReviewPausedBody';
+  static const swapReviewGoneTitle = 'swapReviewGoneTitle';
+  static const swapReviewGoneBody = 'swapReviewGoneBody';
+  static const swapReviewChangedTitle = 'swapReviewChangedTitle';
+  static const swapReviewChangedBody = 'swapReviewChangedBody';
   static const swapReviewRejectedTitle = 'swapReviewRejectedTitle';
   static const swapReviewRejectedBody = 'swapReviewRejectedBody';
   static const swapReviewUnconfirmedTitle = 'swapReviewUnconfirmedTitle';

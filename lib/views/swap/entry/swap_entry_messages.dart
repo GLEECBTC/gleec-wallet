@@ -112,14 +112,24 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       return const [];
     }
     final copy = _failureCopy(state, failure);
+    // Cross-network prices have not answered yet, so an order-book miss is
+    // not the final word.
+    final paused =
+        failure.source == SwapLiquiditySource.atomic &&
+        state.failures.routesPaused;
     final tone = switch (failure.kind) {
       SwapQuoteFailureKind.rateLimited => SwapTone.warning,
       SwapQuoteFailureKind.signedOut => SwapTone.neutral,
+      SwapQuoteFailureKind.noRoute ||
+      SwapQuoteFailureKind.belowMinimum ||
+      SwapQuoteFailureKind.aboveMaximum when paused => SwapTone.warning,
       _ => SwapTone.danger,
     };
     return [
       SwapHelperLine(text: copy.message, tone: tone),
       if (copy.detail != null) SwapHelperLine(text: copy.detail!),
+      if (paused)
+        SwapHelperLine(text: LocaleKeys.swapHelperRoutedPausedLine.tr()),
     ];
   }
 

@@ -5,6 +5,7 @@ import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
 import 'swap_src_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -216,6 +217,59 @@ void main() {
       ).maxAmount(from: eth, to: usdc, balance: d('2'));
 
       expect(max, isNull);
+    });
+  });
+
+  group('Max under a rate limit', () {
+    const limited = RoutedSwapRateLimitedException(message: 'slow down');
+
+    test('probes nothing while quotes are refused', () async {
+      final routed = source();
+      manager.quoteError = limited;
+      await routed.quote(SwapQuoteRequest(from: eth, to: usdc, amount: d('1')));
+
+      final max = await routed.maxAmount(from: eth, to: usdc, balance: d('2'));
+
+      expect(max, isNull);
+      expect(manager.maxCalls, 0);
+    });
+
+    test('still asks KDF for a token, which needs no quote', () async {
+      final routed = source();
+      manager
+        ..quoteError = limited
+        ..max = RoutedSwapMaxSell(
+          amount: d('500'),
+          reservedForFees: d('0'),
+          feeAsset: eth,
+        );
+      await routed.quote(SwapQuoteRequest(from: usdc, to: eth, amount: d('1')));
+
+      final max = await routed.maxAmount(
+        from: usdc,
+        to: eth,
+        balance: d('500'),
+      );
+
+      expect(max!.amount, d('500'));
+      expect(manager.maxCalls, 1);
+    });
+
+    test('a probe refused for the limit pauses quoting', () async {
+      final routed = source();
+      manager.maxError = limited;
+
+      final max = await routed.maxAmount(from: eth, to: usdc, balance: d('2'));
+      final results = await routed.quote(
+        SwapQuoteRequest(from: eth, to: usdc, amount: d('1')),
+      );
+
+      expect(max, isNull);
+      expect(manager.quotes, isEmpty);
+      expect(
+        (results.single as SwapQuoteRejected).failure.kind,
+        SwapQuoteFailureKind.rateLimited,
+      );
     });
   });
 

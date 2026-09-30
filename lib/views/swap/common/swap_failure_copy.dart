@@ -74,6 +74,18 @@ class SwapFailureCopy {
         amount: amount,
         balance: balance,
       ),
+      // A retry still reaches an order book that could not answer; the
+      // paused source answers it without asking the aggregator.
+      SwapQuoteFailureKind.rateLimited
+          when all.any(
+            (other) =>
+                other.source != failure.source &&
+                other.isTransient &&
+                other.kind != SwapQuoteFailureKind.rateLimited,
+          ) =>
+        SwapFailureCopy(
+          message: LocaleKeys.swapErrorRateLimitedBookUnchecked.tr(),
+        ),
       SwapQuoteFailureKind.rateLimited => SwapFailureCopy(
         message: LocaleKeys.swapErrorRateLimited.tr(),
         action: SwapEntryAction.wait,
@@ -189,7 +201,11 @@ class SwapFailureCopy {
     Decimal? balance,
   }) {
     final others = all.where((other) => other.source != failure.source);
-    if (others.any((other) => other.isTransient)) {
+    // The aggregator's rate limit can outlast "a moment" by far, so the order
+    // book's own answer, and its fix, lead instead.
+    final paused =
+        failure.source == SwapLiquiditySource.atomic && all.routesPaused;
+    if (!paused && others.any((other) => other.isTransient)) {
       return SwapFailureCopy(
         message: failure.source == SwapLiquiditySource.atomic
             ? LocaleKeys.swapErrorNoRouteOrderBook.tr()
@@ -254,6 +270,13 @@ class SwapFailureCopy {
       );
     } else {
       detail = null;
+    }
+    if (paused) {
+      return SwapFailureCopy(
+        message: LocaleKeys.swapErrorNoOrderBookFit.tr(),
+        detail: detail,
+        action: SwapEntryAction.wait,
+      );
     }
     return SwapFailureCopy(
       message: LocaleKeys.swapErrorNoRoute.tr(),

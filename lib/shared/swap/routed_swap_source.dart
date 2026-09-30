@@ -134,6 +134,8 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       // as a probe would, without spending a request on one.
       final recent = _budget.latestFor(from, to);
       if (recent != null) return _nativeMax(recent, from, balance);
+      // The probe is a quote: while limited it is refused and still counts.
+      if (_budget.pausedUntil != null) return null;
     }
     try {
       final max = await manager
@@ -144,6 +146,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         reservedForFees: max.reservedForFees,
         feeAsset: max.feeAsset,
       );
+    } on RoutedSwapRateLimitedException {
+      _budget.pause();
+      return null;
     } on Object {
       return null;
     }

@@ -204,8 +204,9 @@ void main() {
       kind: SwapQuoteFailureKind.rateLimited,
     );
     const message =
-        "We're checking too often. Wait a moment, then try again. Your "
-        'selections are preserved.';
+        'Cross-network prices are paused while the price service limits '
+        'requests. This can take up to two hours. Your selections are '
+        'preserved.';
 
     testWidgets('is a warning, and holds the retry until the pause is over', (
       tester,

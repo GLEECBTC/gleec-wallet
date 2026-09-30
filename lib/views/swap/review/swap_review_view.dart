@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
@@ -36,6 +37,7 @@ class SwapReviewView extends StatelessWidget {
     return BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
       buildWhen: (previous, current) =>
           previous.review != current.review ||
+          previous.rateLimitedUntil != current.rateLimitedUntil ||
           previous.payAddress != current.payAddress ||
           previous.receiveAddress != current.receiveAddress,
       builder: (context, state) {
@@ -53,7 +55,10 @@ class SwapReviewView extends StatelessWidget {
           services: services,
           onBack: back,
         );
-        final footer = _ReviewFooter(review: review);
+        final footer = _ReviewFooter(
+          review: review,
+          paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
+        );
 
         return CallbackShortcuts(
           bindings: {const SingleActivator(LogicalKeyboardKey.escape): back},

@@ -274,6 +274,27 @@ void main() {
       expect(of().reasons, isEmpty);
     });
 
+    test('a list names the rate-limited source, and pauses only routes', () {
+      const routed = SwapQuoteFailure(
+        source: SwapLiquiditySource.routed,
+        kind: SwapQuoteFailureKind.rateLimited,
+      );
+      const atomic = SwapQuoteFailure(
+        source: SwapLiquiditySource.atomic,
+        kind: SwapQuoteFailureKind.rateLimited,
+      );
+      const miss = SwapQuoteFailure(
+        source: SwapLiquiditySource.atomic,
+        kind: SwapQuoteFailureKind.noRoute,
+      );
+
+      expect([miss, routed].rateLimit, routed);
+      expect([miss].rateLimit, isNull);
+      expect([miss, routed].routesPaused, isTrue);
+      expect([miss, atomic].routesPaused, isFalse);
+      expect(const <SwapQuoteFailure>[].routesPaused, isFalse);
+    });
+
     test('a result carries either a price or the reason there is none', () {
       final quote = quoteOf();
       const failure = SwapQuoteFailure(

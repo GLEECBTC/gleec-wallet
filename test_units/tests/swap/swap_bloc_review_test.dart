@@ -163,14 +163,18 @@ void main() {
       h.routed.requoteResult = const SwapQuoteRejected(
         SwapQuoteFailure(
           source: SwapLiquiditySource.routed,
-          kind: SwapQuoteFailureKind.noRoute,
-          detail: 'no route now',
+          kind: SwapQuoteFailureKind.serviceError,
+          detail: 'provider down',
         ),
       );
       bloc.add(const UnifiedSwapStartRequested());
       h.settle();
       expect(bloc.state.review!.status, SwapReviewStatus.revalidationFailed);
-      expect(bloc.state.review!.rejectionDetail, 'no route now');
+      expect(bloc.state.review!.rejectionDetail, 'provider down');
+      expect(
+        bloc.state.review!.revalidationRecovery,
+        SwapRevalidationRecovery.tryAgain,
+      );
       expect(h.routedExecutor.started, isEmpty);
 
       h.routed.requoteResult = SwapQuoteAvailable(lowerMinimum(h));
@@ -190,7 +194,83 @@ void main() {
       h.elapse(const Duration(seconds: 1));
       expect(bloc.state.review!.status, SwapReviewStatus.revalidationFailed);
       expect(bloc.state.review!.rejectionDetail, isNull);
+      expect(
+        bloc.state.review!.revalidationRecovery,
+        SwapRevalidationRecovery.tryAgain,
+      );
       expect(h.routedExecutor.started, isEmpty);
+    });
+
+    swapBlocTest('a re-price refused for the rate limit waits it out', (h) {
+      final bloc = h.inReview();
+      final retryAt = h.now().add(const Duration(seconds: 90));
+      h.routed.requoteResult = SwapQuoteRejected(
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.rateLimited,
+          retryAt: retryAt,
+        ),
+      );
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidationFailed);
+      expect(
+        bloc.state.review!.revalidationRecovery,
+        SwapRevalidationRecovery.waitForSource,
+      );
+      expect(bloc.state.rateLimitedUntil, retryAt);
+
+      h.elapse(const Duration(seconds: 90));
+      expect(bloc.state.rateLimitedUntil, isNull);
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(h.routed.requoted, hasLength(1));
+      expect(h.routedExecutor.started, isEmpty);
+    });
+
+    swapBlocTest('back from a paused re-price keeps the options shown', (h) {
+      final bloc = h.inReview();
+      h.routed.requoteResult = SwapQuoteRejected(
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.rateLimited,
+          retryAt: h.now().add(const Duration(minutes: 5)),
+        ),
+      );
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+
+      bloc.add(const UnifiedSwapReviewClosed());
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.selectedQuote, isNotNull);
+      expect(h.routed.requests, hasLength(1));
+    });
+
+    swapBlocTest('a route no longer offered is priced afresh on the way back', (
+      h,
+    ) {
+      final bloc = h.inReview();
+      h.routed.requoteResult = const SwapQuoteRejected(
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.noRoute,
+        ),
+      );
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+      expect(
+        bloc.state.review!.revalidationRecovery,
+        SwapRevalidationRecovery.backToForm,
+      );
+
+      bloc.add(const UnifiedSwapReviewClosed());
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(h.routed.requests, hasLength(2));
+      expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
     });
 
     swapBlocTest('an unchanged price after Refresh can be started', (h) {

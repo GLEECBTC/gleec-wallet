@@ -7,6 +7,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
@@ -78,6 +79,13 @@ class _SwapOptionsSheetState extends State<SwapOptionsSheet> {
               ],
               if (quotes != null)
                 ..._cards(context, quotes, pending, expired: expired),
+              if (state.failures.routesPaused)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: SwapHelperLine(
+                    text: LocaleKeys.swapHelperRoutedPausedLine.tr(),
+                  ),
+                ),
               if (state.checkingAlternatives)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),

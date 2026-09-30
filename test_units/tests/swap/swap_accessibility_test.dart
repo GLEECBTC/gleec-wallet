@@ -284,6 +284,40 @@ void main() {
         ),
       ],
     ),
+    'cross-network prices paused, Try again held': () => form(
+      evaluation: SwapEvaluationStatus.failed,
+      failure: const SwapQuoteFailure(
+        source: SwapLiquiditySource.routed,
+        kind: SwapQuoteFailureKind.rateLimited,
+      ),
+      failures: const [
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.rateLimited,
+        ),
+      ],
+    ).copyWith(rateLimitedUntil: DateTime(2100)),
+    'offers around the amount, cross-network paused': () {
+      final gap = SwapQuoteFailure(
+        source: SwapLiquiditySource.atomic,
+        kind: SwapQuoteFailureKind.noRoute,
+        offers: SwapOrderBookOffers([
+          SwapOfferBand(d('0.5'), d('0.8')),
+          SwapOfferBand(d('1.5'), d('4')),
+        ]),
+      );
+      return form(
+        evaluation: SwapEvaluationStatus.failed,
+        failure: gap,
+        failures: [
+          gap,
+          const SwapQuoteFailure(
+            source: SwapLiquiditySource.routed,
+            kind: SwapQuoteFailureKind.rateLimited,
+          ),
+        ],
+      ).copyWith(rateLimitedUntil: DateTime(2100));
+    },
     'priced, but more than the balance': () =>
         form(issue: SwapFormIssue.insufficient),
     'more than this address holds, with more at others': () {

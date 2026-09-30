@@ -172,7 +172,9 @@ void main() {
       );
 
       expect(lines(tester), [
-        'Cross-network prices are paused briefly and will be back shortly.',
+        'Cross-network prices are paused while the price service limits '
+            'requests, which can take up to two hours. Order-book swaps still '
+            'work.',
       ]);
     });
 

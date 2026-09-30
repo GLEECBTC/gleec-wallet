@@ -239,6 +239,8 @@ import 'tests/swap/swap_entry_ui_picker_flow_test.dart'
 import 'tests/swap/swap_entry_ui_picker_layout_test.dart'
     as swap_entry_ui_picker_layout_test;
 import 'tests/swap/swap_entry_ui_picker_test.dart' as swap_entry_ui_picker_test;
+import 'tests/swap/swap_entry_ui_rate_limit_test.dart'
+    as swap_entry_ui_rate_limit_test;
 import 'tests/swap/swap_entry_ui_review_details_test.dart'
     as swap_entry_ui_review_details_test;
 import 'tests/swap/swap_entry_ui_review_test.dart' as swap_entry_ui_review_test;
@@ -650,6 +652,7 @@ void main() {
   swap_entry_ui_picker_flow_test.main();
   swap_entry_ui_picker_layout_test.main();
   swap_entry_ui_picker_test.main();
+  swap_entry_ui_rate_limit_test.main();
   swap_entry_ui_review_details_test.main();
   swap_entry_ui_review_test.main();
   swap_entry_ui_slippage_test.main();
