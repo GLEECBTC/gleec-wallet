@@ -17,3 +17,7 @@ bool prefersReducedMotion() {
 void Function() watchReducedMotion(void Function(bool reduce) onChange) {
   throw UnsupportedError('stub watchReducedMotion');
 }
+
+void setTabIconBadge(int? argb) {
+  throw UnsupportedError('stub setTabIconBadge');
+}

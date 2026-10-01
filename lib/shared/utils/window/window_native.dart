@@ -74,3 +74,6 @@ bool prefersReducedMotion() => false;
 /// Web only; see [prefersReducedMotion].
 void Function() watchReducedMotion(void Function(bool reduce) onChange) =>
     () {};
+
+/// Web only: there is no tab to mark.
+void setTabIconBadge(int? argb) {}

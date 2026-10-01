@@ -69,6 +69,7 @@ import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/reduced_motion_scope.dart';
+import 'package:web_dex/views/swap/notices/swap_tab_signals.dart';
 
 class AppBlocRoot extends StatelessWidget {
   const AppBlocRoot({
@@ -381,8 +382,14 @@ class _MyAppViewState extends State<_MyAppView> {
       supportedLocales: context.supportedLocales,
       routeInformationParser: _routeInformationParser,
       backButtonDispatcher: _airDexBackButtonDispatcher,
-      builder: (context, child) =>
-          ReducedMotionScope(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => ReducedMotionScope(
+        child: SwapTabSignals(
+          // The colour MaterialApp gives its own title, kept as the page's
+          // theme colour.
+          color: theme.global.light.primaryColor,
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 

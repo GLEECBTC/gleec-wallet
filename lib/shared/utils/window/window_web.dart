@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:js_interop';
+import 'dart:math' as math;
 
 import 'package:web/web.dart' as web;
 
@@ -88,3 +90,76 @@ void Function() watchReducedMotion(void Function(bool reduce) onChange) {
   query.addEventListener('change', listener);
   return () => query.removeEventListener('change', listener);
 }
+
+/// The tab icons' own addresses, kept while a badge stands in for them.
+final Map<web.HTMLLinkElement, String> _tabIcons = {};
+final Map<int, String> _badgedIcons = {};
+var _badgeRequest = 0;
+
+/// Marks the tab's icon with a dot of [argb], or puts the icon back when
+/// [argb] is null. Best-effort: if the icon cannot be drawn, the tab keeps
+/// it unmarked.
+void setTabIconBadge(int? argb) {
+  final request = ++_badgeRequest;
+  final nodes = web.document.querySelectorAll('link[rel~="icon"]');
+  final links = [
+    for (var i = 0; i < nodes.length; i++)
+      nodes.item(i)! as web.HTMLLinkElement,
+  ];
+  for (final link in links) {
+    _tabIcons.putIfAbsent(link, () => link.href);
+  }
+  if (argb == null) {
+    for (final link in links) {
+      link.href = _tabIcons[link] ?? link.href;
+    }
+    return;
+  }
+  final source = links
+      .where((link) => link.getAttribute('sizes') == '32x32')
+      .followedBy(links)
+      .map((link) => _tabIcons[link])
+      .firstOrNull;
+  if (source == null) return;
+  unawaited(
+    _badgedIcon(source, argb).then((href) {
+      if (href == null || request != _badgeRequest) return;
+      for (final link in links) {
+        link.href = href;
+      }
+    }),
+  );
+}
+
+/// [source] drawn at 32 px with a dot in its lower corner, as a data URL.
+Future<String?> _badgedIcon(String source, int argb) async {
+  final cached = _badgedIcons[argb];
+  if (cached != null) return cached;
+  try {
+    final image = web.HTMLImageElement()..src = source;
+    await image.decode().toDart;
+    const size = 32;
+    final canvas = web.HTMLCanvasElement()
+      ..width = size
+      ..height = size;
+    final context = canvas.getContext('2d')! as web.CanvasRenderingContext2D;
+    context.drawImage(image, 0, 0, size, size);
+    for (final (radius, colour) in [
+      (9.0, 'rgba(255,255,255,1)'),
+      (7.0, _css(argb)),
+    ]) {
+      context
+        ..beginPath()
+        ..arc(23, 23, radius, 0, 2 * math.pi)
+        ..fillStyle = colour.toJS
+        ..fill();
+    }
+    return _badgedIcons[argb] = canvas.toDataURL('image/png');
+  } catch (_) {
+    return null;
+  }
+}
+
+String _css(int argb) =>
+    'rgba(${argb >> 16 & 0xff},${argb >> 8 & 0xff},${argb & 0xff},'
+    '${(argb >> 24 & 0xff) / 255})';

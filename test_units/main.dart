@@ -223,6 +223,7 @@ import 'tests/swap/swap_keep_open_copy_test.dart' as swap_keep_open_copy_test;
 import 'tests/swap/swap_exec_checks_test.dart' as swap_exec_checks_test;
 import 'tests/swap/swap_surface_ui_checked_test.dart'
     as swap_surface_ui_checked_test;
+import 'tests/swap/swap_tab_signals_test.dart' as swap_tab_signals_test;
 import 'tests/swap/swap_status_hero_motion_test.dart'
     as swap_status_hero_motion_test;
 import 'tests/swap/swap_surface_ui_moments_test.dart'
@@ -664,6 +665,7 @@ void main() {
   swap_keep_open_copy_test.main();
   swap_exec_checks_test.main();
   swap_surface_ui_checked_test.main();
+  swap_tab_signals_test.main();
   swap_status_hero_motion_test.main();
   swap_surface_ui_moments_test.main();
   swap_exec_times_test.main();

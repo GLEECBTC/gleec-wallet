@@ -1795,6 +1795,12 @@ abstract class LocaleKeys {
   static const swapNoticeAttention = 'swapNoticeAttention';
   static const swapNoticeAction = 'swapNoticeAction';
   static const swapNoticeView = 'swapNoticeView';
+  static const swapTabTitle = 'swapTabTitle';
+  static const swapTabRunning = 'swapTabRunning';
+  static const swapTabRunningMany = 'swapTabRunningMany';
+  static const swapTabCompleted = 'swapTabCompleted';
+  static const swapTabAttention = 'swapTabAttention';
+  static const swapTabAction = 'swapTabAction';
   static const swapPickerTitle = 'swapPickerTitle';
   static const swapPickerSubtitlePay = 'swapPickerSubtitlePay';
   static const swapPickerSubtitleReceive = 'swapPickerSubtitleReceive';
