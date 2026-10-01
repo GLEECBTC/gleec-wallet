@@ -6,8 +6,9 @@ import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 
-/// The status of one step in a swap's timeline.
-enum SwapStepStatus { done, current, error, cancelled, notStarted }
+/// The status of one step in a swap's timeline. [refunded] marks where a
+/// swap turned back and returned the funds.
+enum SwapStepStatus { done, current, error, cancelled, refunded, notStarted }
 
 /// Where a step can be checked: its transaction on an explorer, or the
 /// route's own status page.
@@ -177,7 +178,7 @@ abstract final class SwapTimeline {
       case SwapOutcomeKind.refunded:
         return upTo(
           (sendIndex + 1).clamp(0, count - 1),
-          SwapStepStatus.cancelled,
+          SwapStepStatus.refunded,
         );
       case SwapOutcomeKind.failed:
         final reason = outcome.failure?.reason;

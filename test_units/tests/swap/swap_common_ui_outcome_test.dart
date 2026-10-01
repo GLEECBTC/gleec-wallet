@@ -119,7 +119,8 @@ void main() {
           "The swap didn't happen. Your ETH was returned on Ethereum.",
         );
         expect(hero.icon, Icons.undo_rounded);
-        expect(hero.tone, SwapTone.success);
+        // Safe, but not what was asked for: never success green.
+        expect(hero.tone, SwapTone.warning);
       });
 
       test('a cancellation says nothing was broadcast', () {

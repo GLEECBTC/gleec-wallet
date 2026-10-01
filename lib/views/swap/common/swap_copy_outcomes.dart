@@ -47,7 +47,8 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
             args: [fromTicker, fromNetwork],
           ),
           icon: Icons.undo_rounded,
-          tone: SwapTone.success,
+          // Safe, but not what was asked for: amber, never success green.
+          tone: SwapTone.warning,
         );
       case SwapOutcomeKind.cancelled:
         return SwapHeroCopy(

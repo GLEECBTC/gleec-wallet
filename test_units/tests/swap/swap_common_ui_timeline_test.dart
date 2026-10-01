@@ -248,8 +248,9 @@ void main() {
 
       test('a refund stops just after the send, within the route', () {
         const refunded = SwapExecutionOutcome(kind: SwapOutcomeKind.refunded);
-        expect(ended(refunded), [done, done, done, done, cancelled, waiting]);
-        expect(ended(refunded, stages: [prepare, send]), [done, cancelled]);
+        const returned = SwapStepStatus.refunded;
+        expect(ended(refunded), [done, done, done, done, returned, waiting]);
+        expect(ended(refunded, stages: [prepare, send]), [done, returned]);
       });
 
       test('a failed permission marks the approval step', () {

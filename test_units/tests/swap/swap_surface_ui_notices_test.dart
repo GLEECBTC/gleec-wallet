@@ -156,6 +156,27 @@ void main() {
       expect(find.text('View'), findsOneWidget);
     });
 
+    testWidgets('says a refund came back, without asking for attention', (
+      tester,
+    ) async {
+      await show(tester);
+      await finish(
+        tester,
+        await start(),
+        snapshotOf(
+          id: 'routed-1',
+          outcome: const SwapExecutionOutcome(kind: SwapOutcomeKind.refunded),
+        ),
+      );
+
+      expect(
+        find.text('Swap refunded: your ETH was returned on Ethereum.'),
+        findsOneWidget,
+      );
+      expect(find.text('A swap needs your attention'), findsNothing);
+      expect(registry.unacknowledgedAttentionCount, 0);
+    });
+
     testWidgets('says when a running swap needs the user to act', (
       tester,
     ) async {

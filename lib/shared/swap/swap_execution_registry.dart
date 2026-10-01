@@ -21,6 +21,9 @@ enum SwapExecutionNoticeKind {
   /// It delivered what was asked for.
   completed,
 
+  /// It turned back and returned the funds; nothing is needed of the user.
+  refunded,
+
   /// It finished, but needs the user to look at it.
   needsAttention,
 
@@ -348,9 +351,11 @@ class SwapExecutionRegistry {
       if (!quiet) {
         _notices.add(
           SwapExecutionNotice(
-            kind: snapshot.isSuccess
-                ? SwapExecutionNoticeKind.completed
-                : SwapExecutionNoticeKind.needsAttention,
+            kind: switch (snapshot.outcome?.kind) {
+              SwapOutcomeKind.completed => SwapExecutionNoticeKind.completed,
+              SwapOutcomeKind.refunded => SwapExecutionNoticeKind.refunded,
+              _ => SwapExecutionNoticeKind.needsAttention,
+            },
             snapshot: snapshot,
           ),
         );

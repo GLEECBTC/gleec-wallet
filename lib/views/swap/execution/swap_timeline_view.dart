@@ -248,6 +248,11 @@ _Colours _coloursOf(
     palette.brandHover,
   ),
   SwapStepStatus.error => (palette.dangerBg, palette.danger, palette.danger),
+  SwapStepStatus.refunded => (
+    palette.warningBg,
+    palette.warning,
+    palette.warning,
+  ),
   SwapStepStatus.cancelled => (
     palette.surfaceHigh,
     palette.textTertiary,
@@ -290,6 +295,7 @@ class _StepRow extends StatelessWidget {
       SwapStepStatus.current => Icons.more_horiz_rounded,
       SwapStepStatus.error => Icons.priority_high_rounded,
       SwapStepStatus.cancelled => Icons.close_rounded,
+      SwapStepStatus.refunded => Icons.undo_rounded,
       SwapStepStatus.notStarted => Icons.circle_outlined,
     };
     final statusLabel = switch (step.status) {
@@ -297,11 +303,15 @@ class _StepRow extends StatelessWidget {
       SwapStepStatus.current => LocaleKeys.swapStepCurrent,
       SwapStepStatus.error => LocaleKeys.swapStepError,
       SwapStepStatus.cancelled => LocaleKeys.swapStepCancelled,
+      SwapStepStatus.refunded => LocaleKeys.swapStepRefunded,
       SwapStepStatus.notStarted => LocaleKeys.swapStepNotStarted,
     }.tr(args: [step.title]);
-    final emphasised =
-        step.status == SwapStepStatus.current ||
-        step.status == SwapStepStatus.error;
+    final emphasised = switch (step.status) {
+      SwapStepStatus.current ||
+      SwapStepStatus.error ||
+      SwapStepStatus.refunded => true,
+      _ => false,
+    };
     final beat = this.beat;
     final done = step.status == SwapStepStatus.done;
     final link = step.link;
@@ -419,7 +429,9 @@ class _StepRow extends StatelessWidget {
         progress: window(
           beat.start,
           beat.end,
-          step.status == SwapStepStatus.error
+          // A stop arrives without a bounce, a refund included.
+          step.status == SwapStepStatus.error ||
+                  step.status == SwapStepStatus.refunded
               ? SwapMotion.error
               : SwapMotion.success,
         ),
