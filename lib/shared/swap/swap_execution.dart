@@ -14,6 +14,14 @@ abstract interface class SwapExecutionHandle {
   /// Snapshots until terminal. Each access replays [latest] first.
   Stream<SwapExecutionSnapshot> get updates;
 
+  /// When the engine last answered for this swap, whether or not anything
+  /// changed; null until it has. [updates] carries only changes, so this is
+  /// what tells a quiet swap from one the engine has stopped answering for.
+  DateTime? get checkedAt;
+
+  /// [checkedAt], as each answer arrives.
+  Stream<DateTime> get checks;
+
   /// Stops the swap if that is still possible.
   ///
   /// Throws [SwapCancelRefusedException] when it is not, and
@@ -140,9 +148,16 @@ class StreamSwapExecutionHandle implements SwapExecutionHandle {
     required Stream<SwapExecutionSnapshot> source,
     required Future<void> Function() cancel,
     Future<void> Function()? onClose,
+    DateTime? checkedAt,
+    Stream<DateTime>? checks,
   }) : _latest = initial,
+       _checkedAt = checkedAt,
        _cancel = cancel,
        _onClose = onClose {
+    _checkSubscription = checks?.listen((at) {
+      _checkedAt = at;
+      if (!_checks.isClosed) _checks.add(at);
+    }, onError: (Object _) {});
     _subscription = source.listen(
       _add,
       onError: (Object error, StackTrace trace) {
@@ -153,6 +168,10 @@ class StreamSwapExecutionHandle implements SwapExecutionHandle {
   }
 
   SwapExecutionSnapshot _latest;
+  DateTime? _checkedAt;
+  final StreamController<DateTime> _checks =
+      StreamController<DateTime>.broadcast();
+  StreamSubscription<DateTime>? _checkSubscription;
   final Future<void> Function() _cancel;
   final Future<void> Function()? _onClose;
   final StreamController<SwapExecutionSnapshot> _controller =
@@ -170,6 +189,12 @@ class StreamSwapExecutionHandle implements SwapExecutionHandle {
 
   @override
   SwapExecutionSnapshot get latest => _latest;
+
+  @override
+  DateTime? get checkedAt => _checkedAt;
+
+  @override
+  Stream<DateTime> get checks => _checks.stream;
 
   @override
   Stream<SwapExecutionSnapshot> get updates => Stream.multi((out) {
@@ -192,7 +217,9 @@ class StreamSwapExecutionHandle implements SwapExecutionHandle {
   @override
   Future<void> close() async {
     await _subscription.cancel();
+    await _checkSubscription?.cancel();
     await _onClose?.call();
     if (!_controller.isClosed) await _controller.close();
+    if (!_checks.isClosed) await _checks.close();
   }
 }

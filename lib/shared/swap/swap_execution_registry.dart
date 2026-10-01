@@ -57,6 +57,7 @@ class SwapExecutionRegistry {
   final Map<String, SwapExecutionHandle> _handles = {};
   final Map<String, StreamSubscription<SwapExecutionSnapshot>> _subscriptions =
       {};
+  final Map<String, StreamSubscription<DateTime>> _checkSubscriptions = {};
   final Map<String, SwapExecutionSnapshot> _latest = {};
   final Set<String> _acknowledged = {};
   final StreamController<List<SwapExecutionSnapshot>> _executions =
@@ -67,6 +68,8 @@ class SwapExecutionRegistry {
       StreamController<SwapExecutionSnapshot>.broadcast();
   final StreamController<SwapExecutionSnapshot> _updates =
       StreamController<SwapExecutionSnapshot>.broadcast();
+  final StreamController<({String id, DateTime at})> _checks =
+      StreamController<({String id, DateTime at})>.broadcast();
   var _generation = 0;
 
   /// Every swap followed this session, newest first.
@@ -107,6 +110,14 @@ class SwapExecutionRegistry {
 
   /// The latest snapshot of [id], when it is followed.
   SwapExecutionSnapshot? snapshotOf(String id) => _latest[id];
+
+  /// When the engine last answered for [id], whether or not anything
+  /// changed; null until it has, or while [id] is not followed.
+  DateTime? checkedAt(String id) => _handles[id]?.checkedAt;
+
+  /// [checkedAt] of [id], as each answer arrives, whichever handle follows it.
+  Stream<DateTime> checksOf(String id) =>
+      _checks.stream.where((check) => check.id == id).map((check) => check.at);
 
   /// Starts executing [quote] and follows it.
   ///
@@ -228,9 +239,13 @@ class SwapExecutionRegistry {
     _generation++;
     _inFlightRetry?.cancel();
     final handles = _handles.values.toList();
-    final subscriptions = _subscriptions.values.toList();
+    final subscriptions = [
+      ..._subscriptions.values,
+      ..._checkSubscriptions.values,
+    ];
     _handles.clear();
     _subscriptions.clear();
+    _checkSubscriptions.clear();
     _latest.clear();
     _acknowledged.clear();
     for (final subscription in subscriptions) {
@@ -249,6 +264,7 @@ class SwapExecutionRegistry {
     await _notices.close();
     await _started.close();
     await _updates.close();
+    await _checks.close();
   }
 
   /// Looks [id] up for session [generation]: the handle now followed, or null
@@ -295,6 +311,9 @@ class SwapExecutionRegistry {
       (snapshot) => _update(id, snapshot),
       onError: (Object _) {},
     );
+    _checkSubscriptions[id] = handle.checks.listen((at) {
+      if (!_checks.isClosed) _checks.add((id: id, at: at));
+    });
     _publish();
     return handle;
   }

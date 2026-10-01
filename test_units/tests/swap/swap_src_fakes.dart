@@ -348,5 +348,11 @@ class SrcRoutedHandle implements RoutedSwapHandle {
   Stream<RoutedSwapProgress> get progress => const Stream.empty();
 
   @override
+  DateTime? get checkedAt => null;
+
+  @override
+  Stream<DateTime> get checks => const Stream.empty();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

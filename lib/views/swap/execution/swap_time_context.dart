@@ -7,17 +7,20 @@ import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 
-/// When a swap started and how long it has run, or when it finished and how
-/// long it took; for a routed swap, how long it usually takes; for an atomic
-/// refund, when the refund unlocks.
+/// When a swap started, how long it has run and when the engine last
+/// answered for it, or when it finished and how long it took; for a routed
+/// swap, how long it usually takes; for an atomic refund, when the refund
+/// unlocks.
 ///
 /// A plain line under the hero rather than part of it, so its minutes change
-/// without being read out. It updates on the minute while the swap runs, and
-/// not at all once the swap has finished.
+/// without being read out. While the swap runs it changes only when a figure
+/// would read differently, and not at all once the swap has finished.
 class SwapTimeContext extends StatefulWidget {
   const SwapTimeContext({
     required this.snapshot,
     this.delayed = false,
+    this.checkedAt,
+    this.checks,
     this.now = DateTime.now,
     super.key,
   });
@@ -26,29 +29,57 @@ class SwapTimeContext extends StatefulWidget {
 
   /// Whether the status may be out of date, when an estimate means nothing.
   final bool delayed;
+
+  /// When the engine last answered for the swap, and each answer as it
+  /// arrives: a quiet swap is still being checked.
+  final DateTime? checkedAt;
+  final Stream<DateTime>? checks;
   final DateTime Function() now;
 
   @override
   State<SwapTimeContext> createState() => _SwapTimeContextState();
 }
 
+/// An answer this recent reads as "just now"; after it, the age shows in
+/// tens of seconds, then minutes.
+const _justChecked = Duration(seconds: 20);
+
 class _SwapTimeContextState extends State<SwapTimeContext> {
   Timer? _tick;
+  DateTime? _checkedAt;
+  StreamSubscription<DateTime>? _checks;
 
   @override
   void initState() {
     super.initState();
+    _checkedAt = widget.checkedAt;
+    _listen();
     _schedule();
   }
 
   @override
   void didUpdateWidget(SwapTimeContext oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final given = widget.checkedAt;
+    if (given != null && !(_checkedAt?.isAfter(given) ?? false)) {
+      _checkedAt = given;
+    }
+    if (widget.checks != oldWidget.checks) _listen();
     _schedule();
   }
 
+  void _listen() {
+    unawaited(_checks?.cancel());
+    _checks = widget.checks?.listen((at) {
+      if (!mounted) return;
+      setState(() => _checkedAt = at);
+      _schedule();
+    });
+  }
+
   /// Wakes when the next line would read differently: a whole minute more
-  /// since the start, or the refund unlocking.
+  /// since the start, the last answer growing older, or the refund
+  /// unlocking.
   void _schedule() {
     _tick?.cancel();
     _tick = null;
@@ -67,6 +98,8 @@ class _SwapTimeContextState extends State<SwapTimeContext> {
       final untilUnlock = unlock.difference(now);
       if (untilUnlock < wait) wait = untilUnlock;
     }
+    final untilOlder = _untilCheckedReadsOlder(now);
+    if (untilOlder != null && untilOlder < wait) wait = untilOlder;
     _tick = Timer(wait, () {
       if (!mounted) return;
       setState(() {});
@@ -77,7 +110,38 @@ class _SwapTimeContextState extends State<SwapTimeContext> {
   @override
   void dispose() {
     _tick?.cancel();
+    unawaited(_checks?.cancel());
     super.dispose();
+  }
+
+  Duration _checkedAge(DateTime now) {
+    final age = now.difference(_checkedAt!);
+    return age.isNegative ? Duration.zero : age;
+  }
+
+  Duration? _untilCheckedReadsOlder(DateTime now) {
+    if (_checkedAt == null) return null;
+    final age = _checkedAge(now);
+    if (age < _justChecked) return _justChecked - age;
+    if (age < const Duration(minutes: 1)) {
+      return Duration(seconds: (age.inSeconds ~/ 10 + 1) * 10) - age;
+    }
+    return Duration(minutes: age.inMinutes + 1) - age;
+  }
+
+  /// How long ago the engine last answered: "just now", then in tens of
+  /// seconds, then as long as the swap's own times.
+  String _checked(DateTime now) {
+    final age = _checkedAge(now);
+    if (age < _justChecked) return LocaleKeys.swapTimeCheckedNow.tr();
+    return LocaleKeys.swapTimeCheckedAgo.tr(
+      args: [
+        if (age < const Duration(minutes: 1))
+          LocaleKeys.swapTimeSeconds.tr(args: ['${age.inSeconds ~/ 10 * 10}'])
+        else
+          SwapFormat.elapsed(age),
+      ],
+    );
   }
 
   List<String> _lines(DateTime now) {
@@ -101,7 +165,15 @@ class _SwapTimeContextState extends State<SwapTimeContext> {
     final unlock = snapshot.refundUnlocksAt;
     final estimate = snapshot.estimatedDuration;
     return [
-      if (start != null)
+      if (start != null && _checkedAt != null)
+        LocaleKeys.swapTimeStartedChecked.tr(
+          args: [
+            SwapFormat.time(start, now: now),
+            SwapFormat.elapsed(now.difference(start)),
+            _checked(now),
+          ],
+        )
+      else if (start != null)
         LocaleKeys.swapTimeStarted.tr(
           args: [
             SwapFormat.time(start, now: now),

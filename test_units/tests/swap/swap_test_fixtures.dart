@@ -292,6 +292,8 @@ class FakeHandle implements SwapExecutionHandle {
   SwapExecutionSnapshot _latest;
   final StreamController<SwapExecutionSnapshot> _controller =
       StreamController<SwapExecutionSnapshot>.broadcast();
+  final StreamController<DateTime> _checks =
+      StreamController<DateTime>.broadcast();
   Object? cancelError;
   int cancelCalls = 0;
   bool closed = false;
@@ -300,6 +302,18 @@ class FakeHandle implements SwapExecutionHandle {
     _latest = snapshot;
     _controller.add(snapshot);
   }
+
+  /// The engine answering at [at], with nothing new.
+  void check(DateTime at) {
+    checkedAt = at;
+    if (!_checks.isClosed) _checks.add(at);
+  }
+
+  @override
+  DateTime? checkedAt;
+
+  @override
+  Stream<DateTime> get checks => _checks.stream;
 
   @override
   String get id => _latest.id;
@@ -325,6 +339,7 @@ class FakeHandle implements SwapExecutionHandle {
   Future<void> close() async {
     closed = true;
     await _controller.close();
+    await _checks.close();
   }
 }
 

@@ -90,6 +90,8 @@ class RoutedSwapExecutor implements SwapExecutor {
     return StreamSwapExecutionHandle(
       initial: map(handle.latest),
       source: handle.progress.map(map),
+      checkedAt: handle.checkedAt,
+      checks: handle.checks,
       cancel: () async {
         try {
           await handle.cancel();

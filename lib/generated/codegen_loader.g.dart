@@ -1502,6 +1502,10 @@ abstract class LocaleKeys {
   static const swapDurationHours = 'swapDurationHours';
   static const swapDurationVaries = 'swapDurationVaries';
   static const swapTimeStarted = 'swapTimeStarted';
+  static const swapTimeStartedChecked = 'swapTimeStartedChecked';
+  static const swapTimeCheckedNow = 'swapTimeCheckedNow';
+  static const swapTimeCheckedAgo = 'swapTimeCheckedAgo';
+  static const swapTimeSeconds = 'swapTimeSeconds';
   static const swapTimeFinished = 'swapTimeFinished';
   static const swapTimeFinishedTook = 'swapTimeFinishedTook';
   static const swapTimeUnderMinute = 'swapTimeUnderMinute';

@@ -148,6 +148,8 @@ class AtomicSwapExecutor implements SwapExecutor {
       source: tracker.stream,
       cancel: tracker.cancel,
       onClose: tracker.dispose,
+      checkedAt: tracker.checkedAt,
+      checks: tracker.checks,
     );
     tracker.start();
     return handle;
@@ -161,7 +163,9 @@ class _AtomicSwapTracker {
     required AtomicSwapExecutor executor,
     this.accepted,
     this.placedAt,
-  }) : _executor = executor;
+  }) : _executor = executor,
+       // Every tracker starts from a read KDF has just answered.
+       checkedAt = executor._now();
 
   final String uuid;
   final AtomicSwapExecutor _executor;
@@ -173,6 +177,8 @@ class _AtomicSwapTracker {
 
   final StreamController<SwapExecutionSnapshot> _controller =
       StreamController<SwapExecutionSnapshot>.broadcast();
+  final StreamController<DateTime> _checks =
+      StreamController<DateTime>.broadcast();
   Timer? _timer;
   var _misses = 0;
   var _matched = false;
@@ -189,6 +195,12 @@ class _AtomicSwapTracker {
   DateTime? _unrecordedSince;
 
   Stream<SwapExecutionSnapshot> get stream => _controller.stream;
+
+  /// When KDF last answered for the swap, whether or not anything changed.
+  DateTime checkedAt;
+
+  /// [checkedAt], as each answer arrives.
+  Stream<DateTime> get checks => _checks.stream;
 
   SwapExecutionSnapshot initial({required bool placed, Swap? swap}) {
     _matched = swap != null;
@@ -294,6 +306,8 @@ class _AtomicSwapTracker {
   void _heard() {
     _unanswered = 0;
     _unansweredSince = null;
+    checkedAt = _executor._now();
+    if (!_checks.isClosed) _checks.add(checkedAt);
   }
 
   void _unheard(DateTime polledAt) {
@@ -349,6 +363,7 @@ class _AtomicSwapTracker {
     if (snapshot.isTerminal) {
       _timer?.cancel();
       unawaited(_controller.close());
+      unawaited(_checks.close());
     }
   }
 
@@ -356,6 +371,7 @@ class _AtomicSwapTracker {
     _disposed = true;
     _timer?.cancel();
     if (!_controller.isClosed) await _controller.close();
+    if (!_checks.isClosed) await _checks.close();
   }
 
   SwapExecutionSnapshot _snapshot({

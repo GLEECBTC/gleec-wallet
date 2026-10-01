@@ -75,6 +75,7 @@ class _ExecutionBody extends StatefulWidget {
 
 class _ExecutionBodyState extends State<_ExecutionBody> {
   late final SwapServices _services = context.read<SwapServices>();
+  late final Stream<DateTime> _checks = _services.registry.checksOf(widget.id);
   late final AppLifecycleListener _lifecycle;
   int _resumes = 0;
 
@@ -369,7 +370,12 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         ),
       ],
       _hero(hero, motion: _heroMotion(state, snapshot, hero, delayed: delayed)),
-      SwapTimeContext(snapshot: snapshot, delayed: delayed),
+      SwapTimeContext(
+        snapshot: snapshot,
+        delayed: delayed,
+        checkedAt: _services.registry.checkedAt(widget.id),
+        checks: _checks,
+      ),
       if (copy.priceMoveComparison case final String comparison)
         SwapReveal(
           onMount: state.live,

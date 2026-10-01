@@ -143,6 +143,8 @@ class FakeRoutedHandle implements RoutedSwapHandle {
   RoutedSwapProgress _latest;
   final StreamController<RoutedSwapProgress> _updates =
       StreamController<RoutedSwapProgress>.broadcast();
+  final StreamController<DateTime> _checks =
+      StreamController<DateTime>.broadcast();
   Object? cancelError;
   int cancelCalls = 0;
 
@@ -150,6 +152,18 @@ class FakeRoutedHandle implements RoutedSwapHandle {
     _latest = progress;
     _updates.add(progress);
   }
+
+  /// KDF answering at [at], with nothing new.
+  void check(DateTime at) {
+    checkedAt = at;
+    _checks.add(at);
+  }
+
+  @override
+  DateTime? checkedAt;
+
+  @override
+  Stream<DateTime> get checks => _checks.stream;
 
   Future<void> end() => _updates.close();
 
