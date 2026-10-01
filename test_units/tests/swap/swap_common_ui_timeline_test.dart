@@ -191,6 +191,79 @@ void main() {
       });
     });
 
+    group('while refunding', () {
+      const refunded = SwapExecutionOutcome(kind: SwapOutcomeKind.refunded);
+      SwapExecutionSnapshot peerToPeer({
+        List<SwapRouteStage> stages = const [],
+        SwapExecutionOutcome? outcome,
+      }) => snap(
+        source: SwapLiquiditySource.atomic,
+        routeKind: SwapRouteKind.direct,
+        stage: SwapProgressStage.refunding,
+        outcome: outcome,
+        stages: stages,
+      );
+
+      test('a peer-to-peer swap stops on the exchange, short of the '
+          'receive', () {
+        final steps = stepsOf(peerToPeer());
+        expect(
+          [for (final step in steps) (step.title, step.status)],
+          [
+            ('Preparing', done),
+            ('Sending on Ethereum', done),
+            ('Exchanging asset', cancelled),
+            ('Receive USDC', waiting),
+          ],
+        );
+      });
+
+      test('a peer-to-peer swap stops on the step its refund lands on', () {
+        const returned = SwapStepStatus.refunded;
+        final exchange = SwapRouteStage(
+          kind: SwapRouteStageKind.exchange,
+          asset: eth,
+        );
+        for (final stages in [
+          const <SwapRouteStage>[],
+          [prepare, send],
+          [prepare, exchange, receive],
+        ]) {
+          final landed = statuses(
+            peerToPeer(stages: stages, outcome: refunded),
+          );
+          expect(landed, contains(returned));
+          expect(
+            statuses(peerToPeer(stages: stages)),
+            [
+              for (final status in landed)
+                status == returned ? cancelled : status,
+            ],
+            reason: [for (final stage in stages) stage.kind.name].join(', '),
+          );
+        }
+      });
+
+      test('a routed swap stays on its route', () {
+        for (final kind in [
+          SwapRouteKind.sameChain,
+          SwapRouteKind.crossChain,
+        ]) {
+          expect(
+            statuses(
+              snap(
+                stage: SwapProgressStage.refunding,
+                routeKind: kind,
+                stages: const [],
+              ),
+            ),
+            [done, done, current, waiting],
+            reason: kind.name,
+          );
+        }
+      });
+    });
+
     group('once finished', () {
       List<SwapStepStatus> ended(
         SwapExecutionOutcome outcome, {

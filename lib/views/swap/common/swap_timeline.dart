@@ -101,6 +101,13 @@ abstract final class SwapTimeline {
     return 0;
   }
 
+  /// The step just after the send, where a swap stops once its funds left.
+  static int _stepAfterSend(List<SwapRouteStage> stages) =>
+      (_firstOf(stages, const [SwapRouteStageKind.send]) + 1).clamp(
+        0,
+        stages.length - 1,
+      );
+
   /// Where the swap is (or stopped) in [stages].
   static int _position(SwapExecutionSnapshot s, List<SwapRouteStage> stages) {
     const afterSend = [
@@ -130,6 +137,9 @@ abstract final class SwapTimeline {
         );
       case SwapProgressStage.sending || SwapProgressStage.confirming:
         return _firstOf(stages, const [SwapRouteStageKind.send]);
+      case SwapProgressStage.refunding
+          when s.source == SwapLiquiditySource.atomic:
+        return _stepAfterSend(stages);
       case SwapProgressStage.bridging ||
           SwapProgressStage.awaitingDelivery ||
           SwapProgressStage.refunding ||
@@ -164,7 +174,15 @@ abstract final class SwapTimeline {
     ];
 
     if (outcome == null) {
-      return upTo(_position(s, stages), SwapStepStatus.current);
+      // A route carries out its own refund, so its step stays current. A
+      // peer-to-peer refund starts once the exchange has stopped.
+      final stopped =
+          s.source == SwapLiquiditySource.atomic &&
+          s.stage == SwapProgressStage.refunding;
+      return upTo(
+        _position(s, stages),
+        stopped ? SwapStepStatus.cancelled : SwapStepStatus.current,
+      );
     }
     final sendIndex = _firstOf(stages, const [SwapRouteStageKind.send]);
     switch (outcome.kind) {
@@ -176,10 +194,7 @@ abstract final class SwapTimeline {
         final approvals = s.evidence.approvalTxHashes.isNotEmpty;
         return upTo(approvals ? sendIndex : 0, SwapStepStatus.cancelled);
       case SwapOutcomeKind.refunded:
-        return upTo(
-          (sendIndex + 1).clamp(0, count - 1),
-          SwapStepStatus.refunded,
-        );
+        return upTo(_stepAfterSend(stages), SwapStepStatus.refunded);
       case SwapOutcomeKind.failed:
         final reason = outcome.failure?.reason;
         final int at;
@@ -189,7 +204,7 @@ abstract final class SwapTimeline {
             SwapRouteStageKind.resetApproval,
           ]);
         } else if (s.fundsMovement == SwapFundsMovement.sent) {
-          at = (sendIndex + 1).clamp(0, count - 1);
+          at = _stepAfterSend(stages);
         } else if (s.fundsMovement == SwapFundsMovement.none) {
           at = s.evidence.approvalTxHashes.isNotEmpty ? sendIndex : 0;
         } else {

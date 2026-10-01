@@ -250,6 +250,27 @@ void main() {
       expect(played, ['HapticFeedbackType.selectionClick']);
     });
 
+    testWidgets('a peer-to-peer refund starting completes no step', (
+      tester,
+    ) async {
+      SwapExecutionSnapshot peerToPeer(SwapProgressStage stage) => snapshotOf(
+        source: SwapLiquiditySource.atomic,
+        routeKind: SwapRouteKind.direct,
+        stage: stage,
+        stages: const [],
+      );
+      final played = recordHaptics(tester);
+      final handle = await open(
+        tester,
+        peerToPeer(SwapProgressStage.exchanging),
+      );
+      await tester.pumpAndSettle();
+
+      await hear(tester, handle, peerToPeer(SwapProgressStage.refunding));
+      await tester.pumpAndSettle();
+      expect(played, isEmpty);
+    });
+
     testWidgets('news that moves nothing on plays no haptic', (tester) async {
       final played = recordHaptics(tester);
       final handle = await open(tester, snapshotOf());
