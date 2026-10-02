@@ -182,11 +182,14 @@ class SwapSwitchButton extends StatelessWidget {
 }
 
 /// Accepts one decimal separator (either `.` or `,`, stored as `.`) and at
-/// most [maxDecimals] places.
+/// most [maxDecimals] places. Past them, the last digits drop: a digit typed
+/// into full places goes in and pushes the last one out.
 class _DecimalInputFormatter extends TextInputFormatter {
   _DecimalInputFormatter({required this.maxDecimals});
 
   final int maxDecimals;
+
+  static final _number = RegExp(r'^\d*\.?\d*$');
 
   @override
   TextEditingValue formatEditUpdate(
@@ -194,11 +197,25 @@ class _DecimalInputFormatter extends TextInputFormatter {
     TextEditingValue newValue,
   ) {
     final text = newValue.text.replaceAll(',', '.');
-    if (text.isEmpty) return newValue.copyWith(text: '');
-    final valid = RegExp(
-      maxDecimals == 0 ? r'^\d*$' : '^\\d*\\.?\\d{0,$maxDecimals}\$',
+    if (!_number.hasMatch(text)) return oldValue;
+    final point = text.indexOf('.');
+    if (point < 0) return newValue.copyWith(text: text);
+    // An amount set with more places, such as from a link, loses no more
+    // than an edit adds, and can always be shortened.
+    final oldPoint = oldValue.text.indexOf('.');
+    final limit = oldPoint < 0
+        ? maxDecimals
+        : math.max(maxDecimals, oldValue.text.length - oldPoint - 1);
+    if (limit == 0 && oldPoint < 0) return oldValue;
+    final end = point + 1 + limit;
+    if (text.length <= end) return newValue.copyWith(text: text);
+    final selection = newValue.selection;
+    return TextEditingValue(
+      text: text.substring(0, end),
+      selection: selection.copyWith(
+        baseOffset: math.min(selection.baseOffset, end),
+        extentOffset: math.min(selection.extentOffset, end),
+      ),
     );
-    if (!valid.hasMatch(text)) return oldValue;
-    return newValue.copyWith(text: text);
   }
 }

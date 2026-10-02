@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -215,7 +217,12 @@ class _SwapPayCardState extends State<SwapPayCard> {
       onChanged: widget.onAmountChanged,
       enabled: pay != null,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [_DecimalInputFormatter(maxDecimals: fiat ? 2 : 18)],
+      inputFormatters: [
+        _DecimalInputFormatter(
+          // The form checks the asset's own decimals when it knows them.
+          maxDecimals: fiat ? 2 : pay?.chainId.decimals ?? 18,
+        ),
+      ],
       style: amountStyle,
       cursorColor: palette.brand,
       decoration: InputDecoration(

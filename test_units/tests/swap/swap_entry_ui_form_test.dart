@@ -86,15 +86,6 @@ void main() {
       expect(swap.events.last, const UnifiedSwapAmountChanged(''));
     });
 
-    testWidgets('in dollars takes two decimal places at most', (tester) async {
-      await pump(tester, empty.copyWith(amountMode: SwapAmountMode.fiat));
-      await tester.enterText(field, '12.345');
-      expect(swap.events, isEmpty);
-
-      await tester.enterText(field, '12.34');
-      expect(swap.events, [const UnifiedSwapAmountChanged('12.34')]);
-    });
-
     testWidgets('set by the bloc replaces the field, the cursor at its end', (
       tester,
     ) async {
