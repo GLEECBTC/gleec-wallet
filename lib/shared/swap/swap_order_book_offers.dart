@@ -70,10 +70,15 @@ class SwapOrderBookOffers extends Equatable {
   /// Whether one order takes [amount] whole.
   bool fits(Decimal amount) => bands.any((band) => band.contains(amount));
 
-  /// The largest amount no more than [amount] that one order takes.
-  Decimal? largestUpTo(Decimal amount) {
+  /// The largest amount no more than [amount] that one order takes, with no
+  /// more than [scale] decimal places when given.
+  Decimal? largestUpTo(Decimal amount, {int? scale}) {
     for (final band in bands.reversed) {
-      if (band.min <= amount) return band.max < amount ? band.max : amount;
+      if (band.min > amount) continue;
+      var largest = band.max < amount ? band.max : amount;
+      if (scale != null) largest = largest.floor(scale: scale);
+      // Rounding down can land under this range's minimum; try a lower one.
+      if (largest >= band.min) return largest;
     }
     return null;
   }

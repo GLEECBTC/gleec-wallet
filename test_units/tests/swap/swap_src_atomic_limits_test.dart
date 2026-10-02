@@ -5,6 +5,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:rational/rational.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -241,6 +242,53 @@ void main() {
         ),
       );
       expect(trading.maxCalls.single, (coin: 'BTC', tradeWith: 'ETH'));
+    });
+
+    final pol = assetOf('POL', chainId: 137);
+    final usdcOnPolygon = assetOf(
+      'USDC-PLG20',
+      parent: pol,
+      chainId: 137,
+      decimals: 6,
+    );
+
+    // KDF answers available / (1 + trading fee) as a fraction, which seldom
+    // ends; the SDK cuts it at 18 places.
+    for (final (fee, share, amount, reserved) in [
+      ('1/777', Rational.fromInt(777, 778), '4.118155', '0.005301'),
+      ('2%', Rational.fromInt(50, 51), '4.042603', '0.080853'),
+    ]) {
+      test('Max after a $fee fee keeps to the asset\'s decimals', () async {
+        final kdf = d('4.123456').toRational() * share;
+        trading.maxTaker = MaxTakerVolumeResponse.parse({
+          'result': {
+            'numer': '${kdf.numerator}',
+            'denom': '${kdf.denominator}',
+          },
+        }).amount;
+
+        final max = await source().maxAmount(
+          from: usdcOnPolygon,
+          to: eth,
+          balance: d('4.123456'),
+        );
+
+        expect(max!.amount.scale, lessThanOrEqualTo(6));
+        expect(max.amount, d(amount));
+        expect(max.reservedForFees, d(reserved));
+      });
+    }
+
+    test('Max for an asset with no decimals on record is KDF\'s', () async {
+      trading.maxTaker = '0.980392156862745098';
+
+      final max = await source().maxAmount(
+        from: assetOf('KMD', subClass: CoinSubClass.utxo, decimals: null),
+        to: eth,
+        balance: d('1'),
+      );
+
+      expect(max!.amount, d('0.980392156862745098'));
     });
 
     test('Max never exceeds the balance', () async {

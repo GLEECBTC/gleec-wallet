@@ -87,6 +87,20 @@ void main() {
       expect(offers.largestUpTo(d('0.5')), isNull);
     });
 
+    test('the largest amount up to a cap, within decimal places', () {
+      final cut = offersOf([('1', '2.123456789'), ('5.1234561', '5.1234569')]);
+
+      expect(cut.largestUpTo(d('1.5000009'), scale: 6), d('1.5'));
+      expect(cut.largestUpTo(d('3'), scale: 6), d('2.123456'));
+      // No 6-place amount falls in the upper range.
+      expect(cut.largestUpTo(d('7')), d('5.1234569'));
+      expect(cut.largestUpTo(d('7'), scale: 6), d('2.123456'));
+      expect(
+        offersOf([('1.0000005', '2')]).largestUpTo(d('1.0000009'), scale: 6),
+        isNull,
+      );
+    });
+
     test('the smallest amount from a floor', () {
       expect(offers.smallestFrom(d('3')), d('5'));
       expect(offers.smallestFrom(d('0.5')), d('1'));

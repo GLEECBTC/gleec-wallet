@@ -112,6 +112,27 @@ void main() {
       expect(max.reservedForFees, d('0'));
     });
 
+    test('stops at the largest offer within the asset\'s decimals', () async {
+      final usdcOnPolygon = assetOf(
+        'USDC-PLG20',
+        parent: assetOf('POL', chainId: 137),
+        chainId: 137,
+        decimals: 6,
+      );
+      trading
+        ..maxTaker = '10'
+        ..bids = [bidOf('20', '0.1', '2.123456789')];
+
+      final max = await source().maxAmount(
+        from: usdcOnPolygon,
+        to: eth,
+        balance: d('4'),
+      );
+
+      expect(max!.amount, d('2.123456'));
+      expect(max.offerLimit, isTrue);
+    });
+
     test('keeps what KDF allows when an offer takes it all', () async {
       trading
         ..maxTaker = '3'

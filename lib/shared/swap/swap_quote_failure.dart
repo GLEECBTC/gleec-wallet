@@ -206,7 +206,8 @@ abstract interface class SwapQuoteSource {
   Future<SwapQuoteResult> requote(SwapQuote quote);
 
   /// The largest amount of [from] this source can sell for [to] from
-  /// [balance], keeping what its fees need. Null when it cannot tell.
+  /// [balance], keeping what its fees need, within [from]'s decimals (the
+  /// form refuses more). Null when it cannot tell.
   Future<SwapMaxAmount?> maxAmount({
     required AssetId from,
     required AssetId to,

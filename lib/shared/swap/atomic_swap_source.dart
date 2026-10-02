@@ -154,10 +154,13 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
       final max = await response;
       if (max == null) return null;
       final capped = max > balance ? balance : max;
-      final sellable = capped < Decimal.zero ? Decimal.zero : capped;
+      var sellable = capped < Decimal.zero ? Decimal.zero : capped;
+      // KDF's fraction seldom ends within the asset's decimals.
+      final decimals = from.chainId.decimals;
+      if (decimals != null) sellable = sellable.floor(scale: decimals);
       // More than the largest offer never fills; with no offers, Max still
       // shows what could be sold.
-      final fillable = book?.largestUpTo(sellable);
+      final fillable = book?.largestUpTo(sellable, scale: decimals);
       return SwapMaxAmount(
         amount: fillable ?? sellable,
         reservedForFees: balance > sellable ? balance - sellable : Decimal.zero,
