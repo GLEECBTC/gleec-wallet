@@ -28,6 +28,25 @@ flutter build appbundle
 flutter build ios
 ```
 
+## Build-time settings
+
+Some settings are fixed when the app is built, with `--dart-define` on `flutter run` or `flutter build`. Most are documented with their feature: GasFree in [TRON_GASFREE_RECEIVE_BUILD_POLICY.md](TRON_GASFREE_RECEIVE_BUILD_POLICY.md), analytics in [ANALYTICS.md](ANALYTICS.md), and test switches in [TESTING.md](TESTING.md).
+
+### `LIFI_API_URL`
+
+Where routed swaps reach the LI.FI API. Unset, builds use an interim proxy that holds a partner key, `https://kdf-proxy.nitride.app/lifi/v1` (the default in `lib/shared/constants.dart`). **It must be replaced with the KDF team's managed proxy before release** ([SWAP_RELEASE_CHECKLIST.md](SWAP_RELEASE_CHECKLIST.md)). Point a build at another proxy with:
+
+```bash
+flutter build web --dart-define=LIFI_API_URL=https://<proxy host>/<path>
+```
+
+An empty value (`--dart-define=LIFI_API_URL=`) makes KDF call LI.FI's public API without a key, which allows 75 quotes every two hours per network address, shared by everyone behind it.
+
+- KDF receives it as `lifi_api` and requests `<URL>/v1/quote`, `/v1/status`, `/v1/chains`, `/v1/tokens` and `/v1/tools`. The URL may end in `/v1`, `/` or neither. The proxy must serve those paths and, for web builds, send CORS headers.
+- Whoever serves this URL decides what KDF signs, so it must be HTTPS. KDF also can't use a URL with credentials, a query or a fragment. Any other value is ignored with a log line, and the public API is used. Debug builds also accept plain HTTP to this machine (`localhost`, `127.0.0.1`, `::1`).
+- The key stays on the proxy. There is no setting for it: LI.FI says a key must never ship in a client.
+- A partner key's limit covers every user at once, so size it for peak use. Quotes from every open swap form count, and so does KDF's status polling: every 5 seconds (12 requests a minute) for each cross-network swap until it finishes, errors included.
+
 ----
 
 ## Ruby setup

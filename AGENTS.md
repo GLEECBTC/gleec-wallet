@@ -37,6 +37,8 @@ All four dart-defines are mandatory: without them ~36 GasFree tests hang rather 
 
 Integration/GUI tests (`dart run_integration_tests.dart`), the KDF harness, the SDK package suites, and the full CI map are documented in `docs/TESTING.md`. If a suite is red, name the failing test — do not generalise it to the others.
 
+Live swap tests with real funds are a manual round on the PR's preview: follow "How a round runs" in `docs/SWAP_LIVE_TEST_BRIEF.md`. A person presses every control that commits funds; an agent prepares each swap up to its review, notifies them, and verifies everything else.
+
 ## Additional Documentation
 
 ### Code Styles/Standards

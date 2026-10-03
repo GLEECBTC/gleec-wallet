@@ -12,6 +12,7 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile_item.dart';
+import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
 class MainMenuBarMobile extends StatelessWidget {
   @override
@@ -71,10 +72,14 @@ class MainMenuBarMobile extends StatelessWidget {
                   Expanded(
                     child: Tooltip(
                       message: tradingTooltipMessage(),
-                      child: MainMenuBarMobileItem(
-                        value: MainMenuValue.dex,
-                        enabled: currentWallet?.isHW != true,
-                        isActive: selected == MainMenuValue.dex,
+                      child: SwapAttentionBuilder(
+                        builder: (context, needsAttention) =>
+                            MainMenuBarMobileItem(
+                              value: MainMenuValue.dex,
+                              enabled: currentWallet?.isHW != true,
+                              isActive: selected == MainMenuValue.dex,
+                              needAttention: needsAttention,
+                            ),
                       ),
                     ),
                   ),

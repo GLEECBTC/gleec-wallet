@@ -1,0 +1,171 @@
+# Unified Swap — live test brief
+
+This round tests the **Swap** and **Activity** destinations of the Swap menu entry. **Advanced** is the existing trading interface, unchanged.
+
+**Status:** unit-tested, and checked live against the pinned engine (KDF `feat/lifi-integration@4872ef2`, native and WebAssembly) with a throwaway wallet holding no funds. Quotes, the supported-coin list and every quote error the engine can raise locally were recorded and parse correctly (`komodo_defi_harness/test/routed_swap_live_capture_test.dart`). **No real swap has run on mainnet yet.** Start with small amounts, and move to larger ones only after the small ones behave as described below.
+
+**Quote limit while you test.** Cross-network prices now go through an interim proxy that holds a partner key, instead of the public API's 75 quotes every two hours per network address. The key allows **12,000 quotes every two hours, shared by every tester**. The form spends about one quote per price, a comparison costs one more, and refreshing stops when you leave it alone. If you do hit a limit, cross-network prices pause while order-book prices keep working, and nothing asks again until you do. Note when it happened.
+
+## What changed since the last brief
+
+- **The progress screen moves with the swap, and puts the wait in time.** Watched live, a change passes down the timeline in order: each step's circle turns and its tick pops in, and the line below a step fills as the step completes. The step the swap is on pulses a few times when the screen opens, when the app comes back, and when there is news, and otherwise sits still; while the status may be out of date it does not pulse at all. A swap that completes on screen gets one ring around its tick and, on a phone, one success tap. Every other ending gets a tap that matches it and no ring. Reopening a swap from Activity plays none of this.
+
+  Under the hero, a line says when the swap started and how long it has run ("Started 14:02 · 12 min"), how long a cross-network swap usually takes, when an order-book refund unlocks, and, at the end, when it finished and how long it took ("Finished 14:06 · took 4 min"). Screens now arrive from the direction you are going, and **Back** in Activity returns to where the list was.
+- **Each step links to its proof.** Once a step has a transaction, **View on Explorer** sits under it: the permission reset and approval, the transaction you sent, and the delivery. The first step the route itself handles, moving between networks or converting, opens the route's status page, except while the route waits on you, when the button under the timeline already does. After **Start**, the button reads **Starting…** until the swap is under way.
+- **The browser tab follows your swaps.** On web, the tab's title and icon say when a swap is running ("Swap in progress · Gleec Dex", with a purple dot), when one needs you ("Swap needs action" or "Swap needs attention", amber), and when one completed while you were in another tab or window ("Swap complete", green, until you come back).
+- **The progress screen says when it last checked.** The line under the hero ends with "checked just now" while the engine answers. If it stops, the line says how long ago it last did ("checked 40 s ago", then minutes), so a quiet swap reads as watched rather than frozen.
+- **A running swap says whether Gleec must stay open.** An order-book swap runs on this device until it finishes, a refund included, so its note asks you to keep Gleec open and signed in (on web, open in this tab). A routed swap needs that only until its transaction is sent; after that the note says you can leave. An order-book refund now says your payment is locked until it unlocks, instead of naming a route.
+- **The keyboard and screen readers follow you between swap screens.** Starting a swap, opening one in Activity, or going back puts keyboard focus on the new screen's heading, and screen readers hear the screen arrive by name. Escape leaves the progress screen, as Close or Back does. Back from a swap in Activity returns focus to its row. Switching tabs leaves focus on the tab.
+- **Reduced motion is honoured everywhere.** iOS **Reduce Motion**, the browser's reduced-motion setting, and the macOS and Windows switches now stop the app's animations, as Android's **Remove animations** already did. Before, only Android and Linux were heard.
+- **An order-book pair no one offers says so before an amount, and keeps checking.** Choosing a pair only the order book trades, such as USDT for AVN, reads the book straight away, signed in or out. With no offer:
+  - the form says "No one is offering AVN for USDT right now." and that AVN trades only on the order book, where offers come and go. It prices nothing; the button is **Choose another asset**, which opens the side worth changing;
+  - up to three shortcuts sit above it ("Get AVN with:"), holdings first, each switching that side in one tap;
+  - it checks again every 30 seconds while you're using it, and prices as soon as someone offers; after five minutes untouched it stops and offers **Check again**.
+  - Just after the app starts, the engine may still be finding its peers and can't read the book yet. The form then asks again after 10 seconds, so the message can take a little while to appear.
+
+  This replaces "No swap is available for this amount and pair right now." with **Try again**, which only asked the same book again.
+- **The pickers set apart what no one offers.** With the other side chosen, assets no one on the order book offers for it sit under "No offers with {asset} right now", badged **No offers**, between the ones that trade now and "Not available with {asset}". They can still be chosen, because offers come and go.
+- **An amount no single offer takes names the offers.** Too little: "The smallest offer right now takes 10 USDT." Too much: "The largest offer right now takes 4,500 USDT." Between two offers: "No single offer takes 600 USDT. Offers take up to 500 USDT, or from 900 USDT." The button offers **Use {amount}** when you can pay it. The same button appears for a cross-network minimum or maximum. Before you type, a pair with offers says "Offers take 10 USDT to 4,500 USDT."
+- **Max works on order-book pairs again,** and stops at the largest offer ("Max uses 4,500 USDT, the largest offer right now."). It did nothing before, and the coin's minimum trade was never checked, because the SDK asked the engine for both the wrong way. Your own orders no longer count as offers.
+- **GLEEC and GRC-20 pairs no longer read as an outage.** They trade on the order book only, and the aggregator does not serve their network. They were being sent to it anyway, and the form said "We couldn't check swap options". Now only sources that can price a pair are asked, and with no order-book offer the form says no one is offering it (see above).
+
+  The same fix covers KCC, ETC, TAO and the other networks the aggregator doesn't serve.
+- **A pair nobody can swap says why, and what to do.** For example, an asset only reachable across networks paired with one that trades only on the order book. Each message names the network reason and offers **Choose another asset**.
+- **The picker offers every supported asset,** active or not. Choosing an inactive one activates it first, in the open. Nothing is activated just by opening the form. An inactive asset arriving from a coin page or a link shows **Activate {asset}**.
+- **Signed out, the form asks for a wallet.** Assets can be chosen before signing in, without "Not active" or **Activate** on any of them, and the list is ready at once; it used to show "Checking what this wallet can swap…" for about 10 seconds first. The button reads **Connect wallet** and opens the same sign-in as the header. Offering Activate there used to fail with "Couldn't activate". Signing in from that button returns to Swap on the same pair and amount, a dollar amount still in dollars, and an asset the wallet has not activated shows **Activate {asset}**. Signing in from the header still goes to the wallet page.
+- **Signed out, an amount is priced from the order book.** The engine reads the order book without a wallet, so the form shows what an offer would pay, before fees. **Total cost** reads **Incomplete**, the price stays fresh while you look, and the button still reads **Connect wallet**. Cross-network prices need a connected wallet, and the form says so. It used to show 0 and $0.00 and promise prices after connecting, even for a pair with no offer at all. When both sides share a ticker, such as 1INCH on Avalanche for 1INCH on KuCoin Chain, "no offer" names the network that trades only on the order book.
+- **Signed in, the form prices at once too.** After the engine starts, it used to wait up to 10 seconds for the engine's first list of cross-network assets. Until that list arrives, the wallet's own copy of the provider's networks decides. A pair's options may therefore change once, just after opening, and that is expected.
+- **Choosing what to receive shows what you can reach.** Assets your pay asset can't be swapped for are listed apart, under "Not available with {asset}", with the reason.
+- **Choosing what to pay with can hide assets without a balance.** A **Hide 0 balance assets** switch sits under **Recent**, **Popular** and **All**, and under the search while you type. It says how many assets it hid, offers **Show all assets** when it hides everything, and is remembered. **My assets** already lists only what you hold, and choosing what to receive has no switch.
+- **An asset you don't hold can be priced.** An amount above your balance is still priced, so you can see the rate and compare options before you buy the asset. The button reads **Not enough {asset}** and the review stays closed. Such a price is fetched once and not kept fresh; when it expires, **Refresh quote** fetches it again. An order-book price for more than you hold shows its costs as **Incomplete**, because the engine only works them out for an amount you can pay. A token on a network where you hold none of the network's coin is still not priced: the engine needs gas to estimate its approval.
+- **If part of the asset list can't load,** the picker says the list may be incomplete and offers **Try again**. It keeps the last list rather than dropping assets.
+- **Quotes are spent carefully** (see the limit above):
+  - Each refresh prices the cheapest route only. The fastest is priced when you open **Compare options**, and kept fresh while you compare.
+  - A price is renewed when it is 50 seconds old (a quote lasts 60), while the form is on screen and the app is in front. Renewing stops after two minutes without a touch; the quote then expires, and **Refresh quote** brings it back.
+  - Returning to the same pair and amount within 15 seconds reuses the last price. That includes starting a quote you reviewed moments ago.
+  - After a rate limit, nothing is asked of the aggregator until a pause ends: 30 seconds, doubling each time to 10 minutes. Max doesn't probe during a pause either. Automatic refreshes then wait until you next ask.
+- **A token with none of its network's own coin is stopped at the form.** For example, USDC on Polygon with no POL: "You need some POL on Polygon to pay the network fees." Such a quote used to fail as an unexplained service error.
+- **Max on a network's own coin keeps back three times the quoted gas.** The engine checks the balance at start against a higher figure than the quote shows. If the check still fails, nothing is sent and the result screen shows the shortfall.
+- **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
+- **`/swap` works as an address,** as well as `/dex`, with the same link parameters.
+- **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them. While an asset activates, the picker's rows are announced as unavailable until it finishes, rather than as buttons that do nothing.
+- **A start that may be running stays on screen.** If the answer to Start is lost, the review keeps its warning until you check Activity. Back is disabled and the form beside it is set aside, so the same swap can't be started twice. A failure that spent only fees now says so, and an order-book shortfall names the coin that is short and how much is needed.
+- **A stalled order-book swap says its status is delayed.** If the engine leaves three status reads in a row unanswered (a read counts as unanswered after 15 seconds), hasn't logged a matched swap 5 minutes on, or a swap is still waiting 10 minutes past the deadline the engine set for that step, the swap and its Activity row read **Status update delayed** instead of showing the last step as current. After a restart, for example, the engine holds a swap until both its coins are active. The notice clears as soon as the swap moves again.
+- **An order-book swap the engine won't answer for reads as delayed, not missing.** Opening one while the engine was unresponsive could show the loading placeholder forever, and one stuck swap at sign-in kept every swap after it from being picked up. Each lookup now gives up after 15 seconds: the screen reads **Status update delayed**, asks again every 10 seconds, and goes live once the engine answers. A cancel with no answer in 15 seconds now says it couldn't be confirmed instead of staying on **Cancelling…**.
+- **A link your device can't open says so.** The explorer links, the route page, the provider's terms and **Contact Gleec support** used to fail without a word. Now a dialog offers the link to copy; for support, the email address and the swap details. On web the browser opens links itself, so a blocked pop-up still fails silently.
+- **Large text reflows.** At 200% text, from 375 px up, the form and its sheets stack instead of cutting text off. In the asset picker, the search, groups and switch scroll with the list, and a row whose badges and balance don't fit side by side puts the balance under the name.
+- **The asset picker's last results scroll clear of the keyboard.** On a phone, the end of a search's results used to stay under the keyboard until you closed it, and so could **Clear search** when nothing matched. Now you can scroll them above it and keep typing.
+- **Copying from the evidence sheet says so on the sheet.** **Copy**, **Copy details for support** and **Contact Gleec support** show "… copied" at the bottom of the sheet. The message used to appear on the page underneath, so a phone never showed it and a wider screen dimmed it.
+- **A custom slippage can be saved with the keyboard open.** **Use {value}** now sits just above the keyboard while you type. It used to stay under it, and an iPhone's number pad has no key that closes it, so on an iPhone there was no way to tap it.
+- **Choose another asset replaces an asset this wallet can't swap.** When the form says "{asset} can't be swapped in this wallet" about what you pay with, the button now opens the picker for what you pay with. It used to open the picker for what you receive, where no choice could make the pair work.
+- **A hardware wallet is told it can't swap.** Opening Swap from a link with a Trezor now shows "Trezor currently supports wallet-only mode. Trading and swaps are unavailable for now." Nothing is priced, and the button reads **Swaps unavailable**. The menu already kept Trezor out; from a link, the form used to show prices that could only fail at Start.
+- **Funds at other addresses are named.** An HD wallet swaps from its first address only. When an amount is more than that address holds, the form now also says how much the wallet's other addresses hold, and to move funds to this one first.
+- **Max responds at once.** It used to do nothing visible for a second or more while the form asked what to keep back for fees. Now your whole balance appears straight away, greyed, with a spinner on **Max**, and then drops to what can be sold. With a route selected, only that route's source is asked, so Max no longer waits on the other. Choosing another asset to receive meanwhile asks again for the new pair. Typing meanwhile keeps what you typed. If no source can say what fees need, the whole balance stays and is priced as it is.
+- **A new asset to pay with no longer shows the old balance.** Just after you chose another asset to pay with, the form showed the previous asset's balance under the new ticker until the new one was read, and **Max** pressed then used it. Now the balance and **Max** appear once the new asset's balance is read.
+- **Screen readers hear what Max did.** "Maximum amount applied with network fees kept back" is now spoken when the figure lands, not when **Max** is pressed. When the whole balance is used and nothing is kept back, it says "Whole balance applied". Typing or changing the pair while Max works announces nothing.
+- **A rate-limited price service says so, and for how long.** When the cross-network price service refuses more quotes for a while, the form used to say cross-network prices "couldn't be checked. Try again in a moment", and its **Try again** re-read only the order book. Now:
+  - It says cross-network prices are paused, and that this can take up to two hours.
+  - **Try again** stays disabled until the pause ends.
+  - What the order book found comes first, with any amount it would fill.
+  - Order-book prices shown during a pause say order-book swaps still work.
+  - **Compare options** says why no cross-network option is listed.
+  - In the review, a price the service won't confirm says the same and holds **Try again**. A route that's gone offers **Back to swap**, which prices the form again. It used to offer a retry that could only fail again.
+- **Searching for a ticker finds that asset first.** Typing "ETH" in a picker used to list about 200 assets alphabetically. Every token on Ethereum matches through its network's name, and so does Tether, so ETH itself sat around row 50, below 1INCH, AAVE and the rest, and looked missing. Now ETH on Ethereum comes first, then ETH on the other networks, then tickers and names that start with what you typed, then everything else.
+- **A price change too small to see is shown.** When a cross-network swap stopped because the minimum dropped, the result could read "Minimum was 0.000198 ETH. Now 0.000198 ETH.", because both figures were rounded to the same digits. They now get as many decimals as it takes to differ. The review's "Minimum changed from … to …" does the same, and it leaves out "Total cost changed" when the cost moved by less than a cent.
+- **Typing into a full amount makes room.** The amount takes two decimal places in dollars. In tokens it takes as many as the asset has, where the coin list gives them: 6 for USDC on Polygon. Coins it gives none for, such as ETH and BTC, still take 18. A digit typed into full places used to be refused, so $10.00 became $10.50 only after deleting a 0. Now the digit goes in and the last one drops: typing 5 after the point gives $10.50. Digits typed or pasted past the last place drop the same way, so typing 1.1234567 USDC gives 1.123456. A token amount like that used to stay as typed, and the form said "USDC supports up to 6 decimal places."
+- **Max on the order book fits the asset's decimal places.** On an order-book pair, Max on an asset the coin list gives places for, such as USDC on Polygon (6), used to fill up to 18 places, such as 4.04260392156862745 USDC. The form then said "USDC supports up to 6 decimal places." and priced nothing. Now Max rounds down to the asset's places, 4.042603 USDC, and so does the largest offer it stops at.
+- **Max says what it kept back.** On an order-book pair, Max said "We kept … for network fees." when most or all of it was the order book's trading fee: 2%, or 1% when GLEEC is either side. Now Max on a token, whose network fees are paid in its network's coin, says "Max uses 4.0426 USDC. We kept 0.08086 USDC for the trading fee." On a network's own coin it says "We kept … for trading and network fees." Screen readers hear which, without the figures. They also hear "Largest offer applied" when Max stops at an offer, and "Whole balance applied" when a cross-network route takes a token's whole balance; both used to say network fees were kept back. When nothing is kept back, the form now says "Max uses …, your whole balance." instead of "Trading and network fees are kept back."
+
+Unchanged from the last brief:
+- the atomic "receive at least" figure is what the order enforces;
+- progress never says funds are safe after they moved;
+- swaps survive navigation and sign-out;
+- Activity lists both kinds of swap;
+- the review re-prices before starting;
+- a first routed swap shows the provider's terms.
+
+What remains out of scope, and why, is in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md).
+
+## How a round runs
+
+- **Where:** on the pull request's preview, the "Firebase Hosting Preview" link CI posts on the PR. For #3507 it is https://walletrc--pull-3507-merge-xoq0z90i.web.app. CI rebuilds it at the same address about seven minutes after each push, with the production geo check. Before each run, note the commit it serves; the PR's `build_and_preview` check links the deploy.
+- **Wallet:** create a fresh wallet for the round on the preview itself, and write down its seed phrase. The wallet is stored in the browser for that address only, and a preview expires seven days after its last deploy. Fund it with the kit below.
+- **Who presses what:** a person presses every control that commits funds: **Start**, **Approve exactly … & start**, and **Cancel swap** while an approval may be going out. They also sign in, type any seed phrase, and accept the provider's terms. An AI agent can drive everything else: amounts, pickers, quotes, **Compare options**, slippage, Activity, evidence, explorers and export. It doesn't press those controls, even with permission. Instead it leaves each swap open at its review, notifies the person, and carries on with other checks.
+- **The browser tab:** keep it open and in front while an order-book swap runs, because on web the engine runs in the tab. Don't reload during a swap unless you're testing resume; a reload can also load a newer deploy.
+- **Failure paths:** try refunds, delayed status and resume on the DOC and MARTY test coins, not with real funds. Use a local build with test coins turned on, and `tool/dex_counterparty.dart` as the other side. Stopping it after the taker pays forces a refund.
+- **Results:** report each swap as in "How to report", then update the "Live swaps with funds" row in [`SWAP_RELEASE_CHECKLIST.md`](SWAP_RELEASE_CHECKLIST.md) with the commit tested and the outcome. Re-test a fix on the redeployed preview before the row says it passed.
+
+## What to run with real funds
+
+Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum, Base and Polygon. Run these in order, and stop at the first surprise.
+
+1. **Same network, native coin:** ETH → USDC on Arbitrum (or Base). No approval step; one transaction.
+2. **Same network, token:** USDC → ETH on the same network. Expect an exact-amount approval ("Approve exactly … & start"), then the swap.
+3. **Across networks:** USDC on Polygon → USDC on Arbitrum. Expect the bridge step and "You can leave this screen". Leave, and come back through Activity or the notice.
+4. **Max on a native coin:** Max on ETH (Arbitrum) → USDC. Check the kept-back amount the form states, and that the swap starts.
+5. **Cancel before anything is sent:** start a token sale and cancel while it says "Checking…" or while approving. The result should say whether an approval went out.
+6. **Order book:** ETC → USDC on Polygon. It stands in for GLEEC: both are EVM coins on networks the aggregator doesn't serve, so only the order book can price them. Claiming the USDC spends a little POL; ETC → LTC needs no second coin. Expect the matching step, then each step to the result. With no offer, the form should say no one is offering it before you type an amount, and offer **Choose another asset**.
+
+**Funding from Bitvavo.** Bitvavo pays out ETH, USDC and POL on Ethereum mainnet only, so it can't fund the Arbitrum and Polygon runs. It pays out BNB on Binance Smart Chain and ETC on Ethereum Classic, and those two cover all six runs (checked 2026-09-30):
+- Runs 1, 2, 4 and 5 on Binance Smart Chain, with BNB in place of ETH.
+- Run 3 as USDC on Binance Smart Chain → USDC on Base. It lands with no ETH on Base, which sets up item 3 under What to try.
+- Run 6 as ETC → USDC on Binance Smart Chain. Claiming the USDC spends a little BNB.
+- Run Max (run 4) last. It keeps back only three times the quoted gas, and runs 5 and 6 still pay their fees in BNB.
+
+**Still to run: GLEEC.** Run 6 stands in for a GLEEC swap until a tester can get GLEEC on the Gleec chain, at a `0x` address. HitBTC and FMFW.io, the exchanges that list GLEEC, pay out only on the old chain, whose addresses start with `R`. The wallet shows that coin as **Gleec (OLD)**, and no one offers it on the order book. Whoever has GLEEC should repeat run 6 as GLEEC → USDC on Polygon. On 2026-09-30 one maker offered that for 9.4 to 114 GLEEC, so about 20 GLEEC covers a swap and its fees; no GRC-20 token had an offer.
+
+## What to try
+
+For each item, note what the screen said before you confirmed and what actually happened. The most valuable report is *"it showed me X and I got Y"*.
+
+### Entry
+1. **Invalid amounts:** enter an empty amount, `0`, `1..2`, more than your balance, and your exact balance. Each should get its own message, and **Review swap** should stay disabled. More than your balance is still priced, and the button reads **Not enough {asset}**. More decimals than the asset allows can't be entered: with USDC on Polygon, a seventh place drops off.
+2. **Max:** selling ETH (or another network's own coin) should leave a fee reserve and say so. Selling a token should use the whole balance, except on an order-book pair, which keeps back the trading fee and says so. With USDC on Polygon for ETC, Max should fill no more than 6 decimal places, and be priced.
+3. **A token with none of its network's coin:** "You need some … to pay the network fees", and nothing priced. With some but too little, you should see "You need about … for network fees".
+4. **Switch pay and receive.** The amount should clear, because it was in the other asset's units.
+5. **USD entry:** toggle it, type a dollar amount, and check the token amount beside it. With cents typed, a digit typed after the point should go in and push the last one out.
+6. **Same ticker, different networks** (USDC on Ethereum and on Arbitrum): the picker should mark the rows **Same ticker**, and the review should show each asset's network and contract.
+7. **An asset that isn't active:**
+   - Pick one from **All**: it should activate, then take its place in the form.
+   - Open a coin page's **Swap** for an inactive coin, or a `/swap?from_currency=…` link: the form should show **Activate {asset}**, and nothing is priced until you do.
+8. **GLEEC as what you pay** (no GLEEC needed):
+   - Open the receive picker: order-book assets appear normally; cross-network-only tokens appear under "Not available with GLEEC", with the reason.
+   - With no offer on the order book, the form should say no one is offering it, not that it couldn't check, and **Choose another asset** should open the picker for what you receive.
+   - In that picker, assets no one offers for GLEEC should sit under "No offers with GLEEC right now", and still be choosable.
+9. **Hide 0 balance assets:** choose what to pay with, open **All** and turn the switch on. Only assets with a balance should remain, with "{n} hidden" under the switch. Search for an asset you don't hold: the picker should say it is hidden and offer **Show all assets**. Close and reopen the picker: the switch should keep its setting.
+10. **A price for an asset you don't hold:** pay with a coin you hold none of and enter a small amount. ETH on Base is priced by cross-network routes, and BTC by the order book when an order can fill the amount. The form should show a price and options, say how much is spendable, and the button should read **Not enough ETH** (or **BTC**). After a minute the price should expire and offer **Refresh quote**, without refreshing by itself.
+
+### Options and review
+11. **Compare options:** a cross-network price shows **Compare options**. Opening it prices the fastest route ("Checking for a faster route…"). **Best net return** appears only when at least two options can be compared.
+12. **Slippage:** in the comparison, change it to 1% and 2%, then set a custom value. On a phone, **Use {value}** should stay above the keyboard as you type. Every price should update. Above 1% there should be a warning. The review's **Costs & protection** should show the new value.
+13. **Leave the form alone for three minutes.** Refreshing should stop, the quote expire, and **Refresh quote** appear. Switching to another app or tab should stop refreshing at once.
+14. **Selling ERC-20 tokens:** the review should ask for an exact amount, never unlimited. A token that needs its permission reset first should say "Continue with reset".
+15. **Leave the review while "Checking…"**. Nothing should start.
+
+### Execution
+16. **Same-chain routed swap:** **Start** should read **Starting…** until the progress screen opens. Then the timeline, the hero text on each step, and the result. Until the swap is sent, the note under the timeline should ask you to keep Gleec open; after that, it should say you can leave this screen.
+17. **Cross-chain routed swap:** the bridge step; leave and come back.
+18. **Cancel:** **Cancel swap** appears only before anything is sent. The confirmation says whether an approval already went out. Cancelling after the swap is sent should say so gently.
+19. **Atomic swap:** the matching step, and the result. The note under the timeline should ask you to keep Gleec open and signed in until the swap finishes. An amount larger than any single order should name the largest offer and offer **Use {amount}**, which should price at once. **Max** should stop at the largest offer.
+20. **Motion while you watch:** keep the progress screen open through a swap. Each step should hand on to the next in order; the current step should pulse briefly when there is news and otherwise sit still; a completed swap should ring once. Leave the screen and reopen the swap from Activity: nothing should replay.
+21. **Times:** the line under the hero should say when the swap started and how long it has run, a minute at a time. A cross-network swap adds how long it usually takes, then "Taking longer than usual" once past it. When the swap ends, the line should say when, and how long it took. While it runs, the line ends with "checked just now"; take the device offline for a minute and it should say how long ago the last check was.
+22. **Reduce motion:** turn on iOS **Reduce Motion**, Android **Remove animations**, the browser's reduced-motion setting, macOS **System Settings → Accessibility → Display → Reduce motion**, or Windows **Settings → Accessibility → Visual effects → Animation effects** (off), then run a swap. Nothing should slide, pulse or ring, and a phone should still tap on the result.
+23. **Step links:** as a swap runs, each step with a transaction should gain **View on Explorer**, opening that transaction on its own network's explorer; on a routed swap, the first step the route handles should offer **Open route status page**, once. A screen reader should read each link with its step's name.
+24. **Browser tab (web):** start a swap, then switch to another tab. The tab should read "Swap in progress · Gleec Dex" with a purple dot on its icon. Stay away until the swap completes: it should read "Swap complete" with a green dot, and go back to normal when you return.
+
+### Activity and recovery
+25. **Refunds, partial fills and unfamiliar tokens:** a refunded or partially filled swap, or one that delivered another token, should appear under the right filter. Its detail should answer *What happened? · Where are the funds? · What can I do now?*
+26. **Evidence and support:** **View evidence** should show hashes with explorer links. **Contact Gleec support** copies a support payload: ids, hashes and the provider's reference, but no addresses. On web, a provider error has no provider reference; the engine can't read it there.
+
+### Accessibility
+27. **Screen reader:** with VoiceOver or TalkBack on, choose both assets, switch direction, open **Compare options** and change the slippage without looking. Every control should say what it is and respond to a double-tap.
+28. **Largest text:** set the system text size to its largest, or zoom the browser to 200%. Nothing on the form or its sheets should be cut off or overlap.
+29. **Keyboard only:** start a swap with the keyboard. Focus should land on "Swap progress", Tab should move on through its controls, and Escape should return to the form. In Activity, open a swap with Enter and press Escape: focus should be back on that swap's row.
+
+## How to report
+
+- Open the swap in Activity, tap **View evidence**, then **Copy details for support**, and paste that into the report.
+- Add screenshots of the review before you started and of the result.
+- Note your window width if the layout looked wrong. Below 960 px of swap area the review is full screen; wider, it opens beside the form.
+- If cross-network prices paused, say roughly how many prices you had looked at in the previous two hours.
+- **Settings → Export swap data** includes the full routed history: timestamps, requested amounts, the accepted minimum, outcome, funds movement and gas spent.

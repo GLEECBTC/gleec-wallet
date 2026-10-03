@@ -16,6 +16,7 @@ import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/shared/widgets/gleec_dex_logo.dart';
 import 'package:web_dex/views/common/main_menu/main_menu_desktop_item.dart';
+import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
 class MainMenuDesktop extends StatefulWidget {
   @override
@@ -98,14 +99,18 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                             ),
                             Tooltip(
                               message: tradingTooltipMessage(),
-                              child: DesktopMenuDesktopItem(
-                                key: const Key('main-menu-dex'),
-                                enabled: currentWallet?.isHW != true,
-                                menu: MainMenuValue.dex,
-                                onTap: onTapItem,
-                                isSelected: _checkSelectedItem(
-                                  MainMenuValue.dex,
-                                ),
+                              child: SwapAttentionBuilder(
+                                builder: (context, needsAttention) =>
+                                    DesktopMenuDesktopItem(
+                                      key: const Key('main-menu-dex'),
+                                      enabled: currentWallet?.isHW != true,
+                                      menu: MainMenuValue.dex,
+                                      onTap: onTapItem,
+                                      needAttention: needsAttention,
+                                      isSelected: _checkSelectedItem(
+                                        MainMenuValue.dex,
+                                      ),
+                                    ),
                               ),
                             ),
                             Tooltip(
