@@ -77,6 +77,7 @@ void main() {
       await pump(tester, empty);
       await tester.enterText(field, '1.5');
       await tester.enterText(field, '1.5.2');
+      await tester.enterText(field, '1..5');
       await tester.enterText(field, '1.5x');
 
       expect(swap.events, [const UnifiedSwapAmountChanged('1.5')]);
