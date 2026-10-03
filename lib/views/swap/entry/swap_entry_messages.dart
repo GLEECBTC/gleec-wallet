@@ -158,7 +158,13 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       final feeTicker = max.feeAsset == null
           ? ticker
           : SwapFormat.ticker(max.feeAsset!);
-      return LocaleKeys.swapHelperMaxNative.tr(
+      final key = switch (max.reserveCovers) {
+        SwapMaxReserve.networkFees => LocaleKeys.swapHelperMaxNative,
+        SwapMaxReserve.tradingFee => LocaleKeys.swapHelperMaxTradingFee,
+        SwapMaxReserve.tradingAndNetworkFees =>
+          LocaleKeys.swapHelperMaxTradingAndNetworkFees,
+      };
+      return key.tr(
         args: [
           amount,
           SwapFormat.tokens(
@@ -175,7 +181,23 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         args: [amount, SwapFormat.ticker(parent)],
       );
     }
-    return LocaleKeys.swapHelperMaxAtomic.tr(args: [amount]);
+    return LocaleKeys.swapHelperMaxWhole.tr(args: [amount]);
+  }
+
+  /// What screen readers hear when Max lands, without the figures.
+  String _maxAnnouncement(SwapMaxAmount? max) {
+    if (max != null && max.offerLimit) {
+      return LocaleKeys.swapAnnounceMaxOffer.tr();
+    }
+    if (max == null || max.reservedForFees <= Decimal.zero) {
+      return LocaleKeys.swapAnnounceWholeBalance.tr();
+    }
+    return switch (max.reserveCovers) {
+      SwapMaxReserve.networkFees => LocaleKeys.swapAnnounceMax.tr(),
+      SwapMaxReserve.tradingFee => LocaleKeys.swapAnnounceMaxTradingFee.tr(),
+      SwapMaxReserve.tradingAndNetworkFees =>
+        LocaleKeys.swapAnnounceMaxTradingAndNetworkFees.tr(),
+    };
   }
 
   String? _feeNeeded(UnifiedSwapState state) {

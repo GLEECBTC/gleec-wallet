@@ -142,8 +142,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     required Decimal balance,
   }) async {
     try {
-      // KDF's own answer, which already keeps the trading fee and the
-      // transaction fees back.
+      // KDF's own answer, which already keeps the trading fee back, and the
+      // network fees for a coin that pays its own.
       final response = _trading
           .maxTakerVolume(coin: from.id, tradeWith: to.id)
           .then<Decimal?>(
@@ -165,6 +165,9 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         amount: fillable ?? sellable,
         reservedForFees: balance > sellable ? balance - sellable : Decimal.zero,
         feeAsset: from,
+        reserveCovers: from.parentId == null
+            ? SwapMaxReserve.tradingAndNetworkFees
+            : SwapMaxReserve.tradingFee,
         offerLimit: fillable != null && fillable < sellable,
       );
     } on Object {

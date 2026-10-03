@@ -252,20 +252,65 @@ void main() {
       ]);
     });
 
-    testWidgets('an order-book coin says its fees are kept back', (
+    testWidgets('an order-book token says it kept the trading fee', (
       tester,
     ) async {
       await pump(
         tester,
         maxed(
-          SwapMaxAmount(amount: d('0.5'), reservedForFees: d('0')),
+          SwapMaxAmount(
+            amount: d('4.042603'),
+            reservedForFees: d('0.080853'),
+            feeAsset: usdc,
+            reserveCovers: SwapMaxReserve.tradingFee,
+          ),
+          pay: usdc,
+          receive: eth,
+        ),
+      );
+
+      expect(lines(tester), [
+        'Max uses 4.0426 USDC. We kept 0.08086 USDC for the trading fee.',
+      ]);
+    });
+
+    testWidgets('an order-book coin says it kept trading and network fees', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        maxed(
+          SwapMaxAmount(
+            amount: d('0.49'),
+            reservedForFees: d('0.0101'),
+            feeAsset: btc,
+            reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+          ),
           pay: btc,
         ),
       );
 
       expect(lines(tester), [
-        'Max uses 0.5 BTC. Trading and network fees are kept back.',
+        'Max uses 0.49 BTC. We kept 0.0101 BTC for trading and network fees.',
       ]);
+    });
+
+    testWidgets('a coin with nothing kept back says it is the whole balance', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        maxed(
+          SwapMaxAmount(
+            amount: d('0.5'),
+            reservedForFees: d('0'),
+            reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+          ),
+          pay: btc,
+        ),
+      );
+
+      expect(lines(tester), ['Max uses 0.5 BTC, your whole balance.']);
     });
 
     testWidgets('an amount capped at the largest offer says so', (

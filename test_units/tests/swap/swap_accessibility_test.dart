@@ -403,6 +403,31 @@ void main() {
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 
+      testWidgets('entry: Max with trading and network fees kept back', (
+        tester,
+      ) async {
+        swap.emit(
+          form().copyWith(
+            inputText: '1.9601',
+            maxApplied: SwapMaxAmount(
+              amount: d('1.9601'),
+              reservedForFees: d('0.0399'),
+              feeAsset: eth,
+              reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+            ),
+          ),
+        );
+        await pump(tester, layout, const SwapEntryView());
+        expect(
+          find.text(
+            'Max uses 1.9601 ETH. We kept 0.0399 ETH for trading and network '
+            'fees.',
+          ),
+          findsOneWidget,
+        );
+        await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+      });
+
       testWidgets('picker: paying, with a held asset selected', (tester) async {
         services.balances[eth] = d('1.5');
         await pump(

@@ -67,29 +67,52 @@ class SwapQuoteRequest extends Equatable {
   ];
 }
 
+/// What a Max reserve pays for.
+enum SwapMaxReserve {
+  /// Network fees.
+  networkFees,
+
+  /// The order book's trading fee alone, as a token's network fees are paid
+  /// in its network's coin.
+  tradingFee,
+
+  /// The order book's trading fee and the network fees.
+  tradingAndNetworkFees,
+}
+
 /// The largest sellable amount a source allows, keeping what fees need.
 class SwapMaxAmount extends Equatable {
   const SwapMaxAmount({
     required this.amount,
     required this.reservedForFees,
     this.feeAsset,
+    this.reserveCovers = SwapMaxReserve.networkFees,
     this.offerLimit = false,
   });
 
   /// What may be sold.
   final Decimal amount;
 
-  /// Held back for network fees, in [feeAsset] units. Zero when fees are paid
-  /// in another coin.
+  /// Held back for what [reserveCovers] names, in [feeAsset] units, with any
+  /// remainder of rounding down to the asset's decimals.
   final Decimal reservedForFees;
 
   /// The coin the reserve is held in.
   final AssetId? feeAsset;
+
+  /// What [reservedForFees] pays for.
+  final SwapMaxReserve reserveCovers;
 
   /// Whether [amount] is the largest order-book offer, below what the wallet
   /// could sell.
   final bool offerLimit;
 
   @override
-  List<Object?> get props => [amount, reservedForFees, feeAsset, offerLimit];
+  List<Object?> get props => [
+    amount,
+    reservedForFees,
+    feeAsset,
+    reserveCovers,
+    offerLimit,
+  ];
 }

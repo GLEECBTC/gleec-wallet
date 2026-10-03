@@ -239,6 +239,7 @@ void main() {
           amount: d('0.9'),
           reservedForFees: d('0.1'),
           feeAsset: btc,
+          reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
         ),
       );
       expect(trading.maxCalls.single, (coin: 'BTC', tradeWith: 'ETH'));
@@ -251,6 +252,26 @@ void main() {
       chainId: 137,
       decimals: 6,
     );
+
+    test('Max on a token keeps back only the trading fee', () async {
+      trading.maxTaker = '3.92';
+
+      final max = await source().maxAmount(
+        from: usdcOnPolygon,
+        to: eth,
+        balance: d('4'),
+      );
+
+      expect(
+        max,
+        SwapMaxAmount(
+          amount: d('3.92'),
+          reservedForFees: d('0.08'),
+          feeAsset: usdcOnPolygon,
+          reserveCovers: SwapMaxReserve.tradingFee,
+        ),
+      );
+    });
 
     // KDF answers available / (1 + trading fee) as a fraction, which seldom
     // ends; the SDK cuts it at 18 places.

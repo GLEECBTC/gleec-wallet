@@ -241,6 +241,44 @@ void main() {
       ]);
     });
 
+    testWidgets('says which fees it kept back, or what else it stopped at', (
+      tester,
+    ) async {
+      SwapMaxAmount keeping(
+        String reserved, {
+        SwapMaxReserve covers = SwapMaxReserve.networkFees,
+        bool offerLimit = false,
+      }) => SwapMaxAmount(
+        amount: d('1.9'),
+        reservedForFees: d(reserved),
+        reserveCovers: covers,
+        offerLimit: offerLimit,
+      );
+      final spoken = {
+        'Maximum amount applied with the trading fee kept back': keeping(
+          '0.1',
+          covers: SwapMaxReserve.tradingFee,
+        ),
+        'Maximum amount applied with trading and network fees kept back':
+            keeping('0.1', covers: SwapMaxReserve.tradingAndNetworkFees),
+        'Largest offer applied': keeping(
+          '0.04',
+          covers: SwapMaxReserve.tradingAndNetworkFees,
+          offerLimit: true,
+        ),
+        // A token whose network fees are paid in another coin.
+        'Whole balance applied': keeping('0'),
+      };
+      await pump(tester, priced);
+      for (final MapEntry(key: announcement, value: max) in spoken.entries) {
+        await emitSwapState(tester, swap, asking);
+        await emitSwapState(tester, swap, landed.copyWith(maxApplied: max));
+        expect(tester.takeAnnouncements(), [
+          isAccessibilityAnnouncement(announcement),
+        ], reason: announcement);
+      }
+    });
+
     testWidgets('with nothing to receive uses the whole balance, and says so', (
       tester,
     ) async {

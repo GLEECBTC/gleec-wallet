@@ -119,12 +119,8 @@ class _SwapEntryViewState extends State<SwapEntryView> {
   Widget build(BuildContext context) {
     return BlocListener<UnifiedSwapBloc, UnifiedSwapState>(
       listenWhen: _maxEnded,
-      listener: (context, state) => swapAnnounce(
-        context,
-        state.maxApplied == null
-            ? LocaleKeys.swapAnnounceWholeBalance.tr()
-            : LocaleKeys.swapAnnounceMax.tr(),
-      ),
+      listener: (context, state) =>
+          swapAnnounce(context, _maxAnnouncement(state.maxApplied)),
       child: _form(),
     );
   }

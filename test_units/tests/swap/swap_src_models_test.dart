@@ -221,7 +221,7 @@ void main() {
       );
     });
 
-    test('a max compares by amount, reserve and fee coin', () {
+    test('a max compares by amount, reserve, fee coin and what it covers', () {
       final max = SwapMaxAmount(
         amount: d('1'),
         reservedForFees: d('0.1'),
@@ -235,6 +235,17 @@ void main() {
       expect(
         max,
         isNot(SwapMaxAmount(amount: d('1'), reservedForFees: d('0.1'))),
+      );
+      expect(
+        max,
+        isNot(
+          SwapMaxAmount(
+            amount: d('1'),
+            reservedForFees: d('0.1'),
+            feeAsset: eth,
+            reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+          ),
+        ),
       );
     });
   });
