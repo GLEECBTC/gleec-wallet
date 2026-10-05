@@ -59,8 +59,9 @@ List<SwapQuoteResult> _routed(
   ),
 ];
 
-/// The order-book source selling ETH at [price]: its preimage puts 0.0215 ETH
+/// The order-book source selling ETH at [price]: its preimage puts 0.02185 ETH
 /// of trading fee and gas on top of 1 ETH, and [claim] to claim what arrives.
+/// Refunding the payment takes 0.00125 ETH more.
 AtomicSwapQuoteSource _book(
   SwapBlocHarness h,
   String price,
@@ -73,7 +74,7 @@ AtomicSwapQuoteSource _book(
     ..preimage = preimageOf(
       takerFee: coinFeeOf('ETH', '0.02'),
       feeToSendTakerFee: coinFeeOf('ETH', '0.0003'),
-      baseCoinFee: coinFeeOf('ETH', '0.0012'),
+      baseCoinFee: coinFeeOf('ETH', '0.00155'),
       relCoinFee: claim,
     ),
   networks: () => _networks,
@@ -202,7 +203,11 @@ void main() {
 
       expect(bloc.state.issue, SwapFormIssue.insufficient);
       expect(bloc.state.canReview, isFalse);
-      expect(bloc.spendOf(bloc.state), (amount: d('99.8'), fees: d('0.25')));
+      expect(bloc.spendOf(bloc.state), (
+        amount: d('99.8'),
+        fees: d('0.25'),
+        refundReserve: d('0'),
+      ));
 
       bloc.add(const UnifiedSwapAmountChanged('99.75'));
       h.settle();
@@ -229,11 +234,11 @@ void main() {
 
   group('the order book', () {
     // Each balance is KDF's Max plus what KDF keeps back: the 2% trading fee,
-    // the preimage's 0.0015 ETH of gas and 0.001 ETH to refund. The 0.002 ETH
-    // claim takes Max for USDC from KDF's 1.002 down to 1.
+    // the preimage's 0.00185 ETH of gas and 0.00125 ETH to refund. The 0.002
+    // ETH claim takes Max for USDC from KDF's 1.002 down to 1.
     for (final (pair, receive, book, kdfMax, balance) in [
-      ('BTC', btc, _ethForBtc, '1', '1.0225'),
-      ('a token on its network', usdc, _ethForUsdc, '1.002', '1.02454'),
+      ('BTC', btc, _ethForBtc, '1', '1.0231'),
+      ('a token on its network', usdc, _ethForUsdc, '1.002', '1.02514'),
     ]) {
       swapBlocTest('Max on ETH for $pair reviews with every fee counted', (h) {
         final source = book(h, kdfMax: kdfMax);
@@ -253,27 +258,65 @@ void main() {
       });
     }
 
-    swapBlocTest('its trading fee counts with its gas', (h) {
+    swapBlocTest('its trading fee counts with its gas, and the refund', (h) {
       _onlyTheBook(h, _bookQuote(h, _ethForBtc(h), btc));
-      h.balances[eth] = d('1.0214');
+      // Enough for KDF's own checks, which leave the refund out.
+      h.balances[eth] = d('1.02185');
       final bloc = h.open(pay: 'ETH', receive: 'BTC');
 
-      expect(bloc.spendOf(bloc.state), (amount: d('1'), fees: d('0.0215')));
+      expect(bloc.spendOf(bloc.state), (
+        amount: d('1'),
+        fees: d('0.02185'),
+        refundReserve: d('0.00125'),
+      ));
       expect(bloc.state.issue, SwapFormIssue.insufficient);
 
-      h.balances[eth] = d('1.0215');
+      h.balances[eth] = d('1.0231');
       bloc.add(const UnifiedSwapBalancesRefreshed());
       h.settle();
 
       expect(bloc.state.issue, isNull);
     });
 
-    swapBlocTest('so does the gas to claim a token on its network', (h) {
+    swapBlocTest('so does the gas to claim a token, which covers a refund', (
+      h,
+    ) {
       _onlyTheBook(h, _bookQuote(h, _ethForUsdc(h), usdc));
-      h.balances[eth] = d('1.0234');
+      h.balances[eth] = d('1.02384');
       final bloc = h.open(pay: 'ETH', receive: 'USDC-ERC20');
 
-      expect(bloc.spendOf(bloc.state), (amount: d('1'), fees: d('0.0235')));
+      expect(bloc.spendOf(bloc.state), (
+        amount: d('1'),
+        fees: d('0.02385'),
+        refundReserve: d('0'),
+      ));
+      expect(bloc.state.issue, SwapFormIssue.insufficient);
+    });
+
+    swapBlocTest('Max is not refused when gas has risen since it was read', (
+      h,
+    ) {
+      // KDF's Max came from cheaper gas: at the quote's price, it leaves
+      // 0.0001 ETH less than the refund takes.
+      final source = _ethForBtc(h);
+      _onlyTheBook(h, _bookQuote(h, source, btc));
+      h.balances[eth] = d('1.023');
+      h.atomic.max = h.resolve(
+        source.maxAmount(from: eth, to: btc, balance: d('1.023')),
+      );
+      final bloc = h.open(pay: 'ETH', receive: 'BTC', amount: '0.5')
+        ..add(const UnifiedSwapMaxRequested());
+      h.settle();
+
+      expect(bloc.state.inputText, '1');
+      expect(bloc.spendOf(bloc.state)!.refundReserve, d('0'));
+      expect(bloc.state.issue, isNull);
+
+      // Typed, the same amount is no longer KDF's Max.
+      bloc.add(const UnifiedSwapAmountChanged('1.0'));
+      h.settle();
+
+      expect(bloc.spendOf(bloc.state)!.refundReserve, d('0.00125'));
       expect(bloc.state.issue, SwapFormIssue.insufficient);
     });
   });

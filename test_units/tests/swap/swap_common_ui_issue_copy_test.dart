@@ -54,6 +54,7 @@ void main() {
     String? feeNeeded,
     String? feeHeld,
     String? neededWithFees,
+    bool neededForRefund = false,
     String? heldElsewhere,
   }) => SwapIssueCopy.of(
     issue,
@@ -62,6 +63,7 @@ void main() {
     feeNeeded: feeNeeded,
     feeHeld: feeHeld,
     neededWithFees: neededWithFees,
+    neededForRefund: neededForRefund,
     heldElsewhere: heldElsewhere,
   );
 
@@ -286,6 +288,30 @@ void main() {
         detail:
             'This wallet holds another 2.9 ETH at other addresses. Swaps '
             'spend only from this one, so move funds here first.',
+      );
+    });
+
+    test('what both need names the gas to refund it, when that counts', () {
+      expectCopy(
+        issueOf(
+          SwapFormIssue.insufficient,
+          stateFor(eth, btc, balance: d('1')),
+          neededWithFees: '1.0231 ETH',
+          neededForRefund: true,
+        ),
+        'You need about 1.0231 ETH for this swap, its fees and the gas to '
+        'refund it if it fails. This address has 1 ETH.',
+      );
+    });
+
+    test('the refund alone, with no shortfall to name, changes nothing', () {
+      expectCopy(
+        issueOf(
+          SwapFormIssue.insufficient,
+          stateFor(eth, btc, balance: d('1')),
+          neededForRefund: true,
+        ),
+        'Only 1 ETH is spendable at this address.',
       );
     });
 

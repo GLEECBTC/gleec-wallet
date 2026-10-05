@@ -1251,6 +1251,7 @@
   "swapErrorTooManyDecimals": "{} supports up to {} decimal places.",
   "swapErrorInsufficient": "Only {} is spendable at this address.",
   "swapErrorInsufficientWithFees": "You need about {} for this swap and its fees. This address has {}.",
+  "swapErrorInsufficientWithRefund": "You need about {} for this swap, its fees and the gas to refund it if it fails. This address has {}.",
   "swapErrorInsufficientForFees": "You need about {} for network fees. This address has {}.",
   "swapErrorInsufficientForProviderFees": "You need about {} for network and provider fees. This address has {}.",
   "swapErrorSameAsset": "Choose two different assets.",

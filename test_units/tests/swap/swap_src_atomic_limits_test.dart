@@ -240,6 +240,7 @@ void main() {
           reservedForFees: d('0.1'),
           feeAsset: btc,
           reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+          coversRefund: true,
         ),
       );
       expect(trading.maxCalls.single, (coin: 'BTC', tradeWith: 'ETH'));
@@ -269,6 +270,7 @@ void main() {
           reservedForFees: d('0.08'),
           feeAsset: usdcOnPolygon,
           reserveCovers: SwapMaxReserve.tradingFee,
+          coversRefund: true,
         ),
       );
     });

@@ -57,11 +57,11 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     final balance = next.balance;
     if (balance != null && amount > balance) return SwapFormIssue.insufficient;
 
-    // With a priced option, the fees paid on top must fit too.
+    // With a priced option, its fees and refund gas must fit too.
     final spend = spendOf(next);
     if (balance != null &&
         spend != null &&
-        spend.amount + spend.fees > balance) {
+        spend.amount + spend.fees + spend.refundReserve > balance) {
       return SwapFormIssue.insufficient;
     }
     final quote = next.selectedQuote;

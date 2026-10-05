@@ -177,7 +177,7 @@ void main() {
     });
 
     test('re-pricing keeps the costs unless new ones are given', () {
-      final quote = quoteOf(payload: 'plan');
+      final quote = quoteOf(refundReserve: '0.00125', payload: 'plan');
       final pricing = SwapQuotePricing(payUsd: d('1'), isComplete: true);
 
       final repriced = quote.withPricing(pricing);
@@ -185,9 +185,18 @@ void main() {
 
       expect(repriced.pricing, pricing);
       expect(repriced.fees, same(quote.fees));
+      expect(repriced.refundReserve, d('0.00125'));
       expect(repriced.payload, 'plan');
       expect(repriced, quote.withPricing(pricing));
       expect(refeed.fees, isEmpty);
+    });
+
+    test('a quote keeping gas to refund differs from one that does not', () {
+      expect(quoteOf(refundReserve: '0.00125'), isNot(quoteOf()));
+      expect(
+        quoteOf(refundReserve: '0.00125'),
+        quoteOf(refundReserve: '0.00125'),
+      );
     });
   });
 
@@ -251,6 +260,40 @@ void main() {
             reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
           ),
         ),
+      );
+      expect(
+        max,
+        isNot(
+          SwapMaxAmount(
+            amount: d('1'),
+            reservedForFees: d('0.1'),
+            feeAsset: eth,
+            coversRefund: true,
+          ),
+        ),
+      );
+    });
+
+    test('a max covers the refund only for what it was asked for', () {
+      final max = SwapMaxAmount(
+        amount: d('1'),
+        reservedForFees: d('0.0231'),
+        feeAsset: eth,
+        coversRefund: true,
+      );
+
+      expect(max.coversRefundFor(d('1'), d('1.0231')), isTrue);
+      expect(max.coversRefundFor(d('0.9'), d('1.5')), isTrue);
+      // More than Max, or from less than it was asked with.
+      expect(max.coversRefundFor(d('1.0001'), d('1.0231')), isFalse);
+      expect(max.coversRefundFor(d('1'), d('1.023')), isFalse);
+      expect(max.coversRefundFor(d('1'), null), isFalse);
+      expect(
+        SwapMaxAmount(
+          amount: d('1'),
+          reservedForFees: d('0.0231'),
+        ).coversRefundFor(d('1'), d('1.0231')),
+        isFalse,
       );
     });
   });

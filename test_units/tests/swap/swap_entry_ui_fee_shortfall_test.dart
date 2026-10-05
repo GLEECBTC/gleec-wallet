@@ -114,4 +114,57 @@ void main() {
     ]);
     expect(swapPrimaryLabel(tester), 'Not enough ETH');
   });
+
+  testWidgets('the gas to refund a failed swap is named when it counts', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      swapPricedForm(
+        ranked: [quoteOf(sell: '2', refundReserve: '0.0005')],
+      ).copyWith(
+        inputText: '2',
+        balance: d('2.001'),
+        issue: SwapFormIssue.insufficient,
+      ),
+    );
+
+    expect(lines(tester), [
+      'You need about 2.0015 ETH for this swap, its fees and the gas to '
+          'refund it if it fails. This address has 2.001 ETH.',
+    ]);
+  });
+
+  testWidgets('after Max, which kept that gas back, only fees are named', (
+    tester,
+  ) async {
+    // Max kept 0.01 ETH back; fees have since risen to 0.02 ETH.
+    await pump(
+      tester,
+      swapPricedForm(
+        ranked: [
+          quoteOf(
+            sell: '2',
+            fees: [onTop('0.02', eth, SwapFeeKind.network)],
+            refundReserve: '0.0005',
+          ),
+        ],
+      ).copyWith(
+        inputText: '2',
+        balance: d('2.01'),
+        maxApplied: SwapMaxAmount(
+          amount: d('2'),
+          reservedForFees: d('0.01'),
+          feeAsset: eth,
+          coversRefund: true,
+        ),
+        issue: SwapFormIssue.insufficient,
+      ),
+    );
+
+    expect(lines(tester), [
+      'You need about 2.02 ETH for this swap and its fees. This address '
+          'has 2.01 ETH.',
+    ]);
+  });
 }

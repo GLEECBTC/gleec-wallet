@@ -15,6 +15,9 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         feeNeeded: _feeNeeded(state),
         feeHeld: _feeHeld(state),
         neededWithFees: _neededWithFees(state),
+        neededForRefund:
+            (_bloc.spendOf(state)?.refundReserve ?? Decimal.zero) >
+            Decimal.zero,
         heldElsewhere: _heldElsewhere(state),
       );
       if (copy != null) {
@@ -228,14 +231,14 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     );
   }
 
-  /// The amount with the fees paid on top of it, when the amount alone fits
-  /// the balance and those fees are what it falls short by.
+  /// The amount with its fees and refund gas on top, when the amount alone
+  /// fits the balance and those are what it falls short by.
   String? _neededWithFees(UnifiedSwapState state) {
     final pay = state.pay;
     final balance = state.balance;
     final spend = _bloc.spendOf(state);
     if (pay == null || balance == null || spend == null) return null;
-    final needed = spend.amount + spend.fees;
+    final needed = spend.amount + spend.fees + spend.refundReserve;
     if (spend.amount > balance || needed <= balance) return null;
     return SwapFormat.tokens(
       needed,

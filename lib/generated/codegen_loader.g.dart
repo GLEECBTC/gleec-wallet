@@ -1418,6 +1418,8 @@ abstract class LocaleKeys {
   static const swapErrorTooManyDecimals = 'swapErrorTooManyDecimals';
   static const swapErrorInsufficient = 'swapErrorInsufficient';
   static const swapErrorInsufficientWithFees = 'swapErrorInsufficientWithFees';
+  static const swapErrorInsufficientWithRefund =
+      'swapErrorInsufficientWithRefund';
   static const swapErrorInsufficientForFees = 'swapErrorInsufficientForFees';
   static const swapErrorInsufficientForProviderFees =
       'swapErrorInsufficientForProviderFees';

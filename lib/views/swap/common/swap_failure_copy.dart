@@ -353,8 +353,9 @@ class SwapIssueCopy {
 
   /// The copy for [issue] in [state], or null for "not finished yet": no
   /// amount, or no wallet. [neededWithFees] is the amount with the fees paid
-  /// on top, when only those fees make it too much. [heldElsewhere] is what
-  /// the pay asset's other addresses hold.
+  /// on top, when only those fees make it too much; [neededForRefund] says
+  /// it also holds the gas to refund the swap if it fails. [heldElsewhere] is
+  /// what the pay asset's other addresses hold.
   static SwapIssueCopy? of(
     SwapFormIssue issue,
     UnifiedSwapState state, {
@@ -362,6 +363,7 @@ class SwapIssueCopy {
     String? feeNeeded,
     String? feeHeld,
     String? neededWithFees,
+    bool neededForRefund = false,
     String? heldElsewhere,
   }) {
     final pay = state.pay;
@@ -407,7 +409,12 @@ class SwapIssueCopy {
         ),
       ),
       SwapFormIssue.insufficient => SwapIssueCopy(
-        message: _insufficient(state.balance, ticker, neededWithFees),
+        message: _insufficient(
+          state.balance,
+          ticker,
+          neededWithFees,
+          forRefund: neededForRefund,
+        ),
         detail: heldElsewhere == null
             ? null
             : LocaleKeys.swapHelperHeldElsewhere.tr(args: [heldElsewhere]),
@@ -432,8 +439,9 @@ class SwapIssueCopy {
   static String _insufficient(
     Decimal? balance,
     String ticker,
-    String? neededWithFees,
-  ) {
+    String? neededWithFees, {
+    required bool forRefund,
+  }) {
     if (balance == null) {
       return LocaleKeys.swapErrorInsufficient.tr(args: [ticker]);
     }
@@ -442,11 +450,13 @@ class SwapIssueCopy {
       ticker,
       rounding: SwapRounding.down,
     );
-    return neededWithFees == null
-        ? LocaleKeys.swapErrorInsufficient.tr(args: [held])
-        : LocaleKeys.swapErrorInsufficientWithFees.tr(
-            args: [neededWithFees, held],
-          );
+    if (neededWithFees == null) {
+      return LocaleKeys.swapErrorInsufficient.tr(args: [held]);
+    }
+    return (forRefund
+            ? LocaleKeys.swapErrorInsufficientWithRefund
+            : LocaleKeys.swapErrorInsufficientWithFees)
+        .tr(args: [neededWithFees, held]);
   }
 
   static bool _providerFeesInParent(UnifiedSwapState state) {

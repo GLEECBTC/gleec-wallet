@@ -12,6 +12,7 @@ import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
 part 'atomic_swap_source_max.dart';
 part 'atomic_swap_source_offers.dart';
+part 'atomic_swap_source_refund.dart';
 
 /// What executing an atomic quote needs, carried on [SwapQuote.payload].
 class AtomicSwapPlan {
@@ -56,6 +57,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     bool Function(AssetId from, AssetId to)? tradingAllowed,
     bool Function()? clockValid,
     bool Function(AssetId asset)? isWalletOnly,
+    Map<String, Object?>? Function(AssetId asset)? gasLimitsOf,
     DateTime Function()? now,
   }) : _trading = trading,
        _networks = networks,
@@ -63,6 +65,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
        _tradingAllowed = tradingAllowed,
        _clockValid = clockValid,
        _isWalletOnly = isWalletOnly,
+       _gasLimitsOf = gasLimitsOf,
        _now = now ?? DateTime.now;
 
   final TradingManager _trading;
@@ -71,6 +74,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
   final bool Function()? _clockValid;
   final bool Function(AssetId asset)? _isWalletOnly;
+  final Map<String, Object?>? Function(AssetId asset)? _gasLimitsOf;
   final DateTime Function() _now;
 
   @override
@@ -266,9 +270,9 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     if (preimage case _PreimageRejected(:final failure)) {
       return SwapQuoteRejected(failure);
     }
-    final fees = switch (preimage) {
-      _PreimageFees(:final fees) => fees,
-      _ => const <SwapFeeComponent>[],
+    final (fees, refundReserve) = switch (preimage) {
+      _PreimageFees(:final fees, :final refundReserve) => (fees, refundReserve),
+      _ => (const <SwapFeeComponent>[], null),
     };
 
     // Fees paid out of the received amount reduce what arrives, so the
@@ -319,6 +323,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         toAddress: await _address(to),
         quotedAt: _now(),
         feesKnown: preimage is _PreimageFees,
+        refundReserve: refundReserve,
         payload: AtomicSwapPlan(
           base: from,
           rel: to,
@@ -401,7 +406,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         ?fee(preimage.feeToSendTakerFee, SwapFeeKind.network),
         ?fee(preimage.baseCoinFee, SwapFeeKind.network),
         ?fee(preimage.relCoinFee, SwapFeeKind.network),
-      ]);
+      ], refundReserve: _refundReserve(base, preimage));
     } on TradePreimageRpcErrorNotSufficientBalanceException catch (error) {
       return _PreimageRejected(insufficient(error.coin, error.required));
     } on TradePreimageRpcErrorNotSufficientBaseCoinBalanceException catch (
@@ -442,8 +447,9 @@ sealed class _Preimage {
 }
 
 final class _PreimageFees extends _Preimage {
-  const _PreimageFees(this.fees);
+  const _PreimageFees(this.fees, {this.refundReserve});
   final List<SwapFeeComponent> fees;
+  final Decimal? refundReserve;
 }
 
 final class _PreimageRejected extends _Preimage {

@@ -23,16 +23,24 @@ class SrcProtocol implements ProtocolClass {
     this.testnet = false,
     this.contract,
     this.explorer = 'https://explorer.test/tx/',
+    Map<String, dynamic> config = const {},
     this.broken = false,
-  });
+  }) : _config = config;
 
   final bool testnet;
   final String? contract;
   final String explorer;
+  final Map<String, dynamic> _config;
   final bool broken;
 
   void _check() {
     if (broken) throw StateError('protocol config unreadable');
+  }
+
+  @override
+  Map<String, dynamic> get config {
+    _check();
+    return _config;
   }
 
   @override

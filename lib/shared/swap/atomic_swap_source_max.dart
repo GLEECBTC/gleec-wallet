@@ -42,6 +42,7 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
             ? SwapMaxReserve.tradingAndNetworkFees
             : SwapMaxReserve.tradingFee,
         offerLimit: fillable != null && fillable < sellable,
+        coversRefund: true,
       );
     } on Object {
       return null;

@@ -288,6 +288,7 @@ class SwapQuote extends Equatable {
     this.slippage,
     this.pricing = const SwapQuotePricing(),
     this.feesKnown = true,
+    this.refundReserve,
     this.diagnostic,
     this.payload,
   });
@@ -352,6 +353,11 @@ class SwapQuote extends Equatable {
   /// Whether [fees] lists every cost. An order-book price read without the
   /// engine's fee preimage has none, which must not read as free.
   final bool feesKnown;
+
+  /// Gas kept in [from] on top of [fees], so a swap that fails can still be
+  /// refunded. Spent only then, so it is not a fee. Null when nothing more
+  /// needs keeping, or [feesKnown] is false.
+  final Decimal? refundReserve;
 
   /// Infrastructure identity (provider, tool) for support diagnostics. Never
   /// shown as primary copy.
@@ -454,6 +460,7 @@ class SwapQuote extends Equatable {
     quotedAt: quotedAt,
     pricing: pricing,
     feesKnown: feesKnown,
+    refundReserve: refundReserve,
     diagnostic: diagnostic,
     payload: payload,
   );
@@ -479,6 +486,7 @@ class SwapQuote extends Equatable {
     quotedAt,
     pricing,
     feesKnown,
+    refundReserve,
     diagnostic,
   ];
 }

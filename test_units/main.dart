@@ -166,6 +166,8 @@ import 'tests/swap/swap_src_atomic_offers_test.dart'
     as swap_src_atomic_offers_test;
 import 'tests/swap/swap_src_atomic_max_claim_test.dart'
     as swap_src_atomic_max_claim_test;
+import 'tests/swap/swap_src_atomic_refund_test.dart'
+    as swap_src_atomic_refund_test;
 import 'tests/swap/swap_bloc_max_activation_test.dart'
     as swap_bloc_max_activation_test;
 import 'tests/swap/swap_order_book_offers_test.dart'
@@ -646,6 +648,7 @@ void main() {
   swap_src_models_test.main();
   swap_src_atomic_offers_test.main();
   swap_src_atomic_max_claim_test.main();
+  swap_src_atomic_refund_test.main();
   swap_bloc_max_activation_test.main();
   swap_order_book_offers_test.main();
   unified_swap_repository_offers_test.main();

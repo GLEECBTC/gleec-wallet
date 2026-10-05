@@ -224,6 +224,19 @@ class SwapServices {
     }
   }
 
+  /// [id]'s `gas_limit` config, which KDF reads for its swap transactions.
+  Map<String, Object?>? gasLimitsOf(AssetId id) {
+    try {
+      final limits = assetOf(id)?.protocol.config['gas_limit'];
+      if (limits is! Map) return null;
+      return {
+        for (final MapEntry(:key, :value) in limits.entries) '$key': value,
+      };
+    } on Object {
+      return null;
+    }
+  }
+
   /// A key identifying the signed-in wallet, for per-wallet preferences.
   Future<String?> _walletKey() async {
     final user = _user ?? await _sdk.auth.currentUser;
@@ -316,6 +329,7 @@ class SwapServices {
           tradingAllowed: tradingAllowed,
           clockValid: clockValid,
           isWalletOnly: isWalletOnly,
+          gasLimitsOf: gasLimitsOf,
         ),
       ],
       pricing: pricing,

@@ -46,6 +46,7 @@ void main() {
         reservedForFees: d('0.022'),
         feeAsset: eth,
         reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+        coversRefund: true,
       ),
     );
   });

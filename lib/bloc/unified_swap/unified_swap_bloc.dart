@@ -199,21 +199,30 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   }
 
   /// What starting the selected option takes from the pay balance: the
-  /// amount sold, and the fees paid on top of it in the pay asset. Null
-  /// without a priced option.
-  ({Decimal amount, Decimal fees})? spendOf(UnifiedSwapState state) {
+  /// amount sold, the fees paid on top of it in the pay asset, and the gas
+  /// kept to refund it if it fails. Null without a priced option.
+  ({Decimal amount, Decimal fees, Decimal refundReserve})? spendOf(
+    UnifiedSwapState state,
+  ) {
     final quote = state.selectedQuote;
     final pay = state.pay;
     final amount = amountOf(state);
     if (quote == null || pay == null || amount == null) return null;
     // The option is what starts, and switching to a dollar amount can leave
     // it priced for a little more than the amount now shown.
+    final sold = quote.sellAmount > amount ? quote.sellAmount : amount;
+    final max = state.maxApplied;
     return (
-      amount: quote.sellAmount > amount ? quote.sellAmount : amount,
+      amount: sold,
       // Every fee, the order book's trading fee included: KDF checks the gas
       // to claim a token on the same network alone, never summed with the
       // rest, so only this total shows whether that claim can be paid.
       fees: quote.costOnTopIn(pay),
+      // KDF's Max kept it back already, priced when Max was asked; counting
+      // it again would refuse that Max once gas rises at all.
+      refundReserve: max != null && max.coversRefundFor(sold, state.balance)
+          ? Decimal.zero
+          : quote.refundReserve ?? Decimal.zero,
     );
   }
 
@@ -349,9 +358,13 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     String? amount,
     required SwapAmountMode amountMode,
   }) async {
-    // Max still asking asks again for a new asset to receive, rather than
-    // leave the whole balance it shows as the amount.
-    final remax = state.checkingMax && amount == null && pay == state.pay;
+    // Max, applied or still asking, asks again for a new asset to receive,
+    // rather than leave an amount sized for the old pair, or the whole
+    // balance it shows while asking.
+    final remax =
+        (state.checkingMax || state.maxApplied != null) &&
+        amount == null &&
+        pay == state.pay;
     _invalidate();
     emit(
       _validated(

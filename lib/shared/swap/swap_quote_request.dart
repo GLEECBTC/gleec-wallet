@@ -92,6 +92,7 @@ class SwapMaxAmount extends Equatable {
     this.feeAsset,
     this.reserveCovers = SwapMaxReserve.networkFees,
     this.offerLimit = false,
+    this.coversRefund = false,
   });
 
   /// What may be sold.
@@ -111,6 +112,18 @@ class SwapMaxAmount extends Equatable {
   /// could sell.
   final bool offerLimit;
 
+  /// Whether [amount] already leaves what refunding a failed swap takes from
+  /// this balance, as KDF's own Max does.
+  final bool coversRefund;
+
+  /// Whether selling [sold] from [balance] still leaves what [coversRefund]
+  /// kept back: no more than [amount], from no less than Max was asked with.
+  bool coversRefundFor(Decimal sold, Decimal? balance) =>
+      coversRefund &&
+      sold <= amount &&
+      balance != null &&
+      balance >= amount + reservedForFees;
+
   @override
   List<Object?> get props => [
     amount,
@@ -118,5 +131,6 @@ class SwapMaxAmount extends Equatable {
     feeAsset,
     reserveCovers,
     offerLimit,
+    coversRefund,
   ];
 }

@@ -5,6 +5,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 
+import 'swap_src_fakes.dart';
 import 'swap_src_sdk_fakes.dart';
 import 'swap_test_fixtures.dart';
 
@@ -311,6 +312,31 @@ void main() {
       expect(quote.pricing.minimumUsd, d('60000'));
       expect(sdk.routedSwaps.quotes, isEmpty);
       expect(repo.pricing, same(services.pricing));
+    });
+
+    test('keeps refund gas by the coin\'s own gas limits', () async {
+      sdk.assets.add(
+        assetFor(
+          eth,
+          protocol: SrcProtocol(
+            config: {
+              'gas_limit': {'eth_payment': 100000, 'eth_sender_refund': 500000},
+            },
+          ),
+        ),
+      );
+      sdk.trading.preimage = preimageOf(baseCoinFee: coinFeeOf('ETH', '0.001'));
+      final repo = services.createRepository(
+        tradingAllowed: (_, _) => true,
+        clockValid: () => true,
+      );
+      await repo.catalog();
+
+      final result = await repo.quote(
+        SwapQuoteRequest(from: eth, to: btc, amount: d('1')),
+      );
+
+      expect(result.options.single.refundReserve, d('0.005'));
     });
 
     test('applies the live trading restriction to both sources', () async {

@@ -90,7 +90,43 @@ void main() {
       expect(services.isWalletOnly(unknown), isFalse);
       expect(services.isTestnet(unknown), isFalse);
       expect(services.contractOf(unknown), isNull);
+      expect(services.gasLimitsOf(unknown), isNull);
       expect(services.explorerTxUrl(unknown, '0xhash'), isNull);
+    });
+
+    test('swap gas limits come from the coin config', () {
+      final movr = assetOf('MOVR', subClass: CoinSubClass.moonriver);
+      sdk.assets
+        ..add(
+          assetFor(
+            arb,
+            protocol: SrcProtocol(
+              config: {
+                'gas_limit': {
+                  'eth_payment': 100000,
+                  'eth_sender_refund': 500000,
+                },
+              },
+            ),
+          ),
+        )
+        ..add(
+          assetFor(
+            movr,
+            protocol: SrcProtocol(
+              config: {
+                'gas_limit': <Object?, Object?>{'eth_sender_refund': 500000},
+              },
+            ),
+          ),
+        );
+
+      expect(services.gasLimitsOf(arb), {
+        'eth_payment': 100000,
+        'eth_sender_refund': 500000,
+      });
+      expect(services.gasLimitsOf(movr), {'eth_sender_refund': 500000});
+      expect(services.gasLimitsOf(eth), isNull);
     });
 
     test('a coin config that cannot be read claims nothing', () {
@@ -98,6 +134,7 @@ void main() {
 
       expect(services.isTestnet(arb), isFalse);
       expect(services.contractOf(arb), isNull);
+      expect(services.gasLimitsOf(arb), isNull);
       expect(services.explorerTxUrl(arb, '0xhash'), isNull);
     });
 
