@@ -11,7 +11,6 @@ import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
-import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_links.dart';
@@ -201,10 +200,9 @@ class _ReviewContent extends StatelessWidget {
         ..._status(context),
         const SizedBox(height: 14),
         _Permission(quote: quote),
-        if (review.termsRequired &&
-            quote.source == SwapLiquiditySource.routed) ...[
+        if (quote.source == SwapLiquiditySource.routed) ...[
           const SizedBox(height: 14),
-          const _TermsNotice(),
+          SwapProviderNotice(acceptance: review.termsRequired),
         ],
         const SizedBox(height: 8),
       ],

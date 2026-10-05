@@ -7,9 +7,9 @@ part 'swap_quote_request.dart';
 /// Where a swap's liquidity comes from.
 ///
 /// The two sources are not interchangeable: one is peer-to-peer, the other
-/// executes through a third-party aggregator's contracts. The difference shows
-/// in how a swap completes, not in a provider name — infrastructure identity is
-/// diagnostic, never customer-facing copy.
+/// executes through a third-party aggregator's contracts. A route is described
+/// by how it completes. The aggregator is named, as the third party a routed
+/// swap goes through; the bridges and exchanges it uses stay diagnostic.
 enum SwapLiquiditySource {
   /// KDF's own atomic-swap orderbook. Peer-to-peer, and the only route for
   /// assets no aggregator lists — GLEEC and the GRC-20 tokens above all.

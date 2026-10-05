@@ -271,63 +271,6 @@ class _Permission extends StatelessWidget {
   }
 }
 
-/// The routing provider's terms, presented on a wallet's first routed swap.
-/// Starting the swap is the acceptance; the link only opens the document.
-class _TermsNotice extends StatelessWidget {
-  const _TermsNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = SwapPalette.of(context);
-    final style = SwapText.small(
-      context,
-    ).copyWith(color: palette.textSecondary, height: 1.5);
-    final linkLabel = LocaleKeys.swapTermsLinkLabel.tr(
-      args: [SwapTermsRepository.provider],
-    );
-    final sentence = LocaleKeys.swapTermsNotice.tr(
-      namedArgs: {'terms': '{terms}', 'provider': SwapTermsRepository.provider},
-    );
-    final spans = <InlineSpan>[];
-    sentence.splitMapJoin(
-      '{terms}',
-      onMatch: (_) {
-        spans.add(
-          WidgetSpan(
-            alignment: PlaceholderAlignment.baseline,
-            baseline: TextBaseline.alphabetic,
-            child: MediaQuery.withNoTextScaling(
-              child: Semantics(
-                link: true,
-                child: InkWell(
-                  key: const Key('swap-terms-link'),
-                  onTap: () =>
-                      openSwapLink(context, SwapTermsRepository.termsUrl),
-                  // WidgetSpan scales its child with the paragraph already.
-                  child: Text(
-                    linkLabel,
-                    style: style.copyWith(
-                      color: palette.brandHover,
-                      fontWeight: FontWeight.w700,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        return '';
-      },
-      onNonMatch: (text) {
-        spans.add(TextSpan(text: text));
-        return '';
-      },
-    );
-    return Text.rich(TextSpan(style: style, children: spans));
-  }
-}
-
 class _ReviewFooter extends StatelessWidget {
   const _ReviewFooter({required this.review, this.paused = false});
 

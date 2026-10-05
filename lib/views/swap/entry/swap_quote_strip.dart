@@ -7,6 +7,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
@@ -171,6 +172,12 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
                 );
               },
             ),
+            // Wide screens open the review beside the form, with its own.
+            if (quote.source == SwapLiquiditySource.routed &&
+                state.view != UnifiedSwapView.review) ...[
+              const SizedBox(height: 4),
+              const SwapProviderNotice(linkKey: Key('swap-strip-terms-link')),
+            ],
           ],
         ),
       ),

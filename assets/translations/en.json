@@ -1442,6 +1442,7 @@
   "swapViewInActivity": "View in Activity",
   "swapTermsNotice": "By starting, you agree to the {terms}. Your funds pass through {provider}'s contracts during this swap.",
   "swapTermsLinkLabel": "{} Terms of Service",
+  "swapRoutedThrough": "Routed through {}, an independent third-party service.",
   "swapStagePrepare": "Preparing",
   "swapStagePrepareDetail": "Checking the latest details",
   "swapStageReset": "Resetting permission",

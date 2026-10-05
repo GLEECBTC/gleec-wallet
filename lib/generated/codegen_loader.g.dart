@@ -1613,6 +1613,7 @@ abstract class LocaleKeys {
   static const swapViewInActivity = 'swapViewInActivity';
   static const swapTermsNotice = 'swapTermsNotice';
   static const swapTermsLinkLabel = 'swapTermsLinkLabel';
+  static const swapRoutedThrough = 'swapRoutedThrough';
   static const swapStagePrepare = 'swapStagePrepare';
   static const swapStagePrepareDetail = 'swapStagePrepareDetail';
   static const swapStageReset = 'swapStageReset';

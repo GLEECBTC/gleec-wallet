@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -149,5 +150,75 @@ String? _addressOf(String url) {
     return Uri.decodeComponent(uri.path);
   } on Object {
     return null;
+  }
+}
+
+/// Names the provider a routed swap goes through and links its terms, once:
+/// in the attribution, or on a wallet's first routed swap in the acceptance
+/// that starting the swap gives.
+class SwapProviderNotice extends StatelessWidget {
+  const SwapProviderNotice({
+    this.acceptance = false,
+    this.linkKey = const Key('swap-terms-link'),
+    super.key,
+  });
+
+  /// Whether starting the swap accepts the provider's terms.
+  final bool acceptance;
+
+  /// The terms link's key, distinct where two notices can be on screen.
+  final Key linkKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SwapPalette.of(context);
+    final style = SwapText.small(
+      context,
+    ).copyWith(color: palette.textSecondary, height: 1.5);
+    const provider = SwapTermsRepository.provider;
+    final linkLabel = LocaleKeys.swapTermsLinkLabel.tr(args: [provider]);
+    final routed = LocaleKeys.swapRoutedThrough.tr(args: [provider]);
+    final terms = acceptance
+        ? LocaleKeys.swapTermsNotice.tr(
+            namedArgs: {'terms': '{terms}', 'provider': provider},
+          )
+        : '{terms}';
+    final spans = <InlineSpan>[];
+    '$routed $terms'.splitMapJoin(
+      '{terms}',
+      onMatch: (_) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: MediaQuery.withNoTextScaling(
+              child: Semantics(
+                link: true,
+                child: InkWell(
+                  key: linkKey,
+                  onTap: () =>
+                      openSwapLink(context, SwapTermsRepository.termsUrl),
+                  // WidgetSpan scales its child with the paragraph already.
+                  child: Text(
+                    linkLabel,
+                    style: style.copyWith(
+                      color: palette.brandHover,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        return '';
+      },
+      onNonMatch: (text) {
+        spans.add(TextSpan(text: text));
+        return '';
+      },
+    );
+    return Text.rich(TextSpan(style: style, children: spans));
   }
 }
