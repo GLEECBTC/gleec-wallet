@@ -332,6 +332,18 @@ void main() {
       ]);
     });
 
+    test('an unexpected error is written as its category only', () async {
+      manager.eligibleError = StateError('socket closed');
+
+      final assets = await source().assets(
+        known: {eth, usdc},
+        activated: {eth, usdc},
+      );
+      await assets.update;
+
+      expectLines(['Swap catalog failed: source=routed error=state']);
+    });
+
     test('a read that takes too long says how long it was given', () async {
       manager.hangEligible = true;
 
