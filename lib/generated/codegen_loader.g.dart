@@ -1570,6 +1570,7 @@ abstract class LocaleKeys {
   static const swapNativeIdentity = 'swapNativeIdentity';
   static const swapContractIdentity = 'swapContractIdentity';
   static const swapCopy = 'swapCopy';
+  static const swapShow = 'swapShow';
   static const swapCopied = 'swapCopied';
   static const swapPermissionNoneTitle = 'swapPermissionNoneTitle';
   static const swapPermissionNoneBody = 'swapPermissionNoneBody';

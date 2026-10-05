@@ -201,6 +201,12 @@ class FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
   FakeAuthBloc([AuthBlocState? state])
     : super(state ?? AuthBlocState.initial());
 
+  /// What the views asked of it, such as signing out.
+  final List<AuthBlocEvent> events = [];
+
+  @override
+  void add(AuthBlocEvent event) => events.add(event);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

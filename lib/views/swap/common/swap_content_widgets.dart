@@ -3,11 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/common/seed_backup_gate/gated_copy_address.dart';
+import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/swap/common/swap_buttons.dart';
+import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_status_widgets.dart';
 
@@ -72,7 +77,7 @@ Future<void> copyPayableAddress(
 );
 
 /// A full value — an address, hash or id — with a copy action.
-class SwapCopyLine extends StatelessWidget {
+class SwapCopyLine extends StatefulWidget {
   const SwapCopyLine({
     required this.value,
     this.label,
@@ -91,11 +96,67 @@ class SwapCopyLine extends StatelessWidget {
   final String? copyLabel;
 
   /// Set when [value] is the wallet's own address, which anyone could pay in
-  /// this asset: copying it then goes through [copyPayableAddress].
+  /// this asset. While the seed-backup warning applies, it is shortened
+  /// until **Show** gets past the warning, and copied through
+  /// [copyPayableAddress].
   final AssetId? payableIn;
 
   @override
+  State<SwapCopyLine> createState() => _SwapCopyLineState();
+}
+
+class _SwapCopyLineState extends State<SwapCopyLine> {
+  /// Whether the warning has let the value be shown in full.
+  bool _shown = false;
+
+  @override
+  void didUpdateWidget(covariant SwapCopyLine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) _shown = false;
+  }
+
+  Future<void> _show(bool isTestCoin) async {
+    final mayShow = await ensureSeedBackedUp(
+      context,
+      reason: SeedBackupGateReason.receiveAddress,
+      isTestCoin: isTestCoin,
+    );
+    if (mayShow && mounted) setState(() => _shown = true);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final value = widget.value;
+    final label = widget.label;
+    final payableIn = widget.payableIn;
+    if (payableIn != null && !_shown) {
+      final isTestCoin = context.read<SwapServices>().isTestnet(payableIn);
+      final warns = context.select<AuthBloc, bool>(
+        (auth) => seedBackupGateRequired(
+          wallet: auth.state.currentUser?.wallet,
+          isTestCoin: isTestCoin,
+        ),
+      );
+      if (warns) {
+        final short = SwapFormat.short(value);
+        return Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                label: label == null ? short : '$label: $short',
+                excludeSemantics: true,
+                child: Text(short, style: SwapText.code(context)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SwapLinkButton(
+              label: LocaleKeys.swapShow.tr(),
+              onPressed: () => _show(isTestCoin),
+            ),
+          ],
+        );
+      }
+    }
     final confirmation = LocaleKeys.swapCopied.tr(args: [label ?? value]);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -111,7 +172,7 @@ class SwapCopyLine extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         SwapLinkButton(
-          label: copyLabel ?? LocaleKeys.swapCopy.tr(),
+          label: widget.copyLabel ?? LocaleKeys.swapCopy.tr(),
           onPressed: () => payableIn == null
               ? copyToClipBoard(context, value, confirmation)
               : copyPayableAddress(

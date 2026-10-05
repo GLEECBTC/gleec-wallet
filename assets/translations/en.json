@@ -1401,6 +1401,7 @@
   "swapNativeIdentity": "Native {} · {}",
   "swapContractIdentity": "Contract {}",
   "swapCopy": "Copy",
+  "swapShow": "Show",
   "swapCopied": "{} copied",
   "swapPermissionNoneTitle": "No token approval needed",
   "swapPermissionNoneBody": "You'll only sign the swap request when you start.",
