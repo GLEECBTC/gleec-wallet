@@ -112,6 +112,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       ),
     );
 
+    // Read alongside the price, which is checked against what is held now.
+    final balances = _loadBalances(emit);
     SwapQuoteResult result;
     try {
       result = await _repository.requote(accepted).timeout(_evaluationTimeout);
@@ -123,6 +125,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         ),
       );
     }
+    await balances;
     // Back was pressed while this ran: never start behind the user's back.
     if (version != _startVersion || state.view != UnifiedSwapView.review) {
       return null;
@@ -156,6 +159,27 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
             ),
           );
           add(const UnifiedSwapEvaluationRequested());
+          return null;
+        }
+        // KDF's checks at the start leave out the gas to refund the payment,
+        // so the form's check is run again. A price read without fees is
+        // held to the one reviewed.
+        final short = _shortfallOf(state, fresh.feesKnown ? fresh : accepted);
+        if (short != null) {
+          emit(
+            state.copyWith(
+              review: review.copyWith(
+                status: SwapReviewStatus.revalidationFailed,
+                revalidationFailure: SwapQuoteFailure(
+                  source: fresh.source,
+                  kind: SwapQuoteFailureKind.insufficientFunds,
+                  asset: short == SwapFormIssue.insufficientForFees
+                      ? fresh.from.parentId
+                      : fresh.from,
+                ),
+              ),
+            ),
+          );
           return null;
         }
         if (_isMaterialChange(accepted, fresh)) {

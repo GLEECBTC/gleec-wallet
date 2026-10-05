@@ -58,17 +58,24 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     if (balance != null && amount > balance) return SwapFormIssue.insufficient;
 
     // With a priced option, its fees and refund gas must fit too.
-    final spend = spendOf(next);
+    final quote = next.selectedQuote;
+    return quote == null ? null : _shortfallOf(next, quote);
+  }
+
+  /// The balance [quote] leaves short in [next], if any: the pay asset's, of
+  /// the amount with its fees and refund gas, or the network coin's, of the
+  /// fees paid in it.
+  SwapFormIssue? _shortfallOf(UnifiedSwapState next, SwapQuote quote) {
+    final balance = next.balance;
+    final spend = _spendFor(next, quote);
     if (balance != null &&
         spend != null &&
         spend.amount + spend.fees + spend.refundReserve > balance) {
       return SwapFormIssue.insufficient;
     }
-    final quote = next.selectedQuote;
-    final feeAsset = pay?.parentId;
+    final feeAsset = next.pay?.parentId;
     final feeBalance = next.feeBalance;
-    if (quote != null &&
-        feeAsset != null &&
+    if (feeAsset != null &&
         feeBalance != null &&
         quote.costOnTopIn(feeAsset) > feeBalance) {
       return SwapFormIssue.insufficientForFees;

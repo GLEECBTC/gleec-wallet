@@ -205,9 +205,17 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     UnifiedSwapState state,
   ) {
     final quote = state.selectedQuote;
+    return quote == null ? null : _spendFor(state, quote);
+  }
+
+  /// [spendOf] for [quote], which need not be the selected option.
+  ({Decimal amount, Decimal fees, Decimal refundReserve})? _spendFor(
+    UnifiedSwapState state,
+    SwapQuote quote,
+  ) {
     final pay = state.pay;
     final amount = amountOf(state);
-    if (quote == null || pay == null || amount == null) return null;
+    if (pay == null || amount == null) return null;
     // The option is what starts, and switching to a dollar amount can leave
     // it priced for a little more than the amount now shown.
     final sold = quote.sellAmount > amount ? quote.sellAmount : amount;

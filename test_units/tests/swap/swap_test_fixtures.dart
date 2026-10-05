@@ -71,6 +71,7 @@ SwapQuote quoteOf({
   Duration? duration = const Duration(seconds: 45),
   DateTime? quotedAt,
   SwapQuotePricing? pricing,
+  bool feesKnown = true,
   String? refundReserve,
   Object? payload,
 }) => SwapQuote(
@@ -114,6 +115,7 @@ SwapQuote quoteOf({
         swapCostUsd: d('0'),
         isComplete: true,
       ),
+  feesKnown: feesKnown,
   refundReserve: refundReserve == null ? null : d(refundReserve),
   payload: payload,
 );
