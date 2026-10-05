@@ -8,6 +8,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
 
 ## What changed since the last brief
 
+- **Replaced tokens are marked, and offered only to pay with.** The coin list keeps the old version of some tokens for the people who still hold them, such as USDC.e, the bridged USDC on Polygon ("USD Coin (OLD)"). The swap listed it as a second "USDC · Polygon", told apart only by its contract. Now it reads "USDC (OLD)" throughout the swap, after USDC in the list. The pay picker offers it only while the wallet holds some, and it is never offered to receive, as a shortcut or in the pair the form opens on. Gleec (OLD) reads "GLEEC (OLD)" the same way.
 - **Fees no longer read as price impact.** "vs market" and the high-price-impact warning now leave out the fees the amount you receive was already reduced by: on a routed swap, LI.FI's fee and a bridge's relayer fee. A tiny cross-network swap read "−35% vs market" when the rate was fine and the fees were the cost. Fees get their own warning when all costs together come to 10% or more of what you pay ("High fees: about 40% of this swap's value goes to network and provider fees."), the review calls them out, and **Costs & protection** lists what was "Already taken from what you receive".
 - **Routed swaps name LI.FI.** Under the price, and on every routed review: "Routed through LI.FI, an independent third-party service." with a link to LI.FI's terms. A wallet's first routed swap still says that starting it accepts them. Order-book swaps show neither.
 - **The seed backup notice shows on every swap tab.** While a wallet's seed is not yet confirmed, Swap, Activity and Advanced each show "Backup your seed phrase" once, under the tabs. Before, only Advanced did.
@@ -117,7 +118,7 @@ Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum
 - Run 6 as ETC → USDC on Binance Smart Chain. Claiming the USDC spends a little BNB.
 - Run Max (run 4) last. It keeps back only three times the quoted gas, and runs 5 and 6 still pay their fees in BNB.
 
-**Still to run: GLEEC.** Run 6 stands in for a GLEEC swap until a tester can get GLEEC on the Gleec chain, at a `0x` address. HitBTC and FMFW.io, the exchanges that list GLEEC, pay out only on the old chain, whose addresses start with `R`. The wallet shows that coin as **Gleec (OLD)**, and no one offers it on the order book. Whoever has GLEEC should repeat run 6 as GLEEC → USDC on Polygon. On 2026-09-30 one maker offered that for 9.4 to 114 GLEEC, so about 20 GLEEC covers a swap and its fees; no GRC-20 token had an offer.
+**Still to run: GLEEC.** Run 6 stands in for a GLEEC swap until a tester can get GLEEC on the Gleec chain, at a `0x` address. HitBTC and FMFW.io, the exchanges that list GLEEC, pay out only on the old chain, whose addresses start with `R`. The wallet shows that coin as **Gleec (OLD)** ("GLEEC (OLD)" in the swap, offered only to pay with), and no one offers it on the order book. Whoever has GLEEC should repeat run 6 as GLEEC → USDC on Polygon. On 2026-09-30 one maker offered that for 9.4 to 114 GLEEC, so about 20 GLEEC covers a swap and its fees; no GRC-20 token had an offer.
 
 ## What to try
 
@@ -129,7 +130,7 @@ For each item, note what the screen said before you confirmed and what actually 
 3. **A token with none of its network's coin:** "You need some … to pay the network fees", and nothing priced. With some but too little, you should see "You need about … for network fees".
 4. **Switch pay and receive.** The amount should clear, because it was in the other asset's units.
 5. **USD entry:** toggle it, type a dollar amount, and check the token amount beside it. With cents typed, a digit typed after the point should go in and push the last one out.
-6. **Same ticker, different networks** (USDC on Ethereum and on Arbitrum): the picker should mark the rows **Same ticker**, and the review should show each asset's network and contract.
+6. **Same ticker, different networks** (USDC on Ethereum and on Arbitrum): the picker should mark the rows **Same ticker**, and the review should show each asset's network and contract. A replaced token is not a second ticker: with USDC.e held, the pay picker lists "USDC (OLD)" after USDC on Polygon, and the receive picker doesn't list it.
 7. **An asset that isn't active:**
    - Pick one from **All**: it should activate, then take its place in the form.
    - Open a coin page's **Swap** for an inactive coin, or a `/swap?from_currency=…` link: the form should show **Activate {asset}**, and nothing is priced until you do.
