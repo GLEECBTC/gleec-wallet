@@ -520,14 +520,22 @@ List<String> _seedNodesFor(String path) {
 String _generateRpcPassword() {
   const alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   final random = Random.secure();
+  final threeInARow = RegExp(r'(.)\1\1');
 
-  // KDF rejects weak passwords, so this needs a digit and both cases; drawing
-  // 24 characters from the pool above makes that overwhelmingly likely, and
-  // the explicit tail guarantees it.
-  final body = List.generate(
-    24,
-    (_) => alphabet[random.nextInt(alphabet.length)],
-  ).join();
-
-  return 'Cp$body-7';
+  // KDF's password policy (allow_weak_password is false) requires at least 8
+  // characters, which this always has, and a digit, both cases and a symbol,
+  // which `Cp` and `-7` supply. It also refuses the same character three times
+  // in a row and "password" in any case; a random body can produce either, so
+  // such a password is drawn again.
+  while (true) {
+    final body = List.generate(
+      24,
+      (_) => alphabet[random.nextInt(alphabet.length)],
+    ).join();
+    final password = 'Cp$body-7';
+    if (!threeInARow.hasMatch(password) &&
+        !password.toLowerCase().contains('password')) {
+      return password;
+    }
+  }
 }
