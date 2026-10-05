@@ -52,14 +52,15 @@ flutter test test_units/main.dart \
   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 ```
 
-### The four defines are mandatory
+### The four defines pin GasFree on
 
-Without them `tronGaslessServiceProvider` falls back to its empty default
-(`lib/shared/constants.dart`), every GasFree provider-identity check fails closed, and
-~36 gas-free tests never reach the state they `await`. They **hang rather than fail** —
-an unbounded `bloc.stream.firstWhere` has no deadline — so the symptom is a wedged runner
-and a CI timeout, not a red test. The values are non-secret; the source of record is
-`.github/workflows/unit-tests-on-pr.yml:9-20` and `test_units/main.dart:101-114`.
+GasFree defaults to these production values (`lib/shared/constants.dart`), so a plain
+run passes too; the defines pin them, as CI does. A build that turns GasFree off, or
+empties `tronGaslessServiceProvider`, fails every GasFree provider-identity check closed,
+and ~36 gas-free tests never reach the state they `await`. They **hang rather than fail**
+— an unbounded `bloc.stream.firstWhere` has no deadline — so the symptom is a wedged
+runner and a CI timeout, not a red test. The values are non-secret; the source of record
+is `.github/workflows/unit-tests-on-pr.yml:9-20` and `test_units/main.dart:101-114`.
 
 ### The aggregator trap
 

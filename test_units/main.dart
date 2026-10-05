@@ -175,12 +175,11 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 /// Run in terminal flutter test test_units/main.dart
 /// More info at documentation "Unit and Widget testing" section
 ///
-/// The GasFree suites need the feature compiled in. A plain
-/// `flutter test test_units/main.dart` leaves `tronGaslessServiceProvider`
-/// empty, so every provider-identity check fails closed and ~36 gas-free tests
-/// cannot reach the states they assert. That is the compiled configuration
-/// behaving correctly, not a broken test. CI passes these
-/// (.github/workflows/unit-tests-on-pr.yml); to reproduce it locally:
+/// The GasFree suites need the feature compiled in, which it is by default.
+/// A build that turns it off, or leaves `tronGaslessServiceProvider` empty,
+/// fails every provider-identity check closed, and ~36 gas-free tests cannot
+/// reach the states they assert. CI pins the values explicitly
+/// (.github/workflows/unit-tests-on-pr.yml); to do the same locally:
 ///
 /// ```sh
 /// flutter test test_units/main.dart \
