@@ -30,6 +30,8 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
       var sellable = sellableOf(max > balance ? balance : max);
       final claim = await _claimFee(from, to, sellable, asked);
       final offers = await book;
+      // On top of the refund gas KDF kept, though a swap pays only one of the
+      // two: the overlap is Max's margin for gas rising before its quote.
       if (claim != null) sellable = sellableOf(sellable - claim);
       // More than the largest offer never fills; with no offers, Max still
       // shows what could be sold.
