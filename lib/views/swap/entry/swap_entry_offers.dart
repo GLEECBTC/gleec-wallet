@@ -105,6 +105,11 @@ extension _SwapEntryOffers on _SwapEntryViewState {
     for (final id in offered) {
       balance[id] = _services.lastKnownBalance(id) ?? Decimal.zero;
     }
+    // As in the picker: a legacy asset only to pay with, while held.
+    offered.removeWhere(
+      (id) =>
+          isLegacySwapAsset(id) && (keepsPay || balance[id]! <= Decimal.zero),
+    );
     offered.sort((a, b) {
       final held = (balance[b]! > Decimal.zero ? 1 : 0).compareTo(
         balance[a]! > Decimal.zero ? 1 : 0,

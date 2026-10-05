@@ -53,12 +53,13 @@ void main() {
 
   SwapCatalog catalog({
     SwapCatalogStatus routedStatus = SwapCatalogStatus.fresh,
+    Set<AssetId> extra = const {},
   }) => SwapCatalog(
     sources: [
       SwapSourceAssets(
         source: SwapLiquiditySource.atomic,
-        quotable: {eth, usdc, gleecEvm, btc}.intersection(activated),
-        onceActive: {eth, usdc, gleecEvm, btc}.difference(activated),
+        quotable: {eth, usdc, gleecEvm, btc, ...extra}.intersection(activated),
+        onceActive: {eth, usdc, gleecEvm, btc, ...extra}.difference(activated),
       ),
       SwapSourceAssets(
         source: SwapLiquiditySource.routed,
@@ -367,6 +368,61 @@ void main() {
 
       await tapText(tester, 'Show all assets');
       expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
+    });
+  });
+
+  group('legacy assets', () {
+    setUp(() {
+      activated = {...activated, usdcOld, gleecOld};
+      services.balances = {usdcOld: d('5'), gleecOld: Decimal.zero};
+    });
+
+    SwapAssetPicker picker(SwapPickerSide side, {AssetId? selected}) =>
+        SwapAssetPicker(
+          side: side,
+          catalog: catalog(extra: {usdcOld, gleecOld}),
+          selected: selected,
+          other: null,
+          services: services,
+          isBlocked: (_) => false,
+        );
+
+    Future<void> tapText(WidgetTester tester, String text) async {
+      await tester.tap(find.text(text));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('are not offered to receive, even when held', (tester) async {
+      await open(tester, picker(SwapPickerSide.receive));
+      await tapText(tester, 'All');
+      expect(find.text('USDC (OLD)'), findsNothing);
+      expect(find.text('USDC'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'old');
+      await tester.pumpAndSettle();
+      expect(find.text('USDC (OLD)'), findsNothing);
+    });
+
+    testWidgets('are offered to pay with while held, after the current one', (
+      tester,
+    ) async {
+      await open(tester, picker(SwapPickerSide.pay));
+      await tapText(tester, 'All');
+      expect(find.text('GLEEC (OLD)'), findsNothing, reason: 'none held');
+      expect(
+        tester.getTopLeft(find.text('USDC (OLD)')).dy,
+        greaterThan(tester.getTopLeft(find.text('USDC')).dy),
+      );
+
+      await tapText(tester, 'Popular');
+      expect(find.text('USDC (OLD)'), findsNothing);
+      expect(find.text('USDC'), findsOneWidget);
+    });
+
+    testWidgets('one already chosen stays listed', (tester) async {
+      await open(tester, picker(SwapPickerSide.receive, selected: usdcOld));
+      await tapText(tester, 'All');
+      expect(find.text('USDC (OLD)'), findsOneWidget);
     });
   });
 }

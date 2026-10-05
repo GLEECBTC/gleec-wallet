@@ -282,6 +282,38 @@ void main() {
       expect(chips(tester), ['KMD']);
     });
 
+    testWidgets('offer a legacy asset to pay with only when held', (
+      tester,
+    ) async {
+      services.balances = {usdcOld: d('5')};
+      await pump(
+        tester,
+        noOffers(
+          receiveCounts: SwapOfferCounts(gleec, {
+            usdcOld: true,
+            gleecOld: true,
+            btc: true,
+          }),
+        ),
+      );
+
+      expect(chips(tester), ['USDC (OLD) on Ethereum, 5 held', 'BTC']);
+    });
+
+    testWidgets('never offer a legacy asset to receive', (tester) async {
+      services.balances = {usdcOld: d('5')};
+      await pump(
+        tester,
+        noOffers(
+          pay: gleec,
+          receive: eth,
+          payCounts: SwapOfferCounts(gleec, {usdcOld: true, btc: true}),
+        ),
+      );
+
+      expect(chips(tester), ['BTC']);
+    });
+
     testWidgets('none when no one trades the asset at all', (tester) async {
       await pump(
         tester,

@@ -15,6 +15,7 @@ import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import 'package:web_dex/shared/swap/swap_tickers.dart';
 import 'package:web_dex/views/swap/common/swap_card_pair.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';

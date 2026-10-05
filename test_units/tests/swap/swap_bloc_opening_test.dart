@@ -101,6 +101,43 @@ void main() {
       expect(openingPair(h), (null, null));
     });
 
+    swapBlocTest('never pairs a holding with a legacy asset', (h) {
+      tradeOnly(h, {eth, usdcOld, usdc});
+      h.holdings = [(asset: eth, usdValue: d('6000'))];
+
+      expect(openingPair(h), (eth, usdc));
+    });
+
+    swapBlocTest('skips a last pair that receives a legacy asset', (h) {
+      h.extraAssets.add(usdcOld);
+      h.resolve(h.preferences.rememberPair(eth, usdcOld));
+      tradeOnly(h, {eth, usdc, usdcOld});
+      h.holdings = [(asset: eth, usdValue: d('6000'))];
+
+      expect(openingPair(h), (eth, usdc));
+    });
+
+    swapBlocTest('keeps a last pair paying with a legacy asset still held', (
+      h,
+    ) {
+      h
+        ..extraAssets.add(usdcOld)
+        ..balances[usdcOld] = d('5');
+      h.resolve(h.preferences.rememberPair(usdcOld, eth));
+      tradeOnly(h, {eth, usdc, usdcOld});
+
+      expect(openingPair(h), (usdcOld, eth));
+    });
+
+    swapBlocTest('skips a last pair paying with a legacy asset not held', (h) {
+      h.extraAssets.add(usdcOld);
+      h.resolve(h.preferences.rememberPair(usdcOld, eth));
+      tradeOnly(h, {eth, usdc, usdcOld});
+      h.holdings = [(asset: eth, usdValue: d('6000'))];
+
+      expect(openingPair(h), (eth, usdc));
+    });
+
     swapBlocTest('gives way to an intent that arrives meanwhile', (h) {
       h
         ..holdings = [(asset: eth, usdValue: d('6000'))]

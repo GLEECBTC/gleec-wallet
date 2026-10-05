@@ -100,7 +100,10 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
         if (pay != null &&
             receive != null &&
             tradable.contains(pay) &&
-            tradable.contains(receive)) {
+            tradable.contains(receive) &&
+            !isLegacySwapAsset(receive) &&
+            (!isLegacySwapAsset(pay) ||
+                (await _read(pay) ?? Decimal.zero) > Decimal.zero)) {
           return (pay: pay, receive: receive);
         }
       }
@@ -161,16 +164,17 @@ bool _isStable(AssetId asset) =>
     _stablecoins.contains(asset.symbol.configSymbol.toUpperCase());
 
 /// A stablecoin on the same network as [pay]; for a stablecoin, the
-/// network's own coin.
+/// network's own coin. Never a legacy asset.
 AssetId? _partnerFor(AssetId pay, Set<AssetId> tradable) {
   final network = pay.parentId ?? pay;
+  final candidates = tradable.where((a) => !isLegacySwapAsset(a)).toSet();
   if (_isStable(pay)) {
-    if (tradable.contains(network) && network != pay) return network;
-    return tradable.where((a) => !_isStable(a) && a != pay).firstOrNull;
+    if (candidates.contains(network) && network != pay) return network;
+    return candidates.where((a) => !_isStable(a) && a != pay).firstOrNull;
   }
-  final sameNetwork = tradable.where(
+  final sameNetwork = candidates.where(
     (a) => _isStable(a) && (a.parentId ?? a) == network,
   );
   return sameNetwork.firstOrNull ??
-      tradable.where((a) => _isStable(a) && a != pay).firstOrNull;
+      candidates.where((a) => _isStable(a) && a != pay).firstOrNull;
 }

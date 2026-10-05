@@ -14,6 +14,7 @@ import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import 'package:web_dex/shared/swap/swap_tickers.dart';
 import 'package:web_dex/views/swap/common/swap_failure_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
@@ -198,9 +199,10 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     final activated = _activated ?? widget.catalog.activated ?? const {};
     return {
       for (final id in widget.catalog.assets)
-        if (widget.showTestCoins ||
-            activated.contains(id) ||
-            !widget.services.isTestnet(id))
+        if ((widget.showTestCoins ||
+                activated.contains(id) ||
+                !widget.services.isTestnet(id)) &&
+            _suggests(id, activated))
           id,
     };
   }

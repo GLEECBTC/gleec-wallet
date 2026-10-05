@@ -93,6 +93,9 @@ class SwapBlocHarness {
     usdc: d('5000'),
     btc: d('1'),
   };
+
+  /// Assets the wallet knows beyond ETH, USDC, BTC and GLEEC.
+  final extraAssets = <AssetId>[];
   final unreadableBalances = <AssetId>{};
   final unreadableAddresses = <AssetId>{};
   List<SwapHolding> holdings = [];
@@ -135,7 +138,7 @@ class SwapBlocHarness {
         pricing: SwapPricingService(prices),
         activatedAssets: () async {
           await catalogGate?.future;
-          return {eth, usdc, btc, gleec};
+          return {eth, usdc, btc, gleec, ...extraAssets};
         },
       ),
       registry: registry,
@@ -157,7 +160,8 @@ class SwapBlocHarness {
         return 'address-of-${asset.id}';
       },
       resolveAsset: (ticker) => {
-        for (final asset in [eth, usdc, btc, gleec]) asset.id: asset,
+        for (final asset in [eth, usdc, btc, gleec, ...extraAssets])
+          asset.id: asset,
       }[ticker],
       holdings: () async {
         await holdingsGate?.future;

@@ -20,6 +20,14 @@ extension _PickerBalance on _SwapAssetPickerState {
       activated.contains(id) &&
       (widget.services.lastKnownBalance(id) ?? Decimal.zero) > Decimal.zero;
 
+  /// Whether this side offers [id]. A legacy asset is only offered to pay
+  /// with, while the wallet holds some, so no one is steered into a replaced
+  /// token; one already chosen stays listed.
+  bool _suggests(AssetId id, Set<AssetId> activated) =>
+      !isLegacySwapAsset(id) ||
+      id == widget.selected ||
+      (widget.side == SwapPickerSide.pay && _held(id, activated));
+
   /// Whether the switch leaves [id] out: inactive, or active with nothing to
   /// spend. A balance not read yet, as just after sign-in, is not taken for
   /// zero, or the switch could hide everything.
