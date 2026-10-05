@@ -124,6 +124,7 @@ import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
 import 'tests/analytics/frame_gap_metrics_test.dart';
 import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
+import 'tests/wallet/mobile_coin_row_title_test.dart';
 import 'tests/wallet/coins_repo_activation_wallet_race_test.dart';
 import 'tests/services/legal_acceptance_test.dart';
 import 'tests/services/legal_refresh_test.dart' as legal_refresh_test;
@@ -164,6 +165,7 @@ import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
 import 'tests/utils/convert_fract_rat_tests.dart';
 import 'tests/utils/double_to_string_tests.dart';
+import 'tests/utils/format_list_balance_tests.dart';
 import 'tests/utils/explorer_url_tests.dart';
 import 'tests/utils/get_fiat_amount_tests.dart';
 import 'tests/utils/get_usd_balance_tests.dart';
@@ -216,6 +218,7 @@ void main() {
   inline_legal_acceptance_test.main();
   group('Formatters:', () {
     testCutTrailingZeros();
+    testFormatListBalance();
     testFormatAmount();
     testToStringAmount();
     testLeadingZeros();
@@ -317,6 +320,7 @@ void main() {
   testFrameGapMetrics();
   testCoinSortOrder();
   testCoinsBlocBalanceEmit();
+  testMobileCoinRowTitle();
   testLegalAcceptance();
   legal_refresh_test.main();
   trading_status_service_test.main();
