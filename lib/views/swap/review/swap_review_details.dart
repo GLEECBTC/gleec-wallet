@@ -131,6 +131,7 @@ extension _ReviewContentDetails on _ReviewContent {
           SwapCopyLine(
             value: fromAddress,
             label: LocaleKeys.swapReviewSourceAddress.tr(),
+            payableIn: quote.from,
           ),
         ],
         if (toAddress != null) ...[
@@ -142,6 +143,7 @@ extension _ReviewContentDetails on _ReviewContent {
           SwapCopyLine(
             value: toAddress,
             label: LocaleKeys.swapReviewRecipientAddress.tr(),
+            payableIn: quote.to,
           ),
         ],
         _identity(

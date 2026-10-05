@@ -91,10 +91,17 @@ class SwapAssetPill extends StatelessWidget {
 
 /// "From 0x5520…7B91" / "To 0x80A1…42F0": tap copies the full address.
 class _AddressFooterButton extends StatelessWidget {
-  const _AddressFooterButton({required this.prefix, required this.address});
+  const _AddressFooterButton({
+    required this.prefix,
+    required this.address,
+    required this.asset,
+  });
 
   final String Function(String) prefix;
   final String? address;
+
+  /// The asset the wallet could be paid in at [address].
+  final AssetId? asset;
 
   @override
   Widget build(BuildContext context) {
@@ -103,8 +110,12 @@ class _AddressFooterButton extends StatelessWidget {
     if (address == null) {
       return const SizedBox(height: 48);
     }
-    void copy() =>
-        copyToClipBoard(context, address, LocaleKeys.swapAddressCopied.tr());
+    void copy() => copyPayableAddress(
+      context,
+      address,
+      asset: asset,
+      successMessage: LocaleKeys.swapAddressCopied.tr(),
+    );
     return SwapButtonSemantics(
       label: '${prefix(address)}. ${LocaleKeys.swapCopyAddress.tr()}',
       onTap: copy,

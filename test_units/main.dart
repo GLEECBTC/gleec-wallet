@@ -249,6 +249,8 @@ import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
 import 'tests/swap/swap_bloc_timers_test.dart' as swap_bloc_timers_test;
 import 'tests/swap/swap_bloc_validation_test.dart' as swap_bloc_validation_test;
 import 'tests/swap/swap_bloc_values_test.dart' as swap_bloc_values_test;
+import 'tests/swap/swap_entry_ui_address_gate_test.dart'
+    as swap_entry_ui_address_gate_test;
 import 'tests/swap/swap_entry_ui_cards_test.dart' as swap_entry_ui_cards_test;
 import 'tests/swap/swap_entry_ui_cta_side_test.dart'
     as swap_entry_ui_cta_side_test;
@@ -692,6 +694,7 @@ void main() {
   swap_bloc_timers_test.main();
   swap_bloc_validation_test.main();
   swap_bloc_values_test.main();
+  swap_entry_ui_address_gate_test.main();
   swap_entry_ui_cards_test.main();
   swap_entry_ui_cta_side_test.main();
   swap_entry_ui_cta_test.main();

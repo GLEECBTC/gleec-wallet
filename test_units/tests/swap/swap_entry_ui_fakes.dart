@@ -17,6 +17,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_state.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
@@ -195,6 +196,15 @@ class FakeTradingStatusBloc extends Cubit<TradingStatusState>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// The app's sign-in, signed out unless given a state.
+class FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
+  FakeAuthBloc([AuthBlocState? state])
+    : super(state ?? AuthBlocState.initial());
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 class FakeSettingsBloc extends Cubit<SettingsState> implements SettingsBloc {
   FakeSettingsBloc({required bool testCoins})
     : super(
@@ -302,7 +312,8 @@ SwapQuote quoteWith(
 );
 
 /// Pumps [child] as the swap surface shows it: English, the app's font, a
-/// dark theme, and the swap bloc, services and shell above it.
+/// dark theme, and the swap bloc, services and shell above it. Signed out,
+/// unless [providers] has an [AuthBloc].
 Future<void> pumpSwapUi(
   WidgetTester tester,
   Widget child, {
@@ -320,6 +331,8 @@ Future<void> pumpSwapUi(
   addTearDown(tester.view.resetDevicePixelRatio);
   final controller = shell ?? SwapShellController();
   if (shell == null) addTearDown(controller.dispose);
+  final signedOut = FakeAuthBloc();
+  addTearDown(signedOut.close);
   await tester.pumpWidget(
     EasyLocalization(
       supportedLocales: const [Locale('en')],
@@ -353,6 +366,9 @@ Future<void> pumpSwapUi(
             value: services,
             child: MultiBlocProvider(
               providers: [
+                // Copying an address reads the sign-in and fails without
+                // one. An AuthBloc in [providers] sits below, so it wins.
+                BlocProvider<AuthBloc>.value(value: signedOut),
                 BlocProvider<UnifiedSwapBloc>.value(value: bloc),
                 ...providers,
               ],

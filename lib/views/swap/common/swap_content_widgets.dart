@@ -1,9 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/views/common/seed_backup_gate/gated_copy_address.dart';
 import 'package:web_dex/views/swap/common/swap_buttons.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_status_widgets.dart';
@@ -53,12 +56,28 @@ class SwapTokenIcon extends StatelessWidget {
   }
 }
 
+/// Copies [address], the wallet's own on [asset]'s network. Anyone could pay
+/// the wallet there, so it goes through the seed-backup gate, as wherever
+/// else the wallet hands out such an address.
+Future<void> copyPayableAddress(
+  BuildContext context,
+  String address, {
+  required AssetId? asset,
+  String? successMessage,
+}) => gatedCopyAddress(
+  context,
+  address,
+  successMessage: successMessage,
+  isTestCoin: asset != null && context.read<SwapServices>().isTestnet(asset),
+);
+
 /// A full value — an address, hash or id — with a copy action.
 class SwapCopyLine extends StatelessWidget {
   const SwapCopyLine({
     required this.value,
     this.label,
     this.copyLabel,
+    this.payableIn,
     super.key,
   });
 
@@ -71,8 +90,13 @@ class SwapCopyLine extends StatelessWidget {
   /// The button text. Defaults to "Copy".
   final String? copyLabel;
 
+  /// Set when [value] is the wallet's own address, which anyone could pay in
+  /// this asset: copying it then goes through [copyPayableAddress].
+  final AssetId? payableIn;
+
   @override
   Widget build(BuildContext context) {
+    final confirmation = LocaleKeys.swapCopied.tr(args: [label ?? value]);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -88,11 +112,14 @@ class SwapCopyLine extends StatelessWidget {
         const SizedBox(width: 8),
         SwapLinkButton(
           label: copyLabel ?? LocaleKeys.swapCopy.tr(),
-          onPressed: () => copyToClipBoard(
-            context,
-            value,
-            LocaleKeys.swapCopied.tr(args: [label ?? value]),
-          ),
+          onPressed: () => payableIn == null
+              ? copyToClipBoard(context, value, confirmation)
+              : copyPayableAddress(
+                  context,
+                  value,
+                  asset: payableIn,
+                  successMessage: confirmation,
+                ),
         ),
       ],
     );

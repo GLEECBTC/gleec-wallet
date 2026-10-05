@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -295,6 +294,7 @@ class _SwapPayCardState extends State<SwapPayCard> {
               child: _AddressFooterButton(
                 prefix: (a) => LocaleKeys.swapFromAddress.tr(args: [a]),
                 address: address,
+                asset: pay,
               ),
             ),
           ),
@@ -430,6 +430,7 @@ class SwapReceiveCard extends StatelessWidget {
         child: _AddressFooterButton(
           prefix: (a) => LocaleKeys.swapToAddress.tr(args: [a]),
           address: address,
+          asset: receive,
         ),
       ),
     );
