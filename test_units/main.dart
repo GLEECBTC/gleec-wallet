@@ -144,6 +144,8 @@ import 'tests/swap/swap_signed_out_repository_test.dart'
 import 'tests/swap/swap_shell_test.dart' as swap_shell_test;
 import 'tests/swap/swap_fee_vs_impact_test.dart' as swap_fee_vs_impact_test;
 import 'tests/swap/swap_provider_notice_test.dart' as swap_provider_notice_test;
+import 'tests/swap/swap_shell_backup_notice_button_test.dart'
+    as swap_shell_backup_notice_button_test;
 import 'tests/swap/swap_shell_backup_notice_test.dart'
     as swap_shell_backup_notice_test;
 import 'tests/swap/swap_slippage_test.dart' as swap_slippage_test;
@@ -621,6 +623,7 @@ void main() {
   swap_accessibility_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
+  swap_shell_backup_notice_button_test.main();
   swap_shell_backup_notice_test.main();
   swap_fee_vs_impact_test.main();
   swap_provider_notice_test.main();
