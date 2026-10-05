@@ -99,6 +99,14 @@ class SwapPricingService {
       ),
     );
 
+    // Market prices first, so these share a source with the pay and receive
+    // values the impact compares them against.
+    var deducted = Decimal.zero;
+    for (final fee in quote.feesInReceive) {
+      final usd = usdValue(fee.asset, fee.amount) ?? fee.usdValue;
+      if (usd != null) deducted += usd;
+    }
+
     final known = quote.feesKnown;
     return quote.withPricing(
       SwapQuotePricing(
@@ -108,6 +116,7 @@ class SwapPricingService {
         networkCostUsd: known ? network : null,
         approvalNetworkCostUsd: known ? approval : null,
         swapCostUsd: known ? swap : null,
+        deductedCostUsd: deducted,
         isComplete: known && network != null && swap != null,
       ),
       fees: fees,

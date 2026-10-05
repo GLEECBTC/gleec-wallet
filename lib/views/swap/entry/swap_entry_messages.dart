@@ -57,6 +57,17 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         ),
       );
     }
+    final feeShare = quote?.pricing.feeShare;
+    if (feeShare != null && feeShare >= swapHighFeeShare) {
+      messages.add(
+        SwapHelperLine(
+          text: LocaleKeys.swapWarningHighFees.tr(
+            args: [SwapFormat.percent(feeShare)],
+          ),
+          tone: SwapTone.warning,
+        ),
+      );
+    }
     if (partial != null) {
       messages.add(SwapHelperLine(text: partial));
     } else if (!state.signedIn && quote != null) {

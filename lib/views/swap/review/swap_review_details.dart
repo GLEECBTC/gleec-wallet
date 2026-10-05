@@ -18,6 +18,17 @@ extension _ReviewContentDetails on _ReviewContent {
         .join(' + ');
   }
 
+  /// The USD total of [fees], or null when any is unpriced.
+  Decimal? _pricedTotal(Iterable<SwapFeeComponent> fees) {
+    var total = Decimal.zero;
+    for (final fee in fees) {
+      final usd = fee.usdValue;
+      if (usd == null) return null;
+      total += usd;
+    }
+    return total;
+  }
+
   Widget _costs(BuildContext context) {
     final pricing = quote.pricing;
     final network = quote.fees.where(
@@ -29,6 +40,7 @@ extension _ReviewContentDetails on _ReviewContent {
     final swap = quote.fees.where(
       (f) => f.kind == SwapFeeKind.swap || f.kind == SwapFeeKind.dexFee,
     );
+    final inReceive = quote.feesInReceive.toList();
     final slippage = quote.slippage;
     return SwapDetails(
       title: LocaleKeys.swapReviewCostsProtection.tr(),
@@ -46,6 +58,11 @@ extension _ReviewContentDetails on _ReviewContent {
           label: LocaleKeys.swapSwapCosts.tr(),
           value: _usdOrTokens(pricing.swapCostUsd, swap),
         ),
+        if (inReceive.isNotEmpty)
+          SwapDetailRow(
+            label: LocaleKeys.swapReviewTakenFromReceive.tr(),
+            value: _usdOrTokens(_pricedTotal(inReceive), inReceive),
+          ),
         SwapDetailRow(
           label: LocaleKeys.swapReviewSlippage.tr(),
           value: quote.source == SwapLiquiditySource.atomic || slippage == null
@@ -152,6 +169,7 @@ extension _ReviewContentDetails on _ReviewContent {
   };
 
   List<Widget> _warnings(BuildContext context, Decimal? impact) {
+    final feeShare = quote.pricing.feeShare;
     final multiStep =
         quote.routeKind == SwapRouteKind.crossChain ||
         quote.stages
@@ -179,6 +197,17 @@ extension _ReviewContentDetails on _ReviewContent {
           icon: Icons.trending_down_rounded,
           title: LocaleKeys.swapReviewHighImpactTitle.tr(),
           message: LocaleKeys.swapReviewHighImpactBody.tr(),
+        ),
+      ],
+      if (feeShare != null && feeShare >= swapHighFeeShare) ...[
+        const SizedBox(height: 12),
+        SwapCallout(
+          tone: SwapTone.warning,
+          icon: Icons.receipt_long_rounded,
+          title: LocaleKeys.swapReviewHighFeesTitle.tr(),
+          message: LocaleKeys.swapReviewHighFeesBody.tr(
+            args: [SwapFormat.percent(feeShare)],
+          ),
         ),
       ],
       if (quote.pricing.expectedUsd == null) ...[

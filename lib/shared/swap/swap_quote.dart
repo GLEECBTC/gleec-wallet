@@ -189,6 +189,7 @@ class SwapQuotePricing extends Equatable {
     this.networkCostUsd,
     this.approvalNetworkCostUsd,
     this.swapCostUsd,
+    this.deductedCostUsd,
     this.isComplete = false,
   });
 
@@ -210,6 +211,11 @@ class SwapQuotePricing extends Equatable {
   /// Route and trading fees.
   final Decimal? swapCostUsd;
 
+  /// The priced part of [SwapQuote.feesInReceive]. An unpriced one is left
+  /// out, so [priceImpact] keeps it: the figure may overstate a loss, never
+  /// hide one.
+  final Decimal? deductedCostUsd;
+
   /// Whether every cost was priced. An incomplete total is never presented
   /// as a total.
   final bool isComplete;
@@ -220,12 +226,26 @@ class SwapQuotePricing extends Equatable {
       : networkCostUsd! + swapCostUsd!;
 
   /// The fraction of value lost against the market estimate, from the
-  /// expected receive: 0.05 is 5%. Null without prices.
+  /// expected receive with the fees already taken out of it added back:
+  /// 0.05 is 5%. Fees are not price impact; [feeShare] reports them. Null
+  /// without prices.
   Decimal? get priceImpact {
     final pay = payUsd;
     final expected = expectedUsd;
     if (pay == null || expected == null || pay <= Decimal.zero) return null;
-    return ((pay - expected) / pay).toDecimal(scaleOnInfinitePrecision: 8);
+    final beforeFees = expected + (deductedCostUsd ?? Decimal.zero);
+    return ((pay - beforeFees) / pay).toDecimal(scaleOnInfinitePrecision: 8);
+  }
+
+  /// The fraction of the paid value that all costs together come to: 0.1 is
+  /// 10%. Null unless every cost is priced.
+  Decimal? get feeShare {
+    final pay = payUsd;
+    final total = totalCostUsd;
+    if (!isComplete || pay == null || total == null || pay <= Decimal.zero) {
+      return null;
+    }
+    return (total / pay).toDecimal(scaleOnInfinitePrecision: 8);
   }
 
   @override
@@ -236,6 +256,7 @@ class SwapQuotePricing extends Equatable {
     networkCostUsd,
     approvalNetworkCostUsd,
     swapCostUsd,
+    deductedCostUsd,
     isComplete,
   ];
 }
@@ -386,6 +407,17 @@ class SwapQuote extends Equatable {
   /// The costs of one [kind].
   Iterable<SwapFeeComponent> feesOf(SwapFeeKind kind) =>
       fees.where((fee) => fee.kind == kind);
+
+  /// The fees the receive amounts were already reduced by.
+  ///
+  /// For a routed quote, every one marked [SwapFeeComponent.deductedFromReceive].
+  /// For the order book, only those in [to]: a fee paid from the sold volume
+  /// carries the same mark, but the receive is not reduced by it.
+  Iterable<SwapFeeComponent> get feesInReceive => fees.where(
+    (fee) =>
+        fee.deductedFromReceive &&
+        (source == SwapLiquiditySource.routed || fee.asset == to),
+  );
 
   /// A copy with [pricing] and fee USD values replaced.
   SwapQuote withPricing(

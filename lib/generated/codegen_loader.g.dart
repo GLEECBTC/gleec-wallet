@@ -1482,6 +1482,7 @@ abstract class LocaleKeys {
   static const swapHelperRoutedPausedLine = 'swapHelperRoutedPausedLine';
   static const swapHelperRoutedSignedOut = 'swapHelperRoutedSignedOut';
   static const swapWarningHighImpact = 'swapWarningHighImpact';
+  static const swapWarningHighFees = 'swapWarningHighFees';
   static const swapWarningPriceUnavailable = 'swapWarningPriceUnavailable';
   static const swapMinimumReceived = 'swapMinimumReceived';
   static const swapTotalCost = 'swapTotalCost';
@@ -1541,6 +1542,7 @@ abstract class LocaleKeys {
   static const swapNetworkCosts = 'swapNetworkCosts';
   static const swapApprovalNetworkCost = 'swapApprovalNetworkCost';
   static const swapSwapCosts = 'swapSwapCosts';
+  static const swapReviewTakenFromReceive = 'swapReviewTakenFromReceive';
   static const swapRouteDirect = 'swapRouteDirect';
   static const swapRouteSameChain = 'swapRouteSameChain';
   static const swapRouteCrossChain = 'swapRouteCrossChain';
@@ -1597,6 +1599,8 @@ abstract class LocaleKeys {
   static const swapReviewUnconfirmedBody = 'swapReviewUnconfirmedBody';
   static const swapReviewHighImpactTitle = 'swapReviewHighImpactTitle';
   static const swapReviewHighImpactBody = 'swapReviewHighImpactBody';
+  static const swapReviewHighFeesTitle = 'swapReviewHighFeesTitle';
+  static const swapReviewHighFeesBody = 'swapReviewHighFeesBody';
   static const swapReviewPriceUnavailableTitle =
       'swapReviewPriceUnavailableTitle';
   static const swapReviewPriceUnavailableBody =

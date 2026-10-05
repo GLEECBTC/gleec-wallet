@@ -209,6 +209,8 @@ void main() {
           networkCostUsd: d('4.5'),
           approvalNetworkCostUsd: d('1.5'),
           swapCostUsd: d('3.5'),
+          // The routed receive already had the deducted trading fee taken out.
+          deductedCostUsd: d('1'),
           isComplete: true,
         ),
       );

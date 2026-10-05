@@ -261,6 +261,7 @@ SwapQuotePricing pricingOf({
   String? network = '3',
   String? approval,
   String? swap = '0',
+  String? deducted,
   bool complete = true,
 }) => SwapQuotePricing(
   payUsd: pay == null ? null : d(pay),
@@ -269,6 +270,7 @@ SwapQuotePricing pricingOf({
   networkCostUsd: network == null ? null : d(network),
   approvalNetworkCostUsd: approval == null ? null : d(approval),
   swapCostUsd: swap == null ? null : d(swap),
+  deductedCostUsd: deducted == null ? null : d(deducted),
   isComplete: complete,
 );
 

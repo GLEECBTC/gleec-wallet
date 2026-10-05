@@ -478,3 +478,7 @@ class SwapReceiveCard extends StatelessWidget {
 
 /// The price impact from which the form warns: 5%.
 final swapHighImpact = Decimal.parse('0.05');
+
+/// The share of a swap's value going to fees from which the form warns: 10%,
+/// the threshold LI.FI's own widget uses.
+final swapHighFeeShare = Decimal.parse('0.10');
