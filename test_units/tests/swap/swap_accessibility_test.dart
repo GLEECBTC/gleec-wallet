@@ -228,6 +228,7 @@ void main() {
         ).copyWith(
           catalog: SwapCatalog(sources: catalog.sources, activated: {usdc}),
         ),
+    'paying with a legacy asset': () => form(pay: usdcOld, receive: eth),
     'no network coin': () => form(
       pay: usdc,
       receive: eth,

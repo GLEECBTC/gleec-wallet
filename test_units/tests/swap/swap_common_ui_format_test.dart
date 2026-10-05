@@ -298,5 +298,10 @@ void main() {
       expect(SwapFormat.ticker(eth), 'ETH');
       expect(SwapFormat.ticker(assetOf('PAXG-ERC20', parent: eth)), 'PAXG');
     });
+
+    test('a legacy ticker is marked OLD, not read as its successor', () {
+      expect(SwapFormat.ticker(usdcOld), 'USDC (OLD)');
+      expect(SwapFormat.ticker(gleecOld), 'GLEEC (OLD)');
+    });
   });
 }

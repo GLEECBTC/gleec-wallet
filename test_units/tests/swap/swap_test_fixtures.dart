@@ -45,6 +45,15 @@ final gleec = assetOf(
   decimals: 8,
 );
 
+/// Legacy assets, which the config keeps for holders of a replaced token.
+final usdcOld = assetOf('USDC-ERC20_OLD', parent: eth);
+final gleecOld = assetOf(
+  'GLEEC-OLD',
+  subClass: CoinSubClass.utxo,
+  chainId: 0,
+  decimals: 8,
+);
+
 /// A priced quote with sensible defaults.
 SwapQuote quoteOf({
   String id = 'q1',

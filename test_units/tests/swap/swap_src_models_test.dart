@@ -3,6 +3,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_tickers.dart';
 
 import 'swap_test_fixtures.dart';
 
@@ -26,6 +27,10 @@ void main() {
       );
       expect(fee(symbol: 'WETH').tokenLabel, 'WETH');
       expect(fee().tokenLabel, '');
+    });
+
+    test('a cost in a legacy asset says so', () {
+      expect(fee(asset: usdcOld, symbol: 'USDC.e').tokenLabel, 'USDC (OLD)');
     });
 
     test('pricing a cost changes only its dollar value', () {
@@ -278,6 +283,26 @@ void main() {
       expect(SwapCatalog.empty.of(SwapLiquiditySource.routed), isNull);
       expect(SwapCatalog.empty.assets, isEmpty);
       expect(SwapCatalog.empty.isIncomplete, isFalse);
+    });
+  });
+
+  group('legacy assets', () {
+    test('an id ending in OLD is legacy, whatever its case or separator', () {
+      expect(isLegacySwapAsset(usdcOld), isTrue);
+      expect(isLegacySwapAsset(gleecOld), isTrue);
+      expect(isLegacySwapAsset(assetOf('ETH_OLD')), isTrue);
+      expect(isLegacySwapAsset(assetOf('eth_old')), isTrue);
+
+      expect(isLegacySwapAsset(usdc), isFalse);
+      expect(isLegacySwapAsset(assetOf('BOLD-ERC20', parent: eth)), isFalse);
+      expect(isLegacySwapAsset(assetOf('OLDX')), isFalse);
+    });
+
+    test('a legacy ticker reads as its successor\'s, marked OLD', () {
+      expect(swapTicker(usdc), 'USDC');
+      expect(swapTicker(usdcOld), 'USDC (OLD)');
+      expect(swapTicker(gleecOld), 'GLEEC (OLD)');
+      expect(swapTicker(assetOf('ETH_OLD')), 'ETH (OLD)');
     });
   });
 

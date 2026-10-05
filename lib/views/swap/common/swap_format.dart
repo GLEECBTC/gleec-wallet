@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_tickers.dart';
 
 /// Which way a displayed figure may be rounded.
 ///
@@ -168,8 +169,9 @@ abstract final class SwapFormat {
     return DateFormat.yMMMd().add_Hm().format(local);
   }
 
-  /// The ticker a user knows an asset by: "USDT", not "USDT-ERC20".
-  static String ticker(AssetId asset) => asset.symbol.configSymbol;
+  /// The ticker a user knows an asset by: "USDT", not "USDT-ERC20", and
+  /// "USDC (OLD)" for a legacy asset.
+  static String ticker(AssetId asset) => swapTicker(asset);
 
   static Decimal _round(Decimal value, int scale, SwapRounding rounding) =>
       switch (rounding) {

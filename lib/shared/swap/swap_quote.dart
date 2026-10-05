@@ -1,6 +1,7 @@
 import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_tickers.dart';
 
 part 'swap_quote_request.dart';
 
@@ -88,7 +89,7 @@ class SwapFeeComponent extends Equatable {
   final Decimal? usdValue;
 
   /// A short token label for display.
-  String get tokenLabel => asset?.symbol.configSymbol ?? symbol ?? '';
+  String get tokenLabel => asset == null ? symbol ?? '' : swapTicker(asset!);
 
   /// A copy with [usdValue] set.
   SwapFeeComponent withUsd(Decimal? usd) => SwapFeeComponent(
