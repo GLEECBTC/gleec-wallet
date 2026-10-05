@@ -10,7 +10,30 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'swap_src_fakes.dart';
 import 'swap_test_fixtures.dart';
 
-/// Covers what the aggregator allows to be sold: Max from the gas of a
+RoutedSwapCost _gasCost(String amount) => RoutedSwapCost(
+  label: 'Network fee',
+  amount: d(amount),
+  kind: RoutedSwapCostKind.gas,
+  isDeductedFromReceive: false,
+  assetId: eth,
+);
+
+/// A LI.FI provider fee: [onTop] for `included: false`. Without [asset], the
+/// provider's own symbol names it.
+RoutedSwapCost _providerFee(
+  String amount,
+  AssetId? asset, {
+  bool onTop = true,
+}) => RoutedSwapCost(
+  label: 'Gas receiver fee',
+  amount: d(amount),
+  kind: RoutedSwapCostKind.providerFee,
+  isDeductedFromReceive: !onTop,
+  assetId: asset,
+  symbol: asset == null ? 'ETH' : null,
+);
+
+/// Covers what the aggregator allows to be sold: Max from the costs of a
 /// route priced moments ago, or from KDF's own probe, and what the picker
 /// shows when the aggregator's list cannot be read in time.
 void main() {
@@ -33,12 +56,14 @@ void main() {
     now: () => clock,
   );
 
-  /// Prices [from] for [to] once, with [gas] of network fee in [from].
+  /// Prices [from] for [to] once, with [gas] of network fee in [from], and
+  /// [costs] itemised.
   Future<RoutedSwapQuoteSource> priced(
     AssetId from, {
     AssetId? to,
     String gas = '0.0005',
     String amount = '1',
+    List<RoutedSwapCost> costs = const [],
     RoutedSwapQuoteSource? into,
   }) async {
     final routed = into ?? source();
@@ -46,6 +71,7 @@ void main() {
       from: call.from,
       to: call.to,
       sell: '${call.amount}',
+      costs: costs,
       networkFees: [
         RoutedSwapNetworkFee(ticker: from.id, assetId: from, amount: d(gas)),
         RoutedSwapNetworkFee(ticker: 'USDC-ERC20', amount: d('5')),
@@ -92,6 +118,55 @@ void main() {
           ),
         );
         expect(manager.maxCalls, 0);
+      },
+    );
+
+    test('also keeps back a provider fee charged on top in the coin', () async {
+      final routed = await priced(
+        eth,
+        costs: [_gasCost('0.0005'), _providerFee('0.0012', eth)],
+      );
+
+      final max = await routed.maxAmount(from: eth, to: usdc, balance: d('2'));
+
+      expect(
+        max,
+        SwapMaxAmount(
+          amount: d('1.9973'),
+          reservedForFees: d('0.0027'),
+          feeAsset: eth,
+          reserveCovers: SwapMaxReserve.networkAndProviderFees,
+        ),
+      );
+    });
+
+    test(
+      'keeps back no fee taken from what arrives or paid elsewhere',
+      () async {
+        final routed = await priced(
+          eth,
+          costs: [
+            _providerFee('0.0012', eth, onTop: false),
+            _providerFee('5', usdc),
+            // A token the wallet does not know, named only by the provider.
+            _providerFee('0.0012', null),
+          ],
+        );
+
+        final max = await routed.maxAmount(
+          from: eth,
+          to: usdc,
+          balance: d('2'),
+        );
+
+        expect(
+          max,
+          SwapMaxAmount(
+            amount: d('1.9985'),
+            reservedForFees: d('0.0015'),
+            feeAsset: eth,
+          ),
+        );
       },
     );
 

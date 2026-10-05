@@ -258,7 +258,8 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     }
   }
 
-  /// Max from [offer]'s gas, computed the way the SDK's probe does.
+  /// Max from [offer]: its gas times the SDK probe's margin, and the provider
+  /// fees it charges on top in [from], which the form counts too.
   SwapMaxAmount _nativeMax(
     RoutedSwapOffer offer,
     AssetId from,
@@ -267,7 +268,16 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     final gas = offer.networkFees
         .where((fee) => fee.assetId == from || fee.ticker == from.id)
         .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
-    var reserve = gas * RoutedSwapManager.maxSellFeeMargin;
+    // The gas among the costs is counted above, with its margin.
+    final providerFees = offer.costs
+        .where(
+          (cost) =>
+              cost.kind == RoutedSwapCostKind.providerFee &&
+              !cost.isDeductedFromReceive &&
+              cost.assetId == from,
+        )
+        .fold<Decimal>(Decimal.zero, (sum, cost) => sum + cost.amount);
+    var reserve = gas * RoutedSwapManager.maxSellFeeMargin + providerFees;
     var amount = balance - reserve;
     final decimals = from.chainId.decimals;
     if (decimals != null) {
@@ -278,6 +288,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       amount: amount < Decimal.zero ? Decimal.zero : amount,
       reservedForFees: reserve,
       feeAsset: from,
+      reserveCovers: providerFees > Decimal.zero
+          ? SwapMaxReserve.networkAndProviderFees
+          : SwapMaxReserve.networkFees,
     );
   }
 

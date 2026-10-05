@@ -214,6 +214,28 @@ void main() {
       ]);
     });
 
+    testWidgets(
+      'a route\'s fee charged on top is named with the network fees',
+      (tester) async {
+        await pump(
+          tester,
+          maxed(
+            SwapMaxAmount(
+              amount: d('1.9973'),
+              reservedForFees: d('0.0027'),
+              feeAsset: eth,
+              reserveCovers: SwapMaxReserve.networkAndProviderFees,
+            ),
+          ),
+        );
+
+        expect(lines(tester), [
+          'Max uses 1.9973 ETH. We kept 0.0027 ETH for network and provider '
+              'fees.',
+        ]);
+      },
+    );
+
     testWidgets('a reserve held in another coin is given in that coin', (
       tester,
     ) async {
