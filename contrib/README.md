@@ -97,10 +97,14 @@ flutter build macos --no-pub --release -v \
   --dart-define=TRELLO_LIST_ID=<id> \
   --dart-define=MATOMO_URL=<url> \
   --dart-define=MATOMO_SITE_ID=<id> \
+  --dart-define=TRON_GASLESS_ENABLED=true \
+  --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+  --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+  --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird \
   --flavor production
 ```
 
-Replace the `<...>` placeholders above with your actual values.
+Replace the `<...>` placeholders above with your actual values. The four `TRON_GASLESS_*` values are the production GasFree settings, which are also the app's defaults (see [GasFree TRON settings](../docs/BUILD_RELEASE.md#gasfree-tron-settings)).
 
 To view app entitlements used in the resulting .app:
 
