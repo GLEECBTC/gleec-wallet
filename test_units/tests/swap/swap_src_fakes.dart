@@ -173,13 +173,15 @@ class SrcTrading implements TradingManager {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// A routed offer with sensible defaults: 1 ETH for USDC, same chain.
+/// A routed offer with sensible defaults: 1 ETH for USDC, same chain. The
+/// route's own [minimum] is the guaranteed amount unless given.
 RoutedSwapOffer offerOf({
   AssetId? from,
   AssetId? to,
   String sell = '1',
   String expected = '3000',
   String guaranteed = '2985',
+  String? minimum,
   RoutedSwapRouteKind kind = RoutedSwapRouteKind.sameChain,
   List<RoutedSwapCost> costs = const [],
   List<RoutedSwapNetworkFee> networkFees = const [],
@@ -209,7 +211,11 @@ RoutedSwapOffer offerOf({
     toolName: 'Tool',
     route: RoutedSwapRoute.fromJson({
       'from': {'coin': sold.id, 'amount': sell},
-      'to': {'coin': bought.id, 'amount': expected, 'amount_min': guaranteed},
+      'to': {
+        'coin': bought.id,
+        'amount': expected,
+        'amount_min': minimum ?? guaranteed,
+      },
       'tool': {'key': toolKey, 'name': 'Tool'},
       'kind': kind.wire,
     }),

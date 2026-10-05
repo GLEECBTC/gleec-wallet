@@ -332,5 +332,39 @@ void main() {
         ));
       },
     );
+
+    group('the minimum the review showed', () {
+      // The review showed 2985, a guard below the provider's 2994.
+      final shown = routedQuoteFromOffer(
+        offerOf(guaranteed: '2985', minimum: '2994'),
+        networks: SwapNetworks([eth, usdc]),
+      );
+
+      Future<SwapQuote> requoted({required String guard, String? minimum}) {
+        manager.respond = (_) => offerOf(guaranteed: guard, minimum: minimum);
+        return source().requote(shown).then(available);
+      }
+
+      test('is kept, and guarded, while the route still clears it', () async {
+        final fresh = await requoted(guard: '2984', minimum: '2993');
+
+        expect(fresh.guaranteedReceive, d('2985'));
+        final offer = fresh.payload! as RoutedSwapOffer;
+        expect(offer.guaranteedReceive, d('2985'));
+        expect(offer.route.toMinimum.amount, '2993');
+      });
+
+      test('gives way to a route that no longer clears it', () async {
+        final fresh = await requoted(guard: '2975', minimum: '2984');
+
+        expect(fresh.guaranteedReceive, d('2975'));
+      });
+
+      test('gives way to a better one', () async {
+        final fresh = await requoted(guard: '2990', minimum: '2999');
+
+        expect(fresh.guaranteedReceive, d('2990'));
+      });
+    });
   });
 }

@@ -203,14 +203,32 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     return distinct;
   }
 
+  /// Re-prices [quote]'s route. A route that still clears the minimum
+  /// [quote] showed keeps it: quotes seconds apart differ slightly, and a
+  /// move smaller than the guard margin should neither ask again nor start
+  /// against a number the user did not see.
   @override
-  Future<SwapQuoteResult> requote(SwapQuote quote) => _quote(
-    quote.from,
-    quote.to,
-    quote.sellAmount,
-    quote.order ?? SwapQuoteOrder.cheapest,
-    quote.slippage ?? _defaultSlippage,
-  );
+  Future<SwapQuoteResult> requote(SwapQuote quote) async {
+    final order = quote.order ?? SwapQuoteOrder.cheapest;
+    final result = await _quote(
+      quote.from,
+      quote.to,
+      quote.sellAmount,
+      order,
+      quote.slippage ?? _defaultSlippage,
+    );
+    if (result case SwapQuoteAvailable(
+      quote: SwapQuote(payload: final RoutedSwapOffer fresh),
+    )) {
+      final kept = fresh.keepingMinimum(quote.guaranteedReceive);
+      if (kept != null && !identical(kept, fresh)) {
+        return SwapQuoteAvailable(
+          routedQuoteFromOffer(kept, networks: _networks(), order: order),
+        );
+      }
+    }
+    return result;
+  }
 
   Future<SwapQuoteResult> _quote(
     AssetId from,
