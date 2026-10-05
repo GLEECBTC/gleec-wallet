@@ -420,6 +420,16 @@ class SwapQuote extends Equatable {
         (source == SwapLiquiditySource.routed || fee.asset == to),
   );
 
+  /// The fees paid in [asset] on top of [sellAmount]: every one not taken out
+  /// of what is traded, whatever its kind. A provider fee sent with the swap
+  /// needs the balance as much as gas does.
+  Iterable<SwapFeeComponent> feesOnTopIn(AssetId asset) =>
+      fees.where((fee) => !fee.deductedFromReceive && fee.asset == asset);
+
+  /// What [feesOnTopIn] comes to, in [asset].
+  Decimal costOnTopIn(AssetId asset) =>
+      feesOnTopIn(asset).fold(Decimal.zero, (sum, fee) => sum + fee.amount);
+
   /// A copy with [pricing] and fee USD values replaced.
   SwapQuote withPricing(
     SwapQuotePricing pricing, {

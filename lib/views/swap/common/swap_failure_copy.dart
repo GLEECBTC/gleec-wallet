@@ -342,14 +342,16 @@ class SwapIssueCopy {
   final SwapEntryAction action;
 
   /// The copy for [issue] in [state], or null for "not finished yet": no
-  /// amount, or no wallet. [heldElsewhere] is what the pay asset's other
-  /// addresses hold.
+  /// amount, or no wallet. [neededWithFees] is the amount with the fees paid
+  /// on top, when only those fees make it too much. [heldElsewhere] is what
+  /// the pay asset's other addresses hold.
   static SwapIssueCopy? of(
     SwapFormIssue issue,
     UnifiedSwapState state, {
     required SwapNetworks networks,
     String? feeNeeded,
     String? feeHeld,
+    String? neededWithFees,
     String? heldElsewhere,
   }) {
     final pay = state.pay;
@@ -395,22 +397,17 @@ class SwapIssueCopy {
         ),
       ),
       SwapFormIssue.insufficient => SwapIssueCopy(
-        message: LocaleKeys.swapErrorInsufficient.tr(
-          args: [
-            if (state.balance case final Decimal balance)
-              SwapFormat.tokens(balance, ticker, rounding: SwapRounding.down)
-            else
-              ticker,
-          ],
-        ),
+        message: _insufficient(state.balance, ticker, neededWithFees),
         detail: heldElsewhere == null
             ? null
             : LocaleKeys.swapHelperHeldElsewhere.tr(args: [heldElsewhere]),
       ),
       SwapFormIssue.insufficientForFees => SwapIssueCopy(
-        message: LocaleKeys.swapErrorInsufficientForFees.tr(
-          args: [feeNeeded ?? '', feeHeld ?? ''],
-        ),
+        message:
+            (_providerFeesInParent(state)
+                    ? LocaleKeys.swapErrorInsufficientForProviderFees
+                    : LocaleKeys.swapErrorInsufficientForFees)
+                .tr(args: [feeNeeded ?? '', feeHeld ?? '']),
       ),
       SwapFormIssue.sameAsset => SwapIssueCopy(
         message: LocaleKeys.swapErrorSameAsset.tr(),
@@ -420,6 +417,39 @@ class SwapIssueCopy {
         message: LocaleKeys.swapErrorFiatUnavailable.tr(args: [ticker, ticker]),
       ),
     };
+  }
+
+  static String _insufficient(
+    Decimal? balance,
+    String ticker,
+    String? neededWithFees,
+  ) {
+    if (balance == null) {
+      return LocaleKeys.swapErrorInsufficient.tr(args: [ticker]);
+    }
+    final held = SwapFormat.tokens(
+      balance,
+      ticker,
+      rounding: SwapRounding.down,
+    );
+    return neededWithFees == null
+        ? LocaleKeys.swapErrorInsufficient.tr(args: [held])
+        : LocaleKeys.swapErrorInsufficientWithFees.tr(
+            args: [neededWithFees, held],
+          );
+  }
+
+  static bool _providerFeesInParent(UnifiedSwapState state) {
+    final parent = state.pay?.parentId;
+    final quote = state.selectedQuote;
+    if (parent == null || quote == null) return false;
+    return quote
+        .feesOnTopIn(parent)
+        .any(
+          (fee) =>
+              fee.kind != SwapFeeKind.network &&
+              fee.kind != SwapFeeKind.approvalNetwork,
+        );
   }
 
   static SwapIssueCopy _pairUnsupported(

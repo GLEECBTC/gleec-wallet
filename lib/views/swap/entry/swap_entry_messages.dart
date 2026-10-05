@@ -14,6 +14,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         networks: _services.networks(),
         feeNeeded: _feeNeeded(state),
         feeHeld: _feeHeld(state),
+        neededWithFees: _neededWithFees(state),
         heldElsewhere: _heldElsewhere(state),
       );
       if (copy != null) {
@@ -215,18 +216,25 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     final parent = state.pay?.parentId;
     final quote = state.selectedQuote;
     if (parent == null || quote == null) return null;
-    var total = Decimal.zero;
-    for (final fee in quote.fees) {
-      final network =
-          fee.kind == SwapFeeKind.network ||
-          fee.kind == SwapFeeKind.approvalNetwork;
-      if (network && fee.asset == parent && !fee.deductedFromReceive) {
-        total += fee.amount;
-      }
-    }
     return SwapFormat.tokens(
-      total,
+      quote.costOnTopIn(parent),
       SwapFormat.ticker(parent),
+      rounding: SwapRounding.up,
+    );
+  }
+
+  /// The amount with the fees paid on top of it, when the amount alone fits
+  /// the balance and those fees are what it falls short by.
+  String? _neededWithFees(UnifiedSwapState state) {
+    final pay = state.pay;
+    final balance = state.balance;
+    final spend = _bloc.spendOf(state);
+    if (pay == null || balance == null || spend == null) return null;
+    final needed = spend.amount + spend.fees;
+    if (spend.amount > balance || needed <= balance) return null;
+    return SwapFormat.tokens(
+      needed,
+      SwapFormat.ticker(pay),
       rounding: SwapRounding.up,
     );
   }

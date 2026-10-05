@@ -1417,7 +1417,10 @@ abstract class LocaleKeys {
   static const swapErrorZero = 'swapErrorZero';
   static const swapErrorTooManyDecimals = 'swapErrorTooManyDecimals';
   static const swapErrorInsufficient = 'swapErrorInsufficient';
+  static const swapErrorInsufficientWithFees = 'swapErrorInsufficientWithFees';
   static const swapErrorInsufficientForFees = 'swapErrorInsufficientForFees';
+  static const swapErrorInsufficientForProviderFees =
+      'swapErrorInsufficientForProviderFees';
   static const swapErrorSameAsset = 'swapErrorSameAsset';
   static const swapErrorFiatUnavailable = 'swapErrorFiatUnavailable';
   static const swapErrorBelowMinimum = 'swapErrorBelowMinimum';

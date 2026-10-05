@@ -57,32 +57,21 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     final balance = next.balance;
     if (balance != null && amount > balance) return SwapFormIssue.insufficient;
 
-    // With a priced option, check the network fees can be paid too.
+    // With a priced option, the fees paid on top must fit too.
+    final spend = spendOf(next);
+    if (balance != null &&
+        spend != null &&
+        spend.amount + spend.fees > balance) {
+      return SwapFormIssue.insufficient;
+    }
     final quote = next.selectedQuote;
-    if (quote != null && pay != null) {
-      final fees = quote.fees.where(
-        (fee) =>
-            !fee.deductedFromReceive &&
-            (fee.kind == SwapFeeKind.network ||
-                fee.kind == SwapFeeKind.approvalNetwork),
-      );
-      final ownFees = fees
-          .where((fee) => fee.asset == pay)
-          .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
-      // The option is what starts, and switching to a dollar amount can leave
-      // it priced for a little more than the amount now shown.
-      final spend = quote.sellAmount > amount ? quote.sellAmount : amount;
-      if (balance != null && spend + ownFees > balance) {
-        return SwapFormIssue.insufficient;
-      }
-      final feeAsset = pay.parentId;
-      final feeBalance = next.feeBalance;
-      if (feeAsset != null && feeBalance != null) {
-        final parentFees = fees
-            .where((fee) => fee.asset == feeAsset)
-            .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
-        if (parentFees > feeBalance) return SwapFormIssue.insufficientForFees;
-      }
+    final feeAsset = pay?.parentId;
+    final feeBalance = next.feeBalance;
+    if (quote != null &&
+        feeAsset != null &&
+        feeBalance != null &&
+        quote.costOnTopIn(feeAsset) > feeBalance) {
+      return SwapFormIssue.insufficientForFees;
     }
     return null;
   }

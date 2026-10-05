@@ -68,7 +68,7 @@ enum SwapFormIssue {
   /// More than the address can spend.
   insufficient,
 
-  /// Not enough of the network's native coin for the network fees.
+  /// Not enough of the network's native coin for the fees paid in it.
   insufficientForFees,
 
   /// The pay asset is a token and the wallet holds none of the network's

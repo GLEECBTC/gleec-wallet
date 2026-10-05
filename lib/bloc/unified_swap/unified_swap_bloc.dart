@@ -198,6 +198,29 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     return decimals == null ? raw : raw.floor(scale: decimals);
   }
 
+  /// What starting the selected option takes from the pay balance: the
+  /// amount sold, and the fees paid on top of it in the pay asset. Null
+  /// without a priced option.
+  ({Decimal amount, Decimal fees})? spendOf(UnifiedSwapState state) {
+    final quote = state.selectedQuote;
+    final pay = state.pay;
+    final amount = amountOf(state);
+    if (quote == null || pay == null || amount == null) return null;
+    // The order book's trading fee is left to KDF, which refuses an amount
+    // the fee does not fit. Its Max keeps the fee back but not the gas to
+    // claim a token on the same network, so counting it refuses that Max.
+    final fees = quote
+        .feesOnTopIn(pay)
+        .where((fee) => fee.kind != SwapFeeKind.dexFee)
+        .fold(Decimal.zero, (sum, fee) => sum + fee.amount);
+    // The option is what starts, and switching to a dollar amount can leave
+    // it priced for a little more than the amount now shown.
+    return (
+      amount: quote.sellAmount > amount ? quote.sellAmount : amount,
+      fees: fees,
+    );
+  }
+
   // ------------------------------------------------------------- lifecycle
 
   Future<void> _onStarted(

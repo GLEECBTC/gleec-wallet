@@ -410,7 +410,7 @@ void main() {
     expect(swapPrimaryLabel(tester), 'Not enough ETH');
   });
 
-  testWidgets('the network fees needed leave out a swap fee in that coin', (
+  testWidgets('the fees needed count a provider fee in that coin, and say so', (
     tester,
   ) async {
     SwapFeeComponent fee(SwapFeeKind kind, String amount) => SwapFeeComponent(
@@ -438,7 +438,10 @@ void main() {
       ),
     );
 
-    expect(lines(tester).single, startsWith('You need about 0.002 ETH '));
+    expect(lines(tester), [
+      'You need about 0.003 ETH for network and provider fees. This address '
+          'has 0.00012 ETH.',
+    ]);
   });
 
   testWidgets('a quiet re-price says it is checking under the option', (

@@ -5,6 +5,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/common/swap_failure_copy.dart';
 
 import 'swap_common_ui_fakes.dart';
@@ -52,6 +53,7 @@ void main() {
     UnifiedSwapState state, {
     String? feeNeeded,
     String? feeHeld,
+    String? neededWithFees,
     String? heldElsewhere,
   }) => SwapIssueCopy.of(
     issue,
@@ -59,8 +61,32 @@ void main() {
     networks: networks,
     feeNeeded: feeNeeded,
     feeHeld: feeHeld,
+    neededWithFees: neededWithFees,
     heldElsewhere: heldElsewhere,
   );
+
+  UnifiedSwapState pricedWith(
+    UnifiedSwapState state,
+    List<SwapFeeComponent> fees,
+  ) {
+    final quote = quoteOf(from: state.pay, to: state.receive, fees: fees);
+    return state.copyWith(
+      quotes: UnifiedSwapQuotes(
+        ranked: [quote],
+        unrankable: const [],
+        failures: const [],
+      ),
+      selectedId: quote.id,
+    );
+  }
+
+  SwapFeeComponent ethFee(SwapFeeKind kind, {bool onTop = true}) =>
+      SwapFeeComponent(
+        kind: kind,
+        amount: d('0.001'),
+        deductedFromReceive: !onTop,
+        asset: eth,
+      );
 
   group('swap form issue copy', () {
     useEnglishCopy();
@@ -207,6 +233,59 @@ void main() {
         ),
         'You need about 0.002 ETH for network fees. This address has 0.0005 '
         'ETH.',
+      );
+    });
+
+    test('short on fees that include a provider fee names it too', () {
+      final copy = issueOf(
+        SwapFormIssue.insufficientForFees,
+        pricedWith(stateFor(usdc, eth), [
+          ethFee(SwapFeeKind.network),
+          ethFee(SwapFeeKind.swap),
+        ]),
+        feeNeeded: '0.002 ETH',
+        feeHeld: '0.0005 ETH',
+      );
+
+      expectCopy(
+        copy,
+        'You need about 0.002 ETH for network and provider fees. This '
+        'address has 0.0005 ETH.',
+      );
+    });
+
+    test('approval gas, or a fee taken from what arrives, is not named', () {
+      final copy = issueOf(
+        SwapFormIssue.insufficientForFees,
+        pricedWith(stateFor(usdc, eth), [
+          ethFee(SwapFeeKind.network),
+          ethFee(SwapFeeKind.approvalNetwork),
+          ethFee(SwapFeeKind.swap, onTop: false),
+        ]),
+        feeNeeded: '0.002 ETH',
+        feeHeld: '0.0005 ETH',
+      );
+
+      expectCopy(
+        copy,
+        'You need about 0.002 ETH for network fees. This address has 0.0005 '
+        'ETH.',
+      );
+    });
+
+    test('too much only with the fees says what both need', () {
+      expectCopy(
+        issueOf(
+          SwapFormIssue.insufficient,
+          stateFor(eth, usdc, balance: d('1')),
+          neededWithFees: '1.0215 ETH',
+          heldElsewhere: '2.9 ETH',
+        ),
+        'You need about 1.0215 ETH for this swap and its fees. This address '
+        'has 1 ETH.',
+        detail:
+            'This wallet holds another 2.9 ETH at other addresses. Swaps '
+            'spend only from this one, so move funds here first.',
       );
     });
 
