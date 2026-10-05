@@ -10,6 +10,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
+part 'atomic_swap_source_max.dart';
 part 'atomic_swap_source_offers.dart';
 
 /// What executing an atomic quote needs, carried on [SwapQuote.payload].
@@ -140,40 +141,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
-  }) async {
-    try {
-      // KDF's own answer, which already keeps the trading fee back, and the
-      // network fees for a coin that pays its own.
-      final response = _trading
-          .maxTakerVolume(coin: from.id, tradeWith: to.id)
-          .then<Decimal?>(
-            (response) => Decimal.tryParse(response.amount),
-            onError: (Object _) => null,
-          );
-      final book = await offers(from, to);
-      final max = await response;
-      if (max == null) return null;
-      final capped = max > balance ? balance : max;
-      var sellable = capped < Decimal.zero ? Decimal.zero : capped;
-      // KDF's fraction seldom ends within the asset's decimals.
-      final decimals = from.chainId.decimals;
-      if (decimals != null) sellable = sellable.floor(scale: decimals);
-      // More than the largest offer never fills; with no offers, Max still
-      // shows what could be sold.
-      final fillable = book?.largestUpTo(sellable, scale: decimals);
-      return SwapMaxAmount(
-        amount: fillable ?? sellable,
-        reservedForFees: balance > sellable ? balance - sellable : Decimal.zero,
-        feeAsset: from,
-        reserveCovers: from.parentId == null
-            ? SwapMaxReserve.tradingAndNetworkFees
-            : SwapMaxReserve.tradingFee,
-        offerLimit: fillable != null && fillable < sellable,
-      );
-    } on Object {
-      return null;
-    }
-  }
+  }) => _maxAmount(from, to, balance);
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async => [
@@ -208,6 +176,16 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// take; a relay that does not answer leaves the offers unknown.
   @visibleForTesting
   static const offeredTimeout = Duration(seconds: 15);
+
+  /// How long Max waits for the gas to claim a token before it settles for
+  /// KDF's own answer.
+  @visibleForTesting
+  static const claimFeeTimeout = Duration(seconds: 10);
+
+  /// How long after Max is asked the gas to claim a token may still be read,
+  /// so Max answers within the form's own wait for it.
+  @visibleForTesting
+  static const claimFeeDeadline = Duration(seconds: 20);
 
   Future<SwapQuoteResult> _quote(
     AssetId from,

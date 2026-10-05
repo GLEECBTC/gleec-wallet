@@ -59,29 +59,46 @@ List<SwapQuoteResult> _routed(
   ),
 ];
 
-/// What the order-book source makes of KDF's preimage for selling 1 ETH for
-/// [to] at [price]: the trading fee, the gas to send it and the payment's gas
-/// are paid on top, 0.0215 ETH in all, and [claim] is the gas to claim what
-/// arrives.
-SwapQuote _bookQuote(
+/// The order-book source selling ETH at [price]: its preimage puts 0.0215 ETH
+/// of trading fee and gas on top of 1 ETH, and [claim] to claim what arrives.
+AtomicSwapQuoteSource _book(
   SwapBlocHarness h,
-  AssetId to,
   String price,
-  PreimageCoinFee claim,
-) {
-  final trading = SrcTrading()
+  PreimageCoinFee claim, {
+  String kdfMax = '1',
+}) => AtomicSwapQuoteSource(
+  trading: SrcTrading()
+    ..maxTaker = kdfMax
     ..bids = [bidOf(price, '0.01', '5')]
     ..preimage = preimageOf(
       takerFee: coinFeeOf('ETH', '0.02'),
       feeToSendTakerFee: coinFeeOf('ETH', '0.0003'),
       baseCoinFee: coinFeeOf('ETH', '0.0012'),
       relCoinFee: claim,
+    ),
+  networks: () => _networks,
+  now: h.now,
+);
+
+/// Selling ETH for BTC, whose claim comes out of the BTC that arrives.
+AtomicSwapQuoteSource _ethForBtc(SwapBlocHarness h, {String kdfMax = '1'}) =>
+    _book(
+      h,
+      '0.05',
+      coinFeeOf('BTC', '0.00001', fromVolume: true),
+      kdfMax: kdfMax,
     );
-  final source = AtomicSwapQuoteSource(
-    trading: trading,
-    networks: () => _networks,
-    now: h.now,
-  );
+
+/// Selling ETH for a token on Ethereum, whose claim the ETH pays.
+AtomicSwapQuoteSource _ethForUsdc(SwapBlocHarness h, {String kdfMax = '1'}) =>
+    _book(h, '3000', coinFeeOf('ETH', '0.002'), kdfMax: kdfMax);
+
+/// [source]'s quote for selling 1 ETH for [to].
+SwapQuote _bookQuote(
+  SwapBlocHarness h,
+  AtomicSwapQuoteSource source,
+  AssetId to,
+) {
   final results = h.resolve(
     source.quote(SwapQuoteRequest(from: eth, to: to, amount: d('1'))),
   );
@@ -103,10 +120,6 @@ void _onlyTheBook(SwapBlocHarness h, SwapQuote quote) {
       ),
   ];
 }
-
-/// Selling ETH for BTC, whose claim comes out of the BTC that arrives.
-SwapQuote _ethForBtc(SwapBlocHarness h) =>
-    _bookQuote(h, btc, '0.05', coinFeeOf('BTC', '0.00001', fromVolume: true));
 
 /// Covers the form's checks that depend on prices and fees rather than on
 /// the typed text alone.
@@ -215,26 +228,21 @@ void main() {
   });
 
   group('the order book', () {
-    for (final (pair, receive, quoteFor) in [
-      ('BTC', 'BTC', _ethForBtc),
-      // KDF's Max keeps back the trading fee and the gas to pay, but not the
-      // 0.002 ETH to claim the token.
-      (
-        'a token on its network',
-        'USDC-ERC20',
-        (SwapBlocHarness h) =>
-            _bookQuote(h, usdc, '3000', coinFeeOf('ETH', '0.002')),
-      ),
+    // Each balance is KDF's Max plus what KDF keeps back: the 2% trading fee,
+    // the preimage's 0.0015 ETH of gas and 0.001 ETH to refund. The 0.002 ETH
+    // claim takes Max for USDC from KDF's 1.002 down to 1.
+    for (final (pair, receive, book, kdfMax, balance) in [
+      ('BTC', btc, _ethForBtc, '1', '1.0225'),
+      ('a token on its network', usdc, _ethForUsdc, '1.002', '1.02454'),
     ]) {
-      swapBlocTest('Max on ETH for $pair still reviews', (h) {
-        _onlyTheBook(h, quoteFor(h));
-        h.balances[eth] = d('1.0215');
-        h.atomic.max = SwapMaxAmount(
-          amount: d('1'),
-          reservedForFees: d('0.0215'),
-          reserveCovers: SwapMaxReserve.tradingAndNetworkFees,
+      swapBlocTest('Max on ETH for $pair reviews with every fee counted', (h) {
+        final source = book(h, kdfMax: kdfMax);
+        _onlyTheBook(h, _bookQuote(h, source, receive));
+        h.balances[eth] = d(balance);
+        h.atomic.max = h.resolve(
+          source.maxAmount(from: eth, to: receive, balance: d(balance)),
         );
-        final bloc = h.open(pay: 'ETH', receive: receive, amount: '0.5')
+        final bloc = h.open(pay: 'ETH', receive: receive.id, amount: '0.5')
           ..add(const UnifiedSwapMaxRequested());
         h.settle();
 
@@ -245,12 +253,27 @@ void main() {
       });
     }
 
-    swapBlocTest('its gas still counts; its trading fee is left to KDF', (h) {
-      _onlyTheBook(h, _ethForBtc(h));
-      h.balances[eth] = d('1.0014');
+    swapBlocTest('its trading fee counts with its gas', (h) {
+      _onlyTheBook(h, _bookQuote(h, _ethForBtc(h), btc));
+      h.balances[eth] = d('1.0214');
       final bloc = h.open(pay: 'ETH', receive: 'BTC');
 
-      expect(bloc.spendOf(bloc.state), (amount: d('1'), fees: d('0.0015')));
+      expect(bloc.spendOf(bloc.state), (amount: d('1'), fees: d('0.0215')));
+      expect(bloc.state.issue, SwapFormIssue.insufficient);
+
+      h.balances[eth] = d('1.0215');
+      bloc.add(const UnifiedSwapBalancesRefreshed());
+      h.settle();
+
+      expect(bloc.state.issue, isNull);
+    });
+
+    swapBlocTest('so does the gas to claim a token on its network', (h) {
+      _onlyTheBook(h, _bookQuote(h, _ethForUsdc(h), usdc));
+      h.balances[eth] = d('1.0234');
+      final bloc = h.open(pay: 'ETH', receive: 'USDC-ERC20');
+
+      expect(bloc.spendOf(bloc.state), (amount: d('1'), fees: d('0.0235')));
       expect(bloc.state.issue, SwapFormIssue.insufficient);
     });
   });

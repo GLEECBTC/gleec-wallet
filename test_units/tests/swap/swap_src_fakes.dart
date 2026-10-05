@@ -52,6 +52,9 @@ class SrcTrading implements TradingManager {
   Object? minimumError;
   String maxTaker = '1';
   Object? maxTakerError;
+
+  /// Holds `max_taker_vol` open until completed.
+  Completer<void>? maxGate;
   List<OrderInfo> bids = [bidOf('20', '0.01', '5')];
   Object? bookError;
 
@@ -59,6 +62,9 @@ class SrcTrading implements TradingManager {
   Completer<void>? bookGate;
   TradePreimageResponse preimage = preimageOf();
   Object? preimageError;
+
+  /// Holds `trade_preimage` open until completed.
+  Completer<void>? preimageGate;
 
   /// Bids per `(base, rel)` for `orderbook_depth`; a pair left out has none.
   Map<(String, String), int> depths = {};
@@ -75,6 +81,7 @@ class SrcTrading implements TradingManager {
   final List<List<OrderbookPair>> depthCalls = [];
 
   final List<({String coin, String? tradeWith})> maxCalls = [];
+  final List<String> minimums = [];
   final List<({String base, String rel})> books = [];
   final List<({String volume, String price, SwapMethod method})> preimages = [];
 
@@ -82,6 +89,7 @@ class SrcTrading implements TradingManager {
   Future<MinTradingVolumeResponse> minTradingVolume({
     required String coin,
   }) async {
+    minimums.add(coin);
     final error = minimumError;
     if (error != null) throw error;
     return MinTradingVolumeResponse(mmrpc: '2.0', amount: minimum);
@@ -93,6 +101,7 @@ class SrcTrading implements TradingManager {
     String? tradeWith,
   }) async {
     maxCalls.add((coin: coin, tradeWith: tradeWith));
+    await maxGate?.future;
     final error = maxTakerError;
     if (error != null) throw error;
     return MaxTakerVolumeResponse(mmrpc: '2.0', amount: maxTaker);
@@ -154,6 +163,7 @@ class SrcTrading implements TradingManager {
     String? price,
   }) async {
     preimages.add((volume: volume!, price: price!, method: swapMethod));
+    await preimageGate?.future;
     final error = preimageError;
     if (error != null) throw error;
     return preimage;

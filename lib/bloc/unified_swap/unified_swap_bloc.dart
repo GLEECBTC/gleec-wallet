@@ -206,18 +206,14 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final pay = state.pay;
     final amount = amountOf(state);
     if (quote == null || pay == null || amount == null) return null;
-    // The order book's trading fee is left to KDF, which refuses an amount
-    // the fee does not fit. Its Max keeps the fee back but not the gas to
-    // claim a token on the same network, so counting it refuses that Max.
-    final fees = quote
-        .feesOnTopIn(pay)
-        .where((fee) => fee.kind != SwapFeeKind.dexFee)
-        .fold(Decimal.zero, (sum, fee) => sum + fee.amount);
     // The option is what starts, and switching to a dollar amount can leave
     // it priced for a little more than the amount now shown.
     return (
       amount: quote.sellAmount > amount ? quote.sellAmount : amount,
-      fees: fees,
+      // Every fee, the order book's trading fee included: KDF checks the gas
+      // to claim a token on the same network alone, never summed with the
+      // rest, so only this total shows whether that claim can be paid.
+      fees: quote.costOnTopIn(pay),
     );
   }
 
@@ -297,6 +293,11 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     await _refreshCatalog(emit);
     await _loadBalances(emit);
     await _loadAddresses(emit);
+    // Max asked before the asset to receive was active could not read every
+    // fee it must keep back, such as the gas to claim a token.
+    if (state.maxApplied != null && event.asset == state.receive) {
+      add(const UnifiedSwapMaxRequested());
+    }
     _scheduleEvaluation(immediate: true);
   }
 
