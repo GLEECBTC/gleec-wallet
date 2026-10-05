@@ -116,6 +116,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     networks: _services.networks(),
     amount: _bloc.amountOf(state),
     balance: state.signedIn ? state.balance : null,
+    feeHeld: state.signedIn ? _feeHeld(state) : null,
   );
 
   List<Widget> _failureLines(UnifiedSwapState state) {

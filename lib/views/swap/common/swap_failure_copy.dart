@@ -29,6 +29,7 @@ class SwapFailureCopy {
   /// source's, so a firm answer can say another source could not answer.
   /// [amount] is what was asked and [balance] what the wallet can spend, so
   /// an amount that would fill is offered only when it can be paid.
+  /// [feeHeld] is the network's coin at the swap address, as shown.
   static SwapFailureCopy of(
     SwapQuoteFailure failure,
     AssetId? pay, {
@@ -38,6 +39,7 @@ class SwapFailureCopy {
     SwapNetworks? networks,
     Decimal? amount,
     Decimal? balance,
+    String? feeHeld,
   }) {
     String ticker(AssetId? asset) =>
         asset == null ? '' : SwapFormat.ticker(asset);
@@ -90,8 +92,11 @@ class SwapFailureCopy {
         message: LocaleKeys.swapErrorRateLimited.tr(),
         action: SwapEntryAction.wait,
       ),
-      SwapQuoteFailureKind.serviceError => SwapFailureCopy(
-        message: _serviceMessage(failure, pay, networks),
+      SwapQuoteFailureKind.serviceError => _service(
+        failure,
+        pay,
+        networks,
+        feeHeld,
       ),
       SwapQuoteFailureKind.timeout => SwapFailureCopy(
         message: LocaleKeys.swapErrorTimeout.tr(),
@@ -284,24 +289,29 @@ class SwapFailureCopy {
     );
   }
 
-  /// A token's cross-network quote fails as a service error when the node
-  /// cannot estimate its approval, which is what an address short of the
-  /// network's own coin produces. That cause is only likely, never known,
-  /// so the copy suggests the check rather than asserting it.
-  static String _serviceMessage(
+  /// A token's cross-network quote fails as a service error both when the
+  /// node can't estimate its approval for want of gas and when the provider
+  /// can't be reached, so the copy suggests the check and shows what's held.
+  static SwapFailureCopy _service(
     SwapQuoteFailure failure,
     AssetId? pay,
     SwapNetworks? networks,
+    String? feeHeld,
   ) {
     final parent = pay?.parentId;
     if (failure.source == SwapLiquiditySource.routed &&
         parent != null &&
         networks != null) {
-      return LocaleKeys.swapErrorServiceToken.tr(
-        args: [SwapFormat.ticker(parent), networks.networkOf(parent)],
+      return SwapFailureCopy(
+        message: LocaleKeys.swapErrorServiceToken.tr(
+          args: [SwapFormat.ticker(parent), networks.networkOf(parent)],
+        ),
+        detail: feeHeld == null
+            ? null
+            : LocaleKeys.swapHelperFeeHeld.tr(args: [feeHeld]),
       );
     }
-    return LocaleKeys.swapErrorService.tr();
+    return SwapFailureCopy(message: LocaleKeys.swapErrorService.tr());
   }
 }
 

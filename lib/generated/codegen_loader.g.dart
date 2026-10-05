@@ -1460,6 +1460,7 @@ abstract class LocaleKeys {
   static const swapHelperSignedOutPriced = 'swapHelperSignedOutPriced';
   static const swapHelperBalance = 'swapHelperBalance';
   static const swapHelperHeldElsewhere = 'swapHelperHeldElsewhere';
+  static const swapHelperFeeHeld = 'swapHelperFeeHeld';
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxNetworkAndProviderFees =
       'swapHelperMaxNetworkAndProviderFees';

@@ -113,6 +113,59 @@ void main() {
       );
       expect(copy.message, LocaleKeys.swapErrorService);
     });
+
+    test('a token service error shows what the address holds, if known', () {
+      final service = failure(SwapQuoteFailureKind.serviceError);
+
+      final held = SwapFailureCopy.of(
+        service,
+        usdc,
+        networks: networks,
+        feeHeld: '60 ETH',
+      );
+      final unread = SwapFailureCopy.of(service, usdc, networks: networks);
+
+      expect(held.message, LocaleKeys.swapErrorServiceToken);
+      expect(held.detail, LocaleKeys.swapHelperFeeHeld);
+      expect(unread.detail, isNull);
+    });
+
+    test('the held amount goes only with the gas suggestion', () {
+      final orderBookMiss = failure(
+        SwapQuoteFailureKind.noRoute,
+        source: SwapLiquiditySource.atomic,
+      );
+      final cases = <(SwapQuoteFailure, AssetId, List<SwapQuoteFailure>)>[
+        (failure(SwapQuoteFailureKind.serviceError), eth, const []),
+        (
+          failure(
+            SwapQuoteFailureKind.serviceError,
+            source: SwapLiquiditySource.atomic,
+          ),
+          usdc,
+          const [],
+        ),
+        (failure(SwapQuoteFailureKind.timeout), usdc, const []),
+        (failure(SwapQuoteFailureKind.unknown), usdc, const []),
+        // The outage that prompted this: the order book's miss leads.
+        (
+          orderBookMiss,
+          usdc,
+          [orderBookMiss, failure(SwapQuoteFailureKind.serviceError)],
+        ),
+      ];
+
+      for (final (failure, pay, all) in cases) {
+        final copy = SwapFailureCopy.of(
+          failure,
+          pay,
+          all: all,
+          networks: networks,
+          feeHeld: '60 ETH',
+        );
+        expect(copy.detail, isNull, reason: '${failure.kind} for ${pay.id}');
+      }
+    });
   });
 
   group('form issues', () {

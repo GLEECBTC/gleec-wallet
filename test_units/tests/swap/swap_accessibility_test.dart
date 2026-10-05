@@ -253,6 +253,33 @@ void main() {
         ),
       ],
     ),
+    'no offer, cross-network unreachable': () => form(
+      evaluation: SwapEvaluationStatus.failed,
+      failure: const SwapQuoteFailure(
+        source: SwapLiquiditySource.atomic,
+        kind: SwapQuoteFailureKind.noRoute,
+      ),
+      failures: const [
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.atomic,
+          kind: SwapQuoteFailureKind.noRoute,
+        ),
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.serviceError,
+        ),
+      ],
+    ),
+    'selling a token, cross-network unchecked, gas held shown': () => form(
+      pay: usdc,
+      receive: eth,
+      feeBalance: d('60'),
+      evaluation: SwapEvaluationStatus.failed,
+      failure: const SwapQuoteFailure(
+        source: SwapLiquiditySource.routed,
+        kind: SwapQuoteFailureKind.serviceError,
+      ),
+    ),
     'no one offering an order-book pair': () =>
         form(
           receive: gleecEvm,

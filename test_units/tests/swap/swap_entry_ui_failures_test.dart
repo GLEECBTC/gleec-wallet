@@ -119,6 +119,23 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets('and says what the swap address holds, when it is known', (
+      tester,
+    ) async {
+      final failed = failedWith(
+        const SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.serviceError,
+        ),
+      ).copyWith(pay: usdc, receive: eth);
+
+      await pump(tester, failed.copyWith(feeBalance: d('60')));
+      expect(find.text('This address has 60 ETH.'), findsOneWidget);
+
+      await pump(tester, failed);
+      expect(find.textContaining('This address has'), findsNothing);
+    });
   });
 
   group('an inactive asset reported by a source', () {

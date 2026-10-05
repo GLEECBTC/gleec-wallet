@@ -119,8 +119,8 @@ void main() {
             eth,
             all: [atomicNoRoute, failure(SwapQuoteFailureKind.timeout)],
           ),
-          "No order-book offer fits this amount right now, and cross-network "
-          "prices couldn't be checked. Try again in a moment.",
+          "Cross-network prices couldn't be checked right now, and no "
+          'order-book offer fits this amount. Try again in a moment.',
         );
         expectCopy(
           SwapFailureCopy.of(
@@ -208,6 +208,20 @@ void main() {
           SwapFailureCopy.of(routed, usdc, networks: networks),
           "We couldn't check swap options. If this keeps happening, check "
           'you have enough ETH on Ethereum for network fees.',
+        );
+      });
+
+      test('and says what the address holds, so plenty rules gas out', () {
+        expectCopy(
+          SwapFailureCopy.of(
+            routed,
+            usdc,
+            networks: networks,
+            feeHeld: '60 ETH',
+          ),
+          "We couldn't check swap options. If this keeps happening, check "
+          'you have enough ETH on Ethereum for network fees.',
+          detail: 'This address has 60 ETH.',
         );
       });
 
