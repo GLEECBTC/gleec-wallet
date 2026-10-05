@@ -23,6 +23,7 @@ import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/shared/utils/utils.dart' as utils;
 
 /// A request to open the swap form on a pair, as tickers. The amount is in
 /// pay-asset units, or in US dollars when `fiat` is set.
@@ -304,6 +305,9 @@ class SwapServices {
           networks: networks,
           tradingAllowed: tradingAllowed,
           rateLimit: _routedRateLimit,
+          // Never `isError`: that writes a fixed phrase instead of the line.
+          log: (line) =>
+              unawaited(utils.log(line, path: 'swap -> RoutedSwapQuoteSource')),
         ),
         AtomicSwapQuoteSource(
           trading: _sdk.trading,

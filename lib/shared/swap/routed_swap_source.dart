@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:decimal/decimal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
+    show DiagnosticSanitizer;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/routed_swap_chains.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
@@ -11,6 +13,8 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
 part 'routed_swap_budget.dart';
+part 'routed_swap_offer.dart';
+part 'routed_swap_quote_log.dart';
 
 /// Prices swaps through the aggregator, executed by KDF.
 ///
@@ -20,7 +24,8 @@ part 'routed_swap_budget.dart';
 /// an atomic quote.
 class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// Creates a source backed by [manager]. Sources given the same [rateLimit]
-  /// wait out a refusal together.
+  /// wait out a refusal together. Each failed quote or catalog read is
+  /// described in one line to [log], for the app's exportable log.
   RoutedSwapQuoteSource(
     this.manager, {
     required SwapNetworks Function() networks,
@@ -30,11 +35,13 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Duration catalogTimeout = const Duration(seconds: 10),
     DateTime Function()? now,
     RoutedSwapRateLimit? rateLimit,
+    void Function(String line) log = _discard,
   }) : _networks = networks,
        _tradingAllowed = tradingAllowed,
        _isCandidate = isCandidate,
        _timeout = timeout,
        _catalogTimeout = catalogTimeout,
+       _log = log,
        _budget = _QuoteBudget(
          now ?? DateTime.now,
          rateLimit ?? RoutedSwapRateLimit(),
@@ -46,6 +53,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
   final bool Function(AssetId asset) _isCandidate;
   final Duration _timeout;
+  final void Function(String line) _log;
+
+  static void _discard(String line) {}
 
   /// Shorter than a quote's: once KDF has answered, the form waits on the
   /// catalog before pricing.
@@ -105,7 +115,8 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         quotable: eligible,
         onceActive: onceActive,
       );
-    } on Object {
+    } on Object catch (error) {
+      _report(_RoutedQuoteLog.catalog(error, timeout: _catalogTimeout));
       // An outage must not empty the picker or make every pair read as
       // unsupported: keep KDF's last answer, else the wallet's own guess.
       final last = _lastEligible;
@@ -246,15 +257,33 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         routedQuoteFromOffer(offer, networks: _networks(), order: order),
       );
     } on TimeoutException {
+      _report(_RoutedQuoteLog.timedOut(from, to, order, _timeout));
       return _rejected(SwapQuoteFailureKind.timeout);
     } on RoutedSwapRateLimitedException catch (error) {
-      return SwapQuoteRejected(
-        failureFor(error, from: from, to: to, retryAt: _budget.pause()),
+      final failure = failureFor(
+        error,
+        from: from,
+        to: to,
+        retryAt: _budget.pause(),
       );
+      _report(_RoutedQuoteLog.refused(from, to, order, failure.kind, error));
+      return SwapQuoteRejected(failure);
     } on RoutedSwapRpcException catch (error) {
-      return SwapQuoteRejected(failureFor(error, from: from, to: to));
+      final failure = failureFor(error, from: from, to: to);
+      _report(_RoutedQuoteLog.refused(from, to, order, failure.kind, error));
+      return SwapQuoteRejected(failure);
     } on Object catch (error) {
+      _report(_RoutedQuoteLog.unexpected(from, to, order, error));
       return _rejected(SwapQuoteFailureKind.unknown, detail: error.toString());
+    }
+  }
+
+  /// Writes [line] to the log; a failing sink never fails a quote.
+  void _report(String line) {
+    try {
+      _log(line);
+    } on Object {
+      // Diagnostics are best effort.
     }
   }
 
@@ -404,131 +433,4 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       maximum: maximum,
     );
   }
-}
-
-/// Normalises a routed [offer] into a [SwapQuote], naming networks with
-/// [networks]. Shared by quoting and by execution, so a running swap describes
-/// its stages exactly as its quote did.
-SwapQuote routedQuoteFromOffer(
-  RoutedSwapOffer offer, {
-  required SwapNetworks networks,
-  SwapQuoteOrder? order,
-}) {
-  final resolvedOrder =
-      order ??
-      (offer.order == RoutedSwapOrder.fastest
-          ? SwapQuoteOrder.fastest
-          : SwapQuoteOrder.cheapest);
-  final fromNetwork = networks.networkOf(offer.from);
-  final toNetwork = networks.networkOf(offer.to);
-
-  final stages = <SwapRouteStage>[
-    const SwapRouteStage(kind: SwapRouteStageKind.prepare),
-    if (offer.approval?.resetsFirst ?? false)
-      SwapRouteStage(
-        kind: SwapRouteStageKind.resetApproval,
-        network: fromNetwork,
-        asset: offer.from,
-      ),
-    if (offer.approval != null)
-      SwapRouteStage(
-        kind: SwapRouteStageKind.approve,
-        network: fromNetwork,
-        asset: offer.from,
-      ),
-    SwapRouteStage(
-      kind: SwapRouteStageKind.send,
-      network: fromNetwork,
-      asset: offer.from,
-    ),
-    ..._routedLegStages(offer, networks, fromNetwork, toNetwork),
-    SwapRouteStage(
-      kind: SwapRouteStageKind.receive,
-      network: toNetwork,
-      asset: offer.to,
-    ),
-  ];
-
-  return SwapQuote(
-    id: 'routed-${resolvedOrder.name}',
-    source: SwapLiquiditySource.routed,
-    routeKind: offer.isCrossChain
-        ? SwapRouteKind.crossChain
-        : SwapRouteKind.sameChain,
-    order: resolvedOrder,
-    from: offer.from,
-    to: offer.to,
-    sellAmount: offer.sellAmount,
-    expectedReceive: offer.expectedReceive,
-    guaranteedReceive: offer.guaranteedReceive,
-    fees: [
-      for (final cost in offer.costs)
-        SwapFeeComponent(
-          kind: switch (cost.kind) {
-            RoutedSwapCostKind.providerFee => SwapFeeKind.swap,
-            RoutedSwapCostKind.gas => SwapFeeKind.network,
-            RoutedSwapCostKind.approvalGas => SwapFeeKind.approvalNetwork,
-          },
-          amount: cost.amount,
-          deductedFromReceive: cost.isDeductedFromReceive,
-          asset: cost.assetId,
-          symbol: cost.symbol,
-          usdValue: cost.usdValue,
-        ),
-    ],
-    stages: stages,
-    approval: offer.approval == null
-        ? null
-        : SwapApprovalRequirement(
-            asset: offer.from,
-            exactAmount: offer.sellAmount,
-            resetsFirst: offer.approval!.resetsFirst,
-          ),
-    fromAddress: offer.fromAddress,
-    toAddress: offer.toAddress,
-    estimatedDuration: offer.estimatedDuration,
-    slippage: offer.slippage ?? 0.005,
-    quotedAt: offer.quotedAt,
-    diagnostic: '${offer.provider} · ${offer.toolName} (${offer.toolKey})',
-    payload: offer,
-  );
-}
-
-/// The middle of the route, from its legs: a bridge moves to the leg's
-/// destination network; a swap converts on the leg's network.
-List<SwapRouteStage> _routedLegStages(
-  RoutedSwapOffer offer,
-  SwapNetworks networks,
-  String fromNetwork,
-  String toNetwork,
-) {
-  final stages = <SwapRouteStage>[];
-  for (final leg in offer.legs) {
-    switch (leg.type) {
-      case RoutedSwapStepType.cross:
-        stages.add(
-          SwapRouteStage(
-            kind: SwapRouteStageKind.bridge,
-            network: networks.networkOfEvmChain(leg.toChainId) ?? toNetwork,
-          ),
-        );
-      case RoutedSwapStepType.swap:
-        stages.add(
-          SwapRouteStage(
-            kind: SwapRouteStageKind.convert,
-            network: networks.networkOfEvmChain(leg.chainId) ?? fromNetwork,
-          ),
-        );
-      case RoutedSwapStepType.unknown:
-        break;
-    }
-  }
-  if (stages.isNotEmpty) return stages;
-  // No legs reported: describe the route from its kind alone.
-  return [
-    if (offer.isCrossChain)
-      SwapRouteStage(kind: SwapRouteStageKind.bridge, network: toNetwork)
-    else
-      SwapRouteStage(kind: SwapRouteStageKind.convert, network: fromNetwork),
-  ];
 }
