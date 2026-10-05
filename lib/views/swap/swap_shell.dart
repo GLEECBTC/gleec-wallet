@@ -17,6 +17,7 @@ import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/views/dex/dex_page.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/backup_seed_notification.dart';
 import 'package:web_dex/views/swap/activity/swap_activity_view.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -111,6 +112,8 @@ class _SwapShellState extends State<SwapShell> {
 
   @override
   Widget build(BuildContext context) {
+    // The backup notice reads the signed-in wallet; tests may have no sign-in.
+    final hasAuth = context.select<AuthBloc?, bool>((auth) => auth != null);
     final shell = SwapShellScope(
       controller: _controller,
       child: ListenableBuilder(
@@ -130,6 +133,9 @@ class _SwapShellState extends State<SwapShell> {
                   selected: destination,
                   onSelected: _controller.show,
                 ),
+                // One notice for all three destinations, so it stays put when
+                // switching; the trading page leaves its own out.
+                if (hasAuth) const BackupSeedNotification(hideOnMobile: false),
                 Expanded(child: _body(destination)),
               ],
             ),

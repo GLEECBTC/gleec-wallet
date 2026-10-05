@@ -142,6 +142,8 @@ import 'tests/swap/swap_signed_out_pricing_test.dart'
 import 'tests/swap/swap_signed_out_repository_test.dart'
     as swap_signed_out_repository_test;
 import 'tests/swap/swap_shell_test.dart' as swap_shell_test;
+import 'tests/swap/swap_shell_backup_notice_test.dart'
+    as swap_shell_backup_notice_test;
 import 'tests/swap/swap_slippage_test.dart' as swap_slippage_test;
 import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
 import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
@@ -615,6 +617,7 @@ void main() {
   swap_accessibility_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
+  swap_shell_backup_notice_test.main();
   swap_execution_registry_test.main();
   swap_execution_bloc_test.main();
   swap_copy_test.main();
