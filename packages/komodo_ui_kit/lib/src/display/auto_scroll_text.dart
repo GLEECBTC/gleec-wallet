@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AutoScrollText extends StatefulWidget {
+  /// How far text must overflow before it scrolls; text overflowing by less
+  /// is clipped where it stands.
+  static const double animationThresholdWidth = 5;
+
   const AutoScrollText({
     required this.text,
     this.style,
@@ -26,7 +30,8 @@ class _AutoScrollTextState extends State<AutoScrollText>
     with SingleTickerProviderStateMixin {
   /// To avoid unnecessary animations, we only animate the text if it's wider
   /// than the parent's constraints by this threshold.
-  static const double _kAnimationThresholdWidth = 5;
+  static const double _kAnimationThresholdWidth =
+      AutoScrollText.animationThresholdWidth;
 
   static const Duration _kPauseBeforeRepeat = Duration(seconds: 10);
 
@@ -174,6 +179,9 @@ class _AutoScrollTextState extends State<AutoScrollText>
           TextAlign.start,
       maxLines: 1,
       textWidthBasis: TextWidthBasis.longestLine,
+      // As the rendered Text scales it: without this, larger text overflows
+      // further than measured and the scroll stops short of the end.
+      textScaler: MediaQuery.textScalerOf(context),
     );
 
     return _textWidth!;
@@ -309,6 +317,21 @@ class _AutoScrollTextState extends State<AutoScrollText>
     _lastAvailableSize = null;
     _textWidth = null;
     _renderedTextStyle = null;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // The text size setting or inherited style may have changed the width.
+    _textWidth = null;
+    _renderedTextStyle = null;
+    final size = _lastAvailableSize;
+    if (size != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => computeAnimation(size),
+      );
+    }
   }
 
   @override

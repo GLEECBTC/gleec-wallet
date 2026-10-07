@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
@@ -39,14 +40,42 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('at ${scale}x text the scroll reaches the end of the text', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_host(textScale: scale));
+
+      // Past the initial pause and the outbound pass.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 5));
+
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(_text));
+      final textEnd =
+          tester.getTopLeft(find.text(_text)).dx +
+          paragraph.getMaxIntrinsicWidth(double.infinity);
+      final columnEnd = tester.getTopRight(find.byKey(_column)).dx;
+      expect(textEnd, closeTo(columnEnd, 1));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 }
 
-Widget _host() => const MaterialApp(
-  home: Scaffold(
-    body: Center(
-      child: SizedBox(
-        width: 40,
-        child: AutoScrollText(text: 'A coin name far too long for its column'),
+const _text = 'A coin name far too long for its column';
+const _column = ValueKey('column');
+
+Widget _host({double textScale = 1}) => MaterialApp(
+  home: MediaQuery(
+    data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+    child: const Scaffold(
+      body: Center(
+        child: SizedBox(
+          key: _column,
+          width: 40,
+          child: AutoScrollText(text: _text),
+        ),
       ),
     ),
   ),
