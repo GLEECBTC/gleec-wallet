@@ -33,8 +33,9 @@ KDF paths are relative to `mm2src/mm2_main/src/` unless a path says otherwise. L
 
 The spec's Max option is still to come, so v1 has an interim version behind a single SDK entry point, `RoutedSwapManager.maxSellAmount`:
 
-- **Selling a token:** Max uses the whole balance. The network fee is paid in the network's own coin.
-- **Selling a network's own coin:** Max keeps back three times the native network fee of the route. The form says how much was kept back. The fee comes from a quote on the same pair in the last minute when there is one, and from a probe quote otherwise. The margin is large because `init` checks the balance against the route's gas limit at KDF's own maximum fee per gas (`check_balances` in `routed_swap/swap_task.rs`), which runs well above the provider's estimate. If that check still fails, nothing is sent and the result screen shows KDF's shortfall.
+- **Selling a token:** Max uses the whole balance, less any provider fee a route charges on top in that token. The network fee is paid in the network's own coin.
+- **Selling a network's own coin:** Max keeps back three times the native network fee of the route, and any provider fee the route charges on top in that coin. The form says how much was kept back. The margin is large because `init` checks the balance against the route's gas limit at KDF's own maximum fee per gas (`check_balances` in `routed_swap/swap_task.rs`), which runs well above the provider's estimate. If that check still fails, nothing is sent and the result screen shows KDF's shortfall.
+- **Where the fees come from:** a quote on the same pair in the last minute when there is one, and a probe quote otherwise. During a rate-limit pause no probe is made, and Max leaves the whole balance.
 - **Atomic swaps:** Max uses KDF's `max_taker_vol`, which already accounts for the trading and network fees, capped at the largest amount one offer takes. Until SDK #389 `c65833ad`, the SDK sent `max_taker_vol` (and `min_trading_vol`) as v2 requests, which KDF answers only on its legacy dispatcher, so atomic Max did nothing and the coin minimum was never checked.
 
 When the spec adds Max, it replaces this inside `maxSellAmount`, and the form does not change. A draft for the spec is kept outside the repos until it is agreed.
