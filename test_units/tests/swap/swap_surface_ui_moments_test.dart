@@ -5,6 +5,7 @@ import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
+import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -269,6 +270,59 @@ void main() {
       await hear(tester, handle, peerToPeer(SwapProgressStage.refunding));
       await tester.pumpAndSettle();
       expect(played, isEmpty);
+    });
+
+    testWidgets('an order-book refund stops its exchange, then marks it '
+        'refunded, without a bounce or a ripple', (tester) async {
+      SwapExecutionSnapshot peerToPeer(
+        SwapProgressStage stage, {
+        bool landed = false,
+      }) => snapshotOf(
+        source: SwapLiquiditySource.atomic,
+        routeKind: SwapRouteKind.direct,
+        stage: stage,
+        outcome: landed
+            ? const SwapExecutionOutcome(kind: SwapOutcomeKind.refunded)
+            : null,
+        stages: const [],
+      );
+      String timeline() =>
+          tester.getSemantics(find.byType(SwapTimelineView)).label;
+      Future<void> expectCalm() async {
+        for (var frame = 0; frame < 40; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          expect(effectScales(tester), everyElement(lessThan(1.0001)));
+          final rings = find.descendant(
+            of: find.byType(SwapTimelineView),
+            matching: find.byType(CustomPaint),
+          );
+          for (final ring in tester.renderObjectList(rings)) {
+            expect(ring, isNot(paints..rrect(style: PaintingStyle.stroke)));
+          }
+        }
+        await tester.pumpAndSettle();
+      }
+
+      final played = recordHaptics(tester);
+      final handle = await open(
+        tester,
+        peerToPeer(SwapProgressStage.exchanging),
+      );
+      await tester.pumpAndSettle();
+
+      await hear(tester, handle, peerToPeer(SwapProgressStage.refunding));
+      await expectCalm();
+      expect(timeline(), contains('Cancelled: Exchanging asset.'));
+      expect(played, isEmpty);
+
+      await hear(
+        tester,
+        handle,
+        peerToPeer(SwapProgressStage.refunding, landed: true),
+      );
+      await expectCalm();
+      expect(timeline(), contains('Refunded: Exchanging asset.'));
+      expect(played, ['HapticFeedbackType.lightImpact']);
     });
 
     for (final (name, source) in [

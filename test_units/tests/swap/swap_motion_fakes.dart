@@ -34,6 +34,13 @@ double scaleOf(Matrix4 transform) => math.sqrt(
   math.pow(transform.entry(0, 0), 2) + math.pow(transform.entry(1, 0), 2),
 );
 
+/// How much each effect running in the last frame scales, after the view's
+/// own transform.
+Iterable<double> effectScales(WidgetTester tester) => tester.layers
+    .whereType<TransformLayer>()
+    .skip(1)
+    .map((layer) => scaleOf(layer.transform ?? Matrix4.identity()));
+
 /// Whether any effect painted something turned in the last frame.
 bool effectTurning(WidgetTester tester) => tester.layers
     .whereType<TransformLayer>()

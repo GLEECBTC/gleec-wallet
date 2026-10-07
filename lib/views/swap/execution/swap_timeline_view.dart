@@ -426,15 +426,13 @@ class _StepRow extends StatelessWidget {
         toFg,
       ), child!),
       child: SwapPaintEffect(
-        progress: window(
-          beat.start,
-          beat.end,
+        progress: window(beat.start, beat.end, switch (step.status) {
           // A stop arrives without a bounce, a refund included.
-          step.status == SwapStepStatus.error ||
-                  step.status == SwapStepStatus.refunded
-              ? SwapMotion.error
-              : SwapMotion.success,
-        ),
+          SwapStepStatus.error ||
+          SwapStepStatus.cancelled ||
+          SwapStepStatus.refunded => SwapMotion.error,
+          _ => SwapMotion.success,
+        }),
         opacity: 0,
         scale: 0.6,
         child: glyph,
