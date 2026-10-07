@@ -99,6 +99,27 @@ double _drawnSize(WidgetTester tester, String amount) {
 double _minSize(double textScale) =>
     MobileCoinRowTitle.minScale * _amountStyle.fontSize! * textScale;
 
+/// Pumps a row whose [line] ('price' or 'fiat value') reads [value].
+Future<void> _pumpLine(
+  WidgetTester tester,
+  String line,
+  String value,
+  double screen,
+  double textScale,
+) => _pump(
+  tester,
+  screen: screen,
+  amount: '14,772.12 VRSC',
+  price: line == 'price' ? value : r'↑ $0.20 (+1.01%)',
+  fiat: line == 'fiat value' ? value : r'$2,954.53',
+  textScale: textScale,
+);
+
+/// The column that shrinks or scrolls [text].
+Finder _columnOf(String text) => find
+    .ancestor(of: find.text(text), matching: find.byType(ScaleDownOrScroll))
+    .first;
+
 /// Unmounts the row, so a scrolling amount leaves no timer running.
 Future<void> _unmount(WidgetTester tester) =>
     tester.pumpWidget(const SizedBox.shrink());
@@ -286,74 +307,84 @@ void testMobileCoinRowTitle() {
       expect(_scaleOf(tester, r'↑ $64,123.45 (+2.45%)'), 1);
     });
 
-    for (final screen in [320.0, 360.0, 412.0]) {
-      for (final textScale in [1.0, 2.0]) {
-        for (final price in [
+    // The price and the fiat value share the amount's floor.
+    for (final (line, values) in [
+      (
+        'price',
+        [
           r'↑ $0.20 (+1.01%)',
           r'↑ $64,123.45 (+2.45%)',
           r'↓ $0.000012 (-13.10%)',
-        ]) {
-          testWidgets(
-            'shows the price "$price" legibly on a ${screen.toInt()} dp '
-            'phone at ${textScale}x text',
-            (tester) async {
-              await _pump(
-                tester,
-                screen: screen,
-                amount: '14,772.12 VRSC',
-                price: price,
-                textScale: textScale,
-              );
+        ],
+      ),
+      ('fiat value', [r'$0.01', r'$2,954.53', r'$1,234,567.89']),
+    ]) {
+      for (final screen in [320.0, 360.0, 412.0]) {
+        for (final textScale in [1.0, 2.0]) {
+          for (final value in values) {
+            testWidgets(
+              'shows the $line "$value" legibly on a ${screen.toInt()} dp '
+              'phone at ${textScale}x text',
+              (tester) async {
+                await _pumpLine(tester, line, value, screen, textScale);
 
-              expect(tester.takeException(), isNull);
-              final column = tester.getRect(find.byType(ScaleDownOrScroll));
-              // Shrinking rather than scrolling an overflow too small to
-              // scroll may go below the minimum by that overflow.
-              final allowance =
-                  column.width /
-                  (column.width + AutoScrollText.animationThresholdWidth);
-              expect(
-                _scaleOf(tester, price),
-                greaterThanOrEqualTo(
-                  MobileCoinRowTitle.minScale * allowance - 0.001,
-                ),
-              );
-              // At rest it starts inside its column.
-              expect(
-                tester.getRect(find.text(price)).left,
-                greaterThanOrEqualTo(column.left - 0.01),
-              );
-              await _unmount(tester);
-            },
-          );
+                expect(tester.takeException(), isNull);
+                final column = tester.getRect(_columnOf(value));
+                // Shrinking rather than scrolling an overflow too small to
+                // scroll may go below the minimum by that overflow.
+                final allowance =
+                    column.width /
+                    (column.width + AutoScrollText.animationThresholdWidth);
+                expect(
+                  _scaleOf(tester, value),
+                  greaterThanOrEqualTo(
+                    MobileCoinRowTitle.minScale * allowance - 0.001,
+                  ),
+                );
+                // At rest it starts inside its column.
+                expect(
+                  tester.getRect(find.text(value)).left,
+                  greaterThanOrEqualTo(column.left - 0.01),
+                );
+                if (line == 'fiat value') {
+                  expect(
+                    column.width,
+                    lessThanOrEqualTo(_valueMax(_titleWidth(screen)) + 0.01),
+                  );
+                }
+                await _unmount(tester);
+              },
+            );
+          }
         }
       }
     }
 
-    testWidgets('a price too wide to shrink scrolls to its end', (
-      tester,
-    ) async {
-      const price = r'↑ $64,123.45 (+2.45%)';
-      await _pump(
+    for (final (line, value) in [
+      ('price', r'↑ $64,123.45 (+2.45%)'),
+      ('fiat value', r'$1,234,567.89'),
+    ]) {
+      testWidgets('a $line too wide to shrink scrolls to its end', (
         tester,
-        screen: 320,
-        amount: '14,772.12 VRSC',
-        price: price,
-        textScale: 2,
-      );
-      final column = tester.getRect(find.byType(ScaleDownOrScroll));
-      expect(tester.getRect(find.text(price)).right, greaterThan(column.right));
+      ) async {
+        await _pumpLine(tester, line, value, 320, 2);
+        final column = tester.getRect(_columnOf(value));
+        expect(
+          tester.getRect(find.text(value)).right,
+          greaterThan(column.right),
+        );
 
-      // Past the scroll's initial pause and its outbound pass.
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pump(const Duration(seconds: 5));
+        // Past the scroll's initial pause and its outbound pass.
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pump(const Duration(seconds: 5));
 
-      expect(
-        tester.getRect(find.text(price)).right,
-        closeTo(column.right, 0.5),
-      );
-      await _unmount(tester);
-    });
+        expect(
+          tester.getRect(find.text(value)).right,
+          closeTo(column.right, 0.5),
+        );
+        await _unmount(tester);
+      });
+    }
 
     testWidgets('large text shrinks or scrolls instead of overflowing', (
       tester,
