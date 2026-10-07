@@ -62,9 +62,9 @@ an unbounded `bloc.stream.firstWhere` has no deadline — so the symptom is a we
 and a CI timeout, not a red test. The values are non-secret; the source of record is
 `.github/workflows/unit-tests-on-pr.yml:9-20` and `test_units/main.dart:101-114`.
 
-`LIFI_API_URL` ([BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_api_url)) is not one of them. The
-suite never starts KDF, so leave it unset; `tests/mm2/lifi_api_url_test.dart` covers how
-the app reads it.
+`LIFI_PROXY_URL` ([BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)) is not one of them.
+The suite never starts KDF, so leave it unset; `tests/mm2/lifi_proxy_url_test.dart` covers
+how the app reads it.
 
 ### The aggregator trap
 
@@ -329,7 +329,7 @@ fortnight. The chart flow additionally needs keys added to
 | A BLoC or its states/events | unit | integration, if it drives a screen a suite touches |
 | A widget carrying a `Key` a test uses | unit **and** integration | grep `test_integration/` for the key first |
 | Anything GasFree / TRON | unit **with all four defines** | integration requires explicit defines and a GasFree-specific scenario |
-| The LI.FI endpoint (`LIFI_API_URL`, [BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_api_url)) | unit, plus the `komodo_defi_framework`, `komodo_defi_local_auth`, `komodo_defi_sdk` and harness replay suites | a routed quote through the proxy, the default, or another one with `fvm flutter run --dart-define=LIFI_API_URL=<proxy URL>`. KDF reads the URL only when it calls LI.FI, so a wrong one shows up as failed quotes, not a failed start |
+| The LI.FI proxy (`LIFI_PROXY_URL`, [BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)) | unit, plus the `komodo_defi_framework`, `komodo_defi_local_auth`, `komodo_defi_sdk` and harness replay suites | a routed quote through the proxy, the default, or another one with `fvm flutter run --dart-define=LIFI_PROXY_URL=<proxy URL>`. KDF does not check the URL when it starts, so a wrong one shows up as failed quotes, not a failed start. A proxy that refuses KDF's signature fails them the same way |
 | Auth, activation, pubkeys, balances, storage | SDK **and** harness replay | nightly process tier if it touches the real binary |
 | Anything that could move wallet-load timing | harness replay + bench | update `tool/bench_baseline.json` by hand in the same PR |
 | An RPC request/response type | SDK + harness replay | serialisation bugs surface only on transports that `jsonEncode` |
