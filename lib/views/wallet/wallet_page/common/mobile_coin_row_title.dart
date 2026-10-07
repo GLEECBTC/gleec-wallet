@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 /// The mobile wallet row's title: the coin's icon beside two lines, the name
 /// and held amount, then the market price and the holding's fiat value.
@@ -7,6 +8,11 @@ import 'package:flutter/material.dart';
 /// beside the icon, and shrink to fit beyond that. They are never cut short:
 /// "147…" for a 14,772 VRSC balance reads as a different number. Each line is
 /// split on its own, so a long price is not squeezed by a long amount.
+///
+/// The amount, price and fiat value shrink no further than [minScale] of the
+/// size the text setting asks for, give or take
+/// [AutoScrollText.animationThresholdWidth]; any still too wide scrolls
+/// instead, so they stay readable on a narrow phone or with large text.
 class MobileCoinRowTitle extends StatelessWidget {
   const MobileCoinRowTitle({
     super.key,
@@ -27,6 +33,10 @@ class MobileCoinRowTitle extends StatelessWidget {
   final Widget fiat;
   final TextStyle? amountStyle;
 
+  /// The smallest the amount, price and fiat value are drawn, as a share of
+  /// full size.
+  static const minScale = 0.8;
+
   static const _gap = 8.0;
 
   @override
@@ -39,40 +49,32 @@ class MobileCoinRowTitle extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final valueMax = (constraints.maxWidth - _gap) / 2;
+              Widget fit(Widget child) => ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: valueMax),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: child,
+                ),
+              );
               Widget line(Widget start, Widget end) => Row(
                 children: [
                   Expanded(child: start),
                   const SizedBox(width: _gap),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: valueMax),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerEnd,
-                      child: end,
-                    ),
-                  ),
+                  end,
                 ],
               );
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  line(
-                    name,
-                    Text(
-                      amount,
-                      style: amountStyle,
-                      maxLines: 1,
-                      softWrap: false,
-                    ),
-                  ),
+                  line(name, _amount(context, valueMax, fit)),
                   const SizedBox(height: 2),
                   line(
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: price,
+                    ScaleDownOrScroll(minScale: minScale, child: price),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: valueMax),
+                      child: ScaleDownOrScroll(minScale: minScale, child: fiat),
                     ),
-                    fiat,
                   ),
                 ],
               );
@@ -81,5 +83,55 @@ class MobileCoinRowTitle extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _amount(
+    BuildContext context,
+    double valueMax,
+    Widget Function(Widget) fit,
+  ) {
+    final style = _effectiveAmountStyle(context);
+    final smallest = style.copyWith(fontSize: style.fontSize! * minScale);
+    // Measured at that size, since glyphs do not scale exactly. An overflow
+    // too small for AutoScrollText to scroll would stay cut off, so the
+    // amount shrinks that little further instead.
+    final overflow = _widthOf(context, amount, smallest) - valueMax;
+    if (overflow <= AutoScrollText.animationThresholdWidth) {
+      return fit(
+        Text(amount, style: amountStyle, maxLines: 1, softWrap: false),
+      );
+    }
+    return SizedBox(
+      width: valueMax,
+      child: AutoScrollText(text: amount, style: smallest),
+    );
+  }
+
+  /// [amountStyle] as [Text] resolves it, with a font size to scale.
+  TextStyle _effectiveAmountStyle(BuildContext context) {
+    final style = amountStyle;
+    final resolved = style == null || style.inherit
+        ? DefaultTextStyle.of(context).style.merge(style)
+        : style;
+    return resolved.copyWith(
+      fontSize: resolved.fontSize ?? 14,
+      fontWeight: MediaQuery.boldTextOf(context) ? FontWeight.bold : null,
+      letterSpacing: MediaQuery.maybeLetterSpacingOverrideOf(context),
+      wordSpacing: MediaQuery.maybeWordSpacingOverrideOf(context),
+    );
+  }
+
+  /// The width [text] takes on one line at the text size setting.
+  static double _widthOf(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
   }
 }

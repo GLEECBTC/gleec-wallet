@@ -24,6 +24,8 @@ import 'views/settings/seed_private_key_export_guard_test.dart'
 import 'support/contrast_test.dart' as contrast_test;
 import 'theme/theme_color_roles_test.dart' as theme_color_roles_test;
 import 'shared/widgets/auto_scroll_text_test.dart' as auto_scroll_text_test;
+import 'shared/widgets/scale_down_or_scroll_test.dart'
+    as scale_down_or_scroll_test;
 import 'shared/widgets/notice_banner_test.dart' as notice_banner_test;
 import 'bloc/legal_agreement/legal_agreement_bloc_test.dart'
     as legal_agreement_bloc_test;
@@ -205,6 +207,7 @@ void main() {
   theme_color_roles_test.main();
   notice_banner_test.main();
   auto_scroll_text_test.main();
+  scale_down_or_scroll_test.main();
   app_error_handling_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
