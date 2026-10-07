@@ -5,6 +5,7 @@ import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 import 'swap_common_ui_fakes.dart';
+import 'swap_motion_fakes.dart';
 
 /// Covers how the timeline moves when a swap moves on: in order, within its
 /// limit, with the screen-reader labels and single icons right at once.
@@ -16,6 +17,7 @@ void main() {
     const c = SwapStepStatus.current;
     const n = SwapStepStatus.notStarted;
     const e = SwapStepStatus.error;
+    const x = SwapStepStatus.cancelled;
 
     List<SwapTimelineStep> steps(List<SwapStepStatus> statuses) => [
       for (final (i, status) in statuses.indexed)
@@ -146,6 +148,28 @@ void main() {
       await show(tester, [d, e, n]);
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.priority_high_rounded), findsOneWidget);
+    });
+
+    testWidgets('a stop pops in without overshoot, as an error does', (
+      tester,
+    ) async {
+      for (final stop in [x, e]) {
+        await show(tester, [d, c, n], settle: true);
+        await show(tester, [d, stop, n]);
+        final scales = <double>[];
+        for (var frame = 0; frame < 40; frame++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          scales.addAll(effectScales(tester));
+        }
+        await tester.pumpAndSettle();
+
+        expect(scales, isNotEmpty, reason: '${stop.name} pops in');
+        expect(
+          scales.every((scale) => scale <= 1.0001),
+          isTrue,
+          reason: '${stop.name}: $scales',
+        );
+      }
     });
 
     testWidgets('shows a change at once with less motion', (tester) async {

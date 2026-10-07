@@ -1646,6 +1646,7 @@ abstract class LocaleKeys {
   static const swapStepCurrent = 'swapStepCurrent';
   static const swapStepError = 'swapStepError';
   static const swapStepCancelled = 'swapStepCancelled';
+  static const swapStepRefunded = 'swapStepRefunded';
   static const swapStepNotStarted = 'swapStepNotStarted';
   static const swapProgressTitle = 'swapProgressTitle';
   static const swapProgressPreparingTitle = 'swapProgressPreparingTitle';
@@ -1811,12 +1812,14 @@ abstract class LocaleKeys {
   static const swapActivityPermissionRemains = 'swapActivityPermissionRemains';
   static const swapNoticeCompleted = 'swapNoticeCompleted';
   static const swapNoticeAttention = 'swapNoticeAttention';
+  static const swapNoticeRefunded = 'swapNoticeRefunded';
   static const swapNoticeAction = 'swapNoticeAction';
   static const swapNoticeView = 'swapNoticeView';
   static const swapTabTitle = 'swapTabTitle';
   static const swapTabRunning = 'swapTabRunning';
   static const swapTabRunningMany = 'swapTabRunningMany';
   static const swapTabCompleted = 'swapTabCompleted';
+  static const swapTabRefunded = 'swapTabRefunded';
   static const swapTabAttention = 'swapTabAttention';
   static const swapTabAction = 'swapTabAction';
   static const swapPickerTitle = 'swapPickerTitle';

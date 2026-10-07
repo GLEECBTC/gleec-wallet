@@ -267,6 +267,7 @@ class _ActivityRowState extends State<_ActivityRow> {
         snapshot.updatedAt ?? snapshot.finishedAt ?? snapshot.createdAt;
     final actionRequired = snapshot.stage == SwapProgressStage.actionRequired;
     final attention = snapshot.isTerminal && snapshot.needsAttention;
+    final refunded = snapshot.outcome?.kind == SwapOutcomeKind.refunded;
     return Semantics(
       button: true,
       child: Material(
@@ -300,7 +301,7 @@ class _ActivityRowState extends State<_ActivityRow> {
                         Text(
                           copy.statusLine,
                           style: SwapText.small(context).copyWith(
-                            color: attention || actionRequired
+                            color: attention || actionRequired || refunded
                                 ? palette.warning
                                 : palette.textTertiary,
                           ),

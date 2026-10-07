@@ -182,6 +182,18 @@ void main() {
             'The route is returning your funds. Gleec will keep tracking.',
             'Current: Receive USDC.',
           ),
+          'refunding peer-to-peer': (
+            snapshotOf(
+              source: SwapLiquiditySource.atomic,
+              routeKind: SwapRouteKind.direct,
+              stage: SwapProgressStage.refunding,
+              stages: const [],
+            ),
+            'Refund in progress',
+            'Your payment is locked until the refund unlocks. Then it comes '
+                'back to your wallet.',
+            'Cancelled: Exchanging asset. Peer-to-peer exchange',
+          ),
           'action required': (
             snapshotOf(stage: SwapProgressStage.actionRequired),
             'Action required',
@@ -231,6 +243,10 @@ void main() {
         'You can leave this screen, but keep Gleec open and signed in until '
             'the swap finishes. The swap runs on this device, and pauses '
             'while Gleec is closed.',
+      'refunding peer-to-peer' =>
+        'Keep Gleec open and signed in: it sends your refund from this '
+            'device once the refund unlocks. If Gleec is closed then, the '
+            'refund goes out when you next sign in.',
       _ => 'You can leave this screen. The swap continues in Activity.',
     };
 
@@ -248,6 +264,15 @@ void main() {
         await expectSwapAccessible(tester);
       });
     }
+
+    testWidgets('a peer-to-peer refund puts no step under way', (tester) async {
+      await follow(tester, stages['refunding peer-to-peer']!.$1);
+
+      final steps = timeline(tester);
+      expect(steps, contains('Completed: Sending on Ethereum.'));
+      expect(steps, contains('Not started: Receive USDC.'));
+      expect(steps, isNot(contains('Current:')));
+    });
 
     testWidgets('follows the swap as it moves on and finishes', (tester) async {
       final handle = await follow(tester, snapshotOf());

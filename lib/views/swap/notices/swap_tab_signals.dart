@@ -20,6 +20,9 @@ enum SwapTabSignal {
   /// A finished swap needs looking at.
   attention(0xFFF59E0B),
 
+  /// A swap was refunded while the user was away from the tab.
+  refunded(0xFFF59E0B),
+
   /// A swap completed while the user was away from the tab.
   completed(0xFF16A34A),
 
@@ -66,7 +69,10 @@ class _SwapTabSignalsState extends State<SwapTabSignals> {
   StreamSubscription<SwapExecutionNotice>? _notices;
   AppLifecycleListener? _lifecycle;
   var _away = false;
-  var _completedAway = false;
+
+  /// A swap that finished while the user was away, until they are back; a
+  /// refund outranks a completion.
+  SwapTabSignal? _finishedAway;
   SwapTabSignal? _badged;
   String? _titled;
 
@@ -79,15 +85,19 @@ class _SwapTabSignalsState extends State<SwapTabSignals> {
     _away = _isAway(WidgetsBinding.instance.lifecycleState);
     _executions = registry.executions.listen((_) => _changed());
     _notices = registry.notices.listen((notice) {
-      if (_away && notice.kind == SwapExecutionNoticeKind.completed) {
-        _completedAway = true;
-        _changed();
-      }
+      final finished = switch (notice.kind) {
+        SwapExecutionNoticeKind.refunded => SwapTabSignal.refunded,
+        SwapExecutionNoticeKind.completed => SwapTabSignal.completed,
+        _ => null,
+      };
+      if (!_away || finished == null) return;
+      if (_finishedAway != SwapTabSignal.refunded) _finishedAway = finished;
+      _changed();
     });
     _lifecycle = AppLifecycleListener(
       onStateChange: (state) {
         _away = _isAway(state);
-        if (!_away) _completedAway = false;
+        if (!_away) _finishedAway = null;
         _changed();
       },
     );
@@ -116,7 +126,7 @@ class _SwapTabSignalsState extends State<SwapTabSignals> {
     if (registry.unacknowledgedAttentionCount > 0) {
       return SwapTabSignal.attention;
     }
-    if (_completedAway) return SwapTabSignal.completed;
+    if (_finishedAway case final finished?) return finished;
     if (running.isNotEmpty) return SwapTabSignal.running;
     return null;
   }
@@ -149,6 +159,7 @@ class _SwapTabSignalsState extends State<SwapTabSignals> {
     final what = switch (signal) {
       SwapTabSignal.action => LocaleKeys.swapTabAction.tr(),
       SwapTabSignal.attention => LocaleKeys.swapTabAttention.tr(),
+      SwapTabSignal.refunded => LocaleKeys.swapTabRefunded.tr(),
       SwapTabSignal.completed => LocaleKeys.swapTabCompleted.tr(),
       SwapTabSignal.running =>
         running > 1

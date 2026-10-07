@@ -196,6 +196,7 @@ class SwapHeroMotion {
     this.iconTurns = 0,
     this.iconCurve = SwapMotion.enter,
     this.iconDuration = SwapMotion.pop,
+    this.iconKey,
     this.ring,
     this.ringColor,
   });
@@ -209,6 +210,10 @@ class SwapHeroMotion {
   final double iconTurns;
   final Curve iconCurve;
   final Duration iconDuration;
+
+  /// The icon arrives again each time this changes, even when the icon and
+  /// tone stay the same, as a refund's do when it lands.
+  final Object? iconKey;
 
   /// A ring spreads once from the tile, in [ringColor], each time this
   /// changes to something other than null.
@@ -357,8 +362,7 @@ class SwapStatusHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
       ),
       child: SwapPop(
-        // A refund keeps its icon as it lands, so a new tone pops it too.
-        trigger: (icon, tone),
+        trigger: (icon, tone, motion.iconKey),
         animate: motion.animate,
         from: motion.iconFrom,
         turns: motion.iconTurns,

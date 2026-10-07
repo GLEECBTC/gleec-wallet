@@ -135,7 +135,7 @@ void main() {
         body: "The swap didn't happen. Your ETH was returned on Ethereum.",
         funds: 'Returned to your address on Ethereum.',
         actions: ['Try again'],
-        timeline: 'Cancelled: Receive USDC.',
+        timeline: 'Refunded: Receive USDC.',
       ),
       'cancelled': (
         snapshot: snapshotOf(

@@ -13,6 +13,7 @@ import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
+import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 
 /// Tells the user, wherever they are in the app, when a swap they started
@@ -102,6 +103,11 @@ class _SwapNoticeListenerState extends State<SwapNoticeListener> {
                     rounding: SwapRounding.down,
                   ),
           ],
+        );
+      case SwapExecutionNoticeKind.refunded:
+        final copy = SwapExecutionCopy(notice.snapshot, _services!.networks());
+        return LocaleKeys.swapNoticeRefunded.tr(
+          args: [copy.fromTicker, copy.fromNetwork],
         );
       case SwapExecutionNoticeKind.needsAttention:
         return LocaleKeys.swapNoticeAttention.tr();

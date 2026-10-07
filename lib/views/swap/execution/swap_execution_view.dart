@@ -262,6 +262,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
       iconTurns: turns,
       iconCurve: curve,
       iconDuration: duration,
+      iconKey: snapshot.outcome?.kind,
       ring: snapshot.outcome?.kind == SwapOutcomeKind.completed
           ? snapshot.id
           : null,
