@@ -9,10 +9,10 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 /// "147…" for a 14,772 VRSC balance reads as a different number. Each line is
 /// split on its own, so a long price is not squeezed by a long amount.
 ///
-/// The amount shrinks no further than [minAmountScale] of the size the text
-/// setting asks for, give or take [AutoScrollText.animationThresholdWidth];
-/// an amount still too wide scrolls instead, so a large balance on a narrow
-/// phone stays readable.
+/// The amount and price shrink no further than [minScale] of the size the
+/// text setting asks for, give or take [AutoScrollText.animationThresholdWidth];
+/// either still too wide scrolls instead, so they stay readable on a narrow
+/// phone or with large text.
 class MobileCoinRowTitle extends StatelessWidget {
   const MobileCoinRowTitle({
     super.key,
@@ -33,8 +33,8 @@ class MobileCoinRowTitle extends StatelessWidget {
   final Widget fiat;
   final TextStyle? amountStyle;
 
-  /// The smallest the amount is drawn, as a share of its full size.
-  static const minAmountScale = 0.8;
+  /// The smallest the amount and price are drawn, as a share of full size.
+  static const minScale = 0.8;
 
   static const _gap = 8.0;
 
@@ -69,11 +69,7 @@ class MobileCoinRowTitle extends StatelessWidget {
                   line(name, _amount(context, valueMax, fit)),
                   const SizedBox(height: 2),
                   line(
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: price,
-                    ),
+                    ScaleDownOrScroll(minScale: minScale, child: price),
                     fit(fiat),
                   ),
                 ],
@@ -91,7 +87,7 @@ class MobileCoinRowTitle extends StatelessWidget {
     Widget Function(Widget) fit,
   ) {
     final style = _effectiveAmountStyle(context);
-    final smallest = style.copyWith(fontSize: style.fontSize! * minAmountScale);
+    final smallest = style.copyWith(fontSize: style.fontSize! * minScale);
     // Measured at that size, since glyphs do not scale exactly. An overflow
     // too small for AutoScrollText to scroll would stay cut off, so the
     // amount shrinks that little further instead.

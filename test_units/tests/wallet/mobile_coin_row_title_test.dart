@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -78,11 +77,8 @@ Future<void> _pump(
 /// How far [text] is shrunk to fit: 1 when it is drawn at full size.
 double _scaleOf(WidgetTester tester, String text) {
   final paragraph = tester.renderObject<RenderParagraph>(find.text(text));
-  final fitted = tester.getSize(
-    find.ancestor(of: find.text(text), matching: find.byType(FittedBox)).first,
-  );
-  // A box that fills its column is wider than text drawn at full size.
-  return math.min(1, fitted.width / paragraph.size.width);
+  // Drawn width over laid-out width: the rect carries any scaling above it.
+  return tester.getRect(find.text(text)).width / paragraph.size.width;
 }
 
 /// Whether [amount] scrolls rather than shrinking further.
@@ -101,7 +97,7 @@ double _drawnSize(WidgetTester tester, String amount) {
 
 /// The smallest the amount may be drawn at [textScale].
 double _minSize(double textScale) =>
-    MobileCoinRowTitle.minAmountScale * _amountStyle.fontSize! * textScale;
+    MobileCoinRowTitle.minScale * _amountStyle.fontSize! * textScale;
 
 /// Unmounts the row, so a scrolling amount leaves no timer running.
 Future<void> _unmount(WidgetTester tester) =>
@@ -228,7 +224,7 @@ void testMobileCoinRowTitle() {
             text: TextSpan(
               text: amount,
               style: style.copyWith(
-                fontSize: style.fontSize! * MobileCoinRowTitle.minAmountScale,
+                fontSize: style.fontSize! * MobileCoinRowTitle.minScale,
               ),
             ),
             textDirection: TextDirection.ltr,
@@ -288,6 +284,75 @@ void testMobileCoinRowTitle() {
 
       expect(tester.takeException(), isNull);
       expect(_scaleOf(tester, r'↑ $64,123.45 (+2.45%)'), 1);
+    });
+
+    for (final screen in [320.0, 360.0, 412.0]) {
+      for (final textScale in [1.0, 2.0]) {
+        for (final price in [
+          r'↑ $0.20 (+1.01%)',
+          r'↑ $64,123.45 (+2.45%)',
+          r'↓ $0.000012 (-13.10%)',
+        ]) {
+          testWidgets(
+            'shows the price "$price" legibly on a ${screen.toInt()} dp '
+            'phone at ${textScale}x text',
+            (tester) async {
+              await _pump(
+                tester,
+                screen: screen,
+                amount: '14,772.12 VRSC',
+                price: price,
+                textScale: textScale,
+              );
+
+              expect(tester.takeException(), isNull);
+              final column = tester.getRect(find.byType(ScaleDownOrScroll));
+              // Shrinking rather than scrolling an overflow too small to
+              // scroll may go below the minimum by that overflow.
+              final allowance =
+                  column.width /
+                  (column.width + AutoScrollText.animationThresholdWidth);
+              expect(
+                _scaleOf(tester, price),
+                greaterThanOrEqualTo(
+                  MobileCoinRowTitle.minScale * allowance - 0.001,
+                ),
+              );
+              // At rest it starts inside its column.
+              expect(
+                tester.getRect(find.text(price)).left,
+                greaterThanOrEqualTo(column.left - 0.01),
+              );
+              await _unmount(tester);
+            },
+          );
+        }
+      }
+    }
+
+    testWidgets('a price too wide to shrink scrolls to its end', (
+      tester,
+    ) async {
+      const price = r'↑ $64,123.45 (+2.45%)';
+      await _pump(
+        tester,
+        screen: 320,
+        amount: '14,772.12 VRSC',
+        price: price,
+        textScale: 2,
+      );
+      final column = tester.getRect(find.byType(ScaleDownOrScroll));
+      expect(tester.getRect(find.text(price)).right, greaterThan(column.right));
+
+      // Past the scroll's initial pause and its outbound pass.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 5));
+
+      expect(
+        tester.getRect(find.text(price)).right,
+        closeTo(column.right, 0.5),
+      );
+      await _unmount(tester);
     });
 
     testWidgets('large text shrinks or scrolls instead of overflowing', (
