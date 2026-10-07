@@ -69,8 +69,8 @@ class _DexPageState extends State<DexPage> {
           // Defensive bounds check for tabIndex
           final bool inRange =
               state.tabIndex >= 0 && state.tabIndex < DexListType.values.length;
-          final tab = inRange 
-              ? DexListType.values[state.tabIndex] 
+          final tab = inRange
+              ? DexListType.values[state.tabIndex]
               : DexListType.swap;
           // Explicit mapping: only orders tab shows order entities, all others show swaps
           final kind = switch (tab) {
@@ -104,6 +104,8 @@ class _DexContentState extends State<_DexContent> {
     return BlocBuilder<DexTabBarBloc, DexTabBarState>(
       builder: (BuildContext context, DexTabBarState state) {
         return PageLayout(
+          // The swap shell above shows it for every destination.
+          showBackupNotice: false,
           content: Flexible(
             child: Container(
               margin: isMobile ? const EdgeInsets.only(top: 14) : null,
@@ -126,7 +128,8 @@ class _DexContentState extends State<_DexContent> {
                     child: shouldShowTabContent(state.tabIndex)
                         ? DexListWrapper(
                             key: Key('dex-list-wrapper-${state.tabIndex}'),
-                            state.tabIndex >= 0 && state.tabIndex < DexListType.values.length
+                            state.tabIndex >= 0 &&
+                                    state.tabIndex < DexListType.values.length
                                 ? DexListType.values[state.tabIndex]
                                 : DexListType.swap,
                           )

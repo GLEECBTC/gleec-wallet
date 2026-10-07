@@ -31,8 +31,12 @@ void testFormatAmount() {
     expect(formatAmt(12345678901234), '1.23456789012e+13'); // 14 digits is max
     expect(formatAmt(123456789012345), '1.23456789012e+14'); // 15 digits is max
     expect(
-        formatAmt(123456789012345.1), '1.23456789012e+14'); // 15 digits is max
-    expect(formatAmt(123456789012345.123456789),
-        '1.23456789012e+14'); // 15 digits is max
+      formatAmt(123456789012345.1),
+      '1.23456789012e+14',
+    ); // 15 digits is max
+    expect(
+      formatAmt(123456789012345.123456789),
+      '1.23456789012e+14',
+    ); // 15 digits is max
   });
 }

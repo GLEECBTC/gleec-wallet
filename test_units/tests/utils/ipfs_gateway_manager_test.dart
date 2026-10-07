@@ -22,18 +22,22 @@ void testIpfsGatewayManager() {
         expect(manager.gateways, isNotEmpty);
         // Should use web-optimized or standard based on platform
         if (kIsWeb) {
-          expect(manager.gateways,
-              equals(IpfsConstants.defaultWebOptimizedGateways));
+          expect(
+            manager.gateways,
+            equals(IpfsConstants.defaultWebOptimizedGateways),
+          );
         } else {
           expect(
-              manager.gateways, equals(IpfsConstants.defaultStandardGateways));
+            manager.gateways,
+            equals(IpfsConstants.defaultStandardGateways),
+          );
         }
       });
 
       test('should use custom gateways when provided', () {
         final customWebGateways = ['https://custom-web.gateway.com/ipfs/'];
         final customStandardGateways = [
-          'https://custom-standard.gateway.com/ipfs/'
+          'https://custom-standard.gateway.com/ipfs/',
         ];
 
         final manager = IpfsGatewayManager(
@@ -63,53 +67,74 @@ void testIpfsGatewayManager() {
     group('IPFS URL Detection', () {
       test('should detect ipfs:// protocol URLs', () {
         expect(
-            IpfsGatewayManager.isIpfsUrl(
-                'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl(
+            'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+          ),
+          isTrue,
+        );
         expect(IpfsGatewayManager.isIpfsUrl('ipfs://QmTest/image.png'), isTrue);
       });
 
       test('should detect gateway format URLs', () {
         expect(
-            IpfsGatewayManager.isIpfsUrl(
-                'https://ipfs.io/ipfs/QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl(
+            'https://ipfs.io/ipfs/QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+          ),
+          isTrue,
+        );
         expect(
-            IpfsGatewayManager.isIpfsUrl(
-                'https://gateway.pinata.cloud/ipfs/QmTest/metadata.json'),
-            isTrue);
-        expect(IpfsGatewayManager.isIpfsUrl('https://dweb.link/ipfs/QmTest'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl(
+            'https://gateway.pinata.cloud/ipfs/QmTest/metadata.json',
+          ),
+          isTrue,
+        );
+        expect(
+          IpfsGatewayManager.isIpfsUrl('https://dweb.link/ipfs/QmTest'),
+          isTrue,
+        );
       });
 
       test('should detect subdomain format URLs', () {
         expect(
-            IpfsGatewayManager.isIpfsUrl(
-                'https://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o.ipfs.dweb.link'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl(
+            'https://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o.ipfs.dweb.link',
+          ),
+          isTrue,
+        );
         expect(
-            IpfsGatewayManager.isIpfsUrl(
-                'https://QmTest.ipfs.gateway.com/image.png'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl(
+            'https://QmTest.ipfs.gateway.com/image.png',
+          ),
+          isTrue,
+        );
       });
 
       test('should detect URLs with /ipfs/ path anywhere', () {
         expect(
-            IpfsGatewayManager.isIpfsUrl('https://some.domain.com/ipfs/QmTest'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl('https://some.domain.com/ipfs/QmTest'),
+          isTrue,
+        );
         expect(
-            IpfsGatewayManager.isIpfsUrl(
-                'https://custom-gateway.com/ipfs/QmTest/file.json'),
-            isTrue);
+          IpfsGatewayManager.isIpfsUrl(
+            'https://custom-gateway.com/ipfs/QmTest/file.json',
+          ),
+          isTrue,
+        );
       });
 
       test('should not detect regular HTTP URLs as IPFS', () {
-        expect(IpfsGatewayManager.isIpfsUrl('https://example.com/image.png'),
-            isFalse);
-        expect(IpfsGatewayManager.isIpfsUrl('https://api.example.com/data'),
-            isFalse);
-        expect(IpfsGatewayManager.isIpfsUrl('http://localhost:3000/test'),
-            isFalse);
+        expect(
+          IpfsGatewayManager.isIpfsUrl('https://example.com/image.png'),
+          isFalse,
+        );
+        expect(
+          IpfsGatewayManager.isIpfsUrl('https://api.example.com/data'),
+          isFalse,
+        );
+        expect(
+          IpfsGatewayManager.isIpfsUrl('http://localhost:3000/test'),
+          isFalse,
+        );
       });
 
       test('should handle null and empty URLs', () {
@@ -122,12 +147,13 @@ void testIpfsGatewayManager() {
     group('Content ID Extraction', () {
       test('should extract CID from ipfs:// protocol', () {
         final urls = manager.getGatewayUrls(
-            'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o');
+          'ipfs://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+        );
         expect(urls.isNotEmpty, isTrue);
         expect(
-            urls.first
-                .contains('QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
-            isTrue);
+          urls.first.contains('QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
+          isTrue,
+        );
       });
 
       test('should extract CID and path from ipfs:// protocol', () {
@@ -138,41 +164,46 @@ void testIpfsGatewayManager() {
 
       test('should extract CID from gateway format', () {
         final urls = manager.getGatewayUrls(
-            'https://ipfs.io/ipfs/QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o');
+          'https://ipfs.io/ipfs/QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o',
+        );
         expect(urls.isNotEmpty, isTrue);
         expect(
-            urls.first
-                .contains('QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
-            isTrue);
+          urls.first.contains('QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
+          isTrue,
+        );
       });
 
       test('should extract CID and path from gateway format', () {
         final urls = manager.getGatewayUrls(
-            'https://gateway.pinata.cloud/ipfs/QmTest/image.png');
+          'https://gateway.pinata.cloud/ipfs/QmTest/image.png',
+        );
         expect(urls.isNotEmpty, isTrue);
         expect(urls.first.contains('QmTest/image.png'), isTrue);
       });
 
       test('should extract CID from subdomain format', () {
         final urls = manager.getGatewayUrls(
-            'https://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o.ipfs.dweb.link');
+          'https://QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o.ipfs.dweb.link',
+        );
         expect(urls.isNotEmpty, isTrue);
         expect(
-            urls.first
-                .contains('QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
-            isTrue);
+          urls.first.contains('QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o'),
+          isTrue,
+        );
       });
 
       test('should extract CID and path from subdomain format', () {
         final urls = manager.getGatewayUrls(
-            'https://QmTest.ipfs.gateway.com/path/to/file.json');
+          'https://QmTest.ipfs.gateway.com/path/to/file.json',
+        );
         expect(urls.isNotEmpty, isTrue);
         expect(urls.first.contains('QmTest/path/to/file.json'), isTrue);
       });
 
       test('should handle URLs with /ipfs/ path', () {
-        final urls = manager
-            .getGatewayUrls('https://custom.gateway.com/ipfs/QmTest/data');
+        final urls = manager.getGatewayUrls(
+          'https://custom.gateway.com/ipfs/QmTest/data',
+        );
         expect(urls.isNotEmpty, isTrue);
         expect(urls.first.contains('QmTest/data'), isTrue);
       });
@@ -225,28 +256,38 @@ void testIpfsGatewayManager() {
     });
 
     group('URL Normalization', () {
-      test('should normalize different IPFS URL formats to preferred gateway',
-          () {
-        const cid = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
-        final expectedUrl = '${manager.gateways.first}$cid';
+      test(
+        'should normalize different IPFS URL formats to preferred gateway',
+        () {
+          const cid = 'QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o';
+          final expectedUrl = '${manager.gateways.first}$cid';
 
-        expect(manager.normalizeIpfsUrl('ipfs://$cid'), equals(expectedUrl));
-        expect(manager.normalizeIpfsUrl('https://ipfs.io/ipfs/$cid'),
-            equals(expectedUrl));
-        expect(manager.normalizeIpfsUrl('https://$cid.ipfs.dweb.link'),
-            equals(expectedUrl));
-      });
+          expect(manager.normalizeIpfsUrl('ipfs://$cid'), equals(expectedUrl));
+          expect(
+            manager.normalizeIpfsUrl('https://ipfs.io/ipfs/$cid'),
+            equals(expectedUrl),
+          );
+          expect(
+            manager.normalizeIpfsUrl('https://$cid.ipfs.dweb.link'),
+            equals(expectedUrl),
+          );
+        },
+      );
 
       test('should preserve paths in normalized URLs', () {
         const cidWithPath = 'QmTest/metadata.json';
         final expectedUrl = '${manager.gateways.first}$cidWithPath';
 
-        expect(manager.normalizeIpfsUrl('ipfs://$cidWithPath'),
-            equals(expectedUrl));
         expect(
-            manager.normalizeIpfsUrl(
-                'https://gateway.pinata.cloud/ipfs/$cidWithPath'),
-            equals(expectedUrl));
+          manager.normalizeIpfsUrl('ipfs://$cidWithPath'),
+          equals(expectedUrl),
+        );
+        expect(
+          manager.normalizeIpfsUrl(
+            'https://gateway.pinata.cloud/ipfs/$cidWithPath',
+          ),
+          equals(expectedUrl),
+        );
       });
     });
 
@@ -284,21 +325,24 @@ void testIpfsGatewayManager() {
         expect(await shortCooldownManager.shouldSkipUrl(testUrl), isFalse);
       });
 
-      test('should filter out failed URLs from reliable gateway URLs',
-          () async {
-        const originalUrl = 'ipfs://QmTest';
-        final allUrls = manager.getGatewayUrls(originalUrl);
+      test(
+        'should filter out failed URLs from reliable gateway URLs',
+        () async {
+          const originalUrl = 'ipfs://QmTest';
+          final allUrls = manager.getGatewayUrls(originalUrl);
 
-        if (allUrls.isNotEmpty) {
-          // Mark first gateway as failed
-          await manager.logGatewayAttempt(allUrls.first, false);
+          if (allUrls.isNotEmpty) {
+            // Mark first gateway as failed
+            await manager.logGatewayAttempt(allUrls.first, false);
 
-          final reliableUrls =
-              await manager.getReliableGatewayUrls(originalUrl);
-          expect(reliableUrls.length, equals(allUrls.length - 1));
-          expect(reliableUrls.contains(allUrls.first), isFalse);
-        }
-      });
+            final reliableUrls = await manager.getReliableGatewayUrls(
+              originalUrl,
+            );
+            expect(reliableUrls.length, equals(allUrls.length - 1));
+            expect(reliableUrls.contains(allUrls.first), isFalse);
+          }
+        },
+      );
     });
 
     group('Edge Cases and Error Handling', () {
@@ -342,12 +386,18 @@ void testIpfsGatewayManager() {
         expect(IpfsGatewayManager.isIpfsUrl('Ipfs://QmTest'), isTrue);
         expect(IpfsGatewayManager.isIpfsUrl('ipfs://QmTest'), isTrue);
         // Gateway URLs with different case should work
-        expect(IpfsGatewayManager.isIpfsUrl('HTTPS://gateway.com/IPFS/QmTest'),
-            isTrue);
-        expect(IpfsGatewayManager.isIpfsUrl('https://gateway.com/ipfs/QmTest'),
-            isTrue);
-        expect(IpfsGatewayManager.isIpfsUrl('https://gateway.com/Ipfs/QmTest'),
-            isTrue);
+        expect(
+          IpfsGatewayManager.isIpfsUrl('HTTPS://gateway.com/IPFS/QmTest'),
+          isTrue,
+        );
+        expect(
+          IpfsGatewayManager.isIpfsUrl('https://gateway.com/ipfs/QmTest'),
+          isTrue,
+        );
+        expect(
+          IpfsGatewayManager.isIpfsUrl('https://gateway.com/Ipfs/QmTest'),
+          isTrue,
+        );
       });
     });
 
@@ -364,8 +414,11 @@ void testIpfsGatewayManager() {
           for (final example in examples) {
             final urls = manager.getGatewayUrls(example);
             expect(urls.isNotEmpty, isTrue, reason: 'Failed for: $example');
-            expect(IpfsGatewayManager.isIpfsUrl(example), isTrue,
-                reason: 'Not detected as IPFS: $example');
+            expect(
+              IpfsGatewayManager.isIpfsUrl(example),
+              isTrue,
+              reason: 'Not detected as IPFS: $example',
+            );
           }
         });
 
@@ -379,8 +432,11 @@ void testIpfsGatewayManager() {
           for (final example in examples) {
             final urls = manager.getGatewayUrls(example);
             expect(urls.isNotEmpty, isTrue, reason: 'Failed for: $example');
-            expect(IpfsGatewayManager.isIpfsUrl(example), isTrue,
-                reason: 'Not detected as IPFS: $example');
+            expect(
+              IpfsGatewayManager.isIpfsUrl(example),
+              isTrue,
+              reason: 'Not detected as IPFS: $example',
+            );
           }
         });
       });
@@ -396,13 +452,22 @@ void testIpfsGatewayManager() {
           ];
 
           for (final example in examples) {
-            expect(IpfsGatewayManager.isIpfsUrl(example), isFalse,
-                reason: 'Incorrectly detected as IPFS: $example');
+            expect(
+              IpfsGatewayManager.isIpfsUrl(example),
+              isFalse,
+              reason: 'Incorrectly detected as IPFS: $example',
+            );
             final urls = manager.getGatewayUrls(example);
-            expect(urls.length, equals(1),
-                reason: 'Should return original URL: $example');
-            expect(urls.first, equals(example),
-                reason: 'Should return unchanged: $example');
+            expect(
+              urls.length,
+              equals(1),
+              reason: 'Should return original URL: $example',
+            );
+            expect(
+              urls.first,
+              equals(example),
+              reason: 'Should return unchanged: $example',
+            );
           }
         });
       });
@@ -421,10 +486,16 @@ void testIpfsGatewayManager() {
           ];
 
           for (final example in invalidExamples) {
-            expect(() => manager.getGatewayUrls(example), returnsNormally,
-                reason: 'Should not throw for: $example');
-            expect(() => IpfsGatewayManager.isIpfsUrl(example), returnsNormally,
-                reason: 'Should not throw for: $example');
+            expect(
+              () => manager.getGatewayUrls(example),
+              returnsNormally,
+              reason: 'Should not throw for: $example',
+            );
+            expect(
+              () => IpfsGatewayManager.isIpfsUrl(example),
+              returnsNormally,
+              reason: 'Should not throw for: $example',
+            );
           }
         });
       });
@@ -437,11 +508,7 @@ void testIpfsGatewayManager() {
 
         // Should not throw
         await expectLater(
-          manager.logGatewayAttempt(
-            testUrl,
-            true,
-            loadTime: loadTime,
-          ),
+          manager.logGatewayAttempt(testUrl, true, loadTime: loadTime),
           completes,
         );
       });
@@ -452,11 +519,7 @@ void testIpfsGatewayManager() {
 
         // Should not throw
         await expectLater(
-          manager.logGatewayAttempt(
-            testUrl,
-            false,
-            errorMessage: errorMessage,
-          ),
+          manager.logGatewayAttempt(testUrl, false, errorMessage: errorMessage),
           completes,
         );
       });
