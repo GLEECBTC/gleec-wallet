@@ -8,7 +8,8 @@ import 'auto_scroll_text.dart';
 
 /// Shrinks [child] to fit its width, but no further than [minScale]; a child
 /// still too wide is drawn at [minScale], clipped, and scrolled to show its
-/// end, at [AutoScrollText]'s pace.
+/// end, at [AutoScrollText]'s pace. Each edge with content hidden past it
+/// fades out, as [TextOverflow.fade] does.
 ///
 /// [AutoScrollText] does this for a string; this does it for any widget that
 /// sizes itself to its content, such as a row of an icon and text. Taps reach
@@ -201,7 +202,12 @@ class _RenderScaleDownOrScroll extends RenderProxyBox {
   bool? _reportedOverflow;
 
   final _clipLayer = LayerHandle<ClipRectLayer>();
+  final _fadeLayer = LayerHandle<ShaderMaskLayer>();
   final _transformLayer = LayerHandle<TransformLayer>();
+
+  /// The fade needs a layer of its own, so only while the child overflows.
+  @override
+  bool get alwaysNeedsCompositing => _overflow > 0;
 
   void _onScroll() {
     if (_overflow > 0) markNeedsPaint();
@@ -222,6 +228,7 @@ class _RenderScaleDownOrScroll extends RenderProxyBox {
   @override
   void dispose() {
     _clipLayer.layer = null;
+    _fadeLayer.layer = null;
     _transformLayer.layer = null;
     super.dispose();
   }
@@ -278,6 +285,7 @@ class _RenderScaleDownOrScroll extends RenderProxyBox {
     final overflows = _overflow > 0;
     if (overflows != _reportedOverflow) {
       _reportedOverflow = overflows;
+      markNeedsCompositingBitsUpdate();
       // Not during layout: starting the scroll schedules frames.
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (attached) onOverflowChanged(overflows);
@@ -314,17 +322,42 @@ class _RenderScaleDownOrScroll extends RenderProxyBox {
     }
 
     if (_overflow > 0) {
+      final fade = _fadeLayer.layer ??= ShaderMaskLayer();
+      fade
+        ..shader = _fadeShader()
+        ..maskRect = offset & size
+        ..blendMode = BlendMode.dstIn;
       _clipLayer.layer = context.pushClipRect(
         needsCompositing,
         offset,
         Offset.zero & size,
-        paintScaled,
+        (context, offset) => context.pushLayer(fade, paintScaled, offset),
         oldLayer: _clipLayer.layer,
       );
     } else {
       _clipLayer.layer = null;
+      _fadeLayer.layer = null;
       paintScaled(context, offset);
     }
+  }
+
+  /// Fades out each edge with content hidden past it, over about the width
+  /// of an ellipsis, as [TextOverflow.fade] does.
+  Shader _fadeShader() {
+    const opaque = Color(0xFFFFFFFF);
+    const clear = Color(0x00FFFFFF);
+    final hiddenBefore = _overflow * _scroll.value;
+    final hiddenAfter = _overflow - hiddenBefore;
+    final fade = math.min(size.height * 0.75, size.width / 3) / size.width;
+    return LinearGradient(
+      colors: [
+        if (hiddenBefore > 0.5) clear else opaque,
+        opaque,
+        opaque,
+        if (hiddenAfter > 0.5) clear else opaque,
+      ],
+      stops: [0, fade, 1 - fade, 1],
+    ).createShader(Offset.zero & size);
   }
 
   @override

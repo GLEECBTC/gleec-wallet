@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 const _child = ValueKey('child');
 const _box = ValueKey('box');
+const _shot = ValueKey('shot');
 
 /// A child [childWidth] wide in a box [boxWidth] wide.
 Widget _host({
@@ -13,14 +15,24 @@ Widget _host({
 }) => MaterialApp(
   home: Scaffold(
     body: Center(
-      child: SizedBox(
-        key: _box,
-        width: boxWidth,
-        child: ScaleDownOrScroll(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: SizedBox(key: _child, width: childWidth, height: 20),
+      // White on black, so a pixel's brightness says how far it is faded.
+      child: RepaintBoundary(
+        key: _shot,
+        child: ColoredBox(
+          color: Colors.black,
+          child: SizedBox(
+            key: _box,
+            width: boxWidth,
+            child: ScaleDownOrScroll(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: ColoredBox(
+                  color: Colors.white,
+                  child: SizedBox(key: _child, width: childWidth, height: 20),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -31,6 +43,21 @@ Widget _host({
 /// How far the child is shrunk: 1 at full size.
 double _scaleOf(WidgetTester tester) =>
     tester.getRect(find.byKey(_child)).width / 200;
+
+/// The brightness, 0 to 255, of the box's pixels [xs] across its middle.
+Future<List<int>> _brightness(WidgetTester tester, List<double> xs) async {
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(_shot),
+  );
+  final image = (await tester.runAsync(boundary.toImage))!;
+  final data = (await tester.runAsync(image.toByteData))!;
+  final y = image.height ~/ 2;
+  final result = [
+    for (final x in xs) data.getUint8((y * image.width + x.round()) * 4),
+  ];
+  image.dispose();
+  return result;
+}
 
 /// Past the scroll's initial pause and its outbound pass.
 Future<void> _scrollOut(WidgetTester tester) async {
@@ -149,6 +176,40 @@ void main() {
     }
     expect(framesAsked, 0);
     expect(tester.getRect(find.byKey(_child)), rest);
+  });
+
+  testWidgets('a child that fits is not faded', (tester) async {
+    await tester.pumpWidget(_host(boxWidth: 300));
+    // The child is 200 wide, at the box's start.
+    expect(await _brightness(tester, [1, 100, 198]), [255, 255, 255]);
+  });
+
+  testWidgets('a scrolling child fades at the edges where it is cut off', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host(boxWidth: 100));
+    // At rest only its end is hidden.
+    var edges = await _brightness(tester, [1, 50, 98]);
+    expect(edges[0], 255);
+    expect(edges[1], 255);
+    expect(edges[2], lessThan(128));
+
+    // Part-way through the pass, both ends are hidden. The pass starts on
+    // the frame after the initial pause ends.
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 2));
+    edges = await _brightness(tester, [1, 50, 98]);
+    expect(edges[0], lessThan(128));
+    expect(edges[1], 255);
+    expect(edges[2], lessThan(128));
+
+    // At the end of the pass only its start is hidden.
+    await tester.pump(const Duration(seconds: 3));
+    edges = await _brightness(tester, [1, 50, 98]);
+    expect(edges[0], lessThan(128));
+    expect(edges[1], 255);
+    expect(edges[2], 255);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('disposing during a pause leaves no timer behind', (
