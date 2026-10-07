@@ -38,6 +38,7 @@ export 'src/custom_icons/custom_icons.dart';
 // Display
 // Widgets primarily focused on displaying data and information.
 export 'src/display/auto_scroll_text.dart';
+export 'src/display/scale_down_or_scroll.dart';
 export 'src/display/statistic_card.dart';
 // Dividers
 // Widgets for dividing content or adding scrollbars.
