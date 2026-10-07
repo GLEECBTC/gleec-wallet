@@ -2,26 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/shared/constants.dart';
 
 void main() {
-  group('validatedLifiApiUrl', () {
+  group('validatedLifiProxyUrl', () {
     test('leaves KDF on the public API when the define is empty', () {
-      expect(validatedLifiApiUrl(''), isNull);
+      expect(validatedLifiProxyUrl(''), isNull);
     });
 
     test('the built-in endpoint is one KDF can use', () {
       // One refused here would silently fall back to the public API.
-      expect(validatedLifiApiUrl(lifiApiUrl), lifiApiUrl);
+      expect(validatedLifiProxyUrl(lifiProxyUrl), lifiProxyUrl);
     });
 
     test('passes an HTTPS proxy URL through, trimmed', () {
       expect(
-        validatedLifiApiUrl(' https://swap.example.com/lifi/ '),
+        validatedLifiProxyUrl(' https://swap.example.com/lifi/ '),
         'https://swap.example.com/lifi/',
       );
     });
 
     test('accepts plain HTTP to this machine in a debug build', () {
       expect(
-        validatedLifiApiUrl('http://localhost:8080'),
+        validatedLifiProxyUrl('http://localhost:8080'),
         'http://localhost:8080',
       );
     });
@@ -37,7 +37,7 @@ void main() {
       'https://swap.example.com/lifi#v1',
     ]) {
       test('refuses "$url"', () {
-        expect(validatedLifiApiUrl(url), isNull);
+        expect(validatedLifiProxyUrl(url), isNull);
       });
     }
   });

@@ -61,7 +61,7 @@ import 'tests/custom_token_import/custom_token_import_repository_test.dart'
 import 'tests/fiat/fiat_default_preference_test.dart'
     as fiat_default_preference_test;
 import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
-import 'tests/mm2/lifi_api_url_test.dart' as lifi_api_url_test;
+import 'tests/mm2/lifi_proxy_url_test.dart' as lifi_proxy_url_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
 import 'tests/wallet/activated_coin_id_migration_test.dart'
@@ -617,7 +617,7 @@ void main() {
   fiat_default_preference_test.main();
   tron_fiat_mapping_test.main();
   tron_gasless_provider_config_test.main();
-  lifi_api_url_test.main();
+  lifi_proxy_url_test.main();
   unified_swap_repository_test.main();
   unified_swap_bloc_test.main();
   unified_swap_catalog_bloc_test.main();

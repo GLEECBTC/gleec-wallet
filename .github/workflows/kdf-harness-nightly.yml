@@ -144,7 +144,7 @@ jobs:
           # cause was rate limiting or the node being down.
           #
           # INERT against the currently pinned KDF (feat/lifi-integration,
-          # 4872ef2): the
+          # 7d6fd1e): the
           # telemetry module that reads it lives in the unmerged perf stack
           # (kdf-internal PR #19/#20). Kept set so it starts working again the
           # moment the pin carries that stack; until then a red run gives no

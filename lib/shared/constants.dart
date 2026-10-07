@@ -307,17 +307,15 @@ bool get isTronGaslessConfigured => tronGaslessConfiguredAssetIds.isNotEmpty;
 bool get isTronGaslessReceiveConfigured =>
     tronGaslessReceiveConfiguredAssetIds.isNotEmpty;
 
-/// LI.FI API base URL for routed swaps, handed to KDF as `lifi_api`. Empty
-/// keeps LI.FI's rate-limited public API; see `docs/BUILD_RUN_APP.md`.
+/// Komodo proxy for routed swaps' LI.FI requests, handed to KDF as
+/// `lifi_proxy_url`. KDF signs each request with its P2P key and the proxy
+/// adds the LI.FI key, so no key ships in the app. Empty keeps LI.FI's
+/// rate-limited public API; see `docs/BUILD_RUN_APP.md`.
 ///
-/// The default is an interim proxy holding a partner key. It must be
-/// replaced with the KDF team's managed proxy before release; see
-/// `docs/SWAP_RELEASE_CHECKLIST.md`.
-///
-/// Override at build time via `--dart-define=LIFI_API_URL=...`.
-const String lifiApiUrl = String.fromEnvironment(
-  'LIFI_API_URL',
-  defaultValue: 'https://kdf-proxy.nitride.app/lifi/v1',
+/// Override at build time via `--dart-define=LIFI_PROXY_URL=...`.
+const String lifiProxyUrl = String.fromEnvironment(
+  'LIFI_PROXY_URL',
+  defaultValue: 'https://quicknode.gleec.com/lifi',
 );
 
 /// [rawUrl] trimmed, or null when KDF should stay on the public API.
@@ -325,7 +323,7 @@ const String lifiApiUrl = String.fromEnvironment(
 /// Whoever serves this URL chooses the transactions KDF signs, so it must be
 /// HTTPS (plain HTTP only to loopback in debug builds). The other checks
 /// mirror `KdfStartupConfig`, so a bad define falls back instead of throwing.
-String? validatedLifiApiUrl(String rawUrl) {
+String? validatedLifiProxyUrl(String rawUrl) {
   final url = rawUrl.trim();
   final uri = Uri.tryParse(url);
   final isSecureEndpoint = uri?.scheme == 'https';

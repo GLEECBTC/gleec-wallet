@@ -38,19 +38,19 @@ final class MM2 {
         preActivateDefaultAssets: false,
         tronGaslessProvider: _tronGaslessProviderConfig(),
         assetConfigTransform: applyGleecTronGaslessActivationConfig,
-        lifiApiUrl: _lifiApiUrl(),
+        lifiProxyUrl: _lifiProxyUrl(),
       ),
       onLog: _handleSdkLog,
     );
   }
 
-  String? _lifiApiUrl() {
-    final url = validatedLifiApiUrl(lifiApiUrl);
-    if (url == null && lifiApiUrl.trim().isNotEmpty) {
+  String? _lifiProxyUrl() {
+    final url = validatedLifiProxyUrl(lifiProxyUrl);
+    if (url == null && lifiProxyUrl.trim().isNotEmpty) {
       // Not the value itself: it may be the credential that got it refused.
       log(
-        'LIFI_API_URL ignored: it must be HTTPS, without credentials, a query '
-        'or a fragment. Routed swaps use the public LI.FI API.',
+        'LIFI_PROXY_URL ignored: it must be HTTPS, without credentials, a '
+        'query or a fragment. Routed swaps use the public LI.FI API.',
       ).ignore();
     }
     return url;
