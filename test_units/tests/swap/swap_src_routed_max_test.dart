@@ -253,16 +253,79 @@ void main() {
     });
   });
 
+  group('Max on a token', () {
+    /// Prices USDC for ETH once: gas in ETH, and on top a fee in ETH and,
+    /// unless [tokenFee] is null, one in USDC.
+    Future<RoutedSwapQuoteSource> pricedToken({String? tokenFee}) async {
+      final routed = source();
+      manager.respond = (call) => offerOf(
+        from: call.from,
+        to: call.to,
+        sell: '${call.amount}',
+        costs: [
+          _gasCost('0.0005'),
+          _providerFee('0.0012', eth),
+          if (tokenFee != null) _providerFee(tokenFee, usdc),
+        ],
+        networkFees: [
+          RoutedSwapNetworkFee(
+            ticker: eth.id,
+            assetId: eth,
+            amount: d('0.0005'),
+          ),
+        ],
+      );
+      await routed.quote(SwapQuoteRequest(from: usdc, to: eth, amount: d('1')));
+      return routed;
+    }
+
+    test('keeps back only a fee charged on top in the token', () async {
+      final routed = await pricedToken(tokenFee: '1.2');
+
+      final max = await routed.maxAmount(
+        from: usdc,
+        to: eth,
+        balance: d('500'),
+      );
+
+      expect(manager.maxCalls, 0, reason: 'the quote moments ago stood in');
+      expect(
+        max,
+        SwapMaxAmount(
+          amount: d('498.8'),
+          reservedForFees: d('1.2'),
+          feeAsset: usdc,
+          reserveCovers: SwapMaxReserve.providerFees,
+        ),
+      );
+    });
+
+    test('sells the whole balance with no fee on top in the token', () async {
+      final routed = await pricedToken();
+
+      final max = await routed.maxAmount(
+        from: usdc,
+        to: eth,
+        balance: d('500'),
+      );
+
+      expect(manager.maxCalls, 0);
+      expect(
+        max,
+        SwapMaxAmount(amount: d('500'), reservedForFees: d('0'), feeAsset: eth),
+      );
+    });
+  });
+
   group('Max from KDF', () {
-    test('a token always asks KDF, which keeps nothing back', () async {
-      final routed = await priced(usdc, to: eth);
+    test('a token without a fresh price asks KDF', () async {
       manager.max = RoutedSwapMaxSell(
         amount: d('500'),
         reservedForFees: d('0'),
         feeAsset: eth,
       );
 
-      final max = await routed.maxAmount(
+      final max = await source().maxAmount(
         from: usdc,
         to: eth,
         balance: d('500'),
@@ -273,6 +336,58 @@ void main() {
         max,
         SwapMaxAmount(amount: d('500'), reservedForFees: d('0'), feeAsset: eth),
       );
+    });
+
+    test('a reserve KDF keeps for gas alone is network fees', () async {
+      manager.max = RoutedSwapMaxSell(
+        amount: d('1.9985'),
+        reservedForFees: d('0.0015'),
+        feeAsset: eth,
+      );
+
+      final max = await source().maxAmount(
+        from: eth,
+        to: usdc,
+        balance: d('2'),
+      );
+
+      expect(max!.reserveCovers, SwapMaxReserve.networkFees);
+    });
+
+    test('a provider fee KDF keeps back is named with the gas', () async {
+      manager.max = RoutedSwapMaxSell(
+        amount: d('1.9973'),
+        reservedForFees: d('0.0027'),
+        feeAsset: eth,
+        reservedForProviderFees: d('0.0012'),
+      );
+
+      final max = await source().maxAmount(
+        from: eth,
+        to: usdc,
+        balance: d('2'),
+      );
+
+      expect(max!.reserveCovers, SwapMaxReserve.networkAndProviderFees);
+    });
+
+    test('a token\'s reserve from KDF is provider fees alone', () async {
+      // Rounded up to the token's places, the reserve exceeds the fee.
+      manager.max = RoutedSwapMaxSell(
+        amount: d('498.799999'),
+        reservedForFees: d('1.200001'),
+        feeAsset: usdc,
+        reservedForProviderFees: d('1.2000005'),
+      );
+
+      final max = await source().maxAmount(
+        from: usdc,
+        to: eth,
+        balance: d('500'),
+      );
+
+      expect(max!.reserveCovers, SwapMaxReserve.providerFees);
+      expect(max.feeAsset, usdc);
     });
 
     test('a Max KDF cannot work out is unknown', () async {
@@ -309,15 +424,9 @@ void main() {
       expect(manager.maxCalls, 0);
     });
 
-    test('still asks KDF for a token, which needs no quote', () async {
+    test('probes nothing for a token either, whose Max is a quote', () async {
       final routed = source();
-      manager
-        ..quoteError = limited
-        ..max = RoutedSwapMaxSell(
-          amount: d('500'),
-          reservedForFees: d('0'),
-          feeAsset: eth,
-        );
+      manager.quoteError = limited;
       await routed.quote(SwapQuoteRequest(from: usdc, to: eth, amount: d('1')));
 
       final max = await routed.maxAmount(
@@ -326,8 +435,8 @@ void main() {
         balance: d('500'),
       );
 
-      expect(max!.amount, d('500'));
-      expect(manager.maxCalls, 1);
+      expect(max, isNull);
+      expect(manager.maxCalls, 0);
     });
 
     test('a probe refused for the limit pauses quoting', () async {

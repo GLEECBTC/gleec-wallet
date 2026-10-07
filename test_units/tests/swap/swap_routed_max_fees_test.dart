@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
-import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -40,26 +39,25 @@ void main() {
     });
   });
 
-  test('Max pressed again after a probe that kept only gas fits', () {
+  test('Max before the pair has a price fits the first time', () {
     _run(amount: '', (bloc, manager, async) {
-      // KDF's probe as the pinned SDK makes it: three times the gas.
+      // KDF's probe as the pinned SDK makes it: three times the gas, and the
+      // fee on top.
       manager.max = RoutedSwapMaxSell(
-        amount: d('1.9985'),
-        reservedForFees: d('0.0015'),
+        amount: d('1.9973'),
+        reservedForFees: d('0.0027'),
         feeAsset: eth,
+        reservedForProviderFees: d('0.0012'),
       );
       bloc.add(const UnifiedSwapMaxRequested());
       async.elapse(const Duration(seconds: 3));
 
       expect(manager.maxCalls, 1);
-      expect(bloc.state.inputText, '1.9985');
-      expect(bloc.state.issue, SwapFormIssue.insufficient);
-
-      bloc.add(const UnifiedSwapMaxRequested());
-      async.elapse(const Duration(seconds: 3));
-
-      expect(manager.maxCalls, 1, reason: 'the first price stood in');
       expect(bloc.state.inputText, '1.9973');
+      expect(
+        bloc.state.maxApplied!.reserveCovers,
+        SwapMaxReserve.networkAndProviderFees,
+      );
       expect(bloc.state.issue, isNull);
       expect(bloc.state.canReview, isTrue);
     });

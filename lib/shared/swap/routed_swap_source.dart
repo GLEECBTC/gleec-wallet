@@ -140,14 +140,13 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     required AssetId to,
     required Decimal balance,
   }) async {
-    if (!from.isChildAsset) {
-      // A quote for this pair from moments ago knows the route's gas as well
-      // as a probe would, without spending a request on one.
-      final recent = _budget.latestFor(from, to);
-      if (recent != null) return _nativeMax(recent, from, balance);
-      // The probe is a quote: while limited it is refused and still counts.
-      if (_budget.pausedUntil != null) return null;
-    }
+    // A quote for this pair from moments ago knows the route's gas and fees
+    // on top as well as a probe would, without spending a request on one.
+    final recent = _budget.latestFor(from, to);
+    if (recent != null) return _maxFrom(recent, from, balance);
+    // The probe is a quote, a token's too: while limited it is refused and
+    // still counts.
+    if (_budget.pausedUntil != null) return null;
     try {
       final max = await manager
           .maxSellAmount(from: from, to: to, balance: balance)
@@ -156,6 +155,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         amount: max.amount,
         reservedForFees: max.reservedForFees,
         feeAsset: max.feeAsset,
+        reserveCovers: _reserveCovers(from, max.reservedForProviderFees),
       );
     } on RoutedSwapRateLimitedException {
       _budget.pause();
@@ -305,13 +305,11 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     }
   }
 
-  /// Max from [offer]: its gas times the SDK probe's margin, and the provider
-  /// fees it charges on top in [from], which the form counts too.
-  SwapMaxAmount _nativeMax(
-    RoutedSwapOffer offer,
-    AssetId from,
-    Decimal balance,
-  ) {
+  /// Max from [offer], as the SDK's probe works it out: the gas in [from]
+  /// times its margin, and the provider fees it charges on top in [from],
+  /// which the form counts too. A token has no gas in it: that is paid in its
+  /// network's coin.
+  SwapMaxAmount _maxFrom(RoutedSwapOffer offer, AssetId from, Decimal balance) {
     final gas = offer.networkFees
         .where((fee) => fee.assetId == from || fee.ticker == from.id)
         .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
@@ -334,11 +332,22 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     return SwapMaxAmount(
       amount: amount < Decimal.zero ? Decimal.zero : amount,
       reservedForFees: reserve,
-      feeAsset: from,
-      reserveCovers: providerFees > Decimal.zero
-          ? SwapMaxReserve.networkAndProviderFees
-          : SwapMaxReserve.networkFees,
+      // A token sell with nothing held back still names its gas coin.
+      feeAsset: from.isChildAsset && reserve == Decimal.zero
+          ? from.parentId
+          : from,
+      reserveCovers: _reserveCovers(from, providerFees),
     );
+  }
+
+  /// What a Max reserve in [from] pays for: a token's holds only its
+  /// [providerFees], as its gas is paid in its network's coin. Taken from
+  /// the coin, not the reserve, which is rounded up to the coin's places.
+  static SwapMaxReserve _reserveCovers(AssetId from, Decimal providerFees) {
+    if (providerFees <= Decimal.zero) return SwapMaxReserve.networkFees;
+    return from.isChildAsset
+        ? SwapMaxReserve.providerFees
+        : SwapMaxReserve.networkAndProviderFees;
   }
 
   SwapQuoteRejected _rejected(

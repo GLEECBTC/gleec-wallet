@@ -76,6 +76,10 @@ enum SwapMaxReserve {
   /// amount.
   networkAndProviderFees,
 
+  /// The provider fees a route charges on top of the amount alone, as a
+  /// token's network fees are paid in its network's coin.
+  providerFees,
+
   /// The order book's trading fee alone, as a token's network fees are paid
   /// in its network's coin.
   tradingFee,

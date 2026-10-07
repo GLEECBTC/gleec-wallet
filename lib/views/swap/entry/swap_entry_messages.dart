@@ -178,6 +178,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         SwapMaxReserve.networkFees => LocaleKeys.swapHelperMaxNative,
         SwapMaxReserve.networkAndProviderFees =>
           LocaleKeys.swapHelperMaxNetworkAndProviderFees,
+        SwapMaxReserve.providerFees => LocaleKeys.swapHelperMaxProviderFees,
         SwapMaxReserve.tradingFee => LocaleKeys.swapHelperMaxTradingFee,
         SwapMaxReserve.tradingAndNetworkFees =>
           LocaleKeys.swapHelperMaxTradingAndNetworkFees,
@@ -214,6 +215,8 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       SwapMaxReserve.networkFees => LocaleKeys.swapAnnounceMax.tr(),
       SwapMaxReserve.networkAndProviderFees =>
         LocaleKeys.swapAnnounceMaxNetworkAndProviderFees.tr(),
+      SwapMaxReserve.providerFees =>
+        LocaleKeys.swapAnnounceMaxProviderFees.tr(),
       SwapMaxReserve.tradingFee => LocaleKeys.swapAnnounceMaxTradingFee.tr(),
       SwapMaxReserve.tradingAndNetworkFees =>
         LocaleKeys.swapAnnounceMaxTradingAndNetworkFees.tr(),

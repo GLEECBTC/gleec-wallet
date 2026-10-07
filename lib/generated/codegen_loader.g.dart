@@ -1466,6 +1466,7 @@ abstract class LocaleKeys {
   static const swapHelperMaxNative = 'swapHelperMaxNative';
   static const swapHelperMaxNetworkAndProviderFees =
       'swapHelperMaxNetworkAndProviderFees';
+  static const swapHelperMaxProviderFees = 'swapHelperMaxProviderFees';
   static const swapHelperMaxToken = 'swapHelperMaxToken';
   static const swapHelperMaxTradingFee = 'swapHelperMaxTradingFee';
   static const swapHelperMaxTradingAndNetworkFees =
@@ -1848,6 +1849,7 @@ abstract class LocaleKeys {
   static const swapAnnounceMax = 'swapAnnounceMax';
   static const swapAnnounceMaxNetworkAndProviderFees =
       'swapAnnounceMaxNetworkAndProviderFees';
+  static const swapAnnounceMaxProviderFees = 'swapAnnounceMaxProviderFees';
   static const swapAnnounceMaxTradingFee = 'swapAnnounceMaxTradingFee';
   static const swapAnnounceMaxTradingAndNetworkFees =
       'swapAnnounceMaxTradingAndNetworkFees';

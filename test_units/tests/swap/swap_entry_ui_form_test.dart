@@ -257,6 +257,10 @@ void main() {
       final spoken = {
         'Maximum amount applied with network and provider fees kept back':
             keeping('0.1', covers: SwapMaxReserve.networkAndProviderFees),
+        'Maximum amount applied with provider fees kept back': keeping(
+          '0.1',
+          covers: SwapMaxReserve.providerFees,
+        ),
         'Maximum amount applied with the trading fee kept back': keeping(
           '0.1',
           covers: SwapMaxReserve.tradingFee,
