@@ -34,6 +34,8 @@ import 'dart:math';
 
 import '../test_integration/helpers/get_funded_wif.dart';
 
+part 'dex_counterparty_kdf_output.dart';
+
 const _readyMarker = 'DEX_COUNTERPARTY_READY';
 const _netId = 6133;
 
@@ -150,26 +152,17 @@ Future<void> main(List<String> args) async {
     exit(1);
   }
 
-  // KDF's own output carries the startup config, which holds the passphrase, so
-  // a line is forwarded only with the password redacted out of it.
-  unawaited(
-    process.stderr.transform(utf8.decoder).transform(const LineSplitter()).forEach((
-      line,
-    ) {
-      final lowered = line.toLowerCase();
-      if (lowered.contains('error') || lowered.contains('panic')) {
-        log.line(
-          'kdf: ${line.replaceAll(rpcPassword, '<rpc-password>').replaceAll(passphrase, '<passphrase>')}',
-        );
-      }
-    }),
-  );
-  unawaited(process.stdout.drain<void>());
+  // Errors on stderr are still printed as they arrive. Both streams also feed
+  // the tail an early exit prints, since KDF's fatal errors go to stdout.
+  final output = _KdfOutput(log, rpcPassword, passphrase)
+    ..capture('stderr', process.stderr, forwardErrors: true)
+    ..capture('stdout', process.stdout);
   // An exit before the RPC answers is the difference between "KDF is slow" and
   // "KDF is gone", and the startup timeout alone cannot tell them apart.
-  unawaited(
-    process.exitCode.then((code) => log.line('kdf exited with code $code')),
-  );
+  final exited = process.exitCode.then((code) {
+    log.line('kdf exited with code $code');
+    return code;
+  });
 
   final rpc = _Rpc(
     Uri.parse('http://127.0.0.1:${options.rpcPort}'),
@@ -209,7 +202,7 @@ Future<void> main(List<String> args) async {
   }
 
   try {
-    await rpc.waitUntilReady(options.startupTimeout);
+    await rpc.waitUntilReady(options.startupTimeout, exited);
     log.line('kdf is up');
 
     for (final coin in [_base, _rel]) {
@@ -242,6 +235,9 @@ Future<void> main(List<String> args) async {
     await _waitUntilOnBook(rpc, log, options.bookTimeout);
     print(_readyMarker);
   } on Object catch (error, stack) {
+    // A signal is already stopping the run, and this failure is its doing.
+    if (cleanedUp) return;
+    if (error is _KdfExited) await output.printTail();
     log.line('FAILED: $error');
     log.line('$stack');
     await cleanUp('startup failure');
@@ -385,9 +381,12 @@ class _Rpc {
     return decoded;
   }
 
-  Future<void> waitUntilReady(Duration timeout) async {
+  /// Polls until KDF answers, or throws [_KdfExited] if it exits first.
+  Future<void> waitUntilReady(Duration timeout, Future<int> exited) async {
+    int? exitedWith;
+    unawaited(exited.then((code) => exitedWith = code));
     final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
+    while (exitedWith == null && DateTime.now().isBefore(deadline)) {
       try {
         final version = await call({'method': 'version'});
         _log.line('kdf version=${version['result']}');
@@ -396,6 +395,7 @@ class _Rpc {
         await Future<void>.delayed(const Duration(seconds: 1));
       }
     }
+    if (exitedWith case final code?) throw _KdfExited(code);
     throw TimeoutException('KDF RPC did not become ready within $timeout');
   }
 
@@ -520,14 +520,22 @@ List<String> _seedNodesFor(String path) {
 String _generateRpcPassword() {
   const alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   final random = Random.secure();
+  final threeInARow = RegExp(r'(.)\1\1');
 
-  // KDF rejects weak passwords, so this needs a digit and both cases; drawing
-  // 24 characters from the pool above makes that overwhelmingly likely, and
-  // the explicit tail guarantees it.
-  final body = List.generate(
-    24,
-    (_) => alphabet[random.nextInt(alphabet.length)],
-  ).join();
-
-  return 'Cp$body-7';
+  // KDF's password policy (allow_weak_password is false) requires at least 8
+  // characters, which this always has, and a digit, both cases and a symbol,
+  // which `Cp` and `-7` supply. It also refuses the same character three times
+  // in a row and "password" in any case; a random body can produce either, so
+  // such a password is drawn again.
+  while (true) {
+    final body = List.generate(
+      24,
+      (_) => alphabet[random.nextInt(alphabet.length)],
+    ).join();
+    final password = 'Cp$body-7';
+    if (!threeInARow.hasMatch(password) &&
+        !password.toLowerCase().contains('password')) {
+      return password;
+    }
+  }
 }

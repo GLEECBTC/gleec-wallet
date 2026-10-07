@@ -55,23 +55,23 @@ inputs:
   TRON_GASLESS_ENABLED:
     description: "TRON GasFree send rail kill switch (true/false)"
     required: false
-    default: "false"
+    default: "true"
   TRON_GASLESS_RECEIVE_ENABLED:
     description: "GasFree custody Receive kill switch (true/false)"
     required: false
-    default: "false"
+    default: "true"
   TRON_GASLESS_BASE_URL:
     description: "TRON GasFree provider base URL embedded in the Flutter web build"
     required: false
-    default: ""
+    default: "https://quicknode.gleec.com/gasfree/tron"
   TRON_GASLESS_SERVICE_PROVIDER:
     description: "TRON GasFree service provider address embedded in the Flutter web build"
     required: false
-    default: ""
+    default: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
   TRON_GASLESS_REQUIRED_NETWORK:
     description: "Optional deployment-policy restriction for the GasFree network path (tron/nile)"
     required: false
-    default: ""
+    default: "tron"
 
 runs:
   using: "composite"
