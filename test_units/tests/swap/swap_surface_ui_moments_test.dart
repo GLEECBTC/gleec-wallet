@@ -271,6 +271,63 @@ void main() {
       expect(played, isEmpty);
     });
 
+    for (final (name, source) in [
+      ('an order-book', SwapLiquiditySource.atomic),
+      ('a routed', SwapLiquiditySource.routed),
+    ]) {
+      testWidgets('$name refund landing turns the hero icon back, once', (
+        tester,
+      ) async {
+        SwapExecutionSnapshot refund({bool landed = false, String? txHash}) =>
+            snapshotOf(
+              source: source,
+              stage: SwapProgressStage.refunding,
+              outcome: landed
+                  ? const SwapExecutionOutcome(kind: SwapOutcomeKind.refunded)
+                  : null,
+              sourceTxHash: txHash,
+              stages: const [],
+            );
+        Future<bool> turns() async {
+          for (var frame = 0; frame < 40; frame++) {
+            await tester.pump(const Duration(milliseconds: 16));
+            if (effectTurning(tester)) return true;
+          }
+          return false;
+        }
+
+        final handle = await open(tester, refund());
+        await tester.pumpAndSettle();
+
+        await hear(tester, handle, refund(landed: true));
+        expect(await turns(), isTrue);
+        await tester.pumpAndSettle();
+
+        await hear(tester, handle, refund(landed: true, txHash: '0xsource'));
+        expect(await turns(), isFalse);
+        await tester.pumpAndSettle();
+      });
+    }
+
+    testWidgets('with less motion, a refund lands at once and still plays '
+        'its haptic', (tester) async {
+      SwapExecutionSnapshot refund({bool landed = false}) => snapshotOf(
+        source: SwapLiquiditySource.atomic,
+        stage: SwapProgressStage.refunding,
+        outcome: landed
+            ? const SwapExecutionOutcome(kind: SwapOutcomeKind.refunded)
+            : null,
+        stages: const [],
+      );
+      final played = recordHaptics(tester);
+      final handle = await open(tester, refund(), reduceMotion: true);
+      await tester.pumpAndSettle();
+
+      await hear(tester, handle, refund(landed: true));
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(played, ['HapticFeedbackType.lightImpact']);
+    });
+
     testWidgets('news that moves nothing on plays no haptic', (tester) async {
       final played = recordHaptics(tester);
       final handle = await open(tester, snapshotOf());

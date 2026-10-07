@@ -34,6 +34,11 @@ double scaleOf(Matrix4 transform) => math.sqrt(
   math.pow(transform.entry(0, 0), 2) + math.pow(transform.entry(1, 0), 2),
 );
 
+/// Whether any effect painted something turned in the last frame.
+bool effectTurning(WidgetTester tester) => tester.layers
+    .whereType<TransformLayer>()
+    .any((layer) => (layer.transform?.entry(1, 0) ?? 0).abs() > 1e-6);
+
 /// Records the haptic feedback the rest of the test plays.
 List<String> recordHaptics(WidgetTester tester) {
   final played = <String>[];
