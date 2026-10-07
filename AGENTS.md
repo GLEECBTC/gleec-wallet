@@ -33,7 +33,7 @@ flutter test test_units/main.dart \
   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 ```
 
-All four dart-defines are mandatory: without them ~36 GasFree tests hang rather than fail and wedge the whole run. CI runs *only* `test_units/main.dart`, so a new test file must be imported there or it never runs.
+GasFree is on by default, so a plain run passes too; the four dart-defines pin the production values as CI does. A build that turns GasFree off (`TRON_GASLESS_ENABLED=false`) makes ~36 GasFree tests hang rather than fail and wedge the whole run. CI runs *only* `test_units/main.dart`, so a new test file must be imported there or it never runs.
 
 Integration/GUI tests (`dart run_integration_tests.dart`), the KDF harness, the SDK package suites, and the full CI map are documented in `docs/TESTING.md`. If a suite is red, name the failing test — do not generalise it to the others.
 
