@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'auto_scroll_text.dart';
+import 'edge_fade.dart';
 
 /// Shrinks [child] to fit its width, but no further than [minScale]; a child
 /// still too wide is drawn at [minScale], clipped, and scrolled to show its
@@ -324,7 +325,13 @@ class _RenderScaleDownOrScroll extends RenderProxyBox {
     if (_overflow > 0) {
       final fade = _fadeLayer.layer ??= ShaderMaskLayer();
       fade
-        ..shader = _fadeShader()
+        ..shader = edgeFadeShader(
+          Offset.zero & size,
+          hiddenBefore: _overflow * _scroll.value,
+          hiddenAfter: _overflow * (1 - _scroll.value),
+          // About the width of an ellipsis, as TextOverflow.fade uses.
+          fadeWidth: size.height * 0.75,
+        )
         ..maskRect = offset & size
         ..blendMode = BlendMode.dstIn;
       _clipLayer.layer = context.pushClipRect(
@@ -339,25 +346,6 @@ class _RenderScaleDownOrScroll extends RenderProxyBox {
       _fadeLayer.layer = null;
       paintScaled(context, offset);
     }
-  }
-
-  /// Fades out each edge with content hidden past it, over about the width
-  /// of an ellipsis, as [TextOverflow.fade] does.
-  Shader _fadeShader() {
-    const opaque = Color(0xFFFFFFFF);
-    const clear = Color(0x00FFFFFF);
-    final hiddenBefore = _overflow * _scroll.value;
-    final hiddenAfter = _overflow - hiddenBefore;
-    final fade = math.min(size.height * 0.75, size.width / 3) / size.width;
-    return LinearGradient(
-      colors: [
-        if (hiddenBefore > 0.5) clear else opaque,
-        opaque,
-        opaque,
-        if (hiddenAfter > 0.5) clear else opaque,
-      ],
-      stops: [0, fade, 1 - fade, 1],
-    ).createShader(Offset.zero & size);
   }
 
   @override

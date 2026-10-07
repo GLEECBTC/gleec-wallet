@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'edge_fade.dart';
 
 class AutoScrollText extends StatefulWidget {
   /// How far text must overflow before it scrolls; text overflowing by less
@@ -87,12 +90,8 @@ class _AutoScrollTextState extends State<AutoScrollText>
   Widget build(BuildContext context) {
     final isTextAnimatable = _animation != null;
 
-    // TODO: Initially the text overflow shows as faded, but we have to disable
-    // the edge-fade when the text starts animating. There is an initial "jump"
-    // from faded to non-faded text when the animation starts. This is not
-    // ideal, but it's not a big issue. In the future, see if there is an
-    // efficient way to always show the overflow edge as faded. E.g. Container
-    // gradient decoration. NB: Don't assume that text is always LTR.
+    // At rest the text fades its own cut-off end. Once it scrolls, an edge
+    // mask takes over and fades whichever ends are cut off.
     final overflow = isTextAnimatable
         ? renderedTextStyle.overflow
         : widget.style?.overflow ?? TextOverflow.fade;
@@ -137,7 +136,26 @@ class _AutoScrollTextState extends State<AutoScrollText>
                 : null,
           ),
           width: double.infinity,
-          child: SlideTransition(position: _animation!, child: textWidget),
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final hidden = math.max(
+                0.0,
+                calculateTextSize().width - availableSize.width,
+              );
+              return ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (bounds) => edgeFadeShader(
+                  bounds,
+                  hiddenBefore: hidden * _controller.value,
+                  hiddenAfter: hidden * (1 - _controller.value),
+                  fadeWidth: ellipsisWidth,
+                ),
+                child: child,
+              );
+            },
+            child: SlideTransition(position: _animation!, child: textWidget),
+          ),
         );
       },
     );
@@ -186,6 +204,16 @@ class _AutoScrollTextState extends State<AutoScrollText>
 
     return _textWidth!;
   }
+
+  double? _ellipsisWidth;
+
+  /// How wide the fade at a cut-off edge is: an ellipsis in the text's style,
+  /// as [TextOverflow.fade] uses.
+  double get ellipsisWidth => _ellipsisWidth ??= TextPainter.computeWidth(
+    text: TextSpan(text: '\u2026', style: renderedTextStyle),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  );
 
   /// The pause the animation is currently sitting on.
   ///
@@ -316,6 +344,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
     _animation = null;
     _lastAvailableSize = null;
     _textWidth = null;
+    _ellipsisWidth = null;
     _renderedTextStyle = null;
   }
 
@@ -325,6 +354,7 @@ class _AutoScrollTextState extends State<AutoScrollText>
 
     // The text size setting or inherited style may have changed the width.
     _textWidth = null;
+    _ellipsisWidth = null;
     _renderedTextStyle = null;
     final size = _lastAvailableSize;
     if (size != null) {
