@@ -21,17 +21,24 @@ class SwapAssetPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
     final asset = this.asset;
+    // Nothing chosen yet, it reads as the next thing to do, with its whole
+    // label: no icon takes the room a phone has for it.
+    final choose = asset == null;
     return SwapButtonSemantics(
       label: asset == null
           ? semanticLabel
           : '$semanticLabel: ${SwapFormat.ticker(asset)}, $network',
       onTap: onTap,
       child: Material(
-        color: palette.surfaceHigh,
+        color: choose ? palette.selected : palette.surfaceHigh,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: BorderSide(
-            color: hasError ? palette.danger : palette.controlBorder,
+            color: hasError
+                ? palette.danger
+                : choose
+                ? palette.brand
+                : palette.controlBorder,
           ),
         ),
         child: InkWell(
@@ -40,15 +47,14 @@ class SwapAssetPill extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 52),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+              padding: EdgeInsets.fromLTRB(choose ? 14 : 10, 8, 8, 8),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (asset == null)
-                    Icon(Icons.add_circle_outline, color: palette.brandHover)
-                  else
-                    SwapTokenIcon(asset: asset),
-                  const SizedBox(width: 9),
+                  if (asset != null) ...[
+                    SwapTokenIcon(asset: asset, size: 30),
+                    const SizedBox(width: 8),
+                  ],
                   Flexible(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,20 +70,25 @@ class SwapAssetPill extends StatelessWidget {
                         ),
                         if (asset != null && network != null) ...[
                           const SizedBox(height: 3),
+                          // Two lines before a long network name is cut: the
+                          // amount beside the pill is taller anyway.
                           Text(
                             network!,
-                            style: SwapText.small(context),
-                            maxLines: 1,
+                            style: SwapText.small(
+                              context,
+                            ).copyWith(height: 1.25),
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 2),
                   Icon(
                     Icons.keyboard_arrow_down_rounded,
-                    color: palette.textSecondary,
+                    size: 22,
+                    color: choose ? palette.brandHover : palette.textSecondary,
                   ),
                 ],
               ),
