@@ -7,6 +7,9 @@ import 'package:web_dex/views/swap/common/swap_widgets.dart';
 /// Width below which a sheet covers the whole screen.
 const double _fullScreenBelow = 768;
 
+/// The widest a sheet shown as a dialog gets.
+const double _dialogWidth = 440;
+
 /// Opens [builder] as the swap surface's sheet: full screen on a phone, a
 /// panel sliding in from the right on anything wider.
 ///
@@ -15,19 +18,25 @@ const double _fullScreenBelow = 768;
 /// the scrim all pop with null. A snack bar raised inside a sheet, such as a
 /// copy confirmation, shows on the sheet rather than on the page beneath.
 ///
-/// With [fitContent], a phone gets a bottom sheet the height of its content
-/// instead, for a short choice that should not take the whole screen. It
-/// can also be swiped away.
+/// With [fitContent], a short choice that should not take the whole screen
+/// is only as tall as its content instead: a bottom sheet on a phone, which
+/// can also be swiped away, and a dialog in the middle of a wider window. A
+/// window too short for a dialog keeps the panel. A snack bar raised inside
+/// either shows on the page beneath, so they suit a choice that raises none.
 Future<T?> showSwapSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   required String label,
   bool fitContent = false,
 }) {
-  final width = MediaQuery.sizeOf(context).width;
+  final size = MediaQuery.sizeOf(context);
+  final width = size.width;
   final fullScreen = width < _fullScreenBelow;
   final reduceMotion = MediaQuery.disableAnimationsOf(context);
   final palette = SwapPalette.of(context);
+  if (fitContent && !fullScreen && size.height >= SwapGeometry.shortHeight) {
+    return _showSwapDialog<T>(context: context, builder: builder, label: label);
+  }
   if (fullScreen && fitContent) {
     return showModalBottomSheet<T>(
       context: context,
@@ -48,6 +57,7 @@ Future<T?> showSwapSheet<T>({
             )
           : null,
       builder: (sheetContext) => _FitsContent(
+        handle: true,
         child: SafeArea(top: false, child: Builder(builder: builder)),
       ),
     );
@@ -123,6 +133,60 @@ Future<T?> showSwapSheet<T>({
   );
 }
 
+/// Opens [builder] in a dialog in the middle of the window, as tall as its
+/// content.
+Future<T?> _showSwapDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  required String label,
+}) {
+  final reduceMotion = MediaQuery.disableAnimationsOf(context);
+  final palette = SwapPalette.of(context);
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: label,
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    transitionDuration: reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180),
+    // Dialog stays above the keyboard and hides it from its content, so a
+    // sheet that makes its own room for the keyboard adds none here.
+    pageBuilder: (_, _, _) => SafeArea(
+      child: Dialog(
+        backgroundColor: palette.surfaceRaised,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: palette.shadow,
+        elevation: 24,
+        insetPadding: const EdgeInsets.all(24),
+        insetAnimationDuration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 100),
+        constraints: const BoxConstraints(
+          minWidth: 280,
+          maxWidth: _dialogWidth,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: palette.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _FitsContent(handle: false, child: Builder(builder: builder)),
+      ),
+    ),
+    transitionBuilder: (context, animation, _, child) {
+      final curved = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: curved.drive(Tween<double>(begin: 0.96, end: 1)),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 /// The layout inside a swap sheet: a heading row with a close action, a
 /// scrolling body and an optional pinned footer.
 class SwapSheetScaffold extends StatelessWidget {
@@ -155,9 +219,11 @@ class SwapSheetScaffold extends StatelessWidget {
     // A scrolling body carries the subtitle, so large text cannot push the
     // pinned heading and footer past the screen.
     final pinnedSubtitle = scrollable ? null : subtitle;
-    // In a bottom sheet the drag handle sits above, and the body takes only
-    // the height it needs.
-    final fits = context.getInheritedWidgetOfExactType<_FitsContent>() != null;
+    // In a sheet as tall as its content the body takes only the height it
+    // needs, and under a drag handle the heading needs no room above it.
+    final fitted = context.getInheritedWidgetOfExactType<_FitsContent>();
+    final fits = fitted != null;
+    final underHandle = fitted?.handle ?? false;
     final body = scrollable
         ? SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
@@ -179,7 +245,7 @@ class SwapSheetScaffold extends StatelessWidget {
         Padding(
           padding: EdgeInsets.fromLTRB(
             18,
-            fits ? 0 : 18,
+            underHandle ? 0 : 18,
             18,
             subtitle != null && scrollable ? 4 : 12,
           ),
@@ -226,10 +292,13 @@ class SwapSheetScaffold extends StatelessWidget {
   }
 }
 
-/// Marks a sheet shown as a bottom sheet that is as tall as its content.
+/// Marks a sheet that is as tall as its content.
 class _FitsContent extends InheritedWidget {
-  const _FitsContent({required super.child});
+  const _FitsContent({required this.handle, required super.child});
+
+  /// Whether a drag handle sits above it, as on a bottom sheet.
+  final bool handle;
 
   @override
-  bool updateShouldNotify(_FitsContent oldWidget) => false;
+  bool updateShouldNotify(_FitsContent oldWidget) => handle != oldWidget.handle;
 }
