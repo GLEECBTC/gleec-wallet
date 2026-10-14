@@ -78,6 +78,9 @@ void main() {
         size: size,
         textScale: textScale,
       );
+      // Nothing is held, so it opens on Popular; All is the long list.
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
     }
 
     testWidgets('stays pinned above the list on a tall screen', (tester) async {

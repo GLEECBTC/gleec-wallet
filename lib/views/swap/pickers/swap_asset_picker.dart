@@ -149,7 +149,8 @@ class SwapAssetPicker extends StatefulWidget {
 
 class _SwapAssetPickerState extends State<SwapAssetPicker> {
   final TextEditingController _search = TextEditingController();
-  _PickerTab _tab = _PickerTab.mine;
+  // Signed out, nothing is held: no "My assets" to open on or offer.
+  late _PickerTab _tab = widget.signedIn ? _PickerTab.mine : _PickerTab.popular;
   Set<AssetId>? _activated;
   List<String> _recentTickers = const [];
   bool _failed = false;
@@ -185,9 +186,14 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
         _activated = activated;
         _recentTickers = recentTickers;
         _hideZero = hideZero;
-        // Open on something useful: holdings when there are any.
+        // Open on something useful: holdings when there are any, else what
+        // was chosen lately, else the most traded rather than the alphabet.
         if (_mine(activated).isEmpty) {
-          _tab = _recent().isNotEmpty ? _PickerTab.recent : _PickerTab.all;
+          _tab = _recent().isNotEmpty
+              ? _PickerTab.recent
+              : _popular().isNotEmpty
+              ? _PickerTab.popular
+              : _PickerTab.all;
         }
       });
     } on Object {
@@ -358,7 +364,10 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
       const SizedBox(height: 14),
       if (!searching)
         SwapFilterBar<_PickerTab>(
-          values: _PickerTab.values,
+          values: [
+            for (final tab in _PickerTab.values)
+              if (widget.signedIn || tab != _PickerTab.mine) tab,
+          ],
           selected: _tab,
           semanticLabel: LocaleKeys.swapPickerTitle.tr(),
           labelOf: (tab) => switch (tab) {
