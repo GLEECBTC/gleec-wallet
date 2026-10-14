@@ -92,6 +92,10 @@ class SwapReceiveCard extends StatelessWidget {
     }
     final impact = quote.pricing.priceImpact;
     final high = impact != null && impact >= swapHighImpact;
+    // A difference that rounds to nothing would read "−0% vs market".
+    final shown =
+        impact != null &&
+        SwapFormat.percent(impact.abs()) != SwapFormat.percent(Decimal.zero);
     return Wrap(
       spacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -100,7 +104,7 @@ class SwapReceiveCard extends StatelessWidget {
           SwapFormat.usd(expected, rounding: SwapRounding.down),
           style: SwapText.small(context),
         ),
-        if (impact != null)
+        if (shown)
           Text(
             LocaleKeys.swapVsMarket.tr(
               args: [
