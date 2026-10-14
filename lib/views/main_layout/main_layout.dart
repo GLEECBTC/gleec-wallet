@@ -145,6 +145,11 @@ class _MainLayoutState extends State<MainLayout> {
                     routingState.walletState.selectedCoin.isEmpty &&
                     routingState.walletState.action.isEmpty &&
                     context.watch<AuthBloc>().state.mode == AuthorizeMode.logIn,
+                // Swap pins full-width actions to the bottom of its screens,
+                // where the button would sit over them. Settings still offers
+                // feedback.
+                showFeedbackButton:
+                    routingState.selectedMenu != MainMenuValue.dex,
                 isMini: isMobile,
               ),
             );
@@ -195,10 +200,12 @@ class MainLayoutFab extends StatelessWidget {
     super.key,
     required this.showAddCoinButton,
     required this.isMini,
+    this.showFeedbackButton = true,
   });
 
   final bool showAddCoinButton;
   final bool isMini;
+  final bool showFeedbackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +228,8 @@ class MainLayoutFab extends StatelessWidget {
           )
         : null;
 
-    final Widget? feedbackFab = context.isFeedbackAvailable
+    final Widget? feedbackFab =
+        showFeedbackButton && context.isFeedbackAvailable
         ? Tooltip(
             message: 'Report a bug or feedback',
             child: SizedBox.square(
