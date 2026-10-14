@@ -166,7 +166,7 @@ class _SwapEntryViewState extends State<SwapEntryView> {
               sortKey: const OrdinalSortKey(0),
               child: SwapPayCard(
                 state: state,
-                network: pay == null ? null : networks.networkOf(pay),
+                network: pay == null ? null : SwapFormat.network(pay, networks),
                 tokenAmount: _bloc.amountOf(state),
                 usdPrice: price,
                 onAmountChanged: (text) =>
@@ -191,7 +191,9 @@ class _SwapEntryViewState extends State<SwapEntryView> {
               sortKey: const OrdinalSortKey(2),
               child: SwapReceiveCard(
                 state: state,
-                network: receive == null ? null : networks.networkOf(receive),
+                network: receive == null
+                    ? null
+                    : SwapFormat.network(receive, networks),
                 onPickAsset: () => _pick(SwapPickerSide.receive),
               ),
             ),

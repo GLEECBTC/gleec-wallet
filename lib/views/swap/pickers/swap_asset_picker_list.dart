@@ -53,7 +53,7 @@ extension _PickerList on _SwapAssetPickerState {
           _AssetEntry(asset: final id, :final unreachable, :final noOffers) =>
             _PickerRow(
               asset: id,
-              network: widget.services.networks().networkOf(id),
+              network: SwapFormat.network(id, widget.services.networks()),
               contract: widget.services.contractOf(id),
               balance: widget.services.lastKnownBalance(id),
               usdPrice: widget.services.usdPrice(id),
