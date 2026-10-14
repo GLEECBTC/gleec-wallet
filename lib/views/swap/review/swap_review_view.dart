@@ -54,10 +54,21 @@ class SwapReviewView extends StatelessWidget {
           services: services,
           onBack: back,
         );
-        final footer = _ReviewFooter(
+        Widget footer = _ReviewFooter(
           review: review,
           paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
         );
+        // Consent sits beside the button that gives it, never scrolled away.
+        if (_acceptsTerms(review)) {
+          footer = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SwapProviderNotice(acceptance: true),
+              const SizedBox(height: 10),
+              footer,
+            ],
+          );
+        }
 
         return SwapScreen(
           onEscape: back,
@@ -85,6 +96,19 @@ class SwapReviewView extends StatelessWidget {
     );
   }
 }
+
+/// Whether starting this routed swap accepts the provider's terms, which the
+/// footer then says beside the button.
+bool _acceptsTerms(SwapReview review) =>
+    review.termsRequired &&
+    review.quote.source == SwapLiquiditySource.routed &&
+    switch (review.status) {
+      SwapReviewStatus.ready ||
+      SwapReviewStatus.materialUpdate ||
+      SwapReviewStatus.revalidating ||
+      SwapReviewStatus.starting => true,
+      _ => false,
+    };
 
 class _ReviewContent extends StatelessWidget {
   const _ReviewContent({
@@ -132,6 +156,9 @@ class _ReviewContent extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: SwapBadge(label: badge.$1, tone: badge.$2),
           ),
+        // What changed comes first: on a phone the details below run past
+        // the screen, while the button asking to accept it is pinned.
+        ..._status(context),
         const SizedBox(height: 12),
         _Summary(
           quote: quote,
@@ -148,6 +175,7 @@ class _ReviewContent extends StatelessWidget {
             rounding: SwapRounding.down,
           ),
         ),
+        ..._warnings(context, impact),
         const SizedBox(height: 14),
         _DecisionGrid(quote: quote),
         const SizedBox(height: 12),
@@ -162,11 +190,10 @@ class _ReviewContent extends StatelessWidget {
           fromNetwork: fromNetwork,
           toNetwork: toNetwork,
         ),
-        ..._warnings(context, impact),
-        ..._status(context),
         const SizedBox(height: 14),
         _Permission(quote: quote),
-        if (quote.source == SwapLiquiditySource.routed) ...[
+        if (quote.source == SwapLiquiditySource.routed &&
+            !_acceptsTerms(review)) ...[
           const SizedBox(height: 14),
           SwapProviderNotice(acceptance: review.termsRequired),
         ],
