@@ -12,9 +12,10 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
 part 'swap_amount_controls.dart';
+part 'swap_receive_card.dart';
 
 /// The frame both amount cards share: a label row, the amount beside the
-/// asset pill, and an address footer.
+/// asset pill, and an address footer when there is one to show.
 class _AmountCardFrame extends StatelessWidget {
   const _AmountCardFrame({
     required this.label,
@@ -29,7 +30,7 @@ class _AmountCardFrame extends StatelessWidget {
   final String label;
   final Widget amount;
   final Widget assetPill;
-  final Widget footer;
+  final Widget? footer;
   final Widget? topTrailing;
   final bool hasError;
   final bool focused;
@@ -37,6 +38,11 @@ class _AmountCardFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
+    final footer = this.footer;
+    // A phone gives the amounts the room a wider screen gives the padding.
+    final compact = SwapGeometry.isCompact(context);
+    final inset = compact ? 14.0 : 18.0;
+    final gap = compact ? 12.0 : 16.0;
     final borderColor = hasError
         ? palette.danger
         : focused
@@ -62,7 +68,12 @@ class _AmountCardFrame extends StatelessWidget {
                 ]
               : null,
         ),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 4),
+        padding: EdgeInsets.fromLTRB(
+          inset,
+          inset,
+          inset,
+          footer == null ? inset : 4,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -80,7 +91,7 @@ class _AmountCardFrame extends StatelessWidget {
                 if (topTrailing != null) Flexible(child: topTrailing!),
               ],
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: gap),
             LayoutBuilder(
               builder: (context, constraints) {
                 final scale = MediaQuery.textScalerOf(context).scale(1);
@@ -109,9 +120,11 @@ class _AmountCardFrame extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(height: 16),
-            Divider(height: 1, thickness: 1, color: palette.border),
-            footer,
+            if (footer != null) ...[
+              SizedBox(height: gap),
+              Divider(height: 1, thickness: 1, color: palette.border),
+              footer,
+            ],
           ],
         ),
       ),
@@ -214,6 +227,9 @@ class _SwapPayCardState extends State<SwapPayCard> {
       controller: _controller,
       focusNode: _focus,
       onChanged: widget.onAmountChanged,
+      // A phone's decimal pad has no key to put it away: a tap anywhere else
+      // does, as dragging the form does.
+      onTapOutside: (_) => _focus.unfocus(),
       enabled: pay != null,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
@@ -286,26 +302,31 @@ class _SwapPayCardState extends State<SwapPayCard> {
         onTap: widget.onPickAsset,
         semanticLabel: LocaleKeys.swapYouPay.tr(),
       ),
-      footer: Row(
-        children: [
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _AddressFooterButton(
-                prefix: (a) => LocaleKeys.swapFromAddress.tr(args: [a]),
-                address: address,
-                asset: pay,
-              ),
+      // Signed in, an asset's address is on its way: its row keeps the card
+      // from growing when it lands. Signed out, there is nothing to hold.
+      footer:
+          address == null && balance == null && (pay == null || !state.signedIn)
+          ? null
+          : Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _AddressFooterButton(
+                      prefix: (a) => LocaleKeys.swapFromAddress.tr(args: [a]),
+                      address: address,
+                      asset: pay,
+                    ),
+                  ),
+                ),
+                if (pay != null && balance != null)
+                  SwapLinkButton(
+                    label: LocaleKeys.max.tr(),
+                    onPressed: widget.onMax,
+                    busy: state.checkingMax,
+                  ),
+              ],
             ),
-          ),
-          if (pay != null && balance != null)
-            SwapLinkButton(
-              label: LocaleKeys.max.tr(),
-              onPressed: widget.onMax,
-              busy: state.checkingMax,
-            ),
-        ],
-      ),
     );
   }
 
@@ -357,122 +378,6 @@ class _SwapPayCardState extends State<SwapPayCard> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// The receive side: what the selected option is expected to deliver.
-class SwapReceiveCard extends StatelessWidget {
-  const SwapReceiveCard({
-    required this.state,
-    required this.network,
-    required this.onPickAsset,
-    super.key,
-  });
-
-  final UnifiedSwapState state;
-  final String? network;
-  final VoidCallback onPickAsset;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = SwapPalette.of(context);
-    final quote = state.selectedQuote;
-    final receive = state.receive;
-    final checking =
-        state.evaluation == SwapEvaluationStatus.checking && quote == null;
-    final address = quote?.toAddress ?? state.receiveAddress;
-
-    final Widget amountText;
-    if (checking) {
-      amountText = const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: SwapSkeleton(height: 24, widthFactor: 0.6),
-      );
-    } else {
-      final value = quote?.expectedReceive;
-      amountText = ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value == null
-                  ? '0'
-                  : SwapFormat.amount(value, rounding: SwapRounding.down),
-              style: SwapText.amount(context).copyWith(
-                color: value == null ? palette.textTertiary : palette.text,
-              ),
-              maxLines: 1,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return _AmountCardFrame(
-      label: LocaleKeys.swapYouReceive.tr(),
-      amount: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [amountText, const SizedBox(height: 6), _fiatLine(context)],
-      ),
-      assetPill: SwapAssetPill(
-        asset: receive,
-        network: network,
-        onTap: onPickAsset,
-        semanticLabel: LocaleKeys.swapYouReceive.tr(),
-      ),
-      footer: Align(
-        alignment: Alignment.centerLeft,
-        child: _AddressFooterButton(
-          prefix: (a) => LocaleKeys.swapToAddress.tr(args: [a]),
-          address: address,
-          asset: receive,
-        ),
-      ),
-    );
-  }
-
-  Widget _fiatLine(BuildContext context) {
-    final palette = SwapPalette.of(context);
-    final quote = state.selectedQuote;
-    if (quote == null) {
-      return Text(r'$0.00', style: SwapText.small(context));
-    }
-    final expected = quote.pricing.expectedUsd;
-    if (expected == null) {
-      return Text(
-        LocaleKeys.swapPriceUnavailable.tr(),
-        style: SwapText.small(context),
-      );
-    }
-    final impact = quote.pricing.priceImpact;
-    final high = impact != null && impact >= swapHighImpact;
-    return Wrap(
-      spacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          SwapFormat.usd(expected, rounding: SwapRounding.down),
-          style: SwapText.small(context),
-        ),
-        if (impact != null)
-          Text(
-            LocaleKeys.swapVsMarket.tr(
-              args: [
-                '${impact > Decimal.zero ? '−' : '+'}'
-                    '${SwapFormat.percent(impact.abs())}',
-              ],
-            ),
-            style: SwapText.small(context).copyWith(
-              color: high ? palette.warning : palette.textTertiary,
-              fontWeight: high ? FontWeight.w700 : null,
-            ),
-          ),
-      ],
     );
   }
 }

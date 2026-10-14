@@ -53,6 +53,11 @@ class SwapEntryView extends StatefulWidget {
 class _SwapEntryViewState extends State<SwapEntryView> {
   bool _activating = false;
 
+  /// The asset that last failed to activate. Said under the cards rather
+  /// than in a snack bar, which on a phone would cover the pinned button
+  /// that tries again.
+  AssetId? _activationFailed;
+
   UnifiedSwapBloc get _bloc => context.read<UnifiedSwapBloc>();
   SwapServices get _services => context.read<SwapServices>();
 
@@ -93,22 +98,17 @@ class _SwapEntryViewState extends State<SwapEntryView> {
   }
 
   Future<void> _activate(AssetId asset) async {
-    setState(() => _activating = true);
+    setState(() {
+      _activating = true;
+      _activationFailed = null;
+    });
     try {
       await _services.activate(asset);
       if (!mounted) return;
       _bloc.add(UnifiedSwapAssetActivated(asset));
     } on Object {
       if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            LocaleKeys.swapPickerActivationFailed.tr(
-              args: [SwapFormat.ticker(asset)],
-            ),
-          ),
-        ),
-      );
+      setState(() => _activationFailed = asset);
     } finally {
       if (mounted) setState(() => _activating = false);
     }
@@ -155,11 +155,13 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         final pay = state.pay;
         final receive = state.receive;
         final price = pay == null ? null : _services.usdPrice(pay);
+        final compact = SwapGeometry.isCompact(context);
 
         final cards = Semantics(
           container: true,
           explicitChildNodes: true,
           child: SwapCardPair(
+            gap: compact ? 20 : 32,
             top: Semantics(
               sortKey: const OrdinalSortKey(0),
               child: SwapPayCard(
@@ -214,47 +216,75 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         final checking =
             state.evaluation == SwapEvaluationStatus.checking &&
             state.quotes == null;
+        // On a phone the main action stays put above the keyboard and the
+        // bottom of the screen, wherever the form is scrolled.
+        final pinned = !widget.panelOpen && SwapGeometry.pinsAction(context);
 
-        return SwapScreen(
-          child: SingleChildScrollView(
-            child: SwapColumn(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SwapPageHeading(title: LocaleKeys.swap.tr()),
-                  if (!state.tradingEnabled) ...[
-                    SwapCallout(
-                      tone: SwapTone.warning,
-                      message: state.hardwareWallet
-                          ? LocaleKeys.trezorWalletOnlyNotice.tr()
-                          : LocaleKeys.tradingDisabled.tr(),
+        final form = SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: SwapColumn(
+            padding: compact
+                ? const EdgeInsets.fromLTRB(16, 16, 16, 20)
+                : const EdgeInsets.fromLTRB(16, 20, 16, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // The selected tab already names the screen on a phone.
+                SwapPageHeading(title: LocaleKeys.swap.tr(), visible: !compact),
+                if (!state.tradingEnabled) ...[
+                  SwapCallout(
+                    tone: SwapTone.warning,
+                    message: state.hardwareWallet
+                        ? LocaleKeys.trezorWalletOnlyNotice.tr()
+                        : LocaleKeys.tradingDisabled.tr(),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                cards,
+                ..._messages(context, state),
+                if (_activationFailed case final failed?
+                    when failed == pay || failed == receive)
+                  SwapHelperLine(
+                    text: LocaleKeys.swapPickerActivationFailed.tr(
+                      args: [SwapFormat.ticker(failed)],
                     ),
-                    const SizedBox(height: 14),
-                  ],
-                  cards,
-                  ..._messages(context, state),
-                  if (checking) ...[
-                    const SizedBox(height: 14),
-                    const SwapSkeleton(widthFactor: 0.68),
-                    const SizedBox(height: 8),
-                    const SwapSkeleton(widthFactor: 0.45),
-                  ],
-                  if (quote != null) ...[
-                    SwapQuoteStrip(
-                      state: state,
-                      onCompare: () => showSwapOptionsSheet(context, _bloc),
-                    ),
-                    SwapRateLine(quote: quote),
-                  ],
+                    tone: SwapTone.danger,
+                  ),
+                if (checking) ...[
+                  const SizedBox(height: 14),
+                  const SwapSkeleton(widthFactor: 0.68),
+                  const SizedBox(height: 8),
+                  const SwapSkeleton(widthFactor: 0.45),
+                ],
+                if (quote != null) ...[
+                  SwapQuoteStrip(
+                    state: state,
+                    onCompare: () => showSwapOptionsSheet(context, _bloc),
+                  ),
+                  SwapRateLine(quote: quote),
+                ],
+                if (!pinned) ...[
                   const SizedBox(height: 14),
                   if (widget.panelOpen)
                     SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr())
                   else
                     _primaryAction(context, state),
                 ],
-              ),
+              ],
             ),
           ),
+        );
+
+        return SwapScreen(
+          child: pinned
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: form),
+                    SwapStickyFooter(child: _primaryAction(context, state)),
+                  ],
+                )
+              : form,
         );
       },
     );
