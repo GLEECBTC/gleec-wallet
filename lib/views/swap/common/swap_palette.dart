@@ -285,4 +285,23 @@ abstract final class SwapGeometry {
 
   /// The minimum interactive size.
   static const touchTarget = 48.0;
+
+  /// Width below which the swap screens take their phone layout: tighter
+  /// cards and no display title, which the selected tab already names.
+  static const compactWidth = 600.0;
+
+  /// Height below which a screen's main action is pinned, as on a phone
+  /// held sideways.
+  static const shortHeight = 560.0;
+
+  /// Whether the window is phone-sized.
+  static bool isCompact(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < compactWidth;
+
+  /// Whether a screen's main action stays pinned above the content, so it
+  /// never scrolls out of reach.
+  static bool pinsAction(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return size.width < compactWidth || size.height < shortHeight;
+  }
 }

@@ -77,45 +77,11 @@ class SwapReviewView extends StatelessWidget {
                         ),
                 ),
               ),
-              _StickyFooter(inPanel: inPanel, child: footer),
+              SwapStickyFooter(inPanel: inPanel, child: footer),
             ],
           ),
         );
       },
-    );
-  }
-}
-
-class _StickyFooter extends StatelessWidget {
-  const _StickyFooter({required this.inPanel, required this.child});
-
-  final bool inPanel;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = SwapPalette.of(context);
-    final padded = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: child,
-    );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: inPanel ? palette.surfaceRaised : palette.canvas,
-        border: Border(top: BorderSide(color: palette.border)),
-      ),
-      child: inPanel
-          ? padded
-          : Align(
-              alignment: Alignment.topCenter,
-              heightFactor: 1,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: SwapGeometry.contentWidth,
-                ),
-                child: padded,
-              ),
-            ),
     );
   }
 }

@@ -65,12 +65,17 @@ class SwapPageHeading extends StatelessWidget {
     required this.title,
     this.leading,
     this.subtitle,
+    this.visible = true,
     super.key,
   });
 
   final String title;
   final Widget? leading;
   final String? subtitle;
+
+  /// Whether it is drawn. Hidden, it still names the screen for screen
+  /// readers and takes the keyboard as the screen arrives.
+  final bool visible;
 
   @override
   Widget build(BuildContext context) {
@@ -79,12 +84,17 @@ class SwapPageHeading extends StatelessWidget {
     Widget name = Semantics(
       header: true,
       namesRoute: true,
-      child: Text(title, style: SwapText.title(context)),
+      label: visible ? null : title,
+      // A node with no size is hidden from screen readers.
+      child: visible
+          ? Text(title, style: SwapText.title(context))
+          : const SizedBox(height: 1, width: double.infinity),
     );
     // Where the keyboard lands as the screen arrives; never a Tab stop.
     if (focus != null) {
       name = Focus(focusNode: focus, skipTraversal: true, child: name);
     }
+    if (!visible) return name;
     final heading = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -105,6 +115,47 @@ class SwapPageHeading extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(child: heading),
               ],
+            ),
+    );
+  }
+}
+
+/// A screen's main action, pinned under its scrolling content.
+class SwapStickyFooter extends StatelessWidget {
+  const SwapStickyFooter({
+    required this.child,
+    this.inPanel = false,
+    super.key,
+  });
+
+  final Widget child;
+
+  /// Whether it closes a side panel rather than a whole screen.
+  final bool inPanel;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SwapPalette.of(context);
+    final padded = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: child,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: inPanel ? palette.surfaceRaised : palette.canvas,
+        border: Border(top: BorderSide(color: palette.border)),
+      ),
+      child: inPanel
+          ? padded
+          : Align(
+              alignment: Alignment.topCenter,
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: SwapGeometry.contentWidth,
+                ),
+                child: padded,
+              ),
             ),
     );
   }
