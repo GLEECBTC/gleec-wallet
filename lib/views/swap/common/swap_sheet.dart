@@ -14,15 +14,44 @@ const double _fullScreenBelow = 768;
 /// and dismissal identical everywhere: Escape, the close button and a tap on
 /// the scrim all pop with null. A snack bar raised inside a sheet, such as a
 /// copy confirmation, shows on the sheet rather than on the page beneath.
+///
+/// With [fitContent], a phone gets a bottom sheet the height of its content
+/// instead, for a short choice that should not take the whole screen. It
+/// can also be swiped away.
 Future<T?> showSwapSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   required String label,
+  bool fitContent = false,
 }) {
   final width = MediaQuery.sizeOf(context).width;
   final fullScreen = width < _fullScreenBelow;
   final reduceMotion = MediaQuery.disableAnimationsOf(context);
   final palette = SwapPalette.of(context);
+  if (fullScreen && fitContent) {
+    return showModalBottomSheet<T>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: palette.surfaceRaised,
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      barrierLabel: label,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      sheetAnimationStyle: reduceMotion
+          ? const AnimationStyle(
+              duration: Duration.zero,
+              reverseDuration: Duration.zero,
+            )
+          : null,
+      builder: (sheetContext) => _FitsContent(
+        child: SafeArea(top: false, child: Builder(builder: builder)),
+      ),
+    );
+  }
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: true,
@@ -126,13 +155,31 @@ class SwapSheetScaffold extends StatelessWidget {
     // A scrolling body carries the subtitle, so large text cannot push the
     // pinned heading and footer past the screen.
     final pinnedSubtitle = scrollable ? null : subtitle;
+    // In a bottom sheet the drag handle sits above, and the body takes only
+    // the height it needs.
+    final fits = context.getInheritedWidgetOfExactType<_FitsContent>() != null;
+    final body = scrollable
+        ? SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            child: subtitle == null
+                ? this.body
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [subtitle, const SizedBox(height: 12), this.body],
+                  ),
+          )
+        : Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: this.body,
+          );
     return Column(
+      mainAxisSize: fits ? MainAxisSize.min : MainAxisSize.max,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(
             18,
-            18,
+            fits ? 0 : 18,
             18,
             subtitle != null && scrollable ? 4 : 12,
           ),
@@ -163,26 +210,7 @@ class SwapSheetScaffold extends StatelessWidget {
             ],
           ),
         ),
-        Expanded(
-          child: scrollable
-              ? SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  child: subtitle == null
-                      ? body
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            subtitle,
-                            const SizedBox(height: 12),
-                            body,
-                          ],
-                        ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: body,
-                ),
-        ),
+        if (fits) Flexible(child: body) else Expanded(child: body),
         if (footer != null)
           DecoratedBox(
             decoration: BoxDecoration(
@@ -196,4 +224,12 @@ class SwapSheetScaffold extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Marks a sheet shown as a bottom sheet that is as tall as its content.
+class _FitsContent extends InheritedWidget {
+  const _FitsContent({required super.child});
+
+  @override
+  bool updateShouldNotify(_FitsContent oldWidget) => false;
 }
