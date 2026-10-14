@@ -161,6 +161,108 @@ class SwapStickyFooter extends StatelessWidget {
   }
 }
 
+/// A screen's scrolling content and its main action.
+///
+/// The action follows the content while everything fits, so a tall window
+/// keeps them together. Once the content would run past the bottom, or
+/// always with [pinned], it stays pinned under the content instead and is
+/// never scrolled out of reach.
+class SwapActionLayout extends StatefulWidget {
+  const SwapActionLayout({
+    required this.builder,
+    required this.action,
+    this.pinned = false,
+    this.gap = 14,
+    super.key,
+  });
+
+  /// The content, given the action to end with while it follows the
+  /// content, or null while it is pinned.
+  final Widget Function(BuildContext context, Widget? inlineAction) builder;
+
+  /// The main action. Without one, the content just scrolls.
+  final Widget? action;
+
+  /// Whether the action is always pinned, as on a phone.
+  final bool pinned;
+
+  /// The space the content puts before an action that follows it.
+  final double gap;
+
+  @override
+  State<SwapActionLayout> createState() => _SwapActionLayoutState();
+}
+
+class _SwapActionLayoutState extends State<SwapActionLayout> {
+  final GlobalKey _content = GlobalKey();
+  final GlobalKey _action = GlobalKey();
+  bool _overflows = false;
+  bool _checkScheduled = false;
+
+  /// What the last frame was laid out as, which the next check measures.
+  bool _laidOutPinned = false;
+  double _viewport = double.infinity;
+
+  void _scheduleCheck() {
+    if (_checkScheduled) return;
+    _checkScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkScheduled = false;
+      _check();
+    });
+  }
+
+  /// Pins the action when the content and the action together are taller
+  /// than the screen. The same sum decides both ways, so the action cannot
+  /// flip back and forth.
+  void _check() {
+    if (!mounted || widget.pinned || widget.action == null) return;
+    final content = _content.currentContext?.size?.height;
+    final action = _action.currentContext?.size?.height;
+    if (content == null || action == null) return;
+    final whole = _laidOutPinned ? content + widget.gap + action : content;
+    final overflows = whole > _viewport + 0.5;
+    if (overflows != _overflows) setState(() => _overflows = overflows);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final action = widget.action;
+        final pinned = action != null && (widget.pinned || _overflows);
+        _laidOutPinned = pinned;
+        _viewport = constraints.maxHeight;
+        final keyed = action == null
+            ? null
+            : KeyedSubtree(key: _action, child: action);
+        if (action != null && !widget.pinned) _scheduleCheck();
+        final scroll = NotificationListener<ScrollMetricsNotification>(
+          onNotification: (_) {
+            if (!widget.pinned) _scheduleCheck();
+            return false;
+          },
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            child: KeyedSubtree(
+              key: _content,
+              child: widget.builder(context, pinned ? null : keyed),
+            ),
+          ),
+        );
+        if (!pinned) return scroll;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: scroll),
+            SwapStickyFooter(child: keyed!),
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// Announces [message] to assistive technology, where the platform supports
 /// announcements.
 void swapAnnounce(BuildContext context, String message) {

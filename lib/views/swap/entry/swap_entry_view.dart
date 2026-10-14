@@ -218,75 +218,66 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         final checking =
             state.evaluation == SwapEvaluationStatus.checking &&
             state.quotes == null;
-        // On a phone the main action stays put above the keyboard and the
-        // bottom of the screen, wherever the form is scrolled.
-        final pinned = !widget.panelOpen && SwapGeometry.pinsAction(context);
-
-        final form = SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          child: SwapColumn(
-            padding: compact
-                ? const EdgeInsets.fromLTRB(16, 16, 16, 20)
-                : const EdgeInsets.fromLTRB(16, 20, 16, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // The selected tab already names the screen.
-                SwapPageHeading(title: LocaleKeys.swap.tr(), visible: false),
-                if (!state.tradingEnabled) ...[
-                  SwapCallout(
-                    tone: SwapTone.warning,
-                    message: state.hardwareWallet
-                        ? LocaleKeys.trezorWalletOnlyNotice.tr()
-                        : LocaleKeys.tradingDisabled.tr(),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                cards,
-                ..._messages(context, state),
-                if (_activationFailed case final failed?
-                    when failed == pay || failed == receive)
-                  SwapHelperLine(
-                    text: LocaleKeys.swapPickerActivationFailed.tr(
-                      args: [SwapFormat.ticker(failed)],
+        return SwapScreen(
+          // A phone keeps the main action pinned above the keyboard and the
+          // bottom of the screen; a wider window pins it once the form runs
+          // past the bottom.
+          child: SwapActionLayout(
+            pinned: SwapGeometry.pinsAction(context),
+            action: widget.panelOpen ? null : _primaryAction(context, state),
+            builder: (context, inlineAction) => SwapColumn(
+              padding: compact
+                  ? const EdgeInsets.fromLTRB(16, 16, 16, 20)
+                  : const EdgeInsets.fromLTRB(16, 20, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // The selected tab already names the screen.
+                  SwapPageHeading(title: LocaleKeys.swap.tr(), visible: false),
+                  if (!state.tradingEnabled) ...[
+                    SwapCallout(
+                      tone: SwapTone.warning,
+                      message: state.hardwareWallet
+                          ? LocaleKeys.trezorWalletOnlyNotice.tr()
+                          : LocaleKeys.tradingDisabled.tr(),
                     ),
-                    tone: SwapTone.danger,
-                  ),
-                if (checking) ...[
-                  const SizedBox(height: 14),
-                  const SwapSkeleton(widthFactor: 0.68),
-                  const SizedBox(height: 8),
-                  const SwapSkeleton(widthFactor: 0.45),
+                    const SizedBox(height: 14),
+                  ],
+                  cards,
+                  ..._messages(context, state),
+                  if (_activationFailed case final failed?
+                      when failed == pay || failed == receive)
+                    SwapHelperLine(
+                      text: LocaleKeys.swapPickerActivationFailed.tr(
+                        args: [SwapFormat.ticker(failed)],
+                      ),
+                      tone: SwapTone.danger,
+                    ),
+                  if (checking) ...[
+                    const SizedBox(height: 14),
+                    const SwapSkeleton(widthFactor: 0.68),
+                    const SizedBox(height: 8),
+                    const SwapSkeleton(widthFactor: 0.45),
+                  ],
+                  if (quote != null) ...[
+                    SwapQuoteStrip(
+                      state: state,
+                      onCompare: () => showSwapOptionsSheet(context, _bloc),
+                    ),
+                    SwapRateLine(quote: quote),
+                  ],
+                  if (widget.panelOpen) ...[
+                    const SizedBox(height: 14),
+                    SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr()),
+                  ],
+                  if (inlineAction != null) ...[
+                    const SizedBox(height: 14),
+                    inlineAction,
+                  ],
                 ],
-                if (quote != null) ...[
-                  SwapQuoteStrip(
-                    state: state,
-                    onCompare: () => showSwapOptionsSheet(context, _bloc),
-                  ),
-                  SwapRateLine(quote: quote),
-                ],
-                if (!pinned) ...[
-                  const SizedBox(height: 14),
-                  if (widget.panelOpen)
-                    SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr())
-                  else
-                    _primaryAction(context, state),
-                ],
-              ],
+              ),
             ),
           ),
-        );
-
-        return SwapScreen(
-          child: pinned
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: form),
-                    SwapStickyFooter(child: _primaryAction(context, state)),
-                  ],
-                )
-              : form,
         );
       },
     );

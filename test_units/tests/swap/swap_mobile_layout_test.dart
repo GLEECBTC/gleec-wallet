@@ -22,6 +22,7 @@ import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
 
+part 'swap_mobile_layout_desktop.dart';
 part 'swap_mobile_layout_screens.dart';
 
 const iPhoneSe = Size(375, 667);
@@ -104,6 +105,7 @@ void main() {
   tearDown(() => swap.close());
 
   _formCases();
+  _desktopCases();
   _cardCases();
   _pickerCases();
   _reviewCases();
