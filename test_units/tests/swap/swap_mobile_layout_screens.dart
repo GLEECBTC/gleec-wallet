@@ -138,11 +138,72 @@ void _sheetCases() {
       expect(swap.events, isEmpty);
     });
 
-    testWidgets('slides in as a side panel on a wide screen', (tester) async {
+    final dialog = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.byType(Material),
+    );
+    final use = find.text('Use 0.5%');
+
+    testWidgets('opens as a small dialog in a wider window, with its button '
+        'right under the choices', (tester) async {
       await open(tester, tablet);
 
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.text('Use 0.5%'), findsOneWidget);
+      final box = tester.getRect(dialog.first);
+      expect(box.width, lessThanOrEqualTo(440));
+      expect(box.center.dx, closeTo(tablet.width / 2, 1));
+      expect(box.center.dy, closeTo(tablet.height / 2, 1));
+      expect(box.height, lessThan(tablet.height / 2));
+      // With no drag handle above, the title keeps its room at the top.
+      expect(
+        tester.getTopLeft(find.text('Slippage')).dy - box.top,
+        greaterThanOrEqualTo(18),
+      );
+      expect(
+        tester.getTopLeft(use).dy -
+            tester.getBottomLeft(find.text('Custom')).dy,
+        lessThan(120),
+      );
+    });
+
+    testWidgets('closes on Escape without saving', (tester) async {
+      await open(tester, tablet);
+      expect(find.byType(Dialog), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+      expect(swap.events, isEmpty);
+    });
+
+    testWidgets('sits above the keyboard, with no room left for it inside', (
+      tester,
+    ) async {
+      const keyboard = 336.0;
+      await open(tester, tablet);
+      await tester.tap(find.text('Custom'));
+      await tester.pumpAndSettle();
+      tester.view.viewInsets = const FakeViewPadding(bottom: keyboard);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.enterText(find.byType(TextField), '3');
+      await tester.pumpAndSettle();
+
+      final box = tester.getRect(dialog.first);
+      expect(box.bottom, lessThanOrEqualTo(tablet.height - keyboard));
+      expect(
+        box.bottom - tester.getBottomLeft(find.text('Use 3%')).dy,
+        lessThan(48),
+      );
+    });
+
+    testWidgets('keeps the side panel in a window too short for a dialog', (
+      tester,
+    ) async {
+      await open(tester, sideways);
+
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(Dialog), findsNothing);
+      expect(use, findsOneWidget);
     });
   });
 }

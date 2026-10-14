@@ -14,7 +14,8 @@ Future<void> showSwapSlippageSheet(BuildContext context, UnifiedSwapBloc bloc) {
   return showSwapSheet<void>(
     context: context,
     label: LocaleKeys.swapSlippageTitle.tr(),
-    // Four choices and a button: a phone keeps the swap in view behind it.
+    // Four choices and a button: only that tall, it keeps the swap in view
+    // behind it.
     fitContent: true,
     builder: (_) => SwapSlippageSheet(
       initial: bloc.state.slippage,
