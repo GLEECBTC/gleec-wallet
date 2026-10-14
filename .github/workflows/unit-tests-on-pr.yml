@@ -22,9 +22,11 @@ env:
 jobs:
   unit_tests:
     runs-on: ubuntu-latest
-    # Setup plus two full suite runs (tests, then coverage) took 14-15 minutes
-    # by 2026-09-28. Each step keeps its own 15-minute bound against a wedge.
-    timeout-minutes: 25
+    # Setup plus two full suite runs (tests, then coverage): 14-15 minutes by
+    # 2026-09-28, 20 by 2026-10-07, and past 25 on a slow runner on 2026-10-14.
+    # Each step keeps its own 15-minute bound against a wedge, so the job
+    # allows setup plus both of those.
+    timeout-minutes: 40
 
     steps:
       - name: Setup GH Actions
