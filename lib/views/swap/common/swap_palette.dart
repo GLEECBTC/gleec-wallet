@@ -286,8 +286,8 @@ abstract final class SwapGeometry {
   /// The minimum interactive size.
   static const touchTarget = 48.0;
 
-  /// Width below which the swap screens take their phone layout: tighter
-  /// cards and no display title, which the selected tab already names.
+  /// Width below which the swap screens take their phone layout, with
+  /// tighter cards.
   static const compactWidth = 600.0;
 
   /// Height below which a screen's main action is pinned, as on a phone

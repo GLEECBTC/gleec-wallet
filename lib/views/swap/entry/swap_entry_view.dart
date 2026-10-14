@@ -231,8 +231,8 @@ class _SwapEntryViewState extends State<SwapEntryView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // The selected tab already names the screen on a phone.
-                SwapPageHeading(title: LocaleKeys.swap.tr(), visible: !compact),
+                // The selected tab already names the screen.
+                SwapPageHeading(title: LocaleKeys.swap.tr(), visible: false),
                 if (!state.tradingEnabled) ...[
                   SwapCallout(
                     tone: SwapTone.warning,

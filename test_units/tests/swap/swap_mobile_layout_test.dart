@@ -211,13 +211,20 @@ void _formCases() {
   });
 
   group('the form on a wide screen', () {
-    testWidgets('keeps its title, and the main action after the quote', (
-      tester,
-    ) async {
+    testWidgets('draws no title either, and the main action follows the '
+        'quote', (tester) async {
       await pump(tester, swapPricedForm(), size: tablet);
 
       expect(footer, findsNothing);
-      expect(find.text('Swap'), findsOneWidget);
+      expect(find.text('Swap'), findsNothing);
+      expect(
+        find.semantics.byPredicate(
+          (node) =>
+              node.getSemanticsData().label == 'Swap' &&
+              node.getSemanticsData().flagsCollection.isHeader,
+        ),
+        findsOneWidget,
+      );
       expect(
         above(tester, find.byType(SwapQuoteStrip), swapPrimaryAction),
         isTrue,
