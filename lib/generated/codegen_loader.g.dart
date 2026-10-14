@@ -1389,6 +1389,7 @@ abstract class LocaleKeys {
   static const swapToAddress = 'swapToAddress';
   static const swapYourAddress = 'swapYourAddress';
   static const swapSelectAsset = 'swapSelectAsset';
+  static const swapNetworkSegwit = 'swapNetworkSegwit';
   static const swapChooseNetwork = 'swapChooseNetwork';
   static const swapSwitchDirection = 'swapSwitchDirection';
   static const swapAmountToPay = 'swapAmountToPay';

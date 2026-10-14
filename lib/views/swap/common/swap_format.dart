@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_tickers.dart';
 
 /// Which way a displayed figure may be rounded.
@@ -172,6 +173,15 @@ abstract final class SwapFormat {
   /// The ticker a user knows an asset by: "USDT", not "USDT-ERC20", and
   /// "USDC (OLD)" for a legacy asset.
   static String ticker(AssetId asset) => swapTicker(asset);
+
+  /// The network to show beside a choosable asset. A SegWit coin shares its
+  /// ticker and network with the legacy one, so it says which it is.
+  static String network(AssetId asset, SwapNetworks networks) {
+    final name = networks.networkOf(asset);
+    return asset.isSegwit
+        ? LocaleKeys.swapNetworkSegwit.tr(args: [name])
+        : name;
+  }
 
   static Decimal _round(Decimal value, int scale, SwapRounding rounding) =>
       switch (rounding) {
