@@ -143,6 +143,8 @@ void main() {
         isBlocked: (_) => false,
       ),
     );
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Not available with GLEEC'), findsOneWidget);
     expect(
@@ -226,6 +228,8 @@ void main() {
         showTestCoins: false,
       ),
     );
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
 
     expect(find.text(SwapFormat.ticker(testEth)), findsNothing);
     expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
@@ -248,7 +252,13 @@ void main() {
       services.balances = {eth: d('1.5')};
       await open(tester, picker());
 
-      // Nothing is held without a wallet, so it opens on All.
+      // Nothing is held without a wallet: no My assets, and it opens on the
+      // most traded rather than the alphabet. All still lists everything.
+      expect(find.text('My assets'), findsNothing);
+      expect(find.text(SwapFormat.ticker(paxg)), findsNothing);
+      expect(find.text(SwapFormat.ticker(eth)), findsWidgets);
+      await tester.tap(find.text('All'));
+      await tester.pumpAndSettle();
       expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
       expect(find.text('Not active'), findsNothing);
       expect(find.text('Activate'), findsNothing);
@@ -344,9 +354,10 @@ void main() {
       await services.preferences.rememberHideZeroBalances(true);
       await open(tester, picker(SwapPickerSide.pay));
 
-      // Nothing is held, so the picker opens on All, with everything hidden.
+      // Nothing is held, so the picker opens on Popular, everything hidden.
       expect(find.text('No assets with a balance here'), findsOneWidget);
       await tapText(tester, 'Show all assets');
+      await tapText(tester, 'All');
 
       expect(find.text(SwapFormat.ticker(paxg)), findsOneWidget);
       expect(await services.preferences.hideZeroBalances(), isFalse);
