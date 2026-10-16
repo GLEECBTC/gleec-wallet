@@ -121,13 +121,14 @@ const int? matomoPlatformDimensionId =
 const String moralisProxyUrl = 'https://moralis.gleec.com';
 const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
 
-/// Explicit build-time flag for the TRON GasFree rail.
+/// Build-time flag for the TRON GasFree rail: on unless a build passes
+/// `--dart-define=TRON_GASLESS_ENABLED=false`.
 ///
 /// Provider/runtime policy must also validate before sending or receiving is
 /// eligible.
 const bool tronGaslessEnabled = bool.fromEnvironment(
   'TRON_GASLESS_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// Additional build-time flag for exposing GasFree custody addresses.
@@ -137,7 +138,7 @@ const bool tronGaslessEnabled = bool.fromEnvironment(
 /// wallet, and freshness checks remain fail-closed.
 const bool tronGaslessReceiveEnabled = bool.fromEnvironment(
   'TRON_GASLESS_RECEIVE_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 const String _tronGaslessBuildPolicyDisabled =
@@ -201,7 +202,7 @@ String tronGaslessBuildPolicyMarkerFor({
 /// Override at build time via `--dart-define=TRON_GASLESS_BASE_URL=...`.
 const String tronGaslessBaseUrl = String.fromEnvironment(
   'TRON_GASLESS_BASE_URL',
-  defaultValue: '',
+  defaultValue: 'https://quicknode.gleec.com/gasfree/tron',
 );
 
 /// Returns the configured GasFree network path (`tron` or `nile`) when the
@@ -241,7 +242,7 @@ String? tronGaslessNetworkPath(String rawBaseUrl) {
 /// Override at build time via `--dart-define=TRON_GASLESS_SERVICE_PROVIDER=...`.
 const String tronGaslessServiceProvider = String.fromEnvironment(
   'TRON_GASLESS_SERVICE_PROVIDER',
-  defaultValue: '',
+  defaultValue: 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
 );
 
 /// Conservative validation for the pinned TRON service-provider address.

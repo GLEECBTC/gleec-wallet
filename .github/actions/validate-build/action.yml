@@ -4,23 +4,23 @@ inputs:
   EXPECTED_TRON_GASLESS_ENABLED:
     description: "Whether the compiled Flutter web build must enable GasFree send"
     required: false
-    default: "false"
+    default: "true"
   EXPECTED_TRON_GASLESS_RECEIVE_ENABLED:
     description: "Whether the compiled Flutter web build must enable GasFree receive"
     required: false
-    default: "false"
+    default: "true"
   EXPECTED_TRON_GASLESS_BASE_URL:
     description: "TRON GasFree provider base URL expected in the compiled Flutter web build"
     required: false
-    default: ""
+    default: "https://quicknode.gleec.com/gasfree/tron"
   EXPECTED_TRON_GASLESS_SERVICE_PROVIDER:
     description: "TRON GasFree service provider address expected in the compiled Flutter web build"
     required: false
-    default: ""
+    default: "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
   EXPECTED_TRON_GASLESS_NETWORK:
     description: "Optional deployment-policy restriction for the GasFree network path (tron/nile)"
     required: false
-    default: ""
+    default: "tron"
 runs:
   using: "composite"
   steps:
@@ -133,7 +133,7 @@ runs:
         if [ -n "$TRON_GASLESS_BASE_URL" ]; then
           echo "TRON GasFree build configuration and switches verified."
         else
-          echo "TRON GasFree endpoint is not embedded in this disabled-by-default build."
+          echo "No expected TRON GasFree base URL given; endpoint check skipped."
         fi
 
         # Check that the generated KMD icon exists and was registered in the

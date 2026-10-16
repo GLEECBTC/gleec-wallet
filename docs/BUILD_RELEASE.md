@@ -49,6 +49,27 @@ Example:
 flutter build apk
 ```
 
+### GasFree TRON settings
+
+GasFree TRON (sending and receiving TRC-20 tokens without holding TRX) is on by default: the app's defaults are these production values, which CI and `.docker/build.sh` also pass explicitly.
+
+```bash
+--dart-define=TRON_GASLESS_ENABLED=true \
+--dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+--dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+--dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+```
+
+To build without it, pass `--dart-define=TRON_GASLESS_ENABLED=false` and `--dart-define=TRON_GASLESS_RECEIVE_ENABLED=false`.
+
+To check a finished build, look for the base URL in the compiled app. It is absent when GasFree is off:
+
+```bash
+strings build/linux/x64/release/bundle/lib/libapp.so | grep -c quicknode.gleec.com/gasfree/tron
+```
+
+On macOS the compiled app is `Gleec DEX.app/Contents/Frameworks/App.framework/App`.
+
 ## Docker builds
 
 Prerequisite (ensure SDK submodule is initialized to the pinned commit):

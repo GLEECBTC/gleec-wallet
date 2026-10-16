@@ -24,6 +24,8 @@ import 'views/settings/seed_private_key_export_guard_test.dart'
 import 'support/contrast_test.dart' as contrast_test;
 import 'theme/theme_color_roles_test.dart' as theme_color_roles_test;
 import 'shared/widgets/auto_scroll_text_test.dart' as auto_scroll_text_test;
+import 'shared/widgets/scale_down_or_scroll_test.dart'
+    as scale_down_or_scroll_test;
 import 'shared/widgets/notice_banner_test.dart' as notice_banner_test;
 import 'shared/widgets/reduced_motion_scope_test.dart'
     as reduced_motion_scope_test;
@@ -394,6 +396,7 @@ import 'tests/balance_utils/coins_state_usd_conversion_test.dart';
 import 'tests/analytics/frame_gap_metrics_test.dart';
 import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
+import 'tests/wallet/mobile_coin_row_title_test.dart';
 import 'tests/wallet/coins_repo_activation_wallet_race_test.dart';
 import 'tests/services/legal_acceptance_test.dart';
 import 'tests/services/legal_refresh_test.dart' as legal_refresh_test;
@@ -434,6 +437,7 @@ import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
 import 'tests/utils/convert_fract_rat_tests.dart';
 import 'tests/utils/double_to_string_tests.dart';
+import 'tests/utils/format_list_balance_tests.dart';
 import 'tests/utils/explorer_url_tests.dart';
 import 'tests/utils/get_fiat_amount_tests.dart';
 import 'tests/utils/get_usd_balance_tests.dart';
@@ -443,12 +447,11 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 /// Run in terminal flutter test test_units/main.dart
 /// More info at documentation "Unit and Widget testing" section
 ///
-/// The GasFree suites need the feature compiled in. A plain
-/// `flutter test test_units/main.dart` leaves `tronGaslessServiceProvider`
-/// empty, so every provider-identity check fails closed and ~36 gas-free tests
-/// cannot reach the states they assert. That is the compiled configuration
-/// behaving correctly, not a broken test. CI passes these
-/// (.github/workflows/unit-tests-on-pr.yml); to reproduce it locally:
+/// The GasFree suites need the feature compiled in, which it is by default.
+/// A build that turns it off, or leaves `tronGaslessServiceProvider` empty,
+/// fails every provider-identity check closed, and ~36 gas-free tests cannot
+/// reach the states they assert. CI pins the values explicitly
+/// (.github/workflows/unit-tests-on-pr.yml); to do the same locally:
 ///
 /// ```sh
 /// flutter test test_units/main.dart \
@@ -475,6 +478,7 @@ void main() {
   notice_banner_test.main();
   reduced_motion_scope_test.main();
   auto_scroll_text_test.main();
+  scale_down_or_scroll_test.main();
   app_error_handling_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
@@ -487,6 +491,7 @@ void main() {
   inline_legal_acceptance_test.main();
   group('Formatters:', () {
     testCutTrailingZeros();
+    testFormatListBalance();
     testFormatAmount();
     testToStringAmount();
     testLeadingZeros();
@@ -588,6 +593,7 @@ void main() {
   testFrameGapMetrics();
   testCoinSortOrder();
   testCoinsBlocBalanceEmit();
+  testMobileCoinRowTitle();
   testLegalAcceptance();
   legal_refresh_test.main();
   trading_status_service_test.main();
