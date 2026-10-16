@@ -1,0 +1,243 @@
+part of 'swap_amount_cards.dart';
+
+/// The button that opens the asset picker for one side.
+class SwapAssetPill extends StatelessWidget {
+  const SwapAssetPill({
+    required this.asset,
+    required this.network,
+    required this.onTap,
+    required this.semanticLabel,
+    this.hasError = false,
+    super.key,
+  });
+
+  final AssetId? asset;
+  final String? network;
+  final VoidCallback? onTap;
+  final String semanticLabel;
+  final bool hasError;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SwapPalette.of(context);
+    final asset = this.asset;
+    // Nothing chosen yet, it reads as the next thing to do, with its whole
+    // label: no icon takes the room a phone has for it.
+    final choose = asset == null;
+    return SwapButtonSemantics(
+      label: asset == null
+          ? semanticLabel
+          : '$semanticLabel: ${SwapFormat.ticker(asset)}, $network',
+      onTap: onTap,
+      child: Material(
+        color: choose ? palette.selected : palette.surfaceHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: hasError
+                ? palette.danger
+                : choose
+                ? palette.brand
+                : palette.controlBorder,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(choose ? 14 : 10, 8, 8, 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (asset != null) ...[
+                    SwapTokenIcon(asset: asset, size: 30),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          asset == null
+                              ? LocaleKeys.swapSelectAsset.tr()
+                              : SwapFormat.ticker(asset),
+                          style: SwapText.strong(context).copyWith(height: 1.1),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (asset != null && network != null) ...[
+                          const SizedBox(height: 3),
+                          // Two lines before a long network name is cut: the
+                          // amount beside the pill is taller anyway.
+                          Text(
+                            network!,
+                            style: SwapText.small(
+                              context,
+                            ).copyWith(height: 1.25),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 22,
+                    color: choose ? palette.brandHover : palette.textSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "From 0x5520…7B91" / "To 0x80A1…42F0": tap copies the full address.
+class _AddressFooterButton extends StatelessWidget {
+  const _AddressFooterButton({
+    required this.prefix,
+    required this.address,
+    required this.asset,
+  });
+
+  final String Function(String) prefix;
+  final String? address;
+
+  /// The asset the wallet could be paid in at [address].
+  final AssetId? asset;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = this.address;
+    final palette = SwapPalette.of(context);
+    if (address == null) {
+      return const SizedBox(height: 48);
+    }
+    void copy() => copyPayableAddress(
+      context,
+      address,
+      asset: asset,
+      successMessage: LocaleKeys.swapAddressCopied.tr(),
+    );
+    return SwapButtonSemantics(
+      label: '${prefix(address)}. ${LocaleKeys.swapCopyAddress.tr()}',
+      onTap: copy,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: copy,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    prefix(SwapFormat.short(address)),
+                    style: SwapText.small(
+                      context,
+                    ).copyWith(color: palette.textSecondary),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.content_copy_rounded,
+                  size: 14,
+                  color: palette.textTertiary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The round button between the cards that swaps the two sides.
+class SwapSwitchButton extends StatelessWidget {
+  const SwapSwitchButton({required this.onPressed, super.key});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = SwapPalette.of(context);
+    return SwapButtonSemantics(
+      label: LocaleKeys.swapSwitchDirection.tr(),
+      onTap: onPressed,
+      child: Tooltip(
+        message: LocaleKeys.swapSwitchDirection.tr(),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: palette.canvas, width: 6),
+          ),
+          child: Material(
+            color: palette.surfaceHighest,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: Icon(
+                Icons.swap_vert_rounded,
+                size: 20,
+                color: palette.text,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Accepts one decimal separator (either `.` or `,`, stored as `.`) and at
+/// most [maxDecimals] places. Past them, the last digits drop: a digit typed
+/// into full places goes in and pushes the last one out.
+class _DecimalInputFormatter extends TextInputFormatter {
+  _DecimalInputFormatter({required this.maxDecimals});
+
+  final int maxDecimals;
+
+  static final _number = RegExp(r'^\d*\.?\d*$');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text.replaceAll(',', '.');
+    if (!_number.hasMatch(text)) return oldValue;
+    final point = text.indexOf('.');
+    if (point < 0) return newValue.copyWith(text: text);
+    // An amount set with more places, such as from a link, loses no more
+    // than an edit adds, and can always be shortened.
+    final oldPoint = oldValue.text.indexOf('.');
+    final limit = oldPoint < 0
+        ? maxDecimals
+        : math.max(maxDecimals, oldValue.text.length - oldPoint - 1);
+    if (limit == 0 && oldPoint < 0) return oldValue;
+    final end = point + 1 + limit;
+    if (text.length <= end) return newValue.copyWith(text: text);
+    final selection = newValue.selection;
+    return TextEditingValue(
+      text: text.substring(0, end),
+      selection: selection.copyWith(
+        baseOffset: math.min(selection.baseOffset, end),
+        extentOffset: math.min(selection.extentOffset, end),
+      ),
+    );
+  }
+}

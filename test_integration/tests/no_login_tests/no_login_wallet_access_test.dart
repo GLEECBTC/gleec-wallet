@@ -7,6 +7,7 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/main.dart' as app;
 import 'package:web_dex/model/settings_menu_value.dart';
 
+import '../../common/goto.dart' as goto;
 import '../../helpers/accept_alpha_warning.dart';
 
 Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
@@ -77,6 +78,8 @@ Future<void> testNoLoginWalletAccess(WidgetTester tester) async {
 
   await tester.tap(dexMenuButton);
   await tester.pumpAndSettle();
+  // The maker and taker forms are on the Advanced destination.
+  await goto.advancedSwapDestination(tester);
 
   expect(dexPageTabBar, findsNothing);
   await tester.tap(takeOrderTab);

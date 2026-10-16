@@ -64,9 +64,12 @@ import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/services/platform_web_api/platform_web_api.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/utils/debug_utils.dart';
 import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/widgets/reduced_motion_scope.dart';
+import 'package:web_dex/views/swap/notices/swap_tab_signals.dart';
 
 class AppBlocRoot extends StatelessWidget {
   const AppBlocRoot({
@@ -179,6 +182,19 @@ class AppBlocRoot extends StatelessWidget {
         ),
         RepositoryProvider(create: (_) => OrderbookBloc(sdk: komodoDefiSdk)),
         RepositoryProvider(create: (_) => myOrdersService),
+        // App-wide so a swap keeps being followed — and is resumed at sign-in
+        // — whichever screen is open.
+        RepositoryProvider(
+          lazy: false,
+          create: (_) => SwapServices(
+            sdk: komodoDefiSdk,
+            coinsRepo: coinsRepository,
+            dexRepository: dexRepository,
+            orders: myOrdersService,
+            mm2Api: mm2Api,
+          ),
+          dispose: (services) => services.dispose().ignore(),
+        ),
         RepositoryProvider(
           create: (_) => KmdRewardsBloc(coinsRepository, mm2Api),
         ),
@@ -366,6 +382,14 @@ class _MyAppViewState extends State<_MyAppView> {
       supportedLocales: context.supportedLocales,
       routeInformationParser: _routeInformationParser,
       backButtonDispatcher: _airDexBackButtonDispatcher,
+      builder: (context, child) => ReducedMotionScope(
+        child: SwapTabSignals(
+          // The colour MaterialApp gives its own title, kept as the page's
+          // theme colour.
+          color: theme.global.light.primaryColor,
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 

@@ -9,12 +9,16 @@ class PageLayout extends StatelessWidget {
     this.header,
     this.noBackground = true,
     this.padding,
+    this.showBackupNotice = true,
   });
 
   final Widget content;
   final Widget? header;
   final bool noBackground;
   final EdgeInsetsGeometry? padding;
+
+  /// Off for a page whose host already shows the seed backup notice.
+  final bool showBackupNotice;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +28,7 @@ class PageLayout extends StatelessWidget {
         content: content,
         noBackground: noBackground,
         padding: padding ?? EdgeInsets.zero,
+        showBackupNotice: showBackupNotice,
       );
     }
     return _DesktopLayout(
@@ -31,6 +36,7 @@ class PageLayout extends StatelessWidget {
       content: content,
       noBackground: noBackground,
       padding: padding ?? PagePlate.standardPadding,
+      showBackupNotice: showBackupNotice,
     );
   }
 }
@@ -38,6 +44,7 @@ class PageLayout extends StatelessWidget {
 class _MobileLayout extends StatelessWidget {
   const _MobileLayout({
     required this.content,
+    required this.showBackupNotice,
     this.header,
     this.noBackground = false,
     this.padding = PagePlate.standardPadding,
@@ -47,13 +54,14 @@ class _MobileLayout extends StatelessWidget {
   final Widget content;
   final bool noBackground;
   final EdgeInsetsGeometry padding;
+  final bool showBackupNotice;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.max,
       children: [
-        const BackupSeedNotification(hideOnMobile: false),
+        if (showBackupNotice) const BackupSeedNotification(hideOnMobile: false),
         if (header != null) header!,
         Flexible(
           child: PagePlate(
@@ -70,6 +78,7 @@ class _MobileLayout extends StatelessWidget {
 class _DesktopLayout extends StatelessWidget {
   const _DesktopLayout({
     required this.content,
+    required this.showBackupNotice,
     this.header,
     this.noBackground = false,
     this.padding,
@@ -79,12 +88,13 @@ class _DesktopLayout extends StatelessWidget {
   final Widget? header;
   final bool noBackground;
   final EdgeInsetsGeometry? padding;
+  final bool showBackupNotice;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const BackupSeedNotification(),
+        if (showBackupNotice) const BackupSeedNotification(),
         Flexible(
           child: PagePlate(
             noBackground: noBackground,

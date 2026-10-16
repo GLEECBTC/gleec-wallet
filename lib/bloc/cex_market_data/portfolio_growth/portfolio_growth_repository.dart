@@ -119,8 +119,12 @@ class PortfolioGrowthRepository {
     final methodStopwatch = Stopwatch()..start();
     _log.fine('Getting growth chart for coin: ${coinId.id}');
 
-    final currentUser = await _sdk.auth.currentUser;
-    if (currentUser == null) {
+    // HD mode is part of the session's wallet identity. `currentUser` would
+    // re-verify it against KDF, two RPCs for every coin on every refresh.
+    final bool isHdWallet;
+    try {
+      isHdWallet = (await _sdk.auth.captureSessionContext()).walletId.isHd;
+    } on AuthSessionChangedException {
       _log.warning('User is not logged in when fetching growth chart');
       throw Exception('User is not logged in');
     }
@@ -130,7 +134,7 @@ class PortfolioGrowthRepository {
         coinId,
         fiatCoinId,
         walletId,
-        currentUser,
+        isHdWallet,
         methodStopwatch,
       );
     }
@@ -168,7 +172,7 @@ class PortfolioGrowthRepository {
         fiatCoinId: fiatCoinId,
         graphType: GraphType.balanceGrowth,
         walletId: walletId,
-        isHdWallet: currentUser.isHd,
+        isHdWallet: isHdWallet,
       );
       final existingCache = await _graphCache.get(compoundKey);
       if (existingCache != null && existingCache.graph.isNotEmpty) {
@@ -190,7 +194,7 @@ class PortfolioGrowthRepository {
           graph: List.empty(),
           graphType: GraphType.balanceGrowth,
           walletId: walletId,
-          isHdWallet: currentUser.isHd,
+          isHdWallet: isHdWallet,
         ),
       );
       cacheInsertStopwatch.stop();
@@ -276,7 +280,7 @@ class PortfolioGrowthRepository {
         graph: portfolowGrowthChart,
         graphType: GraphType.balanceGrowth,
         walletId: walletId,
-        isHdWallet: currentUser.isHd,
+        isHdWallet: isHdWallet,
       ),
     );
     cacheInsertStopwatch.stop();
@@ -297,7 +301,7 @@ class PortfolioGrowthRepository {
     AssetId coinId,
     String fiatCoinId,
     String walletId,
-    KdfUser currentUser,
+    bool isHdWallet,
     Stopwatch methodStopwatch,
   ) async {
     final cacheStopwatch = Stopwatch()..start();
@@ -306,7 +310,7 @@ class PortfolioGrowthRepository {
       fiatCoinId: fiatCoinId,
       graphType: GraphType.balanceGrowth,
       walletId: walletId,
-      isHdWallet: currentUser.isHd,
+      isHdWallet: isHdWallet,
     );
     final GraphCache? cachedGraph = await _graphCache.get(compoundKey);
     final cacheExists = cachedGraph != null;

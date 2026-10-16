@@ -27,7 +27,9 @@ import 'package:web_dex/views/common/main_menu/main_menu_bar_mobile.dart';
 import 'package:web_dex/bloc/coins_manager/coins_manager_bloc.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/model/main_menu_value.dart';
+import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/widgets/quick_login_switch.dart';
+import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -109,6 +111,7 @@ class _MainLayoutState extends State<MainLayout> {
         if (state.mode == AuthorizeMode.logIn) {
           QuickLoginSwitch.trackUserLoggedIn();
           unawaited(_requestStoragePersistence());
+          if (context.read<SwapServices?>()?.signInFromSwap ?? false) return;
           routingState.selectedMenu = MainMenuValue.wallet;
           return;
         }
@@ -129,7 +132,9 @@ class _MainLayoutState extends State<MainLayout> {
               floatingActionButtonLocation:
                   FloatingActionButtonLocation.endFloat,
               appBar: null,
-              body: SafeArea(child: MainLayoutRouter()),
+              body: SafeArea(
+                child: SwapNoticeListener(child: MainLayoutRouter()),
+              ),
               bottomNavigationBar: (isMobile || isTablet)
                   ? MainMenuBarMobile()
                   : null,
@@ -140,6 +145,11 @@ class _MainLayoutState extends State<MainLayout> {
                     routingState.walletState.selectedCoin.isEmpty &&
                     routingState.walletState.action.isEmpty &&
                     context.watch<AuthBloc>().state.mode == AuthorizeMode.logIn,
+                // Swap pins full-width actions to the bottom of its screens,
+                // where the button would sit over them. Settings still offers
+                // feedback.
+                showFeedbackButton:
+                    routingState.selectedMenu != MainMenuValue.dex,
                 isMini: isMobile,
               ),
             );
@@ -190,10 +200,12 @@ class MainLayoutFab extends StatelessWidget {
     super.key,
     required this.showAddCoinButton,
     required this.isMini,
+    this.showFeedbackButton = true,
   });
 
   final bool showAddCoinButton;
   final bool isMini;
+  final bool showFeedbackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -216,7 +228,8 @@ class MainLayoutFab extends StatelessWidget {
           )
         : null;
 
-    final Widget? feedbackFab = context.isFeedbackAvailable
+    final Widget? feedbackFab =
+        showFeedbackButton && context.isFeedbackAvailable
         ? Tooltip(
             message: 'Report a bug or feedback',
             child: SizedBox.square(

@@ -47,10 +47,14 @@ void testNumberWithoutExponent() {
     expect(getNumberWithoutExponent('1e+20'), '100000000000000000000');
     expect(getNumberWithoutExponent('-1e+19'), '-10000000000000000000');
     expect(getNumberWithoutExponent('1e+21'), '1000000000000000000000');
-    expect(getNumberWithoutExponent('1e+50'),
-        '100000000000000000000000000000000000000000000000000');
-    expect(getNumberWithoutExponent('1e+100'),
-        '10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000');
+    expect(
+      getNumberWithoutExponent('1e+50'),
+      '100000000000000000000000000000000000000000000000000',
+    );
+    expect(
+      getNumberWithoutExponent('1e+100'),
+      '10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    );
 
     expect(getNumberWithoutExponent('-1.2354e+3'), '-1235.4');
     expect(getNumberWithoutExponent('-1.235400002e+5'), '-123540.0002');
