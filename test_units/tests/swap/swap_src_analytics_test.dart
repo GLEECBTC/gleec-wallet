@@ -319,6 +319,7 @@ void main() {
         'route_failed',
         'safety_check',
         'quote_unavailable',
+        'network_fee',
         'restarted',
         'exchange_failed',
         'internal',

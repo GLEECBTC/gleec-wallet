@@ -12,6 +12,7 @@ import 'package:web_dex/shared/swap/swap_analytics.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
@@ -93,15 +94,17 @@ class _SwapNoticeListenerState extends State<SwapNoticeListener> {
         final ticker = asset == null
             ? snapshot.toTicker
             : SwapFormat.ticker(asset);
+        final received = amount == null
+            ? ticker
+            : SwapFormat.tokens(amount, ticker, rounding: SwapRounding.down);
         return LocaleKeys.swapNoticeCompleted.tr(
           args: [
-            amount == null
-                ? ticker
-                : SwapFormat.tokens(
-                    amount,
-                    ticker,
-                    rounding: SwapRounding.down,
-                  ),
+            if (amount != null && snapshot.outcome!.receivedReported)
+              LocaleKeys.swapReceivedReported.tr(
+                args: [received, SwapTermsRepository.provider],
+              )
+            else
+              received,
           ],
         );
       case SwapExecutionNoticeKind.refunded:

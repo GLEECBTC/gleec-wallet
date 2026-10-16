@@ -4,6 +4,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 
@@ -161,14 +162,19 @@ class SwapExecutionCopy {
   }
 
   String get _received {
-    final amount = snapshot.outcome?.receivedAmount;
-    return amount == null
-        ? receivedTicker
-        : SwapFormat.tokens(
-            amount,
-            receivedTicker,
-            rounding: SwapRounding.down,
-          );
+    final outcome = snapshot.outcome;
+    final amount = outcome?.receivedAmount;
+    if (outcome == null || amount == null) return receivedTicker;
+    final received = SwapFormat.tokens(
+      amount,
+      receivedTicker,
+      rounding: SwapRounding.down,
+    );
+    return outcome.receivedReported
+        ? LocaleKeys.swapReceivedReported.tr(
+            args: [received, SwapTermsRepository.provider],
+          )
+        : received;
   }
 
   /// The status hero while running; the outcome once finished.

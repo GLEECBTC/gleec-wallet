@@ -154,6 +154,14 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
         icon: Icons.price_change_outlined,
         tone: SwapTone.warning,
       ),
+      SwapFailureReason.networkFee => SwapHeroCopy(
+        title: LocaleKeys.swapFailNetworkFeeTitle.tr(),
+        body: _unlessMoved(
+          LocaleKeys.swapFailNetworkFeeBody.tr(args: [fromNetwork]),
+        ),
+        icon: Icons.local_gas_station_outlined,
+        tone: SwapTone.warning,
+      ),
       SwapFailureReason.restarted => SwapHeroCopy(
         title: LocaleKeys.swapFailRestartTitle.tr(),
         body: _unlessMoved(LocaleKeys.swapFailRestartBody.tr()),

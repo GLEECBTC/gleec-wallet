@@ -77,7 +77,7 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     final feeBalance = next.feeBalance;
     if (feeAsset != null &&
         feeBalance != null &&
-        quote.costOnTopIn(feeAsset) > feeBalance) {
+        quote.fundingOnTopIn(feeAsset) > feeBalance) {
       return SwapFormIssue.insufficientForFees;
     }
     return null;

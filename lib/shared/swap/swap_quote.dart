@@ -289,6 +289,7 @@ class SwapQuote extends Equatable {
     this.pricing = const SwapQuotePricing(),
     this.feesKnown = true,
     this.refundReserve,
+    this.requiredGasBalance,
     this.diagnostic,
     this.payload,
   });
@@ -358,6 +359,12 @@ class SwapQuote extends Equatable {
   /// refunded. Spent only then, so it is not a fee. Null when nothing more
   /// needs keeping, or [feesKnown] is false.
   final Decimal? refundReserve;
+
+  /// For a routed quote: what the engine requires the network's own coin to
+  /// hold for gas before it sends, every transaction at its gas limit and fee
+  /// cap. It stands in for the estimated network fees in a balance check,
+  /// never added to them. Null when the engine reports none.
+  final Decimal? requiredGasBalance;
 
   /// Infrastructure identity (provider, tool) for support diagnostics. Never
   /// shown as primary copy.
@@ -436,6 +443,23 @@ class SwapQuote extends Equatable {
   Decimal costOnTopIn(AssetId asset) =>
       feesOnTopIn(asset).fold(Decimal.zero, (sum, fee) => sum + fee.amount);
 
+  /// What starting this needs [asset]'s balance to hold besides
+  /// [sellAmount]: [costOnTopIn], with [requiredGasBalance] in place of the
+  /// estimated network fees when [asset] is the network coin paying them.
+  Decimal fundingOnTopIn(AssetId asset) {
+    final total = costOnTopIn(asset);
+    final required = requiredGasBalance;
+    if (required == null || asset != (from.parentId ?? from)) return total;
+    final gas = feesOnTopIn(asset)
+        .where(
+          (fee) =>
+              fee.kind == SwapFeeKind.network ||
+              fee.kind == SwapFeeKind.approvalNetwork,
+        )
+        .fold(Decimal.zero, (sum, fee) => sum + fee.amount);
+    return total - gas + (required > gas ? required : gas);
+  }
+
   /// A copy with [pricing] and fee USD values replaced.
   SwapQuote withPricing(
     SwapQuotePricing pricing, {
@@ -461,6 +485,7 @@ class SwapQuote extends Equatable {
     pricing: pricing,
     feesKnown: feesKnown,
     refundReserve: refundReserve,
+    requiredGasBalance: requiredGasBalance,
     diagnostic: diagnostic,
     payload: payload,
   );
@@ -487,6 +512,7 @@ class SwapQuote extends Equatable {
     pricing,
     feesKnown,
     refundReserve,
+    requiredGasBalance,
     diagnostic,
   ];
 }
