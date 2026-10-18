@@ -329,6 +329,7 @@ import 'tests/swap/swap_surface_ui_running_test.dart'
     as swap_surface_ui_running_test;
 import 'tests/swap/swap_surface_ui_scope_test.dart'
     as swap_surface_ui_scope_test;
+import 'tests/swap/swap_surface_ui_seen_test.dart' as swap_surface_ui_seen_test;
 import 'tests/swap/swap_surface_ui_shell_test.dart'
     as swap_surface_ui_shell_test;
 import 'tests/swap/swap_common_ui_actions_test.dart'
@@ -764,6 +765,7 @@ void main() {
   swap_surface_ui_progress_test.main();
   swap_surface_ui_running_test.main();
   swap_surface_ui_scope_test.main();
+  swap_surface_ui_seen_test.main();
   swap_surface_ui_shell_test.main();
   swap_common_ui_actions_test.main();
   swap_common_ui_buttons_test.main();
