@@ -109,6 +109,19 @@ abstract final class SwapTimeline {
         stages.length - 1,
       );
 
+  /// Whether a swap that resets its permission first has yet to send the
+  /// reset: the reset's hash comes first among the approvals.
+  static bool _resetting(SwapExecutionSnapshot s) =>
+      (s.approval?.resetsFirst ?? false) && s.evidence.approvalTxHashes.isEmpty;
+
+  /// Whether a swap that resets its permission first stopped with only the
+  /// reset sent. Then neither the approval nor the send went out, whatever
+  /// the funds' movement says: the reset's gas reads as fees paid.
+  static bool _resetOnly(SwapExecutionSnapshot s) =>
+      (s.approval?.resetsFirst ?? false) &&
+      s.evidence.approvalTxHashes.length == 1 &&
+      s.evidence.sourceTxHash == null;
+
   /// Where the swap is (or stopped) in [stages].
   static int _position(SwapExecutionSnapshot s, List<SwapRouteStage> stages) {
     const afterSend = [
@@ -124,12 +137,9 @@ abstract final class SwapTimeline {
           null:
         return _firstOf(stages, const [SwapRouteStageKind.prepare]);
       case SwapProgressStage.approving:
-        final resetting =
-            (s.approval?.resetsFirst ?? false) &&
-            s.evidence.approvalTxHashes.isEmpty;
         return _firstOf(
           stages,
-          resetting
+          _resetting(s)
               ? const [
                   SwapRouteStageKind.resetApproval,
                   SwapRouteStageKind.approve,
@@ -186,6 +196,10 @@ abstract final class SwapTimeline {
       );
     }
     final sendIndex = _firstOf(stages, const [SwapRouteStageKind.send]);
+    final approveIndex = _firstOf(stages, const [
+      SwapRouteStageKind.approve,
+      SwapRouteStageKind.send,
+    ]);
     switch (outcome.kind) {
       case SwapOutcomeKind.completed ||
           SwapOutcomeKind.partialBelowMinimum ||
@@ -193,19 +207,36 @@ abstract final class SwapTimeline {
         return List.filled(count, SwapStepStatus.done);
       case SwapOutcomeKind.cancelled || SwapOutcomeKind.noMatch:
         final approvals = s.evidence.approvalTxHashes.isNotEmpty;
-        return upTo(approvals ? sendIndex : 0, SwapStepStatus.cancelled);
+        return upTo(
+          _resetOnly(s)
+              ? approveIndex
+              : approvals
+              ? sendIndex
+              : 0,
+          SwapStepStatus.cancelled,
+        );
       case SwapOutcomeKind.refunded:
         return upTo(_stepAfterSend(stages), SwapStepStatus.refunded);
       case SwapOutcomeKind.failed:
         final reason = outcome.failure?.reason;
         final int at;
         if (reason == SwapFailureReason.approvalFailed) {
-          at = _firstOf(stages, const [
-            SwapRouteStageKind.approve,
-            SwapRouteStageKind.resetApproval,
-          ]);
+          at = _firstOf(
+            stages,
+            _resetting(s)
+                ? const [
+                    SwapRouteStageKind.resetApproval,
+                    SwapRouteStageKind.approve,
+                  ]
+                : const [
+                    SwapRouteStageKind.approve,
+                    SwapRouteStageKind.resetApproval,
+                  ],
+          );
         } else if (s.fundsMovement == SwapFundsMovement.sent) {
           at = _stepAfterSend(stages);
+        } else if (_resetOnly(s)) {
+          at = approveIndex;
         } else if (s.fundsMovement == SwapFundsMovement.none) {
           at = s.evidence.approvalTxHashes.isNotEmpty ? sendIndex : 0;
         } else {
