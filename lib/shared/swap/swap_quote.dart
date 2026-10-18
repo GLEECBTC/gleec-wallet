@@ -1,0 +1,492 @@
+import 'package:decimal/decimal.dart';
+import 'package:equatable/equatable.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_tickers.dart';
+
+part 'swap_quote_request.dart';
+
+/// Where a swap's liquidity comes from.
+///
+/// The two sources are not interchangeable: one is peer-to-peer, the other
+/// executes through a third-party aggregator's contracts. A route is described
+/// by how it completes. The aggregator is named, as the third party a routed
+/// swap goes through; the bridges and exchanges it uses stay diagnostic.
+enum SwapLiquiditySource {
+  /// KDF's own atomic-swap orderbook. Peer-to-peer, and the only route for
+  /// assets no aggregator lists — GLEEC and the GRC-20 tokens above all.
+  atomic,
+
+  /// An external aggregator, executed by KDF. Reaches far more assets and
+  /// bridges across chains.
+  routed,
+}
+
+/// How a swap completes, which is what a user can reason about.
+enum SwapRouteKind {
+  /// A peer-to-peer exchange with a counterparty from the orderbook.
+  direct,
+
+  /// A conversion on one network. One transaction.
+  sameChain,
+
+  /// A move between networks, with a bridge wait that can run to tens of
+  /// minutes.
+  crossChain,
+}
+
+/// Which route an aggregator was asked for.
+enum SwapQuoteOrder {
+  /// The best quoted cost. The default.
+  cheapest,
+
+  /// The shortest estimated time.
+  fastest,
+}
+
+/// The kind of a [SwapFeeComponent].
+enum SwapFeeKind {
+  /// Chain gas for the swap itself.
+  network,
+
+  /// Chain gas for the exact-amount approval (and reset) before the swap.
+  approvalNetwork,
+
+  /// A fee charged by the route: aggregator or protocol fees.
+  swap,
+
+  /// The atomic-swap trading fee.
+  dexFee,
+}
+
+/// One cost of a quote.
+class SwapFeeComponent extends Equatable {
+  const SwapFeeComponent({
+    required this.kind,
+    required this.amount,
+    required this.deductedFromReceive,
+    this.asset,
+    this.symbol,
+    this.usdValue,
+  });
+
+  /// What kind of cost.
+  final SwapFeeKind kind;
+
+  /// How much, in units of the fee's own token.
+  final Decimal amount;
+
+  /// Whether the receive amounts already account for this cost. Counting it
+  /// again double-charges in the UI.
+  final bool deductedFromReceive;
+
+  /// The wallet asset the fee is paid in, when it maps to one.
+  final AssetId? asset;
+
+  /// The provider's symbol when it does not. Display-only; never a ticker.
+  final String? symbol;
+
+  /// USD value, when known.
+  final Decimal? usdValue;
+
+  /// A short token label for display.
+  String get tokenLabel => asset == null ? symbol ?? '' : swapTicker(asset!);
+
+  /// A copy with [usdValue] set.
+  SwapFeeComponent withUsd(Decimal? usd) => SwapFeeComponent(
+    kind: kind,
+    amount: amount,
+    deductedFromReceive: deductedFromReceive,
+    asset: asset,
+    symbol: symbol,
+    usdValue: usd,
+  );
+
+  @override
+  List<Object?> get props => [
+    kind,
+    amount,
+    deductedFromReceive,
+    asset,
+    symbol,
+    usdValue,
+  ];
+}
+
+/// The permission a token sell grants before swapping.
+class SwapApprovalRequirement extends Equatable {
+  const SwapApprovalRequirement({
+    required this.asset,
+    required this.exactAmount,
+    required this.resetsFirst,
+  });
+
+  /// The token being approved.
+  final AssetId asset;
+
+  /// The exact amount approved — never unlimited.
+  final Decimal exactAmount;
+
+  /// Whether the current permission is reset to zero first, which takes a
+  /// second transaction.
+  final bool resetsFirst;
+
+  @override
+  List<Object?> get props => [asset, exactAmount, resetsFirst];
+}
+
+/// The kind of a [SwapRouteStage].
+enum SwapRouteStageKind {
+  /// Checking the latest details before anything is signed.
+  prepare,
+
+  /// Resetting the token permission to zero.
+  resetApproval,
+
+  /// Approving the exact amount.
+  approve,
+
+  /// Sending the source transaction.
+  send,
+
+  /// Moving between networks.
+  bridge,
+
+  /// Converting on one network.
+  convert,
+
+  /// Exchanging with a peer-to-peer counterparty.
+  exchange,
+
+  /// Arriving at the destination.
+  receive,
+}
+
+/// One step of how a swap completes.
+///
+/// Structured, not copy: the view layer turns it into words, so the same
+/// stage renders in any language.
+class SwapRouteStage extends Equatable {
+  const SwapRouteStage({required this.kind, this.network, this.asset});
+
+  /// What happens.
+  final SwapRouteStageKind kind;
+
+  /// The network it happens on, or arrives at for a bridge.
+  final String? network;
+
+  /// The asset involved, when one is.
+  final AssetId? asset;
+
+  @override
+  List<Object?> get props => [kind, network, asset];
+}
+
+/// What a quote costs and returns in US dollars, where prices are known.
+class SwapQuotePricing extends Equatable {
+  const SwapQuotePricing({
+    this.payUsd,
+    this.expectedUsd,
+    this.minimumUsd,
+    this.networkCostUsd,
+    this.approvalNetworkCostUsd,
+    this.swapCostUsd,
+    this.deductedCostUsd,
+    this.isComplete = false,
+  });
+
+  /// Value of what is paid.
+  final Decimal? payUsd;
+
+  /// Value of the expected receive.
+  final Decimal? expectedUsd;
+
+  /// Value of the guaranteed minimum.
+  final Decimal? minimumUsd;
+
+  /// Network fees, including any approval gas.
+  final Decimal? networkCostUsd;
+
+  /// The approval share of [networkCostUsd].
+  final Decimal? approvalNetworkCostUsd;
+
+  /// Route and trading fees.
+  final Decimal? swapCostUsd;
+
+  /// The priced part of [SwapQuote.feesInReceive]. An unpriced one is left
+  /// out, so [priceImpact] keeps it: the figure may overstate a loss, never
+  /// hide one.
+  final Decimal? deductedCostUsd;
+
+  /// Whether every cost was priced. An incomplete total is never presented
+  /// as a total.
+  final bool isComplete;
+
+  /// Network plus swap costs, when both are known.
+  Decimal? get totalCostUsd => networkCostUsd == null || swapCostUsd == null
+      ? null
+      : networkCostUsd! + swapCostUsd!;
+
+  /// The fraction of value lost against the market estimate, from the
+  /// expected receive with the fees already taken out of it added back:
+  /// 0.05 is 5%. Fees are not price impact; [feeShare] reports them. Null
+  /// without prices.
+  Decimal? get priceImpact {
+    final pay = payUsd;
+    final expected = expectedUsd;
+    if (pay == null || expected == null || pay <= Decimal.zero) return null;
+    final beforeFees = expected + (deductedCostUsd ?? Decimal.zero);
+    return ((pay - beforeFees) / pay).toDecimal(scaleOnInfinitePrecision: 8);
+  }
+
+  /// The fraction of the paid value that all costs together come to: 0.1 is
+  /// 10%. Null unless every cost is priced.
+  Decimal? get feeShare {
+    final pay = payUsd;
+    final total = totalCostUsd;
+    if (!isComplete || pay == null || total == null || pay <= Decimal.zero) {
+      return null;
+    }
+    return (total / pay).toDecimal(scaleOnInfinitePrecision: 8);
+  }
+
+  @override
+  List<Object?> get props => [
+    payUsd,
+    expectedUsd,
+    minimumUsd,
+    networkCostUsd,
+    approvalNetworkCostUsd,
+    swapCostUsd,
+    deductedCostUsd,
+    isComplete,
+  ];
+}
+
+/// A priced way to perform one swap — the prototype's route candidate.
+///
+/// Both sources produce this, so the form and the review never branch on where
+/// a price came from; they branch on [routeKind], which is what a user can
+/// reason about.
+class SwapQuote extends Equatable {
+  const SwapQuote({
+    required this.id,
+    required this.source,
+    required this.routeKind,
+    required this.from,
+    required this.to,
+    required this.sellAmount,
+    required this.expectedReceive,
+    required this.guaranteedReceive,
+    required this.fees,
+    required this.stages,
+    required this.quotedAt,
+    this.order,
+    this.approval,
+    this.fromAddress,
+    this.toAddress,
+    this.estimatedDuration,
+    this.slippage,
+    this.pricing = const SwapQuotePricing(),
+    this.feesKnown = true,
+    this.refundReserve,
+    this.diagnostic,
+    this.payload,
+  });
+
+  /// Stable within one evaluation: identifies the option the user picked.
+  final String id;
+
+  /// Which liquidity source produced this.
+  final SwapLiquiditySource source;
+
+  /// How the swap completes.
+  final SwapRouteKind routeKind;
+
+  /// Which aggregator route was asked for; null for peer-to-peer.
+  final SwapQuoteOrder? order;
+
+  /// The asset being sold.
+  final AssetId from;
+
+  /// The asset being bought.
+  final AssetId to;
+
+  /// How much of [from] is spent.
+  final Decimal sellAmount;
+
+  /// The likely receive amount.
+  final Decimal expectedReceive;
+
+  /// The receive amount the user is guaranteed at minimum.
+  ///
+  /// The number to show before confirmation. Leading with [expectedReceive]
+  /// promises something neither source guarantees.
+  final Decimal guaranteedReceive;
+
+  /// Every cost, normalised.
+  final List<SwapFeeComponent> fees;
+
+  /// How it completes, step by step.
+  final List<SwapRouteStage> stages;
+
+  /// The token permission required first, if any.
+  final SwapApprovalRequirement? approval;
+
+  /// Where the funds are sent from.
+  final String? fromAddress;
+
+  /// Where the output lands.
+  final String? toAddress;
+
+  /// How long this is expected to take.
+  final Duration? estimatedDuration;
+
+  /// The slippage tolerance the minimum reflects, for routed quotes.
+  final double? slippage;
+
+  /// When this was priced.
+  final DateTime quotedAt;
+
+  /// US-dollar figures, where prices are known.
+  final SwapQuotePricing pricing;
+
+  /// Whether [fees] lists every cost. An order-book price read without the
+  /// engine's fee preimage has none, which must not read as free.
+  final bool feesKnown;
+
+  /// Gas kept in [from] on top of [fees], so a swap that fails can still be
+  /// refunded. Spent only then, so it is not a fee. Null when nothing more
+  /// needs keeping, or [feesKnown] is false.
+  final Decimal? refundReserve;
+
+  /// Infrastructure identity (provider, tool) for support diagnostics. Never
+  /// shown as primary copy.
+  final String? diagnostic;
+
+  /// Source-specific data needed to execute. Opaque to the UI.
+  final Object? payload;
+
+  /// How long a quote may be relied on before it is refreshed.
+  static const lifetime = Duration(seconds: 60);
+
+  /// When this quote should no longer be started without re-pricing.
+  DateTime get expiresAt => quotedAt.add(lifetime);
+
+  /// Whether this quote is old enough to need re-pricing.
+  bool isExpiredAt(DateTime now) => !now.isBefore(expiresAt);
+
+  /// Whether a token permission is needed first.
+  bool get requiresApproval => approval != null;
+
+  /// Whether net return can be compared with other options.
+  ///
+  /// Only when the minimum and every cost are priced; otherwise a comparison
+  /// would rank an option on the costs it happens to disclose.
+  bool get isRankable =>
+      pricing.isComplete && pricing.minimumUsd != null && netReturnUsd != null;
+
+  /// What the user is guaranteed to end up with, net of the costs the receive
+  /// amount does not already account for.
+  Decimal? get netReturnUsd {
+    final minimum = pricing.minimumUsd;
+    if (minimum == null || !pricing.isComplete) return null;
+    var extra = Decimal.zero;
+    for (final fee in fees) {
+      if (fee.deductedFromReceive) continue;
+      final usd = fee.usdValue;
+      if (usd == null) return null;
+      extra += usd;
+    }
+    return minimum - extra;
+  }
+
+  /// Units of [to] per unit of [from] at the expected receive.
+  Decimal? get expectedRate => _rate(expectedReceive);
+
+  /// Units of [to] per unit of [from] at the guaranteed minimum.
+  Decimal? get guaranteedRate => _rate(guaranteedReceive);
+
+  Decimal? _rate(Decimal receive) {
+    if (sellAmount <= Decimal.zero) return null;
+    return (receive / sellAmount).toDecimal(scaleOnInfinitePrecision: 18);
+  }
+
+  /// The costs of one [kind].
+  Iterable<SwapFeeComponent> feesOf(SwapFeeKind kind) =>
+      fees.where((fee) => fee.kind == kind);
+
+  /// The fees the receive amounts were already reduced by.
+  ///
+  /// For a routed quote, every one marked [SwapFeeComponent.deductedFromReceive].
+  /// For the order book, only those in [to]: a fee paid from the sold volume
+  /// carries the same mark, but the receive is not reduced by it.
+  Iterable<SwapFeeComponent> get feesInReceive => fees.where(
+    (fee) =>
+        fee.deductedFromReceive &&
+        (source == SwapLiquiditySource.routed || fee.asset == to),
+  );
+
+  /// The fees paid in [asset] on top of [sellAmount]: every one not taken out
+  /// of what is traded, whatever its kind. A provider fee sent with the swap
+  /// needs the balance as much as gas does.
+  Iterable<SwapFeeComponent> feesOnTopIn(AssetId asset) =>
+      fees.where((fee) => !fee.deductedFromReceive && fee.asset == asset);
+
+  /// What [feesOnTopIn] comes to, in [asset].
+  Decimal costOnTopIn(AssetId asset) =>
+      feesOnTopIn(asset).fold(Decimal.zero, (sum, fee) => sum + fee.amount);
+
+  /// A copy with [pricing] and fee USD values replaced.
+  SwapQuote withPricing(
+    SwapQuotePricing pricing, {
+    List<SwapFeeComponent>? fees,
+  }) => SwapQuote(
+    id: id,
+    source: source,
+    routeKind: routeKind,
+    order: order,
+    from: from,
+    to: to,
+    sellAmount: sellAmount,
+    expectedReceive: expectedReceive,
+    guaranteedReceive: guaranteedReceive,
+    fees: fees ?? this.fees,
+    stages: stages,
+    approval: approval,
+    fromAddress: fromAddress,
+    toAddress: toAddress,
+    estimatedDuration: estimatedDuration,
+    slippage: slippage,
+    quotedAt: quotedAt,
+    pricing: pricing,
+    feesKnown: feesKnown,
+    refundReserve: refundReserve,
+    diagnostic: diagnostic,
+    payload: payload,
+  );
+
+  @override
+  List<Object?> get props => [
+    id,
+    source,
+    routeKind,
+    order,
+    from,
+    to,
+    sellAmount,
+    expectedReceive,
+    guaranteedReceive,
+    fees,
+    stages,
+    approval,
+    fromAddress,
+    toAddress,
+    estimatedDuration,
+    slippage,
+    quotedAt,
+    pricing,
+    feesKnown,
+    refundReserve,
+    diagnostic,
+  ];
+}

@@ -8,6 +8,7 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/shared/widgets/focusable_widget.dart';
 import 'package:web_dex/views/dex/entities_list/orders/order_item.dart';
 
+import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
 import '../../common/widget_tester_action_extensions.dart';
 import '../../common/widget_tester_find_extension.dart';
@@ -26,7 +27,6 @@ Future<void> testMakerOrder(WidgetTester tester) async {
 
   String? truncatedUuid;
 
-  final Finder dexSectionButton = find.byKey(const Key('main-menu-dex'));
   final Finder makeOrderTab = find.byKey(const Key('make-order-tab'));
   final Finder sellCoinSelectButton =
       find.byKey(const Key('maker-form-sell-switcher'));
@@ -61,9 +61,10 @@ Future<void> testMakerOrder(WidgetTester tester) async {
 
   await useFaucetIfBalanceInsufficient(tester);
 
-  // Open maker order form
-  await tester.tapAndPump(dexSectionButton);
-  print('🔍 MAKER ORDER: Tapped DEX section button');
+  // Open maker order form. The maker form lives on the Swap surface's
+  // Advanced destination, which `goto.dexPage` selects.
+  await goto.dexPage(tester);
+  print('🔍 MAKER ORDER: Opened the trading interface');
 
   await tester.tapAndPump(makeOrderTab);
   print('🔍 MAKER ORDER: Opened make order tab');

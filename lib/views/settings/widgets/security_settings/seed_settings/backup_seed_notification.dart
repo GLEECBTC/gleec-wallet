@@ -7,7 +7,6 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/router/state/routing_state.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class BackupSeedNotification extends StatefulWidget {
   const BackupSeedNotification({
@@ -148,18 +147,45 @@ class _BackupButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return UiPrimaryButton(
-      text: LocaleKeys.backupSeedNotificationButton.tr(),
-      backgroundColor:
-          customization.buttonBackgroundColor ??
-          theme.custom.simpleButtonBackgroundColor,
-      width: 85,
-      height: 28,
-      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-        fontSize: 12,
-        color: customization.buttonTextColor,
-      ),
+    final colorScheme = Theme.of(context).colorScheme;
+    final background =
+        customization.buttonBackgroundColor ??
+        theme.custom.simpleButtonBackgroundColor;
+    // Not UiPrimaryButton: its fixed size leaves no room for the 48 dp target
+    // Material pads around a smaller button, and split the label at large
+    // text. Padded at standard density, the target is 48 dp on desktop too.
+    return ElevatedButton(
       onPressed: routingState.settingsState.openSecurity,
+      style:
+          ElevatedButton.styleFrom(
+            backgroundColor: background,
+            foregroundColor:
+                ThemeData.estimateBrightnessForColor(background) ==
+                    Brightness.dark
+                ? Colors.white
+                : colorScheme.secondary,
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            minimumSize: const Size(85, 28),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            visualDensity: VisualDensity.standard,
+          ).copyWith(
+            shadowColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.focused)
+                  ? colorScheme.primary
+                  : Colors.transparent,
+            ),
+          ),
+      child: Text(
+        LocaleKeys.backupSeedNotificationButton.tr(),
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          fontSize: 12,
+          color: customization.buttonTextColor,
+        ),
+      ),
     );
   }
 }
