@@ -271,36 +271,57 @@ class SwapServices {
     if (previous == null) unawaited(registry.resumeInFlight());
   }
 
-  Future<List<SwapExecutionRef>> _inFlight() async {
+  Future<List<SwapExecutionRef>> _inFlight() => _inFlightOf(const {
+    SwapLiquiditySource.routed,
+    SwapLiquiditySource.atomic,
+  });
+
+  /// A source that cannot be read never keeps the others' swaps from
+  /// resuming: [SwapInFlightIncomplete] carries them, and reads only the
+  /// failed sources again.
+  Future<List<SwapExecutionRef>> _inFlightOf(
+    Set<SwapLiquiditySource> sources,
+  ) async {
     final refs = <SwapExecutionRef>[];
-    try {
-      final routed = await _sdk.routedSwaps.inFlight();
-      refs.addAll([
-        for (final swap in routed)
-          (id: swap.uuid, source: SwapLiquiditySource.routed),
-      ]);
-    } on Object {
-      // Routed history unavailable: atomic swaps still resume.
+    final unread = <SwapLiquiditySource>{};
+    for (final source in sources) {
+      try {
+        refs.addAll(switch (source) {
+          SwapLiquiditySource.routed => await _routedInFlight(),
+          SwapLiquiditySource.atomic => await _atomicInFlight(),
+        });
+      } on Object {
+        unread.add(source);
+      }
     }
-    try {
-      final page = await _atomicHistory(limit: 50, page: 1);
-      // Only Finished ends a swap: after an error it may still be refunding.
-      // Swaps that never logged it can sit in the list for years, though, and
-      // following every one of them would poll forever.
-      final since = DateTime.now().subtract(_atomicResumeWindow);
-      refs.addAll([
-        for (final swap in page.swaps)
-          if (swap.events.every((e) => e.event.type != 'Finished') &&
-              swap.events.isNotEmpty &&
-              DateTime.fromMillisecondsSinceEpoch(
-                swap.events.last.timestamp,
-              ).isAfter(since))
-            (id: swap.uuid, source: SwapLiquiditySource.atomic),
-      ]);
-    } on Object {
-      // As above, the other way round.
-    }
-    return refs;
+    if (unread.isEmpty) return refs;
+    throw SwapInFlightIncomplete(
+      found: refs,
+      unread: unread,
+      retry: () => _inFlightOf(unread),
+    );
+  }
+
+  Future<List<SwapExecutionRef>> _routedInFlight() async => [
+    for (final swap in await _sdk.routedSwaps.inFlight())
+      (id: swap.uuid, source: SwapLiquiditySource.routed),
+  ];
+
+  Future<List<SwapExecutionRef>> _atomicInFlight() async {
+    final page = await _atomicHistory(limit: 50, page: 1);
+    // Only Finished ends a swap: after an error it may still be refunding.
+    // Swaps that never logged it can sit in the list for years, though, and
+    // following every one of them would poll forever.
+    final since = DateTime.now().subtract(_atomicResumeWindow);
+    return [
+      for (final swap in page.swaps)
+        if (swap.events.every((e) => e.event.type != 'Finished') &&
+            swap.events.isNotEmpty &&
+            DateTime.fromMillisecondsSinceEpoch(
+              swap.events.last.timestamp,
+            ).isAfter(since))
+          (id: swap.uuid, source: SwapLiquiditySource.atomic),
+    ];
   }
 
   Future<AtomicSwapHistoryPage> _atomicHistory({

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
@@ -206,6 +209,29 @@ void main() {
 
       expect(sdk.routedSwaps.watched, ['routed-1']);
       expect(dex.statusReads, isEmpty);
+    });
+
+    test('a list it could not read at sign-in is read again, and only that '
+        'one', () {
+      fakeAsync((async) {
+        final sdk = SrcSdk();
+        final dex = SrcDex();
+        final mm2 = SrcMm2Api()..page = null;
+        final services = servicesOf(sdk, dex: dex, mm2: mm2);
+        sdk.auth.users.add(userOf('alice'));
+        async.flushMicrotasks();
+        expect(dex.statusReads, isEmpty);
+
+        mm2.page = recentSwapsOf([
+          atomicSwapOf('running', ['Started']),
+        ]);
+        async.elapse(const Duration(seconds: 10));
+
+        expect(dex.statusReads, ['running']);
+        expect(sdk.routedSwaps.inFlightCalls, 1);
+        unawaited(services.dispose());
+        async.flushMicrotasks();
+      });
     });
   });
 

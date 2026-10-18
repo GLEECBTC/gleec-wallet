@@ -181,12 +181,25 @@ class FakeMm2Api implements Mm2Api {
     return rawSwapData;
   }
 
+  /// Answers as a running KDF with no swaps. Without an answer the swap
+  /// services would ask again, and the test would end with a timer pending.
   @override
   Future<MyRecentSwapsResponse?> getMyRecentSwaps(
     MyRecentSwapsRequest request,
   ) async {
     recentRequests.add(request);
-    return null;
+    return MyRecentSwapsResponse(
+      result: MyRecentSwapsResponseResult(
+        fromUuid: null,
+        limit: request.limit ?? 10000,
+        skipped: 0,
+        swaps: const [],
+        total: 0,
+        pageNumber: request.pageNumber ?? 1,
+        foundRecords: 0,
+        totalPages: 1,
+      ),
+    );
   }
 
   @override
