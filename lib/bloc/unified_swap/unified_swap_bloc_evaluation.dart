@@ -348,5 +348,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         ),
       ),
     );
+    // The evaluation armed timers only for a preselected option.
+    _armTimers(state.selectedQuote);
   }
 }

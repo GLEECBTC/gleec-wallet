@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
 import 'swap_bloc_fakes.dart';
@@ -200,6 +202,46 @@ void main() {
       h.elapse(const Duration(seconds: 1));
       expect(bloc.state.review!.status, SwapReviewStatus.expired);
       expect(bloc.state.review!.canStart, isFalse);
+    });
+
+    group('an option picked when none could be preselected', () {
+      /// Two options whose costs are unpriced, so neither is chosen for the
+      /// user.
+      UnifiedSwapBloc unranked(SwapBlocHarness h) {
+        SwapQuoteAvailable option(String id, String guaranteed) =>
+            SwapQuoteAvailable(
+              quoteOf(
+                id: id,
+                guaranteed: guaranteed,
+                fees: [feeOf(asset: btc, usd: null)],
+                quotedAt: h.now(),
+              ),
+            );
+        h.routed.respond = (request) => [
+          option('a', '2985'),
+          option('b', '2980'),
+        ];
+        final bloc = h.open();
+        expect(bloc.state.selectedId, isNull);
+        return bloc..add(const UnifiedSwapOptionSelected('b'));
+      }
+
+      swapBlocTest('is renewed at its refresh age', (h) {
+        final bloc = unranked(h);
+        h.elapse(const Duration(seconds: 30));
+
+        expect(h.routed.requests, hasLength(2));
+        expect(bloc.state.selectedId, 'b');
+      });
+
+      swapBlocTest('expires when it is not kept fresh', (h) {
+        h.balances[eth] = d('0.5');
+        final bloc = unranked(h);
+        h.elapse(SwapQuote.lifetime);
+
+        expect(bloc.state.evaluation, SwapEvaluationStatus.expired);
+        expect(h.routed.requests, hasLength(1));
+      });
     });
   });
 
