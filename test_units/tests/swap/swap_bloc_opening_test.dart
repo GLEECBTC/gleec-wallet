@@ -169,6 +169,41 @@ void main() {
     });
   });
 
+  group('a legacy asset to receive', () {
+    void holdLegacy(SwapBlocHarness h) {
+      h
+        ..extraAssets.add(usdcOld)
+        ..balances[usdcOld] = d('5');
+      tradeOnly(h, {eth, usdc, usdcOld});
+    }
+
+    swapBlocTest('is refused from a link', (h) {
+      holdLegacy(h);
+      final bloc = h.open(pay: 'ETH', receive: 'USDC-ERC20_OLD');
+
+      expect(bloc.state.receive, usdcOld);
+      expect(bloc.state.issue, SwapFormIssue.pairUnsupported);
+      expect(bloc.state.canReview, isFalse);
+      expect(h.routed.requests, isEmpty);
+    });
+
+    swapBlocTest('is refused when the sides are switched', (h) {
+      holdLegacy(h);
+      final bloc = h.open(pay: 'USDC-ERC20_OLD', receive: 'ETH', amount: '5');
+      expect(bloc.state.canReview, isTrue);
+
+      bloc
+        ..add(const UnifiedSwapSidesSwitched())
+        ..add(const UnifiedSwapAmountChanged('1'));
+      h.settle();
+
+      expect(bloc.state.receive, usdcOld);
+      expect(bloc.state.issue, SwapFormIssue.pairUnsupported);
+      expect(bloc.state.canReview, isFalse);
+      expect(h.routed.requests, hasLength(1));
+    });
+  });
+
   group('an intent', () {
     swapBlocTest('naming no known asset is ignored', (h) {
       h.holdings = [(asset: eth, usdValue: d('6000'))];

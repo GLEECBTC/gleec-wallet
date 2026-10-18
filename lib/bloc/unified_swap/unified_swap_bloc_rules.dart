@@ -20,6 +20,11 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
   SwapFormIssue? _issueFor(UnifiedSwapState next) {
     final pay = next.pay;
     if (pay != null && pay == next.receive) return SwapFormIssue.sameAsset;
+    // Legacy assets are only sold; this catches links and side switches,
+    // which bypass the picker.
+    if (next.receive case final receive? when isLegacySwapAsset(receive)) {
+      return SwapFormIssue.pairUnsupported;
+    }
     if (next.pairSupport case final support? when !support.isSupported) {
       return SwapFormIssue.pairUnsupported;
     }
