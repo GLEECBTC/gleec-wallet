@@ -263,7 +263,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     if (state.pay != null || state.receive != null) {
       add(const UnifiedSwapOffersRequested());
     }
-    if (state.pay != null || _intentApplied) {
+    if (_pairChosen) {
       // A pair set while the catalog loaded could not be priced then; one
       // still being set prices itself when it finishes.
       if (state.hasPair && _settingPair == 0) {
@@ -278,9 +278,13 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final pair = await _defaultPair({
       for (final source in catalog.sources) ...source.quotable,
     });
-    if (pair == null || state.pay != null || _intentApplied) return;
+    if (pair == null || _pairChosen) return;
     await _setPair(emit, pay: pair.pay, receive: pair.receive);
   }
+
+  /// Whether either side was chosen, so no default pair replaces it.
+  bool get _pairChosen =>
+      state.pay != null || state.receive != null || _intentApplied;
 
   Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
     final read = await _repository.catalog(signedIn: state.signedIn);

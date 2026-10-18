@@ -152,6 +152,21 @@ void main() {
 
       expect((bloc.state.pay, bloc.state.receive), (btc, eth));
     });
+
+    swapBlocTest('gives way to an asset to receive picked meanwhile', (h) {
+      h
+        ..holdings = [(asset: eth, usdValue: d('6000'))]
+        ..holdingsGate = Completer<void>();
+      final bloc = h.build()..add(const UnifiedSwapStarted());
+      h.settle();
+      bloc.add(UnifiedSwapReceiveAssetChanged(btc));
+      h.settle();
+
+      h.holdingsGate!.complete();
+      h.settle();
+
+      expect((bloc.state.pay, bloc.state.receive), (null, btc));
+    });
   });
 
   group('an intent', () {
