@@ -100,6 +100,10 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
   ) {
     final slippage = event.slippage.clamp(swapMinSlippage, swapMaxSlippage);
     if (slippage == state.slippage) return;
+    // Also set beside the review on a wide screen.
+    final leaveReview = state.view == UnifiedSwapView.review;
+    if (leaveReview && _startInDoubt) return;
+    if (leaveReview) _startVersion++;
     _invalidate();
     emit(
       _validated(
@@ -109,6 +113,8 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
           clearSelectedId: true,
           clearFailure: true,
           evaluation: SwapEvaluationStatus.idle,
+          view: leaveReview ? UnifiedSwapView.form : null,
+          clearReview: leaveReview,
         ),
       ),
     );

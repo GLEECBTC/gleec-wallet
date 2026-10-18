@@ -340,15 +340,24 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
   ) {
     final quotes = state.quotes;
     if (quotes == null || quotes.byId(event.id) == null) return;
+    // On a wide screen this is picked beside the review, which closes unless
+    // its start is in doubt.
+    final leaveReview = state.view == UnifiedSwapView.review;
+    if (leaveReview && (event.id == state.selectedId || _startInDoubt)) {
+      return;
+    }
+    if (leaveReview) _startVersion++;
     emit(
       _validated(
         state.copyWith(
           selectedId: event.id,
           manuallySelected: quotes.preselected?.id != event.id,
+          view: leaveReview ? UnifiedSwapView.form : null,
+          clearReview: leaveReview,
         ),
       ),
     );
     // The evaluation armed timers only for a preselected option.
-    _armTimers(state.selectedQuote);
+    _armTimers(state.selectedQuote, shownAgain: leaveReview);
   }
 }
