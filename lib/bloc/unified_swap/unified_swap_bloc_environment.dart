@@ -54,11 +54,19 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     }
     final signingChanged = event.signedIn != state.signedIn;
     if (!signingChanged) {
+      // Without trading the review cannot go ahead, and the form says why.
+      final leaveReview =
+          !event.tradingEnabled &&
+          state.view == UnifiedSwapView.review &&
+          !_startInDoubt;
+      if (leaveReview) _startVersion++;
       emit(
         state.copyWith(
           tradingEnabled: event.tradingEnabled,
           clockValid: event.clockValid,
           hardwareWallet: event.hardwareWallet,
+          view: leaveReview ? UnifiedSwapView.form : null,
+          clearReview: leaveReview,
         ),
       );
     } else {

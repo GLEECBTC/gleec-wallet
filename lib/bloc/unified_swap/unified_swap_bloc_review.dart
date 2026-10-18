@@ -65,6 +65,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   ) async {
     final review = state.review;
     if (review == null || state.view != UnifiedSwapView.review) return;
+    if (!state.tradingEnabled) return;
 
     if (review.status == SwapReviewStatus.expired ||
         review.status == SwapReviewStatus.revalidationFailed ||
@@ -224,6 +225,13 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       // acceptance; it is recorded before anything is sent.
       await _terms.recordAcceptance(at: _now());
     }
+    // Checked again: trading can be turned off during that write, and a
+    // review already starting is kept open through it.
+    if (!state.tradingEnabled) {
+      _startVersion++;
+      emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
+      return;
+    }
 
     try {
       final execution = await _registry.start(quote);
@@ -260,6 +268,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (state.review?.status == SwapReviewStatus.starting) return;
+    if (!state.tradingEnabled) return;
     // Consent was given on the progress screen, old against new, after the
     // engine stopped a swap before sending anything.
     final stale = event.quote.isExpiredAt(_now());

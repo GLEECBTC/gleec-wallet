@@ -333,6 +333,16 @@ void main() {
       },
     );
 
+    test('a trading restriction answers without asking', () async {
+      final result = await source(
+        tradingAllowed: (from, to) => false,
+      ).requote(quoteOf());
+
+      expect(failure(result).kind, SwapQuoteFailureKind.tradingBlocked);
+      expect(failure(result).source, SwapLiquiditySource.routed);
+      expect(manager.quotes, isEmpty);
+    });
+
     group('the minimum the review showed', () {
       // The review showed 2985, a guard below the provider's 2994.
       final shown = routedQuoteFromOffer(
