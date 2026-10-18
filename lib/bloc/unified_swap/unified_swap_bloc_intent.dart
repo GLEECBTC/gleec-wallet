@@ -60,6 +60,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       _validated(
         state.copyWith(
           inputText: event.text,
+          clearConverted: true,
           clearMaxApplied: true,
           checkingMax: false,
           clearQuotes: true,
@@ -84,7 +85,11 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final price = _repository.pricing.prices.usdPrice(pay);
     if (price == null || price <= Decimal.zero) return;
     // Convert what is typed, so toggling never changes the amount traded.
-    final amount = amountOf(state);
+    final typed = amountOf(state);
+    final decimals = pay.chainId.decimals;
+    final amount = typed == null || decimals == null
+        ? typed
+        : typed.floor(scale: decimals);
     final nextMode = state.amountMode == SwapAmountMode.token
         ? SwapAmountMode.fiat
         : SwapAmountMode.token;
@@ -93,7 +98,19 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
         : nextMode == SwapAmountMode.fiat
         ? (amount * price).floor(scale: 2).toString()
         : amount.toString();
-    emit(_validated(state.copyWith(amountMode: nextMode, inputText: text)));
+    final converted = amount != null && nextMode == SwapAmountMode.fiat
+        ? (asset: pay, text: text, amount: amount)
+        : null;
+    emit(
+      _validated(
+        state.copyWith(
+          amountMode: nextMode,
+          inputText: text,
+          converted: converted,
+          clearConverted: converted == null,
+        ),
+      ),
+    );
   }
 
   void _onSlippageChanged(

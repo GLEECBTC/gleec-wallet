@@ -196,6 +196,12 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final value = Decimal.tryParse(text);
     if (value == null) return null;
     if (state.amountMode == SwapAmountMode.token) return value;
+    final converted = state.converted;
+    if (converted != null &&
+        converted.asset == state.pay &&
+        converted.text == state.inputText) {
+      return converted.amount;
+    }
     final pay = state.pay;
     final price = pay == null ? null : _repository.pricing.prices.usdPrice(pay);
     if (price == null || price <= Decimal.zero) return null;
@@ -402,6 +408,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
           // under its ticker and be what Max fills in.
           clearBalance: pay != state.pay,
           clearFeeBalance: pay != state.pay,
+          clearConverted: pay != state.pay,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,

@@ -120,6 +120,7 @@ class UnifiedSwapState extends Equatable {
     this.receiveAddress,
     this.inputText = '',
     this.amountMode = SwapAmountMode.token,
+    this.converted,
     this.balance,
     this.feeBalance,
     this.maxApplied,
@@ -171,6 +172,11 @@ class UnifiedSwapState extends Equatable {
 
   /// How the amount is being entered.
   final SwapAmountMode amountMode;
+
+  /// The amount of [pay] a switch to dollars converted, and the text it
+  /// became. That text is rounded to the cent; while it stands, for this pay
+  /// asset, the amount traded is still this one.
+  final ({AssetId asset, String text, Decimal amount})? converted;
 
   /// Spendable balance of [pay] at its address.
   final Decimal? balance;
@@ -290,6 +296,7 @@ class UnifiedSwapState extends Equatable {
     receiveAddress,
     inputText,
     amountMode,
+    converted,
     balance,
     feeBalance,
     maxApplied,
@@ -327,6 +334,7 @@ class UnifiedSwapState extends Equatable {
     String? receiveAddress,
     String? inputText,
     SwapAmountMode? amountMode,
+    ({AssetId asset, String text, Decimal amount})? converted,
     Decimal? balance,
     Decimal? feeBalance,
     SwapMaxAmount? maxApplied,
@@ -363,6 +371,7 @@ class UnifiedSwapState extends Equatable {
     bool clearRateLimit = false,
     bool clearReview = false,
     bool clearActiveExecution = false,
+    bool clearConverted = false,
   }) {
     return UnifiedSwapState(
       view: view ?? this.view,
@@ -376,6 +385,7 @@ class UnifiedSwapState extends Equatable {
           : (receiveAddress ?? this.receiveAddress),
       inputText: inputText ?? this.inputText,
       amountMode: amountMode ?? this.amountMode,
+      converted: clearConverted ? null : (converted ?? this.converted),
       balance: clearBalance ? null : (balance ?? this.balance),
       feeBalance: clearFeeBalance ? null : (feeBalance ?? this.feeBalance),
       maxApplied: clearMaxApplied ? null : (maxApplied ?? this.maxApplied),
