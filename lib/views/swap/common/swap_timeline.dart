@@ -5,6 +5,7 @@ import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
+import 'package:web_dex/views/swap/common/swap_links.dart';
 
 /// The status of one step in a swap's timeline. [refunded] marks where a
 /// swap turned back and returned the funds.
@@ -254,7 +255,7 @@ abstract final class SwapTimeline {
     final evidence = s.evidence;
     final approvals = evidence.approvalTxHashes;
     final resets = s.approval?.resetsFirst ?? false;
-    final route = Uri.tryParse(evidence.providerExplorerUrl ?? '');
+    final route = swapRoutePage(evidence.providerExplorerUrl);
     return switch (stage.kind) {
       SwapRouteStageKind.resetApproval when resets => transaction(
         s.from,
@@ -268,7 +269,6 @@ abstract final class SwapTimeline {
       SwapRouteStageKind.bridge || SwapRouteStageKind.convert
           when routeStep &&
               route != null &&
-              route.isScheme('https') &&
               s.stage != SwapProgressStage.actionRequired =>
         SwapTimelineLink.route(route),
       SwapRouteStageKind.receive => transaction(

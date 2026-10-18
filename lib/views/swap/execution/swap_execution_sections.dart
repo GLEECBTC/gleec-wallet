@@ -22,7 +22,7 @@ extension _ExecutionSections on _ExecutionBodyState {
     SwapExecutionSnapshot snapshot,
     SwapExecutionCopy copy,
   ) {
-    final routeUrl = snapshot.evidence.providerExplorerUrl;
+    final routePage = swapRoutePage(snapshot.evidence.providerExplorerUrl);
     final cancelMessage = switch (state.cancelStatus) {
       SwapCancelStatus.refusedAlreadySent =>
         LocaleKeys.swapCancelRefusedSent.tr(),
@@ -48,7 +48,7 @@ extension _ExecutionSections on _ExecutionBodyState {
       ],
       const SizedBox(height: 16),
       if (snapshot.stage == SwapProgressStage.actionRequired &&
-          routeUrl != null) ...[
+          routePage != null) ...[
         // The swap is waiting on the user: two pulses say so, then stop.
         _arrive(
           SwapPulse(
@@ -63,7 +63,7 @@ extension _ExecutionSections on _ExecutionBodyState {
             child: SwapButton(
               label: LocaleKeys.swapOpenRoutePage.tr(),
               icon: Icons.open_in_new_rounded,
-              onPressed: () => openSwapLink(context, routeUrl),
+              onPressed: () => openSwapLink(context, '$routePage'),
             ),
           ),
           live: state.live,
