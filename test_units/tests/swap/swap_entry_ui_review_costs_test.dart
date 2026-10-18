@@ -79,6 +79,19 @@ void main() {
     expect(find.text(r'$0.00'), findsNothing);
   });
 
+  for (final (slippage, shown) in [
+    (0.0005, '0.05%'),
+    (0.0025, '0.25%'),
+    (0.02, '2%'),
+  ]) {
+    testWidgets('a slippage of $shown reads as it was set', (tester) async {
+      await pump(tester, quoteWith(quoteOf(), slippage: slippage));
+      await expandCosts(tester);
+
+      expect(detail(tester, 'Slippage'), shown);
+    });
+  }
+
   group('an update', () {
     testWidgets('says what the costs not read before come to', (tester) async {
       await pump(

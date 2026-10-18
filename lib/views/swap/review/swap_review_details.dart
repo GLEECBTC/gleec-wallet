@@ -72,7 +72,7 @@ extension _ReviewContentDetails on _ReviewContent {
           label: LocaleKeys.swapReviewSlippage.tr(),
           value: quote.source == SwapLiquiditySource.atomic || slippage == null
               ? LocaleKeys.swapReviewSlippageNone.tr()
-              : SwapFormat.percent(Decimal.parse(slippage.toString())),
+              : slippageText(slippage),
         ),
         SwapDetailRow(
           label: LocaleKeys.swapReviewMinimumGuard.tr(),
