@@ -9,7 +9,7 @@ import 'swap_bloc_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 /// Covers the ways into a start, each of which must hold: none while trading
-/// is off.
+/// is off, and none for a review that has been left or replaced.
 void main() {
   const tradingOff = UnifiedSwapCapabilitiesChanged(
     tradingEnabled: false,
@@ -96,5 +96,74 @@ void main() {
       expect(h.routedExecutor.started, isEmpty);
       expect(bloc.state.view, UnifiedSwapView.form);
     });
+  });
+
+  group('a start re-pricing', () {
+    swapBlocTest('is dropped once a link changes the pair and another review '
+        'opens', (h) {
+      final bloc = h.inReview();
+      h.routed.requoteGate = Completer<void>();
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+      // Back in the browser, to a link for half as much, then its review.
+      bloc.add(
+        const UnifiedSwapIntentApplied(
+          pay: 'ETH',
+          receive: 'USDC-ERC20',
+          amount: '0.5',
+        ),
+      );
+      h.settle();
+      bloc.add(const UnifiedSwapReviewOpened());
+      h.settle();
+      expect(bloc.state.review!.quote.sellAmount, d('0.5'));
+
+      h.routed.requoteGate!.complete();
+      h.settle();
+
+      expect(h.routedExecutor.started, isEmpty);
+      expect(bloc.state.review!.status, SwapReviewStatus.ready);
+      expect(bloc.state.review!.quote.sellAmount, d('0.5'));
+    });
+
+    swapBlocTest('keeps a new price accepted meanwhile from starting too', (h) {
+      final bloc = h.inReview();
+      h.routed.requoteGate = Completer<void>();
+      h.routedExecutor.gate = Completer<void>();
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+      bloc.add(
+        UnifiedSwapFreshQuoteAccepted(quoteOf(id: 'agreed', quotedAt: h.now())),
+      );
+      h.settle();
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
+
+      h.routed.requoteGate!.complete();
+      h.settle();
+      h.routedExecutor.gate!.complete();
+      h.settle();
+
+      expect(h.routedExecutor.started, hasLength(1));
+      expect(h.routedExecutor.started.single.id, isNot('agreed'));
+    });
+  });
+
+  swapBlocTest('a new price accepted after a start that may be running is '
+      'refused', (h) {
+    h.routedExecutor.startError = SwapStartUnconfirmedException(
+      TimeoutException('lost'),
+    );
+    final bloc = h.inReview()..add(const UnifiedSwapStartRequested());
+    h.settle();
+    expect(bloc.state.review!.status, SwapReviewStatus.unconfirmed);
+    h.routedExecutor.startError = null;
+
+    bloc.add(
+      UnifiedSwapFreshQuoteAccepted(quoteOf(id: 'agreed', quotedAt: h.now())),
+    );
+    h.settle();
+
+    expect(h.routedExecutor.started, hasLength(1));
+    expect(bloc.state.review?.status, SwapReviewStatus.unconfirmed);
   });
 }

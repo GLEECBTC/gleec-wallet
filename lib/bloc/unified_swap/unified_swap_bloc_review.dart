@@ -20,6 +20,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (state.selectedQuote != quote || state.view != UnifiedSwapView.form) {
       return;
     }
+    _startVersion++;
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,
@@ -236,6 +237,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     try {
       final execution = await _registry.start(quote);
       unawaited(_preferences.rememberPair(quote.from, quote.to));
+      _startVersion++;
       emit(
         state.copyWith(
           view: UnifiedSwapView.progress,
@@ -267,11 +269,17 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     UnifiedSwapFreshQuoteAccepted event,
     Emitter<UnifiedSwapState> emit,
   ) async {
-    if (state.review?.status == SwapReviewStatus.starting) return;
+    // A start or re-price under way answers first: starting this beside it
+    // could swap twice.
+    if (_startInDoubt ||
+        state.review?.status == SwapReviewStatus.revalidating) {
+      return;
+    }
     if (!state.tradingEnabled) return;
     // Consent was given on the progress screen, old against new, after the
     // engine stopped a swap before sending anything.
     final stale = event.quote.isExpiredAt(_now());
+    _startVersion++;
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,

@@ -143,8 +143,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
 
-  /// Bumped when a review is left, so a start that is still re-pricing is
-  /// abandoned rather than executed behind the user's back.
+  /// Bumped whenever a review is left or replaced, so a start that is still
+  /// re-pricing is abandoned rather than executed behind the user's back.
   int _startVersion = 0;
 
   /// Bumped when a wallet signs in or out, so reads for the previous one are
@@ -374,6 +374,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
         amount == null &&
         pay == state.pay;
     _invalidate();
+    _startVersion++;
     emit(
       _validated(
         state.copyWith(
