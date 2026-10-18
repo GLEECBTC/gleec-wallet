@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:rational/rational.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
@@ -21,6 +22,7 @@ class AtomicSwapPlan {
     required this.rel,
     required this.volume,
     required this.price,
+    required this.orderPrice,
   });
 
   /// The asset being sold.
@@ -32,9 +34,14 @@ class AtomicSwapPlan {
   /// How much of [base] to sell.
   final Decimal volume;
 
-  /// The worst price accepted, in [rel] per [base]. The order the plan places
-  /// enforces exactly this, and the quote's guarantee is built from it.
+  /// The worst price accepted, in [rel] per [base]. The quote's guarantee is
+  /// built from it.
   final Decimal price;
+
+  /// [price] as the matched order's exact fraction, which the placed order
+  /// asks. KDF compares prices exactly, and its 100-digit decimal can round
+  /// up past what that order accepts.
+  final Rational orderPrice;
 }
 
 /// Prices swaps against KDF's own atomic-swap orderbook.
@@ -329,6 +336,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
           rel: to,
           volume: amount,
           price: order.price,
+          orderPrice: order.orderPrice,
         ),
       ),
     );
@@ -337,20 +345,20 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// The best-priced single order that can absorb [amount] whole. The
   /// wallet's own orders are not counterparties.
   @visibleForTesting
-  static ({Decimal price, Decimal maxVolume})? bestFillingBid(
-    List<OrderInfo> bids,
-    Decimal amount,
-  ) {
-    ({Decimal price, Decimal maxVolume})? best;
+  static ({Decimal price, Rational orderPrice, Decimal maxVolume})?
+  bestFillingBid(List<OrderInfo> bids, Decimal amount) {
+    ({Decimal price, Rational orderPrice, Decimal maxVolume})? best;
     for (final bid in bids) {
       if (bid.isMine ?? false) continue;
       final price = _decimalOf(bid.price);
       final max = _decimalOf(bid.baseMaxVolume);
       if (price == null || max == null || price <= Decimal.zero) continue;
+      final orderPrice = _exactOf(bid.price!, price);
+      if (orderPrice == null) continue;
       final min = _decimalOf(bid.baseMinVolume) ?? Decimal.zero;
       if (amount > max || amount < min) continue;
       if (best == null || price > best.price) {
-        best = (price: price, maxVolume: max);
+        best = (price: price, orderPrice: orderPrice, maxVolume: max);
       }
     }
     return best;
@@ -440,6 +448,27 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// Reads a decimal out of KDF's numeric envelope.
   static Decimal? _decimalOf(NumericValue? value) =>
       value == null ? null : Decimal.tryParse(value.decimal);
+
+  /// [value] exactly: its fraction, when that agrees with [decimal] to within
+  /// [_cutBound]. One that does not is not trusted, and an envelope without a
+  /// fraction is its decimal.
+  static Rational? _exactOf(NumericValue value, Decimal decimal) {
+    final shown = decimal.toRational();
+    final exact = _fractionOf(value.fraction) ?? value.rational;
+    if (exact == null) return shown;
+    return (exact - shown).abs() * _cutBound <= shown ? exact : null;
+  }
+
+  static Rational? _fractionOf(Fraction? fraction) {
+    final numer = BigInt.tryParse(fraction?.numer ?? '');
+    final denom = BigInt.tryParse(fraction?.denom ?? '');
+    if (numer == null || denom == null || denom == BigInt.zero) return null;
+    return Rational(numer, denom);
+  }
+
+  /// 1e30: a decimal may stray from its price by a 1e-30 share of it, far
+  /// more than a 100-digit cut and far less than any real price step.
+  static final _cutBound = Rational(BigInt.from(10).pow(30));
 }
 
 sealed class _Preimage {

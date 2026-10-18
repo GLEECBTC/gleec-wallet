@@ -251,6 +251,7 @@ SwapQuote atomicQuoteOf({String volume = '1', String price = '3000'}) =>
         rel: usdc,
         volume: d(volume),
         price: d(price),
+        orderPrice: Rational.parse(price),
       ),
     );
 

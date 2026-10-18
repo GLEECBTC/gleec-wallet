@@ -8,6 +8,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:rational/rational.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
@@ -96,7 +97,11 @@ void main() {
       bidOf('20', '0', '5'),
     ], d('1'));
 
-    expect(best, (price: d('20'), maxVolume: d('5')));
+    expect(best, (
+      price: d('20'),
+      orderPrice: Rational.fromInt(20),
+      maxVolume: d('5'),
+    ));
   });
 
   group('Max', () {

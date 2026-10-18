@@ -153,6 +153,7 @@ void main() {
             rel: usdc,
             volume: d('10'),
             price: d('1'),
+            orderPrice: Rational.one,
           ),
         );
 

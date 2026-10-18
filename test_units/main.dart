@@ -152,6 +152,8 @@ import 'tests/swap/swap_shell_backup_notice_test.dart'
     as swap_shell_backup_notice_test;
 import 'tests/swap/swap_slippage_test.dart' as swap_slippage_test;
 import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
+import 'tests/swap/swap_atomic_exact_price_test.dart'
+    as swap_atomic_exact_price_test;
 import 'tests/swap/swap_widgets_test.dart' as swap_widgets_test;
 import 'tests/swap/unified_swap_bloc_test.dart' as unified_swap_bloc_test;
 import 'tests/swap/unified_swap_catalog_bloc_test.dart'
@@ -652,6 +654,7 @@ void main() {
   swap_execution_bloc_test.main();
   swap_copy_test.main();
   swap_sources_test.main();
+  swap_atomic_exact_price_test.main();
   swap_src_analytics_test.main();
   swap_src_atomic_limits_test.main();
   swap_src_atomic_quote_test.main();

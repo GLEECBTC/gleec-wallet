@@ -80,7 +80,7 @@ class AtomicSwapExecutor implements SwapExecutor {
             base: plan.base.id,
             rel: plan.rel.id,
             volume: Rational.parse(plan.volume.toString()),
-            price: Rational.parse(plan.price.toString()),
+            price: plan.orderPrice,
             orderType: SellBuyOrderType.fillOrKill,
           ),
         )

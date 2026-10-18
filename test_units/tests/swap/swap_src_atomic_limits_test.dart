@@ -390,6 +390,10 @@ void main() {
       bidOf('10', null, '5'),
     ], d('1'));
 
-    expect(best, (price: d('10'), maxVolume: d('5')));
+    expect(best, (
+      price: d('10'),
+      orderPrice: Rational.fromInt(10),
+      maxVolume: d('5'),
+    ));
   });
 }
