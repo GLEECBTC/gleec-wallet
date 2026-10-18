@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:decimal/decimal.dart';
+import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/app_config/app_config.dart' show excludedAssetList;
+import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
@@ -15,6 +17,7 @@ import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/routed_swap_execution.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
+import 'package:web_dex/shared/swap/swap_analytics.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -23,6 +26,7 @@ import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/shared/utils/utils.dart' as utils;
 
 /// A request to open the swap form on a pair, as tickers. The amount is in
@@ -38,14 +42,18 @@ typedef SwapIntent = ({
 ///
 /// App-wide rather than per screen because the [registry] must outlive every
 /// swap screen: a swap started on the form keeps being followed while the user
-/// is on their wallet, and is picked back up after a restart.
+/// is on their wallet, and is picked back up after a restart. Swap analytics
+/// are reported from here for the same reason: a swap's outcome must reach
+/// the reporter that saw it run, whichever screen is open by then.
 class SwapServices {
+  /// [logAnalytics] replaces sending to the app's AnalyticsRepo, for tests.
   SwapServices({
     required KomodoDefiSdk sdk,
     required CoinsRepo coinsRepo,
     required DexRepository dexRepository,
     required MyOrdersService orders,
     required Mm2Api mm2Api,
+    void Function(AnalyticsEventData event)? logAnalytics,
   }) : _sdk = sdk,
        _coinsRepo = coinsRepo,
        _mm2Api = mm2Api {
@@ -61,6 +69,11 @@ class SwapServices {
         ),
       ],
       inFlight: _inFlight,
+    );
+    _analytics = SwapAnalyticsReporter(
+      registry: registry,
+      log: logAnalytics ?? _queueAnalytics,
+      walletType: () => _user?.type ?? '',
     );
     history = SwapHistoryRepository(
       routedSwaps: sdk.routedSwaps,
@@ -85,6 +98,7 @@ class SwapServices {
   late final SwapHistoryRepository history;
   late final SwapTermsRepository terms;
   late final SwapPreferences preferences;
+  late final SwapAnalyticsReporter _analytics;
 
   /// Outlives each visit to the form: the aggregator limits the network
   /// address or the proxy's key, not the screen.
@@ -476,6 +490,13 @@ class SwapServices {
     await _userSubscription?.cancel();
     await _openRequests.close();
     await _intents.close();
+    await _analytics.dispose();
     await registry.dispose();
+  }
+
+  /// Sends nothing when no AnalyticsRepo is registered.
+  static void _queueAnalytics(AnalyticsEventData event) {
+    if (!GetIt.I.isRegistered<AnalyticsRepo>()) return;
+    GetIt.I<AnalyticsRepo>().queueEvent(event).ignore();
   }
 }

@@ -189,6 +189,8 @@ import 'tests/swap/swap_src_routed_quote_test.dart'
     as swap_src_routed_quote_test;
 import 'tests/swap/swap_src_services_assets_test.dart'
     as swap_src_services_assets_test;
+import 'tests/swap/swap_src_services_analytics_test.dart'
+    as swap_src_services_analytics_test;
 import 'tests/swap/swap_src_services_session_test.dart'
     as swap_src_services_session_test;
 import 'tests/swap/swap_src_storage_test.dart' as swap_src_storage_test;
@@ -676,6 +678,7 @@ void main() {
   swap_src_routed_quote_log_test.main();
   swap_src_routed_quote_test.main();
   swap_src_services_assets_test.main();
+  swap_src_services_analytics_test.main();
   swap_src_services_session_test.main();
   swap_src_storage_test.main();
   swap_exec_atomic_delay_test.main();

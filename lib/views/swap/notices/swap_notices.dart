@@ -3,16 +3,12 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/router/state/routing_state.dart';
-import 'package:web_dex/shared/swap/swap_analytics.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
-import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 
@@ -33,7 +29,6 @@ class SwapNoticeListener extends StatefulWidget {
 class _SwapNoticeListenerState extends State<SwapNoticeListener> {
   StreamSubscription<SwapExecutionNotice>? _subscription;
   SwapServices? _services;
-  SwapAnalyticsReporter? _analytics;
 
   @override
   void initState() {
@@ -41,21 +36,11 @@ class _SwapNoticeListenerState extends State<SwapNoticeListener> {
     final services = _services = context.read<SwapServices?>();
     if (services == null) return;
     _subscription = services.registry.notices.listen(_show);
-    final analytics = context.read<AnalyticsBloc?>();
-    final auth = context.read<AuthBloc?>();
-    if (analytics != null) {
-      _analytics = SwapAnalyticsReporter(
-        registry: services.registry,
-        log: analytics.logEvent,
-        walletType: () => auth?.state.currentUser?.type ?? '',
-      );
-    }
   }
 
   @override
   void dispose() {
     unawaited(_subscription?.cancel());
-    unawaited(_analytics?.dispose());
     super.dispose();
   }
 
