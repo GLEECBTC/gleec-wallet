@@ -4,28 +4,52 @@ part of 'unified_swap_bloc.dart';
 extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   bool get _present => _visible && _foreground;
 
-  void _onVisibilityChanged(
+  Future<void> _onVisibilityChanged(
     UnifiedSwapVisibilityChanged event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
+    final wasPresent = _present;
     _visible = event.visible;
-    _onPresenceChanged();
+    await _onPresenceChanged(emit, wasPresent: wasPresent);
   }
 
-  void _onForegroundChanged(
+  Future<void> _onForegroundChanged(
     UnifiedSwapForegroundChanged event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
+    final wasPresent = _present;
     _foreground = event.foreground;
-    _onPresenceChanged();
+    await _onPresenceChanged(emit, wasPresent: wasPresent);
   }
 
-  void _onPresenceChanged() {
+  Future<void> _onPresenceChanged(
+    Emitter<UnifiedSwapState> emit, {
+    required bool wasPresent,
+  }) async {
     if (!_present) {
       _refresh?.cancel();
       _offersWatch?.cancel();
       return;
     }
+    _onShown();
+    // Funds may have moved while the form was away.
+    if (!wasPresent) await _reloadBalances(emit);
+  }
+
+  /// [_loadBalances], pricing the form if the balances lift what stopped
+  /// it being priced.
+  Future<void> _reloadBalances(
+    Emitter<UnifiedSwapState> emit, {
+    bool immediate = true,
+  }) async {
+    final blocked = !(state.issue?.stillPriced ?? true);
+    await _loadBalances(emit);
+    if (blocked && state.view == UnifiedSwapView.form) {
+      _scheduleEvaluation(immediate: immediate);
+    }
+  }
+
+  void _onShown() {
     if (state.view != UnifiedSwapView.form) return;
     if (state.issue == SwapFormIssue.noOffers || _offersUnknown(state)) {
       add(const UnifiedSwapOffersRequested(quiet: true));

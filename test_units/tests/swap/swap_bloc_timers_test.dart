@@ -330,6 +330,68 @@ void main() {
       expect(bloc.state.issue, SwapFormIssue.insufficient);
     });
 
+    for (final (name, away, back) in [
+      (
+        'the app',
+        const UnifiedSwapForegroundChanged(foreground: false),
+        const UnifiedSwapForegroundChanged(foreground: true),
+      ),
+      (
+        'the form',
+        const UnifiedSwapVisibilityChanged(visible: false),
+        const UnifiedSwapVisibilityChanged(visible: true),
+      ),
+    ]) {
+      swapBlocTest('a balance is read again when $name comes back', (h) {
+        final bloc = h.open()..add(away);
+        h.settle();
+        h.balances[eth] = d('0.5');
+
+        bloc.add(back);
+        h.settle();
+
+        expect(bloc.state.balance, d('0.5'));
+        expect(bloc.state.issue, SwapFormIssue.insufficient);
+      });
+    }
+
+    swapBlocTest('a balance is read again when the amount is edited', (h) {
+      final bloc = h.open();
+      h.balances[eth] = d('0.5');
+
+      bloc.add(const UnifiedSwapAmountChanged('0.8'));
+      h.settle();
+
+      expect(bloc.state.balance, d('0.5'));
+      expect(bloc.state.issue, SwapFormIssue.insufficient);
+    });
+
+    for (final (name, change) in [
+      (
+        'on coming back',
+        <UnifiedSwapEvent>[
+          const UnifiedSwapForegroundChanged(foreground: false),
+          const UnifiedSwapForegroundChanged(foreground: true),
+        ],
+      ),
+      ('on an edit', <UnifiedSwapEvent>[const UnifiedSwapAmountChanged('120')]),
+    ]) {
+      swapBlocTest('gas that arrived $name prices the form', (h) {
+        h.balances[eth] = d('0');
+        final bloc = h.open(pay: 'USDC-ERC20', receive: 'ETH', amount: '100');
+        expect(bloc.state.issue, SwapFormIssue.noFeeBalance);
+        expect(h.routed.requests, isEmpty);
+
+        h.balances[eth] = d('1');
+        change.forEach(bloc.add);
+        h.settle();
+
+        expect(bloc.state.issue, isNull);
+        expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+        expect(h.routed.requests, hasLength(1));
+      });
+    }
+
     swapBlocTest('a balance that cannot be read is unknown, not zero', (h) {
       h.unreadableBalances.add(eth);
       final bloc = h.open();

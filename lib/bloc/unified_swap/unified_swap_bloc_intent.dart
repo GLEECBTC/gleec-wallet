@@ -50,10 +50,10 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     );
   }
 
-  void _onAmountChanged(
+  Future<void> _onAmountChanged(
     UnifiedSwapAmountChanged event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
     if (event.text == state.inputText) return;
     _invalidate();
     emit(
@@ -71,6 +71,8 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       ),
     );
     _scheduleEvaluation();
+    // The balance may have moved since the asset was chosen.
+    await _reloadBalances(emit, immediate: false);
   }
 
   void _onAmountModeToggled(
