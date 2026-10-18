@@ -1421,6 +1421,7 @@
   "swapReviewUpdatedTitle": "Outcome updated",
   "swapReviewUpdatedMinimum": "Minimum changed from {} to {}.",
   "swapReviewUpdatedCost": "Total cost changed from {} to {}.",
+  "swapReviewUpdatedCostKnown": "Total cost is now known: {}.",
   "swapReviewExpiredTitle": "Quote expired",
   "swapReviewExpiredBody": "Refresh before starting. Nothing has been signed or sent.",
   "swapReviewRevalidatingBody": "Checking the latest outcome and costs. Starting is unavailable until this finishes.",

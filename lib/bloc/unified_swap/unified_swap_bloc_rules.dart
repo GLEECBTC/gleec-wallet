@@ -153,11 +153,62 @@ bool _isStructuralChange(SwapQuote accepted, SwapQuote fresh) {
 /// exists to prevent. Costs may drift a little, not a lot.
 bool _isMaterialChange(SwapQuote accepted, SwapQuote fresh) {
   if (fresh.guaranteedReceive < accepted.guaranteedReceive) return true;
+  // Fees not read for the review are new at any amount.
+  if (!accepted.feesKnown) return fresh.fees.isNotEmpty;
   final before = accepted.pricing.totalCostUsd;
   final after = fresh.pricing.totalCostUsd;
-  if (before == null || after == null) return false;
+  // Agreed without a dollar total, the costs are compared as the review
+  // gave them. Asking whenever a total is unknown would ask on every start
+  // for a coin with no dollar price, as GLEEC is today.
+  if (before == null) return _feesRose(accepted, fresh);
+  if (after == null) return false;
+  return _rose(before, after);
+}
+
+bool _rose(Decimal before, Decimal after) {
   final increase = after - before;
   return increase > _costToleranceUsd && increase > before * _costTolerance;
+}
+
+/// Whether the fees priced wherever they are charged rose by [_rose]
+/// together, or another is in a new token or over 10% more of one.
+bool _feesRose(SwapQuote accepted, SwapQuote fresh) {
+  final before = _feesByToken(accepted);
+  final after = _feesByToken(fresh);
+  var usdBefore = Decimal.zero;
+  var usdAfter = Decimal.zero;
+  for (final token in {...before.keys, ...after.keys}) {
+    final was = before[token];
+    final now = after[token];
+    if ((was == null || was.usd != null) && (now == null || now.usd != null)) {
+      usdBefore += was?.usd ?? Decimal.zero;
+      usdAfter += now?.usd ?? Decimal.zero;
+    } else if (now != null &&
+        (was == null ||
+            now.amount > was.amount * (Decimal.one + _costTolerance))) {
+      return true;
+    }
+  }
+  return _rose(usdBefore, usdAfter);
+}
+
+/// [quote]'s fees summed per token, with their dollar value when each of
+/// them has one.
+Map<Object, ({Decimal amount, Decimal? usd})> _feesByToken(SwapQuote quote) {
+  final totals = <Object, ({Decimal amount, Decimal? usd})>{};
+  for (final fee in quote.fees) {
+    final token = fee.asset ?? fee.symbol ?? '';
+    final sum = totals[token];
+    final sumUsd = sum?.usd;
+    final usd = fee.usdValue;
+    totals[token] = (
+      amount: (sum?.amount ?? Decimal.zero) + fee.amount,
+      usd: sum == null
+          ? usd
+          : (sumUsd == null || usd == null ? null : sumUsd + usd),
+    );
+  }
+  return totals;
 }
 
 const _stablecoins = {'USDT', 'USDC', 'DAI'};

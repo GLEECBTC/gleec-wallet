@@ -4,7 +4,12 @@ part of 'swap_review_view.dart';
 /// the status of the latest re-price.
 extension _ReviewContentDetails on _ReviewContent {
   String _usdOrTokens(Decimal? usd, Iterable<SwapFeeComponent> fees) {
+    if (!quote.feesKnown) return LocaleKeys.swapCostIncomplete.tr();
     if (usd != null) return SwapFormat.usd(usd, rounding: SwapRounding.up);
+    return _tokens(fees);
+  }
+
+  String _tokens(Iterable<SwapFeeComponent> fees) {
     final byToken = <String, Decimal>{};
     for (final fee in fees) {
       final label = fee.tokenLabel;
@@ -223,6 +228,29 @@ extension _ReviewContentDetails on _ReviewContent {
     ];
   }
 
+  /// The material update's cost line; null when it reads the same.
+  String? _costChange(SwapQuote previous) {
+    String usd(Decimal value) =>
+        SwapFormat.usd(value, rounding: SwapRounding.up);
+    final before = previous.pricing.totalCostUsd;
+    final after = quote.pricing.totalCostUsd;
+    if (before != null && after != null) {
+      return _changed(usd(before), usd(after));
+    }
+    if (!quote.feesKnown) return null;
+    if (!previous.feesKnown) {
+      return LocaleKeys.swapReviewUpdatedCostKnown.tr(
+        args: [after == null ? _tokens(quote.fees) : usd(after)],
+      );
+    }
+    return _changed(_tokens(previous.fees), _tokens(quote.fees));
+  }
+
+  /// Null when both read the same: a finer change would read "from $0.54 to
+  /// $0.54".
+  static String? _changed(String was, String now) =>
+      was == now ? null : LocaleKeys.swapReviewUpdatedCost.tr(args: [was, now]);
+
   List<Widget> _status(BuildContext context) {
     final toTicker = SwapFormat.ticker(quote.to);
     switch (review.status) {
@@ -239,17 +267,8 @@ extension _ReviewContentDetails on _ReviewContent {
             );
             lines.add(LocaleKeys.swapReviewUpdatedMinimum.tr(args: [was, now]));
           }
-          final before = previous.pricing.totalCostUsd;
-          final after = quote.pricing.totalCostUsd;
-          if (before != null && after != null) {
-            final was = SwapFormat.usd(before, rounding: SwapRounding.up);
-            final now = SwapFormat.usd(after, rounding: SwapRounding.up);
-            // Cents are the finest a cost is worth showing: a smaller change
-            // would read "from $0.54 to $0.54".
-            if (was != now) {
-              lines.add(LocaleKeys.swapReviewUpdatedCost.tr(args: [was, now]));
-            }
-          }
+          final cost = _costChange(previous);
+          if (cost != null) lines.add(cost);
         }
         return [
           const SizedBox(height: 12),
