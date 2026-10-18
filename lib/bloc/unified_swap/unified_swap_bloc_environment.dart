@@ -121,18 +121,31 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       emit(state.copyWith(clearBalance: true, clearFeeBalance: true));
       return;
     }
-    final feeAsset = pay.parentId;
     final epoch = _walletEpoch;
-    final balance = await _read(pay);
+    _showHeld(emit, pay, epoch, await _heldOf(pay));
+  }
+
+  Future<_Held> _heldOf(AssetId asset) async {
+    final feeAsset = asset.parentId;
+    final balance = await _read(asset);
     final feeBalance = feeAsset == null ? null : await _read(feeAsset);
+    return (balance: balance, feeBalance: feeBalance);
+  }
+
+  void _showHeld(
+    Emitter<UnifiedSwapState> emit,
+    AssetId pay,
+    int epoch,
+    _Held held,
+  ) {
     if (state.pay != pay || epoch != _walletEpoch) return;
     emit(
       _validated(
         state.copyWith(
-          balance: balance,
-          clearBalance: balance == null,
-          feeBalance: feeBalance,
-          clearFeeBalance: feeBalance == null,
+          balance: held.balance,
+          clearBalance: held.balance == null,
+          feeBalance: held.feeBalance,
+          clearFeeBalance: held.feeBalance == null,
         ),
       ),
     );

@@ -25,6 +25,12 @@ part 'unified_swap_bloc_rules.dart';
 /// One asset the wallet holds, with its value, for choosing a default pair.
 typedef SwapHolding = ({AssetId asset, Decimal usdValue});
 
+/// What a start takes from the pay balance: amount, on-top fees in the pay
+/// asset, refund gas.
+typedef SwapSpend = ({Decimal amount, Decimal fees, Decimal refundReserve});
+
+typedef _Held = ({Decimal? balance, Decimal? feeBalance});
+
 /// Drives the swap screen: the intent, its automatic evaluation, the review
 /// and the start.
 ///
@@ -198,37 +204,40 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     return decimals == null ? raw : raw.floor(scale: decimals);
   }
 
-  /// What starting the selected option takes from the pay balance: the
-  /// amount sold, the fees paid on top of it in the pay asset, and the gas
-  /// kept to refund it if it fails. Null without a priced option.
-  ({Decimal amount, Decimal fees, Decimal refundReserve})? spendOf(
-    UnifiedSwapState state,
-  ) {
+  /// What starting the selected option takes from the pay balance, for the
+  /// amount on the form. Null without a priced option.
+  SwapSpend? spendOf(UnifiedSwapState state) {
     final quote = state.selectedQuote;
     return quote == null ? null : _spendFor(state, quote);
   }
 
   /// [spendOf] for [quote], which need not be the selected option.
-  ({Decimal amount, Decimal fees, Decimal refundReserve})? _spendFor(
-    UnifiedSwapState state,
-    SwapQuote quote,
-  ) {
-    final pay = state.pay;
+  SwapSpend? _spendFor(UnifiedSwapState state, SwapQuote quote) {
     final amount = amountOf(state);
-    if (pay == null || amount == null) return null;
+    if (state.pay == null || amount == null) return null;
     // The option is what starts, and switching to a dollar amount can leave
     // it priced for a little more than the amount now shown.
     final sold = quote.sellAmount > amount ? quote.sellAmount : amount;
-    final max = state.maxApplied;
+    return _spending(state, quote, sold, state.balance);
+  }
+
+  /// Max counts only for a quote selling the form's pay asset.
+  SwapSpend _spending(
+    UnifiedSwapState state,
+    SwapQuote quote,
+    Decimal sold,
+    Decimal? balance,
+  ) {
+    final max = quote.from == state.pay ? state.maxApplied : null;
     return (
       amount: sold,
       // Every fee, the order book's trading fee included: KDF checks the gas
       // to claim a token on the same network alone, never summed with the
       // rest, so only this total shows whether that claim can be paid.
-      fees: quote.costOnTopIn(pay),
+      fees: quote.costOnTopIn(quote.from),
       // KDF's Max kept it back already, priced when Max was asked; counting
       // it again would refuse that Max once gas rises at all.
-      refundReserve: max != null && max.coversRefundFor(sold, state.balance)
+      refundReserve: max != null && max.coversRefundFor(sold, balance)
           ? Decimal.zero
           : quote.refundReserve ?? Decimal.zero,
     );

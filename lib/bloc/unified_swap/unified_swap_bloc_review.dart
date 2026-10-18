@@ -114,8 +114,10 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       ),
     );
 
-    // Read alongside the price, which is checked against what is held now.
-    final balances = _loadBalances(emit);
+    // Read alongside the price, for the quote's own asset, which need not be
+    // the form's.
+    final epoch = _walletEpoch;
+    final reading = _heldOf(accepted.from);
     SwapQuoteResult result;
     try {
       result = await _repository.requote(accepted).timeout(_evaluationTimeout);
@@ -127,7 +129,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         ),
       );
     }
-    await balances;
+    final held = await reading;
+    _showHeld(emit, accepted.from, epoch, held);
     // Back was pressed while this ran: never start behind the user's back.
     if (version != _startVersion || state.view != UnifiedSwapView.review) {
       return null;
@@ -164,9 +167,14 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           return null;
         }
         // KDF's checks at the start leave out the gas to refund the payment,
-        // so the form's check is run again. A price read without fees is
-        // held to the one reviewed.
-        final short = _shortfallOf(state, fresh.feesKnown ? fresh : accepted);
+        // so the form's check is run again, for the amount that starts. A
+        // price read without fees is held to the one reviewed.
+        final checked = fresh.feesKnown ? fresh : accepted;
+        final short = _shortfall(
+          checked,
+          _spending(state, checked, checked.sellAmount, held.balance),
+          held,
+        );
         if (short != null) {
           emit(
             state.copyWith(

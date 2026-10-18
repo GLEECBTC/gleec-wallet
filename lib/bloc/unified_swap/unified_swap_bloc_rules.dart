@@ -62,19 +62,25 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
     return quote == null ? null : _shortfallOf(next, quote);
   }
 
-  /// The balance [quote] leaves short in [next], if any: the pay asset's, of
-  /// the amount with its fees and refund gas, or the network coin's, of the
-  /// fees paid in it.
-  SwapFormIssue? _shortfallOf(UnifiedSwapState next, SwapQuote quote) {
-    final balance = next.balance;
-    final spend = _spendFor(next, quote);
+  /// The balance [quote] leaves short in [next], for the amount on the form.
+  SwapFormIssue? _shortfallOf(UnifiedSwapState next, SwapQuote quote) =>
+      _shortfall(quote, _spendFor(next, quote), (
+        balance: next.balance,
+        feeBalance: next.feeBalance,
+      ));
+
+  /// The balance [spend] of [quote] leaves short in [held], if any: the pay
+  /// asset's, of the amount with its fees and refund gas, or the network
+  /// coin's, of the fees paid in it.
+  SwapFormIssue? _shortfall(SwapQuote quote, SwapSpend? spend, _Held held) {
+    final balance = held.balance;
     if (balance != null &&
         spend != null &&
         spend.amount + spend.fees + spend.refundReserve > balance) {
       return SwapFormIssue.insufficient;
     }
-    final feeAsset = next.pay?.parentId;
-    final feeBalance = next.feeBalance;
+    final feeAsset = quote.from.parentId;
+    final feeBalance = held.feeBalance;
     if (feeAsset != null &&
         feeBalance != null &&
         quote.costOnTopIn(feeAsset) > feeBalance) {
