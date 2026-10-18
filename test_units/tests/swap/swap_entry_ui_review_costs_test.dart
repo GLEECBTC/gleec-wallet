@@ -79,6 +79,38 @@ void main() {
     expect(find.text(r'$0.00'), findsNothing);
   });
 
+  testWidgets('approval gas reads as part of the network costs', (
+    tester,
+  ) async {
+    SwapFeeComponent gas(SwapFeeKind kind, String amount, String usd) =>
+        SwapFeeComponent(
+          kind: kind,
+          amount: d(amount),
+          deductedFromReceive: false,
+          asset: eth,
+          usdValue: d(usd),
+        );
+    await pump(
+      tester,
+      quoteOf(
+        approval: SwapApprovalRequirement(
+          asset: usdc,
+          exactAmount: d('100'),
+          resetsFirst: false,
+        ),
+        fees: [
+          gas(SwapFeeKind.network, '0.001', '3'),
+          gas(SwapFeeKind.approvalNetwork, '0.0004', '1.2'),
+        ],
+        pricing: pricingOf(network: '4.2', approval: '1.2'),
+      ),
+    );
+    await expandCosts(tester);
+
+    expect(detail(tester, 'Network costs'), r'$4.20');
+    expect(detail(tester, '↳ Approval network cost'), r'$1.20');
+  });
+
   for (final (slippage, shown) in [
     (0.0005, '0.05%'),
     (0.0025, '0.25%'),

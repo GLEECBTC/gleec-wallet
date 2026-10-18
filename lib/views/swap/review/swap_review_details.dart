@@ -54,9 +54,10 @@ extension _ReviewContentDetails on _ReviewContent {
           label: LocaleKeys.swapNetworkCosts.tr(),
           value: _usdOrTokens(pricing.networkCostUsd, network),
         ),
+        // Already counted in the network costs above.
         if (approval.isNotEmpty)
           SwapDetailRow(
-            label: LocaleKeys.swapApprovalNetworkCost.tr(),
+            label: '↳ ${LocaleKeys.swapApprovalNetworkCost.tr()}',
             value: _usdOrTokens(pricing.approvalNetworkCostUsd, approval),
           ),
         SwapDetailRow(
