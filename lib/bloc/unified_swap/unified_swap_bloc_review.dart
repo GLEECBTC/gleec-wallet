@@ -279,26 +279,42 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   ) async {
     // A start or re-price under way answers first: starting this beside it
     // could swap twice.
-    if (_startInDoubt ||
-        state.review?.status == SwapReviewStatus.revalidating) {
-      return;
-    }
-    if (!state.tradingEnabled) return;
-    // Consent was given on the progress screen, old against new, after the
-    // engine stopped a swap before sending anything.
-    final stale = event.quote.isExpiredAt(_now());
+    bool refused() =>
+        _startInDoubt ||
+        state.review?.status == SwapReviewStatus.revalidating ||
+        !state.tradingEnabled;
+    if (refused()) return;
+    final quote = event.quote;
+    final termsRequired =
+        quote.source == SwapLiquiditySource.routed &&
+        !await _terms.hasAccepted();
+    if (refused()) return;
     _startVersion++;
+    final review = SwapReview(
+      quote: quote,
+      status: quote.isExpiredAt(_now())
+          ? SwapReviewStatus.expired
+          : SwapReviewStatus.ready,
+      termsRequired: termsRequired,
+    );
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,
-        review: SwapReview(
-          quote: event.quote,
-          status: stale ? SwapReviewStatus.expired : SwapReviewStatus.ready,
-        ),
+        review: review,
         clearActiveExecution: true,
       ),
     );
-    if (!stale) await _start(emit, event.quote, termsRequired: false);
+    // Consent was given on the progress screen, but does not skip the
+    // re-price: a price read back from history is dated when read, however
+    // old.
+    if (termsRequired) {
+      // The provider's terms are accepted by pressing Start beside them.
+      _armExpiry(quote);
+      return;
+    }
+    final fresh = await _revalidate(emit, review);
+    if (fresh == null) return;
+    await _start(emit, fresh, termsRequired: false);
   }
 
   void _onProgressLeft(
