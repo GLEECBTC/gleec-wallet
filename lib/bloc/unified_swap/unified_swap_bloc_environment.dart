@@ -4,28 +4,52 @@ part of 'unified_swap_bloc.dart';
 extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   bool get _present => _visible && _foreground;
 
-  void _onVisibilityChanged(
+  Future<void> _onVisibilityChanged(
     UnifiedSwapVisibilityChanged event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
+    final wasPresent = _present;
     _visible = event.visible;
-    _onPresenceChanged();
+    await _onPresenceChanged(emit, wasPresent: wasPresent);
   }
 
-  void _onForegroundChanged(
+  Future<void> _onForegroundChanged(
     UnifiedSwapForegroundChanged event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
+    final wasPresent = _present;
     _foreground = event.foreground;
-    _onPresenceChanged();
+    await _onPresenceChanged(emit, wasPresent: wasPresent);
   }
 
-  void _onPresenceChanged() {
+  Future<void> _onPresenceChanged(
+    Emitter<UnifiedSwapState> emit, {
+    required bool wasPresent,
+  }) async {
     if (!_present) {
       _refresh?.cancel();
       _offersWatch?.cancel();
       return;
     }
+    _onShown();
+    // Funds may have moved while the form was away.
+    if (!wasPresent) await _reloadBalances(emit);
+  }
+
+  /// [_loadBalances], pricing the form if the balances lift what stopped
+  /// it being priced.
+  Future<void> _reloadBalances(
+    Emitter<UnifiedSwapState> emit, {
+    bool immediate = true,
+  }) async {
+    final blocked = !(state.issue?.stillPriced ?? true);
+    await _loadBalances(emit);
+    if (blocked && state.view == UnifiedSwapView.form) {
+      _scheduleEvaluation(immediate: immediate);
+    }
+  }
+
+  void _onShown() {
     if (state.view != UnifiedSwapView.form) return;
     if (state.issue == SwapFormIssue.noOffers || _offersUnknown(state)) {
       add(const UnifiedSwapOffersRequested(quiet: true));
@@ -54,11 +78,19 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     }
     final signingChanged = event.signedIn != state.signedIn;
     if (!signingChanged) {
+      // Without trading the review cannot go ahead, and the form says why.
+      final leaveReview =
+          !event.tradingEnabled &&
+          state.view == UnifiedSwapView.review &&
+          !_startInDoubt;
+      if (leaveReview) _startVersion++;
       emit(
         state.copyWith(
           tradingEnabled: event.tradingEnabled,
           clockValid: event.clockValid,
           hardwareWallet: event.hardwareWallet,
+          view: leaveReview ? UnifiedSwapView.form : null,
+          clearReview: leaveReview,
         ),
       );
     } else {
@@ -113,18 +145,31 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       emit(state.copyWith(clearBalance: true, clearFeeBalance: true));
       return;
     }
-    final feeAsset = pay.parentId;
     final epoch = _walletEpoch;
-    final balance = await _read(pay);
+    _showHeld(emit, pay, epoch, await _heldOf(pay));
+  }
+
+  Future<_Held> _heldOf(AssetId asset) async {
+    final feeAsset = asset.parentId;
+    final balance = await _read(asset);
     final feeBalance = feeAsset == null ? null : await _read(feeAsset);
+    return (balance: balance, feeBalance: feeBalance);
+  }
+
+  void _showHeld(
+    Emitter<UnifiedSwapState> emit,
+    AssetId pay,
+    int epoch,
+    _Held held,
+  ) {
     if (state.pay != pay || epoch != _walletEpoch) return;
     emit(
       _validated(
         state.copyWith(
-          balance: balance,
-          clearBalance: balance == null,
-          feeBalance: feeBalance,
-          clearFeeBalance: feeBalance == null,
+          balance: held.balance,
+          clearBalance: held.balance == null,
+          feeBalance: held.feeBalance,
+          clearFeeBalance: held.feeBalance == null,
         ),
       ),
     );

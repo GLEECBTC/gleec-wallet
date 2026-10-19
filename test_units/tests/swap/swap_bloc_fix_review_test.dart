@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -177,8 +178,50 @@ void main() {
   });
 
   group('numbers accepted for a swap the engine stopped', () {
-    swapBlocTest('start at once while they stand', (h) {
-      final bloc = h.open()
+    /// Accepts [agreed] for a routed swap started before, so with the
+    /// provider's terms accepted then.
+    UnifiedSwapBloc accept(SwapBlocHarness h, SwapQuote agreed) {
+      h.resolve(h.terms.recordAcceptance(at: h.now()));
+      final bloc = h.open()..add(UnifiedSwapFreshQuoteAccepted(agreed));
+      h.settle();
+      return bloc;
+    }
+
+    swapBlocTest('are priced again before they start, as any start is', (h) {
+      final agreed = quoteOf(id: 'agreed', quotedAt: h.now());
+      final bloc = accept(h, agreed);
+
+      expect(h.routed.requoted, [agreed]);
+      expect(h.routedExecutor.started.single.id, 'agreed');
+      expect(bloc.state.view, UnifiedSwapView.progress);
+    });
+
+    swapBlocTest('that moved again since are asked about once more', (h) {
+      h.routed.requoteResult = lower(h);
+      final bloc = accept(h, quoteOf(id: 'agreed', quotedAt: h.now()));
+
+      expect(h.routedExecutor.started, isEmpty);
+      expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+      expect(bloc.state.review!.previous!.id, 'agreed');
+    });
+
+    swapBlocTest('the wallet can no longer pay are not started', (h) {
+      h.balances[eth] = d('0.5');
+      final bloc = accept(h, quoteOf(id: 'agreed', quotedAt: h.now()));
+
+      expect(h.routedExecutor.started, isEmpty);
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidationFailed);
+      expect(
+        bloc.state.review!.revalidationFailure!.kind,
+        SwapQuoteFailureKind.insufficientFunds,
+      );
+    });
+
+    swapBlocTest('for another pair are measured against its own balance', (h) {
+      h
+        ..balances[btc] = d('0.01')
+        ..resolve(h.terms.recordAcceptance(at: h.now()));
+      final bloc = h.open(pay: 'BTC', receive: 'ETH', amount: '0.01')
         ..add(
           UnifiedSwapFreshQuoteAccepted(
             quoteOf(id: 'agreed', quotedAt: h.now()),
@@ -188,6 +231,22 @@ void main() {
 
       expect(h.routedExecutor.started.single.id, 'agreed');
       expect(bloc.state.view, UnifiedSwapView.progress);
+    });
+
+    swapBlocTest('wait for Start beside terms not accepted yet', (h) {
+      final agreed = quoteOf(id: 'agreed', quotedAt: h.now());
+      final bloc = h.open()..add(UnifiedSwapFreshQuoteAccepted(agreed));
+      h.settle();
+
+      expect(bloc.state.review!.status, SwapReviewStatus.ready);
+      expect(bloc.state.review!.termsRequired, isTrue);
+      expect(h.routed.requoted, isEmpty);
+      expect(h.routedExecutor.started, isEmpty);
+
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+      expect(h.routed.requoted, [agreed]);
+      expect(h.routedExecutor.started.single.id, 'agreed');
     });
 
     swapBlocTest('once stale open as expired, to be refreshed first', (h) {
