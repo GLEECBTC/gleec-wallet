@@ -184,8 +184,11 @@ class _ShowSwapDataState extends State<ShowSwapData> {
             'min_to_amount_accepted': entry.minToAmountAccepted?.toString(),
             'outcome': entry.receipt?.outcome.wire,
             'partial_reason': entry.receipt?.partialReason?.name,
-            'received_amount': entry.receipt?.amount.toString(),
+            'received_amount': entry.receipt?.amount?.toString(),
             'received_token': entry.receipt?.tokenLabel,
+            'provider_received_amount': entry.receipt?.reported?.amount
+                .toString(),
+            'provider_received_token': entry.receipt?.reported?.tokenLabel,
             'failure': entry.failure?.kind.name,
             'error_type': entry.failure?.errorType,
             'failure_message': entry.failure?.message,

@@ -224,8 +224,9 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       amount: sold,
       // Every fee, the order book's trading fee included: KDF checks the gas
       // to claim a token on the same network alone, never summed with the
-      // rest, so only this total shows whether that claim can be paid.
-      fees: quote.costOnTopIn(pay),
+      // rest, so only this total shows whether that claim can be paid. A
+      // routed route's gas counts at the balance KDF requires for it.
+      fees: quote.fundingOnTopIn(pay),
       // KDF's Max kept it back already, priced when Max was asked; counting
       // it again would refuse that Max once gas rises at all.
       refundReserve: max != null && max.coversRefundFor(sold, state.balance)

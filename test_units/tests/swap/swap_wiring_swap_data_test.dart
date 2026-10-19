@@ -282,6 +282,8 @@ const _blank = <String, dynamic>{
   'partial_reason': null,
   'received_amount': null,
   'received_token': null,
+  'provider_received_amount': null,
+  'provider_received_token': null,
   'failure': null,
   'error_type': null,
   'failure_message': null,

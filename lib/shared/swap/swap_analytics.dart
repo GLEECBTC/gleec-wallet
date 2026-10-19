@@ -130,6 +130,7 @@ class SwapAnalyticsReporter {
     SwapFailureReason.routeFailed => 'route_failed',
     SwapFailureReason.safetyCheck => 'safety_check',
     SwapFailureReason.quoteUnavailable => 'quote_unavailable',
+    SwapFailureReason.networkFee => 'network_fee',
     SwapFailureReason.restarted => 'restarted',
     SwapFailureReason.exchangeFailed => 'exchange_failed',
     SwapFailureReason.internal => 'internal',

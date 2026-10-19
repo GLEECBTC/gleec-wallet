@@ -305,14 +305,12 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     }
   }
 
-  /// Max from [offer], as the SDK's probe works it out: the gas in [from]
-  /// times its margin, and the provider fees it charges on top in [from],
-  /// which the form counts too. A token has no gas in it: that is paid in its
-  /// network's coin.
+  /// Max from [offer], as the SDK's probe works it out: the gas in [from] at
+  /// the balance KDF requires for it, with its margin, and the provider fees
+  /// it charges on top in [from], which the form counts too. A token has no
+  /// gas in it: that is paid in its network's coin.
   SwapMaxAmount _maxFrom(RoutedSwapOffer offer, AssetId from, Decimal balance) {
-    final gas = offer.networkFees
-        .where((fee) => fee.assetId == from || fee.ticker == from.id)
-        .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
+    final gas = RoutedSwapManager.nativeGasReserve(offer, from);
     // The gas among the costs is counted above, with its margin.
     final providerFees = offer.costs
         .where(
@@ -322,7 +320,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
               cost.assetId == from,
         )
         .fold<Decimal>(Decimal.zero, (sum, cost) => sum + cost.amount);
-    var reserve = gas * RoutedSwapManager.maxSellFeeMargin + providerFees;
+    var reserve = gas + providerFees;
     var amount = balance - reserve;
     final decimals = from.chainId.decimals;
     if (decimals != null) {
@@ -426,9 +424,13 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       RoutedSwapRateLimitedException() => failure(
         SwapQuoteFailureKind.rateLimited,
       ),
+      // A node that won't estimate gas for an address without the network's
+      // coin answers the same as one that is down, so a failed estimate reads
+      // as a service error, whose copy names the coin to check.
       RoutedSwapProviderException() ||
       RoutedSwapTransportException() ||
-      RoutedSwapInternalException() => failure(
+      RoutedSwapInternalException() ||
+      RoutedSwapGasEstimationFailedException() => failure(
         SwapQuoteFailureKind.serviceError,
       ),
       _ => failure(SwapQuoteFailureKind.unknown),

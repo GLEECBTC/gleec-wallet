@@ -77,6 +77,10 @@ enum SwapFailureReason {
   /// Pricing failed while the swap was starting.
   quoteUnavailable,
 
+  /// The network fee could not be estimated while the swap was starting or
+  /// before a send. The swap was not sent.
+  networkFee,
+
   /// The app or engine restarted before anything was sent.
   restarted,
 
@@ -158,6 +162,7 @@ class SwapExecutionOutcome extends Equatable {
     this.receivedAmount,
     this.receivedAsset,
     this.receivedSymbol,
+    this.receivedReported = false,
     this.failure,
   });
 
@@ -166,6 +171,10 @@ class SwapExecutionOutcome extends Equatable {
 
   /// What arrived (or came back, for a refund).
   final Decimal? receivedAmount;
+
+  /// Whether [receivedAmount] is what the route's provider reports rather
+  /// than an amount the engine measured on-chain.
+  final bool receivedReported;
 
   /// The asset that arrived, when it maps to a wallet asset.
   final AssetId? receivedAsset;
@@ -185,6 +194,7 @@ class SwapExecutionOutcome extends Equatable {
     receivedAmount,
     receivedAsset,
     receivedSymbol,
+    receivedReported,
     failure,
   ];
 }

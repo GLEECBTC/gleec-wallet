@@ -181,6 +181,8 @@ import 'tests/swap/unified_swap_repository_offers_test.dart'
 import 'tests/swap/swap_src_repository_test.dart' as swap_src_repository_test;
 import 'tests/swap/swap_src_routed_max_test.dart' as swap_src_routed_max_test;
 import 'tests/swap/swap_routed_max_fees_test.dart' as swap_routed_max_fees_test;
+import 'tests/swap/swap_routed_funding_test.dart' as swap_routed_funding_test;
+import 'tests/swap/swap_routed_payout_test.dart' as swap_routed_payout_test;
 import 'tests/swap/swap_src_routed_offer_test.dart'
     as swap_src_routed_offer_test;
 import 'tests/swap/swap_src_routed_quote_log_test.dart'
@@ -668,6 +670,8 @@ void main() {
   swap_src_repository_test.main();
   swap_src_routed_max_test.main();
   swap_routed_max_fees_test.main();
+  swap_routed_funding_test.main();
+  swap_routed_payout_test.main();
   swap_src_routed_offer_test.main();
   swap_src_routed_quote_log_test.main();
   swap_src_routed_quote_test.main();

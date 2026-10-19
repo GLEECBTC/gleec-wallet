@@ -1701,6 +1701,7 @@ abstract class LocaleKeys {
   static const swapCancelRefusedAtomic = 'swapCancelRefusedAtomic';
   static const swapCancelUnconfirmed = 'swapCancelUnconfirmed';
   static const swapOutcomeCompletedTitle = 'swapOutcomeCompletedTitle';
+  static const swapReceivedReported = 'swapReceivedReported';
   static const swapOutcomeCompletedBody = 'swapOutcomeCompletedBody';
   static const swapOutcomeCompletedBodyNetwork =
       'swapOutcomeCompletedBodyNetwork';
@@ -1735,6 +1736,8 @@ abstract class LocaleKeys {
   static const swapFailSafetyBody = 'swapFailSafetyBody';
   static const swapFailQuoteTitle = 'swapFailQuoteTitle';
   static const swapFailQuoteBody = 'swapFailQuoteBody';
+  static const swapFailNetworkFeeTitle = 'swapFailNetworkFeeTitle';
+  static const swapFailNetworkFeeBody = 'swapFailNetworkFeeBody';
   static const swapFailRestartTitle = 'swapFailRestartTitle';
   static const swapFailRestartBody = 'swapFailRestartBody';
   static const swapFailExchangeTitle = 'swapFailExchangeTitle';
