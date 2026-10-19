@@ -1,3 +1,7 @@
+// The analyzer does not treat test_units as tests, so @visibleForTesting
+// members read as violations here.
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
