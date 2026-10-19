@@ -5,10 +5,10 @@ The unified swap ships everything the routed-swap contract supports. This file c
 Each claim below was checked against three sources:
 
 - the routed-swap contract, `gleec-specs#2` at `0b209b2`;
-- the KDF source at the pinned `feat/lifi-integration@7d6fd1e`;
+- the KDF source at `feat/lifi-integration@7d6fd1e`;
 - the SDK on the `add/routed-swap` branch.
 
-KDF paths are relative to `mm2src/mm2_main/src/` unless a path says otherwise. Line numbers are at that commit.
+KDF paths are relative to `mm2src/mm2_main/src/` unless a path says otherwise. Line numbers are at that commit. The pin is now `667045c`. Entries checked again there say so, and use that commit's line numbers.
 
 ## Deferred: not supported by the contract
 

@@ -6,7 +6,7 @@ What has to be true, in order, before the unified swap (wallet #3507) ships. Eac
 
 | Decision | Owner | State |
 |---|---|---|
-| **Aggregator access in production.** Builds now send routed swaps' LI.FI requests through the KDF team's proxy, `https://quicknode.gleec.com/lifi`, the default of `lifiProxyUrl` in `lib/shared/constants.dart` (set 2026-10-07; it replaces the interim `kdf-proxy.nitride.app`). KDF `7d6fd1e` signs each request with its P2P key, and the proxy holds the partner key. On 2026-10-02 its key allowed 12,000 quotes every two hours, shared by every user, and 100 network-list reads a minute. Still open: the proxy's per-peer limit, which its operator sets and the wallet has not measured, and monitoring. On 2026-10-05 the interim proxy refused connections for about 20 minutes and every cross-network price failed until it came back; this one needs an alert for the same failure. | KDF team | Build with `--dart-define=LIFI_PROXY_URL=<proxy URL>` to use another Komodo proxy; the SDK hands it to KDF as `lifi_proxy_url` ([BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)). An empty value uses the public API: 75 quotes every two hours per network address. The key stays on the proxy: the wallet has no setting for it. A partner key's limit covers every user at once, so it must be sized for peak use. KDF's 5-second routed status polling also counts against it: 12 requests a minute for each cross-network swap in flight. The proxy's own refusal, an empty 406, reaches the wallet as `RateLimited` and pauses cross-network prices like LI.FI's 429. |
+| **Aggregator access in production.** Builds now send routed swaps' LI.FI requests through the KDF team's proxy, `https://quicknode.gleec.com/lifi`, the default of `lifiProxyUrl` in `lib/shared/constants.dart` (set 2026-10-07; it replaces the interim `kdf-proxy.nitride.app`). KDF signs each request with its P2P key (since `7d6fd1e`), and the proxy holds the partner key. On 2026-10-02 its key allowed 12,000 quotes every two hours, shared by every user, and 100 network-list reads a minute. Still open: the proxy's per-peer limit, which its operator sets and the wallet has not measured, and monitoring. On 2026-10-05 the interim proxy refused connections for about 20 minutes and every cross-network price failed until it came back; this one needs an alert for the same failure. | KDF team | Build with `--dart-define=LIFI_PROXY_URL=<proxy URL>` to use another Komodo proxy; the SDK hands it to KDF as `lifi_proxy_url` ([BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)). An empty value uses the public API: 75 quotes every two hours per network address. The key stays on the proxy: the wallet has no setting for it. A partner key's limit covers every user at once, so it must be sized for peak use. KDF's 5-second routed status polling also counts against it: 12 requests a minute for each cross-network swap in flight. The proxy's own refusal, an empty 406, reaches the wallet as `RateLimited` and pauses cross-network prices like LI.FI's 429. |
 | **Integrator fees.** | Business | Not in this release. The contract makes them KDF configuration (contract l.385), and KDF sends none today. |
 | **Routed-swap contract, gleec-specs#2.** | CharlVS (GUI review), shamardy (author) | The SDK and the wallet follow the contract at `2880c32` (2026-10-16): measured payouts (`received` optional, `provider_received`), L2 fee accounting (`fee_model`), gas funding (`required_balance`) and `GasEstimationFailed`, as KDF `667045c` emits them. The four changes requested on 2026-09-03 are fixed at `0b209b2`. The GUI review that said "fix the envelope and this is a merge from my side" still stands as *changes requested*. A draft approving re-review and a draft Max section are kept outside the repos until the owner decides to post them. Since 2026-10-05 the wallet shows, and guards, a minimum 0.3% below the provider's `amount_min`, so a start survives the engine's re-quote. l.102 says the GUI must display `amount_min`, so it needs relaxing (see [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md)). |
 | **KDF gaps the wallet works around.** | KDF team | Listed in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md#kdf-behaviour-the-wallet-works-around). None blocks release; KDF changes are out of scope for this one. |
@@ -15,23 +15,19 @@ What has to be true, in order, before the unified swap (wallet #3507) ships. Eac
 
 Do these in order. Each needs a go.
 
-1. **KDF #29 merges into kdf-internal `dev`.** It is the KDF team's to merge. Record the merge commit. Until then the branch's head is `667045c` (2026-10-16), which the SDK and wallet are built against; Development builds must be run for it before anything can pin it (devbuilds and nebula carry only `462f177`, `4872ef2` and `7d6fd1e`).
-2. **coins #2057 merges** (`fee_model` for Base, Mantle, Monad and Avalanche), and the wallet's bundled coins commit moves past it. The contract requires generated coin configurations with these settings before release; without them KDF prices those chains' gas as `standard`, leaving out Base's and Mantle's L1 fees.
-3. **Repin the SDK's KDF** from `feat/lifi-integration@7d6fd1e` to that merge commit. In `packages/komodo_defi_framework/app_build/build_config.json`:
+1. **Done.** SDK #389 was squash-merged into SDK `dev` as `27654ad6` (2026-10-16), and wallet #3507 into `dev` as `dea583b8e` (2026-10-18). The 0.9.8 release candidate (#3543) was closed and folded into 0.10.0.
+2. **KDF `667045c`, pinned before it merges.** Its Development builds ran on 2026-10-18 (kdf-internal run 39177414119). The SDK's `build_config.json` moves from `feat/lifi-integration@7d6fd1e` to `667045c`, and the wallet's `sdk` submodule follows it.
+3. **KDF #29 merges into kdf-internal `dev`.** It is the KDF team's to merge. Record the merge commit, and check that Development builds exist for it.
+4. **coins #2057 merges** (`fee_model` for Base, Mantle, Monad and Avalanche), and the wallet's bundled coins commit moves past it. The contract requires generated coin configurations with these settings before release; without them KDF prices those chains' gas as `standard`, leaving out Base's and Mantle's L1 fees.
+5. **Repin the SDK's KDF** from `feat/lifi-integration@667045c` to that merge commit. In `packages/komodo_defi_framework/app_build/build_config.json`:
    - set `api.branch` to `dev` and `api.api_commit_hash` to the merge commit;
    - replace the seven `valid_zip_sha256_checksums`;
    - leave `coins.*` untouched (the build rewrites `bundled_coins_repo_commit` on every run; restore it before staging).
 
-   First, check that devbuilds has an artefact for every platform: web, iOS, macOS, Android arm64 and armv7, Linux and Windows.
-4. **SDK #389:** out of draft, reviewed, then squash-merged into SDK `dev`. The `protected-main-dev` ruleset needs one approval and every thread resolved. CodeQL never reports, so the merge needs the owner's bypass.
-5. **Repin the wallet's `sdk` submodule** to the squash commit, not to #389's branch head.
-   - Before moving, prove `git -C sdk diff <squash> <pre-squash head>` is empty.
-   - `pubspec.lock` changes only if an SDK package version changed.
-   - Regenerate it with Flutter 3.41.4, and check the diff is only those versions.
-6. **Wallet #3507:**
-   - Check the `# Unreleased` changelog entry against what shipped.
-   - It has been marked ready for review since 2026-09-24. Refresh both PR descriptions.
-   - Merge only **after** the 0.9.8 release candidate (#3543) has merged. Otherwise the swap ships in 0.9.8.
+   First, check that devbuilds has an artefact for every platform: web, iOS, macOS, Android arm64 and armv7, Linux and Windows. Then:
+   - repin the wallet's `sdk` submodule to the SDK's squash commit, after proving `git -C sdk diff <squash> <pre-squash head>` is empty;
+   - check `eth.rs`'s swap gas limits at the new commit, and name it in `atomic_swap_source_refund.dart` and its test.
+6. **Release 0.10.0** from `dev`. Bump the version, and fold the `# Gleec Wallet v0.9.8 Release Notes` section and the `# Unreleased` entries into one v0.10.0 section, checked against what ships.
 
 ## Gates
 
