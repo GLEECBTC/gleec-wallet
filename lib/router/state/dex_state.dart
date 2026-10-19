@@ -13,6 +13,7 @@ class DexState extends ChangeNotifier implements IResettableOnLogout {
 
   DexAction _action;
   String _uuid;
+  bool _detailsRequested = false;
 
   String _fromCurrency;
   String _fromAmount;
@@ -32,7 +33,18 @@ class DexState extends ChangeNotifier implements IResettableOnLogout {
   void setDetailsAction(String uuid) {
     _uuid = uuid;
     _action = DexAction.tradingDetails;
+    _detailsRequested = true;
     notifyListeners();
+  }
+
+  /// Whether [setDetailsAction] was called since this was last asked, so a
+  /// trading page built just after it opens on those details. Details left
+  /// open on an earlier visit, or named by a link that cannot say whether it
+  /// means a swap or an order, are not reopened.
+  bool takeDetailsRequest() {
+    final requested = _detailsRequested;
+    _detailsRequested = false;
+    return requested;
   }
 
   DexAction get action => _action;
@@ -78,6 +90,7 @@ class DexState extends ChangeNotifier implements IResettableOnLogout {
 
   @override
   void reset() {
+    _detailsRequested = false;
     action = DexAction.none;
   }
 

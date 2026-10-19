@@ -7,7 +7,8 @@ import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 
-/// Opens [url], or shows a [SwapLinkFailedDialog] if the device cannot.
+/// Opens [url], or shows a [SwapLinkFailedDialog] if the device cannot, or
+/// if it is not a link [swapLinkUri] lets a swap screen open.
 ///
 /// A dialog rather than a snack bar: over the evidence sheet, which covers a
 /// phone's screen, a snack bar would sit underneath it.
@@ -16,19 +17,38 @@ Future<void> openSwapLink(
   String url, {
   String? details,
 }) async {
-  bool opened;
-  try {
-    // No `canLaunchUrl` first: Android 11+ answers false for mailto: unless
-    // the manifest declares it, while the launch itself works.
-    opened = await launchUrl(Uri.parse(url));
-  } on Object {
-    opened = false;
+  final link = swapLinkUri(url);
+  var opened = false;
+  if (link != null) {
+    try {
+      // No `canLaunchUrl` first: Android 11+ answers false for mailto: unless
+      // the manifest declares it, while the launch itself works.
+      opened = await launchUrl(link);
+    } on Object {
+      opened = false;
+    }
   }
   if (opened || !context.mounted) return;
   await showDialog<void>(
     context: context,
     builder: (_) => SwapLinkFailedDialog(url: url, details: details),
   );
+}
+
+/// [url] when a swap screen may open it: an https page or a mailto address.
+/// A swap's links come from the engine and the route's provider as well,
+/// and any other scheme could start another app or run script.
+Uri? swapLinkUri(String? url) {
+  final uri = url == null ? null : Uri.tryParse(url);
+  if (uri == null) return null;
+  if (uri.isScheme('mailto')) return uri;
+  return uri.isScheme('https') && uri.host.isNotEmpty ? uri : null;
+}
+
+/// The route's own status page at [url], when it is an https page.
+Uri? swapRoutePage(String? url) {
+  final uri = swapLinkUri(url);
+  return uri != null && uri.isScheme('https') ? uri : null;
 }
 
 /// Says [url] could not be opened, offering it (or a mailto address) to copy,

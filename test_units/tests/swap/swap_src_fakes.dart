@@ -265,6 +265,19 @@ class SrcRoutedSwaps implements RoutedSwapManager {
   Set<String> watchable = {};
   final List<String> watched = [];
 
+  /// What [watch] answers, by swap id.
+  final Map<String, RoutedSwapHandle> handles = {};
+
+  /// Answers each start; a start the test did not expect throws.
+  RoutedSwapHandle Function(RoutedSwapOffer offer)? starts;
+
+  @override
+  Future<RoutedSwapHandle> start(RoutedSwapOffer offer) async {
+    final starts = this.starts;
+    if (starts == null) throw StateError('unexpected start');
+    return starts(offer);
+  }
+
   @override
   Future<RoutedSwapOffer> quote({
     required AssetId from,
@@ -336,7 +349,7 @@ class SrcRoutedSwaps implements RoutedSwapManager {
   Future<RoutedSwapHandle> watch(String uuid) async {
     watched.add(uuid);
     if (!watchable.contains(uuid)) throw RoutedSwapNotFoundException(uuid);
-    return SrcRoutedHandle(runningSwap(uuid));
+    return handles[uuid] ?? SrcRoutedHandle(runningSwap(uuid));
   }
 
   @override

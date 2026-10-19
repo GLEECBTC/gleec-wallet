@@ -11,7 +11,7 @@ import 'swap_test_fixtures.dart';
 
 /// Covers the registry when a source cannot tell whether it has a swap: the
 /// swap is reported unconfirmed and asked about again, never taken for one no
-/// source has.
+/// source has. A source that cannot list the swaps it runs is asked again too.
 void main() {
   const retryDelay = Duration(seconds: 10);
   const tick = Duration(milliseconds: 1);
@@ -28,10 +28,11 @@ void main() {
   void run(
     void Function(FakeAsync async, SwapExecutionRegistry registry) body, {
     List<SwapExecutionRef> inFlight = const [],
+    Future<List<SwapExecutionRef>> Function()? read,
   }) => fakeAsync((async) {
     final registry = SwapExecutionRegistry(
       executors: [routed, atomic],
-      inFlight: () async => inFlight,
+      inFlight: read ?? () async => inFlight,
       retryDelay: retryDelay,
     );
     body(async, registry);
@@ -215,6 +216,159 @@ void main() {
         async.elapse(retryDelay * 2);
         expect(routed.resumeCalls, 1);
       }, inFlight: inFlight);
+    });
+  });
+
+  group('reading which swaps still run, at sign-in', () {
+    const routedSwap = (id: 'r-1', source: SwapLiquiditySource.routed);
+    const atomicSwap = (id: 'a-2', source: SwapLiquiditySource.atomic);
+
+    test('a source that could not be read is read again alone, after the '
+        'retry delay, until it answers', () {
+      final reads = <Set<SwapLiquiditySource>>[];
+      var atomicAnswers = false;
+      Future<List<SwapExecutionRef>> readAtomic() async {
+        reads.add({SwapLiquiditySource.atomic});
+        if (atomicAnswers) return const [atomicSwap];
+        throw SwapInFlightIncomplete(
+          found: const [],
+          unread: const {SwapLiquiditySource.atomic},
+          retry: readAtomic,
+        );
+      }
+
+      run(
+        (async, registry) {
+          routed.resumable['r-1'] = FakeHandle(snapshotOf(id: 'r-1'));
+          atomic.resumable['a-2'] = FakeHandle(
+            snapshotOf(id: 'a-2', source: SwapLiquiditySource.atomic),
+          );
+          unawaited(registry.resumeInFlight());
+          async.flushMicrotasks();
+          expect(registry.snapshotOf('r-1'), isNotNull);
+          expect(reads, hasLength(1));
+
+          async.elapse(retryDelay - tick);
+          expect(reads, hasLength(1));
+          async.elapse(tick);
+          expect(reads.last, {SwapLiquiditySource.atomic});
+          expect(registry.snapshotOf('a-2'), isNull);
+
+          // A second failure in a row waits twice as long.
+          atomicAnswers = true;
+          async.elapse(retryDelay * 2 - tick);
+          expect(reads, hasLength(2));
+          async.elapse(tick);
+          expect(registry.snapshotOf('a-2'), isNotNull);
+          expect(routed.resumeCalls, 1);
+
+          async.elapse(retryDelay * 10);
+          expect(reads, hasLength(3));
+        },
+        read: () async {
+          reads.add(SwapLiquiditySource.values.toSet());
+          throw SwapInFlightIncomplete(
+            found: const [routedSwap],
+            unread: const {SwapLiquiditySource.atomic},
+            retry: readAtomic,
+          );
+        },
+      );
+    });
+
+    test('a source that stays down is asked less and less often', () {
+      final readAt = <Duration>[];
+      late FakeAsync clock;
+      Future<List<SwapExecutionRef>> readAtomic() async {
+        readAt.add(clock.elapsed);
+        throw SwapInFlightIncomplete(
+          found: const [],
+          unread: const {SwapLiquiditySource.atomic},
+          retry: readAtomic,
+        );
+      }
+
+      run((async, registry) {
+        clock = async;
+        unawaited(registry.resumeInFlight());
+        async.elapse(retryDelay * 100);
+
+        expect(readAt, [
+          for (final seconds in [0, 10, 30, 70, 150, 310, 630, 950])
+            Duration(seconds: seconds),
+        ]);
+      }, read: readAtomic);
+    });
+
+    test('swaps two reads left unanswered are asked about together, and a '
+        'sign-out stops it all', () {
+      Future<List<SwapExecutionRef>> readAtomic() async => const [atomicSwap];
+
+      run(
+        (async, registry) {
+          routed.resumeError = noAnswer;
+          atomic.resumeError = noAnswer;
+          unawaited(registry.resumeInFlight());
+          async.elapse(retryDelay);
+          // The atomic swap went unanswered as the routed one was due again;
+          // both wait the retry delay from there.
+          expect((routed.resumeCalls, atomic.resumeCalls), (1, 1));
+
+          async.elapse(retryDelay);
+          expect((routed.resumeCalls, atomic.resumeCalls), (2, 2));
+          async.elapse(retryDelay);
+          expect((routed.resumeCalls, atomic.resumeCalls), (3, 3));
+
+          unawaited(registry.reset());
+          async.flushMicrotasks();
+          expect(async.pendingTimers, isEmpty);
+        },
+        read: () async => throw SwapInFlightIncomplete(
+          found: const [routedSwap],
+          unread: const {SwapLiquiditySource.atomic},
+          retry: readAtomic,
+        ),
+      );
+    });
+
+    test('a read that fails outright is tried again whole', () {
+      var reads = 0;
+      run(
+        (async, registry) {
+          routed.resumable['r-1'] = FakeHandle(snapshotOf(id: 'r-1'));
+          unawaited(registry.resumeInFlight());
+          async.flushMicrotasks();
+          expect(registry.current, isEmpty);
+
+          async.elapse(retryDelay);
+          expect(reads, 2);
+          expect(registry.snapshotOf('r-1'), isNotNull);
+        },
+        read: () async {
+          if (++reads == 1) throw StateError('KDF is still starting');
+          return const [routedSwap];
+        },
+      );
+    });
+
+    test('a sign-out stops the reading', () {
+      var reads = 0;
+      run(
+        (async, registry) {
+          unawaited(registry.resumeInFlight());
+          async.flushMicrotasks();
+          unawaited(registry.reset());
+          async.flushMicrotasks();
+
+          expect(async.pendingTimers, isEmpty);
+          async.elapse(retryDelay * 2);
+          expect(reads, 1);
+        },
+        read: () async {
+          reads++;
+          throw StateError('KDF is still starting');
+        },
+      );
     });
   });
 }

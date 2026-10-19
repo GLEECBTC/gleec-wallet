@@ -189,6 +189,8 @@ import 'tests/swap/swap_src_routed_quote_test.dart'
     as swap_src_routed_quote_test;
 import 'tests/swap/swap_src_services_assets_test.dart'
     as swap_src_services_assets_test;
+import 'tests/swap/swap_src_services_analytics_test.dart'
+    as swap_src_services_analytics_test;
 import 'tests/swap/swap_src_services_session_test.dart'
     as swap_src_services_session_test;
 import 'tests/swap/swap_src_storage_test.dart' as swap_src_storage_test;
@@ -316,6 +318,9 @@ import 'tests/swap/swap_surface_ui_failures_test.dart'
     as swap_surface_ui_failures_test;
 import 'tests/swap/swap_surface_ui_link_errors_test.dart'
     as swap_surface_ui_link_errors_test;
+import 'tests/swap/swap_surface_ui_link_schemes_test.dart'
+    as swap_surface_ui_link_schemes_test;
+import 'tests/swap/swap_open_advanced_test.dart' as swap_open_advanced_test;
 import 'tests/swap/swap_surface_ui_links_test.dart'
     as swap_surface_ui_links_test;
 import 'tests/swap/swap_surface_ui_notices_test.dart'
@@ -329,6 +334,7 @@ import 'tests/swap/swap_surface_ui_running_test.dart'
     as swap_surface_ui_running_test;
 import 'tests/swap/swap_surface_ui_scope_test.dart'
     as swap_surface_ui_scope_test;
+import 'tests/swap/swap_surface_ui_seen_test.dart' as swap_surface_ui_seen_test;
 import 'tests/swap/swap_surface_ui_shell_test.dart'
     as swap_surface_ui_shell_test;
 import 'tests/swap/swap_common_ui_actions_test.dart'
@@ -672,6 +678,7 @@ void main() {
   swap_src_routed_quote_log_test.main();
   swap_src_routed_quote_test.main();
   swap_src_services_assets_test.main();
+  swap_src_services_analytics_test.main();
   swap_src_services_session_test.main();
   swap_src_storage_test.main();
   swap_exec_atomic_delay_test.main();
@@ -757,6 +764,8 @@ void main() {
   swap_surface_ui_evidence_test.main();
   swap_surface_ui_failures_test.main();
   swap_surface_ui_link_errors_test.main();
+  swap_surface_ui_link_schemes_test.main();
+  swap_open_advanced_test.main();
   swap_surface_ui_links_test.main();
   swap_surface_ui_notices_test.main();
   swap_surface_ui_outcomes_test.main();
@@ -764,6 +773,7 @@ void main() {
   swap_surface_ui_progress_test.main();
   swap_surface_ui_running_test.main();
   swap_surface_ui_scope_test.main();
+  swap_surface_ui_seen_test.main();
   swap_surface_ui_shell_test.main();
   swap_common_ui_actions_test.main();
   swap_common_ui_buttons_test.main();

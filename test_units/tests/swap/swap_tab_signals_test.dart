@@ -156,6 +156,42 @@ void main() {
     expect(badges.last, isNull);
   });
 
+  testWidgets('says a failure the user was away for, over a refund and a '
+      'completion', (tester) async {
+    await show(tester);
+    final one = await follow(tester, snapshotOf(id: 'one'));
+    final two = await follow(tester, snapshotOf(id: 'two'));
+    final three = await follow(tester, snapshotOf(id: 'three'));
+    await go(tester, away);
+    addTearDown(() => go(tester, back));
+
+    const refunded = SwapExecutionOutcome(kind: SwapOutcomeKind.refunded);
+    await hear(tester, one, snapshotOf(id: 'one', outcome: refunded));
+    expect(titles.last, 'Swap refunded · Gleec Dex');
+
+    // Nothing moved, so the registry has nothing left for anyone to look
+    // at; it is still news to someone who was away.
+    await hear(
+      tester,
+      two,
+      snapshotOf(
+        id: 'two',
+        fundsMovement: SwapFundsMovement.none,
+        outcome: failed(SwapFailureReason.routeFailed),
+      ),
+    );
+    expect(registry.unacknowledgedAttentionCount, 0);
+    expect(titles.last, 'Swap needs attention · Gleec Dex');
+    expect(badges.last, amber);
+
+    await hear(tester, three, snapshotOf(id: 'three', outcome: completed()));
+    expect(titles.last, 'Swap needs attention · Gleec Dex');
+
+    await go(tester, back);
+    expect(titles.last, appTitle);
+    expect(badges.last, isNull);
+  });
+
   testWidgets('leaves a completion seen in the tab to the app', (tester) async {
     await show(tester);
     final handle = await follow(tester, snapshotOf(id: 'one'));

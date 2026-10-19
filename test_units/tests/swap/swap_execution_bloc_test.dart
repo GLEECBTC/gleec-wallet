@@ -26,24 +26,65 @@ void main() {
   tearDown(() => registry.dispose());
 
   group('SwapExecutionBloc', () {
-    test('follows the swap and marks it seen', () async {
+    SwapExecutionSnapshot failure(String id) =>
+        snapshotOf(id: id, outcome: failed(SwapFailureReason.routeFailed));
+
+    test(
+      'follows the swap, and marks a failure seen once it is shown',
+      () async {
+        final started = await registry.start(quoteOf());
+        final bloc = SwapExecutionBloc(registry: registry)
+          ..add(SwapExecutionWatched(started.id))
+          ..add(const SwapExecutionVisibilityChanged(visible: true));
+        await pumpEventQueue();
+
+        routed.lastStarted!.push(failure(started.id));
+        await pumpEventQueue();
+
+        expect(bloc.state.snapshot!.isTerminal, isTrue);
+        expect(registry.unacknowledgedAttentionCount, 0);
+        await bloc.close();
+      },
+    );
+
+    test('leaves a failure unseen while its screen is out of sight', () async {
       final started = await registry.start(quoteOf());
       final bloc = SwapExecutionBloc(registry: registry)
-        ..add(SwapExecutionWatched(started.id));
+        ..add(SwapExecutionWatched(started.id))
+        ..add(const SwapExecutionVisibilityChanged(visible: true))
+        ..add(const SwapExecutionVisibilityChanged(visible: false));
       await pumpEventQueue();
 
-      routed.lastStarted!.push(
-        snapshotOf(
-          id: started.id,
-          outcome: failed(SwapFailureReason.routeFailed),
-        ),
-      );
+      routed.lastStarted!.push(failure(started.id));
       await pumpEventQueue();
+      expect(registry.unacknowledgedAttentionCount, 1);
 
-      expect(bloc.state.snapshot!.isTerminal, isTrue);
+      bloc.add(const SwapExecutionVisibilityChanged(visible: true));
+      await pumpEventQueue();
       expect(registry.unacknowledgedAttentionCount, 0);
       await bloc.close();
     });
+
+    test(
+      'never marks a running swap seen, so its failure still counts',
+      () async {
+        final started = await registry.start(quoteOf());
+        final bloc = SwapExecutionBloc(registry: registry)
+          ..add(SwapExecutionWatched(started.id))
+          ..add(const SwapExecutionVisibilityChanged(visible: true));
+        await pumpEventQueue();
+        routed.lastStarted!.push(
+          snapshotOf(id: started.id, stage: SwapProgressStage.actionRequired),
+        );
+        await pumpEventQueue();
+        expect(registry.unacknowledgedAttentionCount, 1);
+        await bloc.close();
+
+        routed.lastStarted!.push(failure(started.id));
+        await pumpEventQueue();
+        expect(registry.unacknowledgedAttentionCount, 1);
+      },
+    );
 
     test('shows a history snapshot at once for an old swap', () async {
       routed.resumable['old'] = FakeHandle(

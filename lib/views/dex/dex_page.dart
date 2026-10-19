@@ -31,8 +31,12 @@ class _DexPageState extends State<DexPage> {
 
   @override
   void initState() {
-    routingState.dexState.addListener(_onRouteChange);
     super.initState();
+    // The swap screen's Open in Advanced names the swap before this page is
+    // built, so that route change was announced before anything listened.
+    final dex = routingState.dexState;
+    isTradingDetails = dex.takeDetailsRequest() && dex.isTradingDetails;
+    dex.addListener(_onRouteChange);
   }
 
   @override
@@ -89,7 +93,8 @@ class _DexPageState extends State<DexPage> {
   }
 
   void _onRouteChange() {
-    setState(() => isTradingDetails = routingState.dexState.isTradingDetails);
+    final dex = routingState.dexState..takeDetailsRequest();
+    setState(() => isTradingDetails = dex.isTradingDetails);
   }
 }
 
