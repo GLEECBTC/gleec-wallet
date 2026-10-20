@@ -1,7 +1,7 @@
 [submodule "sdk"]
 	path = sdk
 	url = https://github.com/GLEECBTC/komodo-defi-sdk-flutter.git
-	branch = main
+	branch = fix/evm-swaps
 	update = checkout
 	fetchRecurseSubmodules = on-demand
 	# `untracked`, not `dirty`: this submodule is co-developed, not just
