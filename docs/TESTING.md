@@ -123,6 +123,15 @@ KDF_HARNESS=1 KDF_TEST_SEED='<throwaway funded seed>' flutter test --tags proces
   `sdk/pubspec.lock`, and `sdk/packages/komodo_defi_framework/app_build/build_config.json`;
   the PR gate fails on a dirty tree.
 
+### LI.FI read-only native smoke
+
+Run `python3 tool/kdf_lifi_quote_smoke.py --json /tmp/lifi-quote-report.json`
+from the wallet root after generating native KDF/coin assets. It creates an
+unfunded disposable wallet, checks Arbitrum/Base exact quotes, included fees,
+funding totals and typed Max rejection, and permits no fund-committing RPCs.
+It needs live network/proxy access and exits nonzero on failure. See
+[the automated testing report](KDF_LIFI_AUTOMATED_TESTING_2026-10-26.md).
+
 ## 5. SDK package tests
 
 ```bash
