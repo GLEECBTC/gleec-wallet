@@ -11,6 +11,8 @@ class SwapQuoteRequest extends Equatable {
     this.indicative = false,
     this.signedOut = false,
     this.automatic = false,
+    this.maxSource,
+    this.maxOrder = SwapQuoteOrder.cheapest,
   });
 
   /// The asset being sold.
@@ -42,6 +44,24 @@ class SwapQuoteRequest extends Equatable {
   /// action. A source waiting out a rate limit answers these without asking.
   final bool automatic;
 
+  /// The source whose Max controls this pricing snapshot, if any.
+  final SwapLiquiditySource? maxSource;
+
+  /// The selected route order whose Max controls the amount.
+  final SwapQuoteOrder maxOrder;
+
+  /// Exact comparison at the source amount of an accepted Max quote.
+  SwapQuoteRequest atAmount(Decimal amount) => SwapQuoteRequest(
+    from: from,
+    to: to,
+    amount: amount,
+    orders: orders,
+    slippage: slippage,
+    indicative: indicative,
+    signedOut: signedOut,
+    automatic: automatic,
+  );
+
   /// This request, for [orders] instead.
   SwapQuoteRequest withOrders(Set<SwapQuoteOrder> orders) => SwapQuoteRequest(
     from: from,
@@ -52,6 +72,8 @@ class SwapQuoteRequest extends Equatable {
     indicative: indicative,
     signedOut: signedOut,
     automatic: automatic,
+    maxSource: maxSource,
+    maxOrder: maxOrder,
   );
 
   @override
@@ -64,6 +86,8 @@ class SwapQuoteRequest extends Equatable {
     indicative,
     signedOut,
     automatic,
+    maxSource,
+    maxOrder,
   ];
 }
 
@@ -97,7 +121,13 @@ class SwapMaxAmount extends Equatable {
     this.reserveCovers = SwapMaxReserve.networkFees,
     this.offerLimit = false,
     this.coversRefund = false,
+    this.source,
+    this.quote,
   });
+
+  /// The source and complete quote that calculated Max.
+  final SwapLiquiditySource? source;
+  final SwapQuote? quote;
 
   /// What may be sold.
   final Decimal amount;
@@ -136,5 +166,7 @@ class SwapMaxAmount extends Equatable {
     reserveCovers,
     offerLimit,
     coversRefund,
+    source,
+    quote,
   ];
 }

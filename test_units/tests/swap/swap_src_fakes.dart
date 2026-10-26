@@ -253,6 +253,9 @@ class SrcRoutedSwaps implements RoutedSwapManager {
   bool hangEligible = false;
 
   RoutedSwapMaxSell? max;
+  RoutedSwapOffer? maximum;
+  Completer<RoutedSwapOffer>? maxGate;
+  final List<RoutedSwapOrder?> maxOrders = [];
   Object? maxError;
   bool hangMax = false;
   int maxCalls = 0;
@@ -290,6 +293,31 @@ class SrcRoutedSwaps implements RoutedSwapManager {
           from: from,
           to: to,
           sell: '$amount',
+          order: order,
+          slippage: slippage,
+        );
+  }
+
+  @override
+  Future<RoutedSwapOffer> quoteMax({
+    required AssetId from,
+    required AssetId to,
+    double? slippage,
+    RoutedSwapOrder? order,
+    String? provider,
+  }) async {
+    maxCalls++;
+    maxOrders.add(order);
+    if (hangMax) await Completer<void>().future;
+    final error = maxError;
+    if (error != null) throw error;
+    if (maxGate != null) return maxGate!.future;
+    return maximum ??
+        max?.offer ??
+        offerOf(
+          from: from,
+          to: to,
+          sell: max?.amount.toString() ?? '1',
           order: order,
           slippage: slippage,
         );

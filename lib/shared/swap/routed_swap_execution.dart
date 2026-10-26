@@ -314,6 +314,7 @@ SwapExecutionFailure _failureOf(
     shortfallTicker: failure.shortfall?.ticker,
     shortfallAvailable: failure.shortfall?.available,
     shortfallRequired: failure.shortfall?.required,
+    shortfallLockedBySwaps: failure.shortfall?.lockedBySwaps,
     freshQuote: fresh == null
         ? null
         : routedQuoteFromOffer(

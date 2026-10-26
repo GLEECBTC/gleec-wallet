@@ -102,7 +102,10 @@ void main() {
       expect(failure.reason, SwapFailureReason.networkFee);
       expect(failure.nextStep, SwapNextStep.retry);
       expect(failure.retryable, isTrue);
-      expect(SwapAnalyticsReporter.failureCategory(failure.reason), 'network_fee');
+      expect(
+        SwapAnalyticsReporter.failureCategory(failure.reason),
+        'network_fee',
+      );
     });
   });
 
@@ -125,6 +128,30 @@ void main() {
       );
       expect(hero.title, 'You received 2,991.12 USDC as reported by LI.FI');
       expect(hero.tone, SwapTone.success);
+    });
+
+    test('Activity never substitutes a quote for a missing measurement', () {
+      final snapshot = snap(
+        outcome: const SwapExecutionOutcome(kind: SwapOutcomeKind.completed),
+      );
+      final copy = SwapExecutionCopy(snapshot, networks);
+      expect(copy.pairLine, isNot(contains('2,985')));
+      expect(copy.pairLine, isNot(contains('3,000')));
+      expect(copy.pairLine, endsWith('USDC'));
+    });
+
+    test('Activity labels provider-only evidence', () {
+      final snapshot = snap(
+        outcome: SwapExecutionOutcome(
+          kind: SwapOutcomeKind.completed,
+          receivedAmount: d('2991'),
+          receivedReported: true,
+        ),
+      );
+      expect(
+        SwapExecutionCopy(snapshot, networks).pairLine,
+        contains('as reported by LI.FI'),
+      );
     });
 
     test('a measured payout needs no qualifier', () {
@@ -158,28 +185,31 @@ void main() {
       );
     });
 
-    test('a failed fee estimate says nothing was sent, on which network', () {
-      final hero = heroOf(
-        snap(
-          fundsMovement: SwapFundsMovement.none,
-          outcome: const SwapExecutionOutcome(
-            kind: SwapOutcomeKind.failed,
-            failure: SwapExecutionFailure(
-              reason: SwapFailureReason.networkFee,
-              nextStep: SwapNextStep.retry,
+    test(
+      'a failed fee estimate names the network without promising a retry succeeds',
+      () {
+        final hero = heroOf(
+          snap(
+            fundsMovement: SwapFundsMovement.none,
+            outcome: const SwapExecutionOutcome(
+              kind: SwapOutcomeKind.failed,
+              failure: SwapExecutionFailure(
+                reason: SwapFailureReason.networkFee,
+                nextStep: SwapNextStep.retry,
+              ),
             ),
           ),
-        ),
-      );
-      expect(hero.title, "The network fee couldn't be worked out");
-      expect(
-        hero.body,
-        "Ethereum didn't give a fee estimate, so nothing was sent. Try again "
-        'in a moment.',
-      );
-      expect(hero.icon, Icons.local_gas_station_outlined);
-      expect(hero.tone, SwapTone.warning);
-    });
+        );
+        expect(hero.title, "The network fee couldn't be worked out");
+        expect(
+          hero.body,
+          'The network fee on Ethereum could not be estimated. Check your funding '
+          'and get a fresh quote; the network may still reject it.',
+        );
+        expect(hero.icon, Icons.local_gas_station_outlined);
+        expect(hero.tone, SwapTone.warning);
+      },
+    );
 
     test('after an approval, it says what the approval cost', () {
       final hero = heroOf(

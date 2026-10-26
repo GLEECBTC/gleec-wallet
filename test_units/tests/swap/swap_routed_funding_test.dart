@@ -23,7 +23,7 @@ import 'swap_src_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 /// Covers the gas balance KDF requires before it sends a routed swap
-/// (`required_balance`, KDF 667045c): the form checks it in place of the
+/// (`required_balance`, KDF 35f0bde): the form checks it in place of the
 /// estimated fee, and Max keeps it back, so what passes the form also passes
 /// KDF's own check at start.
 void main() {
@@ -102,26 +102,40 @@ void main() {
       });
     });
 
-    test('Max keeps the requirement back, with its margin', () {
+    test('Max uses KDF amount with the exact funding requirement', () {
       _run((bloc, manager, async) {
+        manager.maximum = manager.respond!((
+          from: eth,
+          to: usdc,
+          amount: d('1.9972'),
+          slippage: null,
+          order: RoutedSwapOrder.cheapest,
+        ));
         bloc.add(const UnifiedSwapMaxRequested());
         async.elapse(const Duration(seconds: 3));
 
-        // 0.0016 * 1.25 + 0.0012 = 0.0032 kept back of 2 ETH.
-        expect(manager.maxCalls, 0, reason: 'the quote for 1 ETH stood in');
-        expect(bloc.state.inputText, '1.9968');
-        expect(bloc.state.maxApplied!.reservedForFees, d('0.0032'));
+        // KDF leaves 0.0016 required gas plus 0.0012 provider fees.
+        expect(manager.maxCalls, 1);
+        expect(bloc.state.inputText, '1.9972');
+        expect(bloc.state.maxApplied!.reservedForFees, d('0.0028'));
         expect(bloc.state.issue, isNull);
         expect(bloc.state.canReview, isTrue);
       });
     });
 
-    test('Max without a requirement keeps three times the gas', () {
+    test('Max uses KDF amount even without optional funding totals', () {
       _run(required: null, (bloc, manager, async) {
+        manager.maximum = manager.respond!((
+          from: eth,
+          to: usdc,
+          amount: d('1.9983'),
+          slippage: null,
+          order: RoutedSwapOrder.cheapest,
+        ));
         bloc.add(const UnifiedSwapMaxRequested());
         async.elapse(const Duration(seconds: 3));
 
-        expect(bloc.state.inputText, '1.9973');
+        expect(bloc.state.inputText, '1.9983');
         expect(bloc.state.issue, isNull);
       });
     });

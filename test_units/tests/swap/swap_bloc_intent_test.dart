@@ -253,6 +253,35 @@ void main() {
       expect(h.atomic.maxCalls, 0);
     });
 
+    swapBlocTest('switching Max to the order book keeps that source selected', (
+      h,
+    ) {
+      h.routed.max = maxOf('1.99');
+      h.atomic
+        ..max = maxOf('1.995')
+        ..respond = (request) => [
+          SwapQuoteAvailable(
+            quoteOf(
+              id: 'atomic',
+              source: SwapLiquiditySource.atomic,
+              sell: request.amount.toString(),
+              expected: '2000',
+              guaranteed: '1990',
+              quotedAt: h.now(),
+            ),
+          ),
+        ];
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapOptionSelected('atomic'));
+      h.settle();
+      expect(bloc.state.inputText, '1.995');
+      expect(bloc.state.selectedQuote!.source, SwapLiquiditySource.atomic);
+      expect(bloc.state.maxRequested, isTrue);
+      expect(h.atomic.maxCalls, 1);
+      expect(h.routed.maxCalls, 1);
+    });
+
     swapBlocTest('with no route selected takes the larger allowance', (h) {
       h.routed
         ..respond = null
@@ -269,24 +298,28 @@ void main() {
       expect(bloc.state.maxApplied, maxOf('1.995'));
     });
 
-    swapBlocTest('keeps the whole balance when no source can tell', (h) {
+    swapBlocTest('blocks review when no source can establish Max', (h) {
       final bloc = h.open()..add(const UnifiedSwapMaxRequested());
       h.settle();
 
       expect(bloc.state.inputText, '2');
       expect(bloc.state.checkingMax, isFalse);
       expect(bloc.state.maxApplied, isNull);
-      expect(h.routed.requests.last.amount, d('2'));
+      expect(h.routed.requests.last.amount, d('1'));
+      expect(bloc.state.canReview, isFalse);
+      expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
     });
 
-    swapBlocTest('stops waiting when pricing would have timed out', (h) {
+    swapBlocTest('bounds Max search at three pricing timeouts', (h) {
       holdMax(h);
       final bloc = h.open()..add(const UnifiedSwapMaxRequested());
-      h.elapse(const Duration(seconds: 25));
+      h.elapse(const Duration(seconds: 75));
 
       expect(bloc.state.checkingMax, isFalse);
       expect(bloc.state.inputText, '2');
-      expect(h.routed.requests.last.amount, d('2'));
+      expect(h.routed.requests.last.amount, d('1'));
+      expect(bloc.state.canReview, isFalse);
+      expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
     });
 
     for (final (name, edit) in [
@@ -451,7 +484,9 @@ void main() {
 
       expect(bloc.state.amountMode, SwapAmountMode.fiat);
       expect(bloc.state.inputText, '6000');
-      expect(h.routed.requests.last.amount, d('2'));
+      expect(h.routed.requests.last.amount, d('1'));
+      expect(bloc.state.canReview, isFalse);
+      expect(bloc.state.evaluation, SwapEvaluationStatus.failed);
     });
   });
 }

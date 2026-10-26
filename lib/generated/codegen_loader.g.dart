@@ -1455,6 +1455,9 @@ abstract class LocaleKeys {
   static const swapErrorClock = 'swapErrorClock';
   static const swapErrorNotConfigured = 'swapErrorNotConfigured';
   static const swapErrorInsufficientFunds = 'swapErrorInsufficientFunds';
+  static const swapErrorFundingShortfall = 'swapErrorFundingShortfall';
+  static const swapFundsLocked = 'swapFundsLocked';
+  static const swapFundsNoPaymentRecorded = 'swapFundsNoPaymentRecorded';
   static const swapErrorInvalidAmount = 'swapErrorInvalidAmount';
   static const swapErrorUnknown = 'swapErrorUnknown';
   static const swapHelperChecking = 'swapHelperChecking';

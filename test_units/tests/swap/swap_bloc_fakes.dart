@@ -244,9 +244,17 @@ class ScriptedQuoteSource extends FakeQuoteSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   }) async {
     await maxGate?.future;
-    return super.maxAmount(from: from, to: to, balance: balance);
+    return super.maxAmount(
+      from: from,
+      to: to,
+      balance: balance,
+      order: order,
+      slippage: slippage,
+    );
   }
 }
 

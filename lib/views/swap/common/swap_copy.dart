@@ -140,17 +140,25 @@ class SwapExecutionCopy {
   /// "0.42 ETH → 1,318.42 USDT", or the tickers when amounts are unknown.
   String get pairLine {
     final sell = snapshot.sellAmount;
-    final receive =
-        snapshot.outcome?.receivedAmount ??
-        snapshot.expectedReceive ??
-        snapshot.minimumReceive;
+    final receive = snapshot.isTerminal
+        ? snapshot.outcome?.receivedAmount
+        : snapshot.expectedReceive ?? snapshot.minimumReceive;
     final left = sell == null
         ? fromTicker
         : SwapFormat.tokens(sell, fromTicker);
     final right = receive == null
         ? toTicker
         : SwapFormat.tokens(receive, toTicker, rounding: SwapRounding.down);
-    return LocaleKeys.swapActivityPair.tr(args: [left, right]);
+    return LocaleKeys.swapActivityPair.tr(
+      args: [
+        left,
+        snapshot.outcome?.receivedReported ?? false
+            ? LocaleKeys.swapReceivedReported.tr(
+                args: [right, SwapTermsRepository.provider],
+              )
+            : right,
+      ],
+    );
   }
 
   /// What the received token is called.

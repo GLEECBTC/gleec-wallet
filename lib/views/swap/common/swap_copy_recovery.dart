@@ -43,7 +43,10 @@ extension SwapRecoveryCopy on SwapExecutionCopy {
           SwapOutcomeKind.failed ||
           null:
         lines.add(switch (_movement) {
-          SwapFundsMovement.none => LocaleKeys.swapFundsUnchanged.tr(),
+          SwapFundsMovement.none =>
+            snapshot.source == SwapLiquiditySource.routed && snapshot.isTerminal
+                ? LocaleKeys.swapFundsNoPaymentRecorded.tr()
+                : LocaleKeys.swapFundsUnchanged.tr(),
           SwapFundsMovement.feesOnly => LocaleKeys.swapFundsFeesOnly.tr(
             args: [fromTicker],
           ),

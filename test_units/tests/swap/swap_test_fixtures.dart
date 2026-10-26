@@ -289,6 +289,8 @@ class FakeQuoteSource implements SwapQuoteSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   }) async {
     maxCalls++;
     return max;

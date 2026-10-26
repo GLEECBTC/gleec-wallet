@@ -106,10 +106,13 @@ class SwapFailureCopy {
         action: SwapEntryAction.none,
       ),
       SwapQuoteFailureKind.insufficientFunds => SwapFailureCopy(
-        message: LocaleKeys.swapErrorInsufficientFunds.tr(
-          args: [ticker(failure.asset ?? pay)],
+        message: _shortfall(
+          failure,
+          ticker(failure.asset).isNotEmpty
+              ? ticker(failure.asset)
+              : failure.ticker ?? ticker(pay),
         ),
-        action: SwapEntryAction.none,
+        action: SwapEntryAction.retry,
       ),
       SwapQuoteFailureKind.notConfigured => SwapFailureCopy(
         message: LocaleKeys.swapErrorNotConfigured.tr(),
@@ -131,6 +134,23 @@ class SwapFailureCopy {
         message: LocaleKeys.swapErrorUnknown.tr(),
       ),
     };
+  }
+
+  static String _shortfall(SwapQuoteFailure failure, String ticker) {
+    final required = failure.minimum;
+    final available = failure.available;
+    final message = required == null || available == null
+        ? LocaleKeys.swapErrorInsufficientFunds.tr(args: [ticker])
+        : LocaleKeys.swapErrorFundingShortfall.tr(
+            args: [
+              SwapFormat.tokens(required, ticker, rounding: SwapRounding.up),
+              SwapFormat.tokens(available, ticker, rounding: SwapRounding.down),
+            ],
+          );
+    final locked = failure.lockedBySwaps;
+    return locked == null
+        ? message
+        : '$message ${LocaleKeys.swapFundsLocked.tr(args: [SwapFormat.tokens(locked, ticker)])}';
   }
 
   /// The minimum or maximum the amount crossed, and a switch to it.

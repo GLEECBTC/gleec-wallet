@@ -216,7 +216,7 @@ void main() {
 
     test('a finished swap hands over every id, hash and time it has', () {
       final lines = copyOf(full).supportPayload().split('\n');
-      expect(lines.take(2), ['Swap ID: swap-9', 'Route: 1 ETH → 3,000 USDC']);
+      expect(lines.take(2), ['Swap ID: swap-9', 'Route: 1 ETH → USDC']);
       expect(lines[2], endsWith(': Gleec support is needed'));
       expect(lines.skip(3), [
         'Started: 2026-09-25T10:00:00.000Z',

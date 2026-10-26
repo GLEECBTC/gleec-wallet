@@ -203,11 +203,15 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
     if (required == null || available == null) {
       return _unlessMoved(LocaleKeys.swapFundsUnchanged.tr());
     }
-    return LocaleKeys.swapFailBalanceBody.tr(
+    final message = LocaleKeys.swapFailBalanceBody.tr(
       args: [
         SwapFormat.tokens(required, ticker, rounding: SwapRounding.up),
         SwapFormat.tokens(available, ticker, rounding: SwapRounding.down),
       ],
     );
+    final locked = failure?.shortfallLockedBySwaps;
+    return locked == null
+        ? message
+        : '$message ${LocaleKeys.swapFundsLocked.tr(args: [SwapFormat.tokens(locked, ticker)])}';
   }
 }

@@ -206,23 +206,52 @@ class UnifiedSwapRepository {
       ?request.from.parentId,
     ]);
 
-    final results = await Future.wait(
-      asked.map(
-        (source) => source
-            .quote(request)
-            .catchError(
-              // A source contract violation must not take down the others.
-              (Object error) => <SwapQuoteResult>[
-                SwapQuoteRejected(
-                  SwapQuoteFailure(
-                    source: source.source,
-                    kind: SwapQuoteFailureKind.unknown,
-                    detail: error.toString(),
-                  ),
-                ),
-              ],
+    Future<List<SwapQuoteResult>> ask(
+      SwapQuoteSource source,
+      SwapQuoteRequest input,
+    ) => source
+        .quote(input)
+        .catchError(
+          (Object error) => <SwapQuoteResult>[
+            SwapQuoteRejected(
+              SwapQuoteFailure(
+                source: source.source,
+                kind: SwapQuoteFailureKind.unknown,
+                detail: error.toString(),
+              ),
             ),
-      ),
+          ],
+        );
+    final results = <List<SwapQuoteResult>>[];
+    var comparison = request;
+    if (request.maxSource != null) {
+      final controller = asked
+          .where((s) => s.source == request.maxSource)
+          .firstOrNull;
+      if (controller == null) {
+        return rank([], [
+          SwapQuoteFailure(
+            source: request.maxSource!,
+            kind: SwapQuoteFailureKind.pairUnsupported,
+          ),
+        ]);
+      }
+      final maximum = await ask(controller, request);
+      results.add(maximum);
+      final pricedMax = maximum.whereType<SwapQuoteAvailable>().firstOrNull;
+      if (pricedMax == null) {
+        return rank(
+          [],
+          maximum.whereType<SwapQuoteRejected>().map((e) => e.failure).toList(),
+        );
+      }
+      comparison = request.atAmount(pricedMax.quote.sellAmount);
+    }
+    results.addAll(
+      await Future.wait([
+        for (final source in asked)
+          if (source.source != request.maxSource) ask(source, comparison),
+      ]),
     );
 
     final quotes = <SwapQuote>[];
@@ -258,7 +287,11 @@ class UnifiedSwapRepository {
     final results = await Future.wait(
       routed.map(
         (source) => source
-            .quote(request.withOrders(const {SwapQuoteOrder.fastest}))
+            .quote(
+              request.atAmount(request.amount).withOrders(const {
+                SwapQuoteOrder.fastest,
+              }),
+            )
             .catchError((Object _) => const <SwapQuoteResult>[]),
       ),
     );
@@ -315,16 +348,40 @@ class UnifiedSwapRepository {
     required AssetId to,
     required Decimal balance,
     SwapLiquiditySource? preferred,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   }) async {
+    final failures = <SwapQuoteFailure>[];
     Future<Map<SwapLiquiditySource, SwapMaxAmount>> ask(
       Iterable<SwapQuoteSource> sources,
     ) async {
       final entries = await Future.wait(
         sources.map((source) async {
-          final max = await source
-              .maxAmount(from: from, to: to, balance: balance)
-              .catchError((Object _) => null);
-          return MapEntry(source.source, max);
+          try {
+            return MapEntry(
+              source.source,
+              await source.maxAmount(
+                from: from,
+                to: to,
+                balance: balance,
+                order: order,
+                slippage: slippage,
+              ),
+            );
+          } on SwapMaxUnavailableException catch (error) {
+            failures.add(error.failure);
+          } on Object {
+            failures.add(
+              SwapQuoteFailure(
+                source: source.source,
+                kind: SwapQuoteFailureKind.unknown,
+              ),
+            );
+          }
+          return MapEntry<SwapLiquiditySource, SwapMaxAmount?>(
+            source.source,
+            null,
+          );
         }),
       );
       return {
@@ -338,7 +395,11 @@ class UnifiedSwapRepository {
       final own = await ask(able.where((s) => s.source == preferred));
       if (own.isNotEmpty) return own;
     }
-    return ask(able.where((s) => s.source != preferred));
+    final alternatives = await ask(able.where((s) => s.source != preferred));
+    if (alternatives.isEmpty && failures.isNotEmpty) {
+      throw SwapMaxUnavailableException(failures.first);
+    }
+    return alternatives;
   }
 
   /// Failures known without asking any source; null means ask the sources.

@@ -54,7 +54,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     UnifiedSwapAmountChanged event,
     Emitter<UnifiedSwapState> emit,
   ) {
-    if (event.text == state.inputText) return;
+    if (event.text == state.inputText && !state.maxRequested) return;
     _invalidate();
     emit(
       _validated(
@@ -163,10 +163,11 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     }
 
     // Keep what the selected route needs, read before its options clear.
-    final preferred = state.selectedQuote?.source;
+    final selected = state.selectedQuote;
+    final preferred = selected?.source;
     final version = ++_maxVersion;
-    // The whole balance shows at once, and stays if no source can say what
-    // fees need.
+    // The balance is provisional until KDF returns a fundable Max quote.
+    // A rejection clears prices and blocks review.
     _invalidate();
     emit(
       _validated(
@@ -174,6 +175,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
           inputText: balance.toString(),
           amountMode: SwapAmountMode.token,
           checkingMax: true,
+          maxRequested: true,
           clearMaxApplied: true,
           clearQuotes: true,
           clearSelectedId: true,
@@ -191,10 +193,27 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
             to: receive,
             balance: balance,
             preferred: preferred,
+            order: selected?.order ?? SwapQuoteOrder.cheapest,
+            slippage: state.slippage,
           )
-          .timeout(_evaluationTimeout);
+          .timeout(_evaluationTimeout * 3);
+    } on SwapMaxUnavailableException catch (error) {
+      if (version != _maxVersion || !state.checkingMax) return;
+      emit(state.copyWith(checkingMax: false));
+      _failEvaluation(emit, error.failure, quiet: false);
+      return;
     } on TimeoutException {
-      maxes = const {};
+      if (version != _maxVersion || !state.checkingMax) return;
+      emit(state.copyWith(checkingMax: false));
+      _failEvaluation(
+        emit,
+        SwapQuoteFailure(
+          source: preferred ?? SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.timeout,
+        ),
+        quiet: false,
+      );
+      return;
     }
     // Typing, another pair or wallet, or a later Max has taken over.
     if (version != _maxVersion || !state.checkingMax) return;
@@ -203,13 +222,27 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final max = maxes.isEmpty
         ? null
         : maxes.values.reduce((a, b) => a.amount >= b.amount ? a : b);
+    if (max == null) {
+      emit(state.copyWith(checkingMax: false));
+      _failEvaluation(
+        emit,
+        SwapQuoteFailure(
+          source: preferred ?? SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.noRoute,
+        ),
+        quiet: false,
+      );
+      return;
+    }
     emit(
       _validated(
         state.copyWith(
-          inputText: max?.amount.toString(),
+          inputText: max.amount.toString(),
           // The balance kept is in dollars if the unit was switched meanwhile.
-          amountMode: max == null ? null : SwapAmountMode.token,
+          amountMode: SwapAmountMode.token,
           maxApplied: max,
+          selectedId: maxes[preferred] == max ? selected?.id : null,
+          manuallySelected: selected != null && maxes[preferred] == max,
           checkingMax: false,
         ),
       ),

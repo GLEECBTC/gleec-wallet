@@ -20,6 +20,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (state.selectedQuote != quote || state.view != UnifiedSwapView.form) {
       return;
     }
+    // Freeze the selected snapshot and ignore form requests already in flight.
+    _invalidate();
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,
@@ -263,6 +265,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     // Consent was given on the progress screen, old against new, after the
     // engine stopped a swap before sending anything.
     final stale = event.quote.isExpiredAt(_now());
+    // Freeze the selected snapshot and ignore form requests already in flight.
+    _invalidate();
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,

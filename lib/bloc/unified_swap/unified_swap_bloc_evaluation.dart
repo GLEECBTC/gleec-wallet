@@ -16,6 +16,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       _closing ? null : Timer(delay, () => add(event));
 
   bool _evaluable(UnifiedSwapState state) =>
+      state.view == UnifiedSwapView.form &&
       state.hasPair &&
       !_catalogLoading &&
       !state.checkingMax &&
@@ -28,6 +29,10 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (!_evaluable(state)) return;
+    if (state.maxRequested && state.maxApplied == null) {
+      await _onMaxRequested(const UnifiedSwapMaxRequested(), emit);
+      return;
+    }
     final amount = amountOf(state)!;
     final version = ++_evaluationVersion;
     final quiet = event.quiet && state.quotes != null;
@@ -42,11 +47,16 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       );
     }
 
+    final request = _request(state, amount, automatic: event.quiet);
     final UnifiedSwapQuotes result;
     try {
       result = await _repository
-          .quote(_request(state, amount, automatic: event.quiet))
-          .timeout(_evaluationTimeout);
+          .quote(request)
+          .timeout(
+            request.maxSource != null
+                ? _evaluationTimeout * 3
+                : _evaluationTimeout,
+          );
     } on TimeoutException {
       if (version != _evaluationVersion) return;
       _failEvaluation(
@@ -86,9 +96,32 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         result.byId(previous) != null;
     final selected = keep ? result.byId(previous) : result.preselected;
 
+    final maximum = request.maxSource == null
+        ? null
+        : result.options
+              .where(
+                (quote) =>
+                    quote.source == request.maxSource &&
+                    quote.order == request.maxOrder,
+              )
+              .firstOrNull;
     emit(
       _validated(
         state.copyWith(
+          inputText: maximum?.sellAmount.toString(),
+          amountMode: maximum == null ? null : SwapAmountMode.token,
+          maxApplied: maximum == null
+              ? null
+              : SwapMaxAmount(
+                  amount: maximum.sellAmount,
+                  reservedForFees: maximum.fundingOnTopIn(maximum.from),
+                  feeAsset: state.maxApplied?.feeAsset,
+                  reserveCovers:
+                      state.maxApplied?.reserveCovers ??
+                      SwapMaxReserve.networkFees,
+                  source: request.maxSource,
+                  quote: maximum,
+                ),
           evaluation: SwapEvaluationStatus.ready,
           quotes: result,
           selectedId: selected?.id,
@@ -161,7 +194,8 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
   }) {
     final comparing =
         _comparing == _intentKey(state) ||
-        state.selectedQuote?.order == SwapQuoteOrder.fastest;
+        state.selectedQuote?.order == SwapQuoteOrder.fastest ||
+        state.maxApplied?.quote?.order == SwapQuoteOrder.fastest;
     final balance = state.balance;
     final signedOut = !state.signedIn;
     return SwapQuoteRequest(
@@ -173,6 +207,11 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       indicative: signedOut || (balance != null && amount > balance),
       signedOut: signedOut,
       automatic: automatic,
+      maxSource: state.maxRequested ? state.maxApplied?.source : null,
+      maxOrder:
+          state.selectedQuote?.order ??
+          state.maxApplied?.quote?.order ??
+          SwapQuoteOrder.cheapest,
     );
   }
 
@@ -340,13 +379,23 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
   ) {
     final quotes = state.quotes;
     if (quotes == null || quotes.byId(event.id) == null) return;
+    final previousSource = state.selectedQuote?.source;
+    if (state.maxRequested) _invalidate();
     emit(
       _validated(
         state.copyWith(
           selectedId: event.id,
-          manuallySelected: quotes.preselected?.id != event.id,
+          manuallySelected:
+              state.maxRequested || quotes.preselected?.id != event.id,
         ),
       ),
     );
+    if (state.maxRequested) {
+      if (previousSource != state.selectedQuote?.source) {
+        add(const UnifiedSwapMaxRequested());
+      } else {
+        _scheduleEvaluation(immediate: true);
+      }
+    }
   }
 }

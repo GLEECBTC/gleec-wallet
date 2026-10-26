@@ -152,6 +152,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   }) => _maxAmount(from, to, balance);
 
   @override

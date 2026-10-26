@@ -49,6 +49,36 @@ An empty value (`--dart-define=LIFI_PROXY_URL=`) makes KDF call LI.FI's public A
 - The key stays on the proxy. There is no setting for it: LI.FI says a key must never ship in a client.
 - A partner key's limit covers every user at once, so size it for peak use. Quotes from every open swap form count, and so does KDF's status polling: every 5 seconds (12 requests a minute) for each cross-network swap until it finishes, errors included.
 
+### LI.FI commission
+
+The wallet supplies deployment policy to KDF's global `lifi_integrator` startup
+configuration through `KomodoDefiSdkConfig.lifiIntegrator`. The reusable SDK defaults
+to no integrator. Wallet defaults, confirmed for this integration, are:
+
+| Build define | Default |
+|---|---|
+| `LIFI_INTEGRATOR_ENABLED` | `true` |
+| `LIFI_INTEGRATOR_NAME` | `gleec-dex-staging` |
+| `LIFI_INTEGRATOR_FEE_BPS` | `178` |
+| `LIFI_FEE_BPS` | `22` |
+
+Override these with `--dart-define` on `flutter build` or `flutter run`. Set
+`--dart-define=LIFI_INTEGRATOR_ENABLED=false` to omit the integrator explicitly.
+Invalid enabled settings, blank/reserved names, noninteger or negative fees, and
+combined fees of 10,000 bps or more fail configuration. Disabled builds do not use
+the other commission settings.
+
+The policy survives signed-out startup, registration, sign-in, sign-out and engine
+restarts. KDF requests the fee and validates the provider's allocation. Neither
+Flutter nor the proxy calculates or injects a commission; the proxy holds the API
+key. The combined included fee is displayed once, already reflected in the quote.
+These 178 + 22 bps are deployment policy, not two independently measured payouts.
+
+The coin feed remains pinned. SDK normalization supplies missing native-platform
+fee models for Base (`op_stack`), Mantle (`mantle`), Monad (`monad`) and Avalanche
+(`avalanche`) on bundled, cached and refreshed configurations. Explicit settings
+win, and ERC-20 tokens inherit their platform's fee model in KDF.
+
 ----
 
 ## Ruby setup

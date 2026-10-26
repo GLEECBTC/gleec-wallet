@@ -1,7 +1,7 @@
 part of 'atomic_swap_source.dart';
 
 // KDF's swap gas limits for a network's own coin whose config sets none: to
-// send the payment, and to refund it. Read at 667045ca (eth.rs `gas_limit`);
+// send the payment, and to refund it. Read at 35f0bde4 (eth.rs `gas_limit`);
 // a test fails when KDF is repinned, so they are checked again.
 const _defaultPaymentGas = 155000;
 const _defaultRefundGas = 125000;

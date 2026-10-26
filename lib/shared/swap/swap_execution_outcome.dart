@@ -104,6 +104,7 @@ class SwapExecutionFailure extends Equatable {
     this.shortfallTicker,
     this.shortfallAvailable,
     this.shortfallRequired,
+    this.shortfallLockedBySwaps,
     this.freshQuote,
     this.noRouteReasons = const [],
     this.detail,
@@ -131,6 +132,9 @@ class SwapExecutionFailure extends Equatable {
   /// What was required.
   final Decimal? shortfallRequired;
 
+  /// Funds committed to other swaps, already excluded from available.
+  final Decimal? shortfallLockedBySwaps;
+
   /// For [SwapFailureReason.priceMoved]: the re-priced quote to consent to.
   final SwapQuote? freshQuote;
 
@@ -149,6 +153,7 @@ class SwapExecutionFailure extends Equatable {
     shortfallTicker,
     shortfallAvailable,
     shortfallRequired,
+    shortfallLockedBySwaps,
     freshQuote,
     noRouteReasons,
     detail,

@@ -272,13 +272,13 @@ void main() {
         ),
         (
           failure(SwapQuoteFailureKind.insufficientFunds, asset: eth),
-          'Not enough ETH to cover this swap and its network fees.',
-          SwapEntryAction.none,
+          'Not enough ETH to cover this swap and its network fees. Try Max or add funds.',
+          SwapEntryAction.retry,
         ),
         (
           failure(SwapQuoteFailureKind.insufficientFunds),
-          'Not enough USDC to cover this swap and its network fees.',
-          SwapEntryAction.none,
+          'Not enough USDC to cover this swap and its network fees. Try Max or add funds.',
+          SwapEntryAction.retry,
         ),
         (
           failure(SwapQuoteFailureKind.notConfigured),

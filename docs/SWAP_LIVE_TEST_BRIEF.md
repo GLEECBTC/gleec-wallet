@@ -2,13 +2,13 @@
 
 This round tests the **Swap** and **Activity** destinations of the Swap menu entry. **Advanced** is the existing trading interface, unchanged.
 
-**Status:** unit-tested, and checked live against the engine (KDF `feat/lifi-integration@4872ef2`, native and WebAssembly) with a throwaway wallet holding no funds. `7d6fd1e` was checked the same way through the KDF team's proxy on 2026-10-07, and the pinned `667045c`, built locally, on 2026-10-16. Quotes, the supported-coin list and every quote error the engine can raise locally were recorded and parse correctly (`komodo_defi_harness/test/routed_swap_live_capture_test.dart`). **No real swap has run on mainnet yet.** Start with small amounts, and move to larger ones only after the small ones behave as described below.
+**Status:** validation now targets KDF `35f0bde` and specs `7c388ea`. Native read-only quotes through the configured proxy passed on Arbitrum and Base with the confirmed 2% included fee; unfunded Max returned `InsufficientBalance`. Web and unsigned macOS builds and the automated suites are recorded in [the validation evidence](KDF_LIFI_VALIDATION_2026-10-26.md). **No funded execution was run for this delivery.** Start the human-operated round with small amounts.
 
 **Quote limit while you test.** Cross-network prices now go through the KDF team's LI.FI proxy, which holds a partner key, instead of the public API's 75 quotes every two hours per network address. The key allows **12,000 quotes every two hours, shared by every tester**, and the proxy may also limit each engine on its own. The form spends about one quote per price, a comparison costs one more, and refreshing stops when you leave it alone. If you do hit a limit, cross-network prices pause while order-book prices keep working, and nothing asks again until you do. Note when it happened.
 
 ## What changed since the last brief
 
-- **The engine moves to `feat/lifi-integration@667045c`.** Max and the check before the review now keep back the gas the engine itself requires (its gas limit at the maximum fee), with a margin for Max, instead of three times the estimate. On Arbitrum that is about 7.8 times the estimate. When the engine measured what arrived, the outcome shows it; when only LI.FI reported it, the amount says "as reported by LI.FI". A network fee the engine could not estimate gets its own message, and nothing is sent.
+- **KDF `35f0bde`, specs `7c388ea`.** Max uses KDF’s complete returned quote, without an extra reserve. The review displays the exact provider minimum. The included commission is configured globally in KDF: `gleec-dex-staging`, 178 bps integrator plus 22 bps LI.FI. Confirm the combined included fee appears once. Measured and provider-reported payouts remain distinct; failures after approvals retain the hashes and recorded gas.
 - **Cross-network prices go through the KDF team's proxy.** The engine moves to `feat/lifi-integration@7d6fd1e`, which signs each LI.FI request with its peer-to-peer key for the KDF team's proxy at `quicknode.gleec.com`. The interim proxy that went down on 2026-10-05 is no longer used. Nothing on screen changes. If prices fail more often than before, send the log (see "How to report").
 - **A refund reads amber, and an order-book refund no longer looks like the payout.**
   - **Amber, not green:** a refunded swap was headlined in completion green, the step where it turned back showed a cancellation's grey cross, and the notice said "A swap needs your attention" though nothing did. Now the hero, that step ("Refunded: …", with a turning-back icon) and Activity's "Refund received" are amber. The notice reads "Swap refunded: your ETH was returned on Ethereum.", and on web the tab reads "Swap refunded" with an amber dot while you're away, ahead of a completion. A refund still counts as finished, not as needing attention.
@@ -16,7 +16,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
   - **No bounce on a stop:** a stopped step, a cancellation's included, now pops in without a bounce, as an error and a refund do.
 - **Max keeps back a route's fee on top the first time, and on a token too.** Max learned a provider fee charged on top only from a price for the pair from the last minute. Pressed before the pair had one, it kept back only gas, and you had to press it again. Now the engine's Max keeps the fee back too. Selling a token, Max keeps back a fee a route charges on top in that token and says so: "Max uses 498.8 USDC. We kept 1.2 USDC for provider fees." Without such a fee it still uses your whole balance. Max on a token now asks the aggregator for a price when the pair has none from the last minute, so during a rate-limit pause it asks nothing and leaves your whole balance, as Max on a network's own coin already did.
 - **A typed order-book amount leaves enough to refund a network's own coin.** If an order-book swap fails after you have paid, your payment is refunded, and sending the refund costs gas in the coin you sold. The engine keeps that gas back only for Max. So an amount typed right up to the limit could leave too little to send the refund: selling ETH for BTC, for example, or BNB, POL or GLEEC for anything but a token on their own network. The swap then ended failed, with the ETH locked in the swap contract until ETH was added and the swap recovered from Advanced. The form now keeps that gas back too, and an amount above the new limit says "You need about … ETH for this swap, its fees and the gas to refund it if it fails. This address has … ETH." With the pinned engine it is 125,000 gas, about 0.00013 ETH at 1 gwei. **Start** checks again when it re-prices, fees included: if gas has risen so far that the swap no longer fits what you hold, the review says "This swap can't go ahead as reviewed", and **Back to swap** shows what it needs. Max is unchanged, since it already kept it back, and it now asks again when you choose another coin to receive, as it is worked out for the pair. Selling for a token on the coin's own network keeps back the gas to collect the token, which covers a refund as well; where a token needs less than a refund (many BEP-20 tokens, USDT and USDC on Polygon, USDT on Avalanche), the form keeps back the difference.
-- **A cross-network swap no longer stops at Start over a tiny price move.** The minimum you're shown is now about 0.3% below LI.FI's own, and it is still the least you can receive.
+- **Price acceptance:** KDF retries tighter slippage itself. A `QuoteWorsened` failure must ask for acceptance of a fresh quote; the wallet never lowers the minimum on its own.
   - **What used to happen:** when you pressed Start, the engine priced the route again. It stopped the swap with "Price changed" if that minimum was even slightly lower. Quotes seconds apart differ by hundredths of a percent, so on some routes most starts failed: on 2026-10-05, ETH → POL failed 2 starts in 3.
   - **The review asks less often too.** When the price is more than 15 seconds old, Start prices the route again first. Any lower minimum used to show "Quote updated". Now the review keeps the minimum you saw while LI.FI's own still clears it, and the swap starts with that one.
   - **What to expect:** "Quote updated" and "Price changed" should now appear only after a real move.
@@ -70,7 +70,7 @@ This round tests the **Swap** and **Activity** destinations of the Swap menu ent
   - Returning to the same pair and amount within 15 seconds reuses the last price. That includes starting a quote you reviewed moments ago.
   - After a rate limit, nothing is asked of the aggregator until a pause ends: 30 seconds, doubling each time to 10 minutes. Max doesn't probe during a pause either. Automatic refreshes then wait until you next ask.
 - **A token with none of its network's own coin is stopped at the form.** For example, USDC on Polygon with no POL: "You need some POL on Polygon to pay the network fees." Such a quote used to fail as an unexplained service error.
-- **Max on a network's own coin keeps back three times the quoted gas.** The engine checks the balance at start against a higher figure than the quote shows. If the check still fails, nothing is sent and the result screen shows the shortfall.
+- **Max on a network’s own coin uses KDF’s amount.** Refresh must update source amount, receive, minimum and funding together. Manual input exits Max. While review is open, a late refresh must not replace the accepted amount. A rejected Max must block review and show the named shortfall, including any locked amount.
 - **Slippage can be changed.** **Compare options** (or **Details**) shows the allowance for cross-network routes, with presets of 0.5%, 1% and 2% and a custom 0.05–5%. It warns above 1%. It lasts for the session only.
 - **`/swap` works as an address,** as well as `/dex`, with the same link parameters.
 - **Screen readers can press every control.** The asset pickers, switch direction, the dollar toggle, copy address, the rate and the sheets' close buttons were announced as buttons with no press action, so VoiceOver or TalkBack could not reliably press them. While an asset activates, the picker's rows are announced as unavailable until it finishes, rather than as buttons that do nothing.
@@ -128,6 +128,13 @@ What remains out of scope, and why, is in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEF
 
 ## What to run with real funds
 
+This is a separate human-operated round. Automated validation in
+`KDF_LIFI_VALIDATION_2026-10-26.md` performs read-only quotes and never signs
+approvals or executes swaps. Include completed, partial, refunded and
+missing-measurement outcomes; cancel/restart after approval and retain all
+approval hashes, allowance warnings and recorded gas. Some outcomes require
+replay fixtures when a live provider cannot produce them safely.
+
 Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum, Base and Polygon. Run these in order, and stop at the first surprise.
 
 1. **Same network, native coin:** ETH → USDC on Arbitrum (or Base). No approval step; one transaction.
@@ -141,7 +148,7 @@ Use small amounts: about $5–10 each. The cheapest network fees are on Arbitrum
 - Runs 1, 2, 4 and 5 on Binance Smart Chain, with BNB in place of ETH.
 - Run 3 as USDC on Binance Smart Chain → USDC on Base. It lands with no ETH on Base, which sets up item 3 under What to try.
 - Run 6 as ETC → USDC on Binance Smart Chain. Claiming the USDC spends a little BNB.
-- Run Max (run 4) last. It keeps back only three times the quoted gas, and runs 5 and 6 still pay their fees in BNB.
+- Run Max (run 4) last. KDF determines the fundable amount and may leave unused gas funding. Runs 5 and 6 still pay fees in BNB.
 
 **Still to run: GLEEC.** Run 6 stands in for a GLEEC swap until a tester can get GLEEC on the Gleec chain, at a `0x` address. HitBTC and FMFW.io, the exchanges that list GLEEC, pay out only on the old chain, whose addresses start with `R`. The wallet shows that coin as **Gleec (OLD)** ("GLEEC (OLD)" in the swap, offered only to pay with), and no one offers it on the order book. Whoever has GLEEC should repeat run 6 as GLEEC → USDC on Polygon. On 2026-09-30 one maker offered that for 9.4 to 114 GLEEC, so about 20 GLEEC covers a swap and its fees; no GRC-20 token had an offer.
 

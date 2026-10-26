@@ -78,8 +78,8 @@ void main() {
     expect(calls, 1);
   });
 
-  test('Max on a native coin reuses the route it just priced', () {
-    // Before: 3 — a probe at the full balance, then both routes.
+  test('Max makes one KDF Max request and reuses its returned route', () {
+    // One KDF Max RPC can perform up to four provider quotes internally.
     final calls = _run((bloc, async) {
       bloc.add(const UnifiedSwapMaxRequested());
       async.elapse(const Duration(seconds: 3));
@@ -351,21 +351,20 @@ class _CountingManager implements RoutedSwapManager {
   }
 
   @override
-  Future<RoutedSwapMaxSell> maxSellAmount({
+  Future<RoutedSwapOffer> quoteMax({
     required AssetId from,
     required AssetId to,
-    required Decimal balance,
     double? slippage,
     rpc.RoutedSwapOrder? order,
     String? provider,
-  }) async {
-    if (!from.isChildAsset) calls++;
-    return RoutedSwapMaxSell(
-      amount: balance - d('0.0015'),
-      reservedForFees: d('0.0015'),
-      feeAsset: from,
-    );
-  }
+  }) => quote(
+    from: from,
+    to: to,
+    amount: d('1.9995'),
+    slippage: slippage,
+    order: order,
+    provider: provider,
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

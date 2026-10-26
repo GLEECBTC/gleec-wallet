@@ -233,12 +233,16 @@ void main() {
       ).fundsLocation;
       final gas = [SwapGasSpent(ticker: 'ETH', amount: d('0.001'))];
 
-      test('is unchanged only while no fee is on record', () {
+      test('missing fee records do not imply an unchanged balance', () {
         for (final kind in [
           SwapOutcomeKind.cancelled,
           SwapOutcomeKind.noMatch,
         ]) {
-          expect(where(kind: kind), unchanged, reason: kind.name);
+          expect(
+            where(kind: kind),
+            'No swap payment was recorded. Network fees may still have been spent.',
+            reason: kind.name,
+          );
           expect(
             where(kind: kind, gas: gas),
             feesSpent,

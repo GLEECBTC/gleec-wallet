@@ -371,7 +371,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     // rather than leave an amount sized for the old pair, or the whole
     // balance it shows while asking.
     final remax =
-        (state.checkingMax || state.maxApplied != null) &&
+        (state.maxRequested || state.checkingMax || state.maxApplied != null) &&
         amount == null &&
         pay == state.pay;
     _invalidate();
