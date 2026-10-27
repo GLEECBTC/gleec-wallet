@@ -9,6 +9,12 @@ on:
       - main
       - release/*
   workflow_dispatch:
+    inputs:
+      rc_legal_availability_bypass:
+        description: "One-off #3557 test preview: bypass unpublished legal documents"
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -25,7 +31,7 @@ env:
 # Cancel an in-flight preview build when a new commit is pushed to the same PR,
 # so two runs never race to create/update the same Firebase preview channel.
 concurrency:
-  group: firebase-preview-${{ github.event.pull_request.number || github.ref }}
+  group: firebase-preview-${{ (github.event_name == 'workflow_dispatch' && inputs.rc_legal_availability_bypass && github.ref == 'refs/heads/feat/kdf-667045c' && 3557) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,7 +53,23 @@ jobs:
       - name: Get Preview Channel ID
         id: get_preview_channel_id
         shell: bash
-        run: echo "preview_channel_id=$(echo ${GITHUB_REF#*/})" >> $GITHUB_OUTPUT
+        env:
+          RC_LEGAL_BYPASS: ${{ github.event_name == 'workflow_dispatch' && inputs.rc_legal_availability_bypass }}
+        run: |
+          set -euo pipefail
+          channel_id="${GITHUB_REF#*/}"
+          if [ "$RC_LEGAL_BYPASS" = "true" ]; then
+            # Only this manual RC test run may replace its existing preview.
+            # Ordinary PR runs and all production builds retain the gate.
+            if [ "$GITHUB_REF" != "refs/heads/feat/kdf-667045c" ]; then
+              echo "Legal availability bypass is restricted to RC #3557."
+              exit 1
+            fi
+            channel_id="pull/3557/merge"
+            echo "RC #3557 only: legal-document availability bypass enabled; consent and trading policy remain enforced." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "preview_channel_id=$channel_id" >> "$GITHUB_OUTPUT"
+          echo "legal_bypass=$RC_LEGAL_BYPASS" >> "$GITHUB_OUTPUT"
 
       - name: Setup GH Actions
         id: checkout
@@ -64,6 +86,9 @@ jobs:
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_COMMAND: >-
+            flutter build web --no-pub --release
+            --dart-define=BYPASS_LEGAL_DOCUMENT_GATE=${{ steps.get_preview_channel_id.outputs.legal_bypass }}
           # Optionally provide feedback service configuration if available
           FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
           FEEDBACK_PRODUCTION_URL: ${{ secrets.FEEDBACK_PRODUCTION_URL }}
