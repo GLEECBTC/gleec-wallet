@@ -179,9 +179,12 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     );
   }
 
+  bool _blocked(AssetId from, AssetId to) =>
+      _tradingAllowed != null && !_tradingAllowed(from, to);
+
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async {
-    if (_tradingAllowed != null && !_tradingAllowed(request.from, request.to)) {
+    if (_blocked(request.from, request.to)) {
       return [_rejected(SwapQuoteFailureKind.tradingBlocked)];
     }
     final orders = request.orders.isEmpty
@@ -241,6 +244,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// better price must still execute against the accepted minimum.
   @override
   Future<SwapQuoteResult> requote(SwapQuote quote) async {
+    if (_blocked(quote.from, quote.to)) {
+      return _rejected(SwapQuoteFailureKind.tradingBlocked);
+    }
     final order = quote.order ?? SwapQuoteOrder.cheapest;
     final result = await _quote(
       quote.from,

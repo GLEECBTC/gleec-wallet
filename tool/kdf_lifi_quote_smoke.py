@@ -10,6 +10,7 @@ The JSON report contains assertions and public quote figures, never credentials.
 import argparse
 import hashlib
 import json
+import re
 import secrets
 import socket
 import sys
@@ -24,6 +25,14 @@ from kdf_latency_probe import (
     find_coins_config,
     find_kdf_binary,
 )
+
+
+def random_kdf_password():
+    """Generate a disposable password that satisfies KDF's repetition policy."""
+    while True:
+        password = secrets.token_hex(32) + "Aa1!"
+        if not re.search(r"(.)\1\1", password, re.IGNORECASE):
+            return password
 
 
 class QuoteOnlyKdf(KdfProcess):
@@ -141,8 +150,8 @@ def main():
                 port = sock.getsockname()[1]
             engine = QuoteOnlyKdf(
                 binary=binary, coins=list(coins.values()), seed=secrets.token_hex(32),
-                rpc_password=secrets.token_hex(32) + "Aa1!", port=port,
-                wallet_name="lifi-quote-smoke", wallet_password=secrets.token_hex(32) + "Aa1!",
+                rpc_password=random_kdf_password(), port=port,
+                wallet_name="lifi-quote-smoke", wallet_password=random_kdf_password(),
                 enable_hd=False, workdir=work, p2p=True,
             )
             engine.config.update({"lifi_proxy_url": report["proxy"], "lifi_integrator": report["integrator"]})

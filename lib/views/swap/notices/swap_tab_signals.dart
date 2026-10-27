@@ -70,8 +70,8 @@ class _SwapTabSignalsState extends State<SwapTabSignals> {
   AppLifecycleListener? _lifecycle;
   var _away = false;
 
-  /// A swap that finished while the user was away, until they are back; a
-  /// refund outranks a completion.
+  /// A swap that finished while the user was away, until they are back; the
+  /// most pressing one wins.
   SwapTabSignal? _finishedAway;
   SwapTabSignal? _badged;
   String? _titled;
@@ -86,12 +86,16 @@ class _SwapTabSignalsState extends State<SwapTabSignals> {
     _executions = registry.executions.listen((_) => _changed());
     _notices = registry.notices.listen((notice) {
       final finished = switch (notice.kind) {
+        // A failure with nothing moved never counts as needing attention, but
+        // is news to someone who was away.
+        SwapExecutionNoticeKind.needsAttention => SwapTabSignal.attention,
         SwapExecutionNoticeKind.refunded => SwapTabSignal.refunded,
         SwapExecutionNoticeKind.completed => SwapTabSignal.completed,
-        _ => null,
+        SwapExecutionNoticeKind.actionRequired => null,
       };
       if (!_away || finished == null) return;
-      if (_finishedAway != SwapTabSignal.refunded) _finishedAway = finished;
+      final kept = _finishedAway;
+      if (kept == null || finished.index < kept.index) _finishedAway = finished;
       _changed();
     });
     _lifecycle = AppLifecycleListener(

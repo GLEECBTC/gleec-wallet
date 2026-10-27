@@ -269,15 +269,110 @@ void main() {
         SwapExecutionOutcome outcome, {
         List<SwapRouteStage>? stages,
         SwapFundsMovement movement = SwapFundsMovement.none,
+        SwapApprovalRequirement? approval,
         SwapEvidence? evidence,
       }) => statuses(
         snap(
           outcome: outcome,
           stages: stages ?? full,
           fundsMovement: movement,
+          approval: approval,
           evidence: evidence,
         ),
       );
+
+      final resettingFirst = SwapApprovalRequirement(
+        asset: usdc,
+        exactAmount: d('1250'),
+        resetsFirst: true,
+      );
+      const resetTx = SwapEvidence(
+        executionId: 'swap-1',
+        approvalTxHashes: ['0xreset'],
+      );
+      const resetAndApprovalTx = SwapEvidence(
+        executionId: 'swap-1',
+        approvalTxHashes: ['0xreset', '0xapprove'],
+      );
+
+      test('a permission reset first marks the step that failed', () {
+        final outcome = failed(SwapFailureReason.approvalFailed);
+        expect(ended(outcome, approval: resettingFirst), [
+          done,
+          error,
+          waiting,
+          waiting,
+          waiting,
+          waiting,
+        ]);
+        expect(ended(outcome, approval: resettingFirst, evidence: resetTx), [
+          done,
+          done,
+          error,
+          waiting,
+          waiting,
+          waiting,
+        ]);
+      });
+
+      test('a stop after only the reset went out leaves the approval '
+          'undone', () {
+        // Once a reset is sent, a stop before the swap went out reads as fees
+        // paid, and an engine error as uncertain.
+        for (final outcome in [
+          const SwapExecutionOutcome(kind: SwapOutcomeKind.cancelled),
+          failed(SwapFailureReason.walletRejected),
+          failed(SwapFailureReason.internal),
+        ]) {
+          final status = outcome.kind == SwapOutcomeKind.cancelled
+              ? cancelled
+              : error;
+          for (final movement in SwapFundsMovement.values.where(
+            (movement) => movement != SwapFundsMovement.sent,
+          )) {
+            final reason =
+                '${outcome.failure?.reason ?? outcome.kind}, '
+                '${movement.name}';
+            expect(
+              ended(
+                outcome,
+                movement: movement,
+                approval: resettingFirst,
+                evidence: resetTx,
+              ),
+              [done, done, status, waiting, waiting, waiting],
+              reason: reason,
+            );
+            expect(
+              ended(
+                outcome,
+                movement: movement,
+                approval: resettingFirst,
+                evidence: resetAndApprovalTx,
+              ),
+              [done, done, done, status, waiting, waiting],
+              reason: reason,
+            );
+          }
+        }
+      });
+
+      test('a reset-first swap whose send went out stops on the send', () {
+        const sentAfterReset = SwapEvidence(
+          executionId: 'swap-1',
+          approvalTxHashes: ['0xreset'],
+          sourceTxHash: '0xsource',
+        );
+        expect(
+          ended(
+            failed(SwapFailureReason.internal),
+            movement: SwapFundsMovement.uncertain,
+            approval: resettingFirst,
+            evidence: sentAfterReset,
+          ),
+          [done, done, done, error, waiting, waiting],
+        );
+      });
 
       test('a delivery of any kind completes every step', () {
         for (final kind in [

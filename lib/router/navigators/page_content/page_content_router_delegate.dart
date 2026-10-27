@@ -23,7 +23,7 @@ class PageContentRouterDelegate extends RouterDelegate<AppRoutePath>
       case MainMenuValue.dex:
         // The Swap surface. The full trading interface is not removed — it is
         // the Advanced destination inside this shell.
-        return const SwapShell();
+        return SwapShell(key: SwapShell.routerKey);
       case MainMenuValue.marketMakerBot:
         return const MarketMakerBotPage();
       case MainMenuValue.nft:
@@ -34,7 +34,8 @@ class PageContentRouterDelegate extends RouterDelegate<AppRoutePath>
         );
       case MainMenuValue.settings:
         return SettingsPage(
-            selectedMenu: routingState.settingsState.selectedMenu);
+          selectedMenu: routingState.settingsState.selectedMenu,
+        );
       case MainMenuValue.support:
         return SupportPage();
       case MainMenuValue.wallet:

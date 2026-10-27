@@ -380,6 +380,13 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     final quotes = state.quotes;
     if (quotes == null || quotes.byId(event.id) == null) return;
     final previousSource = state.selectedQuote?.source;
+    // On a wide screen this is picked beside the review, which closes unless
+    // its start is in doubt.
+    final leaveReview = state.view == UnifiedSwapView.review;
+    if (leaveReview && (event.id == state.selectedId || _startInDoubt)) {
+      return;
+    }
+    if (leaveReview) _startVersion++;
     if (state.maxRequested) _invalidate();
     emit(
       _validated(
@@ -387,6 +394,8 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
           selectedId: event.id,
           manuallySelected:
               state.maxRequested || quotes.preselected?.id != event.id,
+          view: leaveReview ? UnifiedSwapView.form : null,
+          clearReview: leaveReview,
         ),
       ),
     );
@@ -396,6 +405,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       } else {
         _scheduleEvaluation(immediate: true);
       }
+    } else {
+      // The evaluation armed timers only for a preselected option.
+      _armTimers(state.selectedQuote, shownAgain: leaveReview);
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
@@ -135,6 +136,61 @@ void main() {
       h.settle();
       expect(bloc.state.amountMode, SwapAmountMode.token);
       expect(bloc.state.inputText, '0.5');
+    });
+
+    swapBlocTest('dollars rounded to the cent keep the amount traded', (h) {
+      final bloc = h.open(amount: '0.123456789')
+        ..add(const UnifiedSwapAmountModeToggled());
+      h.settle();
+      expect(bloc.state.inputText, '370.37');
+      expect(bloc.amountOf(bloc.state), d('0.123456789'));
+      expect(h.routed.requests, hasLength(1));
+
+      bloc.add(const UnifiedSwapAmountModeToggled());
+      h.settle();
+      expect(bloc.state.inputText, '0.123456789');
+    });
+
+    swapBlocTest('dollars typed after a switch are what is traded', (h) {
+      final bloc = h.open(amount: '0.123456789')
+        ..add(const UnifiedSwapAmountModeToggled())
+        ..add(const UnifiedSwapAmountChanged('300'));
+      h.settle();
+
+      expect(bloc.amountOf(bloc.state), d('0.1'));
+      expect(h.routed.requests.last.amount, d('0.1'));
+
+      // Typed back to the figure the switch gave, it is dollars all the same.
+      bloc.add(const UnifiedSwapAmountChanged('370.37'));
+      h.settle();
+      expect(
+        bloc.amountOf(bloc.state),
+        (d('370.37') / d('3000')).toDecimal(scaleOnInfinitePrecision: 18),
+      );
+    });
+
+    swapBlocTest('dollars kept for another asset to pay are worth as much', (
+      h,
+    ) {
+      h.prices.prices[btc] = d('60000');
+      final bloc = h.open(amount: '0.123456789')
+        ..add(const UnifiedSwapAmountModeToggled())
+        ..add(const UnifiedSwapIntentApplied(pay: 'BTC'));
+      h.settle();
+
+      expect((bloc.state.pay, bloc.state.inputText), (btc, '370.37'));
+      expect(bloc.amountOf(bloc.state), d('0.00617283'));
+    });
+
+    swapBlocTest('a switch to dollars drops decimals the asset lacks', (h) {
+      h.prices.prices[btc] = d('60000');
+      final bloc = h.open(pay: 'BTC', receive: 'ETH', amount: '0.123456789');
+      expect(bloc.state.issue, SwapFormIssue.tooManyDecimals);
+
+      bloc.add(const UnifiedSwapAmountModeToggled());
+      h.settle();
+
+      expect(bloc.amountOf(bloc.state), d('0.12345678'));
     });
 
     swapBlocTest('with nothing typed only the unit changes', (h) {

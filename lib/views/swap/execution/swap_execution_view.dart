@@ -75,6 +75,7 @@ class _ExecutionBody extends StatefulWidget {
 
 class _ExecutionBodyState extends State<_ExecutionBody> {
   late final SwapServices _services = context.read<SwapServices>();
+  late final SwapExecutionBloc _bloc = context.read<SwapExecutionBloc>();
   late final Stream<DateTime> _checks = _services.registry.checksOf(widget.id);
   late final AppLifecycleListener _lifecycle;
   int _resumes = 0;
@@ -82,16 +83,39 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
   /// The snapshot the screen last showed, to tell what is news.
   SwapExecutionSnapshot? _heard;
 
+  // Whether no other screen covers this one, and what the bloc was last told.
+  bool _onstage = true;
+  bool? _visible;
+
   @override
   void initState() {
     super.initState();
-    _heard = context.read<SwapExecutionBloc>().state.snapshot;
+    _heard = _bloc.state.snapshot;
     _services.viewing.add(widget.id);
     _lifecycle = AppLifecycleListener(
+      onStateChange: (_) => _reportVisible(),
       onResume: () {
         if (mounted) setState(() => _resumes++);
       },
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _onstage = TickerMode.valuesOf(context).enabled;
+    _reportVisible();
+  }
+
+  void _reportVisible() {
+    if (!mounted) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    final visible =
+        _onstage &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+    if (visible == _visible) return;
+    _visible = visible;
+    _bloc.add(SwapExecutionVisibilityChanged(visible: visible));
   }
 
   @override

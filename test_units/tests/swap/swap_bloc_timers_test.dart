@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
 import 'swap_bloc_fakes.dart';
@@ -201,6 +203,46 @@ void main() {
       expect(bloc.state.review!.status, SwapReviewStatus.expired);
       expect(bloc.state.review!.canStart, isFalse);
     });
+
+    group('an option picked when none could be preselected', () {
+      /// Two options whose costs are unpriced, so neither is chosen for the
+      /// user.
+      UnifiedSwapBloc unranked(SwapBlocHarness h) {
+        SwapQuoteAvailable option(String id, String guaranteed) =>
+            SwapQuoteAvailable(
+              quoteOf(
+                id: id,
+                guaranteed: guaranteed,
+                fees: [feeOf(asset: btc, usd: null)],
+                quotedAt: h.now(),
+              ),
+            );
+        h.routed.respond = (request) => [
+          option('a', '2985'),
+          option('b', '2980'),
+        ];
+        final bloc = h.open();
+        expect(bloc.state.selectedId, isNull);
+        return bloc..add(const UnifiedSwapOptionSelected('b'));
+      }
+
+      swapBlocTest('is renewed at its refresh age', (h) {
+        final bloc = unranked(h);
+        h.elapse(const Duration(seconds: 30));
+
+        expect(h.routed.requests, hasLength(2));
+        expect(bloc.state.selectedId, 'b');
+      });
+
+      swapBlocTest('expires when it is not kept fresh', (h) {
+        h.balances[eth] = d('0.5');
+        final bloc = unranked(h);
+        h.elapse(SwapQuote.lifetime);
+
+        expect(bloc.state.evaluation, SwapEvaluationStatus.expired);
+        expect(h.routed.requests, hasLength(1));
+      });
+    });
   });
 
   group('trading availability', () {
@@ -287,6 +329,68 @@ void main() {
       expect(bloc.state.balance, d('0.5'));
       expect(bloc.state.issue, SwapFormIssue.insufficient);
     });
+
+    for (final (name, away, back) in [
+      (
+        'the app',
+        const UnifiedSwapForegroundChanged(foreground: false),
+        const UnifiedSwapForegroundChanged(foreground: true),
+      ),
+      (
+        'the form',
+        const UnifiedSwapVisibilityChanged(visible: false),
+        const UnifiedSwapVisibilityChanged(visible: true),
+      ),
+    ]) {
+      swapBlocTest('a balance is read again when $name comes back', (h) {
+        final bloc = h.open()..add(away);
+        h.settle();
+        h.balances[eth] = d('0.5');
+
+        bloc.add(back);
+        h.settle();
+
+        expect(bloc.state.balance, d('0.5'));
+        expect(bloc.state.issue, SwapFormIssue.insufficient);
+      });
+    }
+
+    swapBlocTest('a balance is read again when the amount is edited', (h) {
+      final bloc = h.open();
+      h.balances[eth] = d('0.5');
+
+      bloc.add(const UnifiedSwapAmountChanged('0.8'));
+      h.settle();
+
+      expect(bloc.state.balance, d('0.5'));
+      expect(bloc.state.issue, SwapFormIssue.insufficient);
+    });
+
+    for (final (name, change) in [
+      (
+        'on coming back',
+        <UnifiedSwapEvent>[
+          const UnifiedSwapForegroundChanged(foreground: false),
+          const UnifiedSwapForegroundChanged(foreground: true),
+        ],
+      ),
+      ('on an edit', <UnifiedSwapEvent>[const UnifiedSwapAmountChanged('120')]),
+    ]) {
+      swapBlocTest('gas that arrived $name prices the form', (h) {
+        h.balances[eth] = d('0');
+        final bloc = h.open(pay: 'USDC-ERC20', receive: 'ETH', amount: '100');
+        expect(bloc.state.issue, SwapFormIssue.noFeeBalance);
+        expect(h.routed.requests, isEmpty);
+
+        h.balances[eth] = d('1');
+        change.forEach(bloc.add);
+        h.settle();
+
+        expect(bloc.state.issue, isNull);
+        expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+        expect(h.routed.requests, hasLength(1));
+      });
+    }
 
     swapBlocTest('a balance that cannot be read is unknown, not zero', (h) {
       h.unreadableBalances.add(eth);

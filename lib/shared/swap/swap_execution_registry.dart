@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -34,6 +35,26 @@ enum SwapExecutionNoticeKind {
 /// A swap the registry knows how to find again.
 typedef SwapExecutionRef = ({String id, SwapLiquiditySource source});
 
+/// Thrown by a read of the swaps still running when some sources could not
+/// be read: the swaps the others listed, and how to read the rest again.
+class SwapInFlightIncomplete implements Exception {
+  const SwapInFlightIncomplete({
+    required this.found,
+    required this.unread,
+    required this.retry,
+  });
+
+  final List<SwapExecutionRef> found;
+  final Set<SwapLiquiditySource> unread;
+
+  /// Reads [unread] again, as the first read did.
+  final Future<List<SwapExecutionRef>> Function() retry;
+
+  @override
+  String toString() =>
+      'SwapInFlightIncomplete(unread: ${unread.map((s) => s.name).join(', ')})';
+}
+
 /// Owns every swap the app follows, for the whole session.
 ///
 /// A swap outlives the screen that started it — a cross-chain move can run for
@@ -43,7 +64,8 @@ typedef SwapExecutionRef = ({String id, SwapLiquiditySource source});
 /// running when the wallet was last closed are picked back up at sign-in.
 class SwapExecutionRegistry {
   /// Creates the registry over one executor per source. A lookup that ends in
-  /// a [SwapResumeUnconfirmedException] is tried again after [retryDelay].
+  /// a [SwapResumeUnconfirmedException] is tried again after [retryDelay], as
+  /// is an [inFlight] read that fails or throws [SwapInFlightIncomplete].
   SwapExecutionRegistry({
     required List<SwapExecutor> executors,
     required Future<List<SwapExecutionRef>> Function() inFlight,
@@ -56,6 +78,8 @@ class SwapExecutionRegistry {
   final Future<List<SwapExecutionRef>> Function() _inFlight;
   final Duration _retryDelay;
   Timer? _inFlightRetry;
+  Timer? _inFlightReadRetry;
+  final Set<SwapExecutionRef> _unanswered = {};
 
   final Map<String, SwapExecutionHandle> _handles = {};
   final Map<String, StreamSubscription<SwapExecutionSnapshot>> _subscriptions =
@@ -206,16 +230,42 @@ class SwapExecutionRegistry {
   }
 
   /// Picks up swaps still running from a previous session, trying again later
-  /// for those whose lookup is unconfirmed.
-  Future<void> resumeInFlight() async {
-    final generation = _generation;
-    final List<SwapExecutionRef> running;
+  /// for those whose lookup is unconfirmed, and for any source whose list of
+  /// them could not be read.
+  Future<void> resumeInFlight() => _readInFlight(_inFlight, _generation);
+
+  Future<void> _readInFlight(
+    Future<List<SwapExecutionRef>> Function() read,
+    int generation, {
+    int failures = 0,
+  }) async {
+    List<SwapExecutionRef> running;
     try {
-      running = await _inFlight();
+      running = await read();
+    } on SwapInFlightIncomplete catch (incomplete) {
+      running = incomplete.found;
+      _readInFlightLater(incomplete.retry, generation, failures + 1);
     } on Object {
-      return;
+      running = const [];
+      _readInFlightLater(read, generation, failures + 1);
     }
     await _resumeAll(running, generation);
+  }
+
+  /// Reads again after the retry delay, doubled for each failure in a row up
+  /// to 32 times as long: a source that stays down is not asked every few
+  /// seconds for the rest of the session.
+  void _readInFlightLater(
+    Future<List<SwapExecutionRef>> Function() read,
+    int generation,
+    int failures,
+  ) {
+    if (generation != _generation) return;
+    _inFlightReadRetry?.cancel();
+    _inFlightReadRetry = Timer(
+      _retryDelay * (1 << min(failures - 1, 5)),
+      () => unawaited(_readInFlight(read, generation, failures: failures)),
+    );
   }
 
   Future<void> _resumeAll(List<SwapExecutionRef> refs, int generation) async {
@@ -230,10 +280,15 @@ class SwapExecutionRegistry {
       }
     }
     if (unanswered.isEmpty || generation != _generation) return;
-    _inFlightRetry = Timer(
-      _retryDelay,
-      () => unawaited(_resumeAll(unanswered, generation)),
-    );
+    // One timer for every swap still unanswered, whichever read listed it,
+    // so that a sign-out stops them all.
+    _unanswered.addAll(unanswered);
+    _inFlightRetry?.cancel();
+    _inFlightRetry = Timer(_retryDelay, () {
+      final retry = _unanswered.toList();
+      _unanswered.clear();
+      unawaited(_resumeAll(retry, generation));
+    });
   }
 
   /// Forgets everything — on sign-out, so one wallet's swaps never show in
@@ -241,6 +296,8 @@ class SwapExecutionRegistry {
   Future<void> reset() async {
     _generation++;
     _inFlightRetry?.cancel();
+    _inFlightReadRetry?.cancel();
+    _unanswered.clear();
     final handles = _handles.values.toList();
     final subscriptions = [
       ..._subscriptions.values,

@@ -1596,6 +1596,7 @@ abstract class LocaleKeys {
   static const swapReviewUpdatedTitle = 'swapReviewUpdatedTitle';
   static const swapReviewUpdatedMinimum = 'swapReviewUpdatedMinimum';
   static const swapReviewUpdatedCost = 'swapReviewUpdatedCost';
+  static const swapReviewUpdatedCostKnown = 'swapReviewUpdatedCostKnown';
   static const swapReviewExpiredTitle = 'swapReviewExpiredTitle';
   static const swapReviewExpiredBody = 'swapReviewExpiredBody';
   static const swapReviewRevalidatingBody = 'swapReviewRevalidatingBody';

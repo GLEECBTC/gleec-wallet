@@ -100,7 +100,7 @@ void main() {
       await expand(tester, 'Costs & protection');
 
       expect(detail(tester, 'Network costs'), '0.0015 ETH');
-      expect(detail(tester, 'Approval network cost'), '0.0005 ETH');
+      expect(detail(tester, '↳ Approval network cost'), '0.0005 ETH');
       expect(detail(tester, 'Swap costs'), '2 USDC + 0.1 XYZ');
       // Nothing priced in dollars, so no dollar total either.
       expect(find.text('Incomplete'), findsNWidgets(2));
@@ -118,7 +118,7 @@ void main() {
 
       expect(detail(tester, 'Network costs'), r'$0.00');
       expect(detail(tester, 'Swap costs'), r'$0.00');
-      expect(find.text('Approval network cost'), findsNothing);
+      expect(find.textContaining('Approval network cost'), findsNothing);
     });
 
     testWidgets('priced in dollars round up to the cent', (tester) async {
@@ -140,7 +140,7 @@ void main() {
       await expand(tester, 'Costs & protection');
 
       expect(detail(tester, 'Network costs'), r'$4.21');
-      expect(detail(tester, 'Approval network cost'), r'$1.20');
+      expect(detail(tester, '↳ Approval network cost'), r'$1.20');
       expect(detail(tester, 'Swap costs'), r'$0.50');
       expect(
         detail(tester, 'Minimum guard'),

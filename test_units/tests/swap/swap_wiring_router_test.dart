@@ -50,6 +50,9 @@ void main() {
       expect(shell.initialDestination, SwapDestination.swap);
       // Without an override the shell stands up the real swap state.
       expect(shell.destinationBuilder, isNull);
+      // One key for both routers, so a breakpoint moves the shell, not
+      // rebuilds it.
+      expect(shell.key, same(SwapShell.routerKey));
     }
 
     testWidgets('the content area shows the swap surface, opening on Swap', (

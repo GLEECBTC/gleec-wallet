@@ -150,7 +150,7 @@ class SwapEvidenceSheet extends StatelessWidget {
                 evidence.destinationTxHash!,
               ),
             ),
-          if (evidence.providerExplorerUrl != null)
+          if (swapRoutePage(evidence.providerExplorerUrl) case final route?)
             _Field(
               label: LocaleKeys.swapEvidenceRouteStatus.tr(),
               child: Align(
@@ -158,8 +158,7 @@ class SwapEvidenceSheet extends StatelessWidget {
                 child: SwapLinkButton(
                   label: LocaleKeys.swapEvidenceRouteLink.tr(),
                   icon: Icons.open_in_new_rounded,
-                  onPressed: () =>
-                      openSwapLink(context, evidence.providerExplorerUrl!),
+                  onPressed: () => openSwapLink(context, '$route'),
                 ),
               ),
             ),

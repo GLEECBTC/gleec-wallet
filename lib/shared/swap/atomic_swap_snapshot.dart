@@ -7,6 +7,7 @@ typedef _AtomicSide = ({
   List<String> confirming,
   String sent,
   String received,
+  String waitRefund,
   List<String> refunding,
   List<String> refunded,
 });
@@ -21,6 +22,7 @@ const _AtomicSide _taker = (
   ],
   sent: 'TakerPaymentSent',
   received: 'MakerPaymentSpent',
+  waitRefund: 'TakerPaymentWaitRefundStarted',
   refunding: ['TakerPaymentWaitRefundStarted', 'TakerPaymentRefundStarted'],
   refunded: [
     'TakerPaymentRefunded',
@@ -36,6 +38,7 @@ const _AtomicSide _maker = (
   confirming: [],
   sent: 'MakerPaymentSent',
   received: 'TakerPaymentSpent',
+  waitRefund: 'MakerPaymentWaitRefundStarted',
   refunding: ['MakerPaymentWaitRefundStarted', 'MakerPaymentRefundStarted'],
   refunded: ['MakerPaymentRefunded', 'MakerPaymentRefundFinished'],
 );
@@ -124,7 +127,7 @@ SwapExecutionSnapshot atomicSnapshot({
         : at(events.lastOrNull?.timestamp) ?? finishedAt,
     delayedSince: outcome == null ? delayedSince : null,
     refundUnlocksAt: outcome == null && stage == SwapProgressStage.refunding
-        ? _refundLock(swap)
+        ? _refundUnlock(swap, from)
         : null,
     evidence: SwapEvidence(
       executionId: uuid,
@@ -278,21 +281,45 @@ DateTime? _overdueSince(Swap swap, DateTime now) {
   return now.isAfter(deadline.add(_overdueGrace)) ? deadline : null;
 }
 
-/// When [swap]'s own payment can be refunded: the lock its Started event
-/// records, in seconds, for whichever side this wallet took.
-DateTime? _refundLock(Swap? swap) {
+/// How long past the lock KDF gives itself to refund a payment that waits on
+/// the chain's median time: its own `wait_refund_until`.
+const _medianTimeRefundAllowance = Duration(seconds: 3700);
+
+/// When [swap]'s own payment, in [asset], can be refunded.
+///
+/// KDF sends most refunds once the lock its Started event records has
+/// passed. A payment on the median-time path ([_refundWaitsOnMedianTime])
+/// waits until the chain's median block time passes the lock instead, which
+/// can be an hour later; there the deadline KDF logs as it starts waiting
+/// stands in, else the lock plus the same allowance.
+DateTime? _refundUnlock(Swap? swap, AssetId? asset) {
   if (swap == null) return null;
-  final started = swap.events
-      .where((e) => e.event.type == 'Started')
-      .firstOrNull
-      ?.event
-      .data;
+  final side = _sideOf(swap);
+  SwapEventData? dataOf(String type) =>
+      swap.events.where((e) => e.event.type == type).firstOrNull?.event.data;
+  final started = dataOf('Started');
   final seconds = swap.isTaker
       ? started?.takerPaymentLock
       : started?.makerPaymentLock;
   if (seconds == null || seconds == 0) return null;
-  return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+  final lock = DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+  if (asset == null || !_refundWaitsOnMedianTime(asset)) return lock;
+  final waitUntil = dataOf(side.waitRefund)?.waitUntil;
+  return waitUntil == null || waitUntil == 0
+      ? lock.add(_medianTimeRefundAllowance)
+      : DateTime.fromMillisecondsSinceEpoch(waitUntil * 1000);
 }
+
+/// Whether KDF holds a refund of [asset] until the chain's median time
+/// passes the lock: its UTXO coins, QTUM and Sia override `can_refund_htlc`
+/// that way, and every other coin refunds once the lock has passed. The SDK
+/// files QTUM under [CoinSubClass.qrc20] with its tokens, which do not wait;
+/// only the tokens have a parent.
+bool _refundWaitsOnMedianTime(AssetId asset) => switch (asset.subClass) {
+  CoinSubClass.utxo || CoinSubClass.smartChain || CoinSubClass.sia => true,
+  CoinSubClass.qrc20 => asset.parentId == null,
+  _ => false,
+};
 
 DateTime? _earlier(DateTime? a, DateTime? b) =>
     a == null || (b != null && b.isBefore(a)) ? b : a;

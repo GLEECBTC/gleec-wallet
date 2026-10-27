@@ -50,16 +50,17 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     );
   }
 
-  void _onAmountChanged(
+  Future<void> _onAmountChanged(
     UnifiedSwapAmountChanged event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
     if (event.text == state.inputText && !state.maxRequested) return;
     _invalidate();
     emit(
       _validated(
         state.copyWith(
           inputText: event.text,
+          clearConverted: true,
           clearMaxApplied: true,
           checkingMax: false,
           clearQuotes: true,
@@ -71,6 +72,8 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       ),
     );
     _scheduleEvaluation();
+    // The balance may have moved since the asset was chosen.
+    await _reloadBalances(emit, immediate: false);
   }
 
   void _onAmountModeToggled(
@@ -82,7 +85,11 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final price = _repository.pricing.prices.usdPrice(pay);
     if (price == null || price <= Decimal.zero) return;
     // Convert what is typed, so toggling never changes the amount traded.
-    final amount = amountOf(state);
+    final typed = amountOf(state);
+    final decimals = pay.chainId.decimals;
+    final amount = typed == null || decimals == null
+        ? typed
+        : typed.floor(scale: decimals);
     final nextMode = state.amountMode == SwapAmountMode.token
         ? SwapAmountMode.fiat
         : SwapAmountMode.token;
@@ -91,7 +98,19 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
         : nextMode == SwapAmountMode.fiat
         ? (amount * price).floor(scale: 2).toString()
         : amount.toString();
-    emit(_validated(state.copyWith(amountMode: nextMode, inputText: text)));
+    final converted = amount != null && nextMode == SwapAmountMode.fiat
+        ? (asset: pay, text: text, amount: amount)
+        : null;
+    emit(
+      _validated(
+        state.copyWith(
+          amountMode: nextMode,
+          inputText: text,
+          converted: converted,
+          clearConverted: converted == null,
+        ),
+      ),
+    );
   }
 
   void _onSlippageChanged(
@@ -100,6 +119,10 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
   ) {
     final slippage = event.slippage.clamp(swapMinSlippage, swapMaxSlippage);
     if (slippage == state.slippage) return;
+    // Also set beside the review on a wide screen.
+    final leaveReview = state.view == UnifiedSwapView.review;
+    if (leaveReview && _startInDoubt) return;
+    if (leaveReview) _startVersion++;
     _invalidate();
     emit(
       _validated(
@@ -109,6 +132,8 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
           clearSelectedId: true,
           clearFailure: true,
           evaluation: SwapEvaluationStatus.idle,
+          view: leaveReview ? UnifiedSwapView.form : null,
+          clearReview: leaveReview,
         ),
       ),
     );

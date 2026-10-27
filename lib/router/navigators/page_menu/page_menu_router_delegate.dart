@@ -33,7 +33,7 @@ class PageMenuRouterDelegate extends RouterDelegate<AppRoutePath>
         // or simply a narrow browser window - the unified swap form
         // was unreachable and the menu entry opened the old trading
         // page instead.
-        return isMobile ? const SwapShell() : empty;
+        return isMobile ? SwapShell(key: SwapShell.routerKey) : empty;
       case MainMenuValue.marketMakerBot:
         return isMobile ? const MarketMakerBotPage() : empty;
       case MainMenuValue.nft:
