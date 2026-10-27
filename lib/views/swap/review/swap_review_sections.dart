@@ -272,10 +272,17 @@ class _Permission extends StatelessWidget {
 }
 
 class _ReviewFooter extends StatelessWidget {
-  const _ReviewFooter({required this.review, this.paused = false});
+  const _ReviewFooter({
+    required this.review,
+    required this.tradingEnabled,
+    required this.tradingStatusLoading,
+    this.paused = false,
+  });
 
   final SwapReview review;
   final bool paused;
+  final bool tradingEnabled;
+  final bool tradingStatusLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +295,19 @@ class _ReviewFooter extends StatelessWidget {
     }
 
     final quote = review.quote;
+
+    if (!tradingEnabled &&
+        review.status != SwapReviewStatus.starting &&
+        review.status != SwapReviewStatus.unconfirmed) {
+      return SwapButton(
+        key: const Key('swap-start'),
+        label: tradingStatusLoading
+            ? LocaleKeys.swapCtaChecking.tr()
+            : LocaleKeys.swapCtaUnavailable.tr(),
+        onPressed: null,
+        busy: tradingStatusLoading,
+      );
+    }
 
     return switch (review.status) {
       SwapReviewStatus.ready => SwapButton(

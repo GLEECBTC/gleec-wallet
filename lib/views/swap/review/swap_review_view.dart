@@ -37,6 +37,8 @@ class SwapReviewView extends StatelessWidget {
     return BlocBuilder<UnifiedSwapBloc, UnifiedSwapState>(
       buildWhen: (previous, current) =>
           previous.review != current.review ||
+          previous.tradingEnabled != current.tradingEnabled ||
+          previous.tradingStatusLoading != current.tradingStatusLoading ||
           previous.rateLimitedUntil != current.rateLimitedUntil ||
           previous.payAddress != current.payAddress ||
           previous.receiveAddress != current.receiveAddress,
@@ -57,6 +59,8 @@ class SwapReviewView extends StatelessWidget {
         );
         Widget footer = _ReviewFooter(
           review: review,
+          tradingEnabled: state.tradingEnabled,
+          tradingStatusLoading: state.tradingStatusLoading,
           paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
         );
         // Consent sits beside the button that gives it, never scrolled away.

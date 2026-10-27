@@ -140,6 +140,7 @@ class UnifiedSwapState extends Equatable {
     this.activeExecutionId,
     this.structuralNotice = false,
     this.tradingEnabled = true,
+    this.tradingStatusLoading = false,
     this.clockValid = true,
     this.signedIn = true,
     this.hardwareWallet = false,
@@ -242,6 +243,9 @@ class UnifiedSwapState extends Equatable {
   /// Whether trading is available here at all.
   final bool tradingEnabled;
 
+  /// A policy refresh temporarily prevents starting without losing a review.
+  final bool tradingStatusLoading;
+
   /// Whether the device clock is accurate enough for peer-to-peer swaps.
   final bool clockValid;
 
@@ -320,6 +324,7 @@ class UnifiedSwapState extends Equatable {
     activeExecutionId,
     structuralNotice,
     tradingEnabled,
+    tradingStatusLoading,
     clockValid,
     signedIn,
     hardwareWallet,
@@ -359,6 +364,7 @@ class UnifiedSwapState extends Equatable {
     String? activeExecutionId,
     bool? structuralNotice,
     bool? tradingEnabled,
+    bool? tradingStatusLoading,
     bool? clockValid,
     bool? signedIn,
     bool? hardwareWallet,
@@ -416,6 +422,7 @@ class UnifiedSwapState extends Equatable {
           : (activeExecutionId ?? this.activeExecutionId),
       structuralNotice: structuralNotice ?? this.structuralNotice,
       tradingEnabled: tradingEnabled ?? this.tradingEnabled,
+      tradingStatusLoading: tradingStatusLoading ?? this.tradingStatusLoading,
       clockValid: clockValid ?? this.clockValid,
       signedIn: signedIn ?? this.signedIn,
       hardwareWallet: hardwareWallet ?? this.hardwareWallet,

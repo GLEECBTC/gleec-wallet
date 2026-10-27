@@ -18,6 +18,104 @@ void main() {
     tradingEnabled: false,
     clockValid: true,
   );
+  const policyLoading = UnifiedSwapCapabilitiesChanged(
+    tradingEnabled: false,
+    tradingStatusLoading: true,
+    clockValid: true,
+  );
+  const tradingOn = UnifiedSwapCapabilitiesChanged(
+    tradingEnabled: true,
+    clockValid: true,
+  );
+
+  group('during a policy refresh', () {
+    swapBlocTest('Max keeps its review and fee reserve without starting', (h) {
+      h.routed.max = SwapMaxAmount(
+        amount: d('1.99'),
+        reservedForFees: d('0.01'),
+      );
+      final bloc = h.open()..add(const UnifiedSwapMaxRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapReviewOpened());
+      h.settle();
+      final review = bloc.state.review!;
+      final max = bloc.state.maxApplied;
+
+      bloc
+        ..add(policyLoading)
+        ..add(const UnifiedSwapStartRequested());
+      h.settle();
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review, same(review));
+      expect(bloc.state.tradingEnabled, isFalse);
+      expect(h.routed.requoted, isEmpty);
+
+      bloc.add(tradingOn);
+      h.settle();
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review, same(review));
+      expect(bloc.state.maxApplied, same(max));
+      expect(bloc.state.review!.quote.sellAmount, d('1.99'));
+      expect(bloc.state.tradingEnabled, isTrue);
+      expect(h.routedExecutor.started, isEmpty);
+    });
+
+    swapBlocTest('a resolved restriction or failure still closes the review', (
+      h,
+    ) {
+      final bloc = h.inReview()..add(policyLoading);
+      h.settle();
+      bloc.add(tradingOff);
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.review, isNull);
+      expect(h.routedExecutor.started, isEmpty);
+    });
+
+    swapBlocTest('an interrupted re-price requires a new user action', (h) {
+      final bloc = h.inReview();
+      final quote = bloc.state.review!.quote;
+      h.routed.requoteGate = Completer<void>();
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
+      bloc.add(policyLoading);
+      h.settle();
+      bloc.add(tradingOn);
+      h.settle();
+      h.routed.requoteGate!.complete();
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review!.quote, same(quote));
+      expect(bloc.state.review!.status, SwapReviewStatus.expired);
+      expect(h.routedExecutor.started, isEmpty);
+
+      bloc.add(const UnifiedSwapStartRequested());
+      h.settle();
+      expect(bloc.state.review!.status, SwapReviewStatus.ready);
+      expect(h.routedExecutor.started, isEmpty);
+    });
+
+    swapBlocTest('signing out still discards the review', (h) {
+      final bloc = h.inReview()..add(policyLoading);
+      h.settle();
+      bloc.add(
+        const UnifiedSwapCapabilitiesChanged(
+          tradingEnabled: false,
+          tradingStatusLoading: true,
+          clockValid: true,
+          signedIn: false,
+        ),
+      );
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.review, isNull);
+      expect(h.routedExecutor.started, isEmpty);
+    });
+  });
 
   group('with trading turned off', () {
     swapBlocTest('an open review returns to the form, starting nothing', (h) {

@@ -71,6 +71,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (event.tradingEnabled == state.tradingEnabled &&
+        event.tradingStatusLoading == state.tradingStatusLoading &&
         event.clockValid == state.clockValid &&
         event.signedIn == state.signedIn &&
         event.hardwareWallet == state.hardwareWallet) {
@@ -78,19 +79,36 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     }
     final signingChanged = event.signedIn != state.signedIn;
     if (!signingChanged) {
-      // Without trading the review cannot go ahead, and the form says why.
-      final leaveReview =
+      // Periodic policy refreshes must not discard the accepted snapshot.
+      // Start stays disabled; a resolved restriction or failed lookup still
+      // returns to the form. Never hide an unanswered engine start.
+      final pauseReview =
           !event.tradingEnabled &&
+          event.tradingStatusLoading &&
+          !event.hardwareWallet &&
           state.view == UnifiedSwapView.review &&
           !_startInDoubt;
-      if (leaveReview) _startVersion++;
+      final leaveReview =
+          !event.tradingEnabled &&
+          !pauseReview &&
+          state.view == UnifiedSwapView.review &&
+          !_startInDoubt;
+      if (leaveReview || pauseReview) _startVersion++;
       emit(
         state.copyWith(
           tradingEnabled: event.tradingEnabled,
+          tradingStatusLoading: event.tradingStatusLoading,
           clockValid: event.clockValid,
           hardwareWallet: event.hardwareWallet,
           view: leaveReview ? UnifiedSwapView.form : null,
           clearReview: leaveReview,
+          // An interrupted re-price must not resume a prior Start request
+          // when policy becomes ready; require an explicit refresh instead.
+          review:
+              pauseReview &&
+                  state.review?.status == SwapReviewStatus.revalidating
+              ? state.review!.copyWith(status: SwapReviewStatus.expired)
+              : null,
         ),
       );
     } else {
@@ -105,6 +123,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         _validated(
           state.copyWith(
             tradingEnabled: event.tradingEnabled,
+            tradingStatusLoading: event.tradingStatusLoading,
             clockValid: event.clockValid,
             signedIn: event.signedIn,
             hardwareWallet: event.hardwareWallet,
