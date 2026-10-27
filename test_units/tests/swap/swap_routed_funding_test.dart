@@ -19,6 +19,8 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 
+import '../../support/legal_documents_fixture.dart';
+
 import 'swap_src_fakes.dart';
 import 'swap_test_fixtures.dart';
 
@@ -239,6 +241,7 @@ void _run(
             registry: registry,
             terms: SwapTermsRepository(
               walletKey: () async => 'w',
+              legalDocuments: legalFixtureRepository(),
               storage: storage,
             ),
             preferences: SwapPreferences(

@@ -28,6 +28,7 @@ import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/shared/utils/utils.dart' as utils;
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 
 /// A request to open the swap form on a pair, as tickers. The amount is in
 /// pay-asset units, or in US dollars when `fiat` is set.
@@ -49,6 +50,7 @@ class SwapServices {
   /// [logAnalytics] replaces sending to the app's AnalyticsRepo, for tests.
   SwapServices({
     required KomodoDefiSdk sdk,
+    required LegalDocumentsRepository legalDocuments,
     required CoinsRepo coinsRepo,
     required DexRepository dexRepository,
     required MyOrdersService orders,
@@ -81,7 +83,10 @@ class SwapServices {
       networks: networks,
       resolveAsset: resolveAsset,
     );
-    terms = SwapTermsRepository(walletKey: _walletKey);
+    terms = SwapTermsRepository(
+      walletKey: _walletKey,
+      legalDocuments: legalDocuments,
+    );
     preferences = SwapPreferences(walletKey: _walletKey);
     _userSubscription = sdk.auth.watchCurrentUser().listen(
       _onUserChanged,

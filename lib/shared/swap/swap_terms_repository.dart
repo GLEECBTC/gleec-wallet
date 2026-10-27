@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 
 /// A recorded acceptance of the routing provider's terms.
 class SwapTermsAcceptance {
@@ -10,6 +12,7 @@ class SwapTermsAcceptance {
     required this.acceptedAt,
     required this.provider,
     required this.url,
+    this.documentShas = const {},
   });
 
   /// Parses a stored record, or returns null for anything unreadable.
@@ -25,6 +28,9 @@ class SwapTermsAcceptance {
         acceptedAt: acceptedAt,
         provider: '${json['provider'] ?? ''}',
         url: '${json['url'] ?? ''}',
+        documentShas: json['document_shas'] is Map
+            ? Map<String, String>.from(json['document_shas'] as Map)
+            : const {},
       );
     } on Object {
       return null;
@@ -42,6 +48,7 @@ class SwapTermsAcceptance {
 
   /// Where the accepted terms were published.
   final String url;
+  final Map<String, String> documentShas;
 
   /// The stored form.
   String toStorage() => jsonEncode({
@@ -49,6 +56,7 @@ class SwapTermsAcceptance {
     'accepted_at': acceptedAt.toUtc().toIso8601String(),
     'provider': provider,
     'url': url,
+    'document_shas': documentShas,
   });
 }
 
@@ -62,6 +70,7 @@ class SwapTermsAcceptance {
 class SwapTermsRepository {
   SwapTermsRepository({
     required Future<String?> Function() walletKey,
+    required this.legalDocuments,
     BaseStorage? storage,
   }) : _walletKey = walletKey,
        _storage = storage ?? getStorage();
@@ -73,12 +82,21 @@ class SwapTermsRepository {
   static const provider = 'LI.FI';
 
   /// Where the provider publishes its terms.
-  static const termsUrl = 'https://li.fi/legal/terms-and-conditions/';
+  static const termsUrl = '${legalDocumentsBaseUrl}tos_lifi_gleec_wallet.md';
 
   static const _keyPrefix = 'routed_swap_terms_acceptance_v1';
 
   final Future<String?> Function() _walletKey;
   final BaseStorage _storage;
+  final LegalDocumentsRepository legalDocuments;
+  Stream<void> get changes => legalDocuments.changes;
+  Future<LegalConsentSnapshot> loadSnapshot() =>
+      legalDocuments.loadSnapshot(swapConsentDocuments);
+  Future<void> refresh({bool force = false}) =>
+      legalDocuments.refreshDocuments(swapConsentDocuments, force: force);
+  bool canSubmit(LegalConsentSnapshot? snapshot) =>
+      legalDocuments.bypassGate ||
+      (snapshot?.covers(swapConsentDocuments) ?? false);
 
   Future<String?> _key() async {
     final wallet = await _walletKey();
@@ -86,19 +104,32 @@ class SwapTermsRepository {
   }
 
   /// Whether the current wallet has accepted the current terms.
-  Future<bool> hasAccepted() async {
+  Future<bool> hasAccepted({LegalConsentSnapshot? snapshot}) async {
+    final presented = snapshot ?? await loadSnapshot();
+    if (!presented.covers(swapConsentDocuments)) return false;
     final key = await _key();
     if (key == null) return false;
     try {
       final acceptance = SwapTermsAcceptance.tryParse(await _storage.read(key));
-      return acceptance != null && acceptance.version >= currentVersion;
+      return acceptance != null &&
+          acceptance.version >= currentVersion &&
+          swapConsentDocuments.every(
+            (d) =>
+                acceptance.documentShas[d.cacheKey] ==
+                presented.documentShas[d.cacheKey],
+          );
     } on Object {
       return false;
     }
   }
 
   /// Records acceptance for the current wallet.
-  Future<void> recordAcceptance({DateTime? at}) async {
+  Future<void> recordAcceptance({
+    DateTime? at,
+    LegalConsentSnapshot? snapshot,
+  }) async {
+    final presented = snapshot ?? await loadSnapshot();
+    if (!presented.covers(swapConsentDocuments)) return;
     final key = await _key();
     if (key == null) return;
     await _storage.write(
@@ -108,6 +139,7 @@ class SwapTermsRepository {
         acceptedAt: at ?? DateTime.now(),
         provider: provider,
         url: termsUrl,
+        documentShas: presented.documentShas,
       ).toStorage(),
     );
   }

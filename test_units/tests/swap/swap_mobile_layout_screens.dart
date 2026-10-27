@@ -8,6 +8,7 @@ void _reviewCases() {
     }) => swapPricedForm().copyWith(
       view: UnifiedSwapView.review,
       review: SwapReview(
+        legalSnapshot: legalFixtureSnapshot(),
         quote: quoteOf(guaranteed: '2900'),
         previous: quoteOf(),
         status: status,
@@ -54,8 +55,9 @@ void _reviewCases() {
       );
     });
 
-    testWidgets('without terms to accept, keeps the provider line in the '
-        'details', (tester) async {
+    testWidgets('already accepted terms remain readable beside the action', (
+      tester,
+    ) async {
       await pump(
         tester,
         reviewing(SwapReviewStatus.ready),
@@ -64,7 +66,7 @@ void _reviewCases() {
 
       expect(
         find.descendant(of: footer, matching: find.byType(SwapProviderNotice)),
-        findsNothing,
+        findsOneWidget,
       );
       expect(find.byType(SwapProviderNotice), findsOneWidget);
     });

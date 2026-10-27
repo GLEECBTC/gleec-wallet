@@ -15,6 +15,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_response
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_src_fakes.dart';
 
@@ -367,6 +368,7 @@ SwapServices servicesOf(
   SrcMm2Api? mm2,
   void Function(AnalyticsEventData event)? logAnalytics,
 }) => SwapServices(
+  legalDocuments: legalFixtureRepository(),
   sdk: sdk,
   coinsRepo: coins ?? SrcCoinsRepo(),
   dexRepository: dex ?? SrcDex(),

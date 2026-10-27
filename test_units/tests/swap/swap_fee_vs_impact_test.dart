@@ -12,6 +12,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -186,7 +187,11 @@ void main() {
       swap.emit(
         swapPricedForm(ranked: [quote]).copyWith(
           view: UnifiedSwapView.review,
-          review: SwapReview(quote: quote, status: SwapReviewStatus.ready),
+          review: SwapReview(
+            legalSnapshot: legalFixtureSnapshot(),
+            quote: quote,
+            status: SwapReviewStatus.ready,
+          ),
         ),
       );
       await pumpSwapUi(

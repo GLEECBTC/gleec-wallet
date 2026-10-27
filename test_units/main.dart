@@ -145,6 +145,7 @@ import 'tests/swap/swap_signed_out_repository_test.dart'
     as swap_signed_out_repository_test;
 import 'tests/swap/swap_shell_test.dart' as swap_shell_test;
 import 'tests/swap/swap_fee_vs_impact_test.dart' as swap_fee_vs_impact_test;
+import 'tests/swap/swap_legal_gate_test.dart' as swap_legal_gate_test;
 import 'tests/swap/swap_provider_notice_test.dart' as swap_provider_notice_test;
 import 'tests/swap/swap_shell_backup_notice_button_test.dart'
     as swap_shell_backup_notice_button_test;
@@ -417,6 +418,9 @@ import 'tests/sorting/coin_sort_order_test.dart';
 import 'tests/wallet/coins_bloc_balance_emit_test.dart';
 import 'tests/wallet/mobile_coin_row_title_test.dart';
 import 'tests/wallet/coins_repo_activation_wallet_race_test.dart';
+import 'tests/services/legal_hosting_test.dart' as legal_hosting_test;
+import 'views/wallets_manager/widgets/legal_document_gate_test.dart'
+    as legal_document_gate_test;
 import 'tests/services/legal_acceptance_test.dart';
 import 'tests/services/legal_refresh_test.dart' as legal_refresh_test;
 import 'bloc/trading_status/trading_status_service_test.dart'
@@ -615,6 +619,8 @@ void main() {
   testMobileCoinRowTitle();
   testLegalAcceptance();
   legal_refresh_test.main();
+  legal_hosting_test.main();
+  legal_document_gate_test.main();
   trading_status_service_test.main();
   trading_status_disabled_policy_test.main();
   wallet_deleting_test.main();
@@ -668,6 +674,7 @@ void main() {
   swap_shell_breakpoint_test.main();
   swap_fee_vs_impact_test.main();
   swap_provider_notice_test.main();
+  swap_legal_gate_test.main();
   swap_execution_registry_test.main();
   swap_execution_bloc_test.main();
   swap_copy_test.main();

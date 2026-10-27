@@ -16,6 +16,7 @@ import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_common_ui_fakes.dart';
 import 'swap_motion_fakes.dart';
@@ -170,7 +171,11 @@ void main() {
       ),
       selectedId: quote.id,
       view: UnifiedSwapView.review,
-      review: SwapReview(quote: quote, status: status),
+      review: SwapReview(
+        legalSnapshot: legalFixtureSnapshot(),
+        quote: quote,
+        status: status,
+      ),
     );
 
     Future<void> show(WidgetTester tester, SwapReviewStatus status) async {

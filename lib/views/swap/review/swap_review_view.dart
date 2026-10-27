@@ -20,6 +20,8 @@ import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+import 'package:web_dex/views/swap/common/swap_legal_notice.dart';
+import 'package:web_dex/shared/widgets/legal_documents/legal_document_notice.dart';
 
 part 'swap_review_details.dart';
 part 'swap_review_sections.dart';
@@ -64,11 +66,13 @@ class SwapReviewView extends StatelessWidget {
           paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
         );
         // Consent sits beside the button that gives it, never scrolled away.
-        if (_acceptsTerms(review)) {
+        if (review.quote.source == SwapLiquiditySource.routed &&
+            !review.isRecovery) {
           footer = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SwapProviderNotice(acceptance: true),
+              SwapProviderNotice(snapshot: review.legalSnapshot),
+              SwapLegalConsentNotice(review: review),
               const SizedBox(height: 10),
               footer,
             ],
@@ -101,19 +105,6 @@ class SwapReviewView extends StatelessWidget {
     );
   }
 }
-
-/// Whether starting this routed swap accepts the provider's terms, which the
-/// footer then says beside the button.
-bool _acceptsTerms(SwapReview review) =>
-    review.termsRequired &&
-    review.quote.source == SwapLiquiditySource.routed &&
-    switch (review.status) {
-      SwapReviewStatus.ready ||
-      SwapReviewStatus.materialUpdate ||
-      SwapReviewStatus.revalidating ||
-      SwapReviewStatus.starting => true,
-      _ => false,
-    };
 
 class _ReviewContent extends StatelessWidget {
   const _ReviewContent({
@@ -198,9 +189,9 @@ class _ReviewContent extends StatelessWidget {
         const SizedBox(height: 14),
         _Permission(quote: quote),
         if (quote.source == SwapLiquiditySource.routed &&
-            !_acceptsTerms(review)) ...[
+            review.isRecovery) ...[
           const SizedBox(height: 14),
-          SwapProviderNotice(acceptance: review.termsRequired),
+          SwapProviderNotice(snapshot: review.legalSnapshot),
         ],
         const SizedBox(height: 8),
       ],

@@ -26,6 +26,7 @@ import 'package:web_dex/views/swap/swap_shell.dart';
 import 'swap_accessibility_checks.dart';
 import 'swap_surface_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
+import '../../support/legal_documents_fixture.dart';
 import 'swap_wiring_fakes.dart' show trezorUser;
 
 /// The Swap surface's own state: the form and Activity blocs it owns, kept
@@ -178,6 +179,7 @@ void main() {
       final review = SwapReview(
         quote: quoteOf(),
         status: SwapReviewStatus.ready,
+        legalSnapshot: legalFixtureSnapshot(),
       );
       // Seed an already reviewed quote, then exercise the real shell listener.
       // ignore: invalid_use_of_visible_for_testing_member

@@ -6,6 +6,7 @@ import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 
 part 'unified_swap_state_review.dart';
 

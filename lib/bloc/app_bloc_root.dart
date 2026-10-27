@@ -70,6 +70,7 @@ import 'package:web_dex/shared/utils/ipfs_gateway_manager.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/reduced_motion_scope.dart';
 import 'package:web_dex/views/swap/notices/swap_tab_signals.dart';
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 
 class AppBlocRoot extends StatelessWidget {
   const AppBlocRoot({
@@ -186,7 +187,8 @@ class AppBlocRoot extends StatelessWidget {
         // — whichever screen is open.
         RepositoryProvider(
           lazy: false,
-          create: (_) => SwapServices(
+          create: (context) => SwapServices(
+            legalDocuments: context.read<LegalDocumentsRepository>(),
             sdk: komodoDefiSdk,
             coinsRepo: coinsRepository,
             dexRepository: dexRepository,

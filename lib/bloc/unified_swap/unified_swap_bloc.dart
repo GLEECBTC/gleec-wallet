@@ -93,6 +93,12 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapEvaluationRequested>(_onEvaluationRequested);
     on<UnifiedSwapOptionSelected>(_onOptionSelected);
     on<UnifiedSwapReviewOpened>(_onReviewOpened);
+    // The repository coalesces requests for the same document. Keep each
+    // review's refresh alive so opening a new review cannot lose its result.
+    on<UnifiedSwapLegalRequested>(_onLegalRequested);
+    _legalChanges = terms.changes.listen((_) {
+      if (!isClosed) add(const UnifiedSwapLegalRequested());
+    });
     on<UnifiedSwapReviewClosed>(_onReviewClosed);
     on<UnifiedSwapStartRequested>(_onStartRequested);
     on<UnifiedSwapFreshQuoteAccepted>(_onFreshQuoteAccepted);
@@ -120,6 +126,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   late final StreamSubscription<void> _arrivals;
   final SwapExecutionRegistry _registry;
   final SwapTermsRepository _terms;
+  late final StreamSubscription<void> _legalChanges;
   final SwapPreferences _preferences;
   final Future<Decimal?> Function(AssetId asset) _spendableBalance;
   final Future<String?> Function(AssetId asset) _addressOf;
@@ -152,6 +159,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped whenever a review is left or replaced, so a start that is still
   /// re-pricing is abandoned rather than executed behind the user's back.
   int _startVersion = 0;
+
+  /// Only the latest legal read may update the presented review documents.
+  int _legalVersion = 0;
+  bool _waitingForLegalSubmission = false;
 
   /// Bumped when a wallet signs in or out, so reads for the previous one are
   /// dropped.
@@ -445,6 +456,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       UnifiedSwapBalancesRefreshed() ||
       UnifiedSwapCatalogArrived() ||
       UnifiedSwapCapabilitiesChanged() => false,
+      UnifiedSwapLegalRequested(:final retry) => retry,
       UnifiedSwapEvaluationRequested(:final quiet) => !quiet,
       UnifiedSwapOffersRequested(:final quiet) => !quiet,
       UnifiedSwapVisibilityChanged(:final visible) => visible,
@@ -463,6 +475,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     _rateLimit?.cancel();
     _offersWatch?.cancel();
     unawaited(_arrivals.cancel());
+    unawaited(_legalChanges.cancel());
     return super.close();
   }
 

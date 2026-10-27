@@ -309,16 +309,16 @@ class _ReviewFooter extends StatelessWidget {
       );
     }
 
-    return switch (review.status) {
+    final action = switch (review.status) {
       SwapReviewStatus.ready => SwapButton(
         key: const Key('swap-start'),
         label: _startLabel(quote),
-        onPressed: commit,
+        onPressed: review.legalAllowed ? commit : null,
       ),
       SwapReviewStatus.materialUpdate => SwapButton(
         key: const Key('swap-start'),
         label: LocaleKeys.swapAcceptUpdated.tr(),
-        onPressed: commit,
+        onPressed: review.legalAllowed ? commit : null,
       ),
       SwapReviewStatus.expired => SwapButton(
         label: LocaleKeys.swapCtaRefresh.tr(),
@@ -366,6 +366,7 @@ class _ReviewFooter extends StatelessWidget {
         },
       ),
     };
+    return LegalActionTooltip(allowed: review.legalAllowed, child: action);
   }
 
   static String _startLabel(SwapQuote quote) {

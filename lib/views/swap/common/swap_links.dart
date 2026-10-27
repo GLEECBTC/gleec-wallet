@@ -6,6 +6,8 @@ import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
+import 'package:web_dex/views/swap/common/swap_legal_notice.dart';
 
 /// Opens [url], or shows a [SwapLinkFailedDialog] if the device cannot, or
 /// if it is not a link [swapLinkUri] lets a swap screen open.
@@ -179,12 +181,14 @@ String? _addressOf(String url) {
 class SwapProviderNotice extends StatelessWidget {
   const SwapProviderNotice({
     this.acceptance = false,
+    this.snapshot,
     this.linkKey = const Key('swap-terms-link'),
     super.key,
   });
 
   /// Whether starting the swap accepts the provider's terms.
   final bool acceptance;
+  final LegalConsentSnapshot? snapshot;
 
   /// The terms link's key, distinct where two notices can be on screen.
   final Key linkKey;
@@ -216,8 +220,11 @@ class SwapProviderNotice extends StatelessWidget {
                 link: true,
                 child: InkWell(
                   key: linkKey,
-                  onTap: () =>
-                      openSwapLink(context, SwapTermsRepository.termsUrl),
+                  onTap: () => showSwapLegalDocument(
+                    context,
+                    LegalDocumentType.lifiTerms,
+                    snapshot: snapshot,
+                  ),
                   // WidgetSpan scales its child with the paragraph already.
                   child: Text(
                     linkLabel,

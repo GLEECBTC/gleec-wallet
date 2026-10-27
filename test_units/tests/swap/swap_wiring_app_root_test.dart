@@ -12,7 +12,9 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
 import 'swap_wiring_fakes.dart';
@@ -62,7 +64,13 @@ void main() {
       // providers wrap that one's child instead of their own - the whole app.
       await tester.pumpWidget(
         MultiRepositoryProvider(
-          providers: [repositories as dynamic],
+          providers: [
+            RepositoryProvider<LegalDocumentsRepository>(
+              create: (_) => legalFixtureRepository(),
+              dispose: (repository) => repository.dispose(),
+            ),
+            repositories as dynamic,
+          ],
           child: const SizedBox(key: probe),
         ),
       );

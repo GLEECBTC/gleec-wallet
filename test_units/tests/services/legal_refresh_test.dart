@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,8 +7,12 @@ import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+import '../../support/legal_documents_fixture.dart';
 
 class _Storage implements BaseStorage {
+  _Storage({bool populated = true}) {
+    if (populated) data.addAll(LegalFixtureStorage().values);
+  }
   final data = <String, dynamic>{};
   bool failWrites = false;
   @override
@@ -29,15 +31,10 @@ class _Storage implements BaseStorage {
   }
 }
 
-class _Assets extends CachingAssetBundle {
-  @override
-  Future<ByteData> load(String key) async =>
-      ByteData.sublistView(utf8.encode('# Bundled $key'));
-}
-
 http.Response _document(String text) => http.Response(
-  jsonEncode({'content': base64Encode(utf8.encode(text))}),
+  text,
   200,
+  headers: {'content-type': 'text/markdown; charset=utf-8'},
 );
 
 void main() {
@@ -50,7 +47,6 @@ void main() {
         final storage = _Storage()..failWrites = true;
         final repo = LegalDocumentsRepository(
           storage: storage,
-          assetBundle: _Assets(),
           clock: () => now,
           httpClient: MockClient((_) async {
             requests++;
@@ -85,7 +81,6 @@ void main() {
         final pending = Completer<void>();
         final repo = LegalDocumentsRepository(
           storage: _Storage(),
-          assetBundle: _Assets(),
           clock: () => now,
           httpClient: MockClient((request) async {
             calls++;
@@ -117,7 +112,6 @@ void main() {
         var calls = 0;
         final repo = LegalDocumentsRepository(
           storage: _Storage(),
-          assetBundle: _Assets(),
           clock: () => now,
           httpClient: MockClient((_) async {
             calls++;
@@ -145,7 +139,6 @@ void main() {
         final pending = Completer<void>();
         final repo = LegalDocumentsRepository(
           storage: _Storage(),
-          assetBundle: _Assets(),
           httpClient: MockClient((request) async {
             await pending.future;
             return _document('# Changed ${request.url.path}');
@@ -157,10 +150,10 @@ void main() {
           ..add(const LegalAgreementOpened());
         addTearDown(bloc.close);
         await bloc.stream.firstWhere(
-          (state) => state == LegalAgreementStatus.current,
+          (state) => state.status == LegalAgreementStatus.current,
         );
         final updated = bloc.stream.firstWhere(
-          (state) => state == LegalAgreementStatus.updated,
+          (state) => state.status == LegalAgreementStatus.updated,
         );
         pending.complete();
         await updated.timeout(const Duration(seconds: 2));
@@ -177,7 +170,6 @@ void main() {
         final pending = Completer<void>();
         final repo = LegalDocumentsRepository(
           storage: _Storage(),
-          assetBundle: _Assets(),
           httpClient: MockClient((request) async {
             await pending.future;
             return _document('# Changed ${request.url.path}');
@@ -189,7 +181,12 @@ void main() {
           ..add(const LegalAgreementOpened());
         addTearDown(bloc.close);
         await Future<void>.delayed(Duration.zero);
-        bloc.add(const LegalAgreementSubmitted('wallet-login'));
+        bloc.add(
+          LegalAgreementSubmitted(
+            'wallet-login',
+            snapshot: bloc.presentedSnapshot,
+          ),
+        );
         await Future<void>.delayed(Duration.zero);
         pending.complete();
         await repo.refreshConsentDocuments();
@@ -203,10 +200,9 @@ void main() {
 
     test('disposed repositories ignore a late successful response', () async {
       final response = Completer<http.Response>();
-      final storage = _Storage();
+      final storage = _Storage(populated: false);
       final repo = LegalDocumentsRepository(
         storage: storage,
-        assetBundle: _Assets(),
         httpClient: MockClient((_) => response.future),
       );
       final refresh = repo.refreshConsentDocuments();

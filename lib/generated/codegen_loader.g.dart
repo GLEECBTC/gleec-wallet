@@ -924,6 +924,14 @@ abstract class LocaleKeys {
   static const transactionsEmptyDescription = 'transactionsEmptyDescription';
   static const transactionsNoLoginCAT = 'transactionsNoLoginCAT';
   static const loadingError = 'loadingError';
+  static const legalDocumentsUnavailableTitle =
+      'legalDocumentsUnavailableTitle';
+  static const legalDocumentsPlaceholderTitle =
+      'legalDocumentsPlaceholderTitle';
+  static const legalDocumentsWebsite = 'legalDocumentsWebsite';
+  static const legalDocumentsUnavailable = 'legalDocumentsUnavailable';
+  static const legalDocumentsPlaceholder = 'legalDocumentsPlaceholder';
+  static const legalDocumentsLinks = 'legalDocumentsLinks';
   static const legalDocumentLoadError = 'legalDocumentLoadError';
   static const tryAgainButton = 'tryAgainButton';
   static const contractAddress = 'contractAddress';
@@ -1626,6 +1634,7 @@ abstract class LocaleKeys {
   static const swapStartReset = 'swapStartReset';
   static const swapAcceptUpdated = 'swapAcceptUpdated';
   static const swapViewInActivity = 'swapViewInActivity';
+  static const swapLegalConsentNotice = 'swapLegalConsentNotice';
   static const swapTermsNotice = 'swapTermsNotice';
   static const swapTermsLinkLabel = 'swapTermsLinkLabel';
   static const swapRoutedThrough = 'swapRoutedThrough';
