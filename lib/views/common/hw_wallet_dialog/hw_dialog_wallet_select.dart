@@ -26,6 +26,20 @@ class HwDialogWalletSelect extends StatefulWidget {
 
 class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
   WalletBrand? _selectedBrand;
+  bool _waitingForLegal = false;
+
+  Future<void> _continue() async {
+    final brand = _selectedBrand;
+    if (brand == null || _waitingForLegal) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null || brand != _selectedBrand) return;
+    context.read<LegalAgreementBloc>().add(
+      LegalAgreementSubmitted('wallet-hardware', snapshot: agreement.snapshot),
+    );
+    widget.onSelect(brand);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,17 +146,14 @@ class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
             BlocSelector<AuthBloc, AuthBlocState, bool>(
               selector: (state) => state.isLoading,
               builder: (context, inProgress) {
-                return UiPrimaryButton(
-                  text: LocaleKeys.continueText.tr(),
-                  prefix: inProgress ? const UiSpinner() : null,
-                  onPressed: _selectedBrand == null || inProgress
-                      ? null
-                      : () {
-                          context.read<LegalAgreementBloc>().add(
-                            const LegalAgreementSubmitted('wallet-hardware'),
-                          );
-                          widget.onSelect(_selectedBrand!);
-                        },
+                return LegalConsentAction(
+                  builder: (allowed) => UiPrimaryButton(
+                    text: LocaleKeys.continueText.tr(),
+                    prefix: inProgress ? const UiSpinner() : null,
+                    onPressed: !allowed || _selectedBrand == null || inProgress
+                        ? null
+                        : _continue,
+                  ),
                 );
               },
             ),

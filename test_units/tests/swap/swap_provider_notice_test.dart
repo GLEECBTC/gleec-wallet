@@ -9,9 +9,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
-import 'package:web_dex/shared/swap/swap_terms_repository.dart';
+import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -66,6 +68,7 @@ void main() {
       swapPricedForm(ranked: [quote]).copyWith(
         view: UnifiedSwapView.review,
         review: SwapReview(
+          legalSnapshot: legalFixtureSnapshot(),
           quote: quote,
           status: SwapReviewStatus.ready,
           termsRequired: termsRequired,
@@ -102,7 +105,13 @@ void main() {
       expect(attribution(), findsOneWidget);
       await tester.tap(find.byKey(const Key('swap-strip-terms-link')));
       await tester.pumpAndSettle();
-      expect(launched, [SwapTermsRepository.termsUrl]);
+      expect(launched, isEmpty);
+      expect(
+        tester
+            .widget<LegalDocumentView>(find.byType(LegalDocumentView))
+            .document,
+        LegalDocumentType.lifiTerms,
+      );
     });
 
     testWidgets('says nothing of a provider for an order-book swap', (
@@ -122,7 +131,11 @@ void main() {
         tester,
         swapPricedForm(ranked: [quote]).copyWith(
           view: UnifiedSwapView.review,
-          review: SwapReview(quote: quote, status: SwapReviewStatus.ready),
+          review: SwapReview(
+            legalSnapshot: legalFixtureSnapshot(),
+            quote: quote,
+            status: SwapReviewStatus.ready,
+          ),
         ),
       );
 

@@ -325,3 +325,11 @@ enum UnifiedSwapTimerKind {
   /// Check again whether anyone offers a pair that had no offers.
   offers,
 }
+
+/// Reload consent availability after publication, resume, or an explicit retry.
+final class UnifiedSwapLegalRequested extends UnifiedSwapEvent {
+  const UnifiedSwapLegalRequested({this.retry = false});
+  final bool retry;
+  @override
+  List<Object?> get props => [retry];
+}

@@ -6,6 +6,7 @@ import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 
 /// Which screen of the swap flow is showing.
 enum UnifiedSwapView {
@@ -155,6 +156,11 @@ class SwapReview extends Equatable {
     required this.status,
     this.previous,
     this.termsRequired = false,
+    this.legalSnapshot,
+    this.legalBypass = false,
+    this.legalLoading = false,
+    this.legalFailed = false,
+    this.isRecovery = false,
     this.rejectionDetail,
     this.revalidationFailure,
   });
@@ -171,6 +177,20 @@ class SwapReview extends Equatable {
   /// Whether starting records acceptance of the routing provider's terms,
   /// because this wallet has not accepted them yet.
   final bool termsRequired;
+  final LegalConsentSnapshot? legalSnapshot;
+  final bool legalBypass;
+  final bool legalLoading;
+  final bool legalFailed;
+  bool get showLegalFailure =>
+      !(legalSnapshot?.covers(swapConsentDocuments) ?? false) &&
+      (!legalLoading || legalFailed);
+  final bool isRecovery;
+  bool get legalAllowed =>
+      quote.source != SwapLiquiditySource.routed ||
+      isRecovery ||
+      legalBypass ||
+      (legalLoading && !legalFailed) ||
+      (legalSnapshot?.covers(swapConsentDocuments) ?? false);
 
   /// Diagnostic text for a rejection.
   final String? rejectionDetail;
@@ -180,10 +200,12 @@ class SwapReview extends Equatable {
   final SwapQuoteFailure? revalidationFailure;
 
   /// Whether the start action is available.
-  bool get canStart => switch (status) {
-    SwapReviewStatus.ready || SwapReviewStatus.materialUpdate => true,
-    _ => false,
-  };
+  bool get canStart =>
+      legalAllowed &&
+      switch (status) {
+        SwapReviewStatus.ready || SwapReviewStatus.materialUpdate => true,
+        _ => false,
+      };
 
   /// For [SwapReviewStatus.revalidationFailed]: what to offer next.
   SwapRevalidationRecovery get revalidationRecovery {
@@ -202,6 +224,9 @@ class SwapReview extends Equatable {
     SwapQuote? previous,
     bool clearPrevious = false,
     bool? termsRequired,
+    LegalConsentSnapshot? legalSnapshot,
+    bool? legalLoading,
+    bool? legalFailed,
     String? rejectionDetail,
     SwapQuoteFailure? revalidationFailure,
   }) => SwapReview(
@@ -209,6 +234,11 @@ class SwapReview extends Equatable {
     status: status ?? this.status,
     previous: clearPrevious ? null : (previous ?? this.previous),
     termsRequired: termsRequired ?? this.termsRequired,
+    legalSnapshot: legalSnapshot ?? this.legalSnapshot,
+    legalLoading: legalLoading ?? this.legalLoading,
+    legalFailed: legalFailed ?? this.legalFailed,
+    legalBypass: legalBypass,
+    isRecovery: isRecovery,
     rejectionDetail: rejectionDetail ?? this.rejectionDetail,
     revalidationFailure: revalidationFailure ?? this.revalidationFailure,
   );
@@ -219,6 +249,11 @@ class SwapReview extends Equatable {
     status,
     previous,
     termsRequired,
+    legalSnapshot,
+    legalLoading,
+    legalFailed,
+    legalBypass,
+    isRecovery,
     rejectionDetail,
     revalidationFailure,
   ];

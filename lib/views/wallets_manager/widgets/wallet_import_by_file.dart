@@ -58,6 +58,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   bool _isHdMode = true;
   bool _isHdOptionEnabled = true;
   bool _rememberMe = false;
+  bool _waitingForLegal = false;
   bool _allowCustomSeed = false;
   bool _showCustomSeedToggle = false;
 
@@ -195,11 +196,13 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                   const SizedBox(height: 30),
                   TermsConsentText(actionLabel: LocaleKeys.import.tr()),
                   const SizedBox(height: 12),
-                  UiPrimaryButton(
-                    key: const Key('confirm-password-button'),
-                    height: 50,
-                    text: LocaleKeys.import.tr(),
-                    onPressed: _isButtonEnabled ? _onImport : null,
+                  LegalConsentAction(
+                    builder: (allowed) => UiPrimaryButton(
+                      key: const Key('confirm-password-button'),
+                      height: 50,
+                      text: LocaleKeys.import.tr(),
+                      onPressed: allowed && _isButtonEnabled ? _onImport : null,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   UiUnderlineTextButton(
@@ -228,6 +231,12 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   late final KomodoDefiSdk _sdk = context.read<KomodoDefiSdk>();
 
   Future<void> _onImport() async {
+    if (_waitingForLegal) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null) return;
+    final consentSnapshot = agreement.snapshot;
     // Clear any previous common error before starting a new import attempt
     if (_commonError != null) {
       setState(() {
@@ -331,9 +340,12 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
       }
       // Close autofill context after successfully validating password & before import
       TextInput.finishAutofillContext(shouldSave: false);
-      if (!mounted) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
-        const LegalAgreementSubmitted('wallet-import-file'),
+        LegalAgreementSubmitted(
+          'wallet-import-file',
+          snapshot: consentSnapshot,
+        ),
       );
       widget.onImport(
         name: name,
