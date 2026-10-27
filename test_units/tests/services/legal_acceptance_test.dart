@@ -1,6 +1,5 @@
-import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -16,28 +15,10 @@ const _terms = '# Terms\n';
 const _eulaSha = '9e15fa12cac2bbb29df42fe2f278b9f557a91160';
 const _termsSha = '24fe58f74d4fb2a38a4520c547a9716718eb1d6b';
 
-class _LegalAssets extends CachingAssetBundle {
-  _LegalAssets({this.eula = _eula});
-
-  final String eula;
-
-  @override
-  Future<ByteData> load(String key) async {
-    final markdown = switch (key) {
-      'assets/legal/eula.md' => eula,
-      'assets/legal/terms-of-service.md' => _terms,
-      _ => throw StateError('Unexpected legal asset: $key'),
-    };
-    return ByteData.sublistView(Uint8List.fromList(utf8.encode(markdown)));
-  }
-}
-
 http.Response _remoteDocument(String markdown, {String? sha}) => http.Response(
-  jsonEncode({
-    'content': base64Encode(utf8.encode(markdown)),
-    if (sha != null) 'sha': sha,
-  }),
+  markdown,
   200,
+  headers: {'content-type': 'text/markdown; charset=utf-8'},
 );
 
 /// A real in-memory store.
@@ -129,10 +110,16 @@ void testLegalAcceptance() {
 
     setUp(() {
       storage = _MemoryStorage();
+      storage.values.addAll({
+        LegalDocumentType.eula.cacheKey: {'markdown': _eula, 'sha': _eulaSha},
+        LegalDocumentType.termsOfService.cacheKey: {
+          'markdown': _terms,
+          'sha': _termsSha,
+        },
+      });
       remoteResponse = _remoteDocument(_eula, sha: _eulaSha);
       repo = LegalDocumentsRepository(
         storage: storage,
-        assetBundle: _LegalAssets(),
         httpClient: MockClient((_) async => remoteResponse),
       );
     });
@@ -153,7 +140,7 @@ void testLegalAcceptance() {
       expect(record?.termsVersion, kCurrentTermsVersion);
     });
 
-    test('bundled acceptance records the Git content hashes', () async {
+    test('cached acceptance records the Git content hashes', () async {
       await repo.recordAcceptance(surface: 'onboarding');
 
       expect((await repo.readAcceptance())?.documentShas, {
@@ -176,13 +163,10 @@ void testLegalAcceptance() {
 
           final refreshed = await repo.refreshFromRemote(document);
 
-          expect(refreshed?.source, LegalDocumentSource.remote);
+          expect(refreshed, isNull);
           expect(await repo.hasAcceptedCurrentTerms(), isTrue);
           // The same persisted record also works after restarting the repository.
-          final reopened = LegalDocumentsRepository(
-            storage: storage,
-            assetBundle: _LegalAssets(),
-          );
+          final reopened = LegalDocumentsRepository(storage: storage);
           addTearDown(reopened.dispose);
           expect(await reopened.hasAcceptedCurrentTerms(), isTrue);
         },
@@ -227,6 +211,18 @@ void testLegalAcceptance() {
     );
 
     test('legacy bundled records survive an identical first fetch', () async {
+      for (final d in walletConsentDocuments) {
+        final text = File(
+          'docs/legal-hosting/${d.filename}',
+        ).readAsStringSync();
+        storage.values[d.cacheKey] = {
+          'markdown': text,
+          'sha': legalContentSha(text),
+        };
+      }
+      remoteResponse = _remoteDocument(
+        File('docs/legal-hosting/eula_gleec_wallet.md').readAsStringSync(),
+      );
       storeLegacyAcceptance(
         documentShas: {
           'legal_document_eula': 'bundled',
@@ -319,24 +315,8 @@ void testLegalAcceptance() {
     );
 
     test(
-      'removing an identical cached document preserves acceptance',
+      'missing cached text cannot satisfy consent even with prior acceptance',
       () async {
-        await repo.refreshFromRemote(LegalDocumentType.eula);
-        await repo.recordAcceptance(surface: 'onboarding');
-
-        await storage.delete(LegalDocumentType.eula.cacheKey);
-
-        expect(await repo.hasAcceptedCurrentTerms(), isTrue);
-      },
-    );
-
-    test(
-      'falling back to different bundled content invalidates acceptance',
-      () async {
-        remoteResponse = _remoteDocument(
-          '# Updated EULA\n',
-          sha: 'aa654e2f168f87016796b80e8e79260ebee4995b',
-        );
         await repo.refreshFromRemote(LegalDocumentType.eula);
         await repo.recordAcceptance(surface: 'onboarding');
 
@@ -346,12 +326,25 @@ void testLegalAcceptance() {
       },
     );
 
-    test('Unicode content hashes use UTF-8 byte length', () async {
-      repo.dispose();
-      repo = LegalDocumentsRepository(
-        storage: storage,
-        assetBundle: _LegalAssets(eula: '# EULA – café ☕\n'),
+    test('no bundled fallback after cache removal', () async {
+      remoteResponse = _remoteDocument(
+        '# Updated EULA\n',
+        sha: 'aa654e2f168f87016796b80e8e79260ebee4995b',
       );
+      await repo.refreshFromRemote(LegalDocumentType.eula);
+      await repo.recordAcceptance(surface: 'onboarding');
+
+      await storage.delete(LegalDocumentType.eula.cacheKey);
+
+      expect(await repo.hasAcceptedCurrentTerms(), isFalse);
+    });
+
+    test('Unicode content hashes use UTF-8 byte length', () async {
+      storage.values[LegalDocumentType.eula.cacheKey] = {
+        'markdown': '# EULA – café ☕\n',
+      };
+      repo.dispose();
+      repo = LegalDocumentsRepository(storage: storage);
 
       await repo.recordAcceptance(surface: 'onboarding');
 
@@ -362,14 +355,14 @@ void testLegalAcceptance() {
     });
 
     test(
-      'changed bundled text invalidates a newly recorded acceptance',
+      'changed cached text invalidates a newly recorded acceptance',
       () async {
         await repo.recordAcceptance(surface: 'onboarding');
         repo.dispose();
-        repo = LegalDocumentsRepository(
-          storage: storage,
-          assetBundle: _LegalAssets(eula: '# Updated EULA\n'),
-        );
+        storage.values[LegalDocumentType.eula.cacheKey] = {
+          'markdown': '# Updated EULA\n',
+        };
+        repo = LegalDocumentsRepository(storage: storage);
 
         expect(await repo.hasAcceptedCurrentTerms(), isFalse);
       },
@@ -424,7 +417,7 @@ void testLegalAcceptance() {
     test('an unchanged cached document keeps the acceptance valid', () async {
       storage.values['legal_document_eula'] = {
         'markdown': '# EULA',
-        'sha': 'stable-sha',
+        'sha': legalContentSha('# EULA'),
       };
       await repo.recordAcceptance(surface: 'onboarding');
 
@@ -439,30 +432,11 @@ void testLegalAcceptance() {
     });
   });
 
-  testWidgets('real bundled assets persist acceptance after platform I/O', (
-    tester,
-  ) async {
-    final storage = _MemoryStorage();
-    final repository = LegalDocumentsRepository(storage: storage);
+  test('an empty device cannot record missing documents', () async {
+    final repository = LegalDocumentsRepository(storage: _MemoryStorage());
     addTearDown(repository.dispose);
-
-    final acceptance = await tester.runAsync(() async {
-      await repository.recordAcceptance(surface: 'onboarding');
-      return repository.readAcceptance();
-    });
-
-    expect(acceptance?.surface, 'onboarding');
-    expect(
-      acceptance?.documentShas.keys,
-      unorderedEquals([
-        LegalDocumentType.eula.cacheKey,
-        LegalDocumentType.termsOfService.cacheKey,
-      ]),
-    );
-    expect(
-      acceptance?.documentShas.values,
-      everyElement(matches(RegExp(r'^[0-9a-f]{40}$'))),
-    );
-    expect(await tester.runAsync(repository.hasAcceptedCurrentTerms), isTrue);
+    await repository.recordAcceptance(surface: 'onboarding');
+    expect(await repository.readAcceptance(), isNull);
+    expect(await repository.hasAcceptedCurrentTerms(), isFalse);
   });
 }

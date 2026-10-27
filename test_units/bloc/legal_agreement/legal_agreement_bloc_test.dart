@@ -5,6 +5,7 @@ import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
+import '../../support/legal_documents_fixture.dart';
 
 class _Repository extends Fake implements LegalDocumentsRepository {
   _Repository({this.current = false, this.previous = false, this.lookup});
@@ -18,11 +19,15 @@ class _Repository extends Fake implements LegalDocumentsRepository {
   Stream<void> get changes => const Stream.empty();
 
   @override
-  Future<void> refreshConsentDocuments() async {}
+  Future<void> refreshConsentDocuments({bool force = false}) async {}
+
+  @override
+  bool canSubmit(LegalConsentSnapshot? snapshot) =>
+      snapshot?.isAvailable ?? false;
 
   @override
   Future<LegalConsentSnapshot> loadConsentSnapshot() async =>
-      LegalConsentSnapshot(documents: {}, documentShas: {});
+      legalFixtureSnapshot(documents: walletConsentDocuments);
 
   @override
   Future<bool> hasAcceptedCurrentTerms({
@@ -61,7 +66,7 @@ void main() {
         final bloc = LegalAgreementBloc(repository)
           ..add(const LegalAgreementOpened());
         await Future<void>.delayed(Duration.zero);
-        expect(bloc.state, expected);
+        expect(bloc.state.status, expected);
         expect(repository.submissions, isEmpty);
         await bloc.close();
       });
@@ -71,15 +76,27 @@ void main() {
       final lookup = Completer<bool>();
       final repository = _Repository(previous: true, lookup: lookup.future);
       final bloc = LegalAgreementBloc(repository)
-        ..add(const LegalAgreementOpened())
-        ..add(const LegalAgreementSubmitted('wallet-creation'))
-        ..add(const LegalAgreementSubmitted('wallet-creation'));
+        ..add(const LegalAgreementOpened());
+      await Future<void>.delayed(Duration.zero);
+      bloc
+        ..add(
+          LegalAgreementSubmitted(
+            'wallet-creation',
+            snapshot: bloc.presentedSnapshot,
+          ),
+        )
+        ..add(
+          LegalAgreementSubmitted(
+            'wallet-creation',
+            snapshot: bloc.presentedSnapshot,
+          ),
+        );
       await Future<void>.delayed(Duration.zero);
       expect(repository.submissions, ['wallet-creation']);
       expect(repository.write.isCompleted, isFalse);
       lookup.complete(false);
       await Future<void>.delayed(Duration.zero);
-      expect(bloc.state, LegalAgreementStatus.initial);
+      expect(bloc.state.status, LegalAgreementStatus.initial);
       repository.write.complete();
       await bloc.close();
     });

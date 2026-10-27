@@ -75,7 +75,14 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     if (_step == WalletSimpleImportSteps.password) {
       return !_inProgress && _arePasswordsValid;
     }
-    final isFormValid = _refreshFormValidationState();
+    final isFormValid =
+        _nameController.text.isNotEmpty &&
+        _seedController.text.isNotEmpty &&
+        context.read<WalletsRepository>().validateWalletName(
+              _nameController.text,
+            ) ==
+            null &&
+        _validateSeed(_seedController.text) == null;
 
     return !_inProgress && isFormValid;
   }
@@ -134,17 +141,22 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
                       TermsConsentText(actionLabel: LocaleKeys.import.tr()),
                       const SizedBox(height: 12),
                     ],
-                    UiPrimaryButton(
-                      key: const Key('confirm-seed-button'),
-                      text: _inProgress
-                          ? '${LocaleKeys.pleaseWait.tr()}...'
-                          : LocaleKeys.import.tr(),
-                      height: 50,
-                      textStyle: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                    LegalConsentAction(
+                      enforce: _step == WalletSimpleImportSteps.password,
+                      builder: (allowed) => UiPrimaryButton(
+                        key: const Key('confirm-seed-button'),
+                        text: _inProgress
+                            ? '${LocaleKeys.pleaseWait.tr()}...'
+                            : LocaleKeys.import.tr(),
+                        height: 50,
+                        textStyle: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        onPressed: allowed && _isButtonEnabled
+                            ? _onImport
+                            : null,
                       ),
-                      onPressed: _isButtonEnabled ? _onImport : null,
                     ),
                     const SizedBox(height: 20),
                     UiUnderlineTextButton(
@@ -464,6 +476,13 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   }
 
   void _onImport() async {
+    final consentSnapshot = context
+        .read<LegalAgreementBloc>()
+        .presentedSnapshot;
+    if (_step == WalletSimpleImportSteps.password &&
+        !context.read<LegalAgreementBloc>().canSubmit) {
+      return;
+    }
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -512,9 +531,12 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canSubmit) return;
       context.read<LegalAgreementBloc>().add(
-        const LegalAgreementSubmitted('wallet-import-seed'),
+        LegalAgreementSubmitted(
+          'wallet-import-seed',
+          snapshot: consentSnapshot,
+        ),
       );
       widget.onImport(
         name: _nameController.text.trim(),

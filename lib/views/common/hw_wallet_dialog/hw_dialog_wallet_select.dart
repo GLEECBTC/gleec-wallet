@@ -132,17 +132,27 @@ class _HwDialogWalletSelectState extends State<HwDialogWalletSelect> {
             BlocSelector<AuthBloc, AuthBlocState, bool>(
               selector: (state) => state.isLoading,
               builder: (context, inProgress) {
-                return UiPrimaryButton(
-                  text: LocaleKeys.continueText.tr(),
-                  prefix: inProgress ? const UiSpinner() : null,
-                  onPressed: _selectedBrand == null || inProgress
-                      ? null
-                      : () {
-                          context.read<LegalAgreementBloc>().add(
-                            const LegalAgreementSubmitted('wallet-hardware'),
-                          );
-                          widget.onSelect(_selectedBrand!);
-                        },
+                return LegalConsentAction(
+                  builder: (allowed) => UiPrimaryButton(
+                    text: LocaleKeys.continueText.tr(),
+                    prefix: inProgress ? const UiSpinner() : null,
+                    onPressed: !allowed || _selectedBrand == null || inProgress
+                        ? null
+                        : () {
+                            if (!context.read<LegalAgreementBloc>().canSubmit) {
+                              return;
+                            }
+                            context.read<LegalAgreementBloc>().add(
+                              LegalAgreementSubmitted(
+                                'wallet-hardware',
+                                snapshot: context
+                                    .read<LegalAgreementBloc>()
+                                    .presentedSnapshot,
+                              ),
+                            );
+                            widget.onSelect(_selectedBrand!);
+                          },
+                  ),
                 );
               },
             ),

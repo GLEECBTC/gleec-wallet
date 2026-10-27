@@ -35,6 +35,7 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
@@ -79,7 +80,11 @@ void main() {
         pricing: SwapPricingService(FakePriceSource({eth: d('3000')})),
       ),
       registry: registry,
-      terms: SwapTermsRepository(walletKey: () async => 'w', storage: storage),
+      terms: SwapTermsRepository(
+        legalDocuments: legalFixtureRepository(),
+        walletKey: () async => 'w',
+        storage: storage,
+      ),
       preferences: SwapPreferences(
         walletKey: () async => 'w',
         storage: storage,
@@ -316,7 +321,13 @@ void main() {
         ),
       );
       swap.emit(
-        reviewState(SwapReview(quote: quote, status: SwapReviewStatus.ready)),
+        reviewState(
+          SwapReview(
+            legalSnapshot: legalFixtureSnapshot(),
+            quote: quote,
+            status: SwapReviewStatus.ready,
+          ),
+        ),
       );
       await pump(tester, const SwapReviewView());
 
@@ -329,6 +340,7 @@ void main() {
       swap.emit(
         reviewState(
           SwapReview(
+            legalSnapshot: legalFixtureSnapshot(),
             quote: quoteOf(),
             status: SwapReviewStatus.ready,
             termsRequired: true,
@@ -345,7 +357,11 @@ void main() {
     ) async {
       swap.emit(
         reviewState(
-          SwapReview(quote: quoteOf(), status: SwapReviewStatus.unconfirmed),
+          SwapReview(
+            legalSnapshot: legalFixtureSnapshot(),
+            quote: quoteOf(),
+            status: SwapReviewStatus.unconfirmed,
+          ),
         ),
       );
       await pump(tester, const SwapReviewView());
@@ -362,6 +378,7 @@ void main() {
       swap.emit(
         reviewState(
           SwapReview(
+            legalSnapshot: legalFixtureSnapshot(),
             quote: quoteOf(guaranteed: '2900'),
             previous: quoteOf(),
             status: SwapReviewStatus.materialUpdate,
@@ -391,6 +408,7 @@ void main() {
         swap.emit(
           reviewState(
             SwapReview(
+              legalSnapshot: legalFixtureSnapshot(),
               quote: quoteOf(),
               status: SwapReviewStatus.revalidationFailed,
               revalidationFailure: SwapQuoteFailure(

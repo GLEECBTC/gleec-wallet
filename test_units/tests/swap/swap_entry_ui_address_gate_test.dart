@@ -15,6 +15,7 @@ import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import '../../helpers/runtime_auth_fixture.dart';
 import 'swap_accessibility_checks.dart';
@@ -130,7 +131,11 @@ void main() {
   UnifiedSwapState reviewOf(SwapQuote quote) =>
       swapPricedForm(ranked: [quote]).copyWith(
         view: UnifiedSwapView.review,
-        review: SwapReview(quote: quote, status: SwapReviewStatus.ready),
+        review: SwapReview(
+          legalSnapshot: legalFixtureSnapshot(),
+          quote: quote,
+          status: SwapReviewStatus.ready,
+        ),
       );
 
   /// Shows the review of [quote], both addresses unless given one, with

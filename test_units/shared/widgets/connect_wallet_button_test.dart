@@ -20,6 +20,7 @@ import 'package:web_dex/services/legal_documents/legal_documents_repository.dart
 import 'package:web_dex/shared/widgets/connect_wallet/connect_wallet_button.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_events_factory.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
+import '../../support/legal_documents_fixture.dart';
 
 class _EmptyAssetLoader extends AssetLoader {
   const _EmptyAssetLoader();
@@ -96,11 +97,15 @@ class _LegalDocuments extends Fake implements LegalDocumentsRepository {
   Stream<void> get changes => const Stream.empty();
 
   @override
-  Future<void> refreshConsentDocuments() async {}
+  Future<void> refreshConsentDocuments({bool force = false}) async {}
+
+  @override
+  bool canSubmit(LegalConsentSnapshot? snapshot) =>
+      snapshot?.isAvailable ?? false;
 
   @override
   Future<LegalConsentSnapshot> loadConsentSnapshot() async =>
-      LegalConsentSnapshot(documents: {}, documentShas: {});
+      legalFixtureSnapshot(documents: walletConsentDocuments);
 
   @override
   Future<bool> hasAcceptedCurrentTerms({

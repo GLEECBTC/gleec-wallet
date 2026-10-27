@@ -16,6 +16,7 @@ import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
+import '../../support/legal_documents_fixture.dart';
 
 class _EnglishAssetLoader extends AssetLoader {
   const _EnglishAssetLoader();
@@ -35,11 +36,15 @@ class _LegalDocuments extends Fake implements LegalDocumentsRepository {
   Stream<void> get changes => const Stream.empty();
 
   @override
-  Future<void> refreshConsentDocuments() async {}
+  Future<void> refreshConsentDocuments({bool force = false}) async {}
+
+  @override
+  bool canSubmit(LegalConsentSnapshot? snapshot) =>
+      snapshot?.isAvailable ?? false;
 
   @override
   Future<LegalConsentSnapshot> loadConsentSnapshot() async =>
-      LegalConsentSnapshot(documents: {}, documentShas: {});
+      legalFixtureSnapshot(documents: walletConsentDocuments);
 
   @override
   Future<bool> hasAcceptedCurrentTerms({
@@ -61,7 +66,7 @@ class _LegalDocuments extends Fake implements LegalDocumentsRepository {
     opened.add(document);
     return LegalDocumentContent(
       markdown: '# ${document.name}',
-      source: LegalDocumentSource.bundledAsset,
+      source: LegalDocumentSource.cachedRemote,
     );
   }
 
@@ -212,7 +217,7 @@ void main() {
 
         await tester.tap(find.byKey(Key(key)));
         await tester.pumpAndSettle();
-        expect(documents.opened, [document]);
+        expect(documents.opened, isEmpty); // Uses the pinned full text.
         expect(
           tester
               .widget<LegalDocumentView>(find.byType(LegalDocumentView))
@@ -259,7 +264,12 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
         await tester.sendKeyEvent(LogicalKeyboardKey.enter);
         await tester.pumpAndSettle();
-        expect(documents.opened.last, document);
+        expect(
+          tester
+              .widget<LegalDocumentView>(find.byType(LegalDocumentView))
+              .document,
+          document,
+        );
         expect(accepted, 0);
         await tester.tap(find.byKey(const Key('close-disclaimer')));
         await tester.pumpAndSettle();

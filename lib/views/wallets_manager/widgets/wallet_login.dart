@@ -93,6 +93,10 @@ class _WalletLogInState extends State<WalletLogIn> {
   }
 
   void _submitLogin() {
+    final consentSnapshot = context
+        .read<LegalAgreementBloc>()
+        .presentedSnapshot;
+    if (!context.read<LegalAgreementBloc>().canSubmit) return;
     final authState = context.read<AuthBloc>().state;
     if (authState.isLoading) {
       return;
@@ -108,9 +112,9 @@ class _WalletLogInState extends State<WalletLogIn> {
         config: widget.wallet.config.copyWith(type: derivedType),
       );
 
-      if (!mounted) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canSubmit) return;
       context.read<LegalAgreementBloc>().add(
-        const LegalAgreementSubmitted('wallet-login'),
+        LegalAgreementSubmitted('wallet-login', snapshot: consentSnapshot),
       );
       widget.onLogin(
         _passwordController.text,
@@ -179,16 +183,20 @@ class _WalletLogInState extends State<WalletLogIn> {
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                  child: UiPrimaryButton(
-                    height: 50,
-                    text: state.isLoading
-                        ? '${LocaleKeys.pleaseWait.tr()}...'
-                        : LocaleKeys.logIn.tr(),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                  child: LegalConsentAction(
+                    builder: (allowed) => UiPrimaryButton(
+                      height: 50,
+                      text: state.isLoading
+                          ? '${LocaleKeys.pleaseWait.tr()}...'
+                          : LocaleKeys.logIn.tr(),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      onPressed: !allowed || state.isLoading
+                          ? null
+                          : _submitLogin,
                     ),
-                    onPressed: state.isLoading ? null : _submitLogin,
                   ),
                 ),
                 const SizedBox(height: 8),

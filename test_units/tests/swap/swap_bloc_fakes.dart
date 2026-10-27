@@ -14,7 +14,9 @@ import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
+import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_offer_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -57,7 +59,9 @@ SwapFeeComponent feeOf({
 /// The routed source prices every request at the current time; the order
 /// book cannot trade anything unless a test says otherwise.
 class SwapBlocHarness {
-  SwapBlocHarness(this.async);
+  SwapBlocHarness(this.async, {LegalDocumentsRepository? legalDocuments})
+    : legalDocuments = legalDocuments ?? legalFixtureRepository();
+  final LegalDocumentsRepository legalDocuments;
 
   final FakeAsync async;
   final DateTime start = DateTime(2026, 9, 24, 12);
@@ -109,8 +113,11 @@ class SwapBlocHarness {
   SwapPreferences get preferences =>
       SwapPreferences(walletKey: () async => 'wallet', storage: storage);
 
-  SwapTermsRepository get terms =>
-      SwapTermsRepository(walletKey: () async => 'wallet', storage: storage);
+  SwapTermsRepository get terms => SwapTermsRepository(
+    legalDocuments: legalDocuments,
+    walletKey: () async => 'wallet',
+    storage: storage,
+  );
 
   /// A routed quote for [request], made now.
   List<SwapQuoteResult> priced(SwapQuoteRequest request) => [
@@ -143,6 +150,7 @@ class SwapBlocHarness {
       ),
       registry: registry,
       terms: SwapTermsRepository(
+        legalDocuments: legalDocuments,
         walletKey: () async {
           await termsGate?.future;
           return 'wallet';
@@ -225,6 +233,7 @@ class SwapBlocHarness {
   }
 
   void dispose() {
+    legalDocuments.dispose();
     for (final bloc in _blocs) {
       unawaited(bloc.close());
     }

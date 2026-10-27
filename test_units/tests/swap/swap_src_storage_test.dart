@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
 
@@ -23,6 +24,7 @@ void main() {
       SwapPreferences(walletKey: () async => wallet, storage: storage);
 
   SwapTermsRepository terms({BaseStorage? store}) => SwapTermsRepository(
+    legalDocuments: legalFixtureRepository(),
     walletKey: () async => wallet,
     storage: store ?? storage,
   );
@@ -129,7 +131,10 @@ void main() {
 
   test('the default store answers nothing readable in tests', () async {
     final prefs = SwapPreferences(walletKey: () async => 'w1');
-    final defaultTerms = SwapTermsRepository(walletKey: () async => 'w1');
+    final defaultTerms = SwapTermsRepository(
+      legalDocuments: legalFixtureRepository(),
+      walletKey: () async => 'w1',
+    );
 
     expect(await prefs.lastPair(), isNull);
     expect(await prefs.recentAssets(), isEmpty);
@@ -154,6 +159,7 @@ void main() {
           'accepted_at': '2026-09-24T12:00:00.000Z',
           'provider': 'LI.FI',
           'url': SwapTermsRepository.termsUrl,
+          'document_shas': legalFixtureSnapshot().documentShas,
         });
         wallet = 'w2';
         expect(await terms().hasAccepted(), isFalse);
