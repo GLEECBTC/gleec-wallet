@@ -1,3 +1,5 @@
+import 'dart:ui' show Tristate;
+
 import 'package:easy_localization/easy_localization.dart';
 // ignore: implementation_imports
 import 'package:easy_localization/src/localization.dart';
@@ -117,6 +119,22 @@ void main() {
           expect(find.byTooltip(_unavailable), findsOneWidget);
           expect(find.text(_unavailable), findsOneWidget);
           final semantics = tester.ensureSemantics();
+          final materialButton = find.descendant(
+            of: button,
+            matching: find.byType(ElevatedButton),
+          );
+          expect(
+            tester.widget<ElevatedButton>(materialButton).onPressed,
+            isNull,
+          );
+          expect(
+            tester
+                .getSemantics(materialButton)
+                .getSemanticsData()
+                .flagsCollection
+                .isEnabled,
+            Tristate.isFalse,
+          );
           expect(
             tester
                 .getSemantics(
