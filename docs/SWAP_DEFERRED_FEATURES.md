@@ -8,7 +8,11 @@ Each claim below was checked against three sources:
 - the KDF source at `feat/lifi-integration@7d6fd1e`;
 - the SDK PR #407 on `feat/kdf-667045c`.
 
-KDF paths are relative to `mm2src/mm2_main/src/` unless a path says otherwise. Line numbers are at that commit. The integration now targets KDF `35f0bde` and specs `7c388ea`. Historical line references below retain their stated revision; completed Max, minimum, funding and commission changes are recorded here and in `KDF_LIFI_VALIDATION_2026-10-26.md`.
+KDF paths are relative to `mm2src/mm2_main/src/` unless a path says otherwise.
+Line numbers are at that commit. The integration now targets KDF `35f0bde` and
+specs `7c388ea`. Historical line references below retain their stated revision;
+completed Max, minimum, funding and commission changes are recorded here and in
+[Decker's handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#integrated-scope-and-conflict-decisions).
 
 ## Deferred: not supported by the contract
 

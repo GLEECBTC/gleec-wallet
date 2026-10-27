@@ -22,8 +22,7 @@
     "engineBuildDate": "2026-03-03 23:41:09.880",
     "dartSdkVersion": "3.11.1",
     "devToolsVersion": "2.54.1",
-    "flutterVersion": "3.41.4",
-    "flutterRoot": "/Users/charl/fvm/versions/3.41.4"
+    "flutterVersion": "3.41.4"
   },
   "xcode": "Xcode 26.5\nBuild version 17F42",
   "host": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",

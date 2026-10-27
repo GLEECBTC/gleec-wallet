@@ -30,7 +30,9 @@ contract at specs `7c388ea`.
 The SDK keeps commission unset by default. Applications supply deployment policy;
 KDF requests and validates the allocation and the proxy holds the API key.
 
-All seven archive pins and validation results are recorded in
-[KDF_LIFI_VALIDATION_2026-10-26.md](KDF_LIFI_VALIDATION_2026-10-26.md).
+All seven archive pins are retained in the
+[candidate manifest](KDF_LIFI_CANDIDATE_MANIFEST_2026-10-27.json); validation
+results and remaining gates are consolidated in
+[Decker's handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md).
 A human-operated funded round is still required before release. This does not
 add external recipients, Tron/BTC routing or production deployment.

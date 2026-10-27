@@ -1,9 +1,14 @@
 # Combined LI.FI candidate validation — 27 October 2026
 
+The CI snapshot below is historical. See the [final CI verification](KDF_LIFI_FINAL_CI_2026-10-27.md)
+for completed outcomes on the published wallet and SDK heads and the confirmed
+external on-ramp blocker. Local test/build evidence below remains unchanged.
+
 Implementation: wallet `1643c3323f5ebeb9168b244d969a5e6d6df971a1`, SDK
 `b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1`. [Handover and remaining gates](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md).
-All Flutter/Dart commands use `/Users/charl/fvm/versions/3.41.4/bin`, including
-inside the SDK (its own FVM default is not used). Dart is 3.11.1.
+All Flutter/Dart commands use Flutter 3.41.4 / Dart 3.11.1, including inside
+the SDK (its own FVM default is not used). Select that toolchain on `PATH` before
+running the commands below.
 
 ## Commands and local results
 
@@ -109,8 +114,9 @@ and secret version references during packaging without committing secret values.
 ## Read-only live checks
 
 ```sh
+mkdir -p .lifi/evidence
 python3 tool/kdf_lifi_quote_smoke.py \
-  --json docs/KDF_LIFI_QUOTE_REPORT_2026-10-27_FINAL.json
+  --json .lifi/evidence/lifi-quote-report.json
 ```
 
 **Passed**: Arbitrum ETH → USDC and Base ETH → USDC through the configured proxy,
@@ -122,8 +128,11 @@ The runner creates an unfunded wallet, permits only version/activation/quote/sto
 and deletes its temporary wallet and engine logs. Its allowlist regression rejects
 execution, approval, withdrawal and broadcast names before transport.
 
-The [first attempt](KDF_LIFI_QUOTE_REPORT_2026-10-27.json) and
-[diagnostic recheck](KDF_LIFI_QUOTE_REPORT_2026-10-27_RECHECK.json) remain failed.
+The first attempt and diagnostic recheck remain failed. Their generated reports
+are retained locally under the ignored `.lifi/evidence/` directory as
+`KDF_LIFI_QUOTE_REPORT_2026-10-27.json` and
+`KDF_LIFI_QUOTE_REPORT_2026-10-27_RECHECK.json`. The passing final report is
+`KDF_LIFI_QUOTE_REPORT_2026-10-27_FINAL.json` in the same directory.
 The second run's redacted log identified KDF's password repetition policy. The
 runner's generator now excludes triple repeats, including the suffix boundary;
 a deterministic test covers rejection and regeneration. The first attempt and
@@ -139,11 +148,11 @@ from the local integration suites. No full local GUI runner was repeated; the
 published candidate triggers the normal Chrome/Safari workflow with its existing
 public testnet fixtures. Mainnet funded and usability rounds remain human-owned.
 
-Local command logs and quarantined generated outputs are under
-`/private/tmp/lifi-release-integration-20261027`. They are not permanent release
-artifacts. This committed report and manifest retain commands, results, source
-identity and artifact digests; GitHub workflow artifacts supply independent CI
-logs. No raw engine wallet/configuration was retained or uploaded.
+Local command logs and quarantined generated outputs were written to temporary
+storage; paths and hashes are retained in the local log index named below. They
+are not permanent release artifacts. This committed report and manifest retain
+commands, results, source identity and artifact digests; GitHub workflow artifacts
+supply independent CI logs. No raw engine wallet/configuration was retained or uploaded.
 
 ### CI snapshot at 2026-10-27T07:09:13.507937+00:00
 
@@ -164,5 +173,7 @@ In-progress jobs are outstanding automated checks. Release owners must inspect t
 completed outcomes before approving freeze. The historical on-ramp failure is not
 claimed fixed by a workflow that is still running.
 
-[Local log digest index](KDF_LIFI_VALIDATION_LOG_INDEX_2026-10-27.json) identifies
-the full fresh-run logs and exact SDK commands without uploading raw logs.
+The local log digest index,
+`.lifi/evidence/KDF_LIFI_VALIDATION_LOG_INDEX_2026-10-27.json`, identifies the
+full fresh-run logs and exact SDK commands. It is excluded from Git along with
+the generated probe reports; this document retains the portable validation summary.

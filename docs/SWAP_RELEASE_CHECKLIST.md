@@ -2,10 +2,11 @@
 
 Current delivery: [SDK #407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)
 and [wallet #3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557), specs
-`7c388ea`, KDF `35f0bde`. See [validation evidence](KDF_LIFI_VALIDATION_2026-10-26.md)
-and [the combined-candidate handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md)
-for #3554–#3556 integration, frozen inputs and fresh validation. See also
-[release notes](KDF_LIFI_RELEASE_NOTES.md). This checklist records release
+`7c388ea`, KDF `35f0bde`. See [the combined-candidate handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md)
+for #3554–#3556 integration, frozen inputs, current and historical validation,
+Banxa verification and remaining gates. See also
+[release notes](KDF_LIFI_RELEASE_NOTES.md) and the
+[final CI follow-up](KDF_LIFI_FINAL_CI_2026-10-27.md). This checklist records release
 work; it does not authorize merges, deployment or funded transactions.
 
 ## Integration gates
@@ -32,13 +33,30 @@ work; it does not authorize merges, deployment or funded transactions.
   shared, and quote/status polling must fit the production allocation.
 - Complete the [moderated usability session](SWAP_USABILITY_SESSION.md) and the
   release-owner review of UI/preview results. No new usability session was run.
+- Ramp is a user-accepted known limitation, deferred to the next update on
+  27 October. Its failed browser CI remains recorded; repair the proxy quote
+  authorization (`AUTH.ACCESS.INVALID_HOST_API_KEY`, inner 403) for that update.
+  The updated default test explicitly skips deferred Ramp and tests Banxa
+  independently; Ramp is no longer an unresolved code-freeze blocker.
+- Banxa production catalogs, payment methods and six quotes passed a read-only
+  check. Hosted checkout and a completed purchase still need human verification
+  before claiming end-to-end on-ramp readiness. See
+  [the consolidated Banxa evidence](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#banxa-verification-and-ramp-disposition).
+- Independent Banxa Chrome quote/selection checks and the full wallet unit suite
+  now pass locally. Safari needs Remote Automation on the test host, followed by
+  hosted validation of the published test revision. See the
+  [test follow-up](KDF_LIFI_ONRAMP_TEST_VALIDATION_2026-10-27.md).
+- Record KDP and backend KDF deployment versions/image digests. The
+  [RC investigation](KDF_LIFI_PROXY_RC_AUDIT_2026-10-27.md) found no observed need
+  for a newer backend KDF, but source revisions do not identify the deployed
+  services or establish load/recovery readiness.
 - Resolve or explicitly disposition upstream CI failures before release.
 - Prepare signing and the release version/changelog under the release process.
 
 ## Publication and later merge order
 
-Publish SDK #407 first, then repin wallet #3557 to that published SDK commit.
-The PRs stay open. If the SDK later squash-merges, repin the wallet to the squash
+SDK #407 was published first at `b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1`;
+wallet #3557 already pins that commit. The PRs stay open. If the SDK later squash-merges, repin the wallet to the squash
 commit only after proving its tree matches the reviewed SDK head. KDF/specs/coins
 upstream merges and any later engine repin are separate work. Such a repin must
 again verify all seven matching archives, preserve the coins configuration and

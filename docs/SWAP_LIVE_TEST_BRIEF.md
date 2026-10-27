@@ -129,9 +129,9 @@ What remains out of scope, and why, is in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEF
 
 ## What to run with real funds
 
-This is a separate human-operated round. Automated validation in
-`KDF_LIFI_VALIDATION_2026-10-26.md` performs read-only quotes and never signs
-approvals or executes swaps. Include completed, partial, refunded and
+This is a separate human-operated round. The automated LI.FI quote checks
+recorded in [Decker's handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#fresh-validation)
+never sign approvals or execute swaps. Include completed, partial, refunded and
 missing-measurement outcomes; cancel/restart after approval and retain all
 approval hashes, allowance warnings and recorded gas. Some outcomes require
 replay fixtures when a live provider cannot produce them safely.
