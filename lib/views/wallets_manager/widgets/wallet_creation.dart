@@ -44,6 +44,7 @@ class _WalletCreationState extends State<WalletCreation> {
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _inProgress = false;
+  bool _waitingForLegal = false;
   bool _rememberMe = false;
   bool _arePasswordsValid = false;
 
@@ -198,10 +199,12 @@ class _WalletCreationState extends State<WalletCreation> {
   }
 
   void _onCreate() async {
-    final consentSnapshot = context
-        .read<LegalAgreementBloc>()
-        .presentedSnapshot;
-    if (!context.read<LegalAgreementBloc>().canSubmit) return;
+    if (_inProgress || _waitingForLegal) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null) return;
+    final consentSnapshot = agreement.snapshot;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _inProgress = true);
     // Async uniqueness check before proceeding
@@ -229,7 +232,7 @@ class _WalletCreationState extends State<WalletCreation> {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       // Complete autofill session so password managers can save new credentials
       TextInput.finishAutofillContext(shouldSave: true);
-      if (!mounted || !context.read<LegalAgreementBloc>().canSubmit) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
         LegalAgreementSubmitted('wallet-creation', snapshot: consentSnapshot),
       );

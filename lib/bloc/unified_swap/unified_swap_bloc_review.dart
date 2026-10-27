@@ -49,12 +49,20 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (review == null ||
         review.quote.source != SwapLiquiditySource.routed ||
         review.isRecovery ||
+        _waitingForLegalSubmission ||
         _startInDoubt ||
         review.status == SwapReviewStatus.revalidating) {
       return;
     }
     if (!(review.legalSnapshot?.isAvailable ?? false)) {
-      emit(state.copyWith(review: review.copyWith(legalLoading: true)));
+      emit(
+        state.copyWith(
+          review: review.copyWith(
+            legalLoading: true,
+            legalFailed: review.showLegalFailure,
+          ),
+        ),
+      );
     }
     final version = ++_legalVersion;
     await _terms.refresh(force: event.retry);
@@ -74,6 +82,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         review: current.copyWith(
           legalSnapshot: snapshot,
           legalLoading: false,
+          legalFailed: !snapshot.isAvailable,
           termsRequired: !accepted,
         ),
       ),
@@ -107,8 +116,48 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     UnifiedSwapStartRequested event,
     Emitter<UnifiedSwapState> emit,
   ) async {
-    final review = state.review;
+    var review = state.review;
     if (review == null || state.view != UnifiedSwapView.review) return;
+    if (_waitingForLegalSubmission) return;
+    if (review.legalLoading &&
+        !_terms.canSubmit(review.legalSnapshot) &&
+        !review.isRecovery &&
+        review.quote.source == SwapLiquiditySource.routed) {
+      _waitingForLegalSubmission = true;
+      final version = _startVersion;
+      final walletEpoch = _walletEpoch;
+      final quote = review.quote;
+      ++_legalVersion;
+      try {
+        await _terms.refresh();
+        final snapshot = await _terms.loadSnapshot();
+        final accepted = await _terms.hasAccepted(snapshot: snapshot);
+        if (emit.isDone ||
+            version != _startVersion ||
+            walletEpoch != _walletEpoch ||
+            state.view != UnifiedSwapView.review ||
+            state.review?.quote != quote) {
+          return;
+        }
+        review = state.review!.copyWith(
+          legalSnapshot: snapshot,
+          legalLoading: false,
+          legalFailed: !snapshot.isAvailable,
+          termsRequired: !accepted,
+        );
+        emit(state.copyWith(review: review));
+        if (!_terms.canSubmit(snapshot)) return;
+      } finally {
+        _waitingForLegalSubmission = false;
+        // A different review may have opened while this request was pending.
+        // Refresh its display without replaying the abandoned start action.
+        if (!isClosed &&
+            state.view == UnifiedSwapView.review &&
+            state.review?.legalLoading == true) {
+          add(const UnifiedSwapLegalRequested());
+        }
+      }
+    }
 
     if (review.status == SwapReviewStatus.expired ||
         review.status == SwapReviewStatus.revalidationFailed ||
@@ -125,6 +174,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
             legalSnapshot: review.legalSnapshot,
             legalBypass: review.legalBypass,
             legalLoading: review.legalLoading,
+            legalFailed: review.legalFailed,
             isRecovery: review.isRecovery,
           ),
         ),
@@ -241,6 +291,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
                 legalSnapshot: review.legalSnapshot,
                 legalBypass: review.legalBypass,
                 legalLoading: review.legalLoading,
+                legalFailed: review.legalFailed,
                 isRecovery: review.isRecovery,
               ),
             ),

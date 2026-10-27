@@ -924,7 +924,11 @@ abstract class LocaleKeys {
   static const transactionsEmptyDescription = 'transactionsEmptyDescription';
   static const transactionsNoLoginCAT = 'transactionsNoLoginCAT';
   static const loadingError = 'loadingError';
-  static const legalDocumentsLoading = 'legalDocumentsLoading';
+  static const legalDocumentsUnavailableTitle =
+      'legalDocumentsUnavailableTitle';
+  static const legalDocumentsPlaceholderTitle =
+      'legalDocumentsPlaceholderTitle';
+  static const legalDocumentsWebsite = 'legalDocumentsWebsite';
   static const legalDocumentsUnavailable = 'legalDocumentsUnavailable';
   static const legalDocumentsPlaceholder = 'legalDocumentsPlaceholder';
   static const legalDocumentsLinks = 'legalDocumentsLinks';

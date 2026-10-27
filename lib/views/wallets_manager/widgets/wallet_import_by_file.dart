@@ -58,6 +58,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   bool _isHdMode = true;
   bool _isHdOptionEnabled = true;
   bool _rememberMe = false;
+  bool _waitingForLegal = false;
   bool _allowCustomSeed = false;
   bool _showCustomSeedToggle = false;
 
@@ -230,10 +231,12 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   late final KomodoDefiSdk _sdk = context.read<KomodoDefiSdk>();
 
   Future<void> _onImport() async {
-    final consentSnapshot = context
-        .read<LegalAgreementBloc>()
-        .presentedSnapshot;
-    if (!context.read<LegalAgreementBloc>().canSubmit) return;
+    if (_waitingForLegal) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null) return;
+    final consentSnapshot = agreement.snapshot;
     // Clear any previous common error before starting a new import attempt
     if (_commonError != null) {
       setState(() {
@@ -337,7 +340,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
       }
       // Close autofill context after successfully validating password & before import
       TextInput.finishAutofillContext(shouldSave: false);
-      if (!mounted || !context.read<LegalAgreementBloc>().canSubmit) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
         LegalAgreementSubmitted(
           'wallet-import-file',

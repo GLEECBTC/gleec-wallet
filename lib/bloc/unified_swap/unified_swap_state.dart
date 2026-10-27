@@ -159,6 +159,7 @@ class SwapReview extends Equatable {
     this.legalSnapshot,
     this.legalBypass = false,
     this.legalLoading = false,
+    this.legalFailed = false,
     this.isRecovery = false,
     this.rejectionDetail,
     this.revalidationFailure,
@@ -179,11 +180,16 @@ class SwapReview extends Equatable {
   final LegalConsentSnapshot? legalSnapshot;
   final bool legalBypass;
   final bool legalLoading;
+  final bool legalFailed;
+  bool get showLegalFailure =>
+      !(legalSnapshot?.covers(swapConsentDocuments) ?? false) &&
+      (!legalLoading || legalFailed);
   final bool isRecovery;
   bool get legalAllowed =>
       quote.source != SwapLiquiditySource.routed ||
       isRecovery ||
       legalBypass ||
+      (legalLoading && !legalFailed) ||
       (legalSnapshot?.covers(swapConsentDocuments) ?? false);
 
   /// Diagnostic text for a rejection.
@@ -220,6 +226,7 @@ class SwapReview extends Equatable {
     bool? termsRequired,
     LegalConsentSnapshot? legalSnapshot,
     bool? legalLoading,
+    bool? legalFailed,
     String? rejectionDetail,
     SwapQuoteFailure? revalidationFailure,
   }) => SwapReview(
@@ -229,6 +236,7 @@ class SwapReview extends Equatable {
     termsRequired: termsRequired ?? this.termsRequired,
     legalSnapshot: legalSnapshot ?? this.legalSnapshot,
     legalLoading: legalLoading ?? this.legalLoading,
+    legalFailed: legalFailed ?? this.legalFailed,
     legalBypass: legalBypass,
     isRecovery: isRecovery,
     rejectionDetail: rejectionDetail ?? this.rejectionDetail,
@@ -243,6 +251,7 @@ class SwapReview extends Equatable {
     termsRequired,
     legalSnapshot,
     legalLoading,
+    legalFailed,
     legalBypass,
     isRecovery,
     rejectionDetail,

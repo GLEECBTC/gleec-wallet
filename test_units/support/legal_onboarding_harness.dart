@@ -112,6 +112,7 @@ class LegalFormHarness {
     bool updated = false,
     bool available = true,
     bool bypass = false,
+    this.responseGate,
   }) {
     if (available) storage.values.addAll(LegalFixtureStorage().values);
     if (updated) {
@@ -125,8 +126,9 @@ class LegalFormHarness {
     repository = LegalDocumentsRepository(
       storage: storage,
       bypassGate: bypass,
-      httpClient: MockClient(
-        (request) async => remoteAvailable
+      httpClient: MockClient((request) async {
+        await responseGate;
+        return remoteAvailable
             ? http.Response(
                 legalFixtureText(
                   LegalDocumentType.values.firstWhere(
@@ -136,13 +138,14 @@ class LegalFormHarness {
                 200,
                 headers: {'content-type': 'text/markdown'},
               )
-            : http.Response('missing', 404),
-      ),
+            : http.Response('missing', 404);
+      }),
     );
     agreement = LegalAgreementBloc(repository)
       ..add(const LegalAgreementOpened());
   }
   bool remoteAvailable = false;
+  Future<void>? responseGate;
   final storage = LegalTestStorage();
   late final LegalDocumentsRepository repository;
   late final LegalAgreementBloc agreement;
@@ -155,6 +158,7 @@ class LegalFormHarness {
     Widget child, {
     Size size = const Size(800, 1100),
     double textScale = 1,
+    Brightness brightness = Brightness.dark,
   }) async {
     await tester.runAsync(validator.init);
     tester.view.physicalSize = size;
@@ -200,7 +204,9 @@ class LegalFormHarness {
             ],
             child: Builder(
               builder: (context) => MaterialApp(
-                theme: theme.global.dark,
+                theme: brightness == Brightness.dark
+                    ? theme.global.dark
+                    : theme.global.light,
                 locale: context.locale,
                 supportedLocales: context.supportedLocales,
                 localizationsDelegates: context.localizationDelegates,

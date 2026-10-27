@@ -156,6 +156,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
 
   /// Only the latest legal read may update the presented review documents.
   int _legalVersion = 0;
+  bool _waitingForLegalSubmission = false;
 
   /// Bumped when a wallet signs in or out, so reads for the previous one are
   /// dropped.

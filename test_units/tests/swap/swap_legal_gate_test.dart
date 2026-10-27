@@ -1,4 +1,5 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
+import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,68 @@ import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 void main() {
+  for (final outcome in ['success', 'failure', 'closed', 'reopened']) {
+    test('routed swap waits for pending documents: $outcome', () {
+      fakeAsync((async) {
+        final response = Completer<http.Response>();
+        final repository = LegalDocumentsRepository(
+          storage: LegalFixtureStorage(populated: false),
+          bypassGate: false,
+          httpClient: MockClient((_) => response.future),
+        );
+        final h = SwapBlocHarness(async, legalDocuments: repository);
+        try {
+          final bloc = h.inReview();
+          expect(bloc.state.review!.legalLoading, isTrue);
+          expect(bloc.state.review!.canStart, isTrue);
+          bloc.add(const UnifiedSwapStartRequested());
+          bloc.add(const UnifiedSwapStartRequested());
+          h.settle();
+          expect(h.routedExecutor.started, isEmpty);
+          expect(
+            h.storage.values.values.map(SwapTermsAcceptance.tryParse).nonNulls,
+            isEmpty,
+          );
+          if (outcome == 'closed' || outcome == 'reopened') {
+            bloc.add(const UnifiedSwapReviewClosed());
+            h.settle();
+            if (outcome == 'reopened') {
+              bloc.add(const UnifiedSwapReviewOpened());
+              h.settle();
+            }
+          }
+          response.complete(
+            outcome == 'failure'
+                ? http.Response('', 404)
+                : http.Response(
+                    '# Published full terms',
+                    200,
+                    headers: {'content-type': 'text/markdown'},
+                  ),
+          );
+          h.settle();
+          expect(
+            h.routedExecutor.started,
+            outcome == 'success' ? hasLength(1) : isEmpty,
+          );
+          final acceptances = h.storage.values.values
+              .map(SwapTermsAcceptance.tryParse)
+              .nonNulls;
+          expect(acceptances, outcome == 'success' ? hasLength(1) : isEmpty);
+          if (outcome == 'failure') {
+            expect(bloc.state.review!.canStart, isFalse);
+            expect(bloc.state.review!.showLegalFailure, isTrue);
+          }
+          if (outcome == 'reopened') {
+            expect(bloc.state.review!.legalLoading, isFalse);
+            expect(bloc.state.review!.canStart, isTrue);
+          }
+        } finally {
+          h.dispose();
+        }
+      });
+    });
+  }
   for (final bypass in [false, true]) {
     for (final placeholder in [false, true]) {
       test('routed swap guard bypass=$bypass placeholder=$placeholder', () {
@@ -91,7 +154,7 @@ void main() {
       LegalDocumentStatus.placeholder,
     ]) {
       testWidgets(
-        '$status disables the start action with accessible explanation and recovers',
+        '$status shows failure only after retrieval resolves and recovers',
         (tester) async {
           final bloc = RecordingSwapBloc();
           addTearDown(bloc.close);
@@ -118,19 +181,24 @@ void main() {
             size: const Size(360, 800),
           );
           final button = find.byKey(const Key('swap-start'));
-          expect(swapButtonEnabled(tester, find.text('Start swap')), isFalse);
+          final pending = status == LegalDocumentStatus.loading;
+          expect(swapButtonEnabled(tester, find.text('Start swap')), pending);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
-            findsOneWidget,
+            pending ? findsNothing : findsOneWidget,
           );
           expect(
             find.byTooltip(
               'The legal documentation could not be retrieved. Please consult Gleec’s online legal documentation before proceeding.',
             ),
-            findsOneWidget,
+            pending ? findsNothing : findsOneWidget,
           );
           await tester.tap(button);
-          expect(bloc.events, isEmpty);
+          expect(
+            bloc.events,
+            pending ? [const UnifiedSwapStartRequested()] : isEmpty,
+          );
+          bloc.events.clear();
           if (status != LegalDocumentStatus.loading) {
             await tester.tap(find.byKey(const Key('legal-documents-retry')));
             expect(bloc.events, [const UnifiedSwapLegalRequested(retry: true)]);

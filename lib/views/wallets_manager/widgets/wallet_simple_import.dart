@@ -62,6 +62,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _isSeedHidden = true;
   bool _inProgress = false;
+  bool _waitingForLegal = false;
   bool _allowCustomSeed = false;
   bool _isHdMode = true;
   bool _rememberMe = false;
@@ -476,13 +477,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   }
 
   void _onImport() async {
-    final consentSnapshot = context
-        .read<LegalAgreementBloc>()
-        .presentedSnapshot;
-    if (_step == WalletSimpleImportSteps.password &&
-        !context.read<LegalAgreementBloc>().canSubmit) {
-      return;
-    }
+    if (_inProgress || _waitingForLegal) return;
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -493,6 +488,17 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       });
       return;
     }
+
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted ||
+        agreement == null ||
+        _step != WalletSimpleImportSteps.password ||
+        !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    final consentSnapshot = agreement.snapshot;
 
     final WalletConfig config = WalletConfig(
       type: _isHdMode ? WalletType.hdwallet : WalletType.iguana,
@@ -531,7 +537,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !context.read<LegalAgreementBloc>().canSubmit) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
         LegalAgreementSubmitted(
           'wallet-import-seed',

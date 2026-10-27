@@ -32,17 +32,19 @@ class TermsConsentText extends StatelessWidget {
             ),
             const SizedBox(height: 4),
           ],
-          if (!context.read<LegalAgreementBloc>().documentsAvailable)
+          if (state.hasFailure) ...[
             LegalDocumentNotice(
-              status: state.status == LegalAgreementStatus.loading
-                  ? LegalDocumentStatus.loading
-                  : state.status == LegalAgreementStatus.placeholder
+              status: state.status == LegalAgreementStatus.placeholder
                   ? LegalDocumentStatus.placeholder
                   : LegalDocumentStatus.unavailable,
-              onRetry: () => context.read<LegalAgreementBloc>().add(
-                const LegalAgreementRetried(),
-              ),
+              onRetry: state.refreshing
+                  ? null
+                  : () => context.read<LegalAgreementBloc>().add(
+                      const LegalAgreementRetried(),
+                    ),
             ),
+            const SizedBox(height: 12),
+          ],
           _AgreementNotice(actionLabel: actionLabel),
         ],
       ),
@@ -61,7 +63,7 @@ class _AgreementNotice extends StatelessWidget {
       context,
     ).textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.5);
     final notice =
-        (context.read<LegalAgreementBloc>().documentsAvailable
+        (!context.read<LegalAgreementBloc>().state.hasFailure
                 ? LocaleKeys.onboardingAgreementNotice
                 : LocaleKeys.legalDocumentsLinks)
             .tr(namedArgs: {'action': actionLabel});
@@ -150,6 +152,20 @@ class _AgreementNotice extends StatelessWidget {
       context.read<LegalAgreementBloc>().add(const LegalAgreementOpened());
     }
   }
+}
+
+/// Waits for the BLoC's existing fetch without starting wallet work or recording
+/// consent. A closed form or failed retrieval cancels the pending submission.
+Future<LegalAgreementState?> awaitLegalAgreement(BuildContext context) async {
+  final bloc = context.read<LegalAgreementBloc>();
+  if (!bloc.canComplete && bloc.state.status == LegalAgreementStatus.loading) {
+    await bloc.stream.firstWhere(
+      (state) => state.status != LegalAgreementStatus.loading,
+      orElse: () => const LegalAgreementState(LegalAgreementStatus.unavailable),
+    );
+  }
+  if (!context.mounted || bloc.isClosed || !bloc.canComplete) return null;
+  return bloc.state;
 }
 
 /// Rebuild only the action when document availability changes.

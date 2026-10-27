@@ -39,11 +39,19 @@ enum LegalAgreementStatus {
 }
 
 class LegalAgreementState extends Equatable {
-  const LegalAgreementState(this.status, [this.snapshot]);
+  const LegalAgreementState(
+    this.status, [
+    this.snapshot,
+    this.refreshing = false,
+  ]);
   final LegalAgreementStatus status;
   final LegalConsentSnapshot? snapshot;
+  final bool refreshing;
+  bool get hasFailure =>
+      status == LegalAgreementStatus.unavailable ||
+      status == LegalAgreementStatus.placeholder;
   @override
-  List<Object?> get props => [status, snapshot];
+  List<Object?> get props => [status, snapshot, refreshing];
 }
 
 class LegalAgreementBloc
@@ -64,7 +72,12 @@ class LegalAgreementBloc
   bool _submitted = false;
 
   LegalConsentSnapshot? get presentedSnapshot => state.snapshot;
-  bool get canSubmit => _repository.canSubmit(presentedSnapshot);
+
+  /// Optimistic affordance while the first fetch is pending. Completion still
+  /// requires full documents (unless the explicit preview bypass is enabled).
+  bool get canSubmit =>
+      state.status == LegalAgreementStatus.loading || canComplete;
+  bool get canComplete => _repository.canSubmit(presentedSnapshot);
   bool get documentsAvailable => presentedSnapshot?.isAvailable ?? false;
 
   Future<void> _onOpened(
@@ -76,7 +89,9 @@ class LegalAgreementBloc
       var snapshot = await _repository.loadConsentSnapshot();
       if (!snapshot.isAvailable) {
         if (emit.isDone || _submitted) return;
-        emit(const LegalAgreementState(LegalAgreementStatus.loading));
+        if (!state.hasFailure) {
+          emit(const LegalAgreementState(LegalAgreementStatus.loading));
+        }
         await _repository.refreshConsentDocuments();
         snapshot = await _repository.loadConsentSnapshot();
       } else {
@@ -124,9 +139,7 @@ class LegalAgreementBloc
     Emitter<LegalAgreementState> emit,
   ) async {
     if (_submitted) return;
-    if (!documentsAvailable) {
-      emit(const LegalAgreementState(LegalAgreementStatus.loading));
-    }
+    emit(LegalAgreementState(state.status, state.snapshot, true));
     await _repository.refreshConsentDocuments(force: true);
     if (!isClosed && !_submitted) add(const LegalAgreementOpened());
   }

@@ -67,7 +67,8 @@ void main() {
         final bloc = LegalAgreementBloc(repo);
         addTearDown(bloc.close);
         expect(bloc.state.status, LegalAgreementStatus.loading);
-        expect(bloc.canSubmit, isFalse);
+        expect(bloc.canSubmit, isTrue);
+        expect(bloc.canComplete, isFalse);
         final failed = bloc.stream.firstWhere(
           (s) => s.status == LegalAgreementStatus.unavailable,
         );

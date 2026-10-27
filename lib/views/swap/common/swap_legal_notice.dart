@@ -67,17 +67,17 @@ class SwapLegalConsentNotice extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!available)
+        if (review.showLegalFailure)
           LegalDocumentNotice(
-            status: review.legalLoading
-                ? LegalDocumentStatus.loading
-                : review.legalSnapshot?.status ??
-                      LegalDocumentStatus.unavailable,
-            onRetry: () => context.read<UnifiedSwapBloc>().add(
-              const UnifiedSwapLegalRequested(retry: true),
-            ),
+            status:
+                review.legalSnapshot?.status ?? LegalDocumentStatus.unavailable,
+            onRetry: review.legalLoading
+                ? null
+                : () => context.read<UnifiedSwapBloc>().add(
+                    const UnifiedSwapLegalRequested(retry: true),
+                  ),
           )
-        else if (review.termsRequired)
+        else if (available && review.termsRequired)
           Text(LocaleKeys.swapLegalConsentNotice.tr()),
         Wrap(
           spacing: 8,

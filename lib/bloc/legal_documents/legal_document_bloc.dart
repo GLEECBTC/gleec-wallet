@@ -41,7 +41,7 @@ class LegalDocumentBloc
     final cached = await _repository.loadPreferredContent(document);
     if (emit.isDone) return;
     emit(
-      cached.isAvailable
+      cached.isAvailable || state.status != LegalDocumentStatus.loading
           ? cached
           : const LegalDocumentContent.unavailable(
               status: LegalDocumentStatus.loading,
