@@ -3,6 +3,11 @@
 The wallet now uses KDF `35f0bde` for Phase 1 EVM swaps, following the routed-swap
 contract at specs `7c388ea`.
 
+- Swap state survives layout breakpoints. Review and replacement starts recheck
+  policy, terms and quote-specific funding. Background recovery, approval
+  timelines and external link handling include the fixes from #3554–#3556.
+- Release builds retain the existing coin revision and fetch its exact files and
+  icons, including when reusing a cache. Runtime coin updates remain enabled.
 - Max asks KDF for the largest fundable amount and keeps it as form intent.
   Refresh updates the amount, receive minimum and funding together. Typing an
   amount returns to exact mode, and the review freezes the accepted quote.

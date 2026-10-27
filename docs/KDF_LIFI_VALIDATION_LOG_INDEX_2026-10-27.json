@@ -1,0 +1,334 @@
+{
+  "wallet_implementation": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+  "sdk": "b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1",
+  "logs_directory": "/private/tmp/lifi-release-integration-20261027",
+  "logs": [
+    {
+      "name": "app-unit-final.log",
+      "bytes": 1087331,
+      "sha256": "17c75de52441c142fd24bcd983061a652c020efcf4785324eaa83be0bb35f1cd"
+    },
+    {
+      "name": "app-unit-with-assets.log",
+      "bytes": 1087331,
+      "sha256": "0c4dd0818310412d3e1e76d62edefbc2150df03ea6a7ae42f9311cb5fe92ef6f"
+    },
+    {
+      "name": "app-analysis-final.log",
+      "bytes": 392419,
+      "sha256": "82b6f5a66fae00986ec12753afbc63ef70955335d08d33176192ef36574a06fe"
+    },
+    {
+      "name": "build-transformer-final.log",
+      "bytes": 17614,
+      "sha256": "e1988dfa7528dc99bc7dd87652877c95be8173ab7665e3abaa8acb7146d18c8f"
+    },
+    {
+      "name": "routed-rpc-wasm.log",
+      "bytes": 18479,
+      "sha256": "b52ac02ec680c01e674d0757a108128a45e729cd846ba658cdde704c8af1c342"
+    },
+    {
+      "name": "web-build-clean.log",
+      "bytes": 796,
+      "sha256": "c495e001dbe8792294bb0f91ae11ee1cbce321cec760247054cb37c585a1e26f"
+    },
+    {
+      "name": "macos-build.log",
+      "bytes": 33609,
+      "sha256": "e02d28dd054424243150a1a40abac24b6828fc56cdf1893e1b8c5667fa4a6202"
+    },
+    {
+      "name": "quote-runner-test.log",
+      "bytes": 100,
+      "sha256": "a6707d4eff38012da33ddc34bc6dc076a3b17151cfc9aef223c8790cbe64c3da"
+    },
+    {
+      "name": "quote-smoke-final.log",
+      "bytes": 144,
+      "sha256": "f2570ab57bf47e0d46304d316b3f385e2338f694556d8abfb067eda657fb13de"
+    },
+    {
+      "name": "sdk-results.json",
+      "bytes": 5797,
+      "sha256": "4868cb960cd75c14a5fa96b2323cd1706bfdf14fcc23a4fe591ed55e45566e70"
+    },
+    {
+      "name": "sdk-results-assets.json",
+      "bytes": 5538,
+      "sha256": "9e7d31b5c0a61d01ad68e2a23e5c55cc378cb274390796493e0a37cd88af6498"
+    },
+    {
+      "name": "komodo_defi_rpc_methods-assets.log",
+      "bytes": 104738,
+      "sha256": "af7178c69c9dde448ca35eabcba5011377ab5fc7d9ec008089aa9040844df971"
+    },
+    {
+      "name": "komodo_defi_types-assets.log",
+      "bytes": 43756,
+      "sha256": "c87aa4c1d05849038c848e50577b0447eeacdb51bd6427e34a058e47ac6083a0"
+    },
+    {
+      "name": "komodo_defi_framework-assets.log",
+      "bytes": 27966,
+      "sha256": "e62fbc04fd241418b8e39852a5c9db1d005475e115379aedcc24a31d3be775de"
+    },
+    {
+      "name": "komodo_defi_local_auth-assets.log",
+      "bytes": 37240,
+      "sha256": "1d68cf595e093fb90ee94227da9a0be07465acb718b69ac2e706553f1fa9a766"
+    },
+    {
+      "name": "komodo_coin_updates-assets.log",
+      "bytes": 27411,
+      "sha256": "1e3ce2609b7a6da6e535b9e9e617cc93df034298e612b7384ebc018aa91f4b66"
+    },
+    {
+      "name": "komodo_defi_sdk-assets.log",
+      "bytes": 331776,
+      "sha256": "0c7def6928044f13c5da517bd9bf99d2228441e8cca96829625d6529de982572"
+    },
+    {
+      "name": "harness-hd-assets.log",
+      "bytes": 81512,
+      "sha256": "7add9bf737499a1ce33d41942f8b3238cd0f47738f1a9c55fdc8fe8d17d9e5f3"
+    },
+    {
+      "name": "bench-hd-assets.log",
+      "bytes": 1483,
+      "sha256": "cd3b3f3c2cdff156dc80be58e867822588c29499b2cafa9d37cd417b32cd9e81"
+    },
+    {
+      "name": "compare-hd-assets.log",
+      "bytes": 274,
+      "sha256": "93038763e5e68e29cb85d44a27315a6a39d3a30d762045e4cbc3eed97cd71362"
+    },
+    {
+      "name": "harness-iguana-assets.log",
+      "bytes": 82671,
+      "sha256": "f3a7c25f01f743a7a15790ed15ac9645a612ea9e330f0396092a69227b02aa1b"
+    },
+    {
+      "name": "bench-iguana-assets.log",
+      "bytes": 2691,
+      "sha256": "5fb3f2247721000c92148b0306da6bf7c221f0707453a2d958c11cc823585ae4"
+    },
+    {
+      "name": "compare-iguana-assets.log",
+      "bytes": 286,
+      "sha256": "a4b184feaea6dd88212fc08bd181fc60a9a125b87237bfc37a0c55403f3d0fef"
+    }
+  ],
+  "sdk_runs_with_generated_assets": [
+    {
+      "name": "komodo_defi_rpc_methods",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_rpc_methods",
+      "env": {
+        "KDF_HARNESS": ""
+      },
+      "exit": 0,
+      "seconds": 3.1
+    },
+    {
+      "name": "komodo_defi_types",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_types",
+      "env": {
+        "KDF_HARNESS": ""
+      },
+      "exit": 0,
+      "seconds": 3.0
+    },
+    {
+      "name": "komodo_defi_framework",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_framework",
+      "env": {
+        "KDF_HARNESS": ""
+      },
+      "exit": 0,
+      "seconds": 17.5
+    },
+    {
+      "name": "komodo_defi_local_auth",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_local_auth",
+      "env": {
+        "KDF_HARNESS": ""
+      },
+      "exit": 0,
+      "seconds": 75.6
+    },
+    {
+      "name": "komodo_coin_updates",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_coin_updates",
+      "env": {
+        "KDF_HARNESS": ""
+      },
+      "exit": 0,
+      "seconds": 2.9
+    },
+    {
+      "name": "komodo_defi_sdk",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_sdk",
+      "env": {
+        "KDF_HARNESS": ""
+      },
+      "exit": 0,
+      "seconds": 34.6
+    },
+    {
+      "name": "harness-hd",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "--exclude-tags",
+        "bench"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_harness",
+      "env": {
+        "KDF_HARNESS": "",
+        "KDF_HARNESS_WALLET_TYPE": "hd"
+      },
+      "exit": 0,
+      "seconds": 30.9
+    },
+    {
+      "name": "bench-hd",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "--tags",
+        "bench"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_harness",
+      "env": {
+        "KDF_HARNESS": "",
+        "KDF_HARNESS_WALLET_TYPE": "hd",
+        "BENCH_OUT": "/private/tmp/lifi-release-integration-20261027/bench-hd.json"
+      },
+      "exit": 0,
+      "seconds": 8.4
+    },
+    {
+      "name": "compare-hd",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/cache/dart-sdk/bin/dart",
+        "run",
+        "tool/compare_bench.dart",
+        "--baseline",
+        "tool/bench_baseline.json",
+        "--current",
+        "/private/tmp/lifi-release-integration-20261027/bench-hd.json",
+        "--max-regression",
+        "0.30"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_harness",
+      "env": {},
+      "exit": 0,
+      "seconds": 0.2
+    },
+    {
+      "name": "harness-iguana",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "--exclude-tags",
+        "bench"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_harness",
+      "env": {
+        "KDF_HARNESS": "",
+        "KDF_HARNESS_WALLET_TYPE": "iguana"
+      },
+      "exit": 0,
+      "seconds": 16.0
+    },
+    {
+      "name": "bench-iguana",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/flutter",
+        "test",
+        "--no-pub",
+        "--reporter",
+        "expanded",
+        "--tags",
+        "bench"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_harness",
+      "env": {
+        "KDF_HARNESS": "",
+        "KDF_HARNESS_WALLET_TYPE": "iguana",
+        "BENCH_OUT": "/private/tmp/lifi-release-integration-20261027/bench-iguana.json"
+      },
+      "exit": 0,
+      "seconds": 8.4
+    },
+    {
+      "name": "compare-iguana",
+      "command": [
+        "/Users/charl/fvm/versions/3.41.4/bin/cache/dart-sdk/bin/dart",
+        "run",
+        "tool/compare_bench.dart",
+        "--baseline",
+        "tool/bench_baseline.json",
+        "--current",
+        "/private/tmp/lifi-release-integration-20261027/bench-iguana.json",
+        "--max-regression",
+        "0.30"
+      ],
+      "cwd": "/Users/charl/Code/Gleec/gleec-wallet-kdf-integrations/.claude/worktrees/kdf-667045c/sdk/packages/komodo_defi_harness",
+      "env": {},
+      "exit": 0,
+      "seconds": 0.2
+    }
+  ]
+}

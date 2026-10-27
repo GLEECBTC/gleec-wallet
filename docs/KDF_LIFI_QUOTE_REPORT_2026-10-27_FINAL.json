@@ -1,0 +1,86 @@
+{
+  "tested_at": "2026-10-27T06:54:43.860536+00:00",
+  "engine_commit": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+  "coins_commit": "2b0aefb78b184091ab086c66e513d8b03f5d5a01",
+  "proxy": "https://quicknode.gleec.com/lifi",
+  "integrator": {
+    "name": "gleec-dex-staging",
+    "fee_bps": 178,
+    "lifi_fee_bps": 22
+  },
+  "scope": "fresh unfunded wallet; version, activation, quote and stop only",
+  "checks": [
+    {
+      "pair": [
+        "ETH-ARB20",
+        "USDC-ARB20"
+      ],
+      "fee_model": "standard",
+      "exact_amount": "0.05",
+      "receive": "112.743331",
+      "minimum": "112.179614",
+      "gas_funding": [
+        {
+          "coin": "ETH-ARB20",
+          "amount": "0.000009364848612",
+          "required_balance": "0.0000752656456191",
+          "amount_usd": "0.02155610218358772"
+        }
+      ],
+      "included_commission": {
+        "name": "LIFI Fixed Fee",
+        "coin": "ETH-ARB20",
+        "amount": "0.001",
+        "amount_usd": "2.3018",
+        "included": true
+      },
+      "max_error": {
+        "error_type": "InsufficientBalance",
+        "error_data": {
+          "coin": "ETH-ARB20",
+          "available": "0",
+          "required": "0.000000000000000001"
+        }
+      },
+      "passed": true
+    },
+    {
+      "pair": [
+        "ETH-BASE",
+        "USDC-BASE"
+      ],
+      "fee_model": "op_stack",
+      "exact_amount": "0.05",
+      "receive": "112.769902",
+      "minimum": "112.206052",
+      "gas_funding": [
+        {
+          "coin": "ETH-BASE",
+          "amount": "0.000002821405338657",
+          "required_balance": "0.000006973312870802",
+          "amount_usd": "0.00649433902257406917"
+        }
+      ],
+      "included_commission": {
+        "name": "LIFI Fixed Fee",
+        "coin": "ETH-BASE",
+        "amount": "0.001",
+        "amount_usd": "2.3018",
+        "included": true
+      },
+      "max_error": {
+        "error_type": "InsufficientBalance",
+        "error_data": {
+          "coin": "ETH-BASE",
+          "available": "0",
+          "required": "0.000000000000000001"
+        }
+      },
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "coins_config_sha256": "6a1cb3a8c0fc69f2ef2525151238c6433875ce947d8ced78c6411035dc662ea5",
+  "phase": "complete",
+  "version": "3.1.1-beta_35f0bde"
+}

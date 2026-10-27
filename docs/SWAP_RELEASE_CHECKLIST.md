@@ -3,7 +3,9 @@
 Current delivery: [SDK #407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)
 and [wallet #3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557), specs
 `7c388ea`, KDF `35f0bde`. See [validation evidence](KDF_LIFI_VALIDATION_2026-10-26.md)
-and [release notes](KDF_LIFI_RELEASE_NOTES.md). This checklist records release
+and [the combined-candidate handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md)
+for #3554–#3556 integration, frozen inputs and fresh validation. See also
+[release notes](KDF_LIFI_RELEASE_NOTES.md). This checklist records release
 work; it does not authorize merges, deployment or funded transactions.
 
 ## Integration gates
@@ -11,6 +13,7 @@ work; it does not authorize merges, deployment or funded transactions.
 | Gate | Status |
 |---|---|
 | Seven matching KDF archives | Complete. Linux rerun succeeded; all seven downloads and sidecars match the strict manifest. Coins pin preserved. |
+| Frozen bundled coins | Build-time advancement disabled; pinned source and Git blob hashes verified. Runtime coin updates remain enabled. See the candidate manifest. |
 | Commission | Confirmed: `gleec-dex-staging`, 178 + 22 bps. Wallet supplies typed startup policy, KDF requests/validates it, proxy retains API key. Defaults, overrides, disable and invalid settings covered. |
 | Fee models | SDK supplies missing Base `op_stack`, Mantle `mantle`, Monad `monad`, Avalanche `avalanche` settings for bundled/cached/refreshed configs. Explicit settings remain authoritative; tokens inherit platforms. |
 | Max and accepted minimum | KDF Max replaces client reserve multipliers. Concrete comparisons and execution; exact provider minimum, no extra 0.3% reduction. Review snapshots and reacceptance covered. |

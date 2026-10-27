@@ -1,5 +1,9 @@
 # Additional automated LI.FI testing — 2026-10-26
 
+Historical results below predate integration of #3554–#3556. See the
+[27 October combined-candidate handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md)
+for the frozen inputs and rerun results.
+
 This follow-up tested the delivered wallet `202ef1f0b` and SDK `9e3cc0af`.
 The only follow-up code is a reusable quote smoke runner; application and SDK
 runtime code is unchanged.
