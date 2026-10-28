@@ -263,6 +263,8 @@
   "logoutPopupTitle": "Confirm log out?",
   "logoutPopupDescriptionWalletOnly": "Are you sure you want to logout?",
   "logoutPopupDescription": "Are you sure you want to logout? Your opened orders will no longer be available to match with other users and any trades in progress may not be completed",
+  "transactionFiatUnavailable": "USD value unavailable",
+  "transactionCurrentValue": "Current USD value at the available spot price",
   "transactionDetailsTitle": "Transaction completed",
   "customSeedWarningText": "Custom seed phrases are generally less secure and easier to crack than a generated BIP39-compliant seed phrase. To confirm you understand and are aware of the risk, type \"I understand\" in the box below.",
   "customSeedIUnderstand": "i understand",

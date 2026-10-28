@@ -304,6 +304,8 @@ abstract class LocaleKeys {
   static const logoutPopupDescriptionWalletOnly =
       'logoutPopupDescriptionWalletOnly';
   static const logoutPopupDescription = 'logoutPopupDescription';
+  static const transactionFiatUnavailable = 'transactionFiatUnavailable';
+  static const transactionCurrentValue = 'transactionCurrentValue';
   static const transactionDetailsTitle = 'transactionDetailsTitle';
   static const customSeedWarningText = 'customSeedWarningText';
   static const customSeedIUnderstand = 'customSeedIUnderstand';
