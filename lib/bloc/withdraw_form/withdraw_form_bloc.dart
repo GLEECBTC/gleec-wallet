@@ -1124,7 +1124,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       // Normalize the amount string to handle locale-specific formats
       final normalizedAmount = normalizeDecimalString(event.amount);
       final amount = Decimal.parse(normalizedAmount);
-      final decimals = state.asset.id.chainId.decimals;
+      final decimals = withdrawalAmountPrecision(state.asset);
       if (decimals != null && amount.scale > decimals) {
         emit(
           state.copyWith(

@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 
 /// Recipient principal from a signed withdrawal, independent of wallet debit.
 /// EVM/TRON encode the transferred value in totalAmount. UTXO totalAmount is
@@ -23,4 +24,19 @@ Decimal withdrawalRecipientAmount(
   final principal =
       (netDebit > Decimal.zero ? netDebit : changes.spentByMe) - sameAssetFee;
   return principal > Decimal.zero ? principal : Decimal.zero;
+}
+
+/// Configured token precision, or the engine's native EVM unit scale when
+/// its optional config field is absent. Never assume token decimals are 18.
+int? withdrawalAmountPrecision(Asset asset) {
+  final configured = asset.id.chainId.decimals;
+  if (configured != null) return configured;
+  final protocol = asset.protocol;
+  if (protocol is Erc20Protocol &&
+      (protocol.config.valueOrNull<String>('protocol', 'type') ??
+              protocol.config.valueOrNull<String>('type')) ==
+          'ETH') {
+    return 18;
+  }
+  return null;
 }
