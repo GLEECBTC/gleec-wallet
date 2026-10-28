@@ -4,6 +4,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
@@ -222,7 +223,11 @@ void main() {
         for (final a in [eth, usdc, gleecEvm, btc, paxg]) a.id: a,
       };
       source = RoutedSwapQuoteSource(
-        RoutedSwapManager(client: script, resolveAsset: (t) => byTicker[t]),
+        RoutedSwapManager(
+          client: script,
+          auth: _CatalogAuth(),
+          resolveAsset: (t) => byTicker[t],
+        ),
         networks: () => SwapNetworks(byTicker.values),
       );
     });
@@ -296,3 +301,6 @@ class _Script implements ApiClient {
     };
   }
 }
+
+// A catalog lookup must not ask for a signed-in wallet.
+class _CatalogAuth extends Fake implements KomodoDefiLocalAuth {}
