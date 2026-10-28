@@ -1,0 +1,76 @@
+{
+  "status": "release-preparation; not a published artifact manifest",
+  "prepared_on": "2026-10-28",
+  "app": {
+    "version": "0.10.0+0",
+    "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
+    "previous_published_tag": "0.9.7-1",
+    "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6"
+  },
+  "sdk": {
+    "version": "0.9.0",
+    "integration_source": "03a3cb1adf666952a16f0cd80e67b8173076f4c1",
+    "final_main_pin_required": true,
+    "preparation_commit": "2f6ba7241ae2ae558b0bec02cb562cc2f879b084",
+    "preparation_pr": 409,
+    "promotion_pr": 410
+  },
+  "kdf": {
+    "source": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+    "branch": "feat/lifi-integration",
+    "build_config_sha256": "6b47b6c255a15a2d31191af54e8c607267b0ccd8c5a5da5285f722211400412f",
+    "archives": {
+      "web": [
+        "79c3b1b87c8408b2416381c8f62141770e0404bccb5881038504d6e973615f84"
+      ],
+      "ios": [
+        "29440a5386054679f87486b3a4014427655122a8979f96fc7e275ca0dae3e2dd"
+      ],
+      "macos": [
+        "118712f84f5a0888d9fa0237474710a1222be7e49ce0cab22ab4d05afa013c10"
+      ],
+      "android-armv7": [
+        "cd123afeda3fdc98a9d960b71215c8d875317c626eecc43fa84b672534911a35"
+      ],
+      "android-aarch64": [
+        "7130aac8b03e6ba6c60e684b6b1304f6ea5d40d11bd9fd7f1f75ce6566d6bf3d"
+      ],
+      "linux": [
+        "0e85b7c1db4d4865aa1228dcb509e69c83b276afeb4abee551285ce64fa02889"
+      ],
+      "windows": [
+        "0750ed0b87d3d7550a2ac4e1f574c643962a66080ca935ab8b8f9e0ab470355a"
+      ]
+    }
+  },
+  "coins": {
+    "bundled_source": "2b0aefb78b184091ab086c66e513d8b03f5d5a01",
+    "update_commit_on_build": false,
+    "runtime_updates_enabled": true
+  },
+  "specs": "7c388ea7b91cb7c657435d416bc03e5349b46162",
+  "toolchain": {
+    "flutter": "3.41.4",
+    "dart": "3.11.1"
+  },
+  "defines": {
+    "TRON_GASLESS_ENABLED": "true",
+    "TRON_GASLESS_RECEIVE_ENABLED": "true",
+    "TRON_GASLESS_BASE_URL": "https://quicknode.gleec.com/gasfree/tron",
+    "TRON_GASLESS_SERVICE_PROVIDER": "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird",
+    "SWAP_NATIVE_MAX_GAS_RESERVE": "true",
+    "BYPASS_LEGAL_DOCUMENT_GATE": "false",
+    "LIFI_PROXY_URL": "https://quicknode.gleec.com/lifi",
+    "LIFI_INTEGRATOR_ENABLED": "true",
+    "LIFI_INTEGRATOR_NAME": "gleec-dex-staging",
+    "LIFI_INTEGRATOR_FEE_BPS": "178",
+    "LIFI_FEE_BPS": "22"
+  },
+  "distribution_evidence_still_required": [
+    "final app and SDK main commits",
+    "generated bundled coin file hashes",
+    "signed output hashes and signatures",
+    "final build configuration and integrator policy",
+    "required gate dispositions and install/upgrade verification"
+  ]
+}
