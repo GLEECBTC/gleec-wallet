@@ -73,8 +73,11 @@ errors/backoff, exact/token exclusions, cached and refreshed reserves, timeout
 continuations, and review/start/expiry behavior. The explicit rollback tests
 continue to exercise the unmodified KDF Max contract.
 
-A funded Max retest on the updated preview remains a separate release gate;
-synthetic funding checks do not establish successful on-chain settlement.
+A human-submitted buffered native-Max retest on `ed609b9` settled successfully
+on 28 October 2026 and reconciled independently against source and destination
+chain evidence. It supplements the six earlier settlements. Private transaction
+details remain in the local RC ledger. This result does not guarantee tolerance
+for every later fee increase; synthetic funding checks remain separate evidence.
 
 Validation on 28 October 2026 with Flutter 3.41.4:
 

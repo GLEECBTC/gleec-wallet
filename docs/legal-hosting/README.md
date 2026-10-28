@@ -22,4 +22,11 @@ A new installation needs the EULA and wallet ToS before creating, importing, log
 
 For local/preview testing only, `--dart-define=BYPASS_LEGAL_DOCUMENT_GATE=true` allows submission while keeping the notice. It never records acceptance of missing or placeholder documents. The default is false; production builds must leave it disabled. No hosting manifest is needed.
 
+For the owner-authorized 0.10.0 RC testing period, use the manually dispatched,
+exact-commit `rc-0-10-0-legal-testing` preview. Keep the hosted placeholder marker;
+removing it from draft text would make that text eligible for acceptance in all
+wallet builds. The isolated override, validation and retirement steps are in the
+[tester/reviewer handoff](../RC_0.10.0_TESTER_REVIEWER_HANDOFF.md). Final production
+verification must use approved text and a build with the override disabled.
+
 The first fetch is silent and the form action starts enabled. If selected before retrieval completes, submission waits for full documents. A failed fetch or placeholder disables submission and shows the warning banner with Retry and a website link. The banner remains visible during retries, then clears automatically on success. Until the required files are deployed, devices without valid cached documents cannot complete consent submissions.
