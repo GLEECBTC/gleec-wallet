@@ -19,12 +19,14 @@
     "preparation_pr": 409,
     "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "22e14ac94fb555776eda370de08f1dafd5ca4019",
+    "candidate_commit": "80e656101ce1b85fe05ddcbc05b0520f3265d1a0",
     "melos_validation_pr": 411,
     "release_branch": "release-0.9.0",
-    "runtime_validation_commit": "56828b91cb3eb147538803a524271278a2107b75",
+    "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
     "previous_dev_headed_rc_pr": 410,
-    "final_main_pin_required_for": "production distribution, after SDK review/promotion; frozen RC uses candidate_commit"
+    "final_main_pin_required_for": "production distribution, after SDK review/promotion; frozen RC uses candidate_commit",
+    "recovery_pagination_pr": 417,
+    "release_repair_pr": 418
   },
   "kdf": {
     "source": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
@@ -94,16 +96,16 @@
     "melos": "7.8.1",
     "workspace_packages": 22,
     "sdk_package_suites": 16,
-    "sdk_native_passed": 3056,
+    "sdk_native_passed": 3057,
     "sdk_native_skipped": 14,
     "app_passed": 3919,
     "app_skipped": 4,
-    "sdk_wasm_passed": 213,
+    "sdk_wasm_passed": 215,
     "framework_wasm_passed": 10,
     "analysis_errors": 0,
     "analysis_warnings": 55,
     "analysis_infos": 2144,
     "public_etc_browser_http_probe_passed": 1,
-    "scope": "Combined app runtime after #3568\u2013#3572; final SDK freeze bookkeeping changes Markdown only. Full enforced offline Melos bootstrap produced no tracked drift."
+    "scope": "App source is unchanged from f94e5072; combined consumer gate uses frozen SDK 80e65610, tree-identical to dev e849cd0d including complete in-flight pagination. Final Melos package suites and core WASM rerun after the recovery repair."
   }
 }

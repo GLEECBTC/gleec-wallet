@@ -10,8 +10,8 @@ owner sends invitations; this handoff does not request reviews or contact tester
 | --- | --- |
 | App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
 | SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
-| Tested application runtime | `f94e507214ad0330d508bfe8d68624ad067ff526`; final SDK bookkeeping changes docs only |
-| SDK gitlink | `22e14ac94fb555776eda370de08f1dafd5ca4019` |
+| Tested app runtime source | `f94e507214ad0330d508bfe8d68624ad067ff526`; app implementation is unchanged by the final pin update |
+| SDK gitlink | `80e656101ce1b85fe05ddcbc05b0520f3265d1a0` |
 | KDF | `35f0bde438eec2cb0471b19642b9d9c4602fa17d` |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
 | Bundled coins | `2b0aefb78b184091ab086c66e513d8b03f5d5a01`; runtime updates enabled |
@@ -140,19 +140,23 @@ packages resolved; regenerated platform barrels/parts were corrected in SDK #411
 | Validation | Result |
 | --- | --- |
 | App unit aggregator, all four production GasFree defines | 3,919 passed / four skipped |
-| All 16 SDK native package suites through Melos | 3,056 passed / 14 skipped |
-| SDK Chrome/WASM / framework WASM | 213 / 10 passed |
+| All 16 SDK native package suites through Melos | 3,057 passed / 14 skipped |
+| SDK Chrome/WASM / framework WASM | 215 / 10 passed |
 | Auth helper-boundary retest | 127 passed |
 | Full analysis | Zero errors; 55 warnings / 2,144 infos, no new changed-line diagnostic |
 | Consumer enforced offline lockfile, changed Dart formatting, diff checks | Passed |
 | RC preview guard: ordinary/default paths and invalid override rejection | 11 passed |
 | Existing legal repository, swap and onboarding suites, compiled bypass enabled | 53 passed; warning retained and missing-term acceptance absent |
 
-The full app aggregator passed in 4m46s on the combined runtime. Analysis has
+The full app aggregator was repeated on the combined runtime. Analysis has
 zero errors and the same 55 existing warnings; its nonzero exit reflects that
 backlog. Final enforced offline Melos bootstrap produced no tracked drift.
-The final SDK freeze commit changes only Markdown relative to `52f1181f`;
-its package CI and SDK/playground previews passed. The current frozen-head
+SDK #417/#418 also repaired the frozen review finding that in-flight recovery
+stopped silently after 20 pages. All 99 pages are recovered; a wallet change
+while page 21 is pending rejects the whole read. These native/WASM regressions
+pass, and the final SDK branch tree equals the validated dev squash `e849cd0d`.
+The earlier `52f1181f` package CI and SDK/playground previews remain historical
+evidence. The current frozen-head
 checks remain authoritative: pending/running jobs are not passes. Record a
 specific failure and distinguish setup/network failures from code defects.
 Compilation does not establish signing, installation or upgrade behavior.

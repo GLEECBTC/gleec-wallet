@@ -32,6 +32,11 @@ merges; that does not satisfy outstanding release reviews or checks.
 | App #3571 | `c0373eed24d0dbe95a5030b4cb513b9fa464aedb` | Native EVM precision when metadata omits decimals |
 | App #3572 | `f94e507214ad0330d508bfe8d68624ad067ff526` | History direction, self transfers and valuation |
 | App #3510 | `698af846229cc3458dc539d5f3e39fa7f76967d6` | SDK tag/version/ancestry preflight before publication |
+| SDK #417 | `e849cd0de5b59aa6ebe49f5e137c9af6184604e8` | Complete in-flight pagination with session revocation |
+
+SDK #418 normally merged only the #417 dev squash into `release-0.9.0` as
+`80e656101ce1b85fe05ddcbc05b0520f3265d1a0`; their complete trees match.
+The SDK #416 pagination review thread is resolved.
 
 App #3555 and #3556 are closed because their exact revisions were incorporated
 into #3557. Their code exists on dev; the separate PRs were not independently
@@ -39,7 +44,7 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 
 - [x] App/SDK changelogs and versions include unpublished prior fixes and
   user-facing SDK changes. Internal package constraints are aligned.
-- [x] Current SDK gitlink is `22e14ac94fb555776eda370de08f1dafd5ca4019` on frozen
+- [x] Current SDK gitlink is `80e656101ce1b85fe05ddcbc05b0520f3265d1a0` on frozen
   `release-0.9.0` ([SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)).
   SDK main promotion and final app main repin are distribution steps after
   review, not prerequisites for freezing this exact RC source.
@@ -55,17 +60,18 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 ## Fresh validation of the prepared runtime
 
 Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. Combined runtime is
-app `f94e5072` with SDK runtime `56828b91`. Final
-SDK release-branch bookkeeping changes Markdown only; content comparison
-confirms the same runtime. The final app RC also adds documentation and the
-immutable SDK candidate gitlink without changing that runtime.
+app source `f94e5072` with SDK `80e65610`, tree-identical to the validated
+SDK dev squash `e849cd0d`. The later SDK review repair follows every in-flight
+history page and retains session revocation across later pages. The final app
+consumer gate was repeated with that repair. App implementation is unchanged;
+its final preparation adds documentation and the immutable SDK candidate pin.
 
 - [x] `melos bootstrap --offline --enforce-lockfile`, both prepare hooks, 22
   resolved packages. Repeated `melos run prepare --no-select`: stable output.
 - [x] App unit aggregator with four production GasFree defines: **3,919 passed /
   four skipped**.
-- [x] All 16 SDK native package suites through Melos: **3,056 passed / 14 skipped**.
-- [x] Nine core SDK Chrome/WASM files: **213 passed**; two framework WASM files:
+- [x] All 16 SDK native package suites through Melos: **3,057 passed / 14 skipped**.
+- [x] Nine core SDK Chrome/WASM files: **215 passed**; two framework WASM files:
   **10 passed**. Auth helper-boundary retest: **127 passed**.
 - [x] Full analysis: **zero errors**, 55 warnings / 2,144 infos. The warnings
   match the existing baseline; no new changed-line diagnostic
@@ -136,7 +142,9 @@ in the release PR and `rc-test-build.json`; this file cannot contain its own
 commit hash.
 
 Freeze means no planned runtime changes remain for #3563, #3565, #3566 or the
-two SDK correlation/session findings. Restrict changes to verified blockers;
+two SDK correlation/session findings or the later pagination review. The
+99-page recovery and page-21 wallet-change regressions pass in native/WASM.
+Restrict changes to verified blockers;
 make each repair on a focused branch, squash it into dev, carry only that
 reviewed fix into the release branch and repeat affected validation. Do not
 advance release branches to unrelated dev work.
