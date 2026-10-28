@@ -166,6 +166,60 @@ void main() {
       });
     });
 
+    testWidgets(
+      'retains exact funding and distinct routes in readable export',
+      (tester) async {
+        final accepted = _fundingOffer('0.00004');
+        final executed = _fundingOffer('0.000065');
+        routed.pages = [
+          _page([
+            RoutedSwapProgress(
+              uuid: 'funding-shortfall',
+              phase: RoutedSwapPhase.failed,
+              canCancel: false,
+              acceptedOffer: accepted,
+              executedOffer: executed,
+              failure: RoutedSwapFailure(
+                kind: RoutedSwapFailureKind.insufficientBalance,
+                errorType: 'InsufficientBalance',
+                message: 'Funding increased',
+                fundsMovement: RoutedSwapFundsMovement.none,
+                retryPolicy: RoutedSwapRetryPolicy.requote,
+                shortfall: RoutedSwapShortfall(
+                  ticker: 'ETH',
+                  available: d('0.0062'),
+                  required: d('0.006224000000000009'),
+                  lockedBySwaps: d('0.000000000000000001'),
+                ),
+              ),
+            ),
+          ]),
+        ];
+        await pumpData(tester);
+        final bundle = await export(tester);
+        final entry = (bundle['routed'] as List).single as Map;
+        expect(entry['shortfall'], {
+          'coin': 'ETH',
+          'available': '0.0062',
+          'required': '0.006224000000000009',
+          'locked_by_swaps': '0.000000000000000001',
+        });
+        expect(entry['accepted_route'], accepted.route.toJson());
+        expect(entry['executed_route'], executed.route.toJson());
+        expect(
+          ((entry['accepted_route'] as Map)['total_gas_costs'] as List).single,
+          {'coin': 'ETH', 'amount': '0.00003', 'required_balance': '0.00004'},
+        );
+        expect(
+          ((entry['executed_route'] as Map)['total_gas_costs'] as List).single,
+          {'coin': 'ETH', 'amount': '0.00003', 'required_balance': '0.000065'},
+        );
+        final field = tester.widget<TextField>(find.byType(TextField));
+        expect(field.readOnly, isTrue);
+        expect(jsonDecode(field.controller!.text), bundle);
+      },
+    );
+
     testWidgets('reads routed history 50 at a time, at most four pages', (
       tester,
     ) async {
@@ -287,6 +341,9 @@ const _blank = <String, dynamic>{
   'failure': null,
   'error_type': null,
   'failure_message': null,
+  'shortfall': null,
+  'accepted_route': null,
+  'executed_route': null,
   'funds_movement': null,
   'provider_request_id': null,
   'approval_tx_hashes': <String>[],
@@ -366,6 +423,31 @@ const _pending = RoutedSwapProgress(
   uuid: 'routed-pending',
   phase: RoutedSwapPhase.preparing,
   canCancel: true,
+);
+
+RoutedSwapOffer _fundingOffer(String required) => RoutedSwapOffer(
+  from: eth,
+  to: usdc,
+  sellAmount: d('0.0061'),
+  expectedReceive: d('4.5'),
+  guaranteedReceive: d('4.4'),
+  kind: rpc.RoutedSwapRouteKind.sameChain,
+  costs: const [],
+  networkFees: const [],
+  legs: const [],
+  quotedAt: DateTime.utc(2026, 10, 28),
+  provider: 'lifi',
+  toolKey: 'fixture',
+  toolName: 'Fixture',
+  route: rpc.RoutedSwapRoute.fromJson({
+    'from': {'coin': 'ETH', 'amount': '0.0061'},
+    'to': {'coin': 'USDC-ERC20', 'amount': '4.5', 'amount_min': '4.4'},
+    'tool': {'key': 'fixture', 'name': 'Fixture'},
+    'kind': 'same_chain',
+    'total_gas_costs': [
+      {'coin': 'ETH', 'amount': '0.00003', 'required_balance': required},
+    ],
+  }),
 );
 
 /// The desktop save dialog: suggests [path] for whatever is being saved.

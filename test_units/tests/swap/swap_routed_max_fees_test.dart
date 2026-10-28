@@ -101,6 +101,92 @@ void main() {
     });
   });
 
+  for (final expired in [false, true]) {
+    test('Max survives review revalidation, expired=$expired', () {
+      final executor = FakeExecutor(SwapLiquiditySource.routed);
+      _run(executor: executor, (bloc, manager, async) {
+        bloc.add(const UnifiedSwapMaxRequested());
+        async.elapse(const Duration(seconds: 2));
+        final maximum = bloc.state.maxApplied!;
+        bloc.add(const UnifiedSwapReviewOpened());
+        async.flushMicrotasks();
+        final accepted = bloc.state.review!.quote;
+        expect(bloc.state.maxRequested, isTrue);
+        expect(bloc.state.maxApplied, same(maximum));
+
+        if (expired) async.elapse(SwapQuote.lifetime);
+        // A newly calculated Max would differ. Review must revalidate the
+        // principal the user saw; init accepts only a concrete amount.
+        manager.maximum = offerOf(sell: '1.9');
+        final exactCalls = manager.quotes.length;
+        bloc.add(const UnifiedSwapStartRequested());
+        async.flushMicrotasks();
+
+        expect(manager.maxCalls, 1);
+        expect(manager.quotes.length, exactCalls + 1);
+        expect(manager.quotes.last.amount, accepted.sellAmount);
+        expect(bloc.state.maxRequested, isTrue);
+        expect(bloc.state.maxApplied, same(maximum));
+        if (expired) {
+          expect(executor.started, isEmpty);
+          expect(bloc.state.review!.quote.sellAmount, accepted.sellAmount);
+          expect(bloc.state.review!.status, SwapReviewStatus.ready);
+          // Returning to the form restores Max quoting, not exact mode.
+          bloc.add(const UnifiedSwapReviewClosed());
+          async.flushMicrotasks();
+          expect(manager.maxCalls, 2);
+          expect(bloc.state.inputText, '1.9');
+          expect(bloc.state.maxRequested, isTrue);
+        } else {
+          expect(executor.started.single.sellAmount, accepted.sellAmount);
+        }
+      });
+    });
+  }
+
+  test('Max review blocks a newly quoted funding shortfall before init', () {
+    final executor = FakeExecutor(SwapLiquiditySource.routed);
+    _run(executor: executor, (bloc, manager, async) {
+      bloc.add(const UnifiedSwapMaxRequested());
+      async.elapse(const Duration(seconds: 2));
+      bloc.add(const UnifiedSwapReviewOpened());
+      async.flushMicrotasks();
+      final accepted = bloc.state.review!.quote;
+      final respond = manager.respond!;
+      manager.respond = (call) {
+        final fresh = respond(call);
+        return offerOf(
+          from: call.from,
+          to: call.to,
+          sell: '${call.amount}',
+          order: call.order,
+          quotedAt: fresh.quotedAt,
+          costs: fresh.costs,
+          networkFees: [
+            RoutedSwapNetworkFee(
+              ticker: eth.id,
+              assetId: eth,
+              amount: d('0.0005'),
+              requiredBalance: d('0.002'),
+            ),
+          ],
+        );
+      };
+      bloc.add(const UnifiedSwapStartRequested());
+      async.flushMicrotasks();
+
+      expect(manager.maxCalls, 1);
+      expect(manager.quotes.last.amount, accepted.sellAmount);
+      expect(bloc.state.maxRequested, isTrue);
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidationFailed);
+      expect(
+        bloc.state.review!.revalidationFailure!.kind,
+        SwapQuoteFailureKind.insufficientFunds,
+      );
+      expect(executor.started, isEmpty);
+    });
+  });
+
   test(
     'review freezes the accepted Max even when a refresh completes late',
     () {
@@ -208,6 +294,7 @@ void _run(
   void Function(UnifiedSwapBloc bloc, SrcRoutedSwaps manager, FakeAsync async)
   script, {
   String amount = '1',
+  FakeExecutor? executor,
 }) {
   fakeAsync((async) {
     final start = DateTime(2026, 10, 5, 12);
@@ -254,7 +341,7 @@ void _run(
     ));
     final storage = MemoryStorage();
     final registry = SwapExecutionRegistry(
-      executors: [FakeExecutor(SwapLiquiditySource.routed)],
+      executors: [executor ?? FakeExecutor(SwapLiquiditySource.routed)],
       inFlight: () async => const [],
     );
     final bloc =

@@ -7,7 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
-import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_request.dart';
+import 'package:web_dex/shared/swap/swap_diagnostics_reader.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -24,9 +24,23 @@ class ShowSwapData extends StatefulWidget {
 
 class _ShowSwapDataState extends State<ShowSwapData> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _exportController = TextEditingController();
+  bool _showExport = false;
   bool _showData = false;
   bool _inProgress = false;
   bool _isDownloading = false;
+
+  SwapDiagnosticsReader get _diagnostics => SwapDiagnosticsReader(
+    mm2: context.read<Mm2Api>(),
+    routed: context.read<KomodoDefiSdk>().routedSwaps,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _exportController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +51,18 @@ class _ShowSwapDataState extends State<ShowSwapData> {
         if (_showData) ...{const SizedBox(height: 20), _buildData()},
         const SizedBox(height: 20),
         _buildExportButton(),
+        if (_showExport) ...[
+          const SizedBox(height: 20),
+          TextField(
+            controller: _exportController,
+            readOnly: true,
+            maxLines: 10,
+            style: const TextStyle(fontSize: 12),
+            decoration: InputDecoration(
+              labelText: LocaleKeys.exportSwapData.tr(),
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
       ],
     );
@@ -121,11 +147,12 @@ class _ShowSwapDataState extends State<ShowSwapData> {
   Future<void> _exportSwapData() async {
     setState(() => _isDownloading = true);
     try {
-      final bundle = <String, dynamic>{
-        'exported_at': DateTime.now().toUtc().toIso8601String(),
-        'atomic': await _atomicSwapData(),
-        'routed': await _routedSwapData(),
-      };
+      final bundle = await _diagnostics.readBundle();
+      if (!mounted) return;
+      _exportController.text = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(bundle);
+      setState(() => _showExport = true);
 
       // Use ISO timestamp so each file is unique and sorted chronologically.
       final fileName =
@@ -140,92 +167,13 @@ class _ShowSwapDataState extends State<ShowSwapData> {
     }
   }
 
-  /// The raw `my_recent_swaps` answer, or a recorded reason it is absent, so
-  /// the routed half still reaches support.
-  Future<Object?> _atomicSwapData() async {
-    try {
-      final mm2Api = RepositoryProvider.of<Mm2Api>(context);
-      return jsonDecode(await mm2Api.getRawSwapData(MyRecentSwapsRequest()));
-    } on Object catch (error) {
-      return {'unavailable': error.toString()};
-    }
-  }
-
-  /// Routed swaps for the export, or a recorded reason they are absent.
-  ///
-  /// A failure here must not lose the atomic half of the bundle, and it must
-  /// not look like the user simply has no routed swaps — support would draw
-  /// the wrong conclusion from an empty list.
-  Future<Object> _routedSwapData() async {
-    try {
-      final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
-      final entries = <RoutedSwapProgress>[];
-      for (var page = 1; page <= 4; page++) {
-        final result = await sdk.routedSwaps.history(
-          pageNumber: page,
-          limit: 50,
-        );
-        entries.addAll(result.entries);
-        if (!result.hasMore) break;
-      }
-      return [
-        for (final entry in entries)
-          {
-            'uuid': entry.uuid,
-            'phase': entry.phase.name,
-            'raw_state': entry.rawState,
-            'stage': entry.bridgeStage?.name,
-            'created_at': entry.createdAt?.toIso8601String(),
-            'updated_at': entry.updatedAt?.toIso8601String(),
-            'finished_at': entry.finishedAt?.toIso8601String(),
-            'requested_from': entry.requested?.fromTicker,
-            'requested_to': entry.requested?.toTicker,
-            'requested_amount': entry.requested?.amount.toString(),
-            'min_to_amount_accepted': entry.minToAmountAccepted?.toString(),
-            'outcome': entry.receipt?.outcome.wire,
-            'partial_reason': entry.receipt?.partialReason?.name,
-            'received_amount': entry.receipt?.amount?.toString(),
-            'received_token': entry.receipt?.tokenLabel,
-            'provider_received_amount': entry.receipt?.reported?.amount
-                .toString(),
-            'provider_received_token': entry.receipt?.reported?.tokenLabel,
-            'failure': entry.failure?.kind.name,
-            'error_type': entry.failure?.errorType,
-            'failure_message': entry.failure?.message,
-            'funds_movement': entry.failure?.fundsMovement.name,
-            'provider_request_id': entry.failure?.providerRequestId,
-            'approval_tx_hashes': entry.approvalTxHashes,
-            'source_tx_hash': entry.sourceTxHash,
-            'destination_tx_hash': entry.destinationTxHash,
-            'explorer_url': entry.explorerUrl,
-            'gas_spent': [
-              for (final gas in entry.gasSpent)
-                {
-                  'coin': gas.ticker,
-                  'amount': gas.amount.toString(),
-                  'tx_hash': gas.txHash,
-                },
-            ],
-          },
-      ];
-    } on Object catch (error) {
-      return {'unavailable': error.toString()};
-    }
-  }
-
   /// Retrieves the raw swap data from MM2 and displays it in the text field.
   Future<void> _getSwapData() async {
     setState(() => _inProgress = true);
 
-    try {
-      final mm2Api = RepositoryProvider.of<Mm2Api>(context);
-      final response = await mm2Api.getRawSwapData(MyRecentSwapsRequest());
-      final Map<String, dynamic> data = jsonDecode(response);
-      _controller.text = jsonEncode(data['result']['swaps']).toString();
-    } catch (e) {
-      _controller.text = e.toString();
-    }
-
+    final text = await _diagnostics.atomicSwapText();
+    if (!mounted) return;
+    _controller.text = text;
     setState(() {
       _showData = true;
       _inProgress = false;
