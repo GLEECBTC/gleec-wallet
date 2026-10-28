@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/swap/lifi_integrator_policy.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
@@ -39,6 +40,7 @@ final class MM2 {
         tronGaslessProvider: _tronGaslessProviderConfig(),
         assetConfigTransform: applyGleecTronGaslessActivationConfig,
         lifiProxyUrl: _lifiProxyUrl(),
+        lifiIntegrator: gleecLifiIntegratorConfig(),
       ),
       onLog: _handleSdkLog,
     );

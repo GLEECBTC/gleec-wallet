@@ -7,6 +7,7 @@ SwapQuote routedQuoteFromOffer(
   RoutedSwapOffer offer, {
   required SwapNetworks networks,
   SwapQuoteOrder? order,
+  Decimal? maxRetainedBalance,
 }) {
   final resolvedOrder =
       order ??
@@ -83,9 +84,25 @@ SwapQuote routedQuoteFromOffer(
     estimatedDuration: offer.estimatedDuration,
     slippage: offer.slippage ?? 0.005,
     quotedAt: offer.quotedAt,
+    requiredGasBalance: _requiredGasBalance(offer),
+    maxRetainedBalance: maxRetainedBalance,
     diagnostic: '${offer.provider} · ${offer.toolName} (${offer.toolKey})',
     payload: offer,
   );
+}
+
+/// The gas balance the engine requires of the network coin paying [offer]'s
+/// gas, or null when any of its fees in that coin lacks one.
+Decimal? _requiredGasBalance(RoutedSwapOffer offer) {
+  final gasCoin = offer.from.parentId ?? offer.from;
+  Decimal? total;
+  for (final fee in offer.networkFees) {
+    if (fee.assetId != gasCoin && fee.ticker != gasCoin.id) continue;
+    final required = fee.requiredBalance;
+    if (required == null) return null;
+    total = (total ?? Decimal.zero) + required;
+  }
+  return total;
 }
 
 /// The middle of the route, from its legs: a bridge moves to the leg's

@@ -132,6 +132,7 @@ void main() {
           assetId: eth,
           available: d('0.01'),
           required: d('0.02'),
+          lockedBySwaps: d('1'),
         ),
       ),
     );
@@ -139,6 +140,7 @@ void main() {
     expect(failure.shortfallTicker, 'ETH');
     expect(failure.shortfallAvailable, d('0.01'));
     expect(failure.shortfallRequired, d('0.02'));
+    expect(failure.shortfallLockedBySwaps, d('1'));
   });
 
   test('without a shortfall, none is claimed', () {

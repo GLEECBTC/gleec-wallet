@@ -247,12 +247,16 @@ class SrcRoutedSwaps implements RoutedSwapManager {
 
   /// Leaves every quote unanswered, for timeouts.
   bool hangQuotes = false;
+  Completer<RoutedSwapOffer>? quoteGate;
 
   Set<AssetId> eligible = {};
   Object? eligibleError;
   bool hangEligible = false;
 
   RoutedSwapMaxSell? max;
+  RoutedSwapOffer? maximum;
+  Completer<RoutedSwapOffer>? maxGate;
+  final List<RoutedSwapOrder?> maxOrders = [];
   Object? maxError;
   bool hangMax = false;
   int maxCalls = 0;
@@ -264,6 +268,19 @@ class SrcRoutedSwaps implements RoutedSwapManager {
   /// Swaps [watch] finds; any other id is unknown.
   Set<String> watchable = {};
   final List<String> watched = [];
+
+  /// What [watch] answers, by swap id.
+  final Map<String, RoutedSwapHandle> handles = {};
+
+  /// Answers each start; a start the test did not expect throws.
+  RoutedSwapHandle Function(RoutedSwapOffer offer)? starts;
+
+  @override
+  Future<RoutedSwapHandle> start(RoutedSwapOffer offer) async {
+    final starts = this.starts;
+    if (starts == null) throw StateError('unexpected start');
+    return starts(offer);
+  }
 
   @override
   Future<RoutedSwapOffer> quote({
@@ -283,6 +300,7 @@ class SrcRoutedSwaps implements RoutedSwapManager {
     );
     quotes.add(call);
     if (hangQuotes) await Completer<void>().future;
+    if (quoteGate != null) return quoteGate!.future;
     final error = quoteError;
     if (error != null) throw error;
     return respond?.call(call) ??
@@ -290,6 +308,31 @@ class SrcRoutedSwaps implements RoutedSwapManager {
           from: from,
           to: to,
           sell: '$amount',
+          order: order,
+          slippage: slippage,
+        );
+  }
+
+  @override
+  Future<RoutedSwapOffer> quoteMax({
+    required AssetId from,
+    required AssetId to,
+    double? slippage,
+    RoutedSwapOrder? order,
+    String? provider,
+  }) async {
+    maxCalls++;
+    maxOrders.add(order);
+    if (hangMax) await Completer<void>().future;
+    final error = maxError;
+    if (error != null) throw error;
+    if (maxGate != null) return maxGate!.future;
+    return maximum ??
+        max?.offer ??
+        offerOf(
+          from: from,
+          to: to,
+          sell: max?.amount.toString() ?? '1',
           order: order,
           slippage: slippage,
         );
@@ -336,7 +379,7 @@ class SrcRoutedSwaps implements RoutedSwapManager {
   Future<RoutedSwapHandle> watch(String uuid) async {
     watched.add(uuid);
     if (!watchable.contains(uuid)) throw RoutedSwapNotFoundException(uuid);
-    return SrcRoutedHandle(runningSwap(uuid));
+    return handles[uuid] ?? SrcRoutedHandle(runningSwap(uuid));
   }
 
   @override

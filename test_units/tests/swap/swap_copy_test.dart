@@ -167,7 +167,7 @@ void main() {
         ),
       );
       expect(copy.hero.body, LocaleKeys.swapFailInternalBody);
-      expect(copy.fundsLocation, LocaleKeys.swapFundsUnchanged);
+      expect(copy.fundsLocation, LocaleKeys.swapFundsNoPaymentRecorded);
     });
 
     test('mentions a permission left on-chain', () {

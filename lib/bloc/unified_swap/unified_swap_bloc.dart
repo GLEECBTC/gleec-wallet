@@ -25,6 +25,12 @@ part 'unified_swap_bloc_rules.dart';
 /// One asset the wallet holds, with its value, for choosing a default pair.
 typedef SwapHolding = ({AssetId asset, Decimal usdValue});
 
+/// What a start takes from the pay balance: amount, on-top fees in the pay
+/// asset, refund gas.
+typedef SwapSpend = ({Decimal amount, Decimal fees, Decimal refundReserve});
+
+typedef _Held = ({Decimal? balance, Decimal? feeBalance});
+
 /// Drives the swap screen: the intent, its automatic evaluation, the review
 /// and the start.
 ///
@@ -150,8 +156,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
 
-  /// Bumped when a review is left, so a start that is still re-pricing is
-  /// abandoned rather than executed behind the user's back.
+  /// Bumped whenever a review is left or replaced, so a start that is still
+  /// re-pricing is abandoned rather than executed behind the user's back.
   int _startVersion = 0;
 
   /// Only the latest legal read may update the presented review documents.
@@ -201,6 +207,12 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final value = Decimal.tryParse(text);
     if (value == null) return null;
     if (state.amountMode == SwapAmountMode.token) return value;
+    final converted = state.converted;
+    if (converted != null &&
+        converted.asset == state.pay &&
+        converted.text == state.inputText) {
+      return converted.amount;
+    }
     final pay = state.pay;
     final price = pay == null ? null : _repository.pricing.prices.usdPrice(pay);
     if (price == null || price <= Decimal.zero) return null;
@@ -209,37 +221,41 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     return decimals == null ? raw : raw.floor(scale: decimals);
   }
 
-  /// What starting the selected option takes from the pay balance: the
-  /// amount sold, the fees paid on top of it in the pay asset, and the gas
-  /// kept to refund it if it fails. Null without a priced option.
-  ({Decimal amount, Decimal fees, Decimal refundReserve})? spendOf(
-    UnifiedSwapState state,
-  ) {
+  /// What starting the selected option takes from the pay balance, for the
+  /// amount on the form. Null without a priced option.
+  SwapSpend? spendOf(UnifiedSwapState state) {
     final quote = state.selectedQuote;
     return quote == null ? null : _spendFor(state, quote);
   }
 
   /// [spendOf] for [quote], which need not be the selected option.
-  ({Decimal amount, Decimal fees, Decimal refundReserve})? _spendFor(
-    UnifiedSwapState state,
-    SwapQuote quote,
-  ) {
-    final pay = state.pay;
+  SwapSpend? _spendFor(UnifiedSwapState state, SwapQuote quote) {
     final amount = amountOf(state);
-    if (pay == null || amount == null) return null;
+    if (state.pay == null || amount == null) return null;
     // The option is what starts, and switching to a dollar amount can leave
     // it priced for a little more than the amount now shown.
     final sold = quote.sellAmount > amount ? quote.sellAmount : amount;
-    final max = state.maxApplied;
+    return _spending(state, quote, sold, state.balance);
+  }
+
+  /// Max counts only for a quote selling the form's pay asset.
+  SwapSpend _spending(
+    UnifiedSwapState state,
+    SwapQuote quote,
+    Decimal sold,
+    Decimal? balance,
+  ) {
+    final max = quote.from == state.pay ? state.maxApplied : null;
     return (
       amount: sold,
       // Every fee, the order book's trading fee included: KDF checks the gas
       // to claim a token on the same network alone, never summed with the
-      // rest, so only this total shows whether that claim can be paid.
-      fees: quote.costOnTopIn(pay),
+      // rest, so only this total shows whether that claim can be paid. A
+      // routed route's gas counts at the balance KDF requires for it.
+      fees: quote.fundingOnTopIn(quote.from),
       // KDF's Max kept it back already, priced when Max was asked; counting
       // it again would refuse that Max once gas rises at all.
-      refundReserve: max != null && max.coversRefundFor(sold, state.balance)
+      refundReserve: max != null && max.coversRefundFor(sold, balance)
           ? Decimal.zero
           : quote.refundReserve ?? Decimal.zero,
     );
@@ -265,7 +281,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     if (state.pay != null || state.receive != null) {
       add(const UnifiedSwapOffersRequested());
     }
-    if (state.pay != null || _intentApplied) {
+    if (_pairChosen) {
       // A pair set while the catalog loaded could not be priced then; one
       // still being set prices itself when it finishes.
       if (state.hasPair && _settingPair == 0) {
@@ -280,9 +296,13 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final pair = await _defaultPair({
       for (final source in catalog.sources) ...source.quotable,
     });
-    if (pair == null || state.pay != null || _intentApplied) return;
+    if (pair == null || _pairChosen) return;
     await _setPair(emit, pay: pair.pay, receive: pair.receive);
   }
+
+  /// Whether either side was chosen, so no default pair replaces it.
+  bool get _pairChosen =>
+      state.pay != null || state.receive != null || _intentApplied;
 
   Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
     final read = await _repository.catalog(signedIn: state.signedIn);
@@ -381,10 +401,11 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     // rather than leave an amount sized for the old pair, or the whole
     // balance it shows while asking.
     final remax =
-        (state.checkingMax || state.maxApplied != null) &&
+        (state.maxRequested || state.checkingMax || state.maxApplied != null) &&
         amount == null &&
         pay == state.pay;
     _invalidate();
+    _startVersion++;
     emit(
       _validated(
         state.copyWith(
@@ -399,6 +420,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
           // under its ticker and be what Max fills in.
           clearBalance: pay != state.pay,
           clearFeeBalance: pay != state.pay,
+          clearConverted: pay != state.pay,
           clearQuotes: true,
           clearSelectedId: true,
           clearFailure: true,

@@ -259,6 +259,7 @@ class SwapEventData extends Equatable {
     required this.makerPaymentSpendTradeFee,
     required this.txHash,
     this.makerPaymentLock,
+    this.waitUntil,
   });
 
   factory SwapEventData.fromJson(Map<String, dynamic> json) => SwapEventData(
@@ -294,6 +295,7 @@ class SwapEventData extends Equatable {
         : null,
     txHash: json['tx_hash'] ?? json['transaction']?['tx_hash'],
     makerPaymentLock: assertInt(json['maker_payment_lock']),
+    waitUntil: assertInt(json['wait_until']),
   );
 
   final String? takerCoin;
@@ -322,6 +324,10 @@ class SwapEventData extends Equatable {
   /// event has it where a taker's has [takerPaymentLock].
   final int? makerPaymentLock;
 
+  /// How long KDF waits to refund, in seconds: a `*PaymentWaitRefundStarted`
+  /// event's own deadline.
+  final int? waitUntil;
+
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{};
     data['taker_coin'] = takerCoin;
@@ -345,6 +351,7 @@ class SwapEventData extends Equatable {
     data['taker_payment_trade_fee'] = takerPaymentTradeFee?.toJson();
     data['maker_payment_spend_trade_fee'] = makerPaymentSpendTradeFee?.toJson();
     if (makerPaymentLock != null) data['maker_payment_lock'] = makerPaymentLock;
+    if (waitUntil != null) data['wait_until'] = waitUntil;
     return data;
   }
 
@@ -372,6 +379,7 @@ class SwapEventData extends Equatable {
     makerPaymentSpendTradeFee,
     txHash,
     makerPaymentLock,
+    waitUntil,
   ];
 }
 

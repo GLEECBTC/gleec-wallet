@@ -6,6 +6,7 @@ typedef _QuoteKey = ({
   Decimal amount,
   SwapQuoteOrder order,
   double slippage,
+  bool max,
 });
 
 /// The aggregator's rate limit, as the app has met it.
@@ -66,12 +67,9 @@ class _QuoteBudget {
   /// How long an identical request is answered from the last reply.
   static const reuseFor = Duration(seconds: 15);
 
-  /// How long a reply may stand in for a Max probe on the same pair.
-  static const gasReuseFor = Duration(seconds: 60);
+  final Map<_QuoteKey, (DateTime, SwapQuote)> _recent = {};
 
-  final Map<_QuoteKey, (DateTime, RoutedSwapOffer)> _recent = {};
-
-  RoutedSwapOffer? recent(_QuoteKey key) {
+  SwapQuote? recent(_QuoteKey key) {
     final hit = _recent[key];
     if (hit == null) return null;
     if (_now().difference(hit.$1) > reuseFor) return null;
@@ -79,22 +77,12 @@ class _QuoteBudget {
   }
 
   /// Records a reply, which also ends any backoff.
-  void remember(_QuoteKey key, RoutedSwapOffer offer) {
+  void remember(_QuoteKey key, SwapQuote quote) {
     final now = _now();
     _recent
-      ..removeWhere((_, hit) => now.difference(hit.$1) > gasReuseFor)
-      ..[key] = (now, offer);
+      ..removeWhere((_, hit) => now.difference(hit.$1) > reuseFor)
+      ..[key] = (now, quote);
     _limit.lift();
-  }
-
-  RoutedSwapOffer? latestFor(AssetId from, AssetId to) {
-    (DateTime, RoutedSwapOffer)? best;
-    for (final entry in _recent.entries) {
-      if (entry.key.from != from || entry.key.to != to) continue;
-      if (best == null || entry.value.$1.isAfter(best.$1)) best = entry.value;
-    }
-    if (best == null || _now().difference(best.$1) > gasReuseFor) return null;
-    return best.$2;
   }
 
   DateTime? get pausedUntil => _limit.pausedUntil(_now());

@@ -144,7 +144,8 @@ void main() {
         ),
         title: 'Cancelled before funds moved',
         body: 'No asset transfer was broadcast.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
         timeline: 'Cancelled: Preparing.',
       ),

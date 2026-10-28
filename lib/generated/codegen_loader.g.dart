@@ -1463,6 +1463,9 @@ abstract class LocaleKeys {
   static const swapErrorClock = 'swapErrorClock';
   static const swapErrorNotConfigured = 'swapErrorNotConfigured';
   static const swapErrorInsufficientFunds = 'swapErrorInsufficientFunds';
+  static const swapErrorFundingShortfall = 'swapErrorFundingShortfall';
+  static const swapFundsLocked = 'swapFundsLocked';
+  static const swapFundsNoPaymentRecorded = 'swapFundsNoPaymentRecorded';
   static const swapErrorInvalidAmount = 'swapErrorInvalidAmount';
   static const swapErrorUnknown = 'swapErrorUnknown';
   static const swapHelperChecking = 'swapHelperChecking';
@@ -1601,6 +1604,7 @@ abstract class LocaleKeys {
   static const swapReviewUpdatedTitle = 'swapReviewUpdatedTitle';
   static const swapReviewUpdatedMinimum = 'swapReviewUpdatedMinimum';
   static const swapReviewUpdatedCost = 'swapReviewUpdatedCost';
+  static const swapReviewUpdatedCostKnown = 'swapReviewUpdatedCostKnown';
   static const swapReviewExpiredTitle = 'swapReviewExpiredTitle';
   static const swapReviewExpiredBody = 'swapReviewExpiredBody';
   static const swapReviewRevalidatingBody = 'swapReviewRevalidatingBody';
@@ -1710,6 +1714,7 @@ abstract class LocaleKeys {
   static const swapCancelRefusedAtomic = 'swapCancelRefusedAtomic';
   static const swapCancelUnconfirmed = 'swapCancelUnconfirmed';
   static const swapOutcomeCompletedTitle = 'swapOutcomeCompletedTitle';
+  static const swapReceivedReported = 'swapReceivedReported';
   static const swapOutcomeCompletedBody = 'swapOutcomeCompletedBody';
   static const swapOutcomeCompletedBodyNetwork =
       'swapOutcomeCompletedBodyNetwork';
@@ -1744,6 +1749,8 @@ abstract class LocaleKeys {
   static const swapFailSafetyBody = 'swapFailSafetyBody';
   static const swapFailQuoteTitle = 'swapFailQuoteTitle';
   static const swapFailQuoteBody = 'swapFailQuoteBody';
+  static const swapFailNetworkFeeTitle = 'swapFailNetworkFeeTitle';
+  static const swapFailNetworkFeeBody = 'swapFailNetworkFeeBody';
   static const swapFailRestartTitle = 'swapFailRestartTitle';
   static const swapFailRestartBody = 'swapFailRestartBody';
   static const swapFailExchangeTitle = 'swapFailExchangeTitle';

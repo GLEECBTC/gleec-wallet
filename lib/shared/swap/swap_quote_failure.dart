@@ -66,6 +66,9 @@ class SwapQuoteFailure extends Equatable {
     this.asset,
     this.minimum,
     this.maximum,
+    this.available,
+    this.lockedBySwaps,
+    this.ticker,
     this.reasons = const [],
     this.providerRequestId,
     this.detail,
@@ -90,6 +93,11 @@ class SwapQuoteFailure extends Equatable {
 
   /// The upper bound, for [SwapQuoteFailureKind.aboveMaximum].
   final Decimal? maximum;
+
+  /// Spendable funds reported by KDF, already excluding swap commitments.
+  final Decimal? available;
+  final Decimal? lockedBySwaps;
+  final String? ticker;
 
   /// Display strings from the provider explaining a missing route. No stable
   /// format — never parse them.
@@ -133,6 +141,9 @@ class SwapQuoteFailure extends Equatable {
     asset,
     minimum,
     maximum,
+    available,
+    lockedBySwaps,
+    ticker,
     reasons,
     providerRequestId,
     detail,
@@ -212,9 +223,17 @@ abstract interface class SwapQuoteSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   });
 
   /// The smallest amount of [from] this source accepts, when it has a fixed
   /// one. Null when only a quote can tell.
   Future<Decimal?> minimumAmount({required AssetId from});
+}
+
+/// Max failed without establishing a spendable source amount.
+class SwapMaxUnavailableException implements Exception {
+  const SwapMaxUnavailableException(this.failure);
+  final SwapQuoteFailure failure;
 }

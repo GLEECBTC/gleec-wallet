@@ -228,7 +228,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     final quote = state.selectedQuote;
     if (parent == null || quote == null) return null;
     return SwapFormat.tokens(
-      quote.costOnTopIn(parent),
+      quote.fundingOnTopIn(parent),
       SwapFormat.ticker(parent),
       rounding: SwapRounding.up,
     );

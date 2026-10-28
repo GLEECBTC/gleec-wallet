@@ -145,9 +145,18 @@ SwapExecutionSnapshot routedSnapshotFrom(
         // An outcome this build cannot interpret must never read as success.
         RoutedSwapOutcome.unknown => SwapOutcomeKind.partialOtherToken,
       },
-      receivedAmount: receipt.amount,
-      receivedAsset: receipt.assetId,
-      receivedSymbol: receipt.assetId == null ? receipt.symbol : null,
+      // KDF measures most payouts; when it cannot, the provider's report is
+      // the only figure, and is labelled as such.
+      receivedAmount: receipt.amount ?? receipt.reported?.amount,
+      receivedAsset: receipt.isMeasured
+          ? receipt.assetId
+          : receipt.reported?.assetId,
+      receivedSymbol: receipt.isMeasured
+          ? (receipt.assetId == null ? receipt.symbol : null)
+          : (receipt.reported?.assetId == null
+                ? receipt.reported?.symbol
+                : null),
+      receivedReported: !receipt.isMeasured && receipt.reported != null,
     ),
     (_, final RoutedSwapFailure failure) => SwapExecutionOutcome(
       kind: failure.kind == RoutedSwapFailureKind.cancelled
@@ -287,6 +296,7 @@ SwapExecutionFailure _failureOf(
       RoutedSwapFailureKind.preflightRejected => SwapFailureReason.safetyCheck,
       RoutedSwapFailureKind.quoteUnavailable =>
         SwapFailureReason.quoteUnavailable,
+      RoutedSwapFailureKind.gasEstimationFailed => SwapFailureReason.networkFee,
       RoutedSwapFailureKind.abortedOnRestart => SwapFailureReason.restarted,
       RoutedSwapFailureKind.internalError => SwapFailureReason.internal,
       RoutedSwapFailureKind.cancelled ||
@@ -304,6 +314,7 @@ SwapExecutionFailure _failureOf(
     shortfallTicker: failure.shortfall?.ticker,
     shortfallAvailable: failure.shortfall?.available,
     shortfallRequired: failure.shortfall?.required,
+    shortfallLockedBySwaps: failure.shortfall?.lockedBySwaps,
     freshQuote: fresh == null
         ? null
         : routedQuoteFromOffer(

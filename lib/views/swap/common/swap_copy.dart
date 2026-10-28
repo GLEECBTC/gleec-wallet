@@ -4,6 +4,7 @@ import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 
@@ -139,17 +140,25 @@ class SwapExecutionCopy {
   /// "0.42 ETH → 1,318.42 USDT", or the tickers when amounts are unknown.
   String get pairLine {
     final sell = snapshot.sellAmount;
-    final receive =
-        snapshot.outcome?.receivedAmount ??
-        snapshot.expectedReceive ??
-        snapshot.minimumReceive;
+    final receive = snapshot.isTerminal
+        ? snapshot.outcome?.receivedAmount
+        : snapshot.expectedReceive ?? snapshot.minimumReceive;
     final left = sell == null
         ? fromTicker
         : SwapFormat.tokens(sell, fromTicker);
     final right = receive == null
         ? toTicker
         : SwapFormat.tokens(receive, toTicker, rounding: SwapRounding.down);
-    return LocaleKeys.swapActivityPair.tr(args: [left, right]);
+    return LocaleKeys.swapActivityPair.tr(
+      args: [
+        left,
+        snapshot.outcome?.receivedReported ?? false
+            ? LocaleKeys.swapReceivedReported.tr(
+                args: [right, SwapTermsRepository.provider],
+              )
+            : right,
+      ],
+    );
   }
 
   /// What the received token is called.
@@ -161,14 +170,19 @@ class SwapExecutionCopy {
   }
 
   String get _received {
-    final amount = snapshot.outcome?.receivedAmount;
-    return amount == null
-        ? receivedTicker
-        : SwapFormat.tokens(
-            amount,
-            receivedTicker,
-            rounding: SwapRounding.down,
-          );
+    final outcome = snapshot.outcome;
+    final amount = outcome?.receivedAmount;
+    if (outcome == null || amount == null) return receivedTicker;
+    final received = SwapFormat.tokens(
+      amount,
+      receivedTicker,
+      rounding: SwapRounding.down,
+    );
+    return outcome.receivedReported
+        ? LocaleKeys.swapReceivedReported.tr(
+            args: [received, SwapTermsRepository.provider],
+          )
+        : received;
   }
 
   /// The status hero while running; the outcome once finished.

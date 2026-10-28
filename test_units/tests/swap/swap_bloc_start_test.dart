@@ -126,6 +126,112 @@ void main() {
 
       expect(h.routedExecutor.started.single.id, 'fresh');
     });
+
+    group('agreed without a dollar total', () {
+      /// Reviews an option whose fees are [before], or none read, then
+      /// starts it against fees of [after], or none read.
+      UnifiedSwapBloc startUnpriced(
+        SwapBlocHarness h, {
+        List<SwapFeeComponent>? before,
+        List<SwapFeeComponent>? after,
+      }) {
+        SwapQuote option(String id, List<SwapFeeComponent>? fees) => quoteOf(
+          id: id,
+          fees: fees ?? const [],
+          feesKnown: fees != null,
+          quotedAt: h.now(),
+        );
+        h.routed.respond = (request) => [
+          SwapQuoteAvailable(option('agreed', before)),
+        ];
+        final bloc = h.inReview();
+        h.routed.requoteResult = SwapQuoteAvailable(option('fresh', after));
+        bloc.add(const UnifiedSwapStartRequested());
+        h.settle();
+        return bloc;
+      }
+
+      List<SwapFeeComponent> inBtc(String amount) => [
+        feeOf(amount: amount, usd: null, asset: btc),
+      ];
+
+      swapBlocTest('asks again for fees read only at the start', (h) {
+        final bloc = startUnpriced(h, after: [feeOf()]);
+
+        expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+        expect(h.routedExecutor.started, isEmpty);
+      });
+
+      swapBlocTest('starts when the fees still cannot be read', (h) {
+        startUnpriced(h);
+
+        expect(h.routedExecutor.started.single.id, 'fresh');
+      });
+
+      swapBlocTest('asks again for a fee more than a tenth higher', (h) {
+        final bloc = startUnpriced(
+          h,
+          before: inBtc('0.001'),
+          after: inBtc('0.0012'),
+        );
+
+        expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+      });
+
+      swapBlocTest('asks again for a fee in another token', (h) {
+        final bloc = startUnpriced(
+          h,
+          before: inBtc('0.001'),
+          after: [
+            ...inBtc('0.001'),
+            feeOf(amount: '1', usd: null, asset: gleec),
+          ],
+        );
+
+        expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+      });
+
+      swapBlocTest('starts on fees within a tenth', (h) {
+        startUnpriced(h, before: inBtc('0.001'), after: inBtc('0.0011'));
+
+        expect(h.routedExecutor.started.single.id, 'fresh');
+      });
+
+      swapBlocTest('holds the priced fees beside them to the cents allowed', (
+        h,
+      ) {
+        // Gas 13% higher, but by 39 cents.
+        startUnpriced(
+          h,
+          before: [
+            ...inBtc('0.001'),
+            feeOf(amount: '0.001', usd: '3'),
+          ],
+          after: [
+            ...inBtc('0.001'),
+            feeOf(amount: '0.00113', usd: '3.39'),
+          ],
+        );
+
+        expect(h.routedExecutor.started.single.id, 'fresh');
+      });
+
+      swapBlocTest('asks again when those priced fees rise past them', (h) {
+        final bloc = startUnpriced(
+          h,
+          before: [
+            ...inBtc('0.001'),
+            feeOf(amount: '0.001', usd: '3'),
+          ],
+          after: [
+            ...inBtc('0.001'),
+            feeOf(amount: '0.003', usd: '9'),
+          ],
+        );
+
+        expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+      });
+    });
   });
 
   group('a re-price with different steps returns to the form', () {

@@ -21,6 +21,9 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (state.selectedQuote != quote || state.view != UnifiedSwapView.form) {
       return;
     }
+    // Freeze the selected snapshot and ignore form requests already in flight.
+    _invalidate();
+    _startVersion++;
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,
@@ -118,6 +121,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   ) async {
     var review = state.review;
     if (review == null || state.view != UnifiedSwapView.review) return;
+    if (!state.tradingEnabled) return;
     if (_waitingForLegalSubmission) return;
     if (review.legalLoading &&
         !_terms.canSubmit(review.legalSnapshot) &&
@@ -210,8 +214,10 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       ),
     );
 
-    // Read alongside the price, which is checked against what is held now.
-    final balances = _loadBalances(emit);
+    // Read alongside the price, for the quote's own asset, which need not be
+    // the form's.
+    final epoch = _walletEpoch;
+    final reading = _heldOf(accepted.from);
     SwapQuoteResult result;
     try {
       result = await _repository.requote(accepted).timeout(_evaluationTimeout);
@@ -223,7 +229,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         ),
       );
     }
-    await balances;
+    final held = await reading;
+    _showHeld(emit, accepted.from, epoch, held);
     // Back was pressed while this ran: never start behind the user's back.
     if (version != _startVersion || state.view != UnifiedSwapView.review) {
       return null;
@@ -260,9 +267,14 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           return null;
         }
         // KDF's checks at the start leave out the gas to refund the payment,
-        // so the form's check is run again. A price read without fees is
-        // held to the one reviewed.
-        final short = _shortfallOf(state, fresh.feesKnown ? fresh : accepted);
+        // so the form's check is run again, for the amount that starts. A
+        // price read without fees is held to the one reviewed.
+        final checked = fresh.feesKnown ? fresh : accepted;
+        final short = _shortfall(
+          checked,
+          _spending(state, checked, checked.sellAmount, held.balance),
+          held,
+        );
         if (short != null) {
           emit(
             state.copyWith(
@@ -332,10 +344,18 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       // acceptance; it is recorded before anything is sent.
       await _terms.recordAcceptance(at: _now(), snapshot: review.legalSnapshot);
     }
+    // Checked again: trading can be turned off during that write, and a
+    // review already starting is kept open through it.
+    if (!state.tradingEnabled) {
+      _startVersion++;
+      emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
+      return;
+    }
 
     try {
       final execution = await _registry.start(quote);
       unawaited(_preferences.rememberPair(quote.from, quote.to));
+      _startVersion++;
       emit(
         state.copyWith(
           view: UnifiedSwapView.progress,
@@ -367,22 +387,51 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     UnifiedSwapFreshQuoteAccepted event,
     Emitter<UnifiedSwapState> emit,
   ) async {
-    if (state.review?.status == SwapReviewStatus.starting) return;
-    // Consent was given on the progress screen, old against new, after the
-    // engine stopped a swap before sending anything.
-    final stale = event.quote.isExpiredAt(_now());
+    // A start or re-price under way answers first: starting this beside it
+    // could swap twice.
+    bool refused() =>
+        _startInDoubt ||
+        state.review?.status == SwapReviewStatus.revalidating ||
+        !state.tradingEnabled;
+    if (refused()) return;
+    final quote = event.quote;
+    final routed = quote.source == SwapLiquiditySource.routed;
+    final snapshot = routed ? await _terms.loadSnapshot() : null;
+    final termsRequired =
+        routed && !await _terms.hasAccepted(snapshot: snapshot);
+    if (refused()) return;
+    // Freeze the selected snapshot and ignore form requests already in flight.
+    _invalidate();
+    _startVersion++;
+    final review = SwapReview(
+      quote: quote,
+      status: quote.isExpiredAt(_now())
+          ? SwapReviewStatus.expired
+          : SwapReviewStatus.ready,
+      termsRequired: termsRequired,
+      legalSnapshot: snapshot,
+      legalBypass: _terms.legalDocuments.bypassGate,
+      legalLoading: routed && !(snapshot?.isAvailable ?? false),
+    );
     emit(
       state.copyWith(
         view: UnifiedSwapView.review,
-        review: SwapReview(
-          quote: event.quote,
-          status: stale ? SwapReviewStatus.expired : SwapReviewStatus.ready,
-          isRecovery: true,
-        ),
+        review: review,
         clearActiveExecution: true,
       ),
     );
-    if (!stale) await _start(emit, event.quote, termsRequired: false);
+    // Consent was given on the progress screen, but does not skip the
+    // re-price: a price read back from history is dated when read, however
+    // old.
+    if (termsRequired) {
+      // The provider's terms are accepted by pressing Start beside them.
+      _armExpiry(quote);
+      if (routed) add(const UnifiedSwapLegalRequested());
+      return;
+    }
+    final fresh = await _revalidate(emit, review);
+    if (fresh == null) return;
+    await _start(emit, fresh, termsRequired: false);
   }
 
   void _onProgressLeft(

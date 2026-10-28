@@ -57,6 +57,17 @@ final class SwapExecutionCancelRequested extends SwapExecutionEvent {
   const SwapExecutionCancelRequested();
 }
 
+/// The screen came in front of the user, or left: the app moved to the
+/// background, or another screen covered this one.
+final class SwapExecutionVisibilityChanged extends SwapExecutionEvent {
+  const SwapExecutionVisibilityChanged({required this.visible});
+
+  final bool visible;
+
+  @override
+  List<Object?> get props => [visible];
+}
+
 final class _SwapExecutionUpdated extends SwapExecutionEvent {
   const _SwapExecutionUpdated(this.snapshot);
   final SwapExecutionSnapshot snapshot;
@@ -143,6 +154,7 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
        super(SwapExecutionState(snapshot: seed, loading: seed == null)) {
     on<SwapExecutionWatched>(_onWatched);
     on<SwapExecutionCancelRequested>(_onCancelRequested);
+    on<SwapExecutionVisibilityChanged>(_onVisibilityChanged);
     on<_SwapExecutionUpdated>(_onUpdated);
     on<_SwapExecutionEnded>(_onEnded);
     on<_SwapExecutionUnanswered>(_onUnanswered);
@@ -154,6 +166,8 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
 
   // The watch replays the latest snapshot first; that replay is not live.
   bool _answered = false;
+
+  bool _visible = false;
 
   Future<void> _onWatched(
     SwapExecutionWatched event,
@@ -176,7 +190,7 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
                 : const _SwapExecutionEnded(),
           ),
         );
-    _registry.acknowledge(event.id);
+    _markSeen(known);
   }
 
   void _onUpdated(
@@ -192,7 +206,24 @@ class SwapExecutionBloc extends Bloc<SwapExecutionEvent, SwapExecutionState> {
       ),
     );
     _answered = true;
-    if (event.snapshot.isTerminal) _registry.acknowledge(event.snapshot.id);
+    _markSeen(event.snapshot);
+  }
+
+  void _onVisibilityChanged(
+    SwapExecutionVisibilityChanged event,
+    Emitter<SwapExecutionState> emit,
+  ) {
+    _visible = event.visible;
+    _markSeen(state.snapshot);
+  }
+
+  /// The registry keeps a swap seen for the session, so one marked while it
+  /// ran would never count when it later failed.
+  void _markSeen(SwapExecutionSnapshot? snapshot) {
+    if (!_visible || snapshot == null) return;
+    if (snapshot.isTerminal && snapshot.needsAttention) {
+      _registry.acknowledge(snapshot.id);
+    }
   }
 
   void _onEnded(_SwapExecutionEnded event, Emitter<SwapExecutionState> emit) {

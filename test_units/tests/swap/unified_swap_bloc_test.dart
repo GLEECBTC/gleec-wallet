@@ -525,6 +525,12 @@ void main() {
     });
 
     test('a consented fresh quote starts without another review', () async {
+      // The swap it replaces accepted the provider's terms.
+      await SwapTermsRepository(
+        walletKey: () async => 'wallet',
+        legalDocuments: legalFixtureRepository(),
+        storage: storage,
+      ).recordAcceptance();
       final bloc = await ready();
       bloc.add(
         UnifiedSwapFreshQuoteAccepted(
@@ -533,6 +539,7 @@ void main() {
       );
       await settle();
 
+      expect(routed.requoted.single.id, 'fresh');
       expect(routedExecutor.started.single.id, 'fresh');
       expect(bloc.state.view, UnifiedSwapView.progress);
       await bloc.close();

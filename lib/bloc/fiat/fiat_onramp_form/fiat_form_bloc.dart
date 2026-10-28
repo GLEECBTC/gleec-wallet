@@ -569,11 +569,7 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       }
     } on Exception catch (error, stacktrace) {
       _log.shout('Error refreshing payment methods', error, stacktrace);
-      yield state.copyWith(
-        paymentMethods: [],
-        status: FiatFormStatus.failure,
-        providerError: () => null,
-      );
+      yield _paymentMethodsUnavailable();
     }
   }
 
@@ -588,13 +584,8 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
 
   FiatFormState _updatePaymentMethods(List<FiatPaymentMethod> methods) {
     if (methods.isEmpty) {
-      final selectedAsset = state.selectedAsset.value;
-      _log.severe('No payment methods found for $selectedAsset');
-      throw ArgumentError.value(
-        methods,
-        'methods',
-        'No payment methods found for ${state.selectedAsset.value?.getAbbr()}',
-      );
+      _log.warning('No payment methods available for the selected pair');
+      return _paymentMethodsUnavailable();
     }
 
     try {
@@ -617,9 +608,20 @@ class FiatFormBloc extends Bloc<FiatFormEvent, FiatFormState> {
       );
     } catch (e, s) {
       _log.shout('Error updating payment methods', e, s);
-      return state.copyWith(paymentMethods: [], providerError: () => null);
+      return _paymentMethodsUnavailable();
     }
   }
+
+  FiatFormState _paymentMethodsUnavailable() => state.copyWith(
+    paymentMethods: const [],
+    selectedPaymentMethod: FiatPaymentMethod.none,
+    status: FiatFormStatus.failure,
+    providerError: () => null,
+    fiatAmount: _getFiatAmountInputBounds(
+      state.fiatAmount.value,
+      selectedPaymentMethod: FiatPaymentMethod.none,
+    ),
+  );
 
   FiatFormState _defaultPaymentMethods(FiatFormState currentState) {
     return currentState.copyWith(

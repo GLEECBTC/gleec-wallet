@@ -181,6 +181,33 @@ void main() {
     expect(bloc.state.review?.status, SwapReviewStatus.revalidationFailed);
   });
 
+  swapBlocTest('the amount checked is the one that starts, not the form\'s', (
+    h,
+  ) {
+    // $3,000 was 1 ETH when priced. At $2,900 the form reads 1.034 ETH,
+    // more than is held, while the review still sells 1 ETH.
+    _onlyTheBook(h, '1.0035');
+    final bloc = h.build()
+      ..add(const UnifiedSwapStarted())
+      ..add(
+        const UnifiedSwapIntentApplied(
+          pay: 'ETH',
+          receive: 'BTC',
+          amount: '3000',
+          amountMode: SwapAmountMode.fiat,
+        ),
+      );
+    h.settle();
+    bloc.add(const UnifiedSwapReviewOpened());
+    h.settle();
+    expect(bloc.state.review!.quote.sellAmount, d('1'));
+    h.prices.prices[eth] = d('2900');
+
+    _start(h, bloc);
+
+    expect(h.atomicExecutor.started.single.sellAmount, d('1'));
+  });
+
   swapBlocTest('a routed re-price whose fees no longer fit stops too', (h) {
     h.balances[eth] = d('1.0011');
     final bloc = h.inReview();

@@ -6,6 +6,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_sdk/src/pubkeys/pubkey_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
@@ -365,6 +366,7 @@ SwapServices servicesOf(
   SrcCoinsRepo? coins,
   SrcDex? dex,
   SrcMm2Api? mm2,
+  void Function(AnalyticsEventData event)? logAnalytics,
 }) => SwapServices(
   legalDocuments: legalFixtureRepository(),
   sdk: sdk,
@@ -372,4 +374,5 @@ SwapServices servicesOf(
   dexRepository: dex ?? SrcDex(),
   orders: SrcOrders(),
   mm2Api: mm2 ?? SrcMm2Api(),
+  logAnalytics: logAnalytics,
 );

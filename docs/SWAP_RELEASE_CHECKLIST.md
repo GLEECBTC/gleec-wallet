@@ -1,48 +1,67 @@
-# Unified swap — release checklist
+# Unified swap release checklist
 
-What has to be true, in order, before the unified swap (wallet #3507) ships. Each step that changes something outside a developer's machine needs an explicit go from the release owner. Open decisions are listed first, with who owns them.
+Current delivery: [SDK #407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)
+and [wallet #3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557), specs
+`7c388ea`, KDF `35f0bde`. See [the combined-candidate handover](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md)
+for #3554–#3556 integration, frozen inputs, current and historical validation,
+Banxa verification and remaining gates. See also
+[release notes](KDF_LIFI_RELEASE_NOTES.md) and the
+[final CI follow-up](KDF_LIFI_FINAL_CI_2026-10-27.md). This checklist records release
+work; it does not authorize merges, deployment or funded transactions.
 
-## Open decisions
+## Integration gates
 
-| Decision | Owner | State |
-|---|---|---|
-| **Aggregator access in production.** Builds now send routed swaps' LI.FI requests through the KDF team's proxy, `https://quicknode.gleec.com/lifi`, the default of `lifiProxyUrl` in `lib/shared/constants.dart` (set 2026-10-07; it replaces the interim `kdf-proxy.nitride.app`). KDF `7d6fd1e` signs each request with its P2P key, and the proxy holds the partner key. On 2026-10-02 its key allowed 12,000 quotes every two hours, shared by every user, and 100 network-list reads a minute. Still open: the proxy's per-peer limit, which its operator sets and the wallet has not measured, and monitoring. On 2026-10-05 the interim proxy refused connections for about 20 minutes and every cross-network price failed until it came back; this one needs an alert for the same failure. | KDF team | Build with `--dart-define=LIFI_PROXY_URL=<proxy URL>` to use another Komodo proxy; the SDK hands it to KDF as `lifi_proxy_url` ([BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)). An empty value uses the public API: 75 quotes every two hours per network address. The key stays on the proxy: the wallet has no setting for it. A partner key's limit covers every user at once, so it must be sized for peak use. KDF's 5-second routed status polling also counts against it: 12 requests a minute for each cross-network swap in flight. The proxy's own refusal, an empty 406, reaches the wallet as `RateLimited` and pauses cross-network prices like LI.FI's 429. |
-| **Integrator fees.** | Business | Not in this release. The contract makes them KDF configuration (contract l.385), and KDF sends none today. |
-| **Routed-swap contract, gleec-specs#2.** | CharlVS (GUI review), shamardy (author) | The four changes requested on 2026-09-03 are fixed at `0b209b2`. The GUI review that said "fix the envelope and this is a merge from my side" still stands as *changes requested*. A draft approving re-review and a draft Max section are kept outside the repos until the owner decides to post them. Since 2026-10-05 the wallet shows, and guards, a minimum 0.3% below the provider's `amount_min`, so a start survives the engine's re-quote. l.102 says the GUI must display `amount_min`, so it needs relaxing (see [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md)). |
-| **KDF gaps the wallet works around.** | KDF team | Listed in [`SWAP_DEFERRED_FEATURES.md`](SWAP_DEFERRED_FEATURES.md#kdf-behaviour-the-wallet-works-around). None blocks release; KDF changes are out of scope for this one. |
+| Gate | Status |
+|---|---|
+| Seven matching KDF archives | Complete. Linux rerun succeeded; all seven downloads and sidecars match the strict manifest. Coins pin preserved. |
+| Frozen bundled coins | Build-time advancement disabled; pinned source and Git blob hashes verified. Runtime coin updates remain enabled. See the candidate manifest. |
+| Commission | Confirmed: `gleec-dex-staging`, 178 + 22 bps. Wallet supplies typed startup policy, KDF requests/validates it, proxy retains API key. Defaults, overrides, disable and invalid settings covered. |
+| Fee models | SDK supplies missing Base `op_stack`, Mantle `mantle`, Monad `monad`, Avalanche `avalanche` settings for bundled/cached/refreshed configs. Explicit settings remain authoritative; tokens inherit platforms. |
+| Max and accepted minimum | KDF Max replaces client reserve multipliers. Concrete comparisons and execution; exact provider minimum, no extra 0.3% reduction. Review snapshots and reacceptance covered. |
+| Funding and payouts | Required balance remains separate from estimated spending; measured/provider amounts remain optional and distinct. Approval/gas evidence retained on failures. |
+| App, SDK and harness checks | Recorded with commands and final counts in the validation evidence. Analysis has existing diagnostics; it is not claimed to be clean. |
+| Web/macOS builds | Web release and unsigned macOS validation recorded. Signed macOS distribution requires the release provisioning profile. |
+| Native proxy quotes | Unfunded disposable wallet: Arbitrum/Base exact quotes, included 2% fee, funding totals, typed Max insufficiency. No funds committed. |
+| Upstream KDF tests | Still failing: `validate_dex_fee_invalid_sender_erc`, `firo_lelantus_tx_details`, `test_block_header_utxo_loop`. Separate from artifact recovery. |
 
-## Merge path
+## Release gates owned by people
 
-Do these in order. Each needs a go.
+- Run [the funded round](SWAP_LIVE_TEST_BRIEF.md) on the PR preview; a person
+  presses every control that commits funds. Not run for this delivery.
+- Review production proxy capacity, per-peer limits and monitoring with the KDF
+  team. The configured proxy is `https://quicknode.gleec.com/lifi`; limits are
+  shared, and quote/status polling must fit the production allocation.
+- Complete the [moderated usability session](SWAP_USABILITY_SESSION.md) and the
+  release-owner review of UI/preview results. No new usability session was run.
+- Ramp is a user-accepted known limitation, deferred to the next update on
+  27 October. Its failed browser CI remains recorded; repair the proxy quote
+  authorization (`AUTH.ACCESS.INVALID_HOST_API_KEY`, inner 403) for that update.
+  The updated default test explicitly skips deferred Ramp and tests Banxa
+  independently; Ramp is no longer an unresolved code-freeze blocker.
+- Banxa production catalogs, payment methods and six quotes passed a read-only
+  check. Hosted checkout and a completed purchase still need human verification
+  before claiming end-to-end on-ramp readiness. See
+  [the consolidated Banxa evidence](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#banxa-verification-and-ramp-disposition).
+- Independent Banxa Chrome quote/selection checks and the full wallet unit suite
+  now pass locally. Safari needs Remote Automation on the test host, followed by
+  hosted validation of the published test revision. See the
+  [test follow-up](KDF_LIFI_ONRAMP_TEST_VALIDATION_2026-10-27.md).
+- Record KDP and backend KDF deployment versions/image digests. The
+  [RC investigation](KDF_LIFI_PROXY_RC_AUDIT_2026-10-27.md) found no observed need
+  for a newer backend KDF, but source revisions do not identify the deployed
+  services or establish load/recovery readiness.
+- Resolve or explicitly disposition upstream CI failures before release.
+- Prepare signing and the release version/changelog under the release process.
 
-1. **KDF #29 merges into kdf-internal `dev`.** It is the KDF team's to merge. Record the merge commit.
-2. **Repin the SDK's KDF** from `feat/lifi-integration@7d6fd1e` to that merge commit. In `packages/komodo_defi_framework/app_build/build_config.json`:
-   - set `api.branch` to `dev` and `api.api_commit_hash` to the merge commit;
-   - replace the seven `valid_zip_sha256_checksums`;
-   - leave `coins.*` untouched (the build rewrites `bundled_coins_repo_commit` on every run; restore it before staging).
+## Publication and later merge order
 
-   First, check that devbuilds has an artefact for every platform: web, iOS, macOS, Android arm64 and armv7, Linux and Windows.
-3. **SDK #389:** out of draft, reviewed, then squash-merged into SDK `dev`. The `protected-main-dev` ruleset needs one approval and every thread resolved. CodeQL never reports, so the merge needs the owner's bypass.
-4. **Repin the wallet's `sdk` submodule** to the squash commit, not to #389's branch head.
-   - Before moving, prove `git -C sdk diff <squash> <pre-squash head>` is empty.
-   - `pubspec.lock` changes only if an SDK package version changed.
-   - Regenerate it with Flutter 3.41.4, and check the diff is only those versions.
-5. **Wallet #3507:**
-   - Check the `# Unreleased` changelog entry against what shipped.
-   - It has been marked ready for review since 2026-09-24. Refresh both PR descriptions.
-   - Merge only **after** the 0.9.7 release candidate (#3525) has merged. Otherwise the swap ships in 0.9.7.
+SDK #407 was published first at `b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1`;
+wallet #3557 already pins that commit. The PRs stay open. If the SDK later squash-merges, repin the wallet to the squash
+commit only after proving its tree matches the reviewed SDK head. KDF/specs/coins
+upstream merges and any later engine repin are separate work. Such a repin must
+again verify all seven matching archives, preserve the coins configuration and
+recheck the atomic payment/refund gas constants.
 
-## Gates
-
-| Gate | How | Last result |
-|---|---|---|
-| App unit suite | `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` defines (see AGENTS.md) | 3,553 passed, 4 skipped (2026-10-14, with the form's main button pinned while a desktop window is too short for the form, slippage as a small dialog on wider screens and no Swap title on any screen, from 3,545 before them; with the phone layout: the form's main button pinned, compact cards, whole asset labels, SegWit named, the review's notices first, terms beside the start button and slippage as a bottom sheet, from 3,524 before it; 2026-10-07, the same after the move to the KDF team's LI.FI proxy and KDF `7d6fd1e`; with refunds read in amber, an order-book refund stopped at its exchange until it lands, the hero turning back as a refund lands, and stops popping in without a bounce, from 3,507 before them; with Max naming a route's fees on top from the SDK's own answer and on a token, and a token's Max asking nothing during a rate-limit pause, from 3,502 before them; 2026-10-06, with the start checking the refund gas again on a re-price, from 3,494 before it; with order-book amounts keeping back the gas to refund a network's own coin and Max asked again for a new asset to receive, from 3,474 before them; 2026-10-05, with a cross-network start guarded 0.3% below LI.FI's minimum and the review keeping the minimum shown, from 3,470 before them; with order-book Max keeping back the gas to collect a token on the coin's own network and the trading fee counted, from 3,453 before them; with each failed cross-network price written to the app log and the message leading with it, from 3,415 before them; with Max keeping a route's provider fee on top back, from 3,410 before it; with fees charged on top counted before the review, from 3,399 before it; with the review's addresses shortened until the backup warning, from 3,390 before it; with replaced tokens marked "(OLD)" and offered only to pay with while held, from 3,370 before them; with the backup notice's button given a 48 dp target, from 3,354 before it; with the backup warning before copying an address, from 3,345 before it; with fees kept out of the price impact and warned about, LI.FI named on routed swaps, and the backup notice on every swap tab, from 3,326 before them; 2026-10-03, with Max saying what it kept back, from 3,315 before it; with order-book Max rounded down to the asset's decimal places, from 3,310 before it; with digits past the last decimal place dropping rather than being refused, from 3,302 before them; with the tab signals and the last-checked cue, from 3,284 before them; with focus and Escape on each swap screen and the keep-open note, from 3,262 before them; with the timeline's step links and the "Starting…" label, from 3,247 before them; with the progress screen's motion, its time line and reduced motion on every platform, from 3,113 before them; with the picker's search order and the price-change figures after the rate-limit fixes, on top of the stale-balance, closing-race and Max-announcement fixes, the quote budget and the interim LI.FI proxy, on #389 at `ed4556ff`, the same tree as `0dcb79af`: the history cache fixes and the `hive_ce` 2.14 floor) |
-| SDK suites | Each package's `flutter test`; #389's "Flutter tests (all packages)" check runs them all | #389 at `3c3f18f1` (SDK dev's market-data fixes, SDK#392 and SDK#393), run locally (2026-09-29): sdk 1,133 (1 skipped), local_auth 124, harness 224 (4 skipped), framework 98, rpc 343, cex_market_data 361 (6 skipped), and the other 10 packages green. CI has run the framework's 6 web-transport tests in WebAssembly since `e00fa467`, where they pass. CI is green at `536e3640` (2026-09-30). With the order-book RPC fixes and the `best_orders` parser at `536e3640`, run locally (2026-09-30): sdk 1,139 (1 skipped), rpc 361, harness 224 (4 skipped), local_auth 124, framework 98. A first sdk run failed only in the teardown of `history_cache_cipher_upgrade_test.dart`, a flake from SDK#385. At `0dcb79af`, which fixes that flake and the history cache's rebuild race with Hive and requires `hive_ce` 2.14, run locally (2026-09-30): sdk 1,140 (1 skipped), cex_market_data 361 (6 skipped), coin_updates 104, and the cipher-upgrade file passed 25 runs of 25. `ed4556ff`, #389's head after two syncs with SDK `dev`, has the same tree. `2bba931c` (routed swap checks), run locally (2026-10-01): sdk 1,144 (1 skipped), its routed-swap suites 61. `dddd06b2` (the start guard and `keepingMinimum`, on `d8a76440`), run locally (2026-10-05): sdk 1,165 (1 skipped), harness 225 (4 skipped). `b58630c9` merges SDK#404 (the session-scoped wallet checks) with the tree of its head `2b2f653d`, run locally there (2026-10-06): sdk 1,182 (1 skipped), local_auth 127, harness 225 (4 skipped). `39732b16` (the LI.FI proxy setting and the `7d6fd1e` repin), run locally (2026-10-07): sdk 1,185 (1 skipped), local_auth 127, rpc 361, framework 100, harness 225 (4 skipped) |
-| KDF `routed_swap` tests | KDF team's CI on #29. The `Test` workflow runs only when dispatched by hand. | 36 `routed_swap` + 18 LI.FI client tests passed locally at `4872ef2`. `7d6fd1e` adds the LI.FI proxy on top; its Development builds run (2026-10-07) built every target, and its tests were not run |
-| Live engine check, no funds | `routed_swap_live_capture_test.dart` holds the recorded responses | Native and WebAssembly agree; 9 of the day's 75 keyless quotes used. Order-book RPCs (2026-09-30, native, signed out, peer-to-peer on): the v2 forms of `min_trading_vol`, `max_taker_vol` and `orderbook_depth` get `NoSuchMethod`, the legacy forms reach KDF, and `orderbook_depth` answers every pair, zeros included. The web build then showed USDT → AVN with no offers before an amount, and DOGE → AVN's offer range, "Use {max}" and its price. Through the KDF team's proxy (2026-10-07, KDF `7d6fd1e` as published on devbuilds, a wallet with no funds): the web build signed every LI.FI request, `/v1/chains` and `/v1/quote` both answered 200, and 0.05 ETH priced at 127.8053 USDC on Arbitrum (about 5 s), with no request to li.quest or the interim proxy. The native macOS binary read the network list through the proxy the same way. With P2P off it refused with `InternalError`, and with no seed nodes the proxy refused it |
-| Quote budget | `swap_quote_budget_test.dart` | Idle form 42 → 10 → 3 requests per 10 minutes, then none; a form in use re-prices every 50 s, not 30 s (13 per 10 minutes); the fastest route only while **Compare options** is open; after a rate limit, 4 requests per 5 minutes → 1, then none until someone asks; typing 2 → 1; native Max 3 → 1; start 1 → 0 |
-| Accessibility and layout | `swap_accessibility_test.dart`; `swap_widgets_test.dart` runs the same checks on review, outcomes and Activity | Every new and changed state at 375, 390, 768, 1024 and 1440 px, light and dark, and at 200% text, measured in Manrope: no overflow, no text cut short or split mid-word, 48 dp targets, every control labelled and pressable by a screen reader. Passing (2026-09-30, adding the no-offers states, their shortcuts, the offer range and the pickers' "No offers" section, then the hardware-wallet notice and the line on funds at other addresses, then Max while it asks what fees need, then cross-network prices paused, on their own and beside offers around the amount; the review's paused and gone states run in `swap_widgets_test.dart`; then the progress screen's motion and its time line, which keep every state's layout, labels and single copies from the first frame and stand still under reduced motion, on every platform: `ReducedMotionScope` reads iOS, the browser, macOS and Windows as well as Android and Linux; 2026-10-02, then Max's line on trading and network fees kept back, its longest) |
-| Test coverage | `flutter test --coverage` over the app suite and the SDK packages; new files count whole, existing files only for the lines this branch changed | App (2026-09-30): 7,443 of 7,449 lines in the 79 new files (the other 6 are 4 private event `props` and `SwapResumeUnconfirmedException.toString`) and 159 of 161 changed lines in 20 existing files (the other 2 log a refused `LIFI_API_URL`, a define the suite runs without). The order-book offers work alone: all 414 lines of its 7 new files and all 211 lines it changes elsewhere; in the SDK, all 64 lines of the order-book RPC fixes and all 20 of the `best_orders` parser. SDK (2026-09-30, #389 at `536e3640`): 1,596 of 1,597 changed routed-swap lines, in the RPCs and the manager (the other one writes a provider error's request ID in `toJson`); 1,728 of 1,739 of all the lines #389 changes outside its test harness (the other 11 register the manager at start-up, decode the native FFI transport's responses, write that request ID, or belong to a gas-free fix #389 carries) |
-| UI tests | `ui-tests-on-pr` | Red only at `fiat_onramp_tests`, an external Ramp key issue |
-| Live swaps with funds | [`SWAP_LIVE_TEST_BRIEF.md`](SWAP_LIVE_TEST_BRIEF.md) — on the PR preview with the brief's funding kit and small amounts; a person presses every control that commits funds ("How a round runs") | Not run |
-| Moderated usability session | [`SWAP_USABILITY_SESSION.md`](SWAP_USABILITY_SESSION.md) — five users | Not run |
+SDK #389 and wallet #3507 were already merged; this delivery continues their
+funding/payout work. The older Max multipliers and minimum reduction are
+superseded, not release prerequisites. Scope remains Phase 1 EVM swaps.

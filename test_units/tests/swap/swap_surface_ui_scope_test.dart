@@ -12,18 +12,21 @@ import 'package:web_dex/bloc/trading_status/disallowed_feature.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/dex/dex_page.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell.dart';
 
 import 'swap_accessibility_checks.dart';
 import 'swap_surface_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
+import '../../support/legal_documents_fixture.dart';
 import 'swap_wiring_fakes.dart' show trezorUser;
 
 /// The Swap surface's own state: the form and Activity blocs it owns, kept
@@ -165,6 +168,61 @@ void main() {
           tradingEnabled: false,
           clockValid: false,
         ),
+      );
+    });
+
+    testWidgets('policy refresh pauses the review without discarding it', (
+      tester,
+    ) async {
+      await show(tester);
+      final bloc = form(tester);
+      final review = SwapReview(
+        quote: quoteOf(),
+        status: SwapReviewStatus.ready,
+        legalSnapshot: legalFixtureSnapshot(),
+      );
+      // Seed an already reviewed quote, then exercise the real shell listener.
+      // ignore: invalid_use_of_visible_for_testing_member
+      bloc.emit(
+        bloc.state.copyWith(view: UnifiedSwapView.review, review: review),
+      );
+      await tester.pumpAndSettle();
+
+      tradingStatus.push(TradingStatusLoadInProgress());
+      await tester.pump();
+      await tester.pump();
+
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review, same(review));
+      expect(bloc.state.tradingEnabled, isFalse);
+      expect(
+        tester
+            .widget<SwapButton>(find.byKey(const Key('swap-start')))
+            .onPressed,
+        isNull,
+      );
+
+      tradingStatus.push(TradingStatusLoadFailure());
+      await tester.pumpAndSettle();
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review, same(review));
+      expect(bloc.state.tradingEnabled, isFalse);
+      expect(
+        tester
+            .widget<SwapButton>(find.byKey(const Key('swap-start')))
+            .onPressed,
+        isNull,
+      );
+
+      tradingStatus.push(TradingStatusLoadSuccess());
+      await tester.pumpAndSettle();
+      expect(bloc.state.review, same(review));
+      expect(bloc.state.tradingEnabled, isTrue);
+      expect(
+        tester
+            .widget<SwapButton>(find.byKey(const Key('swap-start')))
+            .onPressed,
+        isNotNull,
       );
     });
 

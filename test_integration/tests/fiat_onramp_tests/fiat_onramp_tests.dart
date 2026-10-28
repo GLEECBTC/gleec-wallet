@@ -12,7 +12,7 @@ import 'form_tests.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   fiatOnRampWidgetTests();
-  // Accepted release limitation: Ramp is unavailable. Keep its
+  // Accepted release limitation: Ramp credentials are unavailable. Keep its
   // status visible without preventing Banxa from running. The standalone Ramp
   // target can be run when service recovery is ready for verification.
   fiatOnRampWidgetTests(provider: 'Ramp', skip: true);

@@ -217,12 +217,21 @@ final class UnifiedSwapCapabilitiesChanged extends UnifiedSwapEvent {
   const UnifiedSwapCapabilitiesChanged({
     required this.tradingEnabled,
     required this.clockValid,
+    this.tradingStatusLoading = false,
+    this.tradingStatusUnavailable = false,
     this.signedIn = true,
     this.hardwareWallet = false,
   });
 
   /// Whether trading is available here, to this wallet.
   final bool tradingEnabled;
+
+  /// A policy lookup is pending, rather than a resolved restriction.
+  /// Trading remains disabled until the lookup succeeds.
+  final bool tradingStatusLoading;
+
+  /// The lookup failed without resolving the current trading restrictions.
+  final bool tradingStatusUnavailable;
 
   /// Whether the device clock is accurate enough.
   final bool clockValid;
@@ -236,6 +245,8 @@ final class UnifiedSwapCapabilitiesChanged extends UnifiedSwapEvent {
   @override
   List<Object?> get props => [
     tradingEnabled,
+    tradingStatusLoading,
+    tradingStatusUnavailable,
     clockValid,
     signedIn,
     hardwareWallet,

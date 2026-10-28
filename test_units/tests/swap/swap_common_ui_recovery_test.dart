@@ -142,7 +142,7 @@ void main() {
                 outcome: SwapExecutionOutcome(kind: kind),
               ),
             ),
-            'Your balance is unchanged.',
+            'No swap payment was recorded. Network fees may still have been spent.',
           );
         }
       });
@@ -160,7 +160,7 @@ void main() {
         );
         expect(
           where(failure(SwapFundsMovement.none)),
-          'Your balance is unchanged.',
+          'No swap payment was recorded. Network fees may still have been spent.',
         );
         expect(
           where(failure(SwapFundsMovement.feesOnly)),

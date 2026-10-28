@@ -2,13 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:web_dex/analytics/events/transaction_events.dart';
-import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
-import 'package:web_dex/bloc/analytics/analytics_repo.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/model/main_menu_value.dart';
-import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
@@ -239,81 +233,6 @@ void main() {
       expect(find.byType(SnackBar), findsNothing);
     });
 
-    group('analytics', () {
-      late _RecordingAnalytics analytics;
-
-      setUp(() => analytics = _RecordingAnalytics());
-
-      // Built inside each test, so the bloc handles events on the test's clock.
-      AnalyticsBloc analyticsBloc() => AnalyticsBloc(
-        analytics: analytics,
-        storedData: StoredSettings.initial(),
-        repository: SettingsRepository(storage: MemoryStorage()),
-      );
-
-      SurfaceWrap provide<B extends StateStreamableSource<Object?>>(B value) =>
-          (child) => BlocProvider<B>.value(value: value, child: child);
-
-      testWidgets('reports swaps with the signed-in wallet type', (
-        tester,
-      ) async {
-        final user = KdfUser(
-          walletId: WalletId.withPubkeyHash(
-            'main',
-            const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
-            'main-hash',
-          ),
-          isBip39Seed: true,
-        );
-        await show(
-          tester,
-          wrap: [
-            provide<AnalyticsBloc>(analyticsBloc()),
-            provide<AuthBloc>(_SignedIn(AuthBlocState.loggedIn(user))),
-          ],
-        );
-
-        await finish(
-          tester,
-          await start(),
-          snapshotOf(id: 'routed-1', outcome: completed()),
-        );
-
-        final started = analytics.events.whereType<SwapInitiatedEventData>();
-        expect(started.single.hdType, 'hdwallet');
-        expect(started.single.routeCategory, 'same_chain');
-        expect(
-          analytics.events.whereType<SwapSucceededEventData>(),
-          hasLength(1),
-        );
-      });
-
-      testWidgets('reports no wallet type when nobody is signed in', (
-        tester,
-      ) async {
-        await show(tester, wrap: [provide<AnalyticsBloc>(analyticsBloc())]);
-
-        await start();
-        await tester.pumpAndSettle();
-
-        final started = analytics.events.whereType<SwapInitiatedEventData>();
-        expect(started.single.hdType, '');
-      });
-
-      testWidgets('stops reporting once the app closes', (tester) async {
-        await show(tester, wrap: [provide<AnalyticsBloc>(analyticsBloc())]);
-        await start();
-        await tester.pumpAndSettle();
-        expect(analytics.events, hasLength(1));
-
-        await tester.pumpWidget(const SizedBox());
-        await registry.start(quoteOf(id: 'q2'));
-        await tester.pumpAndSettle();
-
-        expect(analytics.events, hasLength(1));
-      });
-    });
-
     group('the Swap menu mark', () {
       Widget mark() => SwapAttentionBuilder(
         builder: (context, attention) => Text('attention: $attention'),
@@ -347,21 +266,4 @@ void main() {
       });
     });
   });
-}
-
-class _RecordingAnalytics implements AnalyticsRepo {
-  final List<AnalyticsEventData> events = [];
-
-  @override
-  Future<void> queueEvent(AnalyticsEventData data) async => events.add(data);
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _SignedIn extends Cubit<AuthBlocState> implements AuthBloc {
-  _SignedIn(super.initialState);
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

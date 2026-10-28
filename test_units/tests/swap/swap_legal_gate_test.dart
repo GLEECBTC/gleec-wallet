@@ -18,7 +18,13 @@ import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 void main() {
-  for (final outcome in ['success', 'failure', 'closed', 'reopened']) {
+  for (final outcome in [
+    'success',
+    'failure',
+    'closed',
+    'reopened',
+    'policyRefresh',
+  ]) {
     test('routed swap waits for pending documents: $outcome', () {
       fakeAsync((async) {
         final response = Completer<http.Response>();
@@ -48,6 +54,23 @@ void main() {
               h.settle();
             }
           }
+          if (outcome == 'policyRefresh') {
+            bloc.add(
+              const UnifiedSwapCapabilitiesChanged(
+                tradingEnabled: false,
+                tradingStatusLoading: true,
+                clockValid: true,
+              ),
+            );
+            h.settle();
+            bloc.add(
+              const UnifiedSwapCapabilitiesChanged(
+                tradingEnabled: true,
+                clockValid: true,
+              ),
+            );
+            h.settle();
+          }
           response.complete(
             outcome == 'failure'
                 ? http.Response('', 404)
@@ -70,7 +93,7 @@ void main() {
             expect(bloc.state.review!.canStart, isFalse);
             expect(bloc.state.review!.showLegalFailure, isTrue);
           }
-          if (outcome == 'reopened') {
+          if (outcome == 'reopened' || outcome == 'policyRefresh') {
             expect(bloc.state.review!.legalLoading, isFalse);
             expect(bloc.state.review!.canStart, isTrue);
           }

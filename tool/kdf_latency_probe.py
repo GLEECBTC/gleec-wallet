@@ -1518,10 +1518,10 @@ def main() -> int:
         help=(
             "Start KDF with p2p and seed nodes instead of disable_p2p. "
             "REQUIRED for any set containing TRX or NFT against the currently "
-            "pinned KDF (feat/lifi-integration, 7d6fd1e): "
+            "pinned KDF (feat/lifi-integration, 35f0bde): "
             "mm2_p2p/src/p2p_ctx.rs:42 unwraps the "
-            "P2P context, and v2_activation.rs:1217 (build_tron_api_client) "
-            "and :686 (initialize_global_nft) reach it unconditionally, so "
+            "P2P context, and v2_activation.rs:1221 (build_tron_api_client) "
+            "and :687 (initialize_global_nft) reach it unconditionally, so "
             "with p2p off the whole RPC service goes down. The non-panicking "
             "try_fetch_from_mm_arc landed in ed8de236b / d2c16fc29, which is "
             "kdf-internal PR #18 and still unmerged - see "

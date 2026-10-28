@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
     show DiagnosticSanitizer;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/routed_swap_chains.dart';
+import 'package:web_dex/shared/swap/routed_swap_max_policy.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -35,6 +36,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Duration catalogTimeout = const Duration(seconds: 10),
     DateTime Function()? now,
     RoutedSwapRateLimit? rateLimit,
+    this.nativeMaxGasReserve = RoutedSwapMaxPolicy.enabledByDefault,
     void Function(String line) log = _discard,
   }) : _networks = networks,
        _tradingAllowed = tradingAllowed,
@@ -49,6 +51,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
 
   /// The SDK manager doing the real work.
   final RoutedSwapManager manager;
+
+  /// Retains gas headroom in native Max through the release quote policy.
+  final bool nativeMaxGasReserve;
   final SwapNetworks Function() _networks;
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
   final bool Function(AssetId asset) _isCandidate;
@@ -139,51 +144,88 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   }) async {
-    // A quote for this pair from moments ago knows the route's gas and fees
-    // on top as well as a probe would, without spending a request on one.
-    final recent = _budget.latestFor(from, to);
-    if (recent != null) return _maxFrom(recent, from, balance);
-    // The probe is a quote, a token's too: while limited it is refused and
-    // still counts.
-    if (_budget.pausedUntil != null) return null;
-    try {
-      final max = await manager
-          .maxSellAmount(from: from, to: to, balance: balance)
-          .timeout(_timeout);
-      return SwapMaxAmount(
-        amount: max.amount,
-        reservedForFees: max.reservedForFees,
-        feeAsset: max.feeAsset,
-        reserveCovers: _reserveCovers(from, max.reservedForProviderFees),
-      );
-    } on RoutedSwapRateLimitedException {
-      _budget.pause();
-      return null;
-    } on Object {
-      return null;
+    final result = await _quote(
+      from,
+      to,
+      balance,
+      order,
+      slippage ?? _defaultSlippage,
+      max: true,
+    );
+    if (result case SwapQuoteRejected(:final failure)) {
+      throw SwapMaxUnavailableException(failure);
     }
+    final quote = (result as SwapQuoteAvailable).quote;
+    return _maxFromQuote(quote);
   }
+
+  SwapMaxAmount _maxFromQuote(SwapQuote quote) {
+    final offer = quote.payload! as RoutedSwapOffer;
+    final providerFees = offer.costs
+        .where(
+          (cost) =>
+              cost.kind == RoutedSwapCostKind.providerFee &&
+              !cost.isDeductedFromReceive &&
+              cost.assetId == quote.from,
+        )
+        .fold<Decimal>(Decimal.zero, (sum, cost) => sum + cost.amount);
+    return SwapMaxAmount(
+      amount: quote.sellAmount,
+      reservedForFees:
+          quote.maxRetainedBalance ?? quote.fundingOnTopIn(quote.from),
+      feeAsset: quote.from.isChildAsset && providerFees == Decimal.zero
+          ? quote.from.parentId
+          : quote.from,
+      reserveCovers: _reserveCovers(quote.from, providerFees),
+      source: source,
+      quote: quote,
+    );
+  }
+
+  bool _blocked(AssetId from, AssetId to) =>
+      _tradingAllowed != null && !_tradingAllowed(from, to);
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async {
-    if (_tradingAllowed != null && !_tradingAllowed(request.from, request.to)) {
+    if (_blocked(request.from, request.to)) {
       return [_rejected(SwapQuoteFailureKind.tradingBlocked)];
     }
     final orders = request.orders.isEmpty
         ? const {SwapQuoteOrder.cheapest}
         : request.orders;
-    final results = await Future.wait([
-      for (final order in orders)
-        _quote(
-          request.from,
-          request.to,
-          request.amount,
-          order,
-          request.slippage ?? _defaultSlippage,
-          automatic: request.automatic,
-        ),
-    ]);
+    final results = <SwapQuoteResult>[];
+    var amount = request.amount;
+    if (request.maxSource == source) {
+      final result = await _quote(
+        request.from,
+        request.to,
+        amount,
+        request.maxOrder,
+        request.slippage ?? _defaultSlippage,
+        automatic: request.automatic,
+        max: true,
+      );
+      if (result is SwapQuoteRejected) return [result];
+      amount = (result as SwapQuoteAvailable).quote.sellAmount;
+      results.add(result);
+    }
+    results.addAll(
+      await Future.wait([
+        for (final order in orders)
+          if (request.maxSource != source || order != request.maxOrder)
+            _quote(
+              request.from,
+              request.to,
+              amount,
+              order,
+              request.slippage ?? _defaultSlippage,
+              automatic: request.automatic,
+            ),
+      ]),
+    );
     if (results.length < 2) return results;
 
     final available = results.whereType<SwapQuoteAvailable>().toList();
@@ -205,10 +247,12 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
 
   /// Re-prices [quote]'s route. A route that still clears the minimum
   /// [quote] showed keeps it: quotes seconds apart differ slightly, and a
-  /// move smaller than the guard margin should neither ask again nor start
-  /// against a number the user did not see.
+  /// better price must still execute against the accepted minimum.
   @override
   Future<SwapQuoteResult> requote(SwapQuote quote) async {
+    if (_blocked(quote.from, quote.to)) {
+      return _rejected(SwapQuoteFailureKind.tradingBlocked);
+    }
     final order = quote.order ?? SwapQuoteOrder.cheapest;
     final result = await _quote(
       quote.from,
@@ -237,6 +281,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     SwapQuoteOrder order,
     double slippage, {
     bool automatic = false,
+    bool max = false,
   }) async {
     final pausedUntil = _budget.pausedUntil;
     if (pausedUntil != null) {
@@ -248,34 +293,69 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     final key = (
       from: from,
       to: to,
-      amount: amount,
+      amount: max ? Decimal.zero : amount,
       order: order,
       slippage: slippage,
+      max: max,
     );
     final recent = _budget.recent(key);
-    if (recent != null) {
-      return SwapQuoteAvailable(
-        routedQuoteFromOffer(recent, networks: _networks(), order: order),
-      );
-    }
+    if (recent != null) return SwapQuoteAvailable(recent);
     try {
-      final offer = await manager
-          .quote(
-            from: from,
-            to: to,
-            amount: amount,
-            slippage: slippage,
-            order: order == SwapQuoteOrder.fastest
-                ? RoutedSwapOrder.fastest
-                : null,
-          )
-          .timeout(_timeout);
-      _budget.remember(key, offer);
-      return SwapQuoteAvailable(
-        routedQuoteFromOffer(offer, networks: _networks(), order: order),
+      final routedOrder = order == SwapQuoteOrder.fastest
+          ? RoutedSwapOrder.fastest
+          : null;
+      final ({RoutedSwapOffer offer, Decimal? retainedBalance}) priced;
+      if (max) {
+        priced = await const RoutedSwapMaxPolicy().quote(
+          manager: manager,
+          from: from,
+          to: to,
+          slippage: slippage,
+          order: routedOrder,
+          timeout: _timeout * 3,
+          enabled: nativeMaxGasReserve,
+        );
+      } else {
+        priced = (
+          offer: await manager
+              .quote(
+                from: from,
+                to: to,
+                amount: amount,
+                slippage: slippage,
+                order: routedOrder,
+              )
+              .timeout(_timeout),
+          retainedBalance: null,
+        );
+      }
+      final quote = routedQuoteFromOffer(
+        priced.offer,
+        networks: _networks(),
+        order: order,
+        maxRetainedBalance: priced.retainedBalance,
       );
+      _budget.remember(key, quote);
+      return SwapQuoteAvailable(quote);
+    } on SwapMaxUnavailableException catch (error) {
+      _report(
+        _RoutedQuoteLog.unexpected(
+          from,
+          to,
+          order,
+          error.failure.detail ?? 'Native Max unavailable',
+        ),
+      );
+      return SwapQuoteRejected(error.failure);
     } on TimeoutException {
-      _report(_RoutedQuoteLog.timedOut(from, to, order, _timeout));
+      _report(
+        _RoutedQuoteLog.timedOut(
+          from,
+          to,
+          order,
+          max ? _timeout * 3 : _timeout,
+        ),
+      );
       return _rejected(SwapQuoteFailureKind.timeout);
     } on RoutedSwapRateLimitedException catch (error) {
       final failure = failureFor(
@@ -303,41 +383,6 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     } on Object {
       // Diagnostics are best effort.
     }
-  }
-
-  /// Max from [offer], as the SDK's probe works it out: the gas in [from]
-  /// times its margin, and the provider fees it charges on top in [from],
-  /// which the form counts too. A token has no gas in it: that is paid in its
-  /// network's coin.
-  SwapMaxAmount _maxFrom(RoutedSwapOffer offer, AssetId from, Decimal balance) {
-    final gas = offer.networkFees
-        .where((fee) => fee.assetId == from || fee.ticker == from.id)
-        .fold<Decimal>(Decimal.zero, (sum, fee) => sum + fee.amount);
-    // The gas among the costs is counted above, with its margin.
-    final providerFees = offer.costs
-        .where(
-          (cost) =>
-              cost.kind == RoutedSwapCostKind.providerFee &&
-              !cost.isDeductedFromReceive &&
-              cost.assetId == from,
-        )
-        .fold<Decimal>(Decimal.zero, (sum, cost) => sum + cost.amount);
-    var reserve = gas * RoutedSwapManager.maxSellFeeMargin + providerFees;
-    var amount = balance - reserve;
-    final decimals = from.chainId.decimals;
-    if (decimals != null) {
-      reserve = reserve.ceil(scale: decimals);
-      amount = (balance - reserve).floor(scale: decimals);
-    }
-    return SwapMaxAmount(
-      amount: amount < Decimal.zero ? Decimal.zero : amount,
-      reservedForFees: reserve,
-      // A token sell with nothing held back still names its gas coin.
-      feeAsset: from.isChildAsset && reserve == Decimal.zero
-          ? from.parentId
-          : from,
-      reserveCovers: _reserveCovers(from, providerFees),
-    );
   }
 
   /// What a Max reserve in [from] pays for: a token's holds only its
@@ -394,6 +439,29 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         SwapQuoteFailureKind.assetInactive,
         asset: coin == to.id ? to : from,
       ),
+      RoutedSwapInsufficientBalanceException(
+        :final coin,
+        :final available,
+        :final required,
+        :final lockedBySwaps,
+      ) =>
+        SwapQuoteFailure(
+          source: SwapLiquiditySource.routed,
+          kind: SwapQuoteFailureKind.insufficientFunds,
+          asset: [
+            from,
+            to,
+            from.parentId,
+            to.parentId,
+          ].whereType<AssetId>().where((a) => a.id == coin).firstOrNull,
+          ticker: coin,
+          minimum: Decimal.tryParse(required),
+          available: Decimal.tryParse(available),
+          lockedBySwaps: lockedBySwaps == null
+              ? null
+              : Decimal.tryParse(lockedBySwaps),
+          detail: error.message,
+        ),
       RoutedSwapPairNotSupportedException() => failure(
         SwapQuoteFailureKind.pairUnsupported,
       ),
@@ -426,9 +494,13 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       RoutedSwapRateLimitedException() => failure(
         SwapQuoteFailureKind.rateLimited,
       ),
+      // A node that won't estimate gas for an address without the network's
+      // coin answers the same as one that is down, so a failed estimate reads
+      // as a service error, whose copy names the coin to check.
       RoutedSwapProviderException() ||
       RoutedSwapTransportException() ||
-      RoutedSwapInternalException() => failure(
+      RoutedSwapInternalException() ||
+      RoutedSwapGasEstimationFailedException() => failure(
         SwapQuoteFailureKind.serviceError,
       ),
       _ => failure(SwapQuoteFailureKind.unknown),

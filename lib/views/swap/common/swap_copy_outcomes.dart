@@ -154,6 +154,14 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
         icon: Icons.price_change_outlined,
         tone: SwapTone.warning,
       ),
+      SwapFailureReason.networkFee => SwapHeroCopy(
+        title: LocaleKeys.swapFailNetworkFeeTitle.tr(),
+        body: _unlessMoved(
+          LocaleKeys.swapFailNetworkFeeBody.tr(args: [fromNetwork]),
+        ),
+        icon: Icons.local_gas_station_outlined,
+        tone: SwapTone.warning,
+      ),
       SwapFailureReason.restarted => SwapHeroCopy(
         title: LocaleKeys.swapFailRestartTitle.tr(),
         body: _unlessMoved(LocaleKeys.swapFailRestartBody.tr()),
@@ -195,11 +203,15 @@ extension _SwapOutcomeCopy on SwapExecutionCopy {
     if (required == null || available == null) {
       return _unlessMoved(LocaleKeys.swapFundsUnchanged.tr());
     }
-    return LocaleKeys.swapFailBalanceBody.tr(
+    final message = LocaleKeys.swapFailBalanceBody.tr(
       args: [
         SwapFormat.tokens(required, ticker, rounding: SwapRounding.up),
         SwapFormat.tokens(available, ticker, rounding: SwapRounding.down),
       ],
     );
+    final locked = failure?.shortfallLockedBySwaps;
+    return locked == null
+        ? message
+        : '$message ${LocaleKeys.swapFundsLocked.tr(args: [SwapFormat.tokens(locked, ticker)])}';
   }
 }

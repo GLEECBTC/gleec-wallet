@@ -262,10 +262,7 @@ void main() {
       expect(find.byType(SwapBadge), findsNothing);
       expect(find.text(SwapFormat.time(updated)), findsOneWidget);
       expect(find.text(SwapFormat.time(finished)), findsOneWidget);
-      expect(textsOf(tester, row('Cancelled')), [
-        '1 ETH → 3,000 USDC',
-        'Cancelled',
-      ]);
+      expect(textsOf(tester, row('Cancelled')), ['1 ETH → USDC', 'Cancelled']);
       expect(colourOf(tester, 'Received'), SwapPalette.dark.textTertiary);
     });
 

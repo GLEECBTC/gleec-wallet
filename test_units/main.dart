@@ -63,6 +63,8 @@ import 'tests/custom_token_import/custom_token_import_repository_test.dart'
 import 'tests/fiat/fiat_default_preference_test.dart'
     as fiat_default_preference_test;
 import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
+import 'tests/fiat/fiat_provider_failure_test.dart'
+    as fiat_provider_failure_test;
 import 'tests/mm2/lifi_proxy_url_test.dart' as lifi_proxy_url_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
@@ -182,8 +184,16 @@ import 'tests/swap/swap_order_book_offers_test.dart'
 import 'tests/swap/unified_swap_repository_offers_test.dart'
     as unified_swap_repository_offers_test;
 import 'tests/swap/swap_src_repository_test.dart' as swap_src_repository_test;
+import 'tests/swap/swap_native_max_reserve_test.dart'
+    as swap_native_max_reserve_test;
 import 'tests/swap/swap_src_routed_max_test.dart' as swap_src_routed_max_test;
 import 'tests/swap/swap_routed_max_fees_test.dart' as swap_routed_max_fees_test;
+import 'tests/swap/lifi_integrator_policy_test.dart'
+    as lifi_integrator_policy_test;
+import 'tests/swap/swap_routed_funding_test.dart' as swap_routed_funding_test;
+import 'tests/swap/swap_release_integration_test.dart'
+    as swap_release_integration_test;
+import 'tests/swap/swap_routed_payout_test.dart' as swap_routed_payout_test;
 import 'tests/swap/swap_src_routed_offer_test.dart'
     as swap_src_routed_offer_test;
 import 'tests/swap/swap_src_routed_quote_log_test.dart'
@@ -192,6 +202,8 @@ import 'tests/swap/swap_src_routed_quote_test.dart'
     as swap_src_routed_quote_test;
 import 'tests/swap/swap_src_services_assets_test.dart'
     as swap_src_services_assets_test;
+import 'tests/swap/swap_src_services_analytics_test.dart'
+    as swap_src_services_analytics_test;
 import 'tests/swap/swap_src_services_session_test.dart'
     as swap_src_services_session_test;
 import 'tests/swap/swap_src_storage_test.dart' as swap_src_storage_test;
@@ -265,6 +277,7 @@ import 'tests/swap/swap_bloc_offers_test.dart' as swap_bloc_offers_test;
 import 'tests/swap/swap_bloc_opening_test.dart' as swap_bloc_opening_test;
 import 'tests/swap/swap_bloc_review_test.dart' as swap_bloc_review_test;
 import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
+import 'tests/swap/swap_bloc_start_path_test.dart' as swap_bloc_start_path_test;
 import 'tests/swap/swap_bloc_start_refund_test.dart'
     as swap_bloc_start_refund_test;
 import 'tests/swap/swap_bloc_timers_test.dart' as swap_bloc_timers_test;
@@ -299,6 +312,8 @@ import 'tests/swap/swap_entry_ui_rate_limit_test.dart'
     as swap_entry_ui_rate_limit_test;
 import 'tests/swap/swap_entry_ui_review_details_test.dart'
     as swap_entry_ui_review_details_test;
+import 'tests/swap/swap_entry_ui_review_costs_test.dart'
+    as swap_entry_ui_review_costs_test;
 import 'tests/swap/swap_entry_ui_review_test.dart' as swap_entry_ui_review_test;
 import 'tests/swap/swap_entry_ui_slippage_test.dart'
     as swap_entry_ui_slippage_test;
@@ -319,6 +334,9 @@ import 'tests/swap/swap_surface_ui_failures_test.dart'
     as swap_surface_ui_failures_test;
 import 'tests/swap/swap_surface_ui_link_errors_test.dart'
     as swap_surface_ui_link_errors_test;
+import 'tests/swap/swap_surface_ui_link_schemes_test.dart'
+    as swap_surface_ui_link_schemes_test;
+import 'tests/swap/swap_open_advanced_test.dart' as swap_open_advanced_test;
 import 'tests/swap/swap_surface_ui_links_test.dart'
     as swap_surface_ui_links_test;
 import 'tests/swap/swap_surface_ui_notices_test.dart'
@@ -332,6 +350,7 @@ import 'tests/swap/swap_surface_ui_running_test.dart'
     as swap_surface_ui_running_test;
 import 'tests/swap/swap_surface_ui_scope_test.dart'
     as swap_surface_ui_scope_test;
+import 'tests/swap/swap_surface_ui_seen_test.dart' as swap_surface_ui_seen_test;
 import 'tests/swap/swap_surface_ui_shell_test.dart'
     as swap_surface_ui_shell_test;
 import 'tests/swap/swap_common_ui_actions_test.dart'
@@ -633,6 +652,7 @@ void main() {
   fiat_checkout_url_allowlist_test.main();
   fiat_default_preference_test.main();
   tron_fiat_mapping_test.main();
+  fiat_provider_failure_test.main();
   tron_gasless_provider_config_test.main();
   lifi_proxy_url_test.main();
   unified_swap_repository_test.main();
@@ -676,12 +696,18 @@ void main() {
   swap_order_book_offers_test.main();
   unified_swap_repository_offers_test.main();
   swap_src_repository_test.main();
+  swap_native_max_reserve_test.main();
   swap_src_routed_max_test.main();
   swap_routed_max_fees_test.main();
+  swap_routed_funding_test.main();
+  swap_release_integration_test.main();
+  lifi_integrator_policy_test.main();
+  swap_routed_payout_test.main();
   swap_src_routed_offer_test.main();
   swap_src_routed_quote_log_test.main();
   swap_src_routed_quote_test.main();
   swap_src_services_assets_test.main();
+  swap_src_services_analytics_test.main();
   swap_src_services_session_test.main();
   swap_src_storage_test.main();
   swap_exec_atomic_delay_test.main();
@@ -734,6 +760,7 @@ void main() {
   swap_bloc_opening_test.main();
   swap_bloc_review_test.main();
   swap_bloc_start_test.main();
+  swap_bloc_start_path_test.main();
   swap_bloc_start_refund_test.main();
   swap_bloc_timers_test.main();
   swap_bloc_validation_test.main();
@@ -755,6 +782,7 @@ void main() {
   swap_entry_ui_picker_test.main();
   swap_entry_ui_rate_limit_test.main();
   swap_entry_ui_review_details_test.main();
+  swap_entry_ui_review_costs_test.main();
   swap_entry_ui_review_test.main();
   swap_entry_ui_slippage_test.main();
   swap_entry_ui_strip_test.main();
@@ -767,6 +795,8 @@ void main() {
   swap_surface_ui_evidence_test.main();
   swap_surface_ui_failures_test.main();
   swap_surface_ui_link_errors_test.main();
+  swap_surface_ui_link_schemes_test.main();
+  swap_open_advanced_test.main();
   swap_surface_ui_links_test.main();
   swap_surface_ui_notices_test.main();
   swap_surface_ui_outcomes_test.main();
@@ -774,6 +804,7 @@ void main() {
   swap_surface_ui_progress_test.main();
   swap_surface_ui_running_test.main();
   swap_surface_ui_scope_test.main();
+  swap_surface_ui_seen_test.main();
   swap_surface_ui_shell_test.main();
   swap_common_ui_actions_test.main();
   swap_common_ui_buttons_test.main();

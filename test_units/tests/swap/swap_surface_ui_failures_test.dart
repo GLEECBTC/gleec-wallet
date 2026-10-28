@@ -98,14 +98,16 @@ void main() {
         ),
         title: 'Price changed',
         body: 'The price moved below your minimum before anything was sent.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Accept updated quote', 'Try again'],
       ),
       'price moved, without a fresh quote': (
         snapshot: failure(SwapFailureReason.priceMoved, none),
         title: 'Price changed',
         body: 'The price moved below your minimum before anything was sent.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'short of balance': (
@@ -124,7 +126,8 @@ void main() {
         body:
             'The swap needed 2 ETH but this address had 1.5 ETH. Nothing was '
             'swapped.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'short of a coin the wallet does not list': (
@@ -143,14 +146,16 @@ void main() {
         body:
             'The swap needed 0.25 GAS but this address had 0.1 GAS. Nothing '
             'was swapped.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'short of balance, amounts unknown': (
         snapshot: failure(SwapFailureReason.insufficientBalance, none),
         title: 'Not enough balance',
         body: unchanged,
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'permission failed': (
@@ -210,7 +215,8 @@ void main() {
         snapshot: failure(SwapFailureReason.walletRejected, none),
         title: 'Request declined',
         body: 'Nothing was sent for this step.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'declined, maybe after sending': (
@@ -241,21 +247,24 @@ void main() {
         ),
         title: 'Swap blocked by a safety check',
         body: 'Gleec stopped this route before signing. Nothing was sent.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'a route the safety check blocked for good': (
         snapshot: failure(SwapFailureReason.safetyCheck, none),
         title: 'Swap blocked by a safety check',
         body: 'Gleec stopped this route before signing. Nothing was sent.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: [support],
       ),
       'no confirmed price': (
         snapshot: failure(SwapFailureReason.quoteUnavailable, none),
         title: "The price couldn't be confirmed",
         body: 'Nothing was sent. Get a fresh quote to try again.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'no confirmed price, maybe after sending': (
@@ -269,7 +278,8 @@ void main() {
         snapshot: failure(SwapFailureReason.restarted, none),
         title: 'Stopped when Gleec restarted',
         body: 'Nothing was swapped. You can start again safely.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'a restart after sending': (
@@ -307,7 +317,8 @@ void main() {
         snapshot: failure(SwapFailureReason.internal, none),
         title: 'Something went wrong',
         body: 'Nothing was sent. Try again.',
-        funds: unchanged,
+        funds:
+            'No swap payment was recorded. Network fees may still have been spent.',
         actions: ['Try again'],
       ),
       'an engine error, maybe after sending': (

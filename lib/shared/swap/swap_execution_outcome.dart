@@ -77,6 +77,10 @@ enum SwapFailureReason {
   /// Pricing failed while the swap was starting.
   quoteUnavailable,
 
+  /// The network fee could not be estimated while the swap was starting or
+  /// before a send. The swap was not sent.
+  networkFee,
+
   /// The app or engine restarted before anything was sent.
   restarted,
 
@@ -100,6 +104,7 @@ class SwapExecutionFailure extends Equatable {
     this.shortfallTicker,
     this.shortfallAvailable,
     this.shortfallRequired,
+    this.shortfallLockedBySwaps,
     this.freshQuote,
     this.noRouteReasons = const [],
     this.detail,
@@ -127,6 +132,9 @@ class SwapExecutionFailure extends Equatable {
   /// What was required.
   final Decimal? shortfallRequired;
 
+  /// Funds committed to other swaps, already excluded from available.
+  final Decimal? shortfallLockedBySwaps;
+
   /// For [SwapFailureReason.priceMoved]: the re-priced quote to consent to.
   final SwapQuote? freshQuote;
 
@@ -145,6 +153,7 @@ class SwapExecutionFailure extends Equatable {
     shortfallTicker,
     shortfallAvailable,
     shortfallRequired,
+    shortfallLockedBySwaps,
     freshQuote,
     noRouteReasons,
     detail,
@@ -158,6 +167,7 @@ class SwapExecutionOutcome extends Equatable {
     this.receivedAmount,
     this.receivedAsset,
     this.receivedSymbol,
+    this.receivedReported = false,
     this.failure,
   });
 
@@ -166,6 +176,10 @@ class SwapExecutionOutcome extends Equatable {
 
   /// What arrived (or came back, for a refund).
   final Decimal? receivedAmount;
+
+  /// Whether [receivedAmount] is what the route's provider reports rather
+  /// than an amount the engine measured on-chain.
+  final bool receivedReported;
 
   /// The asset that arrived, when it maps to a wallet asset.
   final AssetId? receivedAsset;
@@ -185,6 +199,7 @@ class SwapExecutionOutcome extends Equatable {
     receivedAmount,
     receivedAsset,
     receivedSymbol,
+    receivedReported,
     failure,
   ];
 }

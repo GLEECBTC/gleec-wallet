@@ -123,6 +123,36 @@ KDF_HARNESS=1 KDF_TEST_SEED='<throwaway funded seed>' flutter test --tags proces
   `sdk/pubspec.lock`, and `sdk/packages/komodo_defi_framework/app_build/build_config.json`;
   the PR gate fails on a dirty tree.
 
+### LI.FI read-only native smoke
+
+From the wallet root after generating native KDF/coin assets:
+
+```sh
+mkdir -p .lifi/evidence
+python3 tool/kdf_lifi_quote_smoke.py --json .lifi/evidence/lifi-quote-report.json
+```
+
+Generated reports and local log indexes belong in the ignored `.lifi/evidence/`
+directory. Keep reusable instructions, validation summaries and frozen-input
+manifests in `docs/`; do not link versioned Markdown to local-only reports.
+
+Requires Python 3.9+, generated native KDF/coin assets and live network/proxy
+access; optional `--kdf` and `--coins` select those assets. The runner starts a
+fresh unfunded wallet, verifies the engine version against the manifest and
+activates Arbitrum/Base ETH and USDC. It checks concrete exact amounts, positive
+provider minimums, required funding versus estimated gas, one included combined
+2% fee and typed unfunded Max rejection naming the native coin.
+
+The RPC allowlist permits version, activation, quote and stop; it rejects init,
+approval, withdrawal and broadcast. No existing wallet or seed is read. The runner
+deletes its temporary wallet and logs, records failed phases/startup exceptions
+and exits nonzero on failure. JSON output contains public quote figures and coin
+configuration digests without seeds, credentials or wallet addresses. Its Base
+normalization mirrors SDK policy; SDK tests separately cover bundled, cached and
+refreshed configurations. See the handover for
+[current validation](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#fresh-validation) and
+[historical results](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#historical-validation-before-the-combined-candidate).
+
 ## 5. SDK package tests
 
 ```bash

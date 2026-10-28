@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart' show CoinSubClass;
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/routed_swap_execution.dart';
@@ -124,6 +125,113 @@ void main() {
         ).refundUnlocksAt,
         isNull,
       );
+    });
+
+    group('a refund KDF holds until the median time passes the lock', () {
+      final kmd = assetOf(
+        'KMD',
+        subClass: CoinSubClass.smartChain,
+        chainId: 0,
+        decimals: 8,
+      );
+      final siacoin = assetOf('SC', subClass: CoinSubClass.sia, chainId: 0);
+      final qtum = assetOf('QTUM', subClass: CoinSubClass.qrc20, chainId: 0);
+      final qrc20 = assetOf('QC', subClass: CoinSubClass.qrc20, parent: qtum);
+      final arrr = assetOf('ARRR', subClass: CoinSubClass.zhtlc, chainId: 0);
+      final atom = assetOf('ATOM', subClass: CoinSubClass.tendermint);
+      final known = {
+        for (final asset in [eth, usdc, btc, kmd, siacoin, qtum, qrc20, arrr])
+          asset.id: asset,
+        atom.id: atom,
+      };
+      // KDF logs its own deadline, which for these coins stands in.
+      final logged = lock.add(const Duration(minutes: 63));
+
+      SwapExecutionSnapshot refundOf(
+        String paid, {
+        bool maker = false,
+        bool waitLogged = true,
+      }) => atomicSnapshotFromSwap(
+        atomicSwapOf(
+          'a-1',
+          maker
+              ? [
+                  'Started',
+                  'Negotiated',
+                  'TakerFeeValidated',
+                  'MakerPaymentSent',
+                  'TakerPaymentValidateFailed',
+                  'MakerPaymentWaitRefundStarted',
+                ]
+              : [
+                  'Started',
+                  'Negotiated',
+                  'TakerFeeSent',
+                  'MakerPaymentReceived',
+                  'TakerPaymentSent',
+                  'TakerPaymentWaitForSpendFailed',
+                  'TakerPaymentWaitRefundStarted',
+                ],
+          maker: maker,
+          sell: paid,
+          data: {
+            'Started': {
+              maker ? 'maker_payment_lock' : 'taker_payment_lock': lockSeconds,
+            },
+            if (waitLogged)
+              maker
+                  ? 'MakerPaymentWaitRefundStarted'
+                  : 'TakerPaymentWaitRefundStarted': {
+                'wait_until': logged.millisecondsSinceEpoch ~/ 1000,
+              },
+          },
+        ),
+        networks: execNetworks,
+        resolveAsset: (ticker) => known[ticker],
+      );
+
+      for (final paid in [btc, kmd, siacoin, qtum]) {
+        test('${paid.id} unlocks when KDF said it would, on either side', () {
+          expect(refundOf(paid.id).refundUnlocksAt, logged.toLocal());
+          expect(
+            refundOf(paid.id, maker: true).refundUnlocksAt,
+            logged.toLocal(),
+          );
+        });
+
+        test('${paid.id} without that deadline allows KDF its 3,700 s', () {
+          final unlocks = lock.add(const Duration(seconds: 3700)).toLocal();
+          expect(refundOf(paid.id, waitLogged: false).refundUnlocksAt, unlocks);
+          expect(
+            refundOf(paid.id, maker: true, waitLogged: false).refundUnlocksAt,
+            unlocks,
+          );
+        });
+      }
+
+      for (final paid in [eth, usdc, qrc20, arrr, atom]) {
+        test('${paid.id} unlocks at its lock, whatever KDF logs', () {
+          expect(refundOf(paid.id).refundUnlocksAt, lock.toLocal());
+          expect(
+            refundOf(paid.id, maker: true).refundUnlocksAt,
+            lock.toLocal(),
+          );
+        });
+      }
+
+      test('a coin the wallet does not know unlocks at its lock', () {
+        expect(refundOf('XYZ').refundUnlocksAt, lock.toLocal());
+      });
+
+      test("KDF's wait is read, and written back only when known", () {
+        final data = SwapEventData.fromJson({'wait_until': 1700003700});
+        expect(data.waitUntil, 1700003700);
+        expect(data.toJson()['wait_until'], 1700003700);
+        expect(
+          SwapEventData.fromJson(const {}).toJson().containsKey('wait_until'),
+          isFalse,
+        );
+      });
     });
 
     test("a maker's payment lock is read, and written back only when "

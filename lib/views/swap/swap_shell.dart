@@ -282,10 +282,11 @@ class _SwapScopeState extends State<_SwapScope> {
   UnifiedSwapCapabilitiesChanged _capabilities() {
     final auth = context.read<AuthBloc?>();
     final hardwareWallet = auth?.state.currentUser?.wallet.isHW ?? false;
+    final tradingStatus = context.read<TradingStatusBloc>().state;
     return UnifiedSwapCapabilitiesChanged(
-      tradingEnabled:
-          !hardwareWallet &&
-          _tradingEnabled(context.read<TradingStatusBloc>().state),
+      tradingEnabled: !hardwareWallet && _tradingEnabled(tradingStatus),
+      tradingStatusLoading: tradingStatus is TradingStatusLoadInProgress,
+      tradingStatusUnavailable: tradingStatus is TradingStatusLoadFailure,
       clockValid: _clockValid(context.read<SystemHealthBloc>().state),
       signedIn: _isSignedIn(auth),
       hardwareWallet: hardwareWallet,

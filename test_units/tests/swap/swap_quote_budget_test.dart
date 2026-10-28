@@ -50,6 +50,57 @@ void main() {
     expect(calls, 13, reason: 'at 0 s, then every 50 s');
   });
 
+  void pollPolicy(UnifiedSwapBloc bloc, FakeAsync async) {
+    bloc.add(
+      const UnifiedSwapCapabilitiesChanged(
+        tradingEnabled: false,
+        tradingStatusLoading: true,
+        clockValid: true,
+      ),
+    );
+    async.elapse(const Duration(seconds: 1));
+    bloc.add(
+      const UnifiedSwapCapabilitiesChanged(
+        tradingEnabled: true,
+        clockValid: true,
+      ),
+    );
+    async.elapse(const Duration(seconds: 59));
+  }
+
+  test('policy polls do not keep an idle form quoting for hours', () {
+    final calls = _run((bloc, async) {
+      for (var minute = 0; minute < 180; minute++) {
+        pollPolicy(bloc, async);
+      }
+    });
+    expect(calls, 3, reason: 'the same budget as an idle form without polls');
+  });
+
+  test('policy polls do not quote while the app is in the background', () {
+    final calls = _run((bloc, async) {
+      bloc.add(const UnifiedSwapForegroundChanged(foreground: false));
+      async.elapse(Duration.zero);
+      for (var minute = 0; minute < 180; minute++) {
+        pollPolicy(bloc, async);
+      }
+    });
+    expect(calls, 1, reason: 'only the price requested before leaving');
+  });
+
+  test('policy polls never probe a rate limit without user action', () {
+    final calls = _run(rateLimited: true, atomicPriced: true, (bloc, async) {
+      for (var minute = 0; minute < 180; minute++) {
+        pollPolicy(bloc, async);
+      }
+    });
+    expect(
+      calls,
+      1,
+      reason: 'policy readiness does not authorise another probe',
+    );
+  });
+
   test('a hidden app stops re-pricing at once', () {
     final calls = _run((bloc, async) {
       async.elapse(const Duration(minutes: 1));
@@ -79,8 +130,8 @@ void main() {
     expect(calls, 1);
   });
 
-  test('Max on a native coin reuses the route it just priced', () {
-    // Before: 3 — a probe at the full balance, then both routes.
+  test('Max makes one KDF Max request and reuses its returned route', () {
+    // One KDF Max RPC can perform up to four provider quotes internally.
     final calls = _run((bloc, async) {
       bloc.add(const UnifiedSwapMaxRequested());
       async.elapse(const Duration(seconds: 3));
@@ -353,21 +404,20 @@ class _CountingManager implements RoutedSwapManager {
   }
 
   @override
-  Future<RoutedSwapMaxSell> maxSellAmount({
+  Future<RoutedSwapOffer> quoteMax({
     required AssetId from,
     required AssetId to,
-    required Decimal balance,
     double? slippage,
     rpc.RoutedSwapOrder? order,
     String? provider,
-  }) async {
-    if (!from.isChildAsset) calls++;
-    return RoutedSwapMaxSell(
-      amount: balance - d('0.0015'),
-      reservedForFees: d('0.0015'),
-      feeAsset: from,
-    );
-  }
+  }) => quote(
+    from: from,
+    to: to,
+    amount: d('1.9995'),
+    slippage: slippage,
+    order: order,
+    provider: provider,
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

@@ -73,6 +73,7 @@ SwapQuote quoteOf({
   SwapQuotePricing? pricing,
   bool feesKnown = true,
   String? refundReserve,
+  String? requiredGasBalance,
   Object? payload,
 }) => SwapQuote(
   id: id,
@@ -82,6 +83,7 @@ SwapQuote quoteOf({
   from: from ?? eth,
   to: to ?? usdc,
   sellAmount: d(sell),
+  requiredGasBalance: requiredGasBalance == null ? null : d(requiredGasBalance),
   expectedReceive: d(expected),
   guaranteedReceive: d(guaranteed),
   fees:
@@ -289,6 +291,8 @@ class FakeQuoteSource implements SwapQuoteSource {
     required AssetId from,
     required AssetId to,
     required Decimal balance,
+    SwapQuoteOrder order = SwapQuoteOrder.cheapest,
+    double? slippage,
   }) async {
     maxCalls++;
     return max;
