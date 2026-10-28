@@ -290,6 +290,7 @@ class SwapQuote extends Equatable {
     this.feesKnown = true,
     this.refundReserve,
     this.requiredGasBalance,
+    this.maxRetainedBalance,
     this.diagnostic,
     this.payload,
   });
@@ -365,6 +366,11 @@ class SwapQuote extends Equatable {
   /// cap. It stands in for the estimated network fees in a balance check,
   /// never added to them. Null when the engine reports none.
   final Decimal? requiredGasBalance;
+
+  /// For a native Max quote, the source balance retained for gas headroom
+  /// and any fees on top. It is not an estimated charge or KDF requirement.
+  /// Null for exact amounts and sources without an additional reserve policy.
+  final Decimal? maxRetainedBalance;
 
   /// Infrastructure identity (provider, tool) for support diagnostics. Never
   /// shown as primary copy.
@@ -486,6 +492,7 @@ class SwapQuote extends Equatable {
     feesKnown: feesKnown,
     refundReserve: refundReserve,
     requiredGasBalance: requiredGasBalance,
+    maxRetainedBalance: maxRetainedBalance,
     diagnostic: diagnostic,
     payload: payload,
   );
@@ -513,6 +520,7 @@ class SwapQuote extends Equatable {
     feesKnown,
     refundReserve,
     requiredGasBalance,
+    maxRetainedBalance,
     diagnostic,
   ];
 }

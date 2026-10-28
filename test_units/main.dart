@@ -182,6 +182,8 @@ import 'tests/swap/swap_order_book_offers_test.dart'
 import 'tests/swap/unified_swap_repository_offers_test.dart'
     as unified_swap_repository_offers_test;
 import 'tests/swap/swap_src_repository_test.dart' as swap_src_repository_test;
+import 'tests/swap/swap_native_max_reserve_test.dart'
+    as swap_native_max_reserve_test;
 import 'tests/swap/swap_src_routed_max_test.dart' as swap_src_routed_max_test;
 import 'tests/swap/swap_routed_max_fees_test.dart' as swap_routed_max_fees_test;
 import 'tests/swap/lifi_integrator_policy_test.dart'
@@ -691,6 +693,7 @@ void main() {
   swap_order_book_offers_test.main();
   unified_swap_repository_offers_test.main();
   swap_src_repository_test.main();
+  swap_native_max_reserve_test.main();
   swap_src_routed_max_test.main();
   swap_routed_max_fees_test.main();
   swap_routed_funding_test.main();

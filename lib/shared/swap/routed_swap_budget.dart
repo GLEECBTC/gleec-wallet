@@ -67,9 +67,9 @@ class _QuoteBudget {
   /// How long an identical request is answered from the last reply.
   static const reuseFor = Duration(seconds: 15);
 
-  final Map<_QuoteKey, (DateTime, RoutedSwapOffer)> _recent = {};
+  final Map<_QuoteKey, (DateTime, SwapQuote)> _recent = {};
 
-  RoutedSwapOffer? recent(_QuoteKey key) {
+  SwapQuote? recent(_QuoteKey key) {
     final hit = _recent[key];
     if (hit == null) return null;
     if (_now().difference(hit.$1) > reuseFor) return null;
@@ -77,11 +77,11 @@ class _QuoteBudget {
   }
 
   /// Records a reply, which also ends any backoff.
-  void remember(_QuoteKey key, RoutedSwapOffer offer) {
+  void remember(_QuoteKey key, SwapQuote quote) {
     final now = _now();
     _recent
       ..removeWhere((_, hit) => now.difference(hit.$1) > reuseFor)
-      ..[key] = (now, offer);
+      ..[key] = (now, quote);
     _limit.lift();
   }
 

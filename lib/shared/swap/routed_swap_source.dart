@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_type_utils.dart'
     show DiagnosticSanitizer;
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/routed_swap_chains.dart';
+import 'package:web_dex/shared/swap/routed_swap_max_policy.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -35,6 +36,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Duration catalogTimeout = const Duration(seconds: 10),
     DateTime Function()? now,
     RoutedSwapRateLimit? rateLimit,
+    this.nativeMaxGasReserve = RoutedSwapMaxPolicy.enabledByDefault,
     void Function(String line) log = _discard,
   }) : _networks = networks,
        _tradingAllowed = tradingAllowed,
@@ -49,6 +51,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
 
   /// The SDK manager doing the real work.
   final RoutedSwapManager manager;
+
+  /// Retains gas headroom in native Max through the release quote policy.
+  final bool nativeMaxGasReserve;
   final SwapNetworks Function() _networks;
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
   final bool Function(AssetId asset) _isCandidate;
@@ -169,7 +174,8 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
         .fold<Decimal>(Decimal.zero, (sum, cost) => sum + cost.amount);
     return SwapMaxAmount(
       amount: quote.sellAmount,
-      reservedForFees: quote.fundingOnTopIn(quote.from),
+      reservedForFees:
+          quote.maxRetainedBalance ?? quote.fundingOnTopIn(quote.from),
       feeAsset: quote.from.isChildAsset && providerFees == Decimal.zero
           ? quote.from.parentId
           : quote.from,
@@ -293,38 +299,63 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       max: max,
     );
     final recent = _budget.recent(key);
-    if (recent != null) {
-      return SwapQuoteAvailable(
-        routedQuoteFromOffer(recent, networks: _networks(), order: order),
-      );
-    }
+    if (recent != null) return SwapQuoteAvailable(recent);
     try {
-      final offer =
-          await (max
-                  ? manager.quoteMax(
-                      from: from,
-                      to: to,
-                      slippage: slippage,
-                      order: order == SwapQuoteOrder.fastest
-                          ? RoutedSwapOrder.fastest
-                          : null,
-                    )
-                  : manager.quote(
-                      from: from,
-                      to: to,
-                      amount: amount,
-                      slippage: slippage,
-                      order: order == SwapQuoteOrder.fastest
-                          ? RoutedSwapOrder.fastest
-                          : null,
-                    ))
-              .timeout(max ? _timeout * 3 : _timeout);
-      _budget.remember(key, offer);
-      return SwapQuoteAvailable(
-        routedQuoteFromOffer(offer, networks: _networks(), order: order),
+      final routedOrder = order == SwapQuoteOrder.fastest
+          ? RoutedSwapOrder.fastest
+          : null;
+      final ({RoutedSwapOffer offer, Decimal? retainedBalance}) priced;
+      if (max) {
+        priced = await const RoutedSwapMaxPolicy().quote(
+          manager: manager,
+          from: from,
+          to: to,
+          slippage: slippage,
+          order: routedOrder,
+          timeout: _timeout * 3,
+          enabled: nativeMaxGasReserve,
+        );
+      } else {
+        priced = (
+          offer: await manager
+              .quote(
+                from: from,
+                to: to,
+                amount: amount,
+                slippage: slippage,
+                order: routedOrder,
+              )
+              .timeout(_timeout),
+          retainedBalance: null,
+        );
+      }
+      final quote = routedQuoteFromOffer(
+        priced.offer,
+        networks: _networks(),
+        order: order,
+        maxRetainedBalance: priced.retainedBalance,
       );
+      _budget.remember(key, quote);
+      return SwapQuoteAvailable(quote);
+    } on SwapMaxUnavailableException catch (error) {
+      _report(
+        _RoutedQuoteLog.unexpected(
+          from,
+          to,
+          order,
+          error.failure.detail ?? 'Native Max unavailable',
+        ),
+      );
+      return SwapQuoteRejected(error.failure);
     } on TimeoutException {
-      _report(_RoutedQuoteLog.timedOut(from, to, order, _timeout));
+      _report(
+        _RoutedQuoteLog.timedOut(
+          from,
+          to,
+          order,
+          max ? _timeout * 3 : _timeout,
+        ),
+      );
       return _rejected(SwapQuoteFailureKind.timeout);
     } on RoutedSwapRateLimitedException catch (error) {
       final failure = failureFor(

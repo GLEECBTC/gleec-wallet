@@ -23,6 +23,7 @@ void main() {
     Duration catalogTimeout = const Duration(seconds: 10),
   }) => RoutedSwapQuoteSource(
     manager,
+    nativeMaxGasReserve: false,
     networks: () => SwapNetworks([eth, usdc]),
     timeout: timeout,
     catalogTimeout: catalogTimeout,

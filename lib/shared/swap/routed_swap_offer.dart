@@ -7,6 +7,7 @@ SwapQuote routedQuoteFromOffer(
   RoutedSwapOffer offer, {
   required SwapNetworks networks,
   SwapQuoteOrder? order,
+  Decimal? maxRetainedBalance,
 }) {
   final resolvedOrder =
       order ??
@@ -84,6 +85,7 @@ SwapQuote routedQuoteFromOffer(
     slippage: offer.slippage ?? 0.005,
     quotedAt: offer.quotedAt,
     requiredGasBalance: _requiredGasBalance(offer),
+    maxRetainedBalance: maxRetainedBalance,
     diagnostic: '${offer.provider} · ${offer.toolName} (${offer.toolKey})',
     payload: offer,
   );

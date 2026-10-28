@@ -104,28 +104,33 @@ void main() {
       });
     });
 
-    test('Max uses KDF amount with the exact funding requirement', () {
-      _run((bloc, manager, async) {
-        manager.maximum = manager.respond!((
-          from: eth,
-          to: usdc,
-          amount: d('1.9972'),
-          slippage: null,
-          order: RoutedSwapOrder.cheapest,
-        ));
-        bloc.add(const UnifiedSwapMaxRequested());
-        async.elapse(const Duration(seconds: 3));
+    test(
+      'Max reprices with gas headroom and keeps required funding distinct',
+      () {
+        _run((bloc, manager, async) {
+          manager.maximum = manager.respond!((
+            from: eth,
+            to: usdc,
+            amount: d('1.9972'),
+            slippage: null,
+            order: RoutedSwapOrder.cheapest,
+          ));
+          bloc.add(const UnifiedSwapMaxRequested());
+          async.elapse(const Duration(seconds: 3));
 
-        // KDF leaves 0.0016 required gas plus 0.0012 provider fees.
-        expect(manager.maxCalls, 1);
-        expect(bloc.state.inputText, '1.9972');
-        expect(bloc.state.maxApplied!.reservedForFees, d('0.0028'));
-        expect(bloc.state.issue, isNull);
-        expect(bloc.state.canReview, isTrue);
-      });
-    });
+          // The policy uses KDF principal + gas as its conservative budget.
+          // It retains twice the fresh gas plus the provider fee on top.
+          expect(manager.maxCalls, 1);
+          expect(bloc.state.inputText, '1.9944');
+          expect(bloc.state.maxApplied!.reservedForFees, d('0.0044'));
+          expect(bloc.state.selectedQuote!.fundingOnTopIn(eth), d('0.0028'));
+          expect(bloc.state.issue, isNull);
+          expect(bloc.state.canReview, isTrue);
+        });
+      },
+    );
 
-    test('Max uses KDF amount even without optional funding totals', () {
+    test('Max without required funding data stays unavailable', () {
       _run(required: null, (bloc, manager, async) {
         manager.maximum = manager.respond!((
           from: eth,
@@ -137,8 +142,9 @@ void main() {
         bloc.add(const UnifiedSwapMaxRequested());
         async.elapse(const Duration(seconds: 3));
 
-        expect(bloc.state.inputText, '1.9983');
-        expect(bloc.state.issue, isNull);
+        expect(bloc.state.canReview, isFalse);
+        expect(bloc.state.maxApplied, isNull);
+        expect(bloc.state.failure!.kind, SwapQuoteFailureKind.serviceError);
       });
     });
   });

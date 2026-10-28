@@ -114,7 +114,9 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
               ? null
               : SwapMaxAmount(
                   amount: maximum.sellAmount,
-                  reservedForFees: maximum.fundingOnTopIn(maximum.from),
+                  reservedForFees:
+                      maximum.maxRetainedBalance ??
+                      maximum.fundingOnTopIn(maximum.from),
                   feeAsset: state.maxApplied?.feeAsset,
                   reserveCovers:
                       state.maxApplied?.reserveCovers ??

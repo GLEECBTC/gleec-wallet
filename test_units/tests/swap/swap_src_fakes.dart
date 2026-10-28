@@ -247,6 +247,7 @@ class SrcRoutedSwaps implements RoutedSwapManager {
 
   /// Leaves every quote unanswered, for timeouts.
   bool hangQuotes = false;
+  Completer<RoutedSwapOffer>? quoteGate;
 
   Set<AssetId> eligible = {};
   Object? eligibleError;
@@ -299,6 +300,7 @@ class SrcRoutedSwaps implements RoutedSwapManager {
     );
     quotes.add(call);
     if (hangQuotes) await Completer<void>().future;
+    if (quoteGate != null) return quoteGate!.future;
     final error = quoteError;
     if (error != null) throw error;
     return respond?.call(call) ??

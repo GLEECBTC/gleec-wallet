@@ -25,6 +25,71 @@ import 'swap_test_fixtures.dart';
 /// repository and routed source over a scripted manager, with 2 ETH held,
 /// 0.0005 ETH of gas and a 0.0012 ETH fee.
 void main() {
+  for (final expired in [false, true]) {
+    test(
+      'release reserve survives review and exact revalidation, expired=$expired',
+      () {
+        final executor = FakeExecutor(SwapLiquiditySource.routed);
+        _run(nativeMaxGasReserve: true, executor: executor, (
+          bloc,
+          manager,
+          async,
+        ) {
+          bloc.add(const UnifiedSwapMaxRequested());
+          async.elapse(const Duration(seconds: 2));
+          final maximum = bloc.state.maxApplied!;
+          expect(maximum.amount, d('1.9966'));
+          expect(maximum.reservedForFees, d('0.0022'));
+          expect(bloc.state.selectedQuote!.fundingOnTopIn(eth), d('0.0017'));
+          expect(bloc.state.canReview, isTrue);
+          bloc.add(const UnifiedSwapReviewOpened());
+          async.flushMicrotasks();
+          final accepted = bloc.state.review!.quote;
+          if (expired) async.elapse(SwapQuote.lifetime);
+          bloc.add(const UnifiedSwapStartRequested());
+          async.flushMicrotasks();
+          expect(manager.maxCalls, 1);
+          expect(manager.quotes.last.amount, accepted.sellAmount);
+          expect(bloc.state.maxApplied, same(maximum));
+          if (expired) {
+            expect(executor.started, isEmpty);
+            expect(bloc.state.review!.status, SwapReviewStatus.ready);
+          } else {
+            expect(executor.started.single.sellAmount, d('1.9966'));
+            expect(
+              executor.started.single.guaranteedReceive,
+              accepted.guaranteedReceive,
+            );
+          }
+        });
+      },
+    );
+  }
+
+  test('release Max refresh updates retained balance without charging it', () {
+    _run(nativeMaxGasReserve: true, (bloc, manager, async) {
+      bloc.add(const UnifiedSwapMaxRequested());
+      async.elapse(const Duration(seconds: 2));
+      async.elapse(const Duration(seconds: 16));
+      manager.maximum = manager.respond!((
+        from: eth,
+        to: usdc,
+        amount: d('1.9'),
+        slippage: null,
+        order: RoutedSwapOrder.cheapest,
+      ));
+      bloc.add(const UnifiedSwapEvaluationRequested(quiet: true));
+      async.flushMicrotasks();
+      expect(bloc.state.inputText, '1.8983');
+      expect(bloc.state.maxApplied!.reservedForFees, d('0.0022'));
+      expect(bloc.state.selectedQuote!.requiredGasBalance, d('0.0005'));
+      bloc.add(const UnifiedSwapAmountChanged('0.5'));
+      async.elapse(const Duration(seconds: 2));
+      expect(bloc.state.maxRequested, isFalse);
+      expect(bloc.state.selectedQuote!.maxRetainedBalance, isNull);
+    });
+  });
+
   test('Max uses a KDF quote instead of a recent route gas estimate', () {
     _run((bloc, manager, async) {
       bloc.add(const UnifiedSwapMaxRequested());
@@ -294,6 +359,7 @@ void _run(
   void Function(UnifiedSwapBloc bloc, SrcRoutedSwaps manager, FakeAsync async)
   script, {
   String amount = '1',
+  bool nativeMaxGasReserve = false,
   FakeExecutor? executor,
 }) {
   fakeAsync((async) {
@@ -328,6 +394,7 @@ void _run(
             ticker: eth.id,
             assetId: eth,
             amount: d('0.0005'),
+            requiredBalance: d('0.0005'),
           ),
         ],
         quotedAt: now(),
@@ -350,6 +417,7 @@ void _run(
               sources: [
                 RoutedSwapQuoteSource(
                   manager,
+                  nativeMaxGasReserve: nativeMaxGasReserve,
                   networks: () => SwapNetworks([eth, usdc]),
                   now: now,
                 ),
