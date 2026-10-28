@@ -87,7 +87,18 @@ abstract class BaseFiatProvider {
       }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        return json.decode(response.body);
+        dynamic decoded;
+        try {
+          decoded = json.decode(response.body);
+        } on FormatException {
+          throw const FormatException('Invalid fiat provider response');
+        }
+        // A proxy can return an upstream block page as a JSON string with
+        // HTTP 200. Reject it before provider parsers index it as an object.
+        if (decoded is! Map<String, dynamic>) {
+          throw const FormatException('Invalid fiat provider response');
+        }
+        return decoded;
       } else {
         _log.warning('Request failed with status: ${response.statusCode}');
         dynamic decoded;
@@ -98,6 +109,9 @@ abstract class BaseFiatProvider {
         }
         return Future.error(decoded as Object);
       }
+    } on FormatException catch (e, s) {
+      _log.severe('Invalid fiat provider response', e, s);
+      rethrow;
     } catch (e, s) {
       _log.severe('Network error', e, s);
       return Future.error('Network error: $e');
