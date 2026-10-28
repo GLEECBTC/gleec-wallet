@@ -33,6 +33,8 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
+- **Transfer Review and Precision** ([@CharlVS], [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
+
 - **Atomic Token Permission** ([@CharlVS], [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Block new atomic EVM-token sells when the negotiated spender and permission cannot be verified before Start. The guard also covers Advanced orders and bot starts. Native atomic and routed token swaps retain their separate permission contracts; existing swaps can still be followed and recovered.
 
 - **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.

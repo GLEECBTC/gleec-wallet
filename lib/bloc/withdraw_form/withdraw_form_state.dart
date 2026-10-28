@@ -316,7 +316,9 @@ class WithdrawFormState extends Equatable {
       try {
         final normalizedAmount = normalizeDecimalString(amount);
         final parsedAmount = Decimal.parse(normalizedAmount);
-        if (parsedAmount <= Decimal.zero) {
+        final decimals = asset.id.chainId.decimals;
+        if (parsedAmount <= Decimal.zero ||
+            (decimals != null && parsedAmount.scale > decimals)) {
           return false;
         }
       } catch (_) {

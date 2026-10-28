@@ -75,8 +75,13 @@ changes workflow/docs only; it does not alter this application/SDK runtime.
   boundaries reject them before any new order or approval. Do not fund these
   disabled cases; native atomic and routed token contracts remain separate.
   Existing swap recovery/cancellation stays available.
-- [ ] Existing transfer/history completeness, direction and review-labelling
-  findings need disposition against the private live ledger.
+- [x] Transfer review and input #3565: signed EVM principal/Max, fee and
+  same-asset total are distinct; exact amounts remain accessible/selectable.
+  Unsupported precision and mismatched signed EVM amounts cannot be submitted.
+  Unit/widget cases cover the rejection and normal/Max review. No new funded
+  transfer is claimed by these automated checks.
+- [ ] Wallet-history completeness/direction and unknown fiat #3566 need the
+  SDK and app fixes merged and final validation recorded.
 - [ ] Approved LI.FI text must replace the hosted placeholder before production.
   The owner-authorized manual RC legal-testing bypass keeps the notice and
   cannot record missing terms as accepted. Ordinary builds remain gated.

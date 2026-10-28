@@ -537,6 +537,8 @@
   "withdrawNotSufficientBalanceError": "Not enough {} to withdraw: available {}, required {} or more",
   "withdrawZeroBalanceError": "You have zero {} balance",
   "withdrawAmountTooLowError": "{} {} too low, you need > {} {} to send",
+  "withdrawPreviewAmountChanged": "The signed transfer amount differs from your input. Edit the amount and review it again.",
+  "withdrawAmountPrecisionError": "{} supports up to {} decimal places. Edit the amount before continuing.",
   "withdrawInvalidAmountError": "Invalid amount",
   "withdrawNoSuchCoinError": "Invalid selection, {} does not exist",
   "withdrawPreview": "Preview Withdrawal",

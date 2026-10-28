@@ -693,6 +693,70 @@ void testWithdrawFormConfirmReceipt() {
       },
     );
 
+    testWidgets(
+      'native Max exposes the exact principal and fee to accessibility',
+      (tester) async {
+        final asset = Asset.fromJson({
+          ..._utxoConfig(),
+          'coin': 'ETC',
+          'type': 'Ethereum Classic',
+          'chain_id': 61,
+          'decimals': 18,
+          'protocol': {
+            'type': 'ETH',
+            'protocol_data': {'chain_id': 61},
+          },
+          'nodes': const [],
+          'swap_contract_address': '0x0000000000000000000000000000000000000001',
+          'fallback_swap_contract':
+              '0x0000000000000000000000000000000000000001',
+        }, knownIds: const {});
+        final principal = Decimal.parse('1.000000000000000001');
+        final fee = Decimal.parse('0.000021');
+        final semantics = tester.ensureSemantics();
+        try {
+          await _pumpNarrowLargeText(
+            tester,
+            RepositoryProvider<KomodoDefiSdk>.value(
+              value: _FakeSdk(),
+              child: WithdrawPreviewDetails(
+                state: WithdrawFormState(
+                  asset: asset,
+                  step: WithdrawFormStep.confirm,
+                  recipientAddress: 'recipient',
+                  amount: '5',
+                  isMaxAmount: true,
+                  authorizedRecipientAmount: principal,
+                  isGaslessFeatureConfigured: false,
+                  preview: _result(
+                    coin: 'ETC',
+                    balanceChanges: BalanceChanges(
+                      netChange: -principal - fee,
+                      spentByMe: principal + fee,
+                      receivedByMe: Decimal.zero,
+                      totalAmount: principal,
+                    ),
+                    fee: FeeInfoUtxoFixed(coin: 'ETC', amount: fee),
+                  ),
+                ),
+              ),
+            ),
+            useEnglishTranslations: true,
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.bySemanticsLabel('Recipient gets: 1.000000000000000001 ETC'),
+            findsOneWidget,
+          );
+          expect(find.bySemanticsLabel('Fee: 0.000021 ETC'), findsOneWidget);
+          expect(find.textContaining('1.000021000000000001'), findsWidgets);
+          expect(find.textContaining('1.000000000000000001 ETC'), findsWidgets);
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+
     testWidgets('does not invent a local GasFree fee warning', (tester) async {
       final state = WithdrawFormState(
         asset: _trc20Asset(),
@@ -713,7 +777,7 @@ void testWithdrawFormConfirmReceipt() {
       expect(find.text('withdrawHighFee'), findsNothing);
     });
 
-    testWidgets('non-gasless preview keeps the existing summary', (
+    testWidgets('standard preview separates principal, fee and total debit', (
       tester,
     ) async {
       final state = WithdrawFormState(
@@ -721,9 +785,10 @@ void testWithdrawFormConfirmReceipt() {
         step: WithdrawFormStep.confirm,
         recipientAddress: 'recipient',
         amount: '1',
+        authorizedRecipientAmount: Decimal.one,
         isGaslessFeatureConfigured: false,
         preview: _result(
-          balanceChanges: _balanceChanges(spent: '1'),
+          balanceChanges: _balanceChanges(spent: '1.0001'),
           fee: FeeInfoUtxoFixed(coin: 'KMD', amount: Decimal.parse('0.0001')),
           coin: 'KMD',
         ),
@@ -731,11 +796,11 @@ void testWithdrawFormConfirmReceipt() {
 
       await tester.pumpWidget(_wrap(WithdrawPreviewDetails(state: state)));
 
-      expect(find.text('youSend'), findsOneWidget);
-      expect(find.text('withdrawRecipientGets'), findsNothing);
+      expect(find.text('youSend'), findsNothing);
+      expect(find.text('withdrawRecipientGets'), findsOneWidget);
       expect(
         find.byKey(const Key('withdraw-gasless-total-deducted')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(find.textContaining('1 KMD'), findsWidgets);
     });
@@ -849,6 +914,7 @@ void testWithdrawFormConfirmReceipt() {
         _wrap(
           WithdrawSuccessReceipt(
             asset: _utxoAsset(),
+            recipientAmount: Decimal.fromInt(10),
             result: WithdrawalResult.fromWithdrawResult(
               _result(
                 balanceChanges: _balanceChanges(spent: '10', received: '10'),
