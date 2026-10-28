@@ -107,7 +107,7 @@ void main() {
     test('a wallet short of network coin is insufficient funds too', () async {
       trading.preimageError = shortOfGas;
 
-      final reason = failure(await ask(from: usdc));
+      final reason = failure(await ask());
 
       expect(reason.kind, SwapQuoteFailureKind.insufficientFunds);
       expect(reason.detail, 'ETH');
@@ -116,13 +116,13 @@ void main() {
     test('a shortfall carries the amount required', () async {
       trading.preimageError = shortOfGas;
 
-      expect(failure(await ask(from: usdc)).minimum, d('0.002'));
+      expect(failure(await ask()).minimum, d('0.002'));
     });
 
     test('a shortfall names the coin that is short', () async {
       trading.preimageError = shortOfGas;
 
-      expect(failure(await ask(from: usdc)).asset, eth);
+      expect(failure(await ask()).asset, eth);
     });
 
     test(

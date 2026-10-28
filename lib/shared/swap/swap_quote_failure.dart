@@ -48,6 +48,9 @@ enum SwapQuoteFailureKind {
   /// Trading this asset is unavailable here.
   tradingBlocked,
 
+  /// The engine's token permission cannot be verified before Start.
+  permissionUnavailable,
+
   /// The device clock is off, which peer-to-peer swaps cannot tolerate.
   clockInvalid,
 
@@ -130,7 +133,8 @@ class SwapQuoteFailure extends Equatable {
   bool get isPermanent => switch (kind) {
     SwapQuoteFailureKind.pairUnsupported ||
     SwapQuoteFailureKind.notConfigured ||
-    SwapQuoteFailureKind.tradingBlocked => true,
+    SwapQuoteFailureKind.tradingBlocked ||
+    SwapQuoteFailureKind.permissionUnavailable => true,
     _ => false,
   };
 

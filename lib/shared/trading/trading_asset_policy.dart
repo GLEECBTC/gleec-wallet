@@ -25,3 +25,17 @@ bool canTradeAssetId(AssetId? assetId) =>
 
 bool canTradeAssetPair(String base, String rel) =>
     !isWalletOnlyTradingAssetId(base) && !isWalletOnlyTradingAssetId(rel);
+
+/// The atomic engine negotiates its spender only after matching and can grant
+/// an unlimited allowance. Until that permission is verifiable before Start,
+/// an EVM-token sell must not be represented as requiring no permission.
+bool atomicTokenPermissionUnavailable(AssetId asset) =>
+    asset.isChildAsset && evmCoinSubClasses.contains(asset.subClass);
+
+/// A client-side refusal: retrying cannot establish a missing permission.
+class AtomicPermissionUnavailableException implements Exception {
+  const AtomicPermissionUnavailableException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}

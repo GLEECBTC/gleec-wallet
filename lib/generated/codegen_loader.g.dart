@@ -1593,6 +1593,9 @@ abstract class LocaleKeys {
   static const swapCopy = 'swapCopy';
   static const swapShow = 'swapShow';
   static const swapCopied = 'swapCopied';
+  static const swapPermissionUnavailableTitle =
+      'swapPermissionUnavailableTitle';
+  static const swapPermissionUnavailableBody = 'swapPermissionUnavailableBody';
   static const swapPermissionNoneTitle = 'swapPermissionNoneTitle';
   static const swapPermissionNoneBody = 'swapPermissionNoneBody';
   static const swapPermissionExactTitle = 'swapPermissionExactTitle';

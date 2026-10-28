@@ -33,6 +33,8 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
+- **Atomic Token Permission** ([@CharlVS], [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Block new atomic EVM-token sells when the negotiated spender and permission cannot be verified before Start. The guard also covers Advanced orders and bot starts. Native atomic and routed token swaps retain their separate permission contracts; existing swaps can still be followed and recovered.
+
 - **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.
 - **Native Max Funding** ([@CharlVS], #3557) — Repriced a smaller exact amount with bounded gas headroom before review. Required funding, estimated spending and retained balance stay separate. Later fee or balance changes can still prevent execution; uncertain starts are never automatically resubmitted.
 - **Unavailable Fiat Providers** ([@CharlVS], #3557) — Rejected malformed/block-page responses cleanly, cleared stale payment methods, stopped loading and allowed explicit refresh. Upstream Banxa availability remains tracked in [#3559](https://github.com/GLEECBTC/gleec-wallet/issues/3559).
@@ -50,9 +52,10 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
 and adopters of interim routed-swap APIs. External recipients, new routed
 chains/providers and hardware signing are not certified by this candidate.
-Atomic token-approval disclosure, legal availability, existing transfer/history
-findings, Safari, signed packaging and upstream review/CI items remain explicit
-gates. Five-person usability and live fiat testing were deferred for the earlier
+New atomic EVM-token sells are unavailable until authoritative permission
+preflight is supported; no unlimited approval is inferred from a quoted amount.
+Legal availability, existing transfer/history findings, Safari, signed packaging
+and upstream review/CI items remain explicit gates. Five-person usability and live fiat testing were deferred for the earlier
 integration RC; final distribution requires their recorded disposition.
 
 **Review comparison:** [0.9.7-1...chore/prepare-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...chore/prepare-0.10.0).

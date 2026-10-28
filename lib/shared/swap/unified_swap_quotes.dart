@@ -65,6 +65,7 @@ class UnifiedSwapQuotes extends Equatable {
       SwapQuoteFailureKind.timeout,
       SwapQuoteFailureKind.serviceError,
       SwapQuoteFailureKind.notConfigured,
+      SwapQuoteFailureKind.permissionUnavailable,
       SwapQuoteFailureKind.pairUnsupported,
       SwapQuoteFailureKind.unknown,
       // Whatever a source that was asked said explains more.

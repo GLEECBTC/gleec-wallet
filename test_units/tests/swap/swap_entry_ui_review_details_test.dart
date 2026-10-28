@@ -86,6 +86,21 @@ void main() {
     symbol: symbol,
   );
 
+  testWidgets('unverified atomic token permission never says none or starts', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      quoteOf(source: SwapLiquiditySource.atomic, from: usdc, to: btc),
+    );
+    expect(find.text('Token permission unavailable'), findsOneWidget);
+    expect(find.text('No token approval needed'), findsNothing);
+    final button = tester.widget<SwapButton>(
+      find.byKey(const Key('swap-start')),
+    );
+    expect(button.onPressed, isNull);
+  });
+
   group('costs', () {
     testWidgets('without dollar prices are given in tokens, per token', (
       tester,

@@ -164,20 +164,16 @@ void main() {
       },
     );
 
-    test('a token\'s fees in its network coin map to that coin', () async {
-      trading
-        ..bids = [bidOf('0.00005', '1', '1000')]
-        ..preimage = preimageOf(
-          takerFee: coinFeeOf('USDC-ERC20', '0.75'),
-          feeToSendTakerFee: coinFeeOf('ETH', '0.0004'),
-          baseCoinFee: coinFeeOf('ETH', '0.0006'),
-          relCoinFee: coinFeeOf('BTC', '0.00002'),
-        );
-
-      final quote = available(await ask(source(), from: usdc, to: btc));
-
-      expect(quote.fees.map((fee) => fee.asset), [usdc, eth, eth, btc]);
-      expect(quote.guaranteedReceive, d('0.00005'));
+    test('unverified EVM-token permission blocks before any RPC', () async {
+      for (final subClass in evmCoinSubClasses) {
+        final token = assetOf('TOKEN', subClass: subClass, parent: eth);
+        final reason = failure(await ask(source(), from: token, to: btc));
+        expect(reason.kind, SwapQuoteFailureKind.permissionUnavailable);
+        expect(reason.asset, token);
+        expect(reason.isPermanent, isTrue);
+      }
+      expect(trading.books, isEmpty);
+      expect(trading.preimages, isEmpty);
     });
 
     test(

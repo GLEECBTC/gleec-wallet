@@ -124,6 +124,10 @@ class SwapFailureCopy {
         message: LocaleKeys.tradingDisabled.tr(),
         action: SwapEntryAction.none,
       ),
+      SwapQuoteFailureKind.permissionUnavailable => SwapFailureCopy(
+        message: LocaleKeys.swapPermissionUnavailableBody.tr(),
+        action: SwapEntryAction.chooseAnother,
+      ),
       SwapQuoteFailureKind.clockInvalid => SwapFailureCopy(
         message: LocaleKeys.swapErrorClock.tr(),
         action: SwapEntryAction.none,

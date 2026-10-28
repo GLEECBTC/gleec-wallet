@@ -84,6 +84,25 @@ void main() {
       expect(services.contractOf(eth), isNull);
     });
 
+    test(
+      'atomic permission uses the contract with an unresolved token parent',
+      () {
+        final token = assetOf('PLAIN-TOKEN');
+        expect(token.parentId, isNull);
+        sdk.assets.add(
+          assetFor(token, protocol: SrcProtocol(contract: '0xcontract')),
+        );
+        expect(services.atomicPermissionUnavailable(token), isTrue);
+        expect(services.atomicPermissionUnavailable(eth), isFalse);
+        expect(
+          services.atomicPermissionUnavailable(assetOf('UNKNOWN')),
+          isTrue,
+        );
+        sdk.assets.add(assetFor(arb, protocol: SrcProtocol(broken: true)));
+        expect(services.atomicPermissionUnavailable(arb), isTrue);
+      },
+    );
+
     test('an asset the wallet does not know is plain', () {
       final unknown = assetOf('NOPE');
 
