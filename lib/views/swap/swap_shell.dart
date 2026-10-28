@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/wallet.dart';
@@ -47,6 +48,13 @@ class SwapShell extends StatefulWidget {
     this.destinationBuilder,
     super.key,
   });
+
+  /// The key both page routers give the shell.
+  ///
+  /// Crossing 768 or 1024 px builds a different main layout, with its own page
+  /// router. One key lets Flutter move the shell there, state and all,
+  /// instead of building a new one and closing its blocs.
+  static final GlobalKey routerKey = GlobalKey(debugLabel: 'swap-shell');
 
   /// Which destination to open on.
   final SwapDestination initialDestination;
@@ -105,8 +113,9 @@ class _SwapShellState extends State<SwapShell> {
       SwapDestination.swap => const SwapPage(),
       SwapDestination.activity => const SwapActivityView(),
       // Constructed fresh so the trading page keeps owning its own routing
-      // and lifecycle exactly as it does today.
-      SwapDestination.advanced => const DexPage(),
+      // and lifecycle exactly as it does today. It reads the screen type as
+      // it builds, so each screen type gets a new one rather than a move.
+      SwapDestination.advanced => DexPage(key: ValueKey(screenType)),
     };
   }
 

@@ -151,6 +151,8 @@ import 'tests/swap/swap_shell_backup_notice_button_test.dart'
     as swap_shell_backup_notice_button_test;
 import 'tests/swap/swap_shell_backup_notice_test.dart'
     as swap_shell_backup_notice_test;
+import 'tests/swap/swap_shell_breakpoint_test.dart'
+    as swap_shell_breakpoint_test;
 import 'tests/swap/swap_slippage_test.dart' as swap_slippage_test;
 import 'tests/swap/swap_sources_test.dart' as swap_sources_test;
 import 'tests/swap/swap_atomic_exact_price_test.dart'
@@ -654,6 +656,7 @@ void main() {
   swap_shell_test.main();
   swap_shell_backup_notice_button_test.main();
   swap_shell_backup_notice_test.main();
+  swap_shell_breakpoint_test.main();
   swap_fee_vs_impact_test.main();
   swap_provider_notice_test.main();
   swap_legal_gate_test.main();
