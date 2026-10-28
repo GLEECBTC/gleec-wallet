@@ -14,6 +14,7 @@ import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/utils/extensions/legacy_coin_migration_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/withdrawal_amounts.dart';
 
 /// Returns every source that qualifies as the canonical TRON GasFree signer.
 ///
@@ -316,7 +317,7 @@ class WithdrawFormState extends Equatable {
       try {
         final normalizedAmount = normalizeDecimalString(amount);
         final parsedAmount = Decimal.parse(normalizedAmount);
-        final decimals = asset.id.chainId.decimals;
+        final decimals = withdrawalAmountPrecision(asset);
         if (parsedAmount <= Decimal.zero ||
             (decimals != null && parsedAmount.scale > decimals)) {
           return false;

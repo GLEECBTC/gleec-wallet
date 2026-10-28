@@ -768,21 +768,34 @@ void testWithdrawFormBloc() {
       test(
         '$ticker rejects excess precision before preview or execution',
         () async {
-          final asset = _assetFromConfig({
+          final config = {
             ..._utxoConfig(coin: ticker),
             'type': type,
             'chain_id': chain,
             'decimals': decimals,
-            'protocol': {
-              'type': 'ETH',
-              'protocol_data': {'chain_id': chain},
-            },
+            'protocol': ticker == 'ETC'
+                ? {
+                    'type': 'ETH',
+                    'protocol_data': {'chain_id': chain},
+                  }
+                : {
+                    'type': 'ERC20',
+                    'protocol_data': {
+                      'platform': 'POL',
+                      'contract_address':
+                          '0x0000000000000000000000000000000000000002',
+                    },
+                  },
             'nodes': const [],
             'swap_contract_address':
                 '0x0000000000000000000000000000000000000001',
             'fallback_swap_contract':
                 '0x0000000000000000000000000000000000000001',
-          });
+          };
+          // The pinned native ETC config omits decimals; KDF uses 18.
+          if (ticker == 'ETC') config.remove('decimals');
+          final asset = _assetFromConfig(config);
+          if (ticker == 'ETC') expect(asset.id.chainId.decimals, isNull);
           final withdrawals = _FakeWithdrawalManager(
             previewWithdrawalHandler: (_) async => _utxoPreview(
               assetId: ticker,
