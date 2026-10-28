@@ -5,15 +5,17 @@
     "version": "0.10.0+0",
     "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
     "previous_published_tag": "0.9.7-1",
-    "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6"
+    "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6",
+    "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6"
   },
   "sdk": {
     "version": "0.9.0",
     "integration_source": "03a3cb1adf666952a16f0cd80e67b8173076f4c1",
     "final_main_pin_required": true,
-    "preparation_commit": "2f6ba7241ae2ae558b0bec02cb562cc2f879b084",
+    "preparation_commit": "cc9a585504ab2cd723043399937ac04e1dee4dd1",
     "preparation_pr": 409,
-    "promotion_pr": 410
+    "promotion_pr": 410,
+    "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3"
   },
   "kdf": {
     "source": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
@@ -72,5 +74,9 @@
     "signed output hashes and signatures",
     "final build configuration and integrator policy",
     "required gate dispositions and install/upgrade verification"
-  ]
+  ],
+  "merge_strategy": {
+    "pull_requests_into_dev": "squash",
+    "dev_to_main_release": "merge"
+  }
 }

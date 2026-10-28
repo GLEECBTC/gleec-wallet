@@ -14,9 +14,13 @@ It must be reconciled with final build settings and output evidence at freeze.
   It integrates the #3554–#3556 review/recovery changes and #3558 legal changes.
 - SDK integration source: `03a3cb1adf666952a16f0cd80e67b8173076f4c1`, SDK #407,
   including SDK #405. SDK 0.9.0 preparation is stacked on that source.
-- This preparation is stacked on app `feat/kdf-667045c` to keep its diff
-  focused. After #3557 merges, retarget it to `dev` and preserve the reviewed
-  tree. If squash identities change, verify equivalence and repin deliberately.
+- This preparation was stacked on app `feat/kdf-667045c`. #3554 and #3557
+  have now squash merged into `dev`; retarget this preparation to `dev` after
+  source-branch reconciliation. Preserve reviewed content and record real SHAs.
+- Branch strategy: **squash every PR into `dev`**, including integration and
+  preparation PRs. Use merge commits only for `dev` → `main` release promotion.
+  Source-branch updates may merge dev for conflict resolution; the final PR
+  merge into dev must still be a squash.
 - The actual release PR is `dev` → `main`, initially draft. It must contain
   both integrations, preparation and the final SDK `main` pin before promotion.
 - KDF `35f0bde438eec2cb0471b19642b9d9c4602fa17d`; specs
@@ -39,8 +43,8 @@ It must be reconciled with final build settings and output evidence at freeze.
   validates ERC-20 payment amount outside the watcher-reward branch. This
   directly retains the fix from KDF `2023112`; divergent ancestry alone would
   not establish it. See SDK 0.9.0 checklist for immutable source links.
-- [x] Pin published SDK preparation `2f6ba7241ae2ae558b0bec02cb562cc2f879b084`
-  (SDK #409); review consumer lockfile: only 11 SDK version lines changed.
+- [x] Pin SDK dev preparation squash `cc9a585504ab2cd723043399937ac04e1dee4dd1`
+  (SDK #409, now merged); consumer lockfile changes only 11 SDK version lines.
   SDK #410 is the separate draft `dev` → `main` promotion. Final main pin is
   still required before app promotion.
 - [x] Fresh app aggregator: **3,898 passed, four skipped**, all four production
@@ -95,12 +99,12 @@ These are not fresh results for the prepared version graph.
 
 ## Promotion and distribution order
 
-1. Merge reviewed SDK integration/preparation to `dev`; promote SDK `dev` to
-   `main` with a merge commit and record the immutable release SHA. Create the
+1. Squash merge reviewed SDK integration/preparation to `dev`; promote SDK
+   `dev` to `main` with a merge commit and record the immutable release SHA. Create the
    approved SDK/package tags only under the release process.
 2. Repin this app preparation to that SDK `main` SHA, resolve/review lockfile,
    and repeat consumer checks. The SDK preparation branch pin is provisional.
-3. Merge reviewed app integration/preparation to `dev`. Recheck `main` ancestry,
+3. Squash merge reviewed app integration/preparation to `dev`. Recheck `main` ancestry,
    final diff, SDK reachability, checks and all remaining gates on app promotion.
 4. Promote app `dev` to `main` with a merge commit; record final SHA. Create the
    `0.10.0` release/tag on that commit under the approved release process.
@@ -114,3 +118,26 @@ These are not fresh results for the prepared version graph.
 
 This preparation opens reviewable PRs. It does not merge, publish, deploy,
 commit funds or waive an unresolved gate.
+
+## Dev merge record — 28 October 2026
+
+- App #3554: squash `df11ff0a30b6b5bf827e04df06527821d85a5e88`.
+- App #3557: squash `653ab9000eff9828a03950e63f5969aa9e675ef6`.
+- SDK #405 and #407 are also squash merged into SDK dev; #407's actual squash
+  is `76140abb2312f6c306c3118a2cd619c8985e64a3`.
+- App dev after both implementation merges exactly matches tested integration
+  `5202777ea`. #3555/#3556 content is included through #3557; their separate
+  merges have conflicts and were not performed.
+- The owner explicitly authorized admin bypass for dev merges. #3554's updated
+  head CI was still running; #3557's known provider/UI and preview results stay
+  recorded separately. The passing combined runtime tree was preserved exactly.
+- Preparation #3560 is retargeted/reconciled to dev and must also be squashed.
+  Its SDK dev preparation pin remains provisional until SDK main promotion;
+  final SDK-main repinning and the draft #3561 release gates remain required.
+
+The app preparation now pins SDK dev squash `cc9a5855`, whose complete tree
+matches the updated SDK preparation head `63b04232`. Compared with the tested
+SDK preparation `2f6ba724`, only the release checklist changed. App runtime and
+dependency files remain those tested at `6bca15444`; app documentation, the
+input manifest and the equivalent SDK gitlink record the real squash history.
+SDK main promotion and final main repinning remain separate release gates.
