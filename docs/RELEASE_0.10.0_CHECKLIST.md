@@ -22,6 +22,16 @@ merges; that does not satisfy outstanding release reviews or checks.
 | App #3557 | `653ab9000eff9828a03950e63f5969aa9e675ef6` | Combined implementation, legal and review fixes |
 | App #3560 | `1b91f206e2a8d1934984abfc5fbb7eea6a5f4230` | App 0.10.0 preparation |
 | App #3562 | `a2886621d155e824e0ab392bfd8166a2dc827f17` | Validated SDK gitlink and Melos evidence |
+| SDK #412 | `97b48556ab607506909734841e1f0a003cece694` | Wallet-scoped routed handles and unconfirmed starts |
+| SDK #413 | `56828b91cb3eb147538803a524271278a2107b75` | Signed EVM movements and verified ETC history |
+| SDK #414 | `52f1181f2e0362b6963084089407a06af2e717ad` | Final SDK validation record |
+| SDK #415 | `22e14ac94fb555776eda370de08f1dafd5ca4019` | Frozen release-branch strategy |
+| App #3568 | `dfe722dcf166da4d5bd78b9120c84505812c83f9` | Consume wallet-scoped routed sessions |
+| App #3569 | `22c0892e4ce0341e4c935159842bbf98a1f3f9fb` | Refuse unverifiable atomic EVM-token permission |
+| App #3570 | `c85742a272a4cb92499db821e288a982a56b9ab3` | Transfer principal, review and precision |
+| App #3571 | `c0373eed24d0dbe95a5030b4cb513b9fa464aedb` | Native EVM precision when metadata omits decimals |
+| App #3572 | `f94e507214ad0330d508bfe8d68624ad067ff526` | History direction, self transfers and valuation |
+| App #3510 | `698af846229cc3458dc539d5f3e39fa7f76967d6` | SDK tag/version/ancestry preflight before publication |
 
 App #3555 and #3556 are closed because their exact revisions were incorporated
 into #3557. Their code exists on dev; the separate PRs were not independently
@@ -29,8 +39,10 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 
 - [x] App/SDK changelogs and versions include unpublished prior fixes and
   user-facing SDK changes. Internal package constraints are aligned.
-- [x] Current SDK gitlink is `6038592a9f7853cd76a1a6fcb3a0fab8f3b89847`.
-  SDK main promotion and final app main repin are still required.
+- [x] Current SDK gitlink is `22e14ac94fb555776eda370de08f1dafd5ca4019` on frozen
+  `release-0.9.0` ([SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)).
+  SDK main promotion and final app main repin are distribution steps after
+  review, not prerequisites for freezing this exact RC source.
 - [x] Frozen KDF `35f0bde438eec2cb0471b19642b9d9c4602fa17d`, specs
   `7c388ea7b91cb7c657435d416bc03e5349b46162`, bundled coins
   `2b0aefb78b184091ab086c66e513d8b03f5d5a01`. All seven rebuilt archives
@@ -42,23 +54,28 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 
 ## Fresh validation of the prepared runtime
 
-Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. The RC handoff follow-up
-changes workflow/docs only; it does not alter this application/SDK runtime.
+Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. Combined runtime is
+app `f94e5072` with SDK runtime `56828b91`. Final
+SDK release-branch bookkeeping changes Markdown only; content comparison
+confirms the same runtime. The final app RC also adds documentation and the
+immutable SDK candidate gitlink without changing that runtime.
 
 - [x] `melos bootstrap --offline --enforce-lockfile`, both prepare hooks, 22
   resolved packages. Repeated `melos run prepare --no-select`: stable output.
-- [x] App unit aggregator with four production GasFree defines: **3,898 passed /
+- [x] App unit aggregator with four production GasFree defines: **3,919 passed /
   four skipped**.
-- [x] All 16 SDK native package suites through Melos: **3,045 passed / 14 skipped**.
-- [x] Six SDK Chrome/WASM suites: **176 passed**; two framework WASM suites:
+- [x] All 16 SDK native package suites through Melos: **3,056 passed / 14 skipped**.
+- [x] Nine core SDK Chrome/WASM files: **213 passed**; two framework WASM files:
   **10 passed**. Auth helper-boundary retest: **127 passed**.
-- [x] Full analysis: **zero errors**, 55 warnings / 2,146 infos. The additional
-  infos vs the earliest snapshot are ignored generated browser wrappers; no
-  new changed-line diagnostic remains.
+- [x] Full analysis: **zero errors**, 55 warnings / 2,144 infos. The warnings
+  match the existing baseline; no new changed-line diagnostic
+  remains. Analysis exits nonzero because the repository includes that warning
+  backlog, not because this candidate has analysis errors.
 - [x] Consumer enforced offline lockfile, input hashes, changed Dart formatting
   and diff checks pass. No hosted dependency roll was introduced.
-- [ ] Final-head hosted checks/reviews and actual signed platform evidence.
-  Record each failing or pending job separately; see current release PR checks.
+- [ ] Frozen-head hosted checks and reviewer signoff; record each failing or
+  pending job separately on the current release PRs. Signed platform evidence
+  remains a distribution gate below, distinct from source code freeze.
 
 ## Testing evidence and required dispositions
 
@@ -108,24 +125,47 @@ Five-person usability and live fiat testing were explicitly deferred by the
 owner. Banxa #3559 is after 0.10.0. Preserve that disposition instead of imposing
 those tests again or describing them as passed.
 
-## Promotion and distribution order
+## Freeze boundary and promotion order
 
-1. Complete SDK release gates, then merge SDK #410 (`dev` → `main`) using a
-   **merge commit**. Record its actual immutable main SHA. Tags/publication
-   follow the approved release process.
-2. Open and **squash merge** an app dev PR pinning that SDK main SHA. Reconcile
-   the manifest/checklists and repeat consumer lockfile/tests as appropriate.
-   Consider the SDK-tag preflight documentation in app #3510 in that final repin.
-3. Complete app release gates and review the final diff/checks. Merge app #3561
-   (`dev` → `main`) using a **merge commit**. Auto-merge is not enabled.
-4. Tag/build/publish from the recorded main commits. Record output and generated
-   coin hashes, configuration/defines and signing identity. Preserve at least
-   the prior 0.9.7-1 standard: detached signatures and signed SHA256SUMS. Verify
+The app freezes on `release-0.10.0`; SDK freezes on `release-0.9.0`.
+Both branches come from dev after the focused squash merges above. The old
+dev-headed app #3561 / SDK #410 are replaced by release-branch PRs, so future
+dev commits cannot silently enter this RC. Keep both promotions open for
+reviewer/tester feedback. The exact app commit and preview provenance belong
+in the release PR and `rc-test-build.json`; this file cannot contain its own
+commit hash.
+
+Freeze means no planned runtime changes remain for #3563, #3565, #3566 or the
+two SDK correlation/session findings. Restrict changes to verified blockers;
+make each repair on a focused branch, squash it into dev, carry only that
+reviewed fix into the release branch and repeat affected validation. Do not
+advance release branches to unrelated dev work.
+
+1. Complete SDK release gates, then merge [SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)
+   (`release-0.9.0` → `main`) using a **merge commit**. Record its actual
+   immutable main SHA. Tags/publication follow the approved release process.
+2. Open and **squash merge** an app dev PR pinning that SDK main SHA. Carry
+   that reviewed bookkeeping commit into `release-0.10.0`, reconcile the
+   manifest/checklists and repeat consumer checks as appropriate. Prove that
+   the promoted SDK runtime matches the frozen candidate; investigate any diff.
+3. Complete app release gates and review the final diff/checks. Merge the app
+   release PR (`release-0.10.0` → `main`) using a **merge commit**. Reconcile
+   release changes back into dev through a focused **squash** PR as needed.
+   No automatic merge is enabled and no main admin bypass is assumed.
+4. Before app tagging/publication, run the SDK tag/version/ancestry preflight in
+   [BUILD_RELEASE.md](BUILD_RELEASE.md#github-release-preflight). Build/publish
+   from the recorded main commits. Record output and generated coin hashes,
+   configuration/defines and signing identity. Preserve at least the prior
+   0.9.7-1 standard: detached signatures and signed SHA256SUMS. Verify
    installation/upgrade for every advertised artifact.
 5. Final production build must have `BYPASS_LEGAL_DOCUMENT_GATE=false`, approved
-   hosted legal text and clean-profile consent verification. Retire the manual
-   RC exception/channel after testing. Web deployment and GitHub publication
-   are separate operations; inspect legacy `release: created` native triggers.
+   hosted legal text and clean-profile consent verification. The marker-free
+   local LI.FI draft is not evidence that hosting or legal approval changed.
+   Retire the manual RC exception/channel after testing. Web deployment and
+   GitHub publication are separate operations; inspect legacy `release: created`
+   native triggers.
 
-This checklist does not authorize a production merge or waive an unresolved
-release gate. It is ready to accompany reviewer and controlled-tester invitations.
+Code freeze does not certify a public release. The outstanding operational,
+legal, reviewer and signed-platform items above remain distribution gates.
+The owner may invite reviewers and controlled testers using the frozen source
+and freshly verified preview identity.

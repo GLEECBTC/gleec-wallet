@@ -8,10 +8,10 @@ owner sends invitations; this handoff does not request reviews or contact tester
 
 | Component | Review / pinned input |
 | --- | --- |
-| App 0.10.0+0 | [Release PR #3561](https://github.com/GLEECBTC/gleec-wallet/pull/3561), `main...dev` |
-| SDK 0.9.0 | [Release PR #410](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/410), `main...dev` |
-| Tested application runtime | `a2886621d155e824e0ab392bfd8166a2dc827f17` before this workflow/documentation handoff |
-| SDK gitlink | `6038592a9f7853cd76a1a6fcb3a0fab8f3b89847` |
+| App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
+| SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
+| Tested application runtime | `f94e507214ad0330d508bfe8d68624ad067ff526`; final SDK bookkeeping changes docs only |
+| SDK gitlink | `22e14ac94fb555776eda370de08f1dafd5ca4019` |
 | KDF | `35f0bde438eec2cb0471b19642b9d9c4602fa17d` |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
 | Bundled coins | `2b0aefb78b184091ab086c66e513d8b03f5d5a01`; runtime updates enabled |
@@ -21,16 +21,20 @@ hashes. The final deployed preview's `rc-test-build.json` records its full app
 and SDK commits, JavaScript hash, KDF configuration hash, build time, legal
 override and Actions run. Record that identity with every report; compare it
 with Settings and the release PR head. A version number alone is insufficient.
-The preview URL and verified deployment run are maintained in app #3561.
+The preview URL and verified deployment run are maintained in the current app
+release-branch PR. The old dev-headed app #3561 and SDK #410 are replaced,
+not merged; their historical discussions remain linked from the current PRs.
 
-The ordinary [#3561 preview](https://walletrc--pull-3561-merge-zdanlngw.web.app)
-retains the legal gate. It is separate from the manual RC legal-testing preview.
-Do not substitute an older #3557 preview for the current candidate.
+The ordinary current release-PR preview retains the legal gate. It is separate
+from the manual RC legal-testing preview. Old #3557/#3561 previews are not the
+frozen candidate; use the identity recorded on the current release PR.
 
 ## Temporary legal exception
 
-The owner authorized testing while the LI.FI document is unpublished. Keep the
-hosted placeholder marker. Only the explicit, manually dispatched RC test build
+The owner authorized testing while the LI.FI document is unpublished. The local
+LI.FI draft is now marker-free and all five legal text files are ignored, local-only
+handoff copies. Removing that local marker does not upload or approve the text.
+Only the explicit, manually dispatched RC test build
 sets `BYPASS_LEGAL_DOCUMENT_GATE=true`. The notice remains visible and missing
 or placeholder terms never become acceptance records. Trading policy, funding,
 quote review and uncertain-start checks still apply. This exception does not
@@ -55,8 +59,8 @@ the served `main.dart.js` against its recorded SHA-256, and verify the legal
 warning before sharing. A moved dev head must fail the requested-commit guard.
 If the build expires, refresh explicitly and update the recorded identity.
 
-Before production: upload counsel-approved LI.FI text, remove the marker only
-from that final text, deploy with the bypass disabled, and test clean-profile
+Before production: upload counsel-approved LI.FI text, deploy with the bypass
+disabled, and test clean-profile
 consent plus existing-wallet/recovery behavior. See [hosting handoff](legal-hosting/README.md).
 
 ## Tester round
@@ -88,10 +92,12 @@ prepare a review and independently verify the result. Follow
 
 ### Known restrictions and preserved evidence
 
-- **Atomic token approval X04/Q12 is blocked for funded testing.** The atomic
-  adapter lacks permission evidence while review can claim no permission is
-  required. [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563) tracks
-  the engine contract, truthful disclosure and regression coverage needed.
+- **New atomic EVM-token sells are unavailable in this RC.** [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569)
+  rejects unverifiable spender/approval scope at quote, review and RPC boundaries,
+  including Advanced orders and restored bots. The UI explains that restriction
+  and cannot claim no approval is needed. Do not fund disabled cases. Native
+  atomic and routed token permission contracts remain separate; existing
+  recovery and cancellation stay available.
 - Native routed Max now selects a smaller, completely repriced amount with
   twice the reported gas requirement retained. It makes at most three exact
   quote requests after KDF Max and never falls back to unbuffered Max. Token
@@ -100,14 +106,26 @@ prepare a review and independently verify the result. Follow
 - Seven human-submitted settlements are already recorded, including the buffered
   native-Max retest on `ed609b9`. The later `5202777` layout fix passed native
   Chrome review checks at 200%, 100%, phone and tablet, including expiry/Refresh.
-  This handoff changes workflow/docs only; it does not require another funded
-  operation merely to repeat the version/code-generation preparation.
+  Later freeze repairs have synthetic/native/browser regression coverage.
+  They are not new funded-settlement evidence; further live checks remain
+  human-operated and should target the current frozen preview.
 - Optional X06/X07 have no observed order-book offers. DOC/MARTY real refund
   testing is blocked by stalled configured testnet tips. Report these as blocked,
   not failed executions or passing cases. Fixture refund coverage is separate.
-- Existing transfer/history completeness, direction and review-labelling
-  findings still need disposition against the private live ledger. Do not infer
-  that a settled swap proves all transfer/history surfaces correct.
+- Transfer review/input [#3570](https://github.com/GLEECBTC/gleec-wallet/pull/3570)
+  and native precision [#3571](https://github.com/GLEECBTC/gleec-wallet/pull/3571)
+  separate recipient principal, network fee and same-asset total; preserve exact
+  selectable/accessible amounts; and reject unsupported precision or mismatched
+  signed EVM principal before submission.
+- History [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572) with SDK #413
+  preserves signed outgoing movements across cache/refetch, restores ETC through
+  its verified explorer, and distinguishes unknown gross direction, self-transfer
+  principal/fee and missing fiat. The explorer has a bounded 1,000-row per-address
+  history window; this does not establish unlimited internal-call completeness.
+- SDK #412 binds routed handles/polling/results to the authenticated session.
+  A start without its durable UUID stays unconfirmed; matching history amounts
+  cannot claim an existing swap. Native/browser regressions cover wallet changes
+  and late results. Private live evidence remains in its local ledger.
 - Five-person usability and live fiat testing were explicitly deferred by the
   owner. Banxa follow-up [#3559](https://github.com/GLEECBTC/gleec-wallet/issues/3559)
   is after 0.10.0; it is not a newly imposed RC prerequisite.
@@ -121,21 +139,23 @@ packages resolved; regenerated platform barrels/parts were corrected in SDK #411
 
 | Validation | Result |
 | --- | --- |
-| App unit aggregator, all four production GasFree defines | 3,898 passed / four skipped |
-| All 16 SDK native package suites through Melos | 3,045 passed / 14 skipped |
-| SDK Chrome/WASM / framework WASM | 176 / 10 passed |
+| App unit aggregator, all four production GasFree defines | 3,919 passed / four skipped |
+| All 16 SDK native package suites through Melos | 3,056 passed / 14 skipped |
+| SDK Chrome/WASM / framework WASM | 213 / 10 passed |
 | Auth helper-boundary retest | 127 passed |
-| Full analysis | Zero errors; 55 warnings / 2,146 infos, no new changed-line diagnostic |
+| Full analysis | Zero errors; 55 warnings / 2,144 infos, no new changed-line diagnostic |
 | Consumer enforced offline lockfile, changed Dart formatting, diff checks | Passed |
 | RC preview guard: ordinary/default paths and invalid override rejection | 11 passed |
 | Existing legal repository, swap and onboarding suites, compiled bypass enabled | 53 passed; warning retained and missing-term acceptance absent |
 
-Hosted CI is recorded on the PR heads. At handoff preparation, web, Linux,
-Windows, Android, Docker and dependency scan checks passed; iOS stopped before
-compilation at `xcodebuild -downloadPlatform iOS` with "Unable to connect to
-simulator" (exit 70), and that job was retried. Other queued/running jobs are
-not passes. Successful compilation does not establish signing, installation or
-upgrade behavior. Read the current checks before approving a release.
+The full app aggregator passed in 4m46s on the combined runtime. Analysis has
+zero errors and the same 55 existing warnings; its nonzero exit reflects that
+backlog. Final enforced offline Melos bootstrap produced no tracked drift.
+The final SDK freeze commit changes only Markdown relative to `52f1181f`;
+its package CI and SDK/playground previews passed. The current frozen-head
+checks remain authoritative: pending/running jobs are not passes. Record a
+specific failure and distinguish setup/network failures from code defects.
+Compilation does not establish signing, installation or upgrade behavior.
 
 For systematic review, use the [full-diff review prompt](SDK_APP_FULL_DIFF_REVIEW_PROMPT.md).
 Prioritize amounts/precision/fees, spender and approval scope, quote revalidation,
@@ -143,21 +163,29 @@ uncertain starts, wallet isolation, persisted recovery, public SDK compatibility
 native/WASM boundaries and frozen artifact integrity. Record files actually
 reviewed and open findings; do not turn this checklist into an approval claim.
 
-## Before main promotion
+## Freeze and main promotion
 
-1. Resolve #3563 and transfer/history findings, legal production availability,
-   final-head review/checks and platform install/upgrade evidence. Record explicit
-   dispositions for blocked cases and outstanding KDF/spec/proxy concerns in the
-   [release checklist](RELEASE_0.10.0_CHECKLIST.md).
-2. Promote SDK #410 from `dev` to `main` with a merge commit after its gates pass.
-   Record the actual main SHA; then squash an app dev PR pinning that SHA and
-   refresh the manifest/consumer checks. SDK dev is still a provisional RC pin.
-3. Promote app #3561 from `dev` to `main` with a merge commit after app gates pass.
-   All preparatory PRs into either dev use squash. No automatic merge is enabled.
-4. Build/tag/publish under the release process. Retain hashes, detached signatures
-   and signed SHA256SUMS at least to the 0.9.7-1 standard. Test final production
-   builds with the legal bypass disabled. This testing exception is not a release
-   waiver and must be retired after the RC testing period.
+The RC source is frozen on `release-0.10.0` and `release-0.9.0`, both created
+from dev after the focused squash merges. Later dev work cannot enter these
+candidates automatically. Keep the release PRs open for tester/reviewer feedback.
+Only verified blockers should change a frozen branch; squash the focused fix
+into dev, carry only that reviewed fix to release, and repeat affected checks.
+
+1. Complete current-head reviews/checks and distribution gates in the
+   [release checklist](RELEASE_0.10.0_CHECKLIST.md): approved production legal
+   text, blocked-case dispositions, upstream operational signoff and signed
+   platform install/upgrade evidence remain separate from source freeze.
+2. Promote SDK #416 from `release-0.9.0` to `main` with a **merge commit** after
+   its gates pass. Record the actual main SHA; squash an app dev PR pinning it,
+   carry that bookkeeping fix into the app release branch, and refresh the
+   manifest/consumer checks. Confirm the SDK runtime matches the frozen one.
+3. Promote the app `release-0.10.0` PR to `main` with a **merge commit** after
+   app gates pass. Every PR into dev uses squash, including focused release
+   reconciliation. No automatic merge or main admin bypass is assumed.
+4. Run the SDK tag preflight in [BUILD_RELEASE.md](BUILD_RELEASE.md#github-release-preflight)
+   before app tagging/publication. Retain hashes, detached signatures and signed
+   SHA256SUMS at least to the 0.9.7-1 standard. Test final production builds with
+   the legal bypass disabled, then retire the isolated RC exception/channel.
 
 ## Report a finding
 
