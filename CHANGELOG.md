@@ -29,9 +29,11 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 - Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
   encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
 - Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
-  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/6038592a9f7853cd76a1a6fcb3a0fab8f3b89847/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/6038592a9f7853cd76a1a6fcb3a0fab8f3b89847/docs/RELEASE_0.9.0.md).
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/52f1181f2e0362b6963084089407a06af2e717ad/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/52f1181f2e0362b6963084089407a06af2e717ad/docs/RELEASE_0.9.0.md).
 
 ## 🐛 Bug Fixes
+
+- **Wallet History** ([@CharlVS], [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
 
 - **Transfer Review and Precision** ([@CharlVS], [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
 
@@ -56,8 +58,8 @@ and adopters of interim routed-swap APIs. External recipients, new routed
 chains/providers and hardware signing are not certified by this candidate.
 New atomic EVM-token sells are unavailable until authoritative permission
 preflight is supported; no unlimited approval is inferred from a quoted amount.
-Legal availability, existing transfer/history findings, Safari, signed packaging
-and upstream review/CI items remain explicit gates. Five-person usability and live fiat testing were deferred for the earlier
+Legal availability, Safari, signed packaging and upstream review/CI items remain
+explicit gates. Five-person usability and live fiat testing were deferred for the earlier
 integration RC; final distribution requires their recorded disposition.
 
 **Review comparison:** [0.9.7-1...chore/prepare-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...chore/prepare-0.10.0).

@@ -80,8 +80,13 @@ changes workflow/docs only; it does not alter this application/SDK runtime.
   Unsupported precision and mismatched signed EVM amounts cannot be submitted.
   Unit/widget cases cover the rejection and normal/Max review. No new funded
   transfer is claimed by these automated checks.
-- [ ] Wallet-history completeness/direction and unknown fiat #3566 need the
-  SDK and app fixes merged and final validation recorded.
+- [x] Wallet-history #3566: SDK #413 preserves signed net-only history on
+  cache/refetch and uses the verified ETC Blockscout endpoint. App rows/details
+  distinguish gross unknown direction, self-transfer principal/fees and
+  unavailable fiat; normalized token symbols select current spot prices.
+  Synthetic/native/browser regressions and the public-address CORS probe pass.
+  Private chain evidence remains local; this is not an unbounded internal-call
+  history or new funded-settlement certification.
 - [ ] Approved LI.FI text must replace the hosted placeholder before production.
   The owner-authorized manual RC legal-testing bypass keeps the notice and
   cannot record missing terms as accepted. Ordinary builds remain gated.

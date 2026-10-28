@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:decimal/decimal.dart';
+
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
@@ -120,9 +122,7 @@ class TransactionHistoryBloc
           .watchTransactionHistoryMerged(asset)
           .listen(
             (transactions) {
-              _addIfOpen(
-                TransactionHistoryUpdated(transactions: transactions),
-              );
+              _addIfOpen(TransactionHistoryUpdated(transactions: transactions));
             },
             onError: (error) {
               _addIfOpen(
@@ -258,6 +258,10 @@ class TransactionHistoryBloc
 void _flagTransactions(List<Transaction> transactions, Coin coin) {
   if (!coin.isErcType) return;
   transactions.removeWhere(
-    (tx) => tx.balanceChanges.totalAmount.toDouble() == 0.0,
+    (tx) =>
+        tx.balanceChanges.totalAmount == Decimal.zero &&
+        tx.balanceChanges.netChange == Decimal.zero &&
+        tx.balanceChanges.spentByMe == Decimal.zero &&
+        tx.balanceChanges.receivedByMe == Decimal.zero,
   );
 }
