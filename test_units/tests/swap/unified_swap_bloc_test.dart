@@ -14,6 +14,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
 
@@ -57,6 +58,7 @@ void main() {
       ),
       registry: registry,
       terms: SwapTermsRepository(
+        legalDocuments: legalFixtureRepository(),
         walletKey: () async => 'wallet',
         storage: storage,
       ),
@@ -426,6 +428,7 @@ void main() {
       expect(bloc.state.activeExecutionId, isNotNull);
       expect(
         await SwapTermsRepository(
+          legalDocuments: legalFixtureRepository(),
           walletKey: () async => 'wallet',
           storage: storage,
         ).hasAccepted(),

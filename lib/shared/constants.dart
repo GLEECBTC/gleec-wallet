@@ -19,6 +19,13 @@ const String storedMarketMakerSettingsKey = 'market_maker_settings';
 /// see, such as a policy change that does not touch those two files.
 const int kCurrentTermsVersion = 1;
 
+/// Local/preview testing only. Never enable in production builds. This bypasses
+/// availability gating, not consent recording or other form validation.
+const bool kBypassLegalDocumentGate = bool.fromEnvironment(
+  'BYPASS_LEGAL_DOCUMENT_GATE',
+  defaultValue: false,
+);
+
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
 const String hdWalletModePreferenceKey = 'wallet_hd_mode_preference';
 const String defaultFiatPreferenceKey = 'default_fiat_preference_v1';

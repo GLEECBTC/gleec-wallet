@@ -14,9 +14,10 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   ) async {
     if (!state.canReview) return;
     final quote = state.selectedQuote!;
+    final routed = quote.source == SwapLiquiditySource.routed;
+    final snapshot = routed ? await _terms.loadSnapshot() : null;
     final termsRequired =
-        quote.source == SwapLiquiditySource.routed &&
-        !await _terms.hasAccepted();
+        routed && !await _terms.hasAccepted(snapshot: snapshot);
     if (state.selectedQuote != quote || state.view != UnifiedSwapView.form) {
       return;
     }
@@ -30,10 +31,62 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
               ? SwapReviewStatus.expired
               : SwapReviewStatus.ready,
           termsRequired: termsRequired,
+          legalSnapshot: snapshot,
+          legalBypass: _terms.legalDocuments.bypassGate,
+          legalLoading: routed && !(snapshot?.isAvailable ?? false),
         ),
       ),
     );
     _armExpiry(quote);
+    if (routed) add(const UnifiedSwapLegalRequested());
+  }
+
+  Future<void> _onLegalRequested(
+    UnifiedSwapLegalRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    final review = state.review;
+    if (review == null ||
+        review.quote.source != SwapLiquiditySource.routed ||
+        review.isRecovery ||
+        _waitingForLegalSubmission ||
+        _startInDoubt ||
+        review.status == SwapReviewStatus.revalidating) {
+      return;
+    }
+    if (!(review.legalSnapshot?.isAvailable ?? false)) {
+      emit(
+        state.copyWith(
+          review: review.copyWith(
+            legalLoading: true,
+            legalFailed: review.showLegalFailure,
+          ),
+        ),
+      );
+    }
+    final version = ++_legalVersion;
+    await _terms.refresh(force: event.retry);
+    final snapshot = await _terms.loadSnapshot();
+    final accepted = await _terms.hasAccepted(snapshot: snapshot);
+    final current = state.review;
+    if (emit.isDone ||
+        version != _legalVersion ||
+        current == null ||
+        current.quote != review.quote ||
+        _startInDoubt ||
+        current.status == SwapReviewStatus.revalidating) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        review: current.copyWith(
+          legalSnapshot: snapshot,
+          legalLoading: false,
+          legalFailed: !snapshot.isAvailable,
+          termsRequired: !accepted,
+        ),
+      ),
+    );
   }
 
   void _onReviewClosed(
@@ -63,8 +116,48 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     UnifiedSwapStartRequested event,
     Emitter<UnifiedSwapState> emit,
   ) async {
-    final review = state.review;
+    var review = state.review;
     if (review == null || state.view != UnifiedSwapView.review) return;
+    if (_waitingForLegalSubmission) return;
+    if (review.legalLoading &&
+        !_terms.canSubmit(review.legalSnapshot) &&
+        !review.isRecovery &&
+        review.quote.source == SwapLiquiditySource.routed) {
+      _waitingForLegalSubmission = true;
+      final version = _startVersion;
+      final walletEpoch = _walletEpoch;
+      final quote = review.quote;
+      ++_legalVersion;
+      try {
+        await _terms.refresh();
+        final snapshot = await _terms.loadSnapshot();
+        final accepted = await _terms.hasAccepted(snapshot: snapshot);
+        if (emit.isDone ||
+            version != _startVersion ||
+            walletEpoch != _walletEpoch ||
+            state.view != UnifiedSwapView.review ||
+            state.review?.quote != quote) {
+          return;
+        }
+        review = state.review!.copyWith(
+          legalSnapshot: snapshot,
+          legalLoading: false,
+          legalFailed: !snapshot.isAvailable,
+          termsRequired: !accepted,
+        );
+        emit(state.copyWith(review: review));
+        if (!_terms.canSubmit(snapshot)) return;
+      } finally {
+        _waitingForLegalSubmission = false;
+        // A different review may have opened while this request was pending.
+        // Refresh its display without replaying the abandoned start action.
+        if (!isClosed &&
+            state.view == UnifiedSwapView.review &&
+            state.review?.legalLoading == true) {
+          add(const UnifiedSwapLegalRequested());
+        }
+      }
+    }
 
     if (review.status == SwapReviewStatus.expired ||
         review.status == SwapReviewStatus.revalidationFailed ||
@@ -78,6 +171,11 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
             quote: fresh,
             status: SwapReviewStatus.ready,
             termsRequired: review.termsRequired,
+            legalSnapshot: review.legalSnapshot,
+            legalBypass: review.legalBypass,
+            legalLoading: review.legalLoading,
+            legalFailed: review.legalFailed,
+            isRecovery: review.isRecovery,
           ),
         ),
       );
@@ -190,6 +288,11 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
                 previous: accepted,
                 status: SwapReviewStatus.materialUpdate,
                 termsRequired: review.termsRequired,
+                legalSnapshot: review.legalSnapshot,
+                legalBypass: review.legalBypass,
+                legalLoading: review.legalLoading,
+                legalFailed: review.legalFailed,
+                isRecovery: review.isRecovery,
               ),
             ),
           );
@@ -207,6 +310,11 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
   }) async {
     final review = state.review;
     if (review == null) return;
+    if (quote.source == SwapLiquiditySource.routed &&
+        !review.isRecovery &&
+        !_terms.canSubmit(review.legalSnapshot)) {
+      return;
+    }
     emit(
       state.copyWith(
         review: review.copyWith(
@@ -222,7 +330,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (termsRequired) {
       // Starting a routed swap after being shown the provider's terms is the
       // acceptance; it is recorded before anything is sent.
-      await _terms.recordAcceptance(at: _now());
+      await _terms.recordAcceptance(at: _now(), snapshot: review.legalSnapshot);
     }
 
     try {
@@ -269,6 +377,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         review: SwapReview(
           quote: event.quote,
           status: stale ? SwapReviewStatus.expired : SwapReviewStatus.ready,
+          isRecovery: true,
         ),
         clearActiveExecution: true,
       ),

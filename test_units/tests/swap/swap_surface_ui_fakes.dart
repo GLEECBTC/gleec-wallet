@@ -32,6 +32,7 @@ import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
@@ -149,6 +150,7 @@ class SurfaceServices implements SwapServices {
 
   @override
   late final SwapTermsRepository terms = SwapTermsRepository(
+    legalDocuments: legalFixtureRepository(),
     walletKey: () async => 'w',
     storage: MemoryStorage(),
   );
@@ -339,6 +341,7 @@ class RecordingSwapBloc extends UnifiedSwapBloc {
         ),
         registry: registry,
         terms: SwapTermsRepository(
+          legalDocuments: legalFixtureRepository(),
           walletKey: () async => 'w',
           storage: MemoryStorage(),
         ),

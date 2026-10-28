@@ -40,6 +40,7 @@ import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/pickers/swap_options_sheet.dart';
 import 'package:web_dex/views/swap/pickers/swap_slippage_sheet.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
 import 'swap_test_fixtures.dart';
@@ -116,7 +117,11 @@ void main() {
         pricing: SwapPricingService(FakePriceSource({eth: d('3000')})),
       ),
       registry: registry,
-      terms: SwapTermsRepository(walletKey: () async => 'w', storage: storage),
+      terms: SwapTermsRepository(
+        legalDocuments: legalFixtureRepository(),
+        walletKey: () async => 'w',
+        storage: storage,
+      ),
       preferences: SwapPreferences(
         walletKey: () async => 'w',
         storage: storage,

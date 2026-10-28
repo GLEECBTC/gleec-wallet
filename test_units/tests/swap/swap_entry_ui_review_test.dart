@@ -8,10 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
-import 'package:web_dex/shared/swap/swap_terms_repository.dart';
+import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -40,6 +42,7 @@ void main() {
   }) => swapPricedForm().copyWith(
     view: UnifiedSwapView.review,
     review: SwapReview(
+      legalSnapshot: legalFixtureSnapshot(),
       quote: quote ?? quoteOf(),
       status: status,
       termsRequired: termsRequired,
@@ -259,20 +262,23 @@ void main() {
       );
 
       expect(
-        find.textContaining(
-          'By starting, you agree to the',
-          findRichText: true,
-        ),
+        find.textContaining('By starting, you accept the', findRichText: true),
         findsOneWidget,
       );
       expect(find.text('LI.FI Terms of Service'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('swap-terms-link')));
       await tester.pumpAndSettle();
-      expect(launched, [SwapTermsRepository.termsUrl]);
+      expect(launched, isEmpty);
+      expect(
+        tester
+            .widget<LegalDocumentView>(find.byType(LegalDocumentView))
+            .document,
+        LegalDocumentType.lifiTerms,
+      );
     });
 
-    testWidgets('a link the device cannot open is offered to copy', (
+    testWidgets('legal text remains readable without an external browser', (
       tester,
     ) async {
       const channel = MethodChannel('plugins.flutter.io/url_launcher');
@@ -287,8 +293,8 @@ void main() {
       await tester.tap(find.byKey(const Key('swap-terms-link')));
       await tester.pumpAndSettle();
 
-      expect(find.text("Couldn't open the link"), findsOneWidget);
-      expect(find.text(SwapTermsRepository.termsUrl), findsOneWidget);
+      expect(find.byType(LegalDocumentView), findsOneWidget);
+      expect(find.text("Couldn't open the link"), findsNothing);
     });
 
     testWidgets('are not presented for an order-book swap', (tester) async {

@@ -4,9 +4,10 @@ import 'dart:io';
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
@@ -20,9 +21,12 @@ import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/shared/constants.dart';
+
+import 'legal_documents_fixture.dart';
 
 // Public BIP39 test vector, never a funded wallet.
 const legalTestSeed =
@@ -92,15 +96,6 @@ class LegalEnglishLoader extends AssetLoader {
           as Map<String, dynamic>;
 }
 
-/// Uses the actual document bytes with futures owned by the widget test zone.
-/// Platform asset I/O completes outside FakeAsync, so pumpAndSettle cannot
-/// flush a fire-and-forget acceptance that waits on rootBundle there.
-class _LegalDocumentAssets extends CachingAssetBundle {
-  @override
-  Future<ByteData> load(String key) async =>
-      ByteData.sublistView(File(key).readAsBytesSync());
-}
-
 Wallet legalTestWallet() => Wallet(
   id: 'sample-wallet',
   name: 'My wallet',
@@ -113,7 +108,13 @@ Wallet legalTestWallet() => Wallet(
 );
 
 class LegalFormHarness {
-  LegalFormHarness({bool updated = false}) {
+  LegalFormHarness({
+    bool updated = false,
+    bool available = true,
+    bool bypass = false,
+    this.responseGate,
+  }) {
+    if (available) storage.values.addAll(LegalFixtureStorage().values);
     if (updated) {
       storage.values['legal_acceptance_v1'] = LegalAcceptance(
         termsVersion: kCurrentTermsVersion - 1,
@@ -124,11 +125,27 @@ class LegalFormHarness {
     }
     repository = LegalDocumentsRepository(
       storage: storage,
-      assetBundle: _LegalDocumentAssets(),
+      bypassGate: bypass,
+      httpClient: MockClient((request) async {
+        await responseGate;
+        return remoteAvailable
+            ? http.Response(
+                legalFixtureText(
+                  LegalDocumentType.values.firstWhere(
+                    (d) => d.url == '${request.url}',
+                  ),
+                ),
+                200,
+                headers: {'content-type': 'text/markdown'},
+              )
+            : http.Response('missing', 404);
+      }),
     );
     agreement = LegalAgreementBloc(repository)
       ..add(const LegalAgreementOpened());
   }
+  bool remoteAvailable = false;
+  Future<void>? responseGate;
   final storage = LegalTestStorage();
   late final LegalDocumentsRepository repository;
   late final LegalAgreementBloc agreement;
@@ -141,6 +158,7 @@ class LegalFormHarness {
     Widget child, {
     Size size = const Size(800, 1100),
     double textScale = 1,
+    Brightness brightness = Brightness.dark,
   }) async {
     await tester.runAsync(validator.init);
     tester.view.physicalSize = size;
@@ -148,7 +166,16 @@ class LegalFormHarness {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(() async {
-      await agreement.close();
+      await tester.pumpWidget(const SizedBox.shrink());
+      // Event-transformer cancellation crosses a microtask boundary. Drain it
+      // on the widget clock before awaiting teardown outside the test body.
+      var closed = false;
+      final closing = agreement.close().then((_) => closed = true);
+      for (var i = 0; !closed && i < 20; i++) {
+        await tester.pump();
+      }
+      expect(closed, isTrue, reason: 'legal BLoC teardown must complete');
+      await closing;
       await auth.close();
       repository.dispose();
     });
@@ -177,7 +204,9 @@ class LegalFormHarness {
             ],
             child: Builder(
               builder: (context) => MaterialApp(
-                theme: theme.global.dark,
+                theme: brightness == Brightness.dark
+                    ? theme.global.dark
+                    : theme.global.light,
                 locale: context.locale,
                 supportedLocales: context.supportedLocales,
                 localizationsDelegates: context.localizationDelegates,

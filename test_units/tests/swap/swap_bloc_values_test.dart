@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:web_dex/bloc/swap_activity/swap_activity_bloc.dart';
 import 'package:web_dex/bloc/swap_execution/swap_execution_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/bloc/swap_activity/swap_activity_bloc.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_test_fixtures.dart';
 
@@ -96,6 +97,7 @@ void main() {
 
   group('a review', () {
     final review = SwapReview(
+      legalSnapshot: legalFixtureSnapshot(),
       quote: quoteOf(id: 'new'),
       status: SwapReviewStatus.materialUpdate,
       previous: quoteOf(id: 'old'),

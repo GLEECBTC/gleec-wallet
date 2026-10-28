@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
+import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
 import 'swap_test_fixtures.dart';
@@ -425,7 +426,11 @@ void main() {
   group('with the review open beside the form', () {
     final inReview = swapPricedForm().copyWith(
       view: UnifiedSwapView.review,
-      review: SwapReview(quote: quoteOf(), status: SwapReviewStatus.ready),
+      review: SwapReview(
+        legalSnapshot: legalFixtureSnapshot(),
+        quote: quoteOf(),
+        status: SwapReviewStatus.ready,
+      ),
     );
 
     testWidgets('says editing closes it, in place of the action', (
