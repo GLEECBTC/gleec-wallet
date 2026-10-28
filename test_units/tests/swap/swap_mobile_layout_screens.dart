@@ -1,3 +1,6 @@
+// The analyzer does not treat test_units as tests.
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
 part of 'swap_mobile_layout_test.dart';
 
 void _reviewCases() {
@@ -70,6 +73,59 @@ void _reviewCases() {
       );
       expect(find.byType(SwapProviderNotice), findsOneWidget);
     });
+
+    for (final layout in [
+      (name: 'zoomed window', size: Size(864, 240), panel: false, scale: 1.0),
+      (name: 'short panel', size: Size(430, 300), panel: true, scale: 1.0),
+      (name: 'enlarged text', size: iPhoneSe, panel: false, scale: 2.0),
+    ]) {
+      testWidgets('a short or enlarged review keeps money and consent '
+          'reachable: ${layout.name}', (tester) async {
+        final review = SwapReview(
+          quote: quoteOf(guaranteed: '2900'),
+          status: SwapReviewStatus.ready,
+          termsRequired: true,
+          legalFailed: true,
+          legalBypass: true,
+        );
+        swap.emit(
+          swapPricedForm().copyWith(
+            view: UnifiedSwapView.review,
+            review: review,
+          ),
+        );
+        await pumpSwapUi(
+          tester,
+          SwapReviewView(inPanel: layout.panel),
+          bloc: swap,
+          services: services,
+          size: layout.size,
+          textScale: layout.scale,
+        );
+
+        expect(tester.takeException(), isNull);
+        for (final item in [
+          find.text('You pay'),
+          find.text('2,900 USDC'),
+          find.byKey(const Key('legal-documents-unavailable')),
+          find.byKey(const Key('swap-terms-link')),
+          find.byKey(const Key('swap-start')),
+        ]) {
+          await tester.ensureVisible(item);
+          await tester.pumpAndSettle();
+          expect(item.hitTestable(), findsOneWidget);
+        }
+        expect(
+          find.descendant(
+            of: footer,
+            matching: find.byKey(const Key('swap-terms-link')),
+          ),
+          findsOneWidget,
+        );
+        expect(swap.state.review, same(review));
+        expect(swap.events, isEmpty);
+      });
+    }
   });
 }
 

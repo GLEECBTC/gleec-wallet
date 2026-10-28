@@ -65,7 +65,7 @@ class SwapReviewView extends StatelessWidget {
           tradingStatusLoading: state.tradingStatusLoading,
           paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
         );
-        // Consent sits beside the button that gives it, never scrolled away.
+        // Consent stays together with the button that gives it.
         if (review.quote.source == SwapLiquiditySource.routed &&
             !review.isRecovery) {
           footer = Column(
@@ -81,24 +81,41 @@ class SwapReviewView extends StatelessWidget {
 
         return SwapScreen(
           onEscape: back,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: inPanel
-                      ? Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-                          child: content,
-                        )
-                      : SwapColumn(
-                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                          child: content,
-                        ),
-                ),
-              ),
-              SwapStickyFooter(inPanel: inPanel, child: footer),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final body = inPanel
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                      child: content,
+                    )
+                  : SwapColumn(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                      child: content,
+                    );
+              final action = SwapStickyFooter(inPanel: inPanel, child: footer);
+              final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+
+              // A pinned legal notice can consume a short window's entire
+              // height. Keep one scroll path for the money, consent and action
+              // when zoom, text size or a short panel leaves too little room.
+              if (constraints.maxHeight < 480 * textScale) {
+                return SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [body, action],
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: SingleChildScrollView(child: body)),
+                  action,
+                ],
+              );
+            },
           ),
         );
       },
