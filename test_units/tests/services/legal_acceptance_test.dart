@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -14,6 +12,12 @@ const _terms = '# Terms\n';
 // Independently obtained with `git hash-object --stdin` for the fixture bytes.
 const _eulaSha = '9e15fa12cac2bbb29df42fe2f278b9f557a91160';
 const _termsSha = '24fe58f74d4fb2a38a4520c547a9716718eb1d6b';
+// Historical bundled identities are pinned independently of the implementation.
+// The legal text itself is maintained outside Git.
+const _legacyDocumentHashes = {
+  'legal_document_eula': 'a34507cab4663f718cd126ff32d2c045c7bad755',
+  'legal_document_terms_of_service': '8922a38ea6f88795ba4f4fa747db92f6ca8c2206',
+};
 
 http.Response _remoteDocument(String markdown, {String? sha}) => http.Response(
   markdown,
@@ -43,6 +47,19 @@ class _MemoryStorage implements BaseStorage {
     values.remove(key);
     return true;
   }
+}
+
+/// Consent matching consumes an already-validated snapshot. Content validation
+/// and identical/changed fetches use synthetic Markdown in the tests below.
+class _ValidatedConsentSnapshot extends Fake implements LegalConsentSnapshot {
+  _ValidatedConsentSnapshot(this.documentShas);
+
+  @override
+  final Map<String, String> documentShas;
+
+  @override
+  bool covers(Iterable<LegalDocumentType> required) =>
+      required.every((document) => documentShas.containsKey(document.cacheKey));
 }
 
 void main() => testLegalAcceptance();
@@ -210,31 +227,49 @@ void testLegalAcceptance() {
       },
     );
 
-    test('legacy bundled records survive an identical first fetch', () async {
-      for (final d in walletConsentDocuments) {
-        final text = File(
-          'docs/legal-hosting/${d.filename}',
-        ).readAsStringSync();
-        storage.values[d.cacheKey] = {
-          'markdown': text,
-          'sha': legalContentSha(text),
-        };
-      }
-      remoteResponse = _remoteDocument(
-        File('docs/legal-hosting/eula_gleec_wallet.md').readAsStringSync(),
-      );
+    test('legacy bundled records match historical document hashes', () async {
       storeLegacyAcceptance(
         documentShas: {
           'legal_document_eula': 'bundled',
           'legal_document_terms_of_service': 'bundled',
         },
       );
-      expect(await repo.hasAcceptedCurrentTerms(), isTrue);
-
-      await repo.refreshFromRemote(LegalDocumentType.eula);
-
-      expect(await repo.hasAcceptedCurrentTerms(), isTrue);
+      expect(
+        await repo.hasAcceptedCurrentTerms(
+          snapshot: _ValidatedConsentSnapshot(_legacyDocumentHashes),
+        ),
+        isTrue,
+      );
+      expect((await repo.readAcceptance())?.documentShas, {
+        'legal_document_eula': 'bundled',
+        'legal_document_terms_of_service': 'bundled',
+      });
     });
+
+    for (final document in walletConsentDocuments) {
+      test(
+        'legacy bundled records reject updated ${document.name} hash',
+        () async {
+          storeLegacyAcceptance(
+            documentShas: {
+              'legal_document_eula': 'bundled',
+              'legal_document_terms_of_service': 'bundled',
+            },
+          );
+          expect(
+            await repo.hasAcceptedCurrentTerms(
+              snapshot: _ValidatedConsentSnapshot({
+                ..._legacyDocumentHashes,
+                document.cacheKey: document == LegalDocumentType.eula
+                    ? _eulaSha
+                    : _termsSha,
+              }),
+            ),
+            isFalse,
+          );
+        },
+      );
+    }
 
     test('legacy bundled records reject changed fetched content', () async {
       storeLegacyAcceptance(
