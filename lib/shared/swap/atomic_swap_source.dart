@@ -46,8 +46,8 @@ class AtomicSwapPlan {
 
 /// Prices swaps against KDF's own atomic-swap orderbook.
 ///
-/// The only route for assets no aggregator lists — GLEEC and the GRC-20
-/// tokens most of all.
+/// Covers assets no aggregator lists. New EVM-token sells are unavailable
+/// until their negotiated spending permission can be verified before Start.
 ///
 /// A taker order is matched with **one** maker order, so a quote is priced
 /// against the best single order that can absorb the whole amount, never a
@@ -64,6 +64,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     bool Function(AssetId from, AssetId to)? tradingAllowed,
     bool Function()? clockValid,
     bool Function(AssetId asset)? isWalletOnly,
+    bool Function(AssetId asset)? permissionUnavailable,
     Map<String, Object?>? Function(AssetId asset)? gasLimitsOf,
     DateTime Function()? now,
   }) : _trading = trading,
@@ -72,6 +73,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
        _tradingAllowed = tradingAllowed,
        _clockValid = clockValid,
        _isWalletOnly = isWalletOnly,
+       _permissionUnavailable =
+           permissionUnavailable ?? atomicTokenPermissionUnavailable,
        _gasLimitsOf = gasLimitsOf,
        _now = now ?? DateTime.now;
 
@@ -81,6 +84,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
   final bool Function()? _clockValid;
   final bool Function(AssetId asset)? _isWalletOnly;
+  final bool Function(AssetId asset) _permissionUnavailable;
   final Map<String, Object?>? Function(AssetId asset)? _gasLimitsOf;
   final DateTime Function() _now;
 
@@ -227,6 +231,9 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
 
     if (!canTrade(from) || !canTrade(to)) {
       return reject(SwapQuoteFailureKind.pairUnsupported);
+    }
+    if (_permissionUnavailable(from)) {
+      return reject(SwapQuoteFailureKind.permissionUnavailable, asset: from);
     }
     if (_tradingAllowed != null && !_tradingAllowed(from, to)) {
       return reject(SwapQuoteFailureKind.tradingBlocked);

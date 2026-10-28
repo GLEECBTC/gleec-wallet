@@ -186,6 +186,8 @@ class MarketMakerBotRepository {
       try {
         await _mm2Api.startStopMarketMakerBot(request);
         break;
+      } on AtomicPermissionUnavailableException {
+        rethrow;
       } catch (e, s) {
         if (retries <= 0) {
           rethrow;

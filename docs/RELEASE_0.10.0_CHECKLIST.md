@@ -69,9 +69,12 @@ changes workflow/docs only; it does not alter this application/SDK runtime.
 - [x] Final native Chrome 200% legal-warning review on `5202777`, 100% desktop,
   phone 360×800 and tablet 768×1024, with expiry/Refresh. Safari and signed
   platforms need separate results.
-- [ ] Atomic token-approval disclosure X04/Q12: [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563).
-  Keep those cases unfunded until resolved/reviewed; missing permission evidence
-  cannot support a claim that no permission is needed.
+- [x] Atomic token-approval disclosure X04/Q12: [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563).
+  Unverifiable atomic EVM-token sells are explicitly unavailable in this RC,
+  including Advanced orders and restored bot starts. Quote, review and RPC
+  boundaries reject them before any new order or approval. Do not fund these
+  disabled cases; native atomic and routed token contracts remain separate.
+  Existing swap recovery/cancellation stays available.
 - [ ] Existing transfer/history completeness, direction and review-labelling
   findings need disposition against the private live ledger.
 - [ ] Approved LI.FI text must replace the hosted placeholder before production.

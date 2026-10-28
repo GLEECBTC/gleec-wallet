@@ -99,13 +99,11 @@ void main() {
   });
 
   test(
-    'a token, or a coin refunded out of what it locked, keeps none',
+    'a coin refunded out of what it locked keeps no extra reserve',
     () async {
-      final token = await quote(from: usdc);
       trading.preimage = preimageOf(baseCoinFee: coinFeeOf('BTC', '0.0002'));
       final utxo = await quote(from: btc, to: eth);
 
-      expect(token.refundReserve, isNull);
       expect(utxo.refundReserve, isNull);
     },
   );

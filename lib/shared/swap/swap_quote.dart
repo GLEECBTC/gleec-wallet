@@ -2,6 +2,7 @@ import 'package:decimal/decimal.dart';
 import 'package:equatable/equatable.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_tickers.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
 part 'swap_quote_request.dart';
 
@@ -390,6 +391,11 @@ class SwapQuote extends Equatable {
 
   /// Whether a token permission is needed first.
   bool get requiresApproval => approval != null;
+
+  /// Whether this route cannot establish the permission before committing.
+  bool get permissionUnavailable =>
+      source == SwapLiquiditySource.atomic &&
+      atomicTokenPermissionUnavailable(from);
 
   /// Whether net return can be compared with other options.
   ///
