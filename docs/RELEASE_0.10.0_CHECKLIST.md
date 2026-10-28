@@ -141,3 +141,35 @@ SDK preparation `2f6ba724`, only the release checklist changed. App runtime and
 dependency files remain those tested at `6bca15444`; app documentation, the
 input manifest and the equivalent SDK gitlink record the real squash history.
 SDK main promotion and final main repinning remain separate release gates.
+
+## Melos validation and final dev candidate — 28 October 2026
+
+The configured SDK Melos bootstrap was run with Flutter 3.41.4 / Dart 3.11.1,
+workspace Melos 7.8.1, `--offline --enforce-lockfile`, and both prepare hooks
+(index generation followed by build runners). Melos resolves 22 workspace
+packages. Repeating `melos run prepare --no-select` produced identical output.
+
+The initial regeneration exposed five analysis errors: platform-specific lock
+implementations were exported together and routed-swap Dart parts were exported
+as standalone libraries. SDK #411 corrects the generator configuration,
+refreshes tracked output and preserves the internal Trezor helper boundary.
+It is squash merged into SDK dev at
+`6038592a9f7853cd76a1a6fcb3a0fab8f3b89847`, the current app gitlink.
+Original SDK preparation #409 remains recorded separately at `cc9a5855`.
+
+Fresh validation on the corrected generated output:
+
+- All 16 SDK package suites through `melos exec`: **3,045 passed / 14 skipped**.
+- App aggregator with all production GasFree defines: **3,898 passed / four
+  skipped**, 4m59s.
+- Six SDK Chrome/WASM suites: **176 passed**; two framework WASM suites:
+  **10 passed**. Auth retest after preserving its helper boundary: **127 passed**.
+- Full analysis: **zero errors**, 55 warnings and 2,146 infos. The extra infos
+  relative to the earliest snapshot come from ignored generated web wrappers.
+  No new changed-line diagnostic remains.
+- Changed-file formatting, generation stability, input hashes and diff checks
+  pass. Package versions and consumer dependency versions are unchanged.
+
+SDK #410 and app #3561 still require the recorded final main-promotion and
+release gates. Once SDK main is promoted, repin the app to that immutable main
+SHA in a squash-merged dev PR before promoting the app to main.
