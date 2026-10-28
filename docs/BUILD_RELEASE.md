@@ -20,6 +20,8 @@ used by the pinned submodule has already been tagged in the upstream SDK
 repository.
 
 ```bash
+(
+set -euo pipefail
 git submodule update --init sdk
 
 SDK_VERSION="$(sed -n 's/^version: //p' sdk/packages/komodo_defi_sdk/pubspec.yaml)"
@@ -32,6 +34,7 @@ TAGGED_SDK_VERSION="$(git -C sdk show "${SDK_TAG}:packages/komodo_defi_sdk/pubsp
 
 test "${TAGGED_SDK_VERSION}" = "${SDK_VERSION}"
 git -C sdk merge-base --is-ancestor "${SDK_TAG_COMMIT}" "${SDK_PIN}"
+)
 ```
 
 The remote tag fetch fails when the tag is missing. The version comparison

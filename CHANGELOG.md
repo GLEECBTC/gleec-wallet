@@ -29,15 +29,15 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 - Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
   encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
 - Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
-  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/52f1181f2e0362b6963084089407a06af2e717ad/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/52f1181f2e0362b6963084089407a06af2e717ad/docs/RELEASE_0.9.0.md).
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/22e14ac94fb555776eda370de08f1dafd5ca4019/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/22e14ac94fb555776eda370de08f1dafd5ca4019/docs/RELEASE_0.9.0.md).
 
 ## 🐛 Bug Fixes
 
-- **Wallet History** ([@CharlVS], [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
+- **Wallet History** ([@CharlVS], [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572), [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
 
-- **Transfer Review and Precision** ([@CharlVS], [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
+- **Transfer Review and Precision** ([@CharlVS], [#3570](https://github.com/GLEECBTC/gleec-wallet/pull/3570), [#3571](https://github.com/GLEECBTC/gleec-wallet/pull/3571), [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
 
-- **Atomic Token Permission** ([@CharlVS], [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Block new atomic EVM-token sells when the negotiated spender and permission cannot be verified before Start. The guard also covers Advanced orders and bot starts. Native atomic and routed token swaps retain their separate permission contracts; existing swaps can still be followed and recovered.
+- **Atomic Token Permission** ([@CharlVS], [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569), [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Block new atomic EVM-token sells when the negotiated spender and permission cannot be verified before Start. The guard also covers Advanced orders and bot starts. Native atomic and routed token swaps retain their separate permission contracts; existing swaps can still be followed and recovered.
 
 - **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.
 - **Native Max Funding** ([@CharlVS], #3557) — Repriced a smaller exact amount with bounded gas headroom before review. Required funding, estimated spending and retained balance stay separate. Later fee or balance changes can still prevent execution; uncertain starts are never automatically resubmitted.
@@ -62,7 +62,7 @@ Legal availability, Safari, signed packaging and upstream review/CI items remain
 explicit gates. Five-person usability and live fiat testing were deferred for the earlier
 integration RC; final distribution requires their recorded disposition.
 
-**Review comparison:** [0.9.7-1...chore/prepare-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...chore/prepare-0.10.0).
+**Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
 
 # Gleec Wallet v0.9.8 — preparation history (unpublished)
 

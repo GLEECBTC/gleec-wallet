@@ -1,12 +1,15 @@
 {
-  "status": "release-preparation; not a published artifact manifest",
+  "status": "code-freeze candidate; not a published artifact manifest",
   "prepared_on": "2026-10-28",
   "app": {
     "version": "0.10.0+0",
     "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
     "previous_published_tag": "0.9.7-1",
     "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6",
-    "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6"
+    "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
+    "release_branch": "release-0.10.0",
+    "runtime_validation_commit": "f94e507214ad0330d508bfe8d68624ad067ff526",
+    "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)"
   },
   "sdk": {
     "version": "0.9.0",
@@ -14,10 +17,14 @@
     "final_main_pin_required": true,
     "preparation_commit": "cc9a585504ab2cd723043399937ac04e1dee4dd1",
     "preparation_pr": 409,
-    "promotion_pr": 410,
+    "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "6038592a9f7853cd76a1a6fcb3a0fab8f3b89847",
-    "melos_validation_pr": 411
+    "candidate_commit": "22e14ac94fb555776eda370de08f1dafd5ca4019",
+    "melos_validation_pr": 411,
+    "release_branch": "release-0.9.0",
+    "runtime_validation_commit": "56828b91cb3eb147538803a524271278a2107b75",
+    "previous_dev_headed_rc_pr": 410,
+    "final_main_pin_required_for": "production distribution, after SDK review/promotion; frozen RC uses candidate_commit"
   },
   "kdf": {
     "source": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
@@ -79,18 +86,24 @@
   ],
   "merge_strategy": {
     "pull_requests_into_dev": "squash",
-    "dev_to_main_release": "merge"
+    "release_branches": "release-0.10.0 (app), release-0.9.0 (SDK), frozen from dev",
+    "release_branch_to_main": "merge",
+    "release_reconciliation_into_dev": "squash through focused PR"
   },
   "validation": {
     "melos": "7.8.1",
     "workspace_packages": 22,
     "sdk_package_suites": 16,
-    "sdk_native_passed": 3045,
+    "sdk_native_passed": 3056,
     "sdk_native_skipped": 14,
-    "app_passed": 3898,
+    "app_passed": 3919,
     "app_skipped": 4,
-    "sdk_wasm_passed": 176,
+    "sdk_wasm_passed": 213,
     "framework_wasm_passed": 10,
-    "analysis_errors": 0
+    "analysis_errors": 0,
+    "analysis_warnings": 55,
+    "analysis_infos": 2144,
+    "public_etc_browser_http_probe_passed": 1,
+    "scope": "Combined app runtime after #3568\u2013#3572; final SDK freeze bookkeeping changes Markdown only. Full enforced offline Melos bootstrap produced no tracked drift."
   }
 }
