@@ -1,5 +1,15 @@
 # Gleec Wallet legal-document hosting handoff
 
+The five legal-document files below are local-only handoff copies, ignored by
+Git. This README remains tracked. Obtain the text from the hosting/legal owner;
+a fresh checkout does not include these files. The app reads hosted or validated
+cached documents, and builds/tests must not depend on the local handoff copies.
+Removing them from tracking does not remove copies from existing Git history.
+
+Before applying the removal commit in an existing checkout, copy any local
+documents outside that checkout and restore them into this folder afterwards.
+Git can otherwise remove previously tracked files while updating the checkout.
+
 Publish these files at the root of `https://privacy.gleec.com/`:
 
 | File | URL |
@@ -14,7 +24,11 @@ Publish these files at the root of `https://privacy.gleec.com/`:
 
 **Ilya/counsel:** Finalize the LI.FI swap document and confirm the applicable disclosures and wording, including the app’s informational website referral. The four existing documents have been moved without legal edits.
 
-**Decker:** Replace `tos_lifi_gleec_wallet.md` with Ilya’s final text and remove `<!-- gleec-legal-status: placeholder -->`. The placeholder is informational only and cannot be accepted. Confirm deployment completion.
+**Decker:** Replace `tos_lifi_gleec_wallet.md` with Ilya’s final text before
+production and confirm deployment completion. The owner requested removal of
+`<!-- gleec-legal-status: placeholder -->` from the local draft for RC testing.
+Uploading that marker-free draft makes it eligible for acceptance in ordinary
+builds too; the app does not assess whether its wording is final or approved.
 
 ## Wallet behavior
 
@@ -22,10 +36,11 @@ A new installation needs the EULA and wallet ToS before creating, importing, log
 
 For local/preview testing only, `--dart-define=BYPASS_LEGAL_DOCUMENT_GATE=true` allows submission while keeping the notice. It never records acceptance of missing or placeholder documents. The default is false; production builds must leave it disabled. No hosting manifest is needed.
 
-For the owner-authorized 0.10.0 RC testing period, use the manually dispatched,
-exact-commit `rc-0-10-0-legal-testing` preview. Keep the hosted placeholder marker;
-removing it from draft text would make that text eligible for acceptance in all
-wallet builds. The isolated override, validation and retirement steps are in the
+For the owner-authorized 0.10.0 RC testing period, the manually dispatched,
+exact-commit `rc-0-10-0-legal-testing` preview remains available while a required
+document is unavailable or still carries the placeholder marker. The local
+LI.FI draft is now marker-free; this local change does not update hosting.
+The isolated override, validation and retirement steps are in the
 [tester/reviewer handoff](../RC_0.10.0_TESTER_REVIEWER_HANDOFF.md). Final production
 verification must use approved text and a build with the override disabled.
 
