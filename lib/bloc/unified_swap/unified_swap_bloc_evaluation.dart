@@ -2,12 +2,12 @@ part of 'unified_swap_bloc.dart';
 
 /// Automatic pricing: debounced, versioned, refreshed and expired.
 extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
-  void _scheduleEvaluation({bool immediate = false}) {
+  void _scheduleEvaluation({bool immediate = false, bool quiet = false}) {
     _debounce?.cancel();
     if (!_evaluable(state)) return;
     _debounce = _after(
       immediate ? Duration.zero : _debounceDelay,
-      const UnifiedSwapEvaluationRequested(),
+      UnifiedSwapEvaluationRequested(quiet: quiet),
     );
   }
 

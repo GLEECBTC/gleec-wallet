@@ -202,6 +202,18 @@ void main() {
         isNull,
       );
 
+      tradingStatus.push(TradingStatusLoadFailure());
+      await tester.pumpAndSettle();
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review, same(review));
+      expect(bloc.state.tradingEnabled, isFalse);
+      expect(
+        tester
+            .widget<SwapButton>(find.byKey(const Key('swap-start')))
+            .onPressed,
+        isNull,
+      );
+
       tradingStatus.push(TradingStatusLoadSuccess());
       await tester.pumpAndSettle();
       expect(bloc.state.review, same(review));

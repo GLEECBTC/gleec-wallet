@@ -27,6 +27,11 @@ void main() {
     tradingEnabled: true,
     clockValid: true,
   );
+  const policyUnavailable = UnifiedSwapCapabilitiesChanged(
+    tradingEnabled: false,
+    tradingStatusUnavailable: true,
+    clockValid: true,
+  );
 
   group('during a policy refresh', () {
     swapBlocTest('Max keeps its review and fee reserve without starting', (h) {
@@ -60,9 +65,7 @@ void main() {
       expect(h.routedExecutor.started, isEmpty);
     });
 
-    swapBlocTest('a resolved restriction or failure still closes the review', (
-      h,
-    ) {
+    swapBlocTest('a resolved restriction still closes the review', (h) {
       final bloc = h.inReview()..add(policyLoading);
       h.settle();
       bloc.add(tradingOff);
@@ -70,6 +73,29 @@ void main() {
 
       expect(bloc.state.view, UnifiedSwapView.form);
       expect(bloc.state.review, isNull);
+      expect(h.routedExecutor.started, isEmpty);
+    });
+
+    swapBlocTest('failed lookups preserve an expired review for hours', (h) {
+      final bloc = h.inReview();
+      final quote = bloc.state.review!.quote;
+      for (var minute = 0; minute < 180; minute++) {
+        bloc.add(policyLoading);
+        h.settle();
+        bloc
+          ..add(policyUnavailable)
+          ..add(const UnifiedSwapStartRequested());
+        h.elapse(const Duration(seconds: 5));
+        expect(bloc.state.view, UnifiedSwapView.review);
+        expect(bloc.state.tradingEnabled, isFalse);
+        bloc.add(tradingOn);
+        h.elapse(const Duration(seconds: 55));
+      }
+
+      expect(bloc.state.review!.quote, same(quote));
+      expect(bloc.state.review!.status, SwapReviewStatus.expired);
+      expect(h.routed.requests, hasLength(1));
+      expect(h.routed.requoted, isEmpty);
       expect(h.routedExecutor.started, isEmpty);
     });
 

@@ -72,6 +72,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   ) async {
     if (event.tradingEnabled == state.tradingEnabled &&
         event.tradingStatusLoading == state.tradingStatusLoading &&
+        event.tradingStatusUnavailable == state.tradingStatusUnavailable &&
         event.clockValid == state.clockValid &&
         event.signedIn == state.signedIn &&
         event.hardwareWallet == state.hardwareWallet) {
@@ -80,11 +81,12 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     final signingChanged = event.signedIn != state.signedIn;
     if (!signingChanged) {
       // Periodic policy refreshes must not discard the accepted snapshot.
-      // Start stays disabled; a resolved restriction or failed lookup still
-      // returns to the form. Never hide an unanswered engine start.
+      // Start stays disabled through pending or unavailable lookups. Only a
+      // resolved restriction returns to the form. Never hide an unanswered
+      // engine start.
       final pauseReview =
           !event.tradingEnabled &&
-          event.tradingStatusLoading &&
+          (event.tradingStatusLoading || event.tradingStatusUnavailable) &&
           !event.hardwareWallet &&
           state.view == UnifiedSwapView.review &&
           !_startInDoubt;
@@ -98,6 +100,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         state.copyWith(
           tradingEnabled: event.tradingEnabled,
           tradingStatusLoading: event.tradingStatusLoading,
+          tradingStatusUnavailable: event.tradingStatusUnavailable,
           clockValid: event.clockValid,
           hardwareWallet: event.hardwareWallet,
           view: leaveReview ? UnifiedSwapView.form : null,
@@ -124,6 +127,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
           state.copyWith(
             tradingEnabled: event.tradingEnabled,
             tradingStatusLoading: event.tradingStatusLoading,
+            tradingStatusUnavailable: event.tradingStatusUnavailable,
             clockValid: event.clockValid,
             signedIn: event.signedIn,
             hardwareWallet: event.hardwareWallet,
@@ -145,11 +149,23 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       await _loadBalances(emit);
       await _loadAddresses(emit);
     }
-    if (event.tradingEnabled && state.view == UnifiedSwapView.form) {
+    if (event.tradingEnabled &&
+        state.view == UnifiedSwapView.form &&
+        _present &&
+        (signingChanged || _now().difference(_lastInteraction) < _idleLimit)) {
       // Signing in makes the wallet's own orders known, and those are no
       // counterparty.
-      add(const UnifiedSwapOffersRequested());
-      _scheduleEvaluation(immediate: true);
+      add(const UnifiedSwapOffersRequested(quiet: true));
+      final quote = state.selectedQuote;
+      if (quote != null) {
+        // Resume the quote's existing clock. The refresh timer checks idle,
+        // visibility and backoff, and marks any request as automatic.
+        _armTimers(quote, shownAgain: true);
+      } else if (state.evaluation == SwapEvaluationStatus.idle) {
+        // A lookup may have blocked the first price. A recovery must never
+        // count as a user interaction or retry a failed quote on its own.
+        _scheduleEvaluation(immediate: true, quiet: true);
+      }
     }
   }
 

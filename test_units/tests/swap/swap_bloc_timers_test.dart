@@ -261,7 +261,9 @@ void main() {
       expect(h.routed.requests, hasLength(1));
     });
 
-    swapBlocTest('trading switched back on prices the form at once', (h) {
+    swapBlocTest('trading switched back on resumes the existing quote clock', (
+      h,
+    ) {
       final bloc = h.open()
         ..add(
           const UnifiedSwapCapabilitiesChanged(
@@ -280,7 +282,35 @@ void main() {
       );
       h.settle();
 
+      expect(h.routed.requests, hasLength(1));
+      expect(bloc.state.canReview, isTrue);
+      h.elapse(const Duration(seconds: 30));
       expect(h.routed.requests, hasLength(2));
+      expect(h.routed.requests.last.automatic, isTrue);
+    });
+
+    swapBlocTest('policy readiness resumes a first price it had blocked', (h) {
+      final bloc = h.open(
+        bloc: h.build()
+          ..add(
+            const UnifiedSwapCapabilitiesChanged(
+              tradingEnabled: false,
+              tradingStatusLoading: true,
+              clockValid: true,
+            ),
+          ),
+      );
+      expect(h.routed.requests, isEmpty);
+      bloc.add(
+        const UnifiedSwapCapabilitiesChanged(
+          tradingEnabled: true,
+          clockValid: true,
+        ),
+      );
+      h.settle();
+
+      expect(h.routed.requests, hasLength(1));
+      expect(h.routed.requests.single.automatic, isTrue);
       expect(bloc.state.canReview, isTrue);
     });
 
