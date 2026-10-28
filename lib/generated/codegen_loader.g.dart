@@ -591,6 +591,8 @@ abstract class LocaleKeys {
       'withdrawNotSufficientBalanceError';
   static const withdrawZeroBalanceError = 'withdrawZeroBalanceError';
   static const withdrawAmountTooLowError = 'withdrawAmountTooLowError';
+  static const withdrawPreviewAmountChanged = 'withdrawPreviewAmountChanged';
+  static const withdrawAmountPrecisionError = 'withdrawAmountPrecisionError';
   static const withdrawInvalidAmountError = 'withdrawInvalidAmountError';
   static const withdrawNoSuchCoinError = 'withdrawNoSuchCoinError';
   static const withdrawPreview = 'withdrawPreview';

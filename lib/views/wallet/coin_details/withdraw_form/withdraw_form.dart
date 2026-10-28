@@ -25,6 +25,7 @@ import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/utils/extensions/kdf_user_extensions.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/utils/withdrawal_amounts.dart';
 import 'package:web_dex/shared/widgets/asset_amount_with_fiat.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart'
     show CopiedText, CopiedTextV2;
@@ -684,16 +685,13 @@ class _WithdrawPreviewSummary extends StatelessWidget {
     final fee = preview.fee;
     final feeAssetId = _resolveFeeAssetId(context, state.asset, fee);
     final symbol = state.asset.id.symbol.configSymbol;
-    final recipientAmount = fee is FeeInfoTronGasless
-        ? state.authorizedRecipientAmount ?? preview.balanceChanges.totalAmount
-        : _recipientAmount(preview.balanceChanges);
-    // Gas-free fees are paid in the sent token, so amount + fee reconcile
-    // into a single meaningful total; on other rails the fee is a different
-    // asset and a token-sum would be nonsense.
-    final gaslessFee = fee is FeeInfoTronGasless ? fee : null;
-    final totalDeducted = gaslessFee == null
-        ? null
-        : recipientAmount + gaslessFee.totalTokenFee;
+    final recipientAmount =
+        state.authorizedRecipientAmount ??
+        withdrawalRecipientAmount(state.asset, preview.balanceChanges, fee);
+    // Sum only fees paid in the sent asset. Token gas paid in its platform
+    // coin remains a separate amount in that coin.
+    final sameAssetFee = feeAssetId == state.asset.id;
+    final totalDeducted = sameAssetFee ? recipientAmount + fee.totalFee : null;
     final labelStyle = theme.textTheme.labelLarge?.copyWith(
       color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.72),
       fontWeight: FontWeight.w600,
@@ -720,9 +718,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    gaslessFee != null
-                        ? LocaleKeys.withdrawRecipientGets.tr()
-                        : LocaleKeys.youSend.tr(),
+                    LocaleKeys.withdrawRecipientGets.tr(),
                     style: labelStyle,
                   ),
                   const SizedBox(height: 4),
@@ -741,6 +737,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
         AssetAmountWithFiat(
           assetId: state.asset.id,
           amount: recipientAmount,
+          semanticsLabel: LocaleKeys.withdrawRecipientGets.tr(),
           symbol: symbol,
           style: amountStyle,
           isAutoScrollEnabled: false,
@@ -750,7 +747,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
           Text(
             key: const Key('withdraw-gasless-total-deducted'),
             LocaleKeys.withdrawTotalDeducted.tr(
-              args: [_formatTrimmedDecimal(totalDeducted), symbol],
+              args: [totalDeducted.toString(), symbol],
             ),
             style: labelStyle,
           ),
@@ -791,6 +788,7 @@ class _WithdrawPreviewSummary extends StatelessWidget {
           AssetAmountWithFiat(
             assetId: feeAssetId,
             amount: fee.totalFee,
+            semanticsLabel: LocaleKeys.fee.tr(),
             symbol: feeAssetId.symbol.configSymbol,
             style: feeStyle,
             isAutoScrollEnabled: false,
@@ -1467,16 +1465,6 @@ String _formatTrimmedDecimal(Decimal value, {int precision = 8}) {
 
 String _formatOptionalDecimal(Decimal? value, {int precision = 8}) =>
     value == null ? '—' : _formatTrimmedDecimal(value, precision: precision);
-
-/// The amount sent on a standard rail.
-///
-/// GasFree call sites use the persisted authorization amount or KDF's
-/// `totalAmount` directly. They must never reverse-calculate the recipient
-/// amount from a fee that can settle below the signed maximum.
-Decimal _recipientAmount(BalanceChanges balanceChanges) {
-  final net = balanceChanges.netChange.abs();
-  return net > Decimal.zero ? net : balanceChanges.spentByMe;
-}
 
 /// Status chip for the default GasFree rail. Ordinary sends pay fees in the
 /// token and normally need no TRX; the trailing info affordance discloses
@@ -2503,9 +2491,7 @@ class WithdrawSuccessReceipt extends StatelessWidget {
     final gaslessFinalFee = gaslessFee == null ? null : result.gaslessFinalFee;
     final displayedRecipientAmount =
         recipientAmount ??
-        (gaslessFee == null
-            ? _recipientAmount(result.balanceChanges)
-            : result.balanceChanges.totalAmount);
+        withdrawalRecipientAmount(asset, result.balanceChanges, result.fee);
     final totalDeducted = gaslessFinalFee == null
         ? null
         : displayedRecipientAmount + gaslessFinalFee;
