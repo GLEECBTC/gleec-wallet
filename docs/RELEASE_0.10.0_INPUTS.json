@@ -15,7 +15,9 @@
     "preparation_commit": "cc9a585504ab2cd723043399937ac04e1dee4dd1",
     "preparation_pr": 409,
     "promotion_pr": 410,
-    "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3"
+    "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
+    "candidate_commit": "6038592a9f7853cd76a1a6fcb3a0fab8f3b89847",
+    "melos_validation_pr": 411
   },
   "kdf": {
     "source": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
@@ -78,5 +80,17 @@
   "merge_strategy": {
     "pull_requests_into_dev": "squash",
     "dev_to_main_release": "merge"
+  },
+  "validation": {
+    "melos": "7.8.1",
+    "workspace_packages": 22,
+    "sdk_package_suites": 16,
+    "sdk_native_passed": 3045,
+    "sdk_native_skipped": 14,
+    "app_passed": 3898,
+    "app_skipped": 4,
+    "sdk_wasm_passed": 176,
+    "framework_wasm_passed": 10,
+    "analysis_errors": 0
   }
 }
