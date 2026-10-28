@@ -1,18 +1,63 @@
-# Unreleased
+# Gleec Wallet v0.10.0 Release Notes
+
+This candidate brings Swap, Activity and Advanced trading into one surface,
+with atomic order-book and KDF-executed routed quotes compared after costs.
+It adds durable swap recovery, clearer review/funding evidence and native-Max
+gas headroom, integrates SDK 0.9.0, and includes the macOS startup, market-data
+and phone-balance fixes prepared for the unpublished 0.9.8 release.
+
+This is release preparation. The latest published app release is **0.9.7-1**.
+Final CI, legal/provider availability, review and signed installation gates
+are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
 ## 🚀 New Features
 
-- **One Swap Surface** ([@CharlVS], [#3507](https://github.com/GLEECBTC/gleec-wallet/pull/3507)) - The Swap menu entry now opens a single surface with **Swap**, **Activity** and **Advanced** destinations, also reachable at `/swap`. Swap prices a trade on both liquidity sources - the atomic-swap orderbook, and routed swaps executed by the engine through the SDK's `routed_swap` layer - and ranks the options by what each guarantees after costs. Only a source that can trade the pair is asked, so GLEEC and GRC-20 pairs, which trade on the order book only, are no longer reported as an outage, and a pair nobody can trade says why. The asset picker offers every supported asset and activates one only when you choose it; what you can receive is shown against what you pay with. When choosing what to pay with, **Hide 0 balance assets** leaves out what the wallet cannot spend, says how many it hid, and is remembered. An amount above the balance is still priced, once and on request only, so an asset you don't hold can be priced before you buy it; the button then reads **Not enough …** and the review stays closed. Quotes refresh on their own while the form is in use and expire after a minute; comparing prices the faster route on request, and the slippage for cross-network routes can be changed there. Starting re-prices first, and asks again when the minimum drops or the cost jumps. Token approvals are always for the exact amount. A swap keeps running and being followed when you leave the screen, is picked up again after a restart, and a notice appears anywhere in the app when it finishes. Activity lists routed and atomic swaps under **Active**, **Needs attention** and **Completed**. When a swap finishes other than as asked, its screen says what happened, where the funds are, and what can be done next, and can copy the evidence for support. Every control can be pressed with a screen reader, and at 200% text the surface reflows rather than cutting anything off. Advanced is the full trading interface, unchanged and one tap away. What the routed-swap contract does not support yet is listed in `docs/SWAP_DEFERRED_FEATURES.md`.
+- **One Swap Surface** ([@CharlVS], [#3507](https://github.com/GLEECBTC/gleec-wallet/pull/3507), [#3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557)) — Swap compares supported atomic and routed sources by minimum return after costs. The picker activates assets on demand, preserves Hide 0 balance assets, and explains unsupported pairs or insufficient funds. Advanced trading remains available.
+- **Swap Activity and Recovery** ([@CharlVS], #3555, #3557) — Follow active swaps away from the form and after restart, see attention/completion notices, and export evidence explaining funds, approvals and recovery actions.
+- **Remote Legal Documents and Consent** ([@CharlVS], #3558) — Load versioned legal documents and gate consent on availability. Production availability must pass before distribution; the existing one-off preview override is not a production waiver.
+
+### SDK Updates (komodo-defi-sdk-flutter)
+
+This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
+
+- Typed routed quotes and execution, KDF-owned Max, exact accepted minima,
+  durable UUID recovery, required/locked balances and separate measured versus
+  provider-reported payouts ([SDK#389](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/389), [SDK#407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)).
+- Configured GLEEC/GRC-20 assets for Trezor and unambiguous activation routing
+  ([SDK#405](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/405));
+  hardware routed signing is not established by this change.
+- Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
+  encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
+- Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/cc9a585504ab2cd723043399937ac04e1dee4dd1/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/cc9a585504ab2cd723043399937ac04e1dee4dd1/docs/RELEASE_0.9.0.md).
 
 ## 🐛 Bug Fixes
 
-- **Swap Review and Recovery** ([@CharlVS], #3554, #3555, #3556, #3557) - Preserved swap state across layout changes, blocked duplicate or stale starts, and rechecked accepted replacements against trading policy and the quote's own funding needs. Improved approval and recovery evidence, background attention notices, and safe link handling. KDF Max intent and accepted minimum remain intact through these changes.
+- **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.
+- **Native Max Funding** ([@CharlVS], #3557) — Repriced a smaller exact amount with bounded gas headroom before review. Required funding, estimated spending and retained balance stay separate. Later fee or balance changes can still prevent execution; uncertain starts are never automatically resubmitted.
+- **Unavailable Fiat Providers** ([@CharlVS], #3557) — Rejected malformed/block-page responses cleanly, cleared stale payment methods, stopped loading and allowed explicit refresh. Upstream Banxa availability remains tracked in [#3559](https://github.com/GLEECBTC/gleec-wallet/issues/3559).
+- **Phone Balances and Asset Management** ([@CharlVS], #3546, #3550) — Show whole balances, allow a value too wide to shrink to scroll, and restore asset-manager balance text.
+- **Startup, Sign-Out and Prices** ([@DeckerSU], [@CharlVS], [SDK#395](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/395), [SDK#396](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/396), [SDK#394](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/394), [SDK#390](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/390), [SDK#391](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/391)) — Fixed macOS fresh-install startup, distinguished engine failures from wrong passwords, contained early stream disconnects and restored price fallback behavior from the 0.9.8 preparation.
 
-## 🔧 Technical Improvements
+## 💻 Platform and Build Changes
 
-- **Final KDF LI.FI Integration** ([@CharlVS], [#3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557), [SDK #407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)) - Pins all seven engine platforms to `35f0bde`, with KDF-owned Max and the exact provider minimum. The wallet supplies the confirmed integrator policy through engine startup configuration and shows its combined included fee once. Required gas funding is separate from estimated spending; measured and provider-reported payouts stay distinct. Failed Max quotes block review, and failures after approval retain their hashes and recorded gas. Missing native fee models are normalized without changing the coins pin. See `docs/KDF_LIFI_DECKER_HANDOVER_2026-10-27.md` for the combined candidate, frozen inputs, validation and remaining release gates.
+- **macOS** ([@DeckerSU], #3541) — Sign the KDF helper with hardened runtime and timestamp for notarization. Signed packaging and fresh-install validation remain release gates.
+- **GasFree TRON** ([@CharlVS], #3546, #3549) — Enable production GasFree defaults in ordinary and shared-CI builds. The four production defines remain pinned for release validation.
+- **Frozen Inputs** ([@CharlVS], #3557) — KDF source `35f0bde`, specs `7c388ea`, bundled coins `2b0aefb7`; runtime coin updates remain enabled independently. The engine source retains the ERC-20 payment validation shipped in 0.9.7-1.
 
-# Gleec Wallet v0.9.8 Release Notes
+## Compatibility and Known Limits
+
+SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
+and adopters of interim routed-swap APIs. External recipients, new routed
+chains/providers and hardware signing are not certified by this candidate.
+Atomic token-approval disclosure, legal availability, existing transfer/history
+findings, Safari, signed packaging and upstream review/CI items remain explicit
+gates. Five-person usability and live fiat testing were deferred for the earlier
+integration RC; final distribution requires their recorded disposition.
+
+**Review comparison:** [0.9.7-1...chore/prepare-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...chore/prepare-0.10.0).
+
+# Gleec Wallet v0.9.8 — preparation history (unpublished)
 
 This is a hotfix release. A fresh install of the macOS app could not start its trading engine, and the engine helper bundled with the app could not pass Apple notarization. It also stops a failed engine start from being reported as a wrong password, keeps KMD's price from dropping out for minutes after launch, restores prices from the CoinPaprika fallback, and stops signing out from raising an uncaught error. Phones now show balances in full, and GasFree TRON is on by default, so release builds made outside CI include it.
 
