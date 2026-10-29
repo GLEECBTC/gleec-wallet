@@ -120,12 +120,14 @@ prepare a review and independently verify the result. Follow
 
 ### Known restrictions and preserved evidence
 
-- **New atomic EVM-token sells are unavailable in this RC.** [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569)
-  rejects unverifiable spender/approval scope at quote, review and RPC boundaries,
-  including Advanced orders and restored bots. The UI explains that restriction
-  and cannot claim no approval is needed. Do not fund disabled cases. Native
-  atomic and routed token permission contracts remain separate; existing
-  recovery and cancellation stay available.
+- **Atomic EVM-token trading follows the previous release's behavior.**
+  [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) removes #3569's
+  blanket refusal from unified swaps, Advanced orders and bot starts. The
+  existing permission row describes engine-managed allowance after matching,
+  including possible unlimited permission and reuse of existing allowance.
+  Start has no additional confirmation step. LI.FI's exact-approval/reset
+  contract stays separate. Use the recorded build identity to confirm the
+  restoration is included; no fresh funded atomic settlement is claimed here.
 - Native routed Max now selects a smaller, completely repriced amount with
   twice the reported gas requirement retained. It makes at most three exact
   quote requests after KDF Max and never falls back to unbuffered Max. Token

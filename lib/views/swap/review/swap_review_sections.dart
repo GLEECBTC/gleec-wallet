@@ -247,9 +247,9 @@ class _Permission extends StatelessWidget {
     final approval = quote.approval;
     final String title;
     final String body;
-    if (quote.permissionUnavailable) {
-      title = LocaleKeys.swapPermissionUnavailableTitle.tr();
-      body = LocaleKeys.swapPermissionUnavailableBody.tr();
+    if (quote.hasUnverifiedAtomicApproval) {
+      title = LocaleKeys.swapPermissionAtomicTitle.tr();
+      body = LocaleKeys.swapPermissionAtomicBody.tr();
     } else if (approval == null) {
       title = LocaleKeys.swapPermissionNoneTitle.tr();
       body = LocaleKeys.swapPermissionNoneBody.tr();
@@ -298,16 +298,6 @@ class _ReviewFooter extends StatelessWidget {
     }
 
     final quote = review.quote;
-
-    if (quote.permissionUnavailable &&
-        review.status != SwapReviewStatus.starting &&
-        review.status != SwapReviewStatus.unconfirmed) {
-      return SwapButton(
-        key: const Key('swap-start'),
-        label: LocaleKeys.swapCtaUnavailable.tr(),
-        onPressed: null,
-      );
-    }
 
     if (!tradingEnabled &&
         review.status != SwapReviewStatus.starting &&
