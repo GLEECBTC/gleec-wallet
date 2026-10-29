@@ -1,31 +1,36 @@
 # Gleec Wallet 0.10.0 RC: tester and reviewer handoff
 
-Prepared 28 October 2026. This candidate is available for code review and a
+Updated 29 October 2026. This candidate is available for code review and a
 controlled testing round. Production promotion remains gated below. The release
 owner sends invitations; this handoff does not request reviews or contact testers.
 
-## Proposed engine roll — 29 October
+## Accepted engine inputs — 29 October
 
 SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
-and its focused frozen-branch carry
-[#420](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/420) prepare
-KDF `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` from merged dev. The proposed
-app gitlink currently names SDK `21f64b5002e7ea14296db985a8cade07e003e1d4`;
-it must be replaced with the accepted frozen SDK SHA after tests and review.
+was squash merged into dev. Focused frozen-branch carry
+[#420](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/420) is accepted
+at `da20524e6947833b40c4d70fee5249fc9ae1a911`, pinning merged KDF dev
+`e40ac2fb4319d352bf9c93683eb2518ce9f939e0`. App #3576/#3577 consume only
+that accepted input. Both main RC PRs remain open for testers and reviewers.
 
 The ten-platform build, seven independent archive checks, strict CLI, Melos
-bootstrap/prepare, all 16 SDK suites and both WASM gates passed. The new native
-engine passed the unfunded Arbitrum/Base quote smoke. The app gate passed
-3,919 tests / four skipped after its gas-limit source assertion was updated
-against verified identical constants. Analysis has zero errors and the existing
-55 warnings / 2,144 infos. Upstream KDF failures remain explicit; the single
-retry repeated macOS integration failures, with remaining jobs pending.
+bootstrap/prepare, all 16 SDK suites and both WASM gates passed. The native
+engine passed the unfunded Arbitrum/Base quote smoke. The app gate on the
+accepted frozen SDK pin passed **3,919 tests / four skipped**; analysis has
+zero errors and existing 55 warnings / 2,144 infos. Gas-limit defaults were
+rechecked at the exact new source before updating their pin assertion.
 
-Do not invite testers to a purported new-engine preview until both focused
-RC carries pass tests/review and the refreshed deployed identity is verified.
-The table below describes the **previous accepted 28 October snapshot**;
-existing preview links still serve that snapshot. The proposed new inputs are
-in [the manifest](RELEASE_0.10.0_INPUTS.json). Both actual main RCs stay open.
+The owner accepted documented upstream failures **as-is for RC testing only**.
+Integration and Sia Max failures remain production gates. Three Z-coin tests
+show a CI pass-to-fail regression since pre-merge dev `6afb05f4`, with code
+versus infrastructure cause unassigned. Most other integration failures
+pre-exist; Sia's regression is unconfirmed. Exact names, retry/baseline links
+and the owner disposition are in the SDK artifact provenance record.
+
+Use only the refreshed preview identity on app #3575 after the focused app
+RC carry. The prior 28 October snapshot remains historical; old preview build
+identities do not certify this engine roll. The [manifest](RELEASE_0.10.0_INPUTS.json)
+records the current immutable SDK/KDF inputs.
 
 ## Review entry points and identity
 
@@ -34,8 +39,8 @@ in [the manifest](RELEASE_0.10.0_INPUTS.json). Both actual main RCs stay open.
 | App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
 | SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
 | Tested app runtime source | `f94e507214ad0330d508bfe8d68624ad067ff526`; app implementation is unchanged by the final pin update |
-| SDK gitlink | `80e656101ce1b85fe05ddcbc05b0520f3265d1a0` |
-| KDF | `35f0bde438eec2cb0471b19642b9d9c4602fa17d` |
+| SDK gitlink | `da20524e6947833b40c4d70fee5249fc9ae1a911` |
+| KDF | `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
 | Bundled coins | `2b0aefb78b184091ab086c66e513d8b03f5d5a01`; runtime updates enabled |
 

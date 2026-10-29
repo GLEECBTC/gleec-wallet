@@ -1,5 +1,5 @@
 {
-  "status": "proposed reviewed-input roll for the frozen RC; acceptance and refreshed preview pending; not a published artifact manifest",
+  "status": "frozen RC input candidate; owner accepted documented upstream KDF failures for RC testing only; not a published artifact manifest",
   "prepared_on": "2026-10-29",
   "app": {
     "version": "0.10.0+0",
@@ -9,7 +9,9 @@
     "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
     "release_branch": "release-0.10.0",
     "runtime_validation_commit": "f94e507214ad0330d508bfe8d68624ad067ff526",
-    "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)"
+    "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)",
+    "sdk_pointer_dev_pr": 3576,
+    "sdk_pointer_release_pr": 3577
   },
   "sdk": {
     "version": "0.9.0",
@@ -19,7 +21,7 @@
     "preparation_pr": 409,
     "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "21f64b5002e7ea14296db985a8cade07e003e1d4",
+    "candidate_commit": "da20524e6947833b40c4d70fee5249fc9ae1a911",
     "melos_validation_pr": 411,
     "release_branch": "release-0.9.0",
     "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
@@ -28,9 +30,11 @@
     "recovery_pagination_pr": 417,
     "release_repair_pr": 418,
     "previous_frozen_candidate_commit": "80e656101ce1b85fe05ddcbc05b0520f3265d1a0",
-    "candidate_pin_status": "Provisional SDK #419 source commit; replace with accepted release-0.9.0 SHA after #419 dev squash and #420 frozen-branch carry pass tests and review.",
+    "candidate_pin_status": "Accepted release-0.9.0 head from SDK #420 after #419 dev squash; exact frozen SDK pin for RC testing.",
     "kdf_roll_dev_pr": 419,
-    "kdf_roll_release_pr": 420
+    "kdf_roll_release_pr": 420,
+    "kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e",
+    "artifact_roll_validation_commit": "21f64b5002e7ea14296db985a8cade07e003e1d4"
   },
   "kdf": {
     "source": "e40ac2fb4319d352bf9c93683eb2518ce9f939e0",
@@ -61,13 +65,19 @@
     },
     "workflow_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/40849114158",
     "artifact_provenance": "sdk/docs/KDF_ARTIFACTS_2026-10-29.json",
-    "upstream_tests": "Original run40755486033 failed; one failed-jobs retry has repeated the macOS integration failures, with remaining retry results pending. No waiver; exact original inventory in SDK provenance.",
+    "upstream_tests": "Retry attempt 2 of run 40755486033 still fails Linux/macOS/Windows integration and Docker Sia; Linux unit and Docker ZCoin recovered. The owner accepted these as-is for RC testing on 29 October; production gates remain. Exact failure and regression inventory is in SDK provenance.",
     "atomic_refund_defaults": {
       "eth_payment": 155000,
       "eth_sender_refund": 125000,
       "source": "mm2src/coins/eth.rs gas_limit module at e40ac2fb4319d352bf9c93683eb2518ce9f939e0",
       "eth_rs_git_blob": "73ccdeb00aed5d1bcf98d0ea8b3a1d7a9b6dce83",
       "comparison": "eth.rs blob equals the previous 35f0bde pin; default gas values unchanged"
+    },
+    "upstream_rc_disposition": {
+      "accepted_by": "release owner",
+      "date": "2026-10-29",
+      "scope": "RC testing only; upstream failures remain production gates",
+      "regression_assessment": "Three Z-coin activation tests passed on pre-merge dev 6afb05f4 in run 31990542840 and fail now: confirmed CI regression, code/infrastructure cause unassigned. Most other integration failures pre-existed. Sia regression unconfirmed; no runtime-source delta from previous RC 35f0bde."
     }
   },
   "coins": {
@@ -118,8 +128,8 @@
     "analysis_warnings": 55,
     "analysis_infos": 2144,
     "public_etc_browser_http_probe_passed": 1,
-    "scope": "29 October roll: enforced offline Melos bootstrap and stable repeated prepare; all 16 Melos package suites, both WASM gates, full app aggregator with production GasFree defines and full consumer analysis passed. No runtime source change beyond a source comment; exact-source gas-limit regression was updated after verifying identical eth.rs blob. Frozen release branches and 28 October previews retain prior accepted inputs until focused carry PRs pass tests and review.",
-    "app_validation_status": "passed 29 October on the proposed SDK/KDF roll after verifying identical payment/refund gas constants",
+    "scope": "29 October: enforced offline Melos bootstrap and stable repeated prepare; all 16 Melos package suites and both WASM gates passed on artifact-roll source 21f64b50. Frozen SDK da20524e differs only in two release-evidence documents and has identical package/runtime/configuration trees. Full app aggregator with production GasFree defines and full analysis repeated on the actual accepted SDK pin. KDF source comment/exact-pin regression updated after verifying identical eth.rs blob and gas limits; no gas-policy change.",
+    "app_validation_status": "passed on accepted frozen SDK da20524e: 3,919 tests / four skipped",
     "app_passed": 3919,
     "app_skipped": 4
   }

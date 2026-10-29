@@ -29,7 +29,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 - Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
   encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
 - Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
-  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/21f64b5002e7ea14296db985a8cade07e003e1d4/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/21f64b5002e7ea14296db985a8cade07e003e1d4/docs/RELEASE_0.9.0.md).
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/docs/RELEASE_0.9.0.md).
 
 ## 🐛 Bug Fixes
 
