@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2.dart';
@@ -15,7 +15,6 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'swap_exec_atomic_fakes.dart';
 import 'swap_exec_fakes.dart';
 import 'swap_test_fixtures.dart';
-import 'swap_src_sdk_fakes.dart';
 
 /// Covers how an atomic start tells KDF refusing the order from a request
 /// that got no answer, at every layer down to the RPC call: only a refusal
@@ -25,19 +24,7 @@ void main() {
     // Never initialised, so every call throws before reaching KDF, as a call
     // whose answer was lost does.
     late Mm2Api api;
-    setUp(() {
-      final sdk = SrcSdk()
-        ..assets.add(
-          Asset(
-            id: eth,
-            protocol: SrcProtocol(),
-            isWalletOnly: false,
-            signMessagePrefix: null,
-          ),
-        );
-      api = Mm2Api(mm2: MM2(), sdk: sdk);
-    });
-    tearDown(() => api.dispose());
+    setUp(() => api = Mm2Api(mm2: MM2(), sdk: KomodoDefiSdk()));
 
     SellRequest request() => SellRequest(
       base: 'ETH',

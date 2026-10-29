@@ -283,6 +283,7 @@ class SwapQuote extends Equatable {
     required this.quotedAt,
     this.order,
     this.approval,
+    this.atomicApprovalUnknown = false,
     this.fromAddress,
     this.toAddress,
     this.estimatedDuration,
@@ -334,6 +335,14 @@ class SwapQuote extends Equatable {
 
   /// The token permission required first, if any.
   final SwapApprovalRequirement? approval;
+
+  /// The atomic source knows this is a token even if its parent is unresolved.
+  /// This records unavailable pre-match permission details, not a refusal.
+  final bool atomicApprovalUnknown;
+
+  bool get hasUnverifiedAtomicApproval =>
+      source == SwapLiquiditySource.atomic &&
+      (atomicApprovalUnknown || isAtomicEvmToken(from));
 
   /// Where the funds are sent from.
   final String? fromAddress;
@@ -389,13 +398,9 @@ class SwapQuote extends Equatable {
   /// Whether this quote is old enough to need re-pricing.
   bool isExpiredAt(DateTime now) => !now.isBefore(expiresAt);
 
-  /// Whether a token permission is needed first.
+  /// Whether the quote reports a concrete approval transaction. Atomic
+  /// permission may still be engine-managed when no pre-match details exist.
   bool get requiresApproval => approval != null;
-
-  /// Whether this route cannot establish the permission before committing.
-  bool get permissionUnavailable =>
-      source == SwapLiquiditySource.atomic &&
-      atomicTokenPermissionUnavailable(from);
 
   /// Whether net return can be compared with other options.
   ///
@@ -489,6 +494,7 @@ class SwapQuote extends Equatable {
     fees: fees ?? this.fees,
     stages: stages,
     approval: approval,
+    atomicApprovalUnknown: atomicApprovalUnknown,
     fromAddress: fromAddress,
     toAddress: toAddress,
     estimatedDuration: estimatedDuration,
@@ -517,6 +523,7 @@ class SwapQuote extends Equatable {
     fees,
     stages,
     approval,
+    atomicApprovalUnknown,
     fromAddress,
     toAddress,
     estimatedDuration,

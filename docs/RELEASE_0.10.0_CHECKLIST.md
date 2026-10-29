@@ -50,6 +50,35 @@ records the actual dev squash, frozen head and refreshed preview identity.
 The [input manifest](RELEASE_0.10.0_INPUTS.json) records this candidate.
 Earlier validation and merge records below remain historical evidence.
 
+## Feature defaults and scope — 29 October
+
+These entries record a source audit of the candidate, not new execution or
+signed-platform test results.
+
+- [x] Implemented LI.FI same-chain/cross-chain quoting, cheapest/fastest ordering,
+  exact/Max amounts, approval handling, Activity, recovery and eligible
+  cancellation are wired in without a feature opt-in. Supported assets,
+  activation, trading policy, funding and reviewed execution checks still apply.
+- [x] `LIFI_INTEGRATOR_ENABLED` defaults to true and controls commission
+  configuration. Setting it false does not turn off routed swaps.
+- [x] Ordinary builds enforce document availability before routed Start;
+  `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false. The isolated manual RC preview
+  is the recorded availability exception. Warnings remain and unavailable terms
+  cannot be recorded as accepted. Production legal signoff is still required.
+- [x] The pinned routed request contract has no external-recipient parameter;
+  supported routing uses LI.FI and eligible EVM assets. Expanded provider/chain
+  support and hardware signing need their own implementation or validation.
+  Hardware-wallet trading was wallet-only in 0.9.7-1 and remains so.
+- [x] Atomic EVM-token trading follows 0.9.7-1 behavior. The blanket refusal
+  introduced by #3569 is removed from quote, execution, Advanced and bot RPC
+  boundaries. The existing permission row states that the engine may reuse or
+  grant an unlimited allowance after matching, with no extra confirmation.
+  LI.FI's exact-approval/reset flow and normal execution checks remain separate.
+- [x] Preserve the owner's recorded usability/live-fiat deferrals and RC-only
+  acceptance of upstream KDF failures. Banxa #3559 is after 0.10.0. Release
+  review, CI, approved legal text and signed-platform evidence retain their
+  separate checklist requirements; no pending result becomes a pass here.
+
 ## Prepared and merged into dev
 
 Every merge below used **squash**. The owner authorized admin bypass for dev
@@ -138,11 +167,13 @@ its final preparation adds documentation and the immutable SDK candidate pin.
   phone 360×800 and tablet 768×1024, with expiry/Refresh. Safari and signed
   platforms need separate results.
 - [x] Atomic token-approval disclosure X04/Q12: [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563).
-  Unverifiable atomic EVM-token sells are explicitly unavailable in this RC,
-  including Advanced orders and restored bot starts. Quote, review and RPC
-  boundaries reject them before any new order or approval. Do not fund these
-  disabled cases; native atomic and routed token contracts remain separate.
-  Existing swap recovery/cancellation stays available.
+  Restore new atomic EVM-token trading, Advanced orders and bot starts instead
+  of refusing the whole category. The existing review row explains that
+  allowance is engine-managed after matching and may be unlimited; it never
+  presents absent atomic metadata as proof that no approval is needed. No new
+  modal, acknowledgement step or client-imposed approval limit is introduced.
+  Quote/execution and review regressions cover the restored behavior; no new
+  funded atomic settlement is claimed by unit/widget coverage.
 - [x] Transfer review and input #3565: signed EVM principal/Max, fee and
   same-asset total are distinct; exact amounts remain accessible/selectable.
   Unsupported precision and mismatched signed EVM amounts cannot be submitted.

@@ -39,7 +39,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 - **Transfer Review and Precision** ([@CharlVS], [#3570](https://github.com/GLEECBTC/gleec-wallet/pull/3570), [#3571](https://github.com/GLEECBTC/gleec-wallet/pull/3571), [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
 
-- **Atomic Token Permission** ([@CharlVS], [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569), [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Block new atomic EVM-token sells when the negotiated spender and permission cannot be verified before Start. The guard also covers Advanced orders and bot starts. Native atomic and routed token swaps retain their separate permission contracts; existing swaps can still be followed and recovered.
+- **Atomic Token Trading** ([@CharlVS], [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579), [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Restore atomic EVM-token trading, Advanced orders and bot starts to the previous release's behavior. The existing review row describes engine-managed allowance, including possible unlimited approval, instead of claiming none is needed. No extra confirmation or feature gate is added; LI.FI keeps its separate approval flow.
 
 - **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.
 - **Native Max Funding** ([@CharlVS], #3557) — Repriced a smaller exact amount with bounded gas headroom before review. Required funding, estimated spending and retained balance stay separate. Later fee or balance changes can still prevent execution; uncertain starts are never automatically resubmitted.
@@ -56,13 +56,31 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 ## Compatibility and Known Limits
 
 SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
-and adopters of interim routed-swap APIs. External recipients, new routed
-chains/providers and hardware signing are not certified by this candidate.
-New atomic EVM-token sells are unavailable until authoritative permission
-preflight is supported; no unlimited approval is inferred from a quoted amount.
-Legal availability, Safari, signed packaging and upstream review/CI items remain
-explicit gates. Five-person usability and live fiat testing were deferred for the earlier
-integration RC; final distribution requires their recorded disposition.
+and adopters of interim routed-swap APIs.
+
+- **LI.FI defaults:** supported same-chain/cross-chain quotes, cheapest/fastest
+  selection, exact and Max amounts, approval handling, Activity, recovery and
+  eligible cancellation are available without a feature opt-in. Asset activation,
+  trading policy, funding, reviewed minimums and execution checks still apply.
+  `LIFI_INTEGRATOR_ENABLED` controls commission configuration, not availability.
+- **Terms availability:** ordinary builds require available wallet and LI.FI
+  documents before routed Start. `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false.
+  Only the isolated, manually dispatched RC preview bypasses availability,
+  retaining its warning and never recording unavailable terms as accepted.
+- **Capability scope:** the pinned routed contract supports LI.FI and eligible
+  EVM assets; it has no external-recipient parameter. Additional provider
+  backends and routed hardware signing are not established by this candidate.
+  Hardware wallets remain wallet-only, as in app 0.9.7-1.
+- **Atomic EVM tokens:** trading follows app 0.9.7-1 behavior. The engine may
+  reuse an allowance or grant unlimited permission when the trade matches.
+  The existing review describes that behavior without inventing a spender,
+  exact amount or reset requirement. Start, Advanced orders and bot starts keep
+  their previous interaction flow; existing recovery/cancellation stays usable.
+- **Release qualification:** approved hosted legal text, Safari, signed packaging
+  and upstream review/CI still need their checklist evidence or disposition.
+  The owner accepted documented KDF failures for RC testing only. Five-person
+  usability and live fiat testing were explicitly deferred; Banxa #3559 is after
+  0.10.0. These deferrals are recorded, not passing test results.
 
 **Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
 

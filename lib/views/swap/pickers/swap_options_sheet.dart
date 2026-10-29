@@ -350,8 +350,8 @@ class _OptionCard extends StatelessWidget {
 
   static String _permission(SwapQuote quote) {
     final approval = quote.approval;
-    if (quote.permissionUnavailable) {
-      return LocaleKeys.swapPermissionUnavailableTitle.tr();
+    if (quote.hasUnverifiedAtomicApproval) {
+      return LocaleKeys.swapPermissionAtomicShort.tr();
     }
     if (approval == null) return LocaleKeys.swapPermissionNone.tr();
     return approval.resetsFirst
