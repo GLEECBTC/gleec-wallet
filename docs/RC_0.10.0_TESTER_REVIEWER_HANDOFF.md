@@ -4,6 +4,29 @@ Prepared 28 October 2026. This candidate is available for code review and a
 controlled testing round. Production promotion remains gated below. The release
 owner sends invitations; this handoff does not request reviews or contact testers.
 
+## Proposed engine roll — 29 October
+
+SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
+and its focused frozen-branch carry
+[#420](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/420) prepare
+KDF `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` from merged dev. The proposed
+app gitlink currently names SDK `21f64b5002e7ea14296db985a8cade07e003e1d4`;
+it must be replaced with the accepted frozen SDK SHA after tests and review.
+
+The ten-platform build, seven independent archive checks, strict CLI, Melos
+bootstrap/prepare, all 16 SDK suites and both WASM gates passed. The new native
+engine passed the unfunded Arbitrum/Base quote smoke. The app gate passed
+3,919 tests / four skipped after its gas-limit source assertion was updated
+against verified identical constants. Analysis has zero errors and the existing
+55 warnings / 2,144 infos. Upstream KDF failures remain explicit; the single
+retry repeated macOS integration failures, with remaining jobs pending.
+
+Do not invite testers to a purported new-engine preview until both focused
+RC carries pass tests/review and the refreshed deployed identity is verified.
+The table below describes the **previous accepted 28 October snapshot**;
+existing preview links still serve that snapshot. The proposed new inputs are
+in [the manifest](RELEASE_0.10.0_INPUTS.json). Both actual main RCs stay open.
+
 ## Review entry points and identity
 
 | Component | Review / pinned input |

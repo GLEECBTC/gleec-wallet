@@ -1,6 +1,6 @@
 {
-  "status": "code-freeze candidate; not a published artifact manifest",
-  "prepared_on": "2026-10-28",
+  "status": "proposed reviewed-input roll for the frozen RC; acceptance and refreshed preview pending; not a published artifact manifest",
+  "prepared_on": "2026-10-29",
   "app": {
     "version": "0.10.0+0",
     "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
@@ -19,41 +19,55 @@
     "preparation_pr": 409,
     "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "80e656101ce1b85fe05ddcbc05b0520f3265d1a0",
+    "candidate_commit": "21f64b5002e7ea14296db985a8cade07e003e1d4",
     "melos_validation_pr": 411,
     "release_branch": "release-0.9.0",
     "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
     "previous_dev_headed_rc_pr": 410,
     "final_main_pin_required_for": "production distribution, after SDK review/promotion; frozen RC uses candidate_commit",
     "recovery_pagination_pr": 417,
-    "release_repair_pr": 418
+    "release_repair_pr": 418,
+    "previous_frozen_candidate_commit": "80e656101ce1b85fe05ddcbc05b0520f3265d1a0",
+    "candidate_pin_status": "Provisional SDK #419 source commit; replace with accepted release-0.9.0 SHA after #419 dev squash and #420 frozen-branch carry pass tests and review.",
+    "kdf_roll_dev_pr": 419,
+    "kdf_roll_release_pr": 420
   },
   "kdf": {
-    "source": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
-    "branch": "feat/lifi-integration",
-    "build_config_sha256": "6b47b6c255a15a2d31191af54e8c607267b0ccd8c5a5da5285f722211400412f",
+    "source": "e40ac2fb4319d352bf9c93683eb2518ce9f939e0",
+    "branch": "dev",
+    "build_config_sha256": "e79216c9b05ea6eb439857e41e6f362b135005f8035ff9fc875ddfa6c7707576",
     "archives": {
       "web": [
-        "79c3b1b87c8408b2416381c8f62141770e0404bccb5881038504d6e973615f84"
+        "19e0c549a67a54c9046ece2bf9f26f315532d5024b4560ffb6e86cd2aa0fe04d"
       ],
       "ios": [
-        "29440a5386054679f87486b3a4014427655122a8979f96fc7e275ca0dae3e2dd"
+        "67979dccf7249ed88431f8f811c96b1463e430747aa052f3817a64225c7c0f81"
       ],
       "macos": [
-        "118712f84f5a0888d9fa0237474710a1222be7e49ce0cab22ab4d05afa013c10"
+        "dcf9622f65f4a6bceae2a486fc4ffd9a7166dfb4a8620adf7ba3656e773892c4"
       ],
       "android-armv7": [
-        "cd123afeda3fdc98a9d960b71215c8d875317c626eecc43fa84b672534911a35"
+        "dc33bd5a2e0ec65f76832a8accb1178d5be5607938bfc3973aa4e11b287792e0"
       ],
       "android-aarch64": [
-        "7130aac8b03e6ba6c60e684b6b1304f6ea5d40d11bd9fd7f1f75ce6566d6bf3d"
+        "05c6963feb06050b3ba173d71838595ecb5ec391486a88149abfae352ebccd66"
       ],
       "linux": [
-        "0e85b7c1db4d4865aa1228dcb509e69c83b276afeb4abee551285ce64fa02889"
+        "0d2796d786936a9c95d13d21dd40c9d3c96a93ace7f69799f5e33e505be11baf"
       ],
       "windows": [
-        "0750ed0b87d3d7550a2ac4e1f574c643962a66080ca935ab8b8f9e0ab470355a"
+        "81249337ea6be7bfcd3eec6f4d0d7576d896dfcf04f3a3a68952185fe237ece9"
       ]
+    },
+    "workflow_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/40849114158",
+    "artifact_provenance": "sdk/docs/KDF_ARTIFACTS_2026-10-29.json",
+    "upstream_tests": "Original run40755486033 failed; one failed-jobs retry has repeated the macOS integration failures, with remaining retry results pending. No waiver; exact original inventory in SDK provenance.",
+    "atomic_refund_defaults": {
+      "eth_payment": 155000,
+      "eth_sender_refund": 125000,
+      "source": "mm2src/coins/eth.rs gas_limit module at e40ac2fb4319d352bf9c93683eb2518ce9f939e0",
+      "eth_rs_git_blob": "73ccdeb00aed5d1bcf98d0ea8b3a1d7a9b6dce83",
+      "comparison": "eth.rs blob equals the previous 35f0bde pin; default gas values unchanged"
     }
   },
   "coins": {
@@ -98,14 +112,15 @@
     "sdk_package_suites": 16,
     "sdk_native_passed": 3057,
     "sdk_native_skipped": 14,
-    "app_passed": 3919,
-    "app_skipped": 4,
     "sdk_wasm_passed": 215,
     "framework_wasm_passed": 10,
     "analysis_errors": 0,
     "analysis_warnings": 55,
     "analysis_infos": 2144,
     "public_etc_browser_http_probe_passed": 1,
-    "scope": "App source is unchanged from f94e5072; combined consumer gate uses frozen SDK 80e65610, tree-identical to dev e849cd0d including complete in-flight pagination. Final Melos package suites and core WASM rerun after the recovery repair."
+    "scope": "29 October roll: enforced offline Melos bootstrap and stable repeated prepare; all 16 Melos package suites, both WASM gates, full app aggregator with production GasFree defines and full consumer analysis passed. No runtime source change beyond a source comment; exact-source gas-limit regression was updated after verifying identical eth.rs blob. Frozen release branches and 28 October previews retain prior accepted inputs until focused carry PRs pass tests and review.",
+    "app_validation_status": "passed 29 October on the proposed SDK/KDF roll after verifying identical payment/refund gas constants",
+    "app_passed": 3919,
+    "app_skipped": 4
   }
 }
