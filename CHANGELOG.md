@@ -29,7 +29,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 - Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
   encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
 - Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
-  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/80e656101ce1b85fe05ddcbc05b0520f3265d1a0/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/80e656101ce1b85fe05ddcbc05b0520f3265d1a0/docs/RELEASE_0.9.0.md).
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/docs/RELEASE_0.9.0.md).
 
 ## 🐛 Bug Fixes
 
@@ -51,7 +51,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 - **macOS** ([@DeckerSU], #3541) — Sign the KDF helper with hardened runtime and timestamp for notarization. Signed packaging and fresh-install validation remain release gates.
 - **GasFree TRON** ([@CharlVS], #3546, #3549) — Enable production GasFree defaults in ordinary and shared-CI builds. The four production defines remain pinned for release validation.
-- **Frozen Inputs** ([@CharlVS], #3557) — KDF source `35f0bde`, specs `7c388ea`, bundled coins `2b0aefb7`; runtime coin updates remain enabled independently. The engine source retains the ERC-20 payment validation shipped in 0.9.7-1.
+- **Frozen Inputs** ([@CharlVS], #3557, [SDK#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)) — KDF source `e40ac2f` from merged `dev`, specs `7c388ea`, bundled coins `2b0aefb7`; runtime coin updates remain enabled independently. Seven platform archives have independent build/download verification. Runtime sources and the ERC-20 payment validation shipped in 0.9.7-1 are unchanged from the prior candidate.
 
 ## Compatibility and Known Limits
 

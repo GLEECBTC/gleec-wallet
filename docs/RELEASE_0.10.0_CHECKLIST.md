@@ -1,11 +1,54 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current state: 28 October 2026. App `0.10.0+0` and SDK `0.9.0` are release
+Current RC inputs: 29 October 2026. App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
+
+## Merged-dev KDF roll — 29 October
+
+SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
+was squash merged into dev as `d111063426266e6b967b88f0f7a8598d1017b73e`.
+Focused frozen-branch carry
+[#420](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/420) is accepted
+at `da20524e6947833b40c4d70fee5249fc9ae1a911` on `release-0.9.0`.
+App #3576 pins that exact frozen revision; #3577 carries only the accepted app
+update into `release-0.10.0`. Both main RC PRs remain open. The app release PR
+records the actual dev squash, frozen head and refreshed preview identity.
+
+- [x] Full ten-platform build passed; all seven SDK archives independently
+  match Actions artifacts and ordinary mirror downloads. Strict CLI passed.
+- [x] Enforced offline Melos bootstrap and repeated prepare passed without
+  tracked generation drift. All 16 suites: **3,057 passed / 14 skipped**;
+  core Chrome/WASM **215 passed**, framework WASM **10 passed**. Accepted SDK
+  package/runtime/configuration trees equal that tested input; two release
+  evidence documents record the acceptance and regression assessment.
+- [x] New native KDF version and read-only Arbitrum/Base quotes, funding,
+  minimums, included fee and unfunded Max passed on a fresh unfunded wallet.
+- [x] Unchanged `eth.rs` payment/refund defaults (155,000 / 125,000) were
+  rechecked; their source comment and deliberate exact-pin regression updated.
+- [x] Full app aggregator on the accepted frozen SDK pin: **3,919 passed /
+  four skipped** with all four production GasFree defines. Full analysis:
+  **zero errors**, existing 55 warnings / 2,144 infos. Formatting, input hashes,
+  enforced lockfile and diff checks pass.
+- [x] Owner accepted upstream KDF run `40755486033` failures **as-is for RC
+  testing** on 29 October. Attempt 2 still fails Linux/macOS/Windows integration
+  and Sia Max; Linux unit/session-storage and Docker ZCoin passed on retry.
+  These failures remain production gates for fix or final recorded disposition.
+- [x] Regression assessment: three Z-coin activation tests passed on pre-merge
+  dev `6afb05f4` in run `31990542840` and fail now, a confirmed CI regression;
+  code versus infrastructure cause is unassigned. Eighteen current macOS
+  failures and Linux segwit history already failed then. Sia's regression is
+  unconfirmed; its retry failed a different balance assertion. Runtime sources
+  remain unchanged from prior RC `35f0bde`.
+- Final app-head hosted checks/review, the focused app dev squash/RC carry
+  and refreshed tester preview identity are recorded on app #3575. The older
+  28 October preview remains historical evidence for its own inputs.
+
+The [input manifest](RELEASE_0.10.0_INPUTS.json) records this candidate.
+Earlier validation and merge records below remain historical evidence.
 
 ## Prepared and merged into dev
 
@@ -44,14 +87,14 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 
 - [x] App/SDK changelogs and versions include unpublished prior fixes and
   user-facing SDK changes. Internal package constraints are aligned.
-- [x] Current SDK gitlink is `80e656101ce1b85fe05ddcbc05b0520f3265d1a0` on frozen
+- [x] Current SDK gitlink is `da20524e6947833b40c4d70fee5249fc9ae1a911` on frozen
   `release-0.9.0` ([SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)).
   SDK main promotion and final app main repin are distribution steps after
   review, not prerequisites for freezing this exact RC source.
-- [x] Frozen KDF `35f0bde438eec2cb0471b19642b9d9c4602fa17d`, specs
+- [x] Frozen KDF `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev, specs
   `7c388ea7b91cb7c657435d416bc03e5349b46162`, bundled coins
   `2b0aefb78b184091ab086c66e513d8b03f5d5a01`. All seven rebuilt archives
-  verified; independent provenance is SDK `docs/KDF_ARTIFACTS_2026-10-28.json`.
+  verified; independent provenance is SDK `docs/KDF_ARTIFACTS_2026-10-29.json`.
   Build-time revision advancement is disabled; runtime coin updates stay enabled.
 - [x] Security parity checked against 0.9.7-1: candidate KDF ERC-20 payment amount
   validation remains outside the watcher-reward branch, retaining the fix from
@@ -60,8 +103,10 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 ## Fresh validation of the prepared runtime
 
 Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. Combined runtime is
-app source `f94e5072` with SDK `80e65610`, tree-identical to the validated
-SDK dev squash `e849cd0d`. The later SDK review repair follows every in-flight
+app source `f94e5072` plus the checked gas-source reference/regression from
+`171cc178`, with accepted SDK `da20524e`. Its package/runtime/configuration
+trees equal validated roll source `21f64b50`; two release evidence documents
+add the owner disposition and regression assessment. The later SDK review repair follows every in-flight
 history page and retains session revocation across later pages. The final app
 consumer gate was repeated with that repair. App implementation is unchanged;
 its final preparation adds documentation and the immutable SDK candidate pin.
