@@ -6,7 +6,7 @@ run-name: ${{ github.actor }} is validating code guidelines 🚀
 on:
   pull_request:
     branches:
-      - "*"
+      - "**"
 
 jobs:
   validate_code_guidelines:
