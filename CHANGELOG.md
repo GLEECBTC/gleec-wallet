@@ -56,13 +56,32 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 ## Compatibility and Known Limits
 
 SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
-and adopters of interim routed-swap APIs. External recipients, new routed
-chains/providers and hardware signing are not certified by this candidate.
-New atomic EVM-token sells are unavailable until authoritative permission
-preflight is supported; no unlimited approval is inferred from a quoted amount.
-Legal availability, Safari, signed packaging and upstream review/CI items remain
-explicit gates. Five-person usability and live fiat testing were deferred for the earlier
-integration RC; final distribution requires their recorded disposition.
+and adopters of interim routed-swap APIs.
+
+- **LI.FI defaults:** supported same-chain/cross-chain quotes, cheapest/fastest
+  selection, exact and Max amounts, approval handling, Activity, recovery and
+  eligible cancellation are available without a feature opt-in. Asset activation,
+  trading policy, funding, reviewed minimums and execution checks still apply.
+  `LIFI_INTEGRATOR_ENABLED` controls commission configuration, not availability.
+- **Terms availability:** ordinary builds require available wallet and LI.FI
+  documents before routed Start. `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false.
+  Only the isolated, manually dispatched RC preview bypasses availability,
+  retaining its warning and never recording unavailable terms as accepted.
+- **Capability scope:** the pinned routed contract supports LI.FI and eligible
+  EVM assets; it has no external-recipient parameter. Additional provider
+  backends and routed hardware signing are not established by this candidate.
+  Hardware wallets remain wallet-only, as in app 0.9.7-1.
+- **New atomic restriction:** app 0.9.7-1 allowed atomic EVM-token trading.
+  [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569) blocks new token
+  sells because the atomic spender is negotiated after matching and may receive
+  an unlimited allowance that cannot be verified before Start. LI.FI token
+  routes retain their separate approval contract; existing atomic recovery and
+  cancellation remain available.
+- **Release qualification:** approved hosted legal text, Safari, signed packaging
+  and upstream review/CI still need their checklist evidence or disposition.
+  The owner accepted documented KDF failures for RC testing only. Five-person
+  usability and live fiat testing were explicitly deferred; Banxa #3559 is after
+  0.10.0. These deferrals are recorded, not passing test results.
 
 **Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
 

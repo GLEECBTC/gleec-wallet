@@ -50,6 +50,35 @@ records the actual dev squash, frozen head and refreshed preview identity.
 The [input manifest](RELEASE_0.10.0_INPUTS.json) records this candidate.
 Earlier validation and merge records below remain historical evidence.
 
+## Feature defaults and scope — 29 October
+
+These entries record a source audit of the candidate, not new execution or
+signed-platform test results.
+
+- [x] Implemented LI.FI same-chain/cross-chain quoting, cheapest/fastest ordering,
+  exact/Max amounts, approval handling, Activity, recovery and eligible
+  cancellation are wired in without a feature opt-in. Supported assets,
+  activation, trading policy, funding and reviewed execution checks still apply.
+- [x] `LIFI_INTEGRATOR_ENABLED` defaults to true and controls commission
+  configuration. Setting it false does not turn off routed swaps.
+- [x] Ordinary builds enforce document availability before routed Start;
+  `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false. The isolated manual RC preview
+  is the recorded availability exception. Warnings remain and unavailable terms
+  cannot be recorded as accepted. Production legal signoff is still required.
+- [x] The pinned routed request contract has no external-recipient parameter;
+  supported routing uses LI.FI and eligible EVM assets. Expanded provider/chain
+  support and hardware signing need their own implementation or validation.
+  Hardware-wallet trading was wallet-only in 0.9.7-1 and remains so.
+- [x] Atomic EVM-token trading was available in 0.9.7-1. App #3569 added the
+  current new-sell refusal because the spender is negotiated after matching and
+  may receive an unlimited allowance without authoritative pre-Start evidence.
+  This is an app-side atomic restriction; LI.FI token approvals and existing
+  atomic recovery/cancellation follow their separate contracts.
+- [x] Preserve the owner's recorded usability/live-fiat deferrals and RC-only
+  acceptance of upstream KDF failures. Banxa #3559 is after 0.10.0. Release
+  review, CI, approved legal text and signed-platform evidence retain their
+  separate checklist requirements; no pending result becomes a pass here.
+
 ## Prepared and merged into dev
 
 Every merge below used **squash**. The owner authorized admin bypass for dev
