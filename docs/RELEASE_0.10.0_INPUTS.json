@@ -8,10 +8,12 @@
     "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6",
     "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
     "release_branch": "release-0.10.0",
-    "runtime_validation_commit": "f94e507214ad0330d508bfe8d68624ad067ff526",
+    "runtime_validation_commit": "5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c",
     "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)",
     "sdk_pointer_dev_pr": 3576,
-    "sdk_pointer_release_pr": 3577
+    "sdk_pointer_release_pr": 3577,
+    "atomic_trading_restoration_pr": 3579,
+    "tested_source_commit": "34bad84020e68bf4fe4547ea7990287d050c3aa0"
   },
   "sdk": {
     "version": "0.9.0",
@@ -128,9 +130,10 @@
     "analysis_warnings": 55,
     "analysis_infos": 2144,
     "public_etc_browser_http_probe_passed": 1,
-    "scope": "29 October: enforced offline Melos bootstrap and stable repeated prepare; all 16 Melos package suites and both WASM gates passed on artifact-roll source 21f64b50. Frozen SDK da20524e differs only in two release-evidence documents and has identical package/runtime/configuration trees. Full app aggregator with production GasFree defines and full analysis repeated on the actual accepted SDK pin. KDF source comment/exact-pin regression updated after verifying identical eth.rs blob and gas limits; no gas-policy change.",
-    "app_validation_status": "passed on accepted frozen SDK da20524e: 3,919 tests / four skipped",
-    "app_passed": 3919,
-    "app_skipped": 4
+    "scope": "29 October: enforced offline Melos bootstrap and stable repeated prepare; all 16 Melos package suites and both WASM gates passed on artifact-roll source 21f64b50. Frozen SDK da20524e differs only in two release-evidence documents and has identical package/runtime/configuration trees. Full app aggregator with production GasFree defines and full analysis repeated on the actual accepted SDK pin. KDF source comment/exact-pin regression updated after verifying identical eth.rs blob and gas limits; no gas-policy change. Atomic-token restoration: 95 focused regressions and the full app aggregator (3,922 passed / four skipped) passed on 34bad840. Accepted dev squash 5d5cc5c4 has the identical complete tree; later RC validation-record edits change documentation only. SDK, KDF, runtime configuration and lockfile inputs remain unchanged.",
+    "app_validation_status": "passed on atomic restoration source 34bad840 with frozen SDK da20524e: 3,922 tests / four skipped; accepted dev squash 5d5cc5c4 has the identical complete tree",
+    "app_passed": 3922,
+    "app_skipped": 4,
+    "atomic_focused_passed": 95
   }
 }

@@ -7,6 +7,28 @@ preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
+## Atomic token restoration — 29 October
+
+App [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) was squash
+merged into dev as `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c`. Its complete tree equals tested source
+`34bad84020e68bf4fe4547ea7990287d050c3aa0`. The focused release carry includes that accepted squash and these
+validation records; later dev work must not enter the candidate automatically.
+
+- [x] Restore the previous release's atomic EVM-token trading, Advanced orders
+  and bot starts. The existing review describes engine-managed allowance with
+  no new modal, acknowledgement or client-imposed approval limit.
+- [x] 95 focused quote/execution/review/option regressions pass, including
+  unresolved token parents, pricing metadata and phone layout at 200% text.
+- [x] Full app aggregator: **3,922 passed / four skipped**, with all four
+  production GasFree defines. Analysis: zero errors, existing 55 warnings and
+  2,144 infos. Enforced offline lockfile, generated localization, changed-file
+  formatting and diff checks pass. No new funded settlement is claimed.
+- [x] SDK `da20524e`, KDF `e40ac2f`, configuration, lockfile and prior SDK/Melos
+  validation inputs are unchanged. Subsequent edits here update release
+  evidence only; they do not change the tested runtime.
+- [ ] Record the focused release carry, its required checks/review and refreshed
+  tester preview identity on #3575. Keep both main RCs open.
+
 ## Merged-dev KDF roll — 29 October
 
 SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
@@ -129,7 +151,7 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
   validation remains outside the watcher-reward branch, retaining the fix from
   KDF `2023112`. Diverged ancestry alone was not treated as evidence of removal.
 
-## Fresh validation of the prepared runtime
+## Earlier validation before the atomic restoration
 
 Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. Combined runtime is
 app source `f94e5072` plus the checked gas-source reference/regression from
