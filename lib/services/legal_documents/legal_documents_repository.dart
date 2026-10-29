@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:crypto/crypto.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:web_dex/shared/constants.dart';
@@ -14,95 +12,58 @@ import 'package:web_dex/services/storage/get_storage.dart';
 class LegalDocumentsRepository {
   LegalDocumentsRepository({
     BaseStorage? storage,
-    AssetBundle? assetBundle,
     http.Client? httpClient,
     DateTime Function()? clock,
+    this.bypassGate = kBypassLegalDocumentGate,
   }) : _storage = storage ?? getStorage(),
-       _assetBundle = assetBundle ?? rootBundle,
        _httpClient = httpClient ?? http.Client(),
        _clock = clock ?? DateTime.now;
 
-  static const String _acceptanceKey = 'legal_acceptance_v1';
-
-  /// The two documents the consent line actually names.
-  static const List<LegalDocumentType> _consentDocuments = [
-    LegalDocumentType.eula,
-    LegalDocumentType.termsOfService,
-  ];
-
-  static const String _githubOwner = 'GLEECBTC';
-  static const String _githubRepo = 'gleec-wallet';
-  static const String _githubBranch = 'main';
-
+  static const _acceptanceKey = 'legal_acceptance_v1';
+  final bool bypassGate;
   final BaseStorage _storage;
-  final AssetBundle _assetBundle;
   final http.Client _httpClient;
-  final Logger _log = Logger('LegalDocumentsRepository');
   final DateTime Function() _clock;
+  final _log = Logger('LegalDocumentsRepository');
   final _changes = StreamController<void>.broadcast();
   final _refreshes = <LegalDocumentType, Future<LegalDocumentContent?>>{};
   final _nextRefresh = <LegalDocumentType, DateTime>{};
-  Future<LegalConsentSnapshot>? _snapshot;
+  final _missing = <LegalDocumentType, LegalDocumentStatus>{};
   bool _disposed = false;
 
   Stream<void> get changes => _changes.stream;
+  bool canSubmit(LegalConsentSnapshot? snapshot) =>
+      bypassGate || (snapshot?.covers(walletConsentDocuments) ?? false);
 
-  Future<LegalConsentSnapshot> loadConsentSnapshot() => _snapshot ??=
-      _loadConsentSnapshot().onError((Object error, StackTrace stackTrace) {
-        _snapshot = null;
-        Error.throwWithStackTrace(error, stackTrace);
-      });
+  Future<LegalConsentSnapshot> loadConsentSnapshot() =>
+      loadSnapshot(walletConsentDocuments);
 
-  Future<LegalConsentSnapshot> _loadConsentSnapshot() async {
-    final contents = await Future.wait(
-      _consentDocuments.map(loadPreferredContent),
-    );
-    return LegalConsentSnapshot(
-      documents: {
-        for (var i = 0; i < _consentDocuments.length; i++)
-          _consentDocuments[i]: contents[i],
-      },
-      documentShas: {
-        for (var i = 0; i < _consentDocuments.length; i++)
-          _consentDocuments[i].cacheKey: _contentSha(contents[i].markdown),
-      },
-    );
+  Future<LegalConsentSnapshot> loadSnapshot(
+    List<LegalDocumentType> documents,
+  ) async {
+    final contents = await Future.wait(documents.map(loadPreferredContent));
+    return LegalConsentSnapshot.fromDocuments({
+      for (var i = 0; i < documents.length; i++) documents[i]: contents[i],
+    }, requiredDocuments: documents);
   }
 
-  /// Startup, resume and form entry share the same throttled refresh.
-  Future<void> refreshConsentDocuments() async {
-    if (_disposed) return;
-    try {
-      // Capture the locally available text before remote work starts.
-      await loadConsentSnapshot();
-      await Future.wait(
-        _consentDocuments.map(
-          (document) => refreshFromRemote(document, force: false),
-        ),
-      );
-    } catch (error, stackTrace) {
-      _log.warning('Could not refresh consent documents', error, stackTrace);
-    }
-  }
-
+  /// Does not wait for the network: forms can immediately use a valid cache.
   Future<LegalDocumentContent> loadPreferredContent(
     LegalDocumentType document,
-  ) async {
-    LegalDocumentContent? cached;
-    try {
-      cached = await _readCachedContent(document);
-    } catch (error) {
-      _log.warning('Could not load cached ${document.cacheKey}: $error');
-    }
-    if (cached != null) {
-      return cached;
-    }
+  ) async =>
+      await _readCachedContent(document) ??
+      LegalDocumentContent.unavailable(
+        status: _missing[document] ?? LegalDocumentStatus.unavailable,
+      );
 
-    final bundled = await _assetBundle.loadString(document.assetPath);
-    return LegalDocumentContent(
-      markdown: bundled,
-      source: LegalDocumentSource.bundledAsset,
-    );
+  Future<void> refreshConsentDocuments({bool force = false}) =>
+      refreshDocuments(walletConsentDocuments, force: force);
+
+  Future<void> refreshDocuments(
+    List<LegalDocumentType> documents, {
+    bool force = false,
+  }) async {
+    await Future.wait(documents.map((d) => refreshFromRemote(d, force: force)));
   }
 
   Future<LegalDocumentContent?> refreshFromRemote(
@@ -126,205 +87,160 @@ class LegalDocumentsRepository {
   Future<LegalDocumentContent?> _refreshFromRemote(
     LegalDocumentType document,
   ) async {
-    // Failure paths keep local text and wait at least a minute before retrying.
     _nextRefresh[document] = _clock().add(const Duration(minutes: 1));
-    final uri = Uri.https(
-      'api.github.com',
-      '/repos/$_githubOwner/$_githubRepo/contents/${document.githubPath}',
-      <String, String>{'ref': _githubBranch},
-    );
-
     try {
       final cached = await _readCachedContent(document);
       final response = await _httpClient
           .get(
-            uri,
-            headers: const <String, String>{
-              'Accept': 'application/vnd.github+json',
-              'User-Agent': 'GleecWallet',
-              'X-GitHub-Api-Version': '2022-11-28',
+            Uri.parse(document.url),
+            headers: {
+              'Accept': 'text/markdown, text/plain',
+              if (cached?.etag case final etag?) 'If-None-Match': etag,
             },
           )
           .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode != 200) {
-        _log.warning(
-          'Failed to refresh ${document.cacheKey}: '
-          'GitHub returned ${response.statusCode}',
-        );
-        return null;
-      }
-
-      final payload = jsonDecode(response.body) as Map<String, dynamic>;
-      final encodedContent = payload['content'] as String?;
-      final sha = payload['sha'] as String?;
-      if (encodedContent == null || encodedContent.trim().isEmpty) {
-        _log.warning(
-          'GitHub response missing content for ${document.cacheKey}',
-        );
-        return null;
-      }
-
-      final markdown = utf8.decode(
-        base64Decode(encodedContent.replaceAll('\n', '')),
-      );
-      if (markdown.trim().isEmpty) {
-        _log.warning('Decoded content empty for ${document.cacheKey}');
-        return null;
-      }
-
       if (_disposed) return null;
-      final fetchedAt = _clock();
-      final hasChanged =
-          cached?.markdown != markdown || (sha != null && cached?.sha != sha);
-
-      if (hasChanged) {
-        final persisted = await _storage.write(
-          document.cacheKey,
-          <String, dynamic>{
-            'markdown': markdown,
-            'sha': sha,
-            'fetchedAt': fetchedAt.toIso8601String(),
-          },
-        );
-        if (!persisted) throw StateError('Legal document cache write failed');
-        if (_disposed) return null;
-        _snapshot = null;
-        _changes.add(null);
-      }
-
-      _nextRefresh[document] = _clock().add(const Duration(minutes: 15));
-
-      if (!hasChanged) {
+      if (response.statusCode == 304 && cached != null) {
+        _nextRefresh[document] = _clock().add(const Duration(minutes: 15));
         return null;
       }
-
+      if (response.statusCode != 200) {
+        throw FormatException('HTTP ${response.statusCode}');
+      }
+      final mediaType = response.headers['content-type']
+          ?.split(';')
+          .first
+          .trim()
+          .toLowerCase();
+      if (mediaType != 'text/markdown' && mediaType != 'text/plain') {
+        throw const FormatException('Expected Markdown or plain text');
+      }
+      final markdown = utf8.decode(response.bodyBytes);
+      if (!isLegalMarkdown(markdown)) {
+        throw const FormatException('Empty or invalid legal document');
+      }
+      if (markdown.contains(legalPlaceholderMarker)) {
+        _setMissing(document, LegalDocumentStatus.placeholder);
+        return null;
+      }
+      final sha = legalContentSha(markdown);
+      final fetchedAt = _clock();
+      final etag = response.headers['etag'];
+      final persisted = await _storage.write(document.cacheKey, {
+        'markdown': markdown,
+        'sha': sha,
+        'fetchedAt': fetchedAt.toIso8601String(),
+        'etag': etag,
+        'url': document.url,
+      });
+      if (!persisted) throw StateError('Legal document cache write failed');
+      if (_disposed) return null;
+      _missing.remove(document);
+      _nextRefresh[document] = _clock().add(const Duration(minutes: 15));
+      if (cached?.markdown == markdown) return null;
+      _changes.add(null);
       return LegalDocumentContent(
         markdown: markdown,
         source: LegalDocumentSource.remote,
         sha: sha,
         fetchedAt: fetchedAt,
+        etag: etag,
       );
-    } on TimeoutException catch (error) {
-      _log.warning('Timed out refreshing ${document.cacheKey}: $error');
-      return null;
-    } on FormatException catch (error) {
-      _log.warning('Invalid GitHub payload for ${document.cacheKey}: $error');
-      return null;
-    } catch (error, stackTrace) {
-      _log.warning(
-        'Unexpected error refreshing ${document.cacheKey}',
-        error,
-        stackTrace,
-      );
+    } catch (error) {
+      _log.warning('Could not refresh ${document.cacheKey}: $error');
+      _setMissing(document, LegalDocumentStatus.unavailable);
       return null;
     }
   }
 
-  /// The stored acceptance record, or null if the user has never accepted.
+  void _setMissing(LegalDocumentType document, LegalDocumentStatus status) {
+    if (_disposed || _missing[document] == status) return;
+    _missing[document] = status;
+    _changes.add(null);
+  }
+
+  Future<LegalDocumentContent?> _readCachedContent(
+    LegalDocumentType document,
+  ) async {
+    try {
+      final raw = await _storage.read(document.cacheKey);
+      if (raw is! Map) return null;
+      final markdown = raw['markdown'];
+      if (markdown is! String ||
+          !isLegalMarkdown(markdown) ||
+          markdown.contains(legalPlaceholderMarker)) {
+        return null;
+      }
+      final sha = legalContentSha(markdown);
+      // Old GitHub cache entries can omit the SHA, but a mismatch is corrupt.
+      if (raw['sha'] != null && raw['sha'] != sha) return null;
+      return LegalDocumentContent(
+        markdown: markdown,
+        source: LegalDocumentSource.cachedRemote,
+        sha: sha,
+        fetchedAt: DateTime.tryParse('${raw['fetchedAt']}'),
+        // Validators belong to the new URL, never to the old GitHub endpoint.
+        etag: raw['url'] == document.url && raw['etag'] is String
+            ? raw['etag'] as String
+            : null,
+      );
+    } catch (error) {
+      _log.warning('Could not read ${document.cacheKey}: $error');
+      return null;
+    }
+  }
+
   Future<LegalAcceptance?> readAcceptance() async {
     try {
       final raw = await _storage.read(_acceptanceKey);
-      if (raw is! Map) return null;
-      return LegalAcceptance.fromJson(Map<String, dynamic>.from(raw));
+      return raw is Map
+          ? LegalAcceptance.fromJson(Map<String, dynamic>.from(raw))
+          : null;
     } catch (error) {
-      _log.warning('Could not read the legal acceptance record: $error');
+      _log.warning('Could not read legal acceptance: $error');
       return null;
     }
   }
 
-  /// Records that the user accepted the current documents on [surface].
-  ///
-  /// Fire-and-forget by design: consent is given by the act of continuing, so
-  /// a storage failure must never block the user from reaching their wallet.
+  /// A testing bypass must never turn missing text into an acceptance record.
   Future<void> recordAcceptance({
     required String surface,
     LegalConsentSnapshot? snapshot,
   }) async {
     try {
+      final presented = snapshot ?? await loadConsentSnapshot();
+      if (!presented.covers(walletConsentDocuments)) return;
       await _storage.write(
         _acceptanceKey,
         LegalAcceptance(
           termsVersion: kCurrentTermsVersion,
           acceptedAt: _clock(),
           surface: surface,
-          documentShas: snapshot?.documentShas ?? await _currentDocumentShas(),
+          documentShas: {
+            for (final d in walletConsentDocuments)
+              d.cacheKey: presented.documentShas[d.cacheKey]!,
+          },
         ).toJson(),
       );
     } catch (error) {
-      _log.warning('Could not record the legal acceptance: $error');
+      _log.warning('Could not record legal acceptance: $error');
     }
   }
 
-  /// Whether the stored acceptance still covers what the user would agree to
-  /// today. False when there is no record, when [kCurrentTermsVersion] has been
-  /// bumped, or when either document's content has since changed.
   Future<bool> hasAcceptedCurrentTerms({LegalConsentSnapshot? snapshot}) async {
+    final presented = snapshot ?? await loadConsentSnapshot();
+    if (!presented.covers(walletConsentDocuments)) return false;
     final acceptance = await readAcceptance();
-    if (acceptance == null) return false;
-    if (acceptance.termsVersion < kCurrentTermsVersion) return false;
-
-    final current = snapshot?.documentShas ?? await _currentDocumentShas();
-    for (final entry in current.entries) {
-      var accepted = acceptance.documentShas[entry.key];
-      // Legacy records without a document identity retain their version-only
-      // fallback. New records always identify the actual accepted content.
-      if (accepted == null) continue;
-      if (accepted == 'bundled') {
-        final document = _consentDocuments.firstWhere(
-          (document) => document.cacheKey == entry.key,
-        );
-        accepted = _contentSha(
-          await _assetBundle.loadString(document.assetPath),
-        );
-      }
-      if (accepted != entry.value) return false;
+    if (acceptance == null || acceptance.termsVersion < kCurrentTermsVersion) {
+      return false;
+    }
+    for (final document in walletConsentDocuments) {
+      var accepted = acceptance.documentShas[document.cacheKey];
+      if (accepted == null) continue; // Legacy version-only acceptance.
+      if (accepted == 'bundled') accepted = document.legacyBundledSha;
+      if (accepted != presented.documentShas[document.cacheKey]) return false;
     }
     return true;
-  }
-
-  Future<Map<String, String>> _currentDocumentShas() async {
-    final shas = <String, String>{};
-    for (final document in _consentDocuments) {
-      final content = await loadPreferredContent(document);
-      shas[document.cacheKey] = _contentSha(content.markdown);
-    }
-    return shas;
-  }
-
-  /// Git's blob format keeps these identities compatible with existing GitHub
-  /// SHA records, regardless of whether the text came from assets or the cache.
-  String _contentSha(String markdown) {
-    final bytes = utf8.encode(markdown);
-    return sha1.convert([
-      ...utf8.encode('blob ${bytes.length}\u0000'),
-      ...bytes,
-    ]).toString();
-  }
-
-  Future<LegalDocumentContent?> _readCachedContent(
-    LegalDocumentType document,
-  ) async {
-    final rawValue = await _storage.read(document.cacheKey);
-    if (rawValue is! Map) {
-      return null;
-    }
-
-    final markdown = rawValue['markdown'];
-    if (markdown is! String || markdown.trim().isEmpty) {
-      return null;
-    }
-
-    final sha = rawValue['sha'];
-    final fetchedAtRaw = rawValue['fetchedAt'];
-    return LegalDocumentContent(
-      markdown: markdown,
-      source: LegalDocumentSource.cachedRemote,
-      sha: sha is String ? sha : null,
-      fetchedAt: fetchedAtRaw is String
-          ? DateTime.tryParse(fetchedAtRaw)
-          : null,
-    );
   }
 
   void dispose() {

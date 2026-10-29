@@ -15,6 +15,7 @@ import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/utils/balance_format.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_balance.dart';
@@ -22,6 +23,7 @@ import 'package:web_dex/shared/widgets/coin_fiat_balance.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item_size.dart';
 import 'package:web_dex/views/wallet/common/address_icon.dart';
+import 'package:web_dex/views/wallet/wallet_page/common/mobile_coin_row_title.dart';
 
 /// Widget for showing an authenticated user's balance and anddresses for a
 /// given coin
@@ -153,63 +155,36 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
   ) {
     final statsTap = widget.onStatisticsTap;
     final balance = widget.coin.balance(context.sdk);
+    final amount = _formatBalanceAmount(balance, hideBalances);
     return Container(
       alignment: Alignment.centerLeft,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Use CoinItem with large size for mobile, matching GroupedAssetTickerItem
-          AssetIcon(widget.coin.id, size: CoinItemSize.large.coinLogo),
-          const SizedBox(width: 8),
-          // Left side: ticker with market price and 24h change below it
-          Expanded(
-            flex: 8,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Coin name - using headlineMedium for bold 16px text
-                AutoScrollText(
-                  text: widget.coin.displayName,
-                  style: theme.textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 2),
-                // Market price + 24h change (price is always shown, even when
-                // balances are hidden, since it is public market data).
-                InkWell(
-                  onTap: statsTap,
-                  borderRadius: BorderRadius.circular(8),
-                  child: _PriceWithChange(
-                    coin: widget.coin,
-                    textStyle: theme.textTheme.bodySmall,
-                    iconSize: 12,
-                    spacing: 2,
-                  ),
-                ),
-              ],
-            ),
+      child: MobileCoinRowTitle(
+        // With the network badge, as on desktop: a token's name omits its
+        // network, so the badge is what tells USDT on two chains apart.
+        icon: AssetLogo.ofId(widget.coin.id, size: CoinItemSize.large.coinLogo),
+        // Coin name - using headlineMedium for bold 16px text
+        name: AutoScrollText(
+          text: widget.coin.displayName,
+          style: theme.textTheme.headlineMedium,
+        ),
+        // Market price + 24h change (price is always shown, even when
+        // balances are hidden, since it is public market data).
+        price: InkWell(
+          onTap: statsTap,
+          borderRadius: BorderRadius.circular(8),
+          child: _PriceWithChange(
+            coin: widget.coin,
+            textStyle: theme.textTheme.bodySmall,
+            iconSize: 12,
+            spacing: 2,
           ),
-          const Spacer(),
-          // Right side: holdings (coin amount on top, USD value below)
-          Expanded(
-            flex: 7,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _CoinAmountText(
-                  coin: widget.coin,
-                  balance: balance,
-                  hideBalances: hideBalances,
-                  style: theme.textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 2),
-                _UsdBalanceText(
-                  coin: widget.coin,
-                  textStyle: theme.textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
+        amount: '$amount ${widget.coin.id.symbol.configSymbol}',
+        amountStyle: theme.textTheme.headlineMedium,
+        fiat: _UsdBalanceText(
+          coin: widget.coin,
+          textStyle: theme.textTheme.bodySmall,
+        ),
       ),
     );
   }
@@ -261,52 +236,10 @@ class _ExpandableCoinListItemState extends State<ExpandableCoinListItem> {
   }
 }
 
-class _CoinAmountText extends StatelessWidget {
-  const _CoinAmountText({
-    required this.coin,
-    required this.balance,
-    required this.hideBalances,
-    this.style,
-  });
-
-  final Coin coin;
-  final double? balance;
-  final bool hideBalances;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    final amountText = _formatBalanceAmount(balance, hideBalances);
-
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Flexible(
-            child: Text(
-              amountText,
-              style: style,
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text(' ${coin.abbr}', style: style),
-        ],
-      ),
-    );
-  }
-}
-
 String _formatBalanceAmount(double? balance, bool hideBalances) {
   if (hideBalances) return maskedBalanceText;
   if (balance == null) return '--';
-  if (balance == 0) return '0';
-
-  final formatted = doubleToString(balance);
-  return formatted.isEmpty ? '0' : formatted;
+  return formatListBalance(balance);
 }
 
 /// Displays the asset's current market price in USD together with its 24h

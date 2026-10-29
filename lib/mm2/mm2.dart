@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/shared/constants.dart';
+import 'package:web_dex/shared/swap/lifi_integrator_policy.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
@@ -38,9 +39,23 @@ final class MM2 {
         preActivateDefaultAssets: false,
         tronGaslessProvider: _tronGaslessProviderConfig(),
         assetConfigTransform: applyGleecTronGaslessActivationConfig,
+        lifiProxyUrl: _lifiProxyUrl(),
+        lifiIntegrator: gleecLifiIntegratorConfig(),
       ),
       onLog: _handleSdkLog,
     );
+  }
+
+  String? _lifiProxyUrl() {
+    final url = validatedLifiProxyUrl(lifiProxyUrl);
+    if (url == null && lifiProxyUrl.trim().isNotEmpty) {
+      // Not the value itself: it may be the credential that got it refused.
+      log(
+        'LIFI_PROXY_URL ignored: it must be HTTPS, without credentials, a '
+        'query or a fragment. Routed swaps use the public LI.FI API.',
+      ).ignore();
+    }
+    return url;
   }
 
   TronGaslessProviderConfig? _tronGaslessProviderConfig() {

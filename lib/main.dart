@@ -53,7 +53,10 @@ PerformanceMode? _appDemoPerformanceMode;
 PerformanceMode? get appDemoPerformanceMode =>
     _appDemoPerformanceMode ?? _getPerformanceModeFromUrl();
 
-Future<void> main() async {
+Future<void> main() => runWalletApp();
+
+/// The normal app bootstrap, with injectable legal hosting for browser QA.
+Future<void> runWalletApp({LegalDocumentsRepository? legalDocuments}) async {
   Future<void> startApp() async {
     WalletLoadTimeline.instance.markProcessStart();
     usePathUrlStrategy();
@@ -146,7 +149,7 @@ Future<void> main() async {
             RepositoryProvider.value(value: tradingStatusRepository),
             RepositoryProvider.value(value: tradingStatusService),
             RepositoryProvider<LegalDocumentsRepository>(
-              create: (_) => LegalDocumentsRepository(),
+              create: (_) => legalDocuments ?? LegalDocumentsRepository(),
               dispose: (repository) => repository.dispose(),
             ),
           ],

@@ -22,10 +22,7 @@ void testSystemClockRepository() {
 
     test('returns true when first provider returns valid time', () async {
       mockRegistry.mockProviders = [
-        MockTimeProvider(
-          name: 'ValidProvider',
-          returnTime: DateTime.now(),
-        ),
+        MockTimeProvider(name: 'ValidProvider', returnTime: DateTime.now()),
       ];
 
       final result = await repository.isSystemClockValid();
@@ -76,8 +73,10 @@ void testSystemClockRepository() {
         name: 'ValidProvider',
         returnTime: DateTime.timestamp().toUtc(),
       );
-      final failingProvider =
-          MockTimeProvider(name: 'FailingProvider', returnTime: DateTime.now());
+      final failingProvider = MockTimeProvider(
+        name: 'FailingProvider',
+        returnTime: DateTime.now(),
+      );
 
       mockRegistry.mockProviders = [validProvider, failingProvider];
       await repository.isSystemClockValid();

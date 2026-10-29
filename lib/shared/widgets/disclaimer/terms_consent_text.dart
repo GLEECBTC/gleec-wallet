@@ -5,6 +5,7 @@ import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
+import 'package:web_dex/shared/widgets/legal_documents/legal_document_notice.dart';
 import 'package:web_dex/shared/widgets/disclaimer/disclaimer.dart';
 import 'package:web_dex/shared/widgets/disclaimer/eula.dart';
 
@@ -16,12 +17,12 @@ class TermsConsentText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<LegalAgreementBloc, LegalAgreementStatus>(
-      builder: (context, status) => Column(
+    return BlocBuilder<LegalAgreementBloc, LegalAgreementState>(
+      builder: (context, state) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (status == LegalAgreementStatus.updated) ...[
+          if (state.status == LegalAgreementStatus.updated) ...[
             Text(
               LocaleKeys.onboardingAgreementsUpdated.tr(),
               key: const Key('legal-agreements-updated'),
@@ -30,6 +31,19 @@ class TermsConsentText extends StatelessWidget {
               ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 4),
+          ],
+          if (state.hasFailure) ...[
+            LegalDocumentNotice(
+              status: state.status == LegalAgreementStatus.placeholder
+                  ? LegalDocumentStatus.placeholder
+                  : LegalDocumentStatus.unavailable,
+              onRetry: state.refreshing
+                  ? null
+                  : () => context.read<LegalAgreementBloc>().add(
+                      const LegalAgreementRetried(),
+                    ),
+            ),
+            const SizedBox(height: 12),
           ],
           _AgreementNotice(actionLabel: actionLabel),
         ],
@@ -48,9 +62,11 @@ class _AgreementNotice extends StatelessWidget {
     final textStyle = Theme.of(
       context,
     ).textTheme.bodyMedium?.copyWith(fontSize: 14, height: 1.5);
-    final notice = LocaleKeys.onboardingAgreementNotice.tr(
-      namedArgs: {'action': actionLabel},
-    );
+    final notice =
+        (!context.read<LegalAgreementBloc>().state.hasFailure
+                ? LocaleKeys.onboardingAgreementNotice
+                : LocaleKeys.legalDocumentsLinks)
+            .tr(namedArgs: {'action': actionLabel});
     final spans = <InlineSpan>[];
 
     // Keep the whole sentence translatable, including the order of its links.
@@ -136,4 +152,39 @@ class _AgreementNotice extends StatelessWidget {
       context.read<LegalAgreementBloc>().add(const LegalAgreementOpened());
     }
   }
+}
+
+/// Waits for the BLoC's existing fetch without starting wallet work or recording
+/// consent. A closed form or failed retrieval cancels the pending submission.
+Future<LegalAgreementState?> awaitLegalAgreement(BuildContext context) async {
+  final bloc = context.read<LegalAgreementBloc>();
+  if (!bloc.canComplete && bloc.state.status == LegalAgreementStatus.loading) {
+    await bloc.stream.firstWhere(
+      (state) => state.status != LegalAgreementStatus.loading,
+      orElse: () => const LegalAgreementState(LegalAgreementStatus.unavailable),
+    );
+  }
+  if (!context.mounted || bloc.isClosed || !bloc.canComplete) return null;
+  return bloc.state;
+}
+
+/// Rebuild only the action when document availability changes.
+class LegalConsentAction extends StatelessWidget {
+  const LegalConsentAction({
+    required this.builder,
+    this.enforce = true,
+    super.key,
+  });
+  final bool enforce;
+  final Widget Function(bool allowed) builder;
+
+  @override
+  Widget build(BuildContext context) =>
+      BlocBuilder<LegalAgreementBloc, LegalAgreementState>(
+        builder: (context, _) {
+          final allowed =
+              !enforce || context.read<LegalAgreementBloc>().canSubmit;
+          return LegalActionTooltip(allowed: allowed, child: builder(allowed));
+        },
+      );
 }

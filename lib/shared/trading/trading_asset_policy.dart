@@ -25,3 +25,8 @@ bool canTradeAssetId(AssetId? assetId) =>
 
 bool canTradeAssetPair(String base, String rel) =>
     !isWalletOnlyTradingAssetId(base) && !isWalletOnlyTradingAssetId(rel);
+
+/// Atomic EVM tokens may need an allowance at payment time. This is disclosure
+/// metadata, never a trading restriction or proof that approval is required.
+bool isAtomicEvmToken(AssetId asset) =>
+    asset.isChildAsset && evmCoinSubClasses.contains(asset.subClass);

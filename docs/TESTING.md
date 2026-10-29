@@ -41,6 +41,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 | Browser-only unit | `test/` | `flutter test --platform chrome test/…` | — | No |
 | Skyvern QA | `automated_testing/` | `python -m runner.runner` | — | No |
 | Frame timing | `test_integration/tests/perf_tests/` | `-t perf_tests/perf_tests.dart -D macos -m profile` | — | No |
+| Live swaps with funds | the PR's Firebase preview | manual: [SWAP_LIVE_TEST_BRIEF.md](SWAP_LIVE_TEST_BRIEF.md), "How a round runs" | `firebase-hosting-pull-request.yml` deploys the preview | Release checklist only |
 
 ## 2. Unit and widget tests
 
@@ -52,14 +53,19 @@ flutter test test_units/main.dart \
   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 ```
 
-### The four defines are mandatory
+### The four defines pin GasFree on
 
-Without them `tronGaslessServiceProvider` falls back to its empty default
-(`lib/shared/constants.dart`), every GasFree provider-identity check fails closed, and
-~36 gas-free tests never reach the state they `await`. They **hang rather than fail** —
-an unbounded `bloc.stream.firstWhere` has no deadline — so the symptom is a wedged runner
-and a CI timeout, not a red test. The values are non-secret; the source of record is
-`.github/workflows/unit-tests-on-pr.yml:9-20` and `test_units/main.dart:101-114`.
+GasFree defaults to these production values (`lib/shared/constants.dart`), so a plain
+run passes too; the defines pin them, as CI does. A build that turns GasFree off, or
+empties `tronGaslessServiceProvider`, fails every GasFree provider-identity check closed,
+and ~36 gas-free tests never reach the state they `await`. They **hang rather than fail**
+— an unbounded `bloc.stream.firstWhere` has no deadline — so the symptom is a wedged
+runner and a CI timeout, not a red test. The values are non-secret; the source of record
+is `.github/workflows/unit-tests-on-pr.yml:9-20` and `test_units/main.dart:101-114`.
+
+`LIFI_PROXY_URL` ([BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)) is not one of them.
+The suite never starts KDF, so leave it unset; `tests/mm2/lifi_proxy_url_test.dart` covers
+how the app reads it.
 
 ### The aggregator trap
 
@@ -116,6 +122,36 @@ KDF_HARNESS=1 KDF_TEST_SEED='<throwaway funded seed>' flutter test --tags proces
 - **Revert your tree afterwards.** `flutter test` rewrites `pubspec.lock`,
   `sdk/pubspec.lock`, and `sdk/packages/komodo_defi_framework/app_build/build_config.json`;
   the PR gate fails on a dirty tree.
+
+### LI.FI read-only native smoke
+
+From the wallet root after generating native KDF/coin assets:
+
+```sh
+mkdir -p .lifi/evidence
+python3 tool/kdf_lifi_quote_smoke.py --json .lifi/evidence/lifi-quote-report.json
+```
+
+Generated reports and local log indexes belong in the ignored `.lifi/evidence/`
+directory. Keep reusable instructions, validation summaries and frozen-input
+manifests in `docs/`; do not link versioned Markdown to local-only reports.
+
+Requires Python 3.9+, generated native KDF/coin assets and live network/proxy
+access; optional `--kdf` and `--coins` select those assets. The runner starts a
+fresh unfunded wallet, verifies the engine version against the manifest and
+activates Arbitrum/Base ETH and USDC. It checks concrete exact amounts, positive
+provider minimums, required funding versus estimated gas, one included combined
+2% fee and typed unfunded Max rejection naming the native coin.
+
+The RPC allowlist permits version, activation, quote and stop; it rejects init,
+approval, withdrawal and broadcast. No existing wallet or seed is read. The runner
+deletes its temporary wallet and logs, records failed phases/startup exceptions
+and exits nonzero on failure. JSON output contains public quote figures and coin
+configuration digests without seeds, credentials or wallet addresses. Its Base
+normalization mirrors SDK policy; SDK tests separately cover bundled, cached and
+refreshed configurations. See the handover for
+[current validation](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#fresh-validation) and
+[historical results](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#historical-validation-before-the-combined-candidate).
 
 ## 5. SDK package tests
 
@@ -324,6 +360,7 @@ fortnight. The chart flow additionally needs keys added to
 | A BLoC or its states/events | unit | integration, if it drives a screen a suite touches |
 | A widget carrying a `Key` a test uses | unit **and** integration | grep `test_integration/` for the key first |
 | Anything GasFree / TRON | unit **with all four defines** | integration requires explicit defines and a GasFree-specific scenario |
+| The LI.FI proxy (`LIFI_PROXY_URL`, [BUILD_RUN_APP.md](BUILD_RUN_APP.md#lifi_proxy_url)) | unit, plus the `komodo_defi_framework`, `komodo_defi_local_auth`, `komodo_defi_sdk` and harness replay suites | a routed quote through the proxy, the default, or another one with `fvm flutter run --dart-define=LIFI_PROXY_URL=<proxy URL>`. KDF does not check the URL when it starts, so a wrong one shows up as failed quotes, not a failed start. A proxy that refuses KDF's signature fails them the same way |
 | Auth, activation, pubkeys, balances, storage | SDK **and** harness replay | nightly process tier if it touches the real binary |
 | Anything that could move wallet-load timing | harness replay + bench | update `tool/bench_baseline.json` by hand in the same PR |
 | An RPC request/response type | SDK + harness replay | serialisation bugs surface only on transports that `jsonEncode` |

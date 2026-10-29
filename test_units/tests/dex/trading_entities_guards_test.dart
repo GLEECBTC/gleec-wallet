@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
@@ -70,12 +71,14 @@ Future<T> firstWhereBounded<T>(
   Duration timeout = const Duration(seconds: 5),
   String? description,
 }) {
-  return stream.firstWhere(test).timeout(
-    timeout,
-    onTimeout: () => throw TimeoutException(
-      'No matching event within $timeout${description == null ? '' : ': $description'}',
-    ),
-  );
+  return stream
+      .firstWhere(test)
+      .timeout(
+        timeout,
+        onTimeout: () => throw TimeoutException(
+          'No matching event within $timeout${description == null ? '' : ': $description'}',
+        ),
+      );
 }
 
 // ---------------------------------------------------------------------------
@@ -88,8 +91,12 @@ class _FakeApiClient implements ApiClient {
   String? Function() _activatedWallet;
   set activatedWallet(String? Function() value) => _activatedWallet = value;
 
+  /// RPCs sent; every one here is a `get_wallet_names`.
+  int calls = 0;
+
   @override
   Future<JsonMap> executeRpc(JsonMap request) async {
+    calls++;
     return <String, dynamic>{
       'mmrpc': '2.0',
       'result': <String, dynamic>{
@@ -508,6 +515,39 @@ void testTradingEntitiesGuards() {
         RecoverySubmissionStatus.uncertain,
       );
       expect(harness.mm2Api.recoverCalls, [_uuidA]);
+    });
+  });
+
+  group('background fetch', () {
+    test('waits for a sign-in instead of polling a signed-out KDF', () {
+      fakeAsync((async) {
+        final userController = StreamController<KdfUser?>.broadcast();
+        final auth = _FakeAuth(userController);
+        final client = _FakeApiClient(() => null);
+        final bloc = TradingEntitiesBloc(
+          _FakeSdk(auth: auth, client: client),
+          _FakeMm2Api(),
+          _FakeOrdersService(),
+        );
+        bloc.runUpdate();
+
+        async.elapse(const Duration(minutes: 2));
+        expect(
+          client.calls,
+          0,
+          reason: 'each signed-out poll read get_wallet_names three times',
+        );
+
+        auth.user = _user(_walletA);
+        client.activatedWallet = () => _walletA;
+        userController.add(auth.user);
+        async.elapse(const Duration(seconds: 11));
+        expect(client.calls, greaterThan(0));
+
+        bloc.dispose();
+        unawaited(userController.close());
+        async.flushMicrotasks();
+      });
     });
   });
 }

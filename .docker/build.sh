@@ -113,6 +113,23 @@ if [ -n "$MATOMO_URL" ] && [ -n "$MATOMO_SITE_ID" ]; then
 else
   echo "Warning: Missing Matomo parameters. Both MATOMO_URL and MATOMO_SITE_ID must be provided."
 fi
+# GasFree TRON is compiled out unless these are passed. Default to the
+# production values CI builds with (.github/workflows/desktop-builds.yml);
+# TRON_GASLESS_ENABLED=false turns the rail off.
+export TRON_GASLESS_ENABLED=${TRON_GASLESS_ENABLED:-true}
+export TRON_GASLESS_RECEIVE_ENABLED=${TRON_GASLESS_RECEIVE_ENABLED:-true}
+export TRON_GASLESS_BASE_URL=${TRON_GASLESS_BASE_URL-https://quicknode.gleec.com/gasfree/tron}
+export TRON_GASLESS_SERVICE_PROVIDER=${TRON_GASLESS_SERVICE_PROVIDER-TLntW9Z59LYY5KEi9cmwk3PKjQga828ird}
+export TRON_GASLESS_REQUIRED_NETWORK=${TRON_GASLESS_REQUIRED_NETWORK-tron}
+bash .github/scripts/validate_tron_gasless_config.sh || exit 1
+BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=$TRON_GASLESS_ENABLED"
+BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=$TRON_GASLESS_RECEIVE_ENABLED"
+if [ -n "$TRON_GASLESS_BASE_URL" ]; then
+  BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_BASE_URL=$TRON_GASLESS_BASE_URL"
+fi
+if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
+  BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_SERVICE_PROVIDER=$TRON_GASLESS_SERVICE_PROVIDER"
+fi
 # Add web-specific build arguments if the target is web
 if [ "$BUILD_TARGET" = "web" ]; then
     echo "Adding web-specific build arguments: --no-web-resources-cdn"

@@ -1,0 +1,441 @@
+import 'package:decimal/decimal.dart';
+import 'package:equatable/equatable.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
+
+part 'unified_swap_state_review.dart';
+
+/// Which screen of the swap flow is showing.
+enum UnifiedSwapView {
+  /// Choosing what to pay and receive.
+  form,
+
+  /// Reviewing the selected option before committing.
+  review,
+
+  /// Following the swap that was just started.
+  progress,
+}
+
+/// How the pay amount is being entered.
+enum SwapAmountMode {
+  /// In units of the pay asset.
+  token,
+
+  /// In US dollars, converted at the current price.
+  fiat,
+}
+
+/// KDF's default slippage for cross-network routes, as a fraction.
+const swapDefaultSlippage = 0.005;
+
+/// The slippage range the form offers: KDF accepts up to 0.5, but beyond 5%
+/// a route mostly invites being traded against.
+const swapMinSlippage = 0.0005;
+const swapMaxSlippage = 0.05;
+
+/// Why the form cannot be evaluated or reviewed.
+enum SwapFormIssue {
+  /// No source can trade this pair; see [UnifiedSwapState.pairSupport].
+  pairUnsupported,
+
+  /// Only the order book trades this pair, and no one is offering it; see
+  /// [UnifiedSwapState.hints]. Nothing is priced until an offer appears.
+  noOffers,
+
+  /// No wallet is signed in, so nothing is active and only wallet-free
+  /// sources price. The way on is connecting one, not activating an asset.
+  signedOut,
+
+  /// An asset in the pair is not active in the wallet yet. It is activated
+  /// only when the user asks — activation is never a side effect of looking.
+  assetInactive,
+
+  /// No amount yet. Not an error — the user has not finished.
+  amountMissing,
+
+  /// The amount is not a number.
+  amountMalformed,
+
+  /// The amount is zero.
+  amountZero,
+
+  /// More decimal places than the pay asset supports.
+  tooManyDecimals,
+
+  /// More than the address can spend.
+  insufficient,
+
+  /// Not enough of the network's native coin for the fees paid in it.
+  insufficientForFees,
+
+  /// The pay asset is a token and the wallet holds none of the network's
+  /// native coin, which every route needs for its fees.
+  noFeeBalance,
+
+  /// Both sides are the same asset.
+  sameAsset,
+
+  /// No price for the fiat amount, so no token amount can be derived.
+  fiatUnavailable;
+
+  /// Whether the form still prices the swap. It cannot be reviewed, but
+  /// people look up a price before they hold enough to pay, or before they
+  /// sign in.
+  bool get stillPriced =>
+      this == insufficient || this == insufficientForFees || this == signedOut;
+}
+
+/// What the quote evaluation is doing.
+enum SwapEvaluationStatus {
+  /// Nothing to evaluate yet.
+  idle,
+
+  /// Checking what is available.
+  checking,
+
+  /// At least one option is on offer.
+  ready,
+
+  /// Nothing could be priced; see the failure.
+  failed,
+
+  /// The options went stale and must be refreshed before review.
+  expired,
+}
+
+/// The swap screen's state.
+class UnifiedSwapState extends Equatable {
+  const UnifiedSwapState({
+    this.view = UnifiedSwapView.form,
+    this.loadingAssets = true,
+    this.catalog = SwapCatalog.empty,
+    this.pay,
+    this.receive,
+    this.payAddress,
+    this.receiveAddress,
+    this.inputText = '',
+    this.amountMode = SwapAmountMode.token,
+    this.converted,
+    this.balance,
+    this.feeBalance,
+    this.maxApplied,
+    this.checkingMax = false,
+    this.maxRequested = false,
+    this.issue,
+    this.evaluation = SwapEvaluationStatus.idle,
+    this.quotes,
+    this.selectedId,
+    this.manuallySelected = false,
+    this.failure,
+    this.failures = const [],
+    this.rateLimitedUntil,
+    this.checkingAlternatives = false,
+    this.slippage = swapDefaultSlippage,
+    this.review,
+    this.activeExecutionId,
+    this.structuralNotice = false,
+    this.tradingEnabled = true,
+    this.tradingStatusLoading = false,
+    this.tradingStatusUnavailable = false,
+    this.clockValid = true,
+    this.signedIn = true,
+    this.hardwareWallet = false,
+    this.hints = const SwapOrderBookHints(),
+  });
+
+  /// Which screen is showing.
+  final UnifiedSwapView view;
+
+  /// Whether the tradable assets are still loading.
+  final bool loadingAssets;
+
+  /// What the sources can trade, active or not.
+  final SwapCatalog catalog;
+
+  /// The asset being sold.
+  final AssetId? pay;
+
+  /// The asset being bought.
+  final AssetId? receive;
+
+  /// The pay asset's enabled address, before a quote reports it.
+  final String? payAddress;
+
+  /// The receive asset's enabled address, before a quote reports it.
+  final String? receiveAddress;
+
+  /// Raw text from the amount field, in [amountMode] units — kept unparsed so
+  /// the field never fights the user mid-entry.
+  final String inputText;
+
+  /// How the amount is being entered.
+  final SwapAmountMode amountMode;
+
+  /// The amount of [pay] a switch to dollars converted, and the text it
+  /// became. That text is rounded to the cent; while it stands, for this pay
+  /// asset, the amount traded is still this one.
+  final ({AssetId asset, String text, Decimal amount})? converted;
+
+  /// Spendable balance of [pay] at its address.
+  final Decimal? balance;
+
+  /// Spendable balance of the coin that pays [pay]'s network fees, when that
+  /// is not [pay] itself.
+  final Decimal? feeBalance;
+
+  /// The Max last applied, so the form can say what was kept back.
+  final SwapMaxAmount? maxApplied;
+
+  /// Whether Max is still asking what fees need. Meanwhile the amount is the
+  /// whole balance, and nothing is priced.
+  final bool checkingMax;
+
+  /// Max remains the intent until an amount or pair is edited.
+  final bool maxRequested;
+
+  /// Why the form cannot proceed, if it cannot.
+  final SwapFormIssue? issue;
+
+  /// What the evaluation is doing.
+  final SwapEvaluationStatus evaluation;
+
+  /// The latest evaluation.
+  final UnifiedSwapQuotes? quotes;
+
+  /// The chosen option's id.
+  final String? selectedId;
+
+  /// Whether the user picked an option other than the preselected one.
+  final bool manuallySelected;
+
+  /// Why nothing could be priced, when nothing could.
+  final SwapQuoteFailure? failure;
+
+  /// Every source's failure from the last evaluation, including those of
+  /// sources that could not answer while another did.
+  final List<SwapQuoteFailure> failures;
+
+  /// While set, automatic re-pricing waits: the provider asked to slow down.
+  final DateTime? rateLimitedUntil;
+
+  /// Whether alternative routes are being priced for a comparison.
+  final bool checkingAlternatives;
+
+  /// How far a cross-network route may fill below its expected amount, as a
+  /// fraction. For this session only: a raised allowance should not outlive
+  /// the swap it was raised for.
+  final double slippage;
+
+  /// The review step, while open.
+  final SwapReview? review;
+
+  /// The swap being followed on the progress screen.
+  final String? activeExecutionId;
+
+  /// Set when revalidation found the route's steps changed, and a fresh
+  /// evaluation replaced the review.
+  final bool structuralNotice;
+
+  /// Whether trading is available here at all.
+  final bool tradingEnabled;
+
+  /// A policy refresh temporarily prevents starting without losing a review.
+  final bool tradingStatusLoading;
+
+  /// Trading stays disabled while a failed policy lookup is retried.
+  final bool tradingStatusUnavailable;
+
+  /// Whether the device clock is accurate enough for peer-to-peer swaps.
+  final bool clockValid;
+
+  /// Whether a wallet is signed in.
+  final bool signedIn;
+
+  /// Whether that wallet is a hardware wallet. If so, [tradingEnabled] is
+  /// false whatever the location allows.
+  final bool hardwareWallet;
+
+  /// What the order book offers for the chosen assets.
+  final SwapOrderBookHints hints;
+
+  /// The selected option.
+  SwapQuote? get selectedQuote {
+    final id = selectedId;
+    return id == null ? null : quotes?.byId(id);
+  }
+
+  /// Every option on offer.
+  List<SwapQuote> get options => quotes?.options ?? const [];
+
+  /// Whether both assets are chosen and differ.
+  bool get hasPair => pay != null && receive != null && pay != receive;
+
+  /// Which sources can price the pair. Null until both assets are chosen and
+  /// the catalog has loaded.
+  SwapPairSupport? get pairSupport =>
+      hasPair && !loadingAssets ? catalog.support(pay!, receive!) : null;
+
+  /// The first asset of the pair that is not active yet, pay side first.
+  AssetId? get inactiveAsset {
+    if (loadingAssets) return null;
+    for (final asset in [pay, receive]) {
+      if (asset != null && !catalog.isActive(asset)) return asset;
+    }
+    return null;
+  }
+
+  /// Whether the review may be opened.
+  bool get canReview =>
+      view == UnifiedSwapView.form &&
+      tradingEnabled &&
+      evaluation == SwapEvaluationStatus.ready &&
+      issue == null &&
+      selectedQuote != null;
+
+  @override
+  List<Object?> get props => [
+    view,
+    loadingAssets,
+    catalog,
+    pay,
+    receive,
+    payAddress,
+    receiveAddress,
+    inputText,
+    amountMode,
+    converted,
+    balance,
+    feeBalance,
+    maxApplied,
+    checkingMax,
+    maxRequested,
+    issue,
+    evaluation,
+    quotes,
+    selectedId,
+    manuallySelected,
+    failure,
+    failures,
+    rateLimitedUntil,
+    checkingAlternatives,
+    slippage,
+    review,
+    activeExecutionId,
+    structuralNotice,
+    tradingEnabled,
+    tradingStatusLoading,
+    tradingStatusUnavailable,
+    clockValid,
+    signedIn,
+    hardwareWallet,
+    hints,
+  ];
+
+  /// A copy with the given fields replaced. Nullable fields take explicit
+  /// `clear` flags: a swap form spends most of its life clearing stale prices
+  /// and errors, and `null` as "leave alone" makes that impossible to express.
+  UnifiedSwapState copyWith({
+    UnifiedSwapView? view,
+    bool? loadingAssets,
+    SwapCatalog? catalog,
+    AssetId? pay,
+    AssetId? receive,
+    String? payAddress,
+    String? receiveAddress,
+    String? inputText,
+    SwapAmountMode? amountMode,
+    ({AssetId asset, String text, Decimal amount})? converted,
+    Decimal? balance,
+    Decimal? feeBalance,
+    SwapMaxAmount? maxApplied,
+    bool? checkingMax,
+    bool? maxRequested,
+    SwapFormIssue? issue,
+    SwapEvaluationStatus? evaluation,
+    UnifiedSwapQuotes? quotes,
+    String? selectedId,
+    bool? manuallySelected,
+    SwapQuoteFailure? failure,
+    List<SwapQuoteFailure>? failures,
+    DateTime? rateLimitedUntil,
+    bool? checkingAlternatives,
+    double? slippage,
+    SwapReview? review,
+    String? activeExecutionId,
+    bool? structuralNotice,
+    bool? tradingEnabled,
+    bool? tradingStatusLoading,
+    bool? tradingStatusUnavailable,
+    bool? clockValid,
+    bool? signedIn,
+    bool? hardwareWallet,
+    SwapOrderBookHints? hints,
+    bool clearPay = false,
+    bool clearReceive = false,
+    bool clearPayAddress = false,
+    bool clearReceiveAddress = false,
+    bool clearBalance = false,
+    bool clearFeeBalance = false,
+    bool clearMaxApplied = false,
+    bool clearIssue = false,
+    bool clearQuotes = false,
+    bool clearSelectedId = false,
+    bool clearFailure = false,
+    bool clearRateLimit = false,
+    bool clearReview = false,
+    bool clearActiveExecution = false,
+    bool clearConverted = false,
+  }) {
+    return UnifiedSwapState(
+      view: view ?? this.view,
+      loadingAssets: loadingAssets ?? this.loadingAssets,
+      catalog: catalog ?? this.catalog,
+      pay: clearPay ? null : (pay ?? this.pay),
+      receive: clearReceive ? null : (receive ?? this.receive),
+      payAddress: clearPayAddress ? null : (payAddress ?? this.payAddress),
+      receiveAddress: clearReceiveAddress
+          ? null
+          : (receiveAddress ?? this.receiveAddress),
+      inputText: inputText ?? this.inputText,
+      amountMode: amountMode ?? this.amountMode,
+      converted: clearConverted ? null : (converted ?? this.converted),
+      balance: clearBalance ? null : (balance ?? this.balance),
+      feeBalance: clearFeeBalance ? null : (feeBalance ?? this.feeBalance),
+      maxApplied: clearMaxApplied ? null : (maxApplied ?? this.maxApplied),
+      checkingMax: checkingMax ?? this.checkingMax,
+      maxRequested:
+          maxRequested ?? (clearMaxApplied ? false : this.maxRequested),
+      issue: clearIssue ? null : (issue ?? this.issue),
+      evaluation: evaluation ?? this.evaluation,
+      quotes: clearQuotes ? null : (quotes ?? this.quotes),
+      selectedId: clearSelectedId ? null : (selectedId ?? this.selectedId),
+      manuallySelected: manuallySelected ?? this.manuallySelected,
+      failure: clearFailure ? null : (failure ?? this.failure),
+      failures: failures ?? (clearFailure ? const [] : this.failures),
+      rateLimitedUntil: clearRateLimit
+          ? null
+          : (rateLimitedUntil ?? this.rateLimitedUntil),
+      checkingAlternatives: checkingAlternatives ?? this.checkingAlternatives,
+      slippage: slippage ?? this.slippage,
+      review: clearReview ? null : (review ?? this.review),
+      activeExecutionId: clearActiveExecution
+          ? null
+          : (activeExecutionId ?? this.activeExecutionId),
+      structuralNotice: structuralNotice ?? this.structuralNotice,
+      tradingEnabled: tradingEnabled ?? this.tradingEnabled,
+      tradingStatusLoading: tradingStatusLoading ?? this.tradingStatusLoading,
+      tradingStatusUnavailable:
+          tradingStatusUnavailable ?? this.tradingStatusUnavailable,
+      clockValid: clockValid ?? this.clockValid,
+      signedIn: signedIn ?? this.signedIn,
+      hardwareWallet: hardwareWallet ?? this.hardwareWallet,
+      hints: hints ?? this.hints,
+    );
+  }
+}

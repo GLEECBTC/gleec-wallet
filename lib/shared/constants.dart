@@ -19,6 +19,13 @@ const String storedMarketMakerSettingsKey = 'market_maker_settings';
 /// see, such as a policy change that does not touch those two files.
 const int kCurrentTermsVersion = 1;
 
+/// Local/preview testing only. Never enable in production builds. This bypasses
+/// availability gating, not consent recording or other form validation.
+const bool kBypassLegalDocumentGate = bool.fromEnvironment(
+  'BYPASS_LEGAL_DOCUMENT_GATE',
+  defaultValue: false,
+);
+
 const String lastLoggedInWalletKey = 'last_logged_in_wallet';
 const String hdWalletModePreferenceKey = 'wallet_hd_mode_preference';
 const String defaultFiatPreferenceKey = 'default_fiat_preference_v1';
@@ -121,13 +128,14 @@ const int? matomoPlatformDimensionId =
 const String moralisProxyUrl = 'https://moralis.gleec.com';
 const String nftAntiSpamUrl = 'https://nft-antispam.gleec.com';
 
-/// Explicit build-time flag for the TRON GasFree rail.
+/// Build-time flag for the TRON GasFree rail: on unless a build passes
+/// `--dart-define=TRON_GASLESS_ENABLED=false`.
 ///
 /// Provider/runtime policy must also validate before sending or receiving is
 /// eligible.
 const bool tronGaslessEnabled = bool.fromEnvironment(
   'TRON_GASLESS_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 /// Additional build-time flag for exposing GasFree custody addresses.
@@ -137,7 +145,7 @@ const bool tronGaslessEnabled = bool.fromEnvironment(
 /// wallet, and freshness checks remain fail-closed.
 const bool tronGaslessReceiveEnabled = bool.fromEnvironment(
   'TRON_GASLESS_RECEIVE_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 
 const String _tronGaslessBuildPolicyDisabled =
@@ -201,7 +209,7 @@ String tronGaslessBuildPolicyMarkerFor({
 /// Override at build time via `--dart-define=TRON_GASLESS_BASE_URL=...`.
 const String tronGaslessBaseUrl = String.fromEnvironment(
   'TRON_GASLESS_BASE_URL',
-  defaultValue: '',
+  defaultValue: 'https://quicknode.gleec.com/gasfree/tron',
 );
 
 /// Returns the configured GasFree network path (`tron` or `nile`) when the
@@ -241,7 +249,7 @@ String? tronGaslessNetworkPath(String rawBaseUrl) {
 /// Override at build time via `--dart-define=TRON_GASLESS_SERVICE_PROVIDER=...`.
 const String tronGaslessServiceProvider = String.fromEnvironment(
   'TRON_GASLESS_SERVICE_PROVIDER',
-  defaultValue: '',
+  defaultValue: 'TLntW9Z59LYY5KEi9cmwk3PKjQga828ird',
 );
 
 /// Conservative validation for the pinned TRON service-provider address.
@@ -306,6 +314,41 @@ bool get isTronGaslessConfigured => tronGaslessConfiguredAssetIds.isNotEmpty;
 /// Whether the app may present a GasFree custody address for new deposits.
 bool get isTronGaslessReceiveConfigured =>
     tronGaslessReceiveConfiguredAssetIds.isNotEmpty;
+
+/// Komodo proxy for routed swaps' LI.FI requests, handed to KDF as
+/// `lifi_proxy_url`. KDF signs each request with its P2P key and the proxy
+/// adds the LI.FI key, so no key ships in the app. Empty keeps LI.FI's
+/// rate-limited public API; see `docs/BUILD_RUN_APP.md`.
+///
+/// Override at build time via `--dart-define=LIFI_PROXY_URL=...`.
+const String lifiProxyUrl = String.fromEnvironment(
+  'LIFI_PROXY_URL',
+  defaultValue: 'https://quicknode.gleec.com/lifi',
+);
+
+/// [rawUrl] trimmed, or null when KDF should stay on the public API.
+///
+/// Whoever serves this URL chooses the transactions KDF signs, so it must be
+/// HTTPS (plain HTTP only to loopback in debug builds). The other checks
+/// mirror `KdfStartupConfig`, so a bad define falls back instead of throwing.
+String? validatedLifiProxyUrl(String rawUrl) {
+  final url = rawUrl.trim();
+  final uri = Uri.tryParse(url);
+  final isSecureEndpoint = uri?.scheme == 'https';
+  final isLoopbackDebugEndpoint =
+      kDebugMode &&
+      uri?.scheme == 'http' &&
+      const {'localhost', '127.0.0.1', '::1'}.contains(uri?.host);
+  if (uri == null ||
+      (!isSecureEndpoint && !isLoopbackDebugEndpoint) ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    return null;
+  }
+  return url;
+}
 
 const String geoBlockerApiUrl = 'https://gleec-wallet-bouncer.gleec.com/v1';
 const String tradingBlacklistUrl =

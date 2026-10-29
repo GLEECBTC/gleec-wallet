@@ -12,7 +12,8 @@ class TradePreimageNotSufficientBalanceError implements BaseError {
   });
 
   factory TradePreimageNotSufficientBalanceError.fromJson(
-      Map<String, dynamic> json) {
+    Map<String, dynamic> json,
+  ) {
     return TradePreimageNotSufficientBalanceError(
       coin: json['error_data']['coin'],
       available: json['error_data']['available'],
@@ -42,7 +43,8 @@ class TradePreimageNotSufficientBaseCoinBalanceError implements BaseError {
   });
 
   factory TradePreimageNotSufficientBaseCoinBalanceError.fromJson(
-      Map<String, dynamic> json) {
+    Map<String, dynamic> json,
+  ) {
     return TradePreimageNotSufficientBaseCoinBalanceError(
       coin: json['error_data']['coin'],
       available: json['error_data']['available'],
@@ -107,11 +109,11 @@ class TradePreimageCoinIsWalletOnlyError implements BaseError {
   TradePreimageCoinIsWalletOnlyError({required this.coin, required this.error});
 
   factory TradePreimageCoinIsWalletOnlyError.fromJson(
-          Map<String, dynamic> json) =>
-      TradePreimageCoinIsWalletOnlyError(
-        coin: json['error_data']['coin'],
-        error: json['error'],
-      );
+    Map<String, dynamic> json,
+  ) => TradePreimageCoinIsWalletOnlyError(
+    coin: json['error_data']['coin'],
+    error: json['error'],
+  );
   static String type = 'CoinIsWalletOnly';
   final String coin;
   final String error;
@@ -124,9 +126,7 @@ class TradePreimageBaseEqualRelError implements BaseError {
   TradePreimageBaseEqualRelError({required this.error});
 
   factory TradePreimageBaseEqualRelError.fromJson(Map<String, dynamic> json) =>
-      TradePreimageBaseEqualRelError(
-        error: json['error'],
-      );
+      TradePreimageBaseEqualRelError(error: json['error']);
 
   static String type = 'BaseEqualRel';
   final String error;
@@ -184,9 +184,7 @@ class TradePreimagePriceTooLowError implements BaseError {
 class TradePreimageTransportError implements BaseError {
   TradePreimageTransportError({required this.error});
   factory TradePreimageTransportError.fromJson(Map<String, dynamic> json) =>
-      TradePreimageTransportError(
-        error: json['error'],
-      );
+      TradePreimageTransportError(error: json['error']);
   static String type = 'Transport';
   final String error;
 
@@ -197,9 +195,7 @@ class TradePreimageTransportError implements BaseError {
 class TradePreimageInternalError implements BaseError {
   TradePreimageInternalError({required this.error});
   factory TradePreimageInternalError.fromJson(Map<String, dynamic> json) =>
-      TradePreimageInternalError(
-        error: json['error'],
-      );
+      TradePreimageInternalError(error: json['error']);
 
   static String type = 'InternalError';
   final String error;
@@ -227,7 +223,7 @@ class TradePreimageErrorFactory implements ErrorFactory<TradePreimageRequest> {
     TradePreimagePriceTooLowError.type: (json) =>
         TradePreimagePriceTooLowError.fromJson(json),
     TradePreimageTransportError.type: (json) =>
-        TradePreimageTransportError.fromJson(json)
+        TradePreimageTransportError.fromJson(json),
   };
 
   @override

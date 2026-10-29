@@ -12,6 +12,41 @@ Optionally, you can enable Firebase Analytics for the app. To do so, follow the 
 
 ⚠️ **IMPORTANT**: For all production builds, be sure to follow the security practices outlined in the [Build Security Advisory](./BUILD_SECURITY_ADVISORY.md). Always use `--enforce-lockfile` and `--no-pub` flags when building for production.
 
+## GitHub release preflight
+
+Run this check from a clean checkout of the exact app release commit before
+creating the app tag or GitHub release. It verifies that the SDK package version
+used by the pinned submodule has already been tagged in the upstream SDK
+repository.
+
+```bash
+(
+set -euo pipefail
+git submodule update --init sdk
+
+SDK_VERSION="$(sed -n 's/^version: //p' sdk/packages/komodo_defi_sdk/pubspec.yaml)"
+SDK_TAG="komodo_defi_sdk-v${SDK_VERSION}"
+SDK_PIN="$(git rev-parse HEAD:sdk)"
+
+git -C sdk fetch origin "refs/tags/${SDK_TAG}:refs/tags/${SDK_TAG}"
+SDK_TAG_COMMIT="$(git -C sdk rev-list -n 1 "${SDK_TAG}")"
+TAGGED_SDK_VERSION="$(git -C sdk show "${SDK_TAG}:packages/komodo_defi_sdk/pubspec.yaml" | sed -n 's/^version: //p')"
+
+test "${TAGGED_SDK_VERSION}" = "${SDK_VERSION}"
+git -C sdk merge-base --is-ancestor "${SDK_TAG_COMMIT}" "${SDK_PIN}"
+)
+```
+
+The remote tag fetch fails when the tag is missing. The version comparison
+fails when the tag names a commit with different package metadata, and the
+ancestry check fails when the app's pinned SDK commit does not contain the
+tagged release. The tagged commit may be an ancestor rather than the exact pin
+when the app includes reviewed post-release SDK fixes.
+
+Any failure blocks the app release. Complete the SDK release and create the
+correct upstream package tag first; do not create a placeholder app release or
+tag to bypass this check.
+
 ## Build for Web
 
 ### Standard build
@@ -48,6 +83,27 @@ Example:
 ```bash
 flutter build apk
 ```
+
+### GasFree TRON settings
+
+GasFree TRON (sending and receiving TRC-20 tokens without holding TRX) is on by default: the app's defaults are these production values, which CI and `.docker/build.sh` also pass explicitly.
+
+```bash
+--dart-define=TRON_GASLESS_ENABLED=true \
+--dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+--dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
+--dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+```
+
+To build without it, pass `--dart-define=TRON_GASLESS_ENABLED=false` and `--dart-define=TRON_GASLESS_RECEIVE_ENABLED=false`.
+
+To check a finished build, look for the base URL in the compiled app. It is absent when GasFree is off:
+
+```bash
+strings build/linux/x64/release/bundle/lib/libapp.so | grep -c quicknode.gleec.com/gasfree/tron
+```
+
+On macOS the compiled app is `Gleec DEX.app/Contents/Frameworks/App.framework/App`.
 
 ## Docker builds
 

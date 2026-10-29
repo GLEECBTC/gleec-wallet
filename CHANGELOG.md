@@ -1,3 +1,116 @@
+# Gleec Wallet v0.10.0 Release Notes
+
+This candidate brings Swap, Activity and Advanced trading into one surface,
+with atomic order-book and KDF-executed routed quotes compared after costs.
+It adds durable swap recovery, clearer review/funding evidence and native-Max
+gas headroom, integrates SDK 0.9.0, and includes the macOS startup, market-data
+and phone-balance fixes prepared for the unpublished 0.9.8 release.
+
+This is release preparation. The latest published app release is **0.9.7-1**.
+Final CI, legal/provider availability, review and signed installation gates
+are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
+
+## 🚀 New Features
+
+- **One Swap Surface** ([@CharlVS], [#3507](https://github.com/GLEECBTC/gleec-wallet/pull/3507), [#3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557)) — Swap compares supported atomic and routed sources by minimum return after costs. The picker activates assets on demand, preserves Hide 0 balance assets, and explains unsupported pairs or insufficient funds. Advanced trading remains available.
+- **Swap Activity and Recovery** ([@CharlVS], #3555, #3557) — Follow active swaps away from the form and after restart, see attention/completion notices, and export evidence explaining funds, approvals and recovery actions.
+- **Remote Legal Documents and Consent** ([@CharlVS], #3558) — Load versioned legal documents and gate consent on availability. Production availability must pass before distribution; the existing one-off preview override is not a production waiver.
+
+### SDK Updates (komodo-defi-sdk-flutter)
+
+This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
+
+- Typed routed quotes and execution, KDF-owned Max, exact accepted minima,
+  durable UUID recovery, required/locked balances and separate measured versus
+  provider-reported payouts ([SDK#389](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/389), [SDK#407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)).
+- Configured GLEEC/GRC-20 assets for Trezor and unambiguous activation routing
+  ([SDK#405](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/405));
+  hardware routed signing is not established by this change.
+- Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
+  encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
+- Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/docs/RELEASE_0.9.0.md).
+
+## 🐛 Bug Fixes
+
+- **Cold-Start Swap Recovery** ([@CharlVS], [SDK#417](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/417)) — Recover active routed swaps across every history page instead of silently stopping at page 20. A wallet change during later pagination rejects the entire read.
+
+- **Wallet History** ([@CharlVS], [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572), [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
+
+- **Transfer Review and Precision** ([@CharlVS], [#3570](https://github.com/GLEECBTC/gleec-wallet/pull/3570), [#3571](https://github.com/GLEECBTC/gleec-wallet/pull/3571), [#3565](https://github.com/GLEECBTC/gleec-wallet/issues/3565)) — Separate recipient principal from fees and same-asset total debit, including Max. Preserve exact accessible amounts and reject unsupported decimals or an EVM preview that differs from the entered amount before submission.
+
+- **Atomic Token Trading** ([@CharlVS], [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579), [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563)) — Restore atomic EVM-token trading, Advanced orders and bot starts to the previous release's behavior. The existing review row describes engine-managed allowance, including possible unlimited approval, instead of claiming none is needed. No extra confirmation or feature gate is added; LI.FI keeps its separate approval flow.
+
+- **Review and Start** ([@CharlVS], #3554, #3556, #3557) — Preserved review across layout and policy refreshes, kept it scrollable in short windows, blocked duplicate/stale starts and revalidated replacements against policy, funding and accepted minimums.
+- **Native Max Funding** ([@CharlVS], #3557) — Repriced a smaller exact amount with bounded gas headroom before review. Required funding, estimated spending and retained balance stay separate. Later fee or balance changes can still prevent execution; uncertain starts are never automatically resubmitted.
+- **Unavailable Fiat Providers** ([@CharlVS], #3557) — Rejected malformed/block-page responses cleanly, cleared stale payment methods, stopped loading and allowed explicit refresh. Upstream Banxa availability remains tracked in [#3559](https://github.com/GLEECBTC/gleec-wallet/issues/3559).
+- **Phone Balances and Asset Management** ([@CharlVS], #3546, #3550) — Show whole balances, allow a value too wide to shrink to scroll, and restore asset-manager balance text.
+- **Startup, Sign-Out and Prices** ([@DeckerSU], [@CharlVS], [SDK#395](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/395), [SDK#396](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/396), [SDK#394](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/394), [SDK#390](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/390), [SDK#391](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/391)) — Fixed macOS fresh-install startup, distinguished engine failures from wrong passwords, contained early stream disconnects and restored price fallback behavior from the 0.9.8 preparation.
+
+## 💻 Platform and Build Changes
+
+- **macOS** ([@DeckerSU], #3541) — Sign the KDF helper with hardened runtime and timestamp for notarization. Signed packaging and fresh-install validation remain release gates.
+- **GasFree TRON** ([@CharlVS], #3546, #3549) — Enable production GasFree defaults in ordinary and shared-CI builds. The four production defines remain pinned for release validation.
+- **Frozen Inputs** ([@CharlVS], #3557, [SDK#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)) — KDF source `e40ac2f` from merged `dev`, specs `7c388ea`, bundled coins `2b0aefb7`; runtime coin updates remain enabled independently. Seven platform archives have independent build/download verification. Runtime sources and the ERC-20 payment validation shipped in 0.9.7-1 are unchanged from the prior candidate.
+
+## Compatibility and Known Limits
+
+SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
+and adopters of interim routed-swap APIs.
+
+- **LI.FI defaults:** supported same-chain/cross-chain quotes, cheapest/fastest
+  selection, exact and Max amounts, approval handling, Activity, recovery and
+  eligible cancellation are available without a feature opt-in. Asset activation,
+  trading policy, funding, reviewed minimums and execution checks still apply.
+  `LIFI_INTEGRATOR_ENABLED` controls commission configuration, not availability.
+- **Terms availability:** ordinary builds require available wallet and LI.FI
+  documents before routed Start. `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false.
+  Only the isolated, manually dispatched RC preview bypasses availability,
+  retaining its warning and never recording unavailable terms as accepted.
+- **Capability scope:** the pinned routed contract supports LI.FI and eligible
+  EVM assets; it has no external-recipient parameter. Additional provider
+  backends and routed hardware signing are not established by this candidate.
+  Hardware wallets remain wallet-only, as in app 0.9.7-1.
+- **Atomic EVM tokens:** trading follows app 0.9.7-1 behavior. The engine may
+  reuse an allowance or grant unlimited permission when the trade matches.
+  The existing review describes that behavior without inventing a spender,
+  exact amount or reset requirement. Start, Advanced orders and bot starts keep
+  their previous interaction flow; existing recovery/cancellation stays usable.
+- **Release qualification:** approved hosted legal text, Safari, signed packaging
+  and upstream review/CI still need their checklist evidence or disposition.
+  The owner accepted documented KDF failures for RC testing only. Five-person
+  usability and live fiat testing were explicitly deferred; Banxa #3559 is after
+  0.10.0. These deferrals are recorded, not passing test results.
+
+**Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
+
+# Gleec Wallet v0.9.8 — preparation history (unpublished)
+
+This is a hotfix release. A fresh install of the macOS app could not start its trading engine, and the engine helper bundled with the app could not pass Apple notarization. It also stops a failed engine start from being reported as a wrong password, keeps KMD's price from dropping out for minutes after launch, restores prices from the CoinPaprika fallback, and stops signing out from raising an uncaught error. Phones now show balances in full, and GasFree TRON is on by default, so release builds made outside CI include it.
+
+## 🐛 Bug Fixes
+
+- **macOS App Could Not Start on a Fresh Install** ([@DeckerSU], [SDK#395](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/395)) - On a fresh install the app never got past launch: the trading engine was never started, and the error was misreported as "Incorrect password or invalid seed" before any wallet was opened. The trading engine reads its coin list from a file the app writes to a temporary folder. Since the `path_provider_foundation` 2.6.0 update, that folder is `Library/Caches/<bundle id>` inside the app's sandbox container, which is named but never created, so on a fresh install the file could not be written and the engine was never launched. The folder is now created before it is used.
+- **Engine Start Failures No Longer Reported as a Wrong Password** ([@CharlVS], [SDK#396](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/396)) - Any failure to start the trading engine surfaced as "Incorrect password or invalid seed", including at launch, before registering a wallet and while deleting one, where no password is sent. A wrong password is now reported only when a password was sent; other failures report that the wallet process failed to start. An engine that could not be launched is logged with the kind of failure and its OS error code.
+- **KMD's Price No Longer Drops Out After Launch** ([@CharlVS], [SDK#390](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/390)) - The price feed request only accepted tickers updated in the last 10 minutes, and KMD's entry is sometimes older than that before the feed refreshes it, so KMD could show no price for minutes at a time. The window is now 30 minutes, and the web app's preloaded price request uses the same address so the preload is still used.
+- **Prices From CoinPaprika Load Again** ([@CharlVS], [SDK#391](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/391)) - CoinPaprika, one of the fallback price sources, never returned a current price for the default USDT quote: it answers stablecoin requests in USD, and the lookup asked for USDT. Its 24-hour change and volume also always read as 0. Both now come through.
+- **Signing Out No Longer Raises an Uncaught Error** ([@CharlVS], [SDK#394](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/394)) - A sign-out or a dropped engine event connection could reach a balance or history watcher before it had attached its handlers, raising an uncaught "KDF event connection was disconnected" error and leaving the watcher on a dead stream. The watcher now receives the error and falls back to polling.
+- **Balances No Longer Cut Off on Phones** ([@CharlVS], #3546, #3550) - On a phone the asset list gave a balance about 87 pixels and drew its ticker first, so 14,772 VRSC read as "147…" and 4,430 KMD as "443…". A balance now takes the width it needs, up to half the row, and shrinks to fit instead of being cut. It shrinks to no less than 80% of the size the text setting asks for; a balance still too wide, such as 123,456,789.12 SHIB on a small phone, scrolls to show its last digits. It is grouped by thousands and rounded down, with 2 decimals from 1,000, 4 from 1, and 4 past the leading zeros below that. The ticker drops its network suffix ("USDT", not "USDT-ERC20"), and the coin's logo carries a network badge instead, as on desktop. The market price under the coin's name, which ran out of room for prices like Bitcoin's, now shares its line only with the fiat value. The price and the fiat value follow the same rule as the balance: no less than 80% of their size, then scrolling.
+- **GasFree TRON On by Default** ([@CharlVS], #3546) - GasFree TRON was compiled out unless a build passed four settings. CI passed them, but `.docker/build.sh` (the Linux and Android release builds) and the macOS release steps did not, so builds made that way shipped without GasFree. None of the 0.9.7 desktop releases (Linux, macOS and Windows) has it; only the web app did. GasFree is now on by default, with the production endpoint and provider, and a build turns it off with `TRON_GASLESS_ENABLED=false`. `.docker/build.sh` also checks and passes the settings, and `docs/BUILD_RELEASE.md` gives a command that confirms a finished build includes them.
+- **Asset Manager Shows Balances Again** ([@CharlVS], #3546) - In the desktop asset manager's list for removing assets, any non-zero balance showed a fragment of program text instead of the amount.
+
+## 💻 Platform-Specific Changes
+
+- **Notarizable macOS Engine Helper** ([@DeckerSU], #3541) - The bundled `kdf` helper is now signed with the hardened runtime and a secure timestamp, which Apple requires for notarization. It needs no extra entitlements.
+
+## 🔧 Technical Improvements
+
+- **SDK 0.8.1** ([@CharlVS], #3542) - Pins the SDK's 0.8.1 patch release, [`a96398ba`](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/commit/a96398ba9ae72efbe654de7c3edc0bfe2b05dda0) on SDK `main` ([SDK#398](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/398)), with `komodo_defi_sdk` 0.8.1 and `komodo_defi_framework` and `komodo_defi_local_auth` 0.6.1. It carries the fixes above. It has no API changes, and the trading engine version is unchanged.
+
+**Full Changelog**: [0.9.7...0.9.8](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7...0.9.8)
+
+---
+
 # Gleec Wallet v0.9.7 Release Notes
 
 This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a fresh HD sign-in, makes transaction history survive a restart, and reworks wallet setup so the create-or-import decision, the terms you agree to, and the prompt to save your recovery phrase all happen where they belong. It gives every supported NFT chain its own tab that enables the chain on tap, and rolls the native trading engine to the `3.1.0-beta` line, which reprices EVM swap gas under the Amsterdam/Bogota fork rules and is visible in DEX fee estimates.
@@ -7,6 +120,7 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **TRON Gas-Free Sends & Receives** ([@CharlVS], #3500) - Send and receive TRC-20 tokens on TRON without holding TRX for gas, using the custody-address model and the GasFree relay. Includes the send and receive flows, address handling, and the supporting transaction history.
 - **Transaction History Survives a Restart** ([@CharlVS], #3500) - Recent transaction history is cached with SDK-owned encryption and bounded retention between sessions. A coin's details page can render cached history on a cold start before network activation completes. On by default, with up to 1,000 transactions per wallet/asset, 20,000 globally and 64 MiB of logical data including indexes; older history remains available from providers.
 - **An NFT Tab for Every Supported Chain** ([@CharlVS], #3523) - The NFT page now shows a tab for every catalogue chain available in your region rather than only the chains already enabled, and tapping an un-enabled one activates it. A tab reports **Not enabled**, a spinner, or **Couldn't enable** instead of a count, so a chain nobody has queried can never read as "you own nothing here". Browsing a chain is session-scoped: it does not add the coin to your wallet or to the next sign-in's set.
+- **Polygon's Native Coin Is Now POL** ([@CharlVS], #3536) - Follows Polygon's MATIC → POL rename: the platform coin is now POL, and Polygon token tickers (`-PLG20`) are unchanged. A wallet that enabled Polygon before the rename keeps its row, with the same addresses, because the chain and derivation path did not change. Banxa's native POL listing, which stopped matching any coin once Banxa adopted the new ticker, resolves to Polygon again.
 
 ## ⚡ Performance Enhancements
 
@@ -22,6 +136,8 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 
 ## 🔒 Security Updates
 
+- **Wallet Secrets Are Kept Out of Diagnostic Logs** ([@CharlVS], #3530) - Revealing or exporting wallet secrets could leave them in the diagnostic files attached to a log download or a feedback report. Log downloads and feedback now share one exporter that drops records written by earlier builds and sanitises the rest before they leave the app; feedback providers receive only prepared attachments and allowlisted metadata, and screens that show secrets stay protected while feedback is captured. On iOS, diagnostic archives that earlier builds left in the app's Documents folder are removed.
+- **Private-Key Export Is Tied to the Signed-In Wallet** ([@CharlVS], [@DeckerSU], #3530, #3534) - A pending export is discarded when you cancel, navigate away or the signed-in wallet changes, and is checked again before each copy or download. The export screen no longer offers Share; keys can still be copied or downloaded. The export also reports which accounts and address ranges each asset covers, or that the asset is unavailable.
 - **A Shielded Asset's Viewing Key Was Shown Before You Revealed It** ([@CharlVS], #3537) - The private-key export screen gates secrets twice: a master "show private keys" switch, then a per-key eye. A shielded asset's viewing key was rendered through the widget used for the derivation path, address and public key, so it was on screen, selectable and copyable the moment the export result painted - with both gates still closed. A viewing key cannot spend, which is presumably why it was filed with the public values, but it decrypts the account's entire incoming and outgoing note history. It now sits behind the same gate as the spending key.
 - **Cached Transaction History Is Now Tamper-Evident** ([@CharlVS], #3537) - The encrypted history cache used AES-CBC with no authentication tag, and the CRC-32 around each record provided no integrity at all: CRC-32 is affine, so an edit could be corrected without knowing anything secret, and the browser backend writes no CRC. Records are now AES-256-GCM and an altered one is refused rather than decoded. Caches written by earlier builds are rebuilt from the network on first run. Two limitations remain and are described in the SDK release notes: on the web the cache key still lives in browser storage and still covers every wallet on the device.
 
@@ -34,7 +150,6 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 - **The DEX Coin Selector Was Unreachable In Release Web Builds** ([@CharlVS], #3537) - Each row in the DEX coin and best-order tables took its widget key from its Dart type name. dart2js renames types when it minifies, which it does for release builds and not for debug or profile ones, so the same row answered to a different name depending on how the app was built. The key is now spelled out by the table rather than derived from a type.
 - **A Rejected Trade Form Said Nothing** ([@CharlVS], #3537) - When the taker form refused a submission it returned quietly to the entry step, so the only evidence anything had happened was the confirmation page not appearing. It now reports why.
 - **A Shared Activation Failure Could Strand Everything Waiting On It** (#3537) - When several parts of the app asked for the same asset at once, they shared one in-flight request. If that request then failed - a wallet switch or sign-out during sign-in activations - the failure reached the caller that started it but not the others, which were abandoned mid-wait. Balances, receive addresses and transaction history for that asset never arrived; the address path had no deadline at all, and the activation path only recovered when its own three- or eight-minute backstop fired.
-
 - **Wallet Import Password Validation Updates Immediately** ([@CharlVS], #3528) - Fixed stale button state: import becomes available when the password and confirmation are valid, and becomes unavailable again when they no longer match.
 - **On-Ramp Checkout URLs Are Validated** ([@CharlVS], #3514) - Only HTTPS checkout URLs on supported provider domains can open in the wallet's payment frame. The deployed wrapper also enforces this for existing native clients, and payment messages are checked at the frame boundary.
 - **Web Updates Reload the Deployed App** ([@CharlVS], #3514, #3526, #3528) - Restored update checks and cleared obsolete Flutter service-worker caches when applying an update. The popup now waits until the site can serve the announced release, so a partially deployed update cannot offer a release that reloading would not install.
@@ -72,7 +187,6 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 
 - **Session, selection and deletion contracts** (#3525) - The SDK issues runtime session contexts, verifies sensitive writes afresh, owns atomic wallet creation with initial metadata, and exposes typed activation and reviewed-deletion outcomes. Wallet selection is separate from runtime activation; app callers are migrated together.
 - **Encrypted, bounded transaction history** (#3525) - Cache values are encrypted with a key protected by platform secure storage and use opaque keyed identifiers. Old plaintext history is retired without migration and rebuilt from providers; blocked or failed deletion is logged and retried on later starts/opens. Defaults cap each wallet/asset at 1,000 transactions, global entries at 20,000, and logical data plus indexes at 64 MiB. Storage/key failures use bounded memory. Provider pagination remains accessible beyond cached retention limits.
-
 - **SDK 0.8.0 Release** ([SDK#360](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/360), [SDK#367](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/367), [SDK#374](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/374), [SDK#382](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/382); wallet #3528) - The submodule pins the SDK 0.8.0 release, [`0a94d030`](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/commit/0a94d030e) on SDK `main`, tagged [`komodo_defi_sdk-v0.8.0`](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/releases/tag/komodo_defi_sdk-v0.8.0), with SDK package version `0.8.0` and local-auth `0.6.0`. Metadata writes require the verified identity captured when work starts, and the app's callers are migrated. History keeps one wallet context across cached and live results, preserves streams during temporary identity failures, and rechecks the session before recording activation, including on WebAssembly. Since the release candidate, deleting a wallet no longer hangs when its transaction history was never opened, a restricted asset is refused even while the trading engine still has it enabled, including when a withdrawal is about to broadcast, and Polygon assets saved before the POL rename still load ([SDK#386](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/386), [SDK#387](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/387)). These packages are consumed through the Git submodule; the trading engine artefact is unchanged at `f3efd2c`.
 - **KDF Downloads Restricted to Official Mirrors** ([SDK#373](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/373)) - Two third-party hosts were dropped from the trading-engine download sources, leaving only Gleec's own build host and the upstream mirror.
 
@@ -89,9 +203,13 @@ This release adds gas-free TRC-20 sends and receives on TRON, cuts the wait on a
 ## 📚 Documentation
 
 - **Release documentation cleanup** (#3525) - Archive the proxy reproduction/deployment tree and historical review, investigation and completed-plan documents outside the release checkout. Retain CI tools, regressions and benchmark baselines; consolidate reusable theme, performance, security and operating guidance into maintained docs.
-
 - **Measurement Captures Lifted Out of the Repository** ([@CharlVS], #3516) - Retire the spent KDF measurement documents and their raw capture data, and correct the ones that no longer describe the shipped build - roughly 15,000 lines removed. The wallet-load performance report was deleted outright: its headline figure was measured against the descoped engine stack and is false for what ships here.
 - **Contributor Docs Point at a Branch That Exists** ([@CharlVS], #3519) - The contribution and branching guides told contributors to branch from, sync with, and open pull requests against `master`, which this repository does not have. 11 references corrected to `main`.
+
+## ⚠️ Known Issues
+
+- Private-key display and export for TRX and TRC-20 tokens is temporarily unavailable until the trading engine exports those keys correctly (#3530). Other assets in the same selection still export; keep your recovery phrase to back up your wallet.
+- Polygon is withheld from the NFT page because the trading engine still recognises Polygon NFTs only under the old `MATIC` and `NFT_MATIC` tickers (#3536).
 
 **Full Changelog**: [0.9.6...0.9.7](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.6...0.9.7)
 

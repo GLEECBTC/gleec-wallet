@@ -110,19 +110,16 @@ class ProfitLossRepository {
       'useCache: $useCache',
     );
 
-    final userStopwatch = Stopwatch()..start();
-    final currentUser = await _sdk.auth.currentUser;
-    userStopwatch.stop();
-
-    if (currentUser == null) {
-      _log.warning('No current user found when fetching profit/loss');
+    // HD mode is part of the session's wallet identity. `currentUser` would
+    // re-verify it against KDF, two RPCs for every coin on every refresh.
+    final bool isHdWallet;
+    try {
+      isHdWallet = (await _sdk.auth.captureSessionContext()).walletId.isHd;
+    } on AuthSessionChangedException {
+      _log.warning('No wallet session when fetching profit/loss');
       methodStopwatch.stop();
       return <ProfitLoss>[];
     }
-    _log.fine(
-      'Current user fetched in ${userStopwatch.elapsedMilliseconds}ms, '
-      'isHd: ${currentUser.isHd}',
-    );
 
     if (useCache) {
       final cacheStopwatch = Stopwatch()..start();
@@ -130,7 +127,7 @@ class ProfitLossRepository {
         coinId: coinId.id,
         fiatCurrency: fiatCoinId,
         walletId: walletId,
-        isHdWallet: currentUser.isHd,
+        isHdWallet: isHdWallet,
       );
       final ProfitLossCache? profitLossCache = await _profitLossCacheProvider
           .get(compoundKey);
@@ -169,7 +166,7 @@ class ProfitLossRepository {
         coinId: coinId.id,
         fiatCurrency: fiatCoinId,
         walletId: walletId,
-        isHdWallet: currentUser.isHd,
+        isHdWallet: isHdWallet,
       );
       final existingCache = await _profitLossCacheProvider.get(compoundKey);
       if (existingCache != null && existingCache.profitLosses.isNotEmpty) {
@@ -190,7 +187,7 @@ class ProfitLossRepository {
           fiatCoinId: fiatCoinId,
           lastUpdated: DateTime.now(),
           walletId: walletId,
-          isHdWallet: currentUser.isHd,
+          isHdWallet: isHdWallet,
         ),
       );
       cacheInsertStopwatch.stop();
@@ -226,7 +223,7 @@ class ProfitLossRepository {
         fiatCoinId: fiatCoinId,
         lastUpdated: DateTime.now(),
         walletId: walletId,
-        isHdWallet: currentUser.isHd,
+        isHdWallet: isHdWallet,
       ),
     );
     cacheInsertStopwatch.stop();

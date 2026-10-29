@@ -292,6 +292,10 @@ class TradingEntitiesBloc implements BlocBase {
   }
 
   bool _shouldRunBackgroundFetch() {
+    // Signed out there is nothing to fetch, and a sign-in arrives on the auth
+    // stream. Polling only re-read the signed-out state, at three
+    // `get_wallet_names` every 10 seconds on the Swap page.
+    if (_walletId == null) return false;
     if (_isTradingMenuActive) return true;
     if (_lastFetchAt == null) return true;
     return DateTime.now().difference(_lastFetchAt!) >= _backgroundFetchInterval;

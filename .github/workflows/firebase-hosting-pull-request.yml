@@ -9,6 +9,17 @@ on:
       - main
       - release/*
   workflow_dispatch:
+    inputs:
+      rc_legal_availability_bypass:
+        description: "0.10.0 RC testing only: bypass unpublished legal documents on an isolated preview"
+        type: boolean
+        default: false
+        required: false
+      rc_expected_app_commit:
+        description: "Exact 40-character dev SHA, required when the RC legal bypass is enabled"
+        type: string
+        default: ""
+        required: false
 
 permissions:
   contents: read
@@ -25,7 +36,7 @@ env:
 # Cancel an in-flight preview build when a new commit is pushed to the same PR,
 # so two runs never race to create/update the same Firebase preview channel.
 concurrency:
-  group: firebase-preview-${{ github.event.pull_request.number || github.ref }}
+  group: firebase-preview-${{ (github.event_name == 'workflow_dispatch' && inputs.rc_legal_availability_bypass && github.ref == 'refs/heads/dev' && 'rc-0-10-0-legal-testing') || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,6 +45,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Setup GH Actions
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Shortify commit sha
         id: shortify_commit
         shell: bash
@@ -44,16 +61,17 @@ jobs:
         shell: bash
         run: echo "ref_short=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
 
+      - name: Validate preview channel guard
+        shell: bash
+        run: bash .github/scripts/test_preview_channel.sh
+
       - name: Get Preview Channel ID
         id: get_preview_channel_id
         shell: bash
-        run: echo "preview_channel_id=$(echo ${GITHUB_REF#*/})" >> $GITHUB_OUTPUT
-
-      - name: Setup GH Actions
-        id: checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        env:
+          RC_LEGAL_BYPASS: ${{ github.event_name == 'workflow_dispatch' && inputs.rc_legal_availability_bypass }}
+          RC_EXPECTED_APP_COMMIT: ${{ inputs.rc_expected_app_commit }}
+        run: bash .github/scripts/preview_channel.sh
 
       - name: Install Flutter and dependencies
         id: install_flutter
@@ -64,6 +82,9 @@ jobs:
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_COMMAND: >-
+            flutter build web --no-pub --release
+            --dart-define=BYPASS_LEGAL_DOCUMENT_GATE=${{ steps.get_preview_channel_id.outputs.legal_bypass }}
           # Optionally provide feedback service configuration if available
           FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
           FEEDBACK_PRODUCTION_URL: ${{ secrets.FEEDBACK_PRODUCTION_URL }}
@@ -92,6 +113,31 @@ jobs:
           EXPECTED_TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
           EXPECTED_TRON_GASLESS_NETWORK: "tron"
 
+      - name: Record preview build identity
+        shell: bash
+        env:
+          LEGAL_BYPASS: ${{ steps.get_preview_channel_id.outputs.legal_bypass }}
+          CHANNEL_ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C sdk rev-parse HEAD)" = "$(git rev-parse HEAD:sdk)"
+          jq -n \
+            --arg app_commit "$GITHUB_SHA" \
+            --arg sdk_commit "$(git -C sdk rev-parse HEAD)" \
+            --arg version "$(awk '/^version:/ {print $2; exit}' pubspec.yaml)" \
+            --arg channel "$CHANNEL_ID" \
+            --argjson legal_bypass "$LEGAL_BYPASS" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg javascript_sha256 "$(sha256sum build/web/main.dart.js | cut -d' ' -f1)" \
+            --arg kdf_config_sha256 "$(sha256sum sdk/packages/komodo_defi_framework/app_build/build_config.json | cut -d' ' -f1)" \
+            '{app_commit: $app_commit, sdk_commit: $sdk_commit, version: $version,
+              channel: $channel, legal_availability_bypass: $legal_bypass,
+              production_approved: false, run: $run, built_at: $built_at,
+              javascript_sha256: $javascript_sha256, kdf_config_sha256: $kdf_config_sha256}' \
+            > build/web/rc-test-build.json
+
       - name: Deploy Gleec Wallet web feature preview (Expires in 7 days)
         id: deploy_preview
         uses: ./.github/actions/firebase-hosting-deploy
@@ -101,6 +147,13 @@ jobs:
           target: web
           expires: 7d
           projectId: komodo-wallet-official
+
+      - name: Record deployed preview
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.deploy_preview.outputs.details_url }}
+        run: |
+          printf 'Preview: %s\n\nIdentity: %s/rc-test-build.json\n' "$PREVIEW_URL" "$PREVIEW_URL" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment Firebase preview URL
         if: github.event_name == 'pull_request'

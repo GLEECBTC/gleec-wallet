@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:web_dex/main.dart' as app;
 
+import '../../common/goto.dart' as goto;
 import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 
@@ -18,6 +19,8 @@ Future<void> testNoLoginTakerForm(WidgetTester tester) async {
 
   await tester.tap(mainMenuDexForm);
   await tester.pumpAndSettle();
+  // The taker form is on the Advanced destination of the Swap surface.
+  await goto.advancedSwapDestination(tester);
   await tester.tap(takerFormBuySwitcher);
   await tester.pumpAndSettle();
   await tester.tap(searchTakerCoinField);

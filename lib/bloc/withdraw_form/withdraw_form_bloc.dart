@@ -16,6 +16,7 @@ import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
+import 'package:web_dex/shared/utils/withdrawal_amounts.dart';
 import 'package:web_dex/shared/utils/kdf_error_display.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:collection/collection.dart';
@@ -549,6 +550,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         normalizeDecimalString(requestState.amount),
       );
       if (explicitAmount != null && explicitAmount > Decimal.zero) {
+        if (requestState.asset.protocol is Erc20Protocol &&
+            explicitAmount != preview.balanceChanges.totalAmount) {
+          throw FormatException(LocaleKeys.withdrawPreviewAmountChanged.tr());
+        }
         return explicitAmount;
       }
     }
@@ -560,8 +565,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return preview.balanceChanges.totalAmount;
     }
 
-    final net = preview.balanceChanges.netChange.abs();
-    return net > Decimal.zero ? net : preview.balanceChanges.spentByMe;
+    return withdrawalRecipientAmount(
+      requestState.asset,
+      preview.balanceChanges,
+      preview.fee,
+    );
   }
 
   String _formatErrorMessage(Object error) {
@@ -1116,6 +1124,20 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       // Normalize the amount string to handle locale-specific formats
       final normalizedAmount = normalizeDecimalString(event.amount);
       final amount = Decimal.parse(normalizedAmount);
+      final decimals = withdrawalAmountPrecision(state.asset);
+      if (decimals != null && amount.scale > decimals) {
+        emit(
+          state.copyWith(
+            amount: event.amount,
+            amountError: () => TextError(
+              error: LocaleKeys.withdrawAmountPrecisionError.tr(
+                args: [state.asset.id.symbol.configSymbol, '$decimals'],
+              ),
+            ),
+          ),
+        );
+        return;
+      }
       // Use the selected address balance if available
       final balance = state.selectedSourceAddress?.balance.spendable;
 
@@ -2481,6 +2503,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           isAwaitingTrezorConfirmation: false,
         ),
       );
+      return;
+    }
+
+    if (state.step != WithdrawFormStep.confirm ||
+        state.preview == null ||
+        state.hasPreviewError) {
       return;
     }
 
