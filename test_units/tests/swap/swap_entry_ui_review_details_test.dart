@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -86,20 +87,49 @@ void main() {
     symbol: symbol,
   );
 
-  testWidgets('unverified atomic token permission never says none or starts', (
-    tester,
-  ) async {
-    await pump(
-      tester,
-      quoteOf(source: SwapLiquiditySource.atomic, from: usdc, to: btc),
-    );
-    expect(find.text('Token permission unavailable'), findsOneWidget);
-    expect(find.text('No token approval needed'), findsNothing);
-    final button = tester.widget<SwapButton>(
-      find.byKey(const Key('swap-start')),
-    );
-    expect(button.onPressed, isNull);
-  });
+  testWidgets(
+    'atomic token review keeps Start and discloses engine-managed approval',
+    (tester) async {
+      await pump(
+        tester,
+        quoteOf(source: SwapLiquiditySource.atomic, from: usdc, to: btc),
+      );
+      expect(find.text('Approval handled by trading engine'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'may reuse an existing allowance or grant unlimited permission',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('No token approval needed'), findsNothing);
+      expect(find.text('Exact approval only'), findsNothing);
+      final start = find.byKey(const Key('swap-start'));
+      expect(tester.widget<SwapButton>(start).onPressed, isNotNull);
+      await tester.ensureVisible(start);
+      await tester.tap(start);
+      expect(swap.events.whereType<UnifiedSwapStartRequested>(), hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'atomic permission copy remains reachable on a phone at 200 percent',
+    (tester) async {
+      await pump(
+        tester,
+        quoteOf(source: SwapLiquiditySource.atomic, from: usdc, to: btc),
+        size: const Size(360, 800),
+        textScale: 2,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Approval handled by trading engine'), findsOneWidget);
+      expect(
+        tester
+            .widget<SwapButton>(find.byKey(const Key('swap-start')))
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
 
   group('costs', () {
     testWidgets('without dollar prices are given in tokens, per token', (

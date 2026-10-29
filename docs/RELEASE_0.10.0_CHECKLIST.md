@@ -7,6 +7,28 @@ preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
+## Atomic token restoration — 29 October
+
+App [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) was squash
+merged into dev as `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c`. Its complete tree equals tested source
+`34bad84020e68bf4fe4547ea7990287d050c3aa0`. The focused release carry includes that accepted squash and these
+validation records; later dev work must not enter the candidate automatically.
+
+- [x] Restore the previous release's atomic EVM-token trading, Advanced orders
+  and bot starts. The existing review describes engine-managed allowance with
+  no new modal, acknowledgement or client-imposed approval limit.
+- [x] 95 focused quote/execution/review/option regressions pass, including
+  unresolved token parents, pricing metadata and phone layout at 200% text.
+- [x] Full app aggregator: **3,922 passed / four skipped**, with all four
+  production GasFree defines. Analysis: zero errors, existing 55 warnings and
+  2,144 infos. Enforced offline lockfile, generated localization, changed-file
+  formatting and diff checks pass. No new funded settlement is claimed.
+- [x] SDK `da20524e`, KDF `e40ac2f`, configuration, lockfile and prior SDK/Melos
+  validation inputs are unchanged. Subsequent edits here update release
+  evidence only; they do not change the tested runtime.
+- [ ] Record the focused release carry, its required checks/review and refreshed
+  tester preview identity on #3575. Keep both main RCs open.
+
 ## Merged-dev KDF roll — 29 October
 
 SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
@@ -49,6 +71,35 @@ records the actual dev squash, frozen head and refreshed preview identity.
 
 The [input manifest](RELEASE_0.10.0_INPUTS.json) records this candidate.
 Earlier validation and merge records below remain historical evidence.
+
+## Feature defaults and scope — 29 October
+
+These entries record a source audit of the candidate, not new execution or
+signed-platform test results.
+
+- [x] Implemented LI.FI same-chain/cross-chain quoting, cheapest/fastest ordering,
+  exact/Max amounts, approval handling, Activity, recovery and eligible
+  cancellation are wired in without a feature opt-in. Supported assets,
+  activation, trading policy, funding and reviewed execution checks still apply.
+- [x] `LIFI_INTEGRATOR_ENABLED` defaults to true and controls commission
+  configuration. Setting it false does not turn off routed swaps.
+- [x] Ordinary builds enforce document availability before routed Start;
+  `BYPASS_LEGAL_DOCUMENT_GATE` defaults to false. The isolated manual RC preview
+  is the recorded availability exception. Warnings remain and unavailable terms
+  cannot be recorded as accepted. Production legal signoff is still required.
+- [x] The pinned routed request contract has no external-recipient parameter;
+  supported routing uses LI.FI and eligible EVM assets. Expanded provider/chain
+  support and hardware signing need their own implementation or validation.
+  Hardware-wallet trading was wallet-only in 0.9.7-1 and remains so.
+- [x] Atomic EVM-token trading follows 0.9.7-1 behavior. The blanket refusal
+  introduced by #3569 is removed from quote, execution, Advanced and bot RPC
+  boundaries. The existing permission row states that the engine may reuse or
+  grant an unlimited allowance after matching, with no extra confirmation.
+  LI.FI's exact-approval/reset flow and normal execution checks remain separate.
+- [x] Preserve the owner's recorded usability/live-fiat deferrals and RC-only
+  acceptance of upstream KDF failures. Banxa #3559 is after 0.10.0. Release
+  review, CI, approved legal text and signed-platform evidence retain their
+  separate checklist requirements; no pending result becomes a pass here.
 
 ## Prepared and merged into dev
 
@@ -100,7 +151,7 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
   validation remains outside the watcher-reward branch, retaining the fix from
   KDF `2023112`. Diverged ancestry alone was not treated as evidence of removal.
 
-## Fresh validation of the prepared runtime
+## Earlier validation before the atomic restoration
 
 Flutter 3.41.4 / Dart 3.11.1, workspace Melos 7.8.1. Combined runtime is
 app source `f94e5072` plus the checked gas-source reference/regression from
@@ -138,11 +189,13 @@ its final preparation adds documentation and the immutable SDK candidate pin.
   phone 360×800 and tablet 768×1024, with expiry/Refresh. Safari and signed
   platforms need separate results.
 - [x] Atomic token-approval disclosure X04/Q12: [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563).
-  Unverifiable atomic EVM-token sells are explicitly unavailable in this RC,
-  including Advanced orders and restored bot starts. Quote, review and RPC
-  boundaries reject them before any new order or approval. Do not fund these
-  disabled cases; native atomic and routed token contracts remain separate.
-  Existing swap recovery/cancellation stays available.
+  Restore new atomic EVM-token trading, Advanced orders and bot starts instead
+  of refusing the whole category. The existing review row explains that
+  allowance is engine-managed after matching and may be unlimited; it never
+  presents absent atomic metadata as proof that no approval is needed. No new
+  modal, acknowledgement step or client-imposed approval limit is introduced.
+  Quote/execution and review regressions cover the restored behavior; no new
+  funded atomic settlement is claimed by unit/widget coverage.
 - [x] Transfer review and input #3565: signed EVM principal/Max, fee and
   same-asset total are distinct; exact amounts remain accessible/selectable.
   Unsupported precision and mismatched signed EVM amounts cannot be submitted.

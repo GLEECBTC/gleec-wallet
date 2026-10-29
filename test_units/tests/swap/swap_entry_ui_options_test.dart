@@ -257,6 +257,22 @@ void main() {
     expect(find.text('Checking for a faster route…'), findsOneWidget);
   });
 
+  testWidgets(
+    'an atomic token option describes permission without hiding the route',
+    (tester) async {
+      await pump(
+        tester,
+        swapPricedForm(
+          ranked: [
+            quoteOf(source: SwapLiquiditySource.atomic, from: usdc, to: btc),
+          ],
+        ),
+      );
+      expect(find.text('Checked when matched'), findsOneWidget);
+      expect(find.text('No token approval'), findsNothing);
+    },
+  );
+
   testWidgets('each option says what permission it asks for', (tester) async {
     SwapApprovalRequirement approval({required bool reset}) =>
         SwapApprovalRequirement(

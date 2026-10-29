@@ -85,21 +85,15 @@ void main() {
     });
 
     test(
-      'atomic permission uses the contract with an unresolved token parent',
+      'atomic disclosure uses the token contract with an unresolved parent',
       () {
-        final token = assetOf('PLAIN-TOKEN');
-        expect(token.parentId, isNull);
+        final token = assetOf('UNRESOLVED-TOKEN', subClass: CoinSubClass.erc20);
         sdk.assets.add(
           assetFor(token, protocol: SrcProtocol(contract: '0xcontract')),
         );
-        expect(services.atomicPermissionUnavailable(token), isTrue);
-        expect(services.atomicPermissionUnavailable(eth), isFalse);
-        expect(
-          services.atomicPermissionUnavailable(assetOf('UNKNOWN')),
-          isTrue,
-        );
-        sdk.assets.add(assetFor(arb, protocol: SrcProtocol(broken: true)));
-        expect(services.atomicPermissionUnavailable(arb), isTrue);
+        expect(token.parentId, isNull);
+        expect(services.atomicTokenApproval(token), isTrue);
+        expect(services.atomicTokenApproval(eth), isFalse);
       },
     );
 

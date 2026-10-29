@@ -4,6 +4,20 @@ Updated 29 October 2026. This candidate is available for code review and a
 controlled testing round. Production promotion remains gated below. The release
 owner sends invitations; this handoff does not request reviews or contact testers.
 
+## Atomic trading restoration — 29 October
+
+App [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) restores the
+previous atomic EVM-token behavior and corrects the existing permission row,
+with no new modal or confirmation step. Accepted dev squash `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c` has
+the identical complete tree to tested source `34bad84020e68bf4fe4547ea7990287d050c3aa0`. The focused RC carry
+adds only that accepted change and documentation of its validation.
+
+The full app aggregator passed **3,922 tests / four skipped**; 95 focused
+regressions and analysis (zero errors; existing warnings/infos) pass. SDK/KDF
+inputs and prior SDK/Melos evidence remain unchanged. Use the refreshed build
+identity on #3575 to test this restoration; earlier previews do not certify it.
+No fresh funded atomic settlement is claimed by the unit/widget tests.
+
 ## Accepted engine inputs — 29 October
 
 SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
@@ -38,7 +52,7 @@ records the current immutable SDK/KDF inputs.
 | --- | --- |
 | App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
 | SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
-| Tested app runtime source | `f94e507214ad0330d508bfe8d68624ad067ff526`; app implementation is unchanged by the final pin update |
+| Tested app runtime source | `34bad84020e68bf4fe4547ea7990287d050c3aa0`; accepted dev `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c` has the identical complete tree |
 | SDK gitlink | `da20524e6947833b40c4d70fee5249fc9ae1a911` |
 | KDF | `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
@@ -120,12 +134,14 @@ prepare a review and independently verify the result. Follow
 
 ### Known restrictions and preserved evidence
 
-- **New atomic EVM-token sells are unavailable in this RC.** [#3569](https://github.com/GLEECBTC/gleec-wallet/pull/3569)
-  rejects unverifiable spender/approval scope at quote, review and RPC boundaries,
-  including Advanced orders and restored bots. The UI explains that restriction
-  and cannot claim no approval is needed. Do not fund disabled cases. Native
-  atomic and routed token permission contracts remain separate; existing
-  recovery and cancellation stay available.
+- **Atomic EVM-token trading follows the previous release's behavior.**
+  [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) removes #3569's
+  blanket refusal from unified swaps, Advanced orders and bot starts. The
+  existing permission row describes engine-managed allowance after matching,
+  including possible unlimited permission and reuse of existing allowance.
+  Start has no additional confirmation step. LI.FI's exact-approval/reset
+  contract stays separate. Use the recorded build identity to confirm the
+  restoration is included; no fresh funded atomic settlement is claimed here.
 - Native routed Max now selects a smaller, completely repriced amount with
   twice the reported gas requirement retained. It makes at most three exact
   quote requests after KDF Max and never falls back to unbuffered Max. Token

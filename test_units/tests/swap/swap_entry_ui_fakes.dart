@@ -318,6 +318,7 @@ SwapQuote quoteWith(
   fees: quote.fees,
   stages: quote.stages,
   approval: quote.approval,
+  atomicApprovalUnknown: quote.atomicApprovalUnknown,
   fromAddress: fromAddress,
   toAddress: toAddress,
   estimatedDuration: quote.estimatedDuration,

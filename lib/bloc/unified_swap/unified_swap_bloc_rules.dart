@@ -137,6 +137,10 @@ final _costToleranceUsd = Decimal.parse('0.50');
 /// a different permission. Consent to the old shape does not carry over.
 bool _isStructuralChange(SwapQuote accepted, SwapQuote fresh) {
   if (accepted.routeKind != fresh.routeKind) return true;
+  if (accepted.hasUnverifiedAtomicApproval !=
+      fresh.hasUnverifiedAtomicApproval) {
+    return true;
+  }
   if ((accepted.approval == null) != (fresh.approval == null)) return true;
   if ((accepted.approval?.resetsFirst ?? false) !=
       (fresh.approval?.resetsFirst ?? false)) {

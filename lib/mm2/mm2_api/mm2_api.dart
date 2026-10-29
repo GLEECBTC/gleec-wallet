@@ -1,11 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:easy_localization/easy_localization.dart';
-import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:web_dex/shared/trading/trading_asset_policy.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
-
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:rational/rational.dart';
@@ -23,7 +18,6 @@ import 'package:web_dex/mm2/mm2_api/rpc/import_swaps/import_swaps_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/import_swaps/import_swaps_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/kmd_rewards_info/kmd_rewards_info_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/market_maker_bot_request.dart';
-import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/max_maker_vol/max_maker_vol_req.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/max_maker_vol/max_maker_vol_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/max_taker_vol/max_taker_vol_request.dart';
@@ -279,26 +273,7 @@ class Mm2Api {
     }
   }
 
-  // Backstop for Advanced trading, restored bot settings and direct callers.
-  // Read the authoritative protocol rather than guessing from a ticker suffix
-  // or a parentId that might not have resolved in the registry.
-  String? _atomicPermissionError(String ticker) {
-    try {
-      final asset = _sdk.assets.findAssetsByConfigId(ticker).single;
-      final protocol = asset.protocol;
-      if (protocol is! Erc20Protocol ||
-          (protocol.contractAddress ?? '').isEmpty) {
-        return null;
-      }
-    } on Object {
-      // An unavailable/ambiguous asset cannot prove that permission is absent.
-    }
-    return LocaleKeys.swapPermissionUnavailableBody.tr();
-  }
-
   Future<Map<String, dynamic>> sell(SellRequest request) async {
-    final permissionError = _atomicPermissionError(request.base);
-    if (permissionError != null) return {'error': permissionError};
     try {
       return await _mm2.call(request);
     } catch (e, s) {
@@ -314,15 +289,10 @@ class Mm2Api {
 
   /// [sell] without turning a call that got no answer into an error answer:
   /// KDF's answer, error or not, and a throw when none arrived.
-  Future<Map<String, dynamic>> sellOrThrow(SellRequest request) async {
-    final permissionError = _atomicPermissionError(request.base);
-    if (permissionError != null) return {'error': permissionError};
-    return _mm2.call(request);
-  }
+  Future<Map<String, dynamic>> sellOrThrow(SellRequest request) =>
+      _mm2.call(request);
 
   Future<Map<String, dynamic>?> setprice(SetPriceRequest request) async {
-    final permissionError = _atomicPermissionError(request.base);
-    if (permissionError != null) return {'error': permissionError};
     try {
       return await _mm2.call(request) as Map<String, dynamic>?;
     } catch (e, s) {
@@ -599,18 +569,6 @@ class Mm2Api {
     >
   >
   getTradePreimage(TradePreimageRequest request) async {
-    final permissionError = _atomicPermissionError(
-      request.swapMethod == 'buy' ? request.rel : request.base,
-    );
-    if (permissionError != null) {
-      return ApiResponse(
-        request: request,
-        error: {
-          'error_type': 'AtomicPermissionUnavailable',
-          'error': permissionError,
-        },
-      );
-    }
     try {
       final JsonMap responseJson = await _mm2.call(request);
       if (responseJson['error'] != null) {
@@ -643,19 +601,6 @@ class Mm2Api {
   Future<void> startStopMarketMakerBot(
     MarketMakerBotRequest marketMakerBotRequest,
   ) async {
-    if (marketMakerBotRequest.method == 'start_simple_market_maker_bot') {
-      for (final pair
-          in marketMakerBotRequest.params?.tradeCoinPairs?.values ??
-              const <TradeCoinPairConfig>[]) {
-        // Bots can trade in both directions.
-        final permissionError =
-            _atomicPermissionError(pair.baseCoinId) ??
-            _atomicPermissionError(pair.relCoinId);
-        if (permissionError != null) {
-          throw AtomicPermissionUnavailableException(permissionError);
-        }
-      }
-    }
     try {
       final JsonMap response = await _mm2.call(marketMakerBotRequest.toJson());
       log(

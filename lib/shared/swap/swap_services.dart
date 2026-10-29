@@ -5,7 +5,6 @@ import 'package:decimal/decimal.dart';
 import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/app_config/app_config.dart' show excludedAssetList;
 import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
@@ -226,19 +225,11 @@ class SwapServices {
   /// Whether the coin config marks [id] wallet-only.
   bool isWalletOnly(AssetId id) => assetOf(id)?.isWalletOnly ?? false;
 
-  /// Unknown atomic permission is never evidence that no approval is needed.
-  /// Use the configured contract even when the token parent is unresolved.
-  bool atomicPermissionUnavailable(AssetId id) {
-    if (atomicTokenPermissionUnavailable(id)) return true;
-    try {
-      final asset = assetOf(id);
-      if (asset == null) return true;
-      return evmCoinSubClasses.contains(id.subClass) &&
-          (asset.protocol.contractAddress ?? '').isNotEmpty;
-    } on Object {
-      return true;
-    }
-  }
+  /// Permission details for atomic token payments are determined after matching.
+  /// Use the contract as well as the id when a parent has not resolved yet.
+  bool atomicTokenApproval(AssetId id) =>
+      evmCoinSubClasses.contains(id.subClass) &&
+      (id.isChildAsset || (contractOf(id) ?? '').isNotEmpty);
 
   /// Whether [id] is a test-network asset.
   bool isTestnet(AssetId id) {
@@ -384,7 +375,7 @@ class SwapServices {
           tradingAllowed: tradingAllowed,
           clockValid: clockValid,
           isWalletOnly: isWalletOnly,
-          permissionUnavailable: atomicPermissionUnavailable,
+          tokenApproval: atomicTokenApproval,
           gasLimitsOf: gasLimitsOf,
         ),
       ],
