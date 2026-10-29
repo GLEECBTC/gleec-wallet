@@ -165,7 +165,7 @@ void main() {
 
     expect(
       pinned,
-      startsWith('35f0bde4'),
+      'e40ac2fb4319d352bf9c93683eb2518ce9f939e0',
       reason:
           'KDF was repinned. Check ETH_PAYMENT and ETH_SENDER_REFUND in '
           "eth.rs's gas_limit module at the new commit against the defaults "

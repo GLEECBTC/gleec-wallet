@@ -1,11 +1,46 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current state: 28 October 2026. App `0.10.0+0` and SDK `0.9.0` are release
+Current proposal: 29 October 2026. App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
+
+## Pending merged-dev KDF roll
+
+The proposed gitlink is SDK `21f64b5002e7ea14296db985a8cade07e003e1d4`
+([SDK #419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)),
+pinning merged KDF dev `e40ac2fb4319d352bf9c93683eb2518ce9f939e0`.
+[SDK #420](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/420)
+prepares its focused carry into frozen `release-0.9.0`. The app pointer PR
+must be repinned to the actual accepted frozen SDK SHA before its dev squash,
+then carried through its own focused `release-0.10.0` PR after tests and review
+pass. Both main RCs stay open. The accepted 28 October snapshot below and its
+previews remain historical; they do not certify this new roll.
+
+- [x] Full ten-platform build passed; all seven SDK archives independently
+  match Actions artifacts and ordinary mirror downloads. Strict CLI passed.
+- [x] Enforced offline Melos bootstrap and repeated prepare passed without
+  tracked generation drift. All 16 suites: **3,057 passed / 14 skipped**;
+  core Chrome/WASM **215 passed**, framework WASM **10 passed**.
+- [x] Verified new native KDF version and read-only Arbitrum/Base quotes,
+  funding, minimums, included fee and unfunded Max using a fresh unfunded wallet.
+- [x] Rechecked unchanged `eth.rs` payment/refund defaults (155,000 / 125,000);
+  update their source comment and deliberate exact-pin regression together.
+- [x] Full app aggregator after that source-check update: **3,919 passed / four
+  skipped** with all four production GasFree defines. Full analysis: **zero
+  errors**, existing 55 warnings / 2,144 infos; changed-file formatting and
+  input/lockfile/hash checks passed.
+- [ ] Current-head hosted checks, reviewer signoff, SDK dev squash/focused RC
+  carry, final app pin/dev squash/focused RC carry, and refreshed RC preview.
+- [ ] Upstream KDF run `40755486033`: failed tests are named in SDK provenance;
+  its one retry repeated the macOS integration failures; remaining jobs are
+  pending. Build/downstream success does not waive session-storage, Sia Max
+  or other upstream failures.
+
+The [input manifest](RELEASE_0.10.0_INPUTS.json) describes this proposal.
+The records below describe the previous accepted frozen snapshot.
 
 ## Prepared and merged into dev
 
