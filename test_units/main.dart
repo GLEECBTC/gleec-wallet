@@ -123,8 +123,6 @@ import 'tests/password/validate_password_tests.dart';
 import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
 import 'tests/router/swap_route_alias_test.dart' as swap_route_alias_test;
-import 'tests/swap/swap_atomic_permission_boundary_test.dart'
-    as atomic_permission;
 import 'tests/swap/swap_accessibility_test.dart' as swap_accessibility_test;
 import 'tests/swap/swap_asset_picker_test.dart' as swap_asset_picker_test;
 import 'tests/swap/swap_catalog_test.dart' as swap_catalog_test;
@@ -490,7 +488,6 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
-  atomic_permission.main();
   diagnostic_artifacts_test.main();
   guarded_file_saver_test.main();
   safe_log_exporter_test.main();

@@ -69,11 +69,11 @@ signed-platform test results.
   supported routing uses LI.FI and eligible EVM assets. Expanded provider/chain
   support and hardware signing need their own implementation or validation.
   Hardware-wallet trading was wallet-only in 0.9.7-1 and remains so.
-- [x] Atomic EVM-token trading was available in 0.9.7-1. App #3569 added the
-  current new-sell refusal because the spender is negotiated after matching and
-  may receive an unlimited allowance without authoritative pre-Start evidence.
-  This is an app-side atomic restriction; LI.FI token approvals and existing
-  atomic recovery/cancellation follow their separate contracts.
+- [x] Atomic EVM-token trading follows 0.9.7-1 behavior. The blanket refusal
+  introduced by #3569 is removed from quote, execution, Advanced and bot RPC
+  boundaries. The existing permission row states that the engine may reuse or
+  grant an unlimited allowance after matching, with no extra confirmation.
+  LI.FI's exact-approval/reset flow and normal execution checks remain separate.
 - [x] Preserve the owner's recorded usability/live-fiat deferrals and RC-only
   acceptance of upstream KDF failures. Banxa #3559 is after 0.10.0. Release
   review, CI, approved legal text and signed-platform evidence retain their
@@ -167,11 +167,13 @@ its final preparation adds documentation and the immutable SDK candidate pin.
   phone 360×800 and tablet 768×1024, with expiry/Refresh. Safari and signed
   platforms need separate results.
 - [x] Atomic token-approval disclosure X04/Q12: [#3563](https://github.com/GLEECBTC/gleec-wallet/issues/3563).
-  Unverifiable atomic EVM-token sells are explicitly unavailable in this RC,
-  including Advanced orders and restored bot starts. Quote, review and RPC
-  boundaries reject them before any new order or approval. Do not fund these
-  disabled cases; native atomic and routed token contracts remain separate.
-  Existing swap recovery/cancellation stays available.
+  Restore new atomic EVM-token trading, Advanced orders and bot starts instead
+  of refusing the whole category. The existing review row explains that
+  allowance is engine-managed after matching and may be unlimited; it never
+  presents absent atomic metadata as proof that no approval is needed. No new
+  modal, acknowledgement step or client-imposed approval limit is introduced.
+  Quote/execution and review regressions cover the restored behavior; no new
+  funded atomic settlement is claimed by unit/widget coverage.
 - [x] Transfer review and input #3565: signed EVM principal/Max, fee and
   same-asset total are distinct; exact amounts remain accessible/selectable.
   Unsupported precision and mismatched signed EVM amounts cannot be submitted.

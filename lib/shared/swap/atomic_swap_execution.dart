@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:rational/rational.dart';
-import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
@@ -71,11 +70,6 @@ class AtomicSwapExecutor implements SwapExecutor {
   @override
   Future<SwapExecutionHandle> start(SwapQuote quote) async {
     final plan = quote.payload;
-    if (quote.permissionUnavailable ||
-        (plan is AtomicSwapPlan &&
-            atomicTokenPermissionUnavailable(plan.base))) {
-      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
-    }
     if (plan is! AtomicSwapPlan) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
     }

@@ -116,6 +116,53 @@ void main() {
     });
   });
 
+  test(
+    'EVM token quotes remain available with engine-managed permission',
+    () async {
+      for (final subClass in evmCoinSubClasses) {
+        final token = assetOf('TOKEN', subClass: subClass, parent: eth);
+        final quote = available(await ask(source(), from: token, to: btc));
+        expect(quote.hasUnverifiedAtomicApproval, isTrue);
+        expect(quote.approval, isNull);
+        expect(
+          quote
+              .withPricing(const SwapQuotePricing())
+              .hasUnverifiedAtomicApproval,
+          isTrue,
+        );
+      }
+      expect(trading.books, hasLength(evmCoinSubClasses.length));
+      expect(trading.preimages, hasLength(evmCoinSubClasses.length));
+    },
+  );
+
+  test(
+    'protocol metadata preserves disclosure without a resolved parent',
+    () async {
+      final token = assetOf('UNRESOLVED-TOKEN', subClass: CoinSubClass.erc20);
+      final atomic = AtomicSwapQuoteSource(
+        trading: trading,
+        networks: () => networks,
+        tokenApproval: (id) => id == token,
+      );
+      final quote = available(await ask(atomic, from: token, to: btc));
+      expect(token.parentId, isNull);
+      expect(quote.atomicApprovalUnknown, isTrue);
+      expect(
+        quote.withPricing(const SwapQuotePricing()).hasUnverifiedAtomicApproval,
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'receiving a token does not require outgoing token permission',
+    () async {
+      final quote = available(await ask(source(), from: btc, to: usdc));
+      expect(quote.hasUnverifiedAtomicApproval, isFalse);
+    },
+  );
+
   group('fees', () {
     test(
       'only fees paid out of the received coin lower the guarantee',
@@ -164,16 +211,20 @@ void main() {
       },
     );
 
-    test('unverified EVM-token permission blocks before any RPC', () async {
-      for (final subClass in evmCoinSubClasses) {
-        final token = assetOf('TOKEN', subClass: subClass, parent: eth);
-        final reason = failure(await ask(source(), from: token, to: btc));
-        expect(reason.kind, SwapQuoteFailureKind.permissionUnavailable);
-        expect(reason.asset, token);
-        expect(reason.isPermanent, isTrue);
-      }
-      expect(trading.books, isEmpty);
-      expect(trading.preimages, isEmpty);
+    test('a token\'s fees in its network coin map to that coin', () async {
+      trading
+        ..bids = [bidOf('0.00005', '1', '1000')]
+        ..preimage = preimageOf(
+          takerFee: coinFeeOf('USDC-ERC20', '0.75'),
+          feeToSendTakerFee: coinFeeOf('ETH', '0.0004'),
+          baseCoinFee: coinFeeOf('ETH', '0.0006'),
+          relCoinFee: coinFeeOf('BTC', '0.00002'),
+        );
+
+      final quote = available(await ask(source(), from: usdc, to: btc));
+
+      expect(quote.fees.map((fee) => fee.asset), [usdc, eth, eth, btc]);
+      expect(quote.guaranteedReceive, d('0.00005'));
     });
 
     test(
