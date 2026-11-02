@@ -33,6 +33,8 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
+- **Trezor Sign-In** ([@CharlVS]) — Sign in when a "My Trezor" wallet file has no saved record, instead of failing with "Wallet already exists". A wallet file the app cannot open, such as another app's in a shared folder, stays untouched and a new local wallet is used. The error dialog now says sign-in failed and mentions Trezor Suite only as a possible cause.
+
 - **Cold-Start Swap Recovery** ([@CharlVS], [SDK#417](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/417)) — Recover active routed swaps across every history page instead of silently stopping at page 20. A wallet change during later pagination rejects the entire read.
 
 - **Wallet History** ([@CharlVS], [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572), [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
