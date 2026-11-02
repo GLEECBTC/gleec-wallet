@@ -435,7 +435,7 @@
   "trezorEnterPinHint": "The PIN layout is displayed on your Trezor",
   "trezorInProgressTitle": "Looking for your Trezor...",
   "trezorInProgressHint": "Please do not disable your Trezor",
-  "trezorErrorBusy": "Device is busy.\nMake sure that Trezor Suite is not running in background.",
+  "trezorErrorSignInFailed": "Trezor sign-in failed.\nIf the device is busy, make sure that Trezor Suite is not running in the background.",
   "trezorErrorInvalidPin": "Invalid PIN code",
   "trezorSelectTitle": "Connect a hardware wallet",
   "trezorSelectSubTitle": "Select a hardware wallet you'd like to use with Gleec Wallet",

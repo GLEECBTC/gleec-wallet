@@ -481,7 +481,7 @@ abstract class LocaleKeys {
   static const trezorEnterPinHint = 'trezorEnterPinHint';
   static const trezorInProgressTitle = 'trezorInProgressTitle';
   static const trezorInProgressHint = 'trezorInProgressHint';
-  static const trezorErrorBusy = 'trezorErrorBusy';
+  static const trezorErrorSignInFailed = 'trezorErrorSignInFailed';
   static const trezorErrorInvalidPin = 'trezorErrorInvalidPin';
   static const trezorSelectTitle = 'trezorSelectTitle';
   static const trezorSelectSubTitle = 'trezorSelectSubTitle';
