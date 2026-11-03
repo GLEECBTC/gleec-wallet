@@ -11,6 +11,12 @@ on:
       - release-*
   workflow_dispatch:
     inputs:
+      lifi_environment:
+        description: "LI.FI integration for this test build (production requires the matching KDP key)"
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
       rc_legal_availability_bypass:
         description: "0.10.0 RC testing only: bypass unpublished legal documents on an isolated preview"
         type: boolean
@@ -48,19 +54,19 @@ jobs:
     steps:
       - name: Setup GH Actions
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
       - name: Shortify commit sha
         id: shortify_commit
         shell: bash
-        run: echo "sha_short=$(echo ${GITHUB_SHA::7})" >> $GITHUB_OUTPUT
+        run: echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Get branch
         id: get_branch
         shell: bash
-        run: echo "ref_short=$(echo ${GITHUB_REF##*/})" >> $GITHUB_OUTPUT
+        run: echo "ref_short=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
 
       - name: Validate preview channel guard
         shell: bash
@@ -73,6 +79,12 @@ jobs:
           RC_LEGAL_BYPASS: ${{ github.event_name == 'workflow_dispatch' && inputs.rc_legal_availability_bypass }}
           RC_EXPECTED_APP_COMMIT: ${{ inputs.rc_expected_app_commit }}
         run: bash .github/scripts/preview_channel.sh
+
+      - name: Select public LI.FI profile
+        id: lifi_profile
+        uses: ./.github/actions/lifi-profile
+        with:
+          requested: ${{ inputs.lifi_environment || 'staging' }}
 
       - name: Install Flutter and dependencies
         id: install_flutter
@@ -97,6 +109,7 @@ jobs:
           MATOMO_URL: ${{ secrets.MATOMO_URL }}
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
           ANALYTICS_DISABLED: true
+          LIFI_BUILD_ENVIRONMENT: ${{ steps.lifi_profile.outputs.environment }}
           # Feature previews are production-equivalent GasFree canaries.
           TRON_GASLESS_ENABLED: "true"
           TRON_GASLESS_RECEIVE_ENABLED: "true"
@@ -119,11 +132,14 @@ jobs:
         env:
           LEGAL_BYPASS: ${{ steps.get_preview_channel_id.outputs.legal_bypass }}
           CHANNEL_ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}
+          LIFI_BUILD_ENVIRONMENT: ${{ steps.lifi_profile.outputs.environment }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C sdk rev-parse HEAD)" = "$(git rev-parse HEAD:sdk)"
+          lifi_config=$(python3 tool/lifi_build_config.py "$LIFI_BUILD_ENVIRONMENT")
           jq -n \
+            --slurpfile lifi_build_defines "$lifi_config" \
             --arg app_commit "$GITHUB_SHA" \
             --arg sdk_commit "$(git -C sdk rev-parse HEAD)" \
             --arg version "$(awk '/^version:/ {print $2; exit}' pubspec.yaml)" \
@@ -136,6 +152,7 @@ jobs:
             '{app_commit: $app_commit, sdk_commit: $sdk_commit, version: $version,
               channel: $channel, legal_availability_bypass: $legal_bypass,
               production_approved: false, run: $run, built_at: $built_at,
+              lifi_build_defines: $lifi_build_defines[0],
               javascript_sha256: $javascript_sha256, kdf_config_sha256: $kdf_config_sha256}' \
             > build/web/rc-test-build.json
 

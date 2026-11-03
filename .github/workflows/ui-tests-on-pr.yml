@@ -56,7 +56,7 @@ jobs:
     steps:
       - name: Setup GH Actions
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
 
@@ -64,7 +64,7 @@ jobs:
       - name: Install Chrome and chromedriver
         id: setup_chrome
         if: ${{ matrix.browser == 'chrome' }}
-        uses: browser-actions/setup-chrome@v2
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2
         with:
           chrome-version: stable
           install-chromedriver: true
@@ -218,7 +218,7 @@ jobs:
       # Post-test steps (upload logs, coverage, and failure check)
       - name: Upload driver logs
         id: upload_logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ runner.os }}-${{ matrix.browser }}-logs
           path: ${{ matrix.driver_logs }}

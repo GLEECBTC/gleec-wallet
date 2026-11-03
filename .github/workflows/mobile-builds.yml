@@ -5,8 +5,18 @@ on:
   pull_request:
     branches: [dev, main, release/*, hotfix/*, feature/*]
   workflow_dispatch:
+    inputs:
+      lifi_environment:
+        description: "LI.FI integration for this test build (production requires the matching KDP key)"
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
   release:
-    types: [created]
+    types: [published]
+
+permissions:
+  contents: read
 
 env:
   TRON_GASLESS_MAINNET_BASE_URL: "https://quicknode.gleec.com/gasfree/tron"
@@ -16,7 +26,6 @@ jobs:
   build_mobile:
     name: Build Mobile (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -35,9 +44,15 @@ jobs:
     steps:
       - name: Checkout code
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           submodules: recursive
+
+      - name: Select public LI.FI profile
+        id: lifi_profile
+        uses: ./.github/actions/lifi-profile
+        with:
+          requested: ${{ inputs.lifi_environment || 'staging' }}
 
       - name: Install Flutter and dependencies
         id: install_flutter
@@ -92,6 +107,7 @@ jobs:
           MATOMO_URL: ${{ secrets.MATOMO_URL }}
           MATOMO_SITE_ID: ${{ secrets.MATOMO_SITE_ID }}
           BUILD_COMMAND: ${{ matrix.build_command }}
+          LIFI_BUILD_ENVIRONMENT: ${{ steps.lifi_profile.outputs.environment }}
           TRON_GASLESS_ENABLED: "true"
           TRON_GASLESS_RECEIVE_ENABLED: "true"
           TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
@@ -101,12 +117,21 @@ jobs:
       - name: Compute short commit SHA
         id: vars
         shell: bash
-        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
         id: upload_artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.artifact_name }}-${{ steps.vars.outputs.short_sha }}
+          name: ${{ matrix.artifact_name }}-${{ steps.vars.outputs.short_sha }}-${{ steps.lifi_profile.outputs.environment }}
           path: ${{ matrix.artifact_path }}
-          retention-days: 5
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+      - name: Attach public build provenance
+        uses: ./.github/actions/build-provenance
+        with:
+          environment: ${{ steps.lifi_profile.outputs.environment }}
+          artifact_path: ${{ matrix.artifact_path }}
+          artifact_name: ${{ matrix.artifact_name }}-${{ steps.vars.outputs.short_sha }}-${{ steps.lifi_profile.outputs.environment }}

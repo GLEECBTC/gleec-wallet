@@ -66,6 +66,9 @@ import 'tests/fiat/tron_fiat_mapping_test.dart' as tron_fiat_mapping_test;
 import 'tests/fiat/fiat_provider_failure_test.dart'
     as fiat_provider_failure_test;
 import 'tests/mm2/lifi_proxy_url_test.dart' as lifi_proxy_url_test;
+import 'tests/mm2/sdk_build_manifest_test.dart' as sdk_build_manifest_test;
+import 'tests/ci/lifi_workflow_contract_test.dart'
+    as lifi_workflow_contract_test;
 import 'tests/mm2/tron_gasless_provider_config_test.dart'
     as tron_gasless_provider_config_test;
 import 'tests/wallet/activated_coin_id_migration_test.dart'
@@ -706,6 +709,8 @@ void main() {
   swap_routed_funding_test.main();
   swap_release_integration_test.main();
   lifi_integrator_policy_test.main();
+  sdk_build_manifest_test.main();
+  lifi_workflow_contract_test.main();
   swap_routed_payout_test.main();
   swap_src_routed_offer_test.main();
   swap_src_routed_quote_log_test.main();

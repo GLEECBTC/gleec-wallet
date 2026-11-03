@@ -74,6 +74,9 @@ Flutter nor the proxy calculates or injects a commission; the proxy holds the AP
 key. The combined included fee is displayed once, already reflected in the quote.
 These 178 + 22 bps are deployment policy, not two independently measured payouts.
 
+For public staging/production profiles, CI selection and artifact verification,
+see [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md).
+
 The coin feed remains pinned. SDK normalization supplies missing native-platform
 fee models for Base (`op_stack`), Mantle (`mantle`), Monad (`monad`) and Avalanche
 (`avalanche`) on bundled, cached and refreshed configurations. Explicit settings
