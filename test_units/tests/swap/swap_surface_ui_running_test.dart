@@ -33,7 +33,7 @@ void main() {
     setUp(() {
       routed = GatedExecutor(SwapLiquiditySource.routed);
       atomic = _Engine(SwapLiquiditySource.atomic);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed, atomic],
         inFlight: () async => const [],
       );

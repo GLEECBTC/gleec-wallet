@@ -18,7 +18,7 @@ void main() {
 
   setUp(() {
     executor = FakeExecutor(SwapLiquiditySource.routed);
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [executor],
       inFlight: () async => const [],
     );
@@ -83,7 +83,7 @@ void main() {
       void Function(FakeAsync async, SwapExecutionBloc bloc) body, {
       SwapExecutionSnapshot? initial,
     }) => fakeAsync((async) {
-      final slow = SwapExecutionRegistry(
+      final slow = testSwapRegistry(
         executors: [executor],
         inFlight: () async => const [],
         retryDelay: retryDelay,

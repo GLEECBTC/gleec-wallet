@@ -69,7 +69,7 @@ void main() {
 
     setUp(() {
       executor = _HeldExecutor();
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [executor],
         inFlight: () async => const [],
       );
@@ -363,9 +363,13 @@ class _HeldExecutor extends FakeExecutor {
   void answer() => _answer!.complete();
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
     starts++;
+    final result = super.start(quote, authorization: authorization);
     await (_answer ??= Completer<void>()).future;
-    return super.start(quote);
+    return result;
   }
 }

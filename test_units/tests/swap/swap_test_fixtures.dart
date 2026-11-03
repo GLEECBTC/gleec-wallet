@@ -1,14 +1,92 @@
 import 'dart:async';
 
 import 'package:decimal/decimal.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
+import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
+import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_pricing.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+
+/// Stable, owner-scoped auth for fixtures which do not exercise transitions.
+class TestSwapAuth implements KomodoDefiLocalAuth {
+  TestSwapAuth({String wallet = 'wallet', bool fullIdentity = true}) {
+    sessions.observe(
+      KdfUser(
+        walletId: WalletId(
+          name: wallet,
+          pubkeyHash: fullIdentity ? 'hash-$wallet' : null,
+          authOptions: const AuthOptions(
+            derivationMethod: DerivationMethod.hdWallet,
+          ),
+        ),
+        isBip39Seed: true,
+      ),
+    );
+  }
+
+  final sessions = AuthSessionTracker();
+  AuthSessionContext? get currentSession => sessions.current;
+
+  @override
+  bool isSessionContextCurrent(AuthSessionContext context) =>
+      sessions.isCurrent(context);
+
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!isSessionContextCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  @override
+  Future<AuthSessionContext> captureSessionContext() async =>
+      currentSession ?? (throw const AuthSessionChangedException());
+
+  @override
+  Future<T> runWithSession<T>(
+    AuthSessionContext expected,
+    Future<T> Function() dispatch,
+  ) async {
+    ensureSessionContextCurrent(expected);
+    return dispatch();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final testSwapAuth = TestSwapAuth();
+
+SwapExecutionAuthorization testSwapAuthorization({
+  TestSwapAuth? auth,
+  void Function()? beforeDispatch,
+}) => SwapExecutionAuthorization(
+  session: (auth ?? testSwapAuth).currentSession!,
+  beforeDispatch: beforeDispatch ?? () {},
+);
+
+/// A registry with real session validation for tests focused on tracking/UI.
+SwapExecutionRegistry testSwapRegistry({
+  required List<SwapExecutor> executors,
+  required Future<List<SwapExecutionRef>> Function() inFlight,
+  Duration retryDelay = const Duration(seconds: 10),
+  TestSwapAuth? auth,
+}) {
+  final owner = auth ?? testSwapAuth;
+  return SwapExecutionRegistry(
+    executors: executors,
+    inFlight: inFlight,
+    retryDelay: retryDelay,
+    currentSession: () => owner.currentSession,
+    isSessionCurrent: owner.isSessionContextCurrent,
+  );
+}
 
 Decimal d(String value) => Decimal.parse(value);
 
@@ -375,7 +453,11 @@ class FakeExecutor implements SwapExecutor {
   int resumeCalls = 0;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
+    authorization.beforeDispatch();
     started.add(quote);
     final error = startError;
     if (error != null) throw error;

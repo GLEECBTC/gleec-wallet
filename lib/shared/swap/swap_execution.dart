@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show AuthSessionContext;
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
@@ -32,6 +33,22 @@ abstract interface class SwapExecutionHandle {
   Future<void> close();
 }
 
+/// The original session and revocable intent for one submission.
+///
+/// Executors call [beforeDispatch] under the session's dispatch lease,
+/// immediately before invoking the request that can start a swap. A thrown
+/// exception means nothing was sent. Once it returns, a lost response must
+/// remain an unconfirmed start rather than authorizing a retry.
+final class SwapExecutionAuthorization {
+  const SwapExecutionAuthorization({
+    required this.session,
+    required this.beforeDispatch,
+  });
+
+  final AuthSessionContext session;
+  final void Function() beforeDispatch;
+}
+
 /// Starts and resumes swaps for one liquidity source.
 abstract interface class SwapExecutor {
   /// Which source this executes for.
@@ -42,7 +59,10 @@ abstract interface class SwapExecutor {
   /// Throws [SwapStartRejectedException] when the engine refused before
   /// anything started, and [SwapStartUnconfirmedException] when the swap may
   /// have started but could not be confirmed.
-  Future<SwapExecutionHandle> start(SwapQuote quote);
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  });
 
   /// Re-attaches to a swap by its durable id, or null when this source does
   /// not know it.
@@ -85,10 +105,23 @@ enum SwapStartRejection {
 /// Never re-arm a start button on this: the engine may already be running the
 /// swap, and a second tap is a second real swap. Point the user at Activity.
 class SwapStartUnconfirmedException implements Exception {
-  const SwapStartUnconfirmedException(this.cause);
+  const SwapStartUnconfirmedException(
+    this.cause, {
+    this.taskId,
+    this.executionId,
+  });
 
   /// What went wrong.
   final Object cause;
+
+  /// A routed task acknowledged by the original engine session, when known.
+  /// Task ids can be reused after a restart; never query one in a replacement
+  /// session or infer that its presence makes retrying the start safe.
+  final int? taskId;
+
+  /// The durable swap or atomic order reference, when the response supplied it.
+  /// Recovery remains scoped to the wallet that authorized the submission.
+  final String? executionId;
 
   @override
   String toString() => 'Could not confirm whether the swap started: $cause';

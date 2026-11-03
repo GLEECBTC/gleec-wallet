@@ -214,7 +214,11 @@ class FakeRoutedManager implements RoutedSwapManager {
   RoutedSwapProgress Function(RoutedSwapOffer offer)? seed;
 
   @override
-  Future<RoutedSwapHandle> start(RoutedSwapOffer offer) async {
+  Future<RoutedSwapHandle> start(
+    RoutedSwapOffer offer, {
+    void Function()? beforeDispatch,
+  }) async {
+    beforeDispatch?.call();
     started.add(offer);
     final error = startError;
     if (error != null) throw error;

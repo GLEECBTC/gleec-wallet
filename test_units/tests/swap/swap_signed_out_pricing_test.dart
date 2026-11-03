@@ -75,7 +75,7 @@ void main() {
         FakeExecutor(SwapLiquiditySource.routed),
         FakeExecutor(SwapLiquiditySource.atomic),
       ];
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: executors,
         inFlight: () async => const [],
       );

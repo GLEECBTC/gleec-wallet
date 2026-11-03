@@ -111,6 +111,8 @@ void main() {
       expect(sdk.auth.users.hasListener, isTrue);
 
       await tester.pumpWidget(const SizedBox());
+      // Session-stream cancellation settles before the user subscription.
+      await tester.runAsync(() => pumpEventQueue());
       await tester.pump(Duration.zero);
 
       expect(sdk.auth.users.hasListener, isFalse);

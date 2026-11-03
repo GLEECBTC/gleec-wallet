@@ -1,34 +1,79 @@
 part of 'unified_swap_bloc.dart';
 
-/// A start the user confirmed: the registry's submission and the wallet
-/// epoch it was confirmed in.
-typedef _Confirmation = ({SwapSubmission submission, int walletEpoch});
+/// The action confirmed before preparation begins. Re-pricing may replace the
+/// executable quote, but never the session, review revision, or shown terms.
+typedef _Confirmation = ({
+  SwapSubmission submission,
+  int walletEpoch,
+  int version,
+  SwapQuote quote,
+  LegalConsentSnapshot? legalSnapshot,
+});
 
-/// The start itself, sent only while the form that confirmed it is open and
-/// the wallet session it was confirmed in holds.
 extension _UnifiedSwapStart on UnifiedSwapBloc {
-  /// A start confirmed now. Taken when Start is pressed, before anything is
-  /// awaited, so each wait after it is held to this session.
-  _Confirmation _confirm() =>
-      (submission: _registry.beginSubmission(), walletEpoch: _walletEpoch);
+  _Confirmation? _confirm(
+    SwapQuote quote, {
+    LegalConsentSnapshot? legalSnapshot,
+    SwapSubmission? reviewedIn,
+  }) {
+    if (_closing || isClosed) return null;
+    if (reviewedIn != null && !_registry.isCurrent(reviewedIn)) return null;
+    try {
+      final submission = _registry.beginSubmission();
+      if (reviewedIn != null && reviewedIn.session != submission.session) {
+        return null;
+      }
+      return (
+        submission: submission,
+        walletEpoch: _walletEpoch,
+        version: ++_startVersion,
+        quote: quote,
+        legalSnapshot: legalSnapshot,
+      );
+    } on SwapStartRejectedException {
+      return null;
+    }
+  }
 
-  /// Whether [confirmation] may still be sent: its form is open, no wallet
-  /// has signed in or out, and the registry's session is the one it was
-  /// confirmed in.
-  bool _stillConfirmed(
+  /// A late handler may abandon only its own review, never a replacement.
+  bool _ownsConfirmation(
     Emitter<UnifiedSwapState> emit,
     _Confirmation confirmation,
   ) =>
       !emit.isDone &&
       !_closing &&
-      confirmation.walletEpoch == _walletEpoch &&
+      !isClosed &&
+      confirmation.version == _startVersion &&
+      confirmation.walletEpoch == _walletEpoch;
+
+  bool _mayUpdateConfirmation(
+    Emitter<UnifiedSwapState> emit,
+    _Confirmation confirmation,
+  ) =>
+      _ownsConfirmation(emit, confirmation) &&
       _registry.isCurrent(confirmation.submission);
 
-  /// Drops a start that lapsed before anything was sent.
-  void _abandonStart(Emitter<UnifiedSwapState> emit) {
+  bool _stillConfirmed(
+    Emitter<UnifiedSwapState> emit,
+    _Confirmation confirmation,
+  ) => _mayUpdateConfirmation(emit, confirmation) && state.tradingEnabled;
+
+  void _abandonStart(
+    Emitter<UnifiedSwapState> emit,
+    _Confirmation confirmation,
+  ) {
+    if (!_ownsConfirmation(emit, confirmation)) return;
     _startVersion++;
-    if (emit.isDone) return;
     emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
+  }
+
+  bool _continuePreparation(
+    Emitter<UnifiedSwapState> emit,
+    _Confirmation confirmation,
+  ) {
+    if (_stillConfirmed(emit, confirmation)) return true;
+    _abandonStart(emit, confirmation);
+    return false;
   }
 
   Future<void> _start(
@@ -37,57 +82,67 @@ extension _UnifiedSwapStart on UnifiedSwapBloc {
     required bool termsRequired,
     required _Confirmation confirmation,
   }) async {
+    if (!_continuePreparation(emit, confirmation)) return;
     final review = state.review;
     if (review == null) return;
+    // A review opened while documents were still loading may complete that
+    // same read; an already presented snapshot remains frozen throughout.
+    final legalSnapshot = confirmation.legalSnapshot?.isAvailable == true
+        ? confirmation.legalSnapshot
+        : review.legalSnapshot;
     if (quote.source == SwapLiquiditySource.routed &&
         !review.isRecovery &&
-        !_terms.canSubmit(review.legalSnapshot)) {
+        !_terms.canSubmit(legalSnapshot)) {
       return;
     }
     emit(
       state.copyWith(
-        review: review.copyWith(
-          quote: quote,
-          status: SwapReviewStatus.starting,
-          clearPrevious: true,
-        ),
+        review: review.copyWith(status: SwapReviewStatus.revalidating),
       ),
     );
     _refresh?.cancel();
     _expiry?.cancel();
 
     if (termsRequired) {
-      // Starting a routed swap after being shown the provider's terms is the
-      // acceptance; it is recorded before anything is sent, and only for the
-      // wallet that was shown them.
       try {
         await _terms.recordAcceptance(
           at: _now(),
-          snapshot: review.legalSnapshot,
+          snapshot: legalSnapshot,
+          walletKey: confirmation.submission.walletKey,
           stillCurrent: () => _stillConfirmed(emit, confirmation),
         );
       } on Object {
-        _abandonStart(emit);
+        _abandonStart(emit, confirmation);
         return;
       }
     }
-    // Checked again, with nothing awaited before the registry sends: the form
-    // can close, the wallet session end and trading be turned off during the
-    // re-price or that write, and a review already starting is kept open
-    // through them.
-    if (!_stillConfirmed(emit, confirmation)) {
-      _abandonStart(emit);
-      return;
-    }
-    if (!state.tradingEnabled) {
-      _startVersion++;
-      emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
-      return;
-    }
+    if (!_continuePreparation(emit, confirmation)) return;
 
     try {
-      final execution = await _registry.start(quote, confirmation.submission);
-      unawaited(_preferences.rememberPair(quote.from, quote.to));
+      final execution = await _registry.start(
+        quote,
+        confirmation.submission,
+        stillCurrent: () => _stillConfirmed(emit, confirmation),
+        onDispatch: () {
+          emit(
+            state.copyWith(
+              review: state.review!.copyWith(
+                quote: quote,
+                status: SwapReviewStatus.starting,
+                clearPrevious: true,
+              ),
+            ),
+          );
+        },
+      );
+      if (!_mayUpdateConfirmation(emit, confirmation)) return;
+      unawaited(
+        _preferences.rememberPair(
+          quote.from,
+          quote.to,
+          walletKey: confirmation.submission.walletKey,
+        ),
+      );
       _startVersion++;
       emit(
         state.copyWith(
@@ -97,6 +152,10 @@ extension _UnifiedSwapStart on UnifiedSwapBloc {
         ),
       );
     } on SwapStartRejectedException catch (error) {
+      if (!_mayUpdateConfirmation(emit, confirmation)) {
+        _abandonStart(emit, confirmation);
+        return;
+      }
       emit(
         state.copyWith(
           review: state.review?.copyWith(
@@ -106,8 +165,9 @@ extension _UnifiedSwapStart on UnifiedSwapBloc {
         ),
       );
     } on Object {
-      // The engine may already have the swap. Another tap here could start a
-      // second real swap, so the review stays blocked and says where to look.
+      // The registry owns recovery even if the form/session has since ended.
+      // An unanswered dispatch must never re-arm the original Start action.
+      if (!_mayUpdateConfirmation(emit, confirmation)) return;
       emit(
         state.copyWith(
           review: state.review?.copyWith(status: SwapReviewStatus.unconfirmed),
