@@ -9,11 +9,13 @@ published signed-artifact manifest.
 
 ## Validated KDF and coins roll — 3 November
 
-This RC candidate pins SDK `47dd0f5a35a9d355ec657662f0995fc3f0997d3b`;
-SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) must be
-accepted into dev before the normal SDK [#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431)
-carry and the app's focused dev/RC carries. These candidate pins are provisional
-until branch acceptance; main release PRs SDK #416 and app #3575 stay open.
+This RC candidate pins accepted SDK `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`.
+SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) was
+squash merged into dev as `db73613cd34a2c0779da024a71338052e4bbb030`; normal RC carry
+[#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431) is
+`3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. Both accepted trees match their validated sources.
+App #3586 and #3587 acceptance remains gated on current hosted checks. Main
+release PRs SDK #416 and app #3575 stay open.
 
 - [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
   builds and all 17 test jobs passed. Original failures and their passing retries
@@ -32,8 +34,13 @@ until branch acceptance; main release PRs SDK #416 and app #3575 stay open.
   generated coin files match exact-commit source bytes. Hashes are in the inputs.
 - [x] Rechecked unchanged `ETH_PAYMENT=155000` / `ETH_SENDER_REFUND=125000`
   in exact a51 source; updated the source comment and exact-pin regression.
-- [ ] Record focused dev squashes, normal RC carries, hosted checks/review and
-  refreshed final preview identity after accepted branch heads are known.
+- [x] SDK dev squash #430 and normal RC carry #431 accepted after all SDK
+  checks passed, using only the owner-authorized approval override.
+- [ ] Complete app #3586 dev squash and #3587 normal RC carry after all current
+  checks pass, then record accepted heads and refreshed final preview identity.
+  The earlier app candidates failed `Banxa on-ramp quotes and selection` on
+  Chrome and Safari (no USD50 -> BTC quote within45s). The Windows runner
+  lost communication before compilation. These failures are retained, not waived.
 
 Historical sections below retain their original revisions and dispositions.
 
