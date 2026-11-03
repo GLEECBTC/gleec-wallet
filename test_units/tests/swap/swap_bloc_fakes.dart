@@ -110,12 +110,15 @@ class SwapBlocHarness {
   Completer<void>? balanceGate;
   final _blocs = <UnifiedSwapBloc>[];
 
+  /// The signed-in wallet, as the terms read it when they are recorded.
+  String wallet = 'wallet';
+
   SwapPreferences get preferences =>
       SwapPreferences(walletKey: () async => 'wallet', storage: storage);
 
   SwapTermsRepository get terms => SwapTermsRepository(
     legalDocuments: legalDocuments,
-    walletKey: () async => 'wallet',
+    walletKey: () async => wallet,
     storage: storage,
   );
 
@@ -153,7 +156,7 @@ class SwapBlocHarness {
         legalDocuments: legalDocuments,
         walletKey: () async {
           await termsGate?.future;
-          return 'wallet';
+          return wallet;
         },
         storage: storage,
       ),
