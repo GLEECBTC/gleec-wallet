@@ -37,10 +37,15 @@ release PRs SDK #416 and app #3575 stay open.
 - [x] SDK dev squash #430 and normal RC carry #431 accepted after all SDK
   checks passed, using only the owner-authorized approval override.
 - [ ] Complete app #3586 dev squash and #3587 normal RC carry after all current
-  checks pass, then record accepted heads and refreshed final preview identity.
-  The earlier app candidates failed `Banxa on-ramp quotes and selection` on
-  Chrome and Safari (no USD50 -> BTC quote within45s). The Windows runner
-  lost communication before compilation. These failures are retained, not waived.
+  checks pass with the named Banxa deferral, then record accepted heads and
+  refreshed final preview identity. The Windows runner disconnect before
+  compilation remains an infrastructure failure requiring a passing current run.
+- [x] The owner explicitly deferred `Banxa on-ramp quotes and selection` for
+  0.10.0. It is visibly skipped in the integration aggregator, not reported as
+  a quote pass; existing Ramp deferral remains separate. Original Chrome/Safari
+  failures (no USD50 -> BTC quote within45s) are retained. Restore Banxa proxy
+  access before re-enabling: production returned40104/401; test mode returned
+  a Cloudflare block page. All other GUI tests and checks remain required.
 
 Historical sections below retain their original revisions and dispositions.
 
