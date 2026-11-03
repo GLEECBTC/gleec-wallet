@@ -280,6 +280,8 @@ import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
 import 'tests/swap/swap_bloc_start_path_test.dart' as swap_bloc_start_path_test;
 import 'tests/swap/swap_bloc_start_refund_test.dart'
     as swap_bloc_start_refund_test;
+import 'tests/swap/swap_bloc_start_session_test.dart'
+    as swap_bloc_start_session_test;
 import 'tests/swap/swap_bloc_timers_test.dart' as swap_bloc_timers_test;
 import 'tests/swap/swap_bloc_validation_test.dart' as swap_bloc_validation_test;
 import 'tests/swap/swap_bloc_values_test.dart' as swap_bloc_values_test;
@@ -762,6 +764,7 @@ void main() {
   swap_bloc_start_test.main();
   swap_bloc_start_path_test.main();
   swap_bloc_start_refund_test.main();
+  swap_bloc_start_session_test.main();
   swap_bloc_timers_test.main();
   swap_bloc_validation_test.main();
   swap_bloc_values_test.main();
