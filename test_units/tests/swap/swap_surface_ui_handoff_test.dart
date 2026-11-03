@@ -323,7 +323,7 @@ void main() {
       );
       expect(routingState, isNotNull);
 
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       await tester.pump();
       await tester.pump();
       await tester.pump(SwapMotion.pop ~/ 3);

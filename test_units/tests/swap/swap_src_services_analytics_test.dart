@@ -74,6 +74,7 @@ void main() {
       quoteOf(
         payload: offerOf(from: eth, to: usdc),
       ),
+      services.registry.beginSubmission(),
     );
 
     test(

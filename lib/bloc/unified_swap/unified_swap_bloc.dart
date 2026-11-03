@@ -21,6 +21,7 @@ part 'unified_swap_bloc_intent.dart';
 part 'unified_swap_bloc_offers.dart';
 part 'unified_swap_bloc_review.dart';
 part 'unified_swap_bloc_rules.dart';
+part 'unified_swap_bloc_start.dart';
 
 /// One asset the wallet holds, with its value, for choosing a default pair.
 typedef SwapHolding = ({AssetId asset, Decimal usdValue});

@@ -269,8 +269,8 @@ void main() {
     testWidgets('counts running swaps and unread problems on the filters', (
       tester,
     ) async {
-      await registry.start(quoteOf());
-      await registry.start(quoteOf(id: 'q2'));
+      await registry.start(quoteOf(), registry.beginSubmission());
+      await registry.start(quoteOf(id: 'q2'), registry.beginSubmission());
       await show(tester);
 
       Finder count(String filter) => find.descendant(

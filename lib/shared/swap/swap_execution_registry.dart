@@ -55,6 +55,19 @@ class SwapInFlightIncomplete implements Exception {
       'SwapInFlightIncomplete(unread: ${unread.map((s) => s.name).join(', ')})';
 }
 
+/// A start the user confirmed, in the session they confirmed it in.
+///
+/// Taken from [SwapExecutionRegistry.beginSubmission] when Start is pressed
+/// and handed to [SwapExecutionRegistry.start], however long the re-price and
+/// the terms take in between. It lapses at the next
+/// [SwapExecutionRegistry.reset], so a start confirmed before a sign-out or a
+/// wallet switch is never sent in the session that follows.
+final class SwapSubmission {
+  const SwapSubmission._(this._generation);
+
+  final int _generation;
+}
+
 /// Owns every swap the app follows, for the whole session.
 ///
 /// A swap outlives the screen that started it — a cross-chain move can run for
@@ -146,18 +159,36 @@ class SwapExecutionRegistry {
   Stream<DateTime> checksOf(String id) =>
       _checks.stream.where((check) => check.id == id).map((check) => check.at);
 
-  /// Starts executing [quote] and follows it.
+  /// A start confirmed now, in this session.
+  SwapSubmission beginSubmission() => SwapSubmission._(_generation);
+
+  /// Whether [submission] was confirmed in this session.
+  bool isCurrent(SwapSubmission submission) =>
+      submission._generation == _generation;
+
+  /// Starts executing [quote], confirmed as [submission], and follows it.
   ///
-  /// Rethrows [SwapStartRejectedException] and
-  /// [SwapStartUnconfirmedException] from the executor unchanged.
-  Future<SwapExecutionSnapshot> start(SwapQuote quote) async {
+  /// Throws [SwapStartRejectedException] without asking the engine when
+  /// [submission] was confirmed in a session that has since ended. Rethrows
+  /// [SwapStartRejectedException] and [SwapStartUnconfirmedException] from
+  /// the executor unchanged.
+  Future<SwapExecutionSnapshot> start(
+    SwapQuote quote,
+    SwapSubmission submission,
+  ) async {
     final executor = _executors[quote.source];
     if (executor == null) {
       throw const SwapStartRejectedException(SwapStartRejection.unknown);
     }
-    final generation = _generation;
+    // Nothing is awaited between this and the executor sending the start.
+    if (!isCurrent(submission)) {
+      throw const SwapStartRejectedException(
+        SwapStartRejection.quoteStale,
+        detail: 'The wallet session it was confirmed in has ended.',
+      );
+    }
     final handle = await executor.start(quote);
-    if (_follow(handle, generation) != null && !_started.isClosed) {
+    if (_follow(handle, submission._generation) != null && !_started.isClosed) {
       _started.add(handle.latest);
     }
     return handle.latest;

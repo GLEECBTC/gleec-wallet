@@ -51,7 +51,10 @@ void main() {
         ? atomic
         : routed;
     executor.next = snapshot;
-    await registry.start(quoteOf(source: snapshot.source));
+    await registry.start(
+      quoteOf(source: snapshot.source),
+      registry.beginSubmission(),
+    );
     await pumpEventQueue();
     return executor.last!;
   }

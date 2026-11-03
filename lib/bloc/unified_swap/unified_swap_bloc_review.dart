@@ -123,6 +123,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (review == null || state.view != UnifiedSwapView.review) return;
     if (!state.tradingEnabled) return;
     if (_waitingForLegalSubmission) return;
+    final confirmation = _confirm();
     if (review.legalLoading &&
         !_terms.canSubmit(review.legalSnapshot) &&
         !review.isRecovery &&
@@ -191,12 +192,22 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     if (review.status == SwapReviewStatus.materialUpdate &&
         !review.quote.isExpiredAt(_now())) {
       // The user has seen the updated numbers side by side and accepted them.
-      await _start(emit, review.quote, termsRequired: review.termsRequired);
+      await _start(
+        emit,
+        review.quote,
+        termsRequired: review.termsRequired,
+        confirmation: confirmation,
+      );
       return;
     }
     final fresh = await _revalidate(emit, review);
     if (fresh == null) return;
-    await _start(emit, fresh, termsRequired: review.termsRequired);
+    await _start(
+      emit,
+      fresh,
+      termsRequired: review.termsRequired,
+      confirmation: confirmation,
+    );
   }
 
   /// Re-prices [review]'s route. Returns the quote to start with when the
@@ -315,74 +326,6 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     }
   }
 
-  Future<void> _start(
-    Emitter<UnifiedSwapState> emit,
-    SwapQuote quote, {
-    required bool termsRequired,
-  }) async {
-    final review = state.review;
-    if (review == null) return;
-    if (quote.source == SwapLiquiditySource.routed &&
-        !review.isRecovery &&
-        !_terms.canSubmit(review.legalSnapshot)) {
-      return;
-    }
-    emit(
-      state.copyWith(
-        review: review.copyWith(
-          quote: quote,
-          status: SwapReviewStatus.starting,
-          clearPrevious: true,
-        ),
-      ),
-    );
-    _refresh?.cancel();
-    _expiry?.cancel();
-
-    if (termsRequired) {
-      // Starting a routed swap after being shown the provider's terms is the
-      // acceptance; it is recorded before anything is sent.
-      await _terms.recordAcceptance(at: _now(), snapshot: review.legalSnapshot);
-    }
-    // Checked again: trading can be turned off during that write, and a
-    // review already starting is kept open through it.
-    if (!state.tradingEnabled) {
-      _startVersion++;
-      emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
-      return;
-    }
-
-    try {
-      final execution = await _registry.start(quote);
-      unawaited(_preferences.rememberPair(quote.from, quote.to));
-      _startVersion++;
-      emit(
-        state.copyWith(
-          view: UnifiedSwapView.progress,
-          activeExecutionId: execution.id,
-          clearReview: true,
-        ),
-      );
-    } on SwapStartRejectedException catch (error) {
-      emit(
-        state.copyWith(
-          review: state.review?.copyWith(
-            status: SwapReviewStatus.rejected,
-            rejectionDetail: error.detail,
-          ),
-        ),
-      );
-    } on Object {
-      // The engine may already have the swap. Another tap here could start a
-      // second real swap, so the review stays blocked and says where to look.
-      emit(
-        state.copyWith(
-          review: state.review?.copyWith(status: SwapReviewStatus.unconfirmed),
-        ),
-      );
-    }
-  }
-
   Future<void> _onFreshQuoteAccepted(
     UnifiedSwapFreshQuoteAccepted event,
     Emitter<UnifiedSwapState> emit,
@@ -394,6 +337,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         state.review?.status == SwapReviewStatus.revalidating ||
         !state.tradingEnabled;
     if (refused()) return;
+    final confirmation = _confirm();
     final quote = event.quote;
     final routed = quote.source == SwapLiquiditySource.routed;
     final snapshot = routed ? await _terms.loadSnapshot() : null;
@@ -431,7 +375,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     }
     final fresh = await _revalidate(emit, review);
     if (fresh == null) return;
-    await _start(emit, fresh, termsRequired: false);
+    await _start(emit, fresh, termsRequired: false, confirmation: confirmation);
   }
 
   void _onProgressLeft(
