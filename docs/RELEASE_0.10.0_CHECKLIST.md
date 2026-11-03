@@ -1,11 +1,29 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current RC inputs: 29 October 2026. App `0.10.0+0` and SDK `0.9.0` are release
+Current RC inputs: 3 November 2026. App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
+
+## Opsec swap authorization — 3 November
+
+The offer/session and pending-confirmation defects are release blockers. The
+focused correction and deliberately deferred proxy trust redesign are tracked
+in [the remediation record](OPSEC_SWAP_SESSION_REMEDIATION_2026-11-03.md).
+App implementation `e148efcb5` pins SDK `c0edb25e` ([SDK #427](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/427)).
+The full app aggregator passes **3,991 tests / four skipped**; SDK, local-auth,
+affected package and both replay suites pass. Chrome/WASM authorization tests
+pass (app 84, SDK 42, local-auth 10), as do release WASM and unsigned macOS
+compile checks. Independent source review found no remaining blocker. Full
+analysis has zero errors and existing repository lint findings; no warning is
+in a changed file. Exact revisions, test results and limits are in the record.
+
+Hosted checks, branch acceptance and refreshed preview identity remain separate
+gates on the final PR heads. KDF and coin inputs remain frozen. Production
+promotion remains a separate action. Entries below retain historical results
+for their recorded revisions.
 
 ## Atomic token restoration — 29 October
 
