@@ -79,8 +79,8 @@ The immutable implementation revisions are:
 
 | Target | App source | SDK pin |
 | --- | --- | --- |
-| RC | `e148efcb5f5ea611e7edd0aa3cdfc3860bc8984b` | `c0edb25e3e3a7a7bf04f4eddc2bbf4acf7b46727` ([SDK #427](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/427)) |
-| Development | `f65ed6430cffcd6cfccaa55192619407f5d6267a` | `d7f03b63c0a895e6ccca0ce0bece9d4afb0385cf` ([SDK #426](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/426)) |
+| RC | `33bf94a7cc4ed9b4ba5bc04f2694a344445908a1` | `3730b456d1bb9046ab899a0d367e5c1a2eb9055a` ([SDK #429](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/429)) |
+| Development | `d4df53688b5602462247bc92dfbd7d9f3b5e77c8` | `0cd7578e8887290371e4d06d527d95c97cba9d38` ([SDK #428](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/428)) |
 
 App runtime and test trees are identical between these two revisions. The SDK
 package trees are also identical. Later evidence-only commits do not change
@@ -93,8 +93,8 @@ app lockfile SHA-256 remains
 
 | Check | Result |
 | --- | --- |
-| App aggregator, all four production GasFree defines | 3,991 passed, 4 skipped |
-| Core SDK suite | 1,233 passed, 1 skipped |
+| App aggregator, all four production GasFree defines | 3,991 passed, 4 skipped; repeated on final app/SDK pin pair |
+| Core SDK suite | 1,238 passed, 1 skipped |
 | Local-auth suite | 156 passed |
 | Framework suite | 101 passed |
 | RPC suite | 379 passed |
@@ -102,7 +102,7 @@ app lockfile SHA-256 remains
 | Replay harness, HD | 221 passed, 3 skipped |
 | Replay harness, iguana | 221 passed, 3 skipped |
 | App Chrome/WASM authorization and lifecycle tests | 84 passed |
-| SDK Chrome/WASM routed-session tests | 42 passed |
+| SDK Chrome/WASM routed-session tests | 47 passed |
 | Local-auth Chrome/WASM dispatch-lease tests | 10 passed |
 | Release web/WASM build | Passed |
 | macOS debug compile with CI unsigned settings | Passed |
@@ -132,6 +132,14 @@ browser tests at `test/`, while this app uses `test_units/`. Running the same
 three files through a temporary symlink under `test/` passed all 84 cases;
 the link was removed afterwards.
 
+SDK #426/#427 delivered the implementation; #428/#429 completed five explicit
+wallet-transition test combinations. The final SDK pins differ from the original
+validated pins only in `routed_swap_offer_session_test.dart`. The complete core
+suite and browser session suite were rerun on those final pins, and independent
+review approved the added assertions. The app aggregator passed again on the
+final app/SDK pair (3,991 / 4 skipped). All other validated library, test, dependency and engine
+inputs are unchanged.
+
 ### Regression boundaries
 
 - SDK offer tests cover exact/Max offers, supported copies and preserved
@@ -154,6 +162,27 @@ found no remaining blocker in pre-dispatch rejection, post-dispatch uncertainty,
 review ownership, or recovery. Hosted PR checks and deployed preview identity
 are separate evidence and must be read from the exact PR head; local results
 do not imply that hosted workflows have passed.
+
+### Hosted delivery evidence
+
+The implementation SDK PRs are merged: development `2e162cbb96c7aef2df2bd72e4aa6af80846ac406`
+and RC `d58bb7bb9a8eba0cd970f34e02bf3bd004c91b1e`. The test follow-up is also merged:
+development `e217dbb6399859a2cd130ef43756a5c62e5039bb` and RC
+`3832b0f45d349e46faf25d79bc643c5218bf73f2`. Exact app acceptance and refreshed
+preview identity are maintained on [app #3583](https://github.com/GLEECBTC/gleec-wallet/pull/3583)
+and [app #3584](https://github.com/GLEECBTC/gleec-wallet/pull/3584).
+
+The original implementation passed hosted SDK all-package tests (16 suites),
+both SDK WASM gates, app unit-test steps, app code guidelines, and Android,
+Windows and Linux builds. These results belong to the earlier PR heads; later
+head statuses are not inferred from them. One iOS job stopped before compilation
+in `xcodebuild -downloadPlatform iOS` with “Unable to connect to simulator”
+(exit 70; [failed job](https://github.com/GLEECBTC/gleec-wallet/actions/runs/41654060085/job/125979565320)).
+The identical Xcode version and unchanged iOS/workflow inputs passed on 2 November
+([baseline job](https://github.com/GLEECBTC/gleec-wallet/actions/runs/41531143872/job/125571356077)).
+This runner setup failure is not an app test pass. Local release-WASM
+and deployed-preview wallet/signed-out Swap smoke checks captured no console
+errors; no wallet was connected or funds submitted.
 
 ### Reproduction
 

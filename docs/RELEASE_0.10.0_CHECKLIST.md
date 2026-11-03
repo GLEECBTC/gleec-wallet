@@ -12,10 +12,10 @@ published signed-artifact manifest.
 The offer/session and pending-confirmation defects are release blockers. The
 focused correction and deliberately deferred proxy trust redesign are tracked
 in [the remediation record](OPSEC_SWAP_SESSION_REMEDIATION_2026-11-03.md).
-App implementation `e148efcb5` pins SDK `c0edb25e` ([SDK #427](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/427)).
+App implementation `33bf94a7c` pins SDK `3730b456` ([SDK #429](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/429)).
 The full app aggregator passes **3,991 tests / four skipped**; SDK, local-auth,
 affected package and both replay suites pass. Chrome/WASM authorization tests
-pass (app 84, SDK 42, local-auth 10), as do release WASM and unsigned macOS
+pass (app 84, SDK 47, local-auth 10), as do release WASM and unsigned macOS
 compile checks. Independent source review found no remaining blocker. Full
 analysis has zero errors and existing repository lint findings; no warning is
 in a changed file. Exact revisions, test results and limits are in the record.
