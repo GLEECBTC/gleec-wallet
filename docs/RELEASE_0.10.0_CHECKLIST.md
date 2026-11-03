@@ -47,6 +47,12 @@ release PRs SDK #416 and app #3575 stay open.
   access before re-enabling: production returned40104/401; test mode returned
   a Cloudflare block page. All other GUI tests and checks remain required.
 
+The first final RC Chrome run stopped at `Run wallet tests` /
+`failure_withdraw`: a global animation settle timed out after MARTY activated.
+The focused test repair waits for the balance view, followed by the unchanged
+actual funded-balance and withdrawal assertions. Read-only probes reached the
+funded balance; current full browser validation remains required.
+
 Historical sections below retain their original revisions and dispositions.
 
 ## Opsec swap authorization — 3 November

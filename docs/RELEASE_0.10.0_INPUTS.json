@@ -286,6 +286,20 @@
       "disposition": "Explicitly deferred in the integration aggregator, displayed as skipped/deferred rather than passed; original Chrome and Safari failure records retained. Existing Ramp deferral is separate. Re-enable Banxa after proxy access is restored.",
       "observed_service_failure": "Production payment-method GET returns40104/401 not authorized; test mode returns a Cloudflare block page. No orders or funded actions were attempted.",
       "other_gates": "All other current checks and GUI tests must pass. Windows runner disconnect is not waived."
+    },
+    "withdrawal_gui_wait_repair": {
+      "original_head": "6ff0ab6927f08f399b2f272b834cbf3ff8aff836",
+      "original_job": 126226022805,
+      "test": "Run wallet tests:",
+      "phase": "failure_withdraw",
+      "failure": "pumpAndSettle timed out ten minutes after successful MARTY activation and opening coin details",
+      "repair": "Use the existing bounded pumpUntilVisible for the balance view. The next step still requires an actual loaded, funded MARTY balance; testnet, exact amount/recipient, preview, confirmation and receipt assertions remain unchanged.",
+      "local_evidence": "Two read-only browser probes reached the actual funded balance after this repair. Their later optional receive/copy diagnostic did not complete; no full withdrawal pass or transaction submission is claimed. Full current-head hosted browser suites remain required.",
+      "analysis": {
+        "errors": 0,
+        "warnings": 55,
+        "infos": 2144
+      }
     }
   }
 }
