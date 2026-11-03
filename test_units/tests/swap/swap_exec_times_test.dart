@@ -278,7 +278,10 @@ void main() {
 
     test('a swap started here is dated from its start until the record '
         'is read', () async {
-      final handle = await executor.start(quoteOf(payload: offerOf()));
+      final handle = await executor.start(
+        quoteOf(payload: offerOf()),
+        authorization: testSwapAuthorization(),
+      );
       expect(handle.latest.createdAt, now);
 
       final recorded = DateTime.utc(2026, 9, 30, 14, 1);
@@ -290,7 +293,10 @@ void main() {
     });
 
     test('a finish seen here is dated when it was seen', () async {
-      final handle = await executor.start(quoteOf(payload: offerOf()));
+      final handle = await executor.start(
+        quoteOf(payload: offerOf()),
+        authorization: testSwapAuthorization(),
+      );
       now = now.add(const Duration(minutes: 4));
       manager.live['r-1']!.push(finished());
       await pumpEventQueue();
@@ -298,7 +304,10 @@ void main() {
     });
 
     test("the record's finish time wins", () async {
-      final handle = await executor.start(quoteOf(payload: offerOf()));
+      final handle = await executor.start(
+        quoteOf(payload: offerOf()),
+        authorization: testSwapAuthorization(),
+      );
       final recorded = DateTime.utc(2026, 9, 30, 14, 5);
       manager.live['r-1']!.push(finished(at: recorded));
       await pumpEventQueue();

@@ -20,7 +20,7 @@ void _progressCases(
     testWidgets('progress: a swap the engine has yet to answer for, $name', (
       tester,
     ) async {
-      final registry = SwapExecutionRegistry(
+      final registry = testSwapRegistry(
         executors: [
           FakeExecutor(SwapLiquiditySource.atomic)
             ..resumeError = TimeoutException('no answer from KDF'),

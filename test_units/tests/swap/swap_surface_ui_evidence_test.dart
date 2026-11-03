@@ -21,7 +21,7 @@ void main() {
     setUpAll(loadSurfaceCopy);
 
     setUp(() {
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: const [],
         inFlight: () async => const [],
       );

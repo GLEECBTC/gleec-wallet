@@ -103,11 +103,17 @@ class SwapTermsRepository {
     return wallet == null ? null : '$_keyPrefix:$wallet';
   }
 
-  /// Whether the current wallet has accepted the current terms.
-  Future<bool> hasAccepted({LegalConsentSnapshot? snapshot}) async {
+  /// Whether the wallet whose review is open accepted the presented terms.
+  ///
+  /// Review and submission callers pass their captured [walletKey], so a
+  /// delayed read cannot borrow another wallet's acceptance.
+  Future<bool> hasAccepted({
+    LegalConsentSnapshot? snapshot,
+    String? walletKey,
+  }) async {
     final presented = snapshot ?? await loadSnapshot();
     if (!presented.covers(swapConsentDocuments)) return false;
-    final key = await _key();
+    final key = walletKey == null ? await _key() : '$_keyPrefix:$walletKey';
     if (key == null) return false;
     try {
       final acceptance = SwapTermsAcceptance.tryParse(await _storage.read(key));
@@ -123,15 +129,21 @@ class SwapTermsRepository {
     }
   }
 
-  /// Records acceptance for the current wallet.
+  /// Records acceptance for [walletKey], captured when the user confirmed.
+  ///
+  /// Legacy callers may omit the key to resolve the current wallet. Submission
+  /// callers pass the original key and recheck [stillCurrent] before writing;
+  /// an async preparation step must never move consent to a different wallet.
   Future<void> recordAcceptance({
     DateTime? at,
     LegalConsentSnapshot? snapshot,
+    String? walletKey,
+    bool Function()? stillCurrent,
   }) async {
     final presented = snapshot ?? await loadSnapshot();
     if (!presented.covers(swapConsentDocuments)) return;
-    final key = await _key();
-    if (key == null) return;
+    final key = walletKey == null ? await _key() : '$_keyPrefix:$walletKey';
+    if (key == null || !(stillCurrent?.call() ?? true)) return;
     await _storage.write(
       key,
       SwapTermsAcceptance(

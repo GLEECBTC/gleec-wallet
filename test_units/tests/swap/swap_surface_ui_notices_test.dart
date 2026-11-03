@@ -28,7 +28,7 @@ void main() {
 
     setUp(() {
       routed = FakeExecutor(SwapLiquiditySource.routed);
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [routed],
         inFlight: () async => const [],
       );
@@ -54,7 +54,7 @@ void main() {
     );
 
     Future<FakeHandle> start() async {
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       return routed.lastStarted!;
     }
 

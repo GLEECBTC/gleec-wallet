@@ -270,6 +270,7 @@ class AtomicRig {
   final dex = FakeDex();
   final orders = FakeOrders();
   late final executor = AtomicSwapExecutor(
+    auth: testSwapAuth,
     dexRepository: dex,
     orders: orders,
     networks: () => execNetworks,
@@ -290,7 +291,9 @@ class AtomicRig {
 
   /// Starts [quote]; its first poll has not run yet.
   void start([SwapQuote? quote]) {
-    executor.start(quote ?? atomicQuoteOf()).then(_follow, onError: _fail);
+    executor
+        .start(quote ?? atomicQuoteOf(), authorization: testSwapAuthorization())
+        .then(_follow, onError: _fail);
     async.flushMicrotasks();
   }
 

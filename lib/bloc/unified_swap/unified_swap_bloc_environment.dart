@@ -10,6 +10,15 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   ) async {
     final wasPresent = _present;
     _visible = event.visible;
+    if (!_visible && !_startInDoubt) {
+      // Switching tabs keeps this BLoC alive but removes the confirming form.
+      // Revoke preparation without treating an engine dispatch as cancelled.
+      _startVersion++;
+      if (_waitingForLegalSubmission ||
+          state.review?.status == SwapReviewStatus.revalidating) {
+        emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
+      }
+    }
     await _onPresenceChanged(emit, wasPresent: wasPresent);
   }
 
@@ -63,6 +72,49 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       add(const UnifiedSwapEvaluationRequested());
     } else {
       _armTimers(quote, shownAgain: true);
+    }
+  }
+
+  Future<void> _onSessionInvalidated(
+    UnifiedSwapSessionInvalidated event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    if (_closing || isClosed || emit.isDone) return;
+    _invalidate();
+    final epoch = ++_walletEpoch;
+    _startVersion++;
+    _legalVersion++;
+    _legalSubmissionVersion = null;
+    _reviewSubmission = null;
+    // This is a different wallet context, not cancellation of the old engine
+    // operation. The registry owns recovery; none of its prior UI belongs here.
+    emit(
+      _validated(
+        state.copyWith(
+          view: UnifiedSwapView.form,
+          clearReview: true,
+          clearActiveExecution: true,
+          clearQuotes: true,
+          clearSelectedId: true,
+          clearFailure: true,
+          clearMaxApplied: true,
+          checkingMax: false,
+          clearBalance: true,
+          clearFeeBalance: true,
+          clearPayAddress: true,
+          clearReceiveAddress: true,
+          evaluation: SwapEvaluationStatus.idle,
+          structuralNotice: false,
+        ),
+      ),
+    );
+    await _loadBalances(emit);
+    if (_closing || emit.isDone || epoch != _walletEpoch) return;
+    await _loadAddresses(emit);
+    if (_closing || emit.isDone || epoch != _walletEpoch) return;
+    if (_present) {
+      add(const UnifiedSwapOffersRequested(quiet: true));
+      _scheduleEvaluation(immediate: true, quiet: true);
     }
   }
 
@@ -197,6 +249,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     int epoch,
     _Held held,
   ) {
+    if (_closing || isClosed || emit.isDone) return;
     if (state.pay != pay || epoch != _walletEpoch) return;
     emit(
       _validated(
@@ -224,6 +277,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     final epoch = _walletEpoch;
     final payAddress = pay == null ? null : await _address(pay);
     final receiveAddress = receive == null ? null : await _address(receive);
+    if (_closing || isClosed || emit.isDone) return;
     if (state.pay != pay || state.receive != receive) return;
     if (epoch != _walletEpoch) return;
     emit(

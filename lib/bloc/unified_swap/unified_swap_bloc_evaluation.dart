@@ -388,7 +388,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     if (leaveReview && (event.id == state.selectedId || _startInDoubt)) {
       return;
     }
-    if (leaveReview) _startVersion++;
+    _startVersion++;
     if (state.maxRequested) _invalidate();
     emit(
       _validated(

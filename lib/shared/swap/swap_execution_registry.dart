@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
+    show AuthSessionChangedException, AuthSessionContext;
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -55,6 +57,25 @@ class SwapInFlightIncomplete implements Exception {
       'SwapInFlightIncomplete(unread: ${unread.map((s) => s.name).join(', ')})';
 }
 
+/// A start the user confirmed, in the session they confirmed it in.
+///
+/// Taken from [SwapExecutionRegistry.beginSubmission] when Start is pressed
+/// and handed to [SwapExecutionRegistry.start], however long the re-price and
+/// the terms take in between. It lapses at the next
+/// [SwapExecutionRegistry.reset], so a start confirmed before a sign-out or a
+/// wallet switch is never sent in the session that follows.
+final class SwapSubmission {
+  SwapSubmission._(this._owner, this._generation, this.session)
+    : walletKey = session.walletId.compoundId;
+
+  final Object _owner;
+  final int _generation;
+  final AuthSessionContext session;
+  final String walletKey;
+  bool _claimed = false;
+  bool _dispatched = false;
+}
+
 /// Owns every swap the app follows, for the whole session.
 ///
 /// A swap outlives the screen that started it — a cross-chain move can run for
@@ -69,14 +90,22 @@ class SwapExecutionRegistry {
   SwapExecutionRegistry({
     required List<SwapExecutor> executors,
     required Future<List<SwapExecutionRef>> Function() inFlight,
+    required AuthSessionContext? Function() currentSession,
+    required bool Function(AuthSessionContext) isSessionCurrent,
     Duration retryDelay = const Duration(seconds: 10),
   }) : _executors = {for (final e in executors) e.source: e},
        _inFlight = inFlight,
+       _currentSession = currentSession,
+       _isSessionCurrent = isSessionCurrent,
        _retryDelay = retryDelay;
 
   final Map<SwapLiquiditySource, SwapExecutor> _executors;
   final Future<List<SwapExecutionRef>> Function() _inFlight;
   final Duration _retryDelay;
+  final AuthSessionContext? Function() _currentSession;
+  final bool Function(AuthSessionContext) _isSessionCurrent;
+  final Object _owner = Object();
+  bool _disposed = false;
   Timer? _inFlightRetry;
   Timer? _inFlightReadRetry;
   final Set<SwapExecutionRef> _unanswered = {};
@@ -97,6 +126,8 @@ class SwapExecutionRegistry {
       StreamController<SwapExecutionSnapshot>.broadcast();
   final StreamController<({String id, DateTime at})> _checks =
       StreamController<({String id, DateTime at})>.broadcast();
+  final StreamController<void> _invalidations =
+      StreamController<void>.broadcast(sync: true);
   var _generation = 0;
 
   /// Every swap followed this session, newest first.
@@ -127,6 +158,13 @@ class SwapExecutionRegistry {
   /// Every followed swap's changes, one snapshot at a time.
   Stream<SwapExecutionSnapshot> get updates => _updates.stream;
 
+  /// Original confirmations stopped belonging to this registry session.
+  ///
+  /// Emitted synchronously with revocation so open forms can discard stale
+  /// reviews, including an old session's pending start. It does not cancel
+  /// any request already dispatched to the engine.
+  Stream<void> get invalidations => _invalidations.stream;
+
   /// How many followed swaps are still running.
   int get activeCount => _latest.values.where((s) => !s.isTerminal).length;
 
@@ -146,18 +184,77 @@ class SwapExecutionRegistry {
   Stream<DateTime> checksOf(String id) =>
       _checks.stream.where((check) => check.id == id).map((check) => check.at);
 
-  /// Starts executing [quote] and follows it.
+  /// A start confirmed now, in this session.
+  SwapSubmission beginSubmission() {
+    final session = _currentSession();
+    if (_disposed || session == null || !_isSessionCurrent(session)) {
+      throw _staleSubmission;
+    }
+    return SwapSubmission._(_owner, _generation, session);
+  }
+
+  /// Whether [submission] was confirmed in this session.
+  bool isCurrent(SwapSubmission submission) =>
+      !_disposed &&
+      identical(submission._owner, _owner) &&
+      submission._generation == _generation &&
+      _isSessionCurrent(submission.session);
+
+  static const _staleSubmission = SwapStartRejectedException(
+    SwapStartRejection.quoteStale,
+    detail: 'The swap confirmation is no longer current.',
+  );
+
+  /// Starts executing [quote], confirmed as [submission], and follows it.
   ///
-  /// Rethrows [SwapStartRejectedException] and
-  /// [SwapStartUnconfirmedException] from the executor unchanged.
-  Future<SwapExecutionSnapshot> start(SwapQuote quote) async {
+  /// Throws [SwapStartRejectedException] without asking the engine when
+  /// [submission] was confirmed in a session that has since ended. Rethrows
+  /// [SwapStartRejectedException] and [SwapStartUnconfirmedException] from
+  /// the executor unchanged.
+  Future<SwapExecutionSnapshot> start(
+    SwapQuote quote,
+    SwapSubmission submission, {
+    bool Function()? stillCurrent,
+    void Function()? onDispatch,
+  }) async {
+    if (submission._claimed ||
+        !isCurrent(submission) ||
+        !(stillCurrent?.call() ?? true)) {
+      throw _staleSubmission;
+    }
+    submission._claimed = true;
     final executor = _executors[quote.source];
     if (executor == null) {
       throw const SwapStartRejectedException(SwapStartRejection.unknown);
     }
-    final generation = _generation;
-    final handle = await executor.start(quote);
-    if (_follow(handle, generation) != null && !_started.isClosed) {
+    final handle = await executor.start(
+      quote,
+      authorization: SwapExecutionAuthorization(
+        session: submission.session,
+        beforeDispatch: () {
+          // Preparation may await an auth lease. Validate the original intent
+          // again at the executor's actual submission boundary.
+          if (submission._dispatched ||
+              !isCurrent(submission) ||
+              !(stillCurrent?.call() ?? true)) {
+            throw _staleSubmission;
+          }
+          submission._dispatched = true;
+          onDispatch?.call();
+          // The callback is synchronous, but may itself revoke the session.
+          if (!isCurrent(submission)) throw _staleSubmission;
+        },
+      ),
+    );
+    // Auth notifications may lag behind synchronous session revocation.
+    if (!isCurrent(submission)) {
+      unawaited(handle.close());
+      throw SwapStartUnconfirmedException(
+        const AuthSessionChangedException(),
+        executionId: handle.id,
+      );
+    }
+    if (_follow(handle, submission._generation) != null && !_started.isClosed) {
       _started.add(handle.latest);
     }
     return handle.latest;
@@ -295,6 +392,7 @@ class SwapExecutionRegistry {
   /// another's session. The swaps themselves keep running in the engine.
   Future<void> reset() async {
     _generation++;
+    if (!_invalidations.isClosed) _invalidations.add(null);
     _inFlightRetry?.cancel();
     _inFlightReadRetry?.cancel();
     _unanswered.clear();
@@ -319,12 +417,15 @@ class SwapExecutionRegistry {
 
   /// Releases everything.
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     await reset();
     await _executions.close();
     await _notices.close();
     await _started.close();
     await _updates.close();
     await _checks.close();
+    await _invalidations.close();
   }
 
   /// Looks [id] up for session [generation]: the handle now followed, or null

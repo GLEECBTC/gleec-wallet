@@ -65,7 +65,7 @@ void setUpSwapUi() {
 class RecordingSwapBloc extends UnifiedSwapBloc {
   RecordingSwapBloc({Map<AssetId, Decimal>? prices})
     : this._(
-        SwapExecutionRegistry(executors: const [], inFlight: () async => []),
+        testSwapRegistry(executors: const [], inFlight: () async => []),
         prices ?? {eth: d('3000')},
       );
 

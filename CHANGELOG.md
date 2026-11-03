@@ -33,6 +33,8 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
+- **Swap Start Ownership** ([@CharlVS]) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching; SDK offers cannot be rebound to another session. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
+
 - **Trezor Sign-In** ([@CharlVS], [SDK#424](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/424)) — Sign in when a "My Trezor" wallet file has no saved record, instead of failing with "Wallet already exists". A wallet file the app cannot open, such as another app's in a shared folder, stays untouched and a new local wallet is used. The error dialog now says sign-in failed and mentions Trezor Suite only as a possible cause.
 
 - **Cold-Start Swap Recovery** ([@CharlVS], [SDK#417](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/417)) — Recover active routed swaps across every history page instead of silently stopping at page 20. A wallet change during later pagination rejects the entire read.

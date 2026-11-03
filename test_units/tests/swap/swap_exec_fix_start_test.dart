@@ -52,6 +52,7 @@ void main() {
     setUp(() {
       rpc = _SellRpc();
       executor = AtomicSwapExecutor(
+        auth: testSwapAuth,
         dexRepository: DexRepository(rpc),
         orders: MyOrdersService(rpc),
         networks: () => execNetworks,
@@ -61,7 +62,10 @@ void main() {
 
     Future<Object> startError([SwapQuote? quote]) async {
       try {
-        await executor.start(quote ?? atomicQuoteOf());
+        await executor.start(
+          quote ?? atomicQuoteOf(),
+          authorization: testSwapAuthorization(),
+        );
       } on Object catch (error) {
         return error;
       }

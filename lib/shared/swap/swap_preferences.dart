@@ -50,8 +50,14 @@ class SwapPreferences {
   }
 
   /// Remembers [from] and [to] as the last pair.
-  Future<void> rememberPair(AssetId from, AssetId to) async {
-    final key = await _key(_pairKey);
+  Future<void> rememberPair(
+    AssetId from,
+    AssetId to, {
+    String? walletKey,
+  }) async {
+    final key = walletKey == null
+        ? await _key(_pairKey)
+        : '$_pairKey:$walletKey';
     if (key == null) return;
     await _storage.write(key, jsonEncode({'from': from.id, 'to': to.id}));
   }

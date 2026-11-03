@@ -13,6 +13,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/my_recent_swaps/my_recent_swaps_request.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/atomic_swap_source.dart';
 import 'package:web_dex/shared/swap/routed_swap_execution.dart';
@@ -55,6 +56,7 @@ class SwapServices {
     required DexRepository dexRepository,
     required MyOrdersService orders,
     required Mm2Api mm2Api,
+    BaseStorage? storage,
     void Function(AnalyticsEventData event)? logAnalytics,
   }) : _sdk = sdk,
        _coinsRepo = coinsRepo,
@@ -64,6 +66,7 @@ class SwapServices {
       executors: [
         RoutedSwapExecutor(sdk.routedSwaps, networks: networks),
         AtomicSwapExecutor(
+          auth: sdk.auth,
           dexRepository: dexRepository,
           orders: orders,
           networks: networks,
@@ -71,6 +74,8 @@ class SwapServices {
         ),
       ],
       inFlight: _inFlight,
+      currentSession: () => _session,
+      isSessionCurrent: sdk.auth.isSessionContextCurrent,
     );
     _analytics = SwapAnalyticsReporter(
       registry: registry,
@@ -86,10 +91,15 @@ class SwapServices {
     terms = SwapTermsRepository(
       walletKey: _walletKey,
       legalDocuments: legalDocuments,
+      storage: storage,
     );
-    preferences = SwapPreferences(walletKey: _walletKey);
+    preferences = SwapPreferences(walletKey: _walletKey, storage: storage);
     _userSubscription = sdk.auth.watchCurrentUser().listen(
       _onUserChanged,
+      onError: (Object _) {},
+    );
+    _sessionSubscription = sdk.auth.watchSessionContext().listen(
+      _onSessionChanged,
       onError: (Object _) {},
     );
   }
@@ -110,6 +120,9 @@ class SwapServices {
   final RoutedSwapRateLimit _routedRateLimit = RoutedSwapRateLimit();
 
   StreamSubscription<KdfUser?>? _userSubscription;
+  StreamSubscription<AuthSessionContext?>? _sessionSubscription;
+  AuthSessionContext? _session;
+  bool _disposed = false;
   KdfUser? _user;
   final StreamController<SwapExecutionRef> _openRequests =
       StreamController<SwapExecutionRef>.broadcast();
@@ -264,22 +277,37 @@ class SwapServices {
 
   /// A key identifying the signed-in wallet, for per-wallet preferences.
   Future<String?> _walletKey() async {
-    final user = _user ?? await _sdk.auth.currentUser;
-    return user?.walletId.compoundId;
+    final session = _session;
+    return !_disposed &&
+            session != null &&
+            _sdk.auth.isSessionContextCurrent(session)
+        ? session.walletId.compoundId
+        : null;
   }
 
   void _onUserChanged(KdfUser? user) {
-    final previous = _user?.walletId;
     _user = user;
-    if (user == null) {
-      unawaited(registry.reset());
+  }
+
+  void _onSessionChanged(AuthSessionContext? session) {
+    if (_disposed ||
+        (session != null && !_sdk.auth.isSessionContextCurrent(session))) {
       return;
     }
-    if (previous != null && previous != user.walletId) {
-      unawaited(registry.reset().then((_) => registry.resumeInFlight()));
-      return;
-    }
-    if (previous == null) unawaited(registry.resumeInFlight());
+    final previous = _session;
+    _session = session;
+    // Identity enrichment may replace the value without ending its epoch.
+    if (previous == session) return;
+    unawaited(
+      registry.reset().then((_) async {
+        if (!_disposed &&
+            session != null &&
+            _session == session &&
+            _sdk.auth.isSessionContextCurrent(session)) {
+          await registry.resumeInFlight();
+        }
+      }),
+    );
   }
 
   Future<List<SwapExecutionRef>> _inFlight() => _inFlightOf(const {
@@ -520,6 +548,9 @@ class SwapServices {
 
   /// Stops following swaps and releases resources.
   Future<void> dispose() async {
+    _disposed = true;
+    _session = null;
+    await _sessionSubscription?.cancel();
     await _userSubscription?.cancel();
     await _openRequests.close();
     await _intents.close();
