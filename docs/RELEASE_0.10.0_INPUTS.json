@@ -1,5 +1,5 @@
 {
-  "status": "Validated KDF/coins roll candidate; focused SDK/app branch acceptance and hosted checks pending; not a published artifact manifest",
+  "status": "Validated KDF/coins roll; SDK development and RC accepted; app hosted checks and acceptance remain gated, including the Banxa quote failure; not a published artifact manifest",
   "prepared_on": "2026-11-03",
   "app": {
     "version": "0.10.0+0",
@@ -22,7 +22,7 @@
     "preparation_pr": 409,
     "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "0766626bb3db6706ecb177a921752029630b6412",
+    "candidate_commit": "db73613cd34a2c0779da024a71338052e4bbb030",
     "melos_validation_pr": 411,
     "release_branch": "release-0.9.0",
     "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
@@ -31,13 +31,15 @@
     "recovery_pagination_pr": 417,
     "release_repair_pr": 418,
     "previous_frozen_candidate_commit": "55bd00c64f5721177d26a78df297751b4b61f540",
-    "candidate_pin_status": "Validated development candidate; SDK#430 development acceptance and SDK#431 normal RC carry are pending. Retains accepted Trezor and wallet-session fixes.",
+    "candidate_pin_status": "Exact accepted SDK development pin. SDK#430 squash and normal SDK#431 RC carry accepted after all SDK checks passed, using the authorized approval-only override. App acceptance awaits current hosted checks.",
     "kdf_roll_dev_pr": 430,
     "kdf_roll_release_pr": 431,
     "artifact_roll_validation_commit": "0766626bb3db6706ecb177a921752029630b6412",
     "previous_kdf_roll_dev_pr": 419,
     "previous_kdf_roll_release_pr": 420,
-    "previous_kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e"
+    "previous_kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e",
+    "kdf_roll_dev_squash_commit": "db73613cd34a2c0779da024a71338052e4bbb030",
+    "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206"
   },
   "kdf": {
     "source": "a51d69a11ff937ecf9678e9b37632af578252846",
@@ -188,11 +190,11 @@
     "date": "2026-11-03",
     "kdf_source": "a51d69a11ff937ecf9678e9b37632af578252846",
     "coins_source": "efd3a6471709f7e13e0b03277e37548e11840aae",
-    "scope": "KDF10/10 builds and17/17 tests pass; all7 archives independently verified. Final local SDK/app validation passed; focused branch acceptance/hosted checks pending.",
+    "scope": "KDF, SDK and local app gates passed. SDK430/431 accepted. Current app3586/3587 hosted checks must pass before dev squash and normal RC carry; prior Banxa GUI failures and Windows runner disconnect are preserved.",
     "previous_app_rc": "99ae9bec0ce60a045f6b95d73e1c45309d248221",
     "previous_sdk_rc": "3730b456d1bb9046ab899a0d367e5c1a2eb9055a",
     "candidate_kind": "development",
-    "sdk_candidate": "0766626bb3db6706ecb177a921752029630b6412",
+    "sdk_candidate": "db73613cd34a2c0779da024a71338052e4bbb030",
     "previous_sdk_pin": "3730b456d1bb9046ab899a0d367e5c1a2eb9055a",
     "sdk_development_pr": 430,
     "sdk_release_pr": 431,
@@ -211,7 +213,7 @@
       "analysis_warnings": 55,
       "analysis_infos": 2144,
       "sdk_validation_source": "0766626bb3db6706ecb177a921752029630b6412",
-      "runtime_equivalence": "SDK carry47dd0f5a differs from validated source0766626b only in two accepted historical RC documents. App dev and RC runtime/test trees match before the two identical gas-source/pin-regression edits. No lockfile change."
+      "runtime_equivalence": "Accepted SDK dev db73613c exactly matches tested source0766626b. Accepted SDK RC3b462904 exactly matches carry47dd0f5a, differing from tested source only in two accepted historical RC documents. App dev/RC runtime and test trees match; no lockfile change."
     },
     "bundle_verification": {
       "release_wasm_build": "passed",
@@ -265,6 +267,15 @@
         "seed_nodes.json": "2755231cdd598dc89238cd9ad38d7df8acf00853c738aca7e467b2ea9622c756"
       },
       "settings": "Recorded production defines with BYPASS_LEGAL_DOCUMENT_GATE=false; build only, no deployment"
+    },
+    "sdk_development_squash": "db73613cd34a2c0779da024a71338052e4bbb030",
+    "sdk_release_merge": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "prior_candidate_hosted_failures": {
+      "app_dev_head": "687a53955f3d0f7c83dc9d6ba2698d93879a5356",
+      "app_rc_head": "35fa13db20f41ac6ee6a3d1c80c1cadfc113707e",
+      "gui_test": "Banxa on-ramp quotes and selection",
+      "gui_failure": "No usable USD50 -> BTC quote within45s; Chrome/Linux and Safari/macOS failed on both candidates. No waiver.",
+      "windows_dev_build": "Hosted runner lost communication during environment setup before compilation. Original annotation retained; new current-head validation required."
     }
   }
 }
