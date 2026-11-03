@@ -177,7 +177,7 @@ void main() {
       h.termsGate = Completer<void>();
       bloc.add(const UnifiedSwapStartRequested());
       h.settle();
-      expect(bloc.state.review!.status, SwapReviewStatus.starting);
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidating);
       bloc.add(tradingOff);
       h.settle();
 

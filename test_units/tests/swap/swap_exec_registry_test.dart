@@ -21,7 +21,7 @@ void main() {
   setUp(() {
     routed = FakeExecutor(SwapLiquiditySource.routed);
     inFlight = [];
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [routed],
       inFlight: () async => inFlight,
     );
@@ -79,7 +79,7 @@ void main() {
 
   test('keeps following a swap whose feed reports an error', () async {
     final engine = StreamController<SwapExecutionSnapshot>.broadcast();
-    final errors = SwapExecutionRegistry(
+    final errors = testSwapRegistry(
       executors: [_StreamExecutor(engine)],
       inFlight: () async => const [],
     );
@@ -96,7 +96,7 @@ void main() {
 
   test('a second handle for a swap already followed is let go', () async {
     final twin = _TwinExecutor();
-    final twins = SwapExecutionRegistry(
+    final twins = testSwapRegistry(
       executors: [twin],
       inFlight: () async => const [],
     );
@@ -122,7 +122,7 @@ void main() {
       final engine = manager.live['r-1'] = FakeRoutedHandle(
         progressOf(uuid: 'r-1', phase: RoutedSwapPhase.bridging),
       );
-      final shared = SwapExecutionRegistry(
+      final shared = testSwapRegistry(
         executors: [RoutedSwapExecutor(manager, networks: () => execNetworks)],
         inFlight: () async => const [],
       );
@@ -157,7 +157,7 @@ void main() {
   test('a sign-out while a swap is being re-attached never leaks it', () async {
     final manager = FakeRoutedManager()..watchGate = Completer<void>();
     manager.live['r-1'] = FakeRoutedHandle(progressOf(uuid: 'r-1'));
-    final shared = SwapExecutionRegistry(
+    final shared = testSwapRegistry(
       executors: [RoutedSwapExecutor(manager, networks: () => execNetworks)],
       inFlight: () async => [(id: 'r-1', source: SwapLiquiditySource.routed)],
     );
@@ -191,8 +191,10 @@ class _StreamExecutor implements SwapExecutor {
       );
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) =>
-      throw UnimplementedError();
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) => throw UnimplementedError();
 }
 
 /// Hands out a fresh handle for the same swap on every start.
@@ -203,7 +205,11 @@ class _TwinExecutor implements SwapExecutor {
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
+    authorization.beforeDispatch();
     final handle = FakeHandle(snapshotOf(id: 'twin'));
     handles.add(handle);
     return handle;

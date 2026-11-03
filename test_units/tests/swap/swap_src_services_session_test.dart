@@ -144,15 +144,25 @@ void main() {
       expect(followed(), ['r-1']);
     });
 
-    test('preferences use the signed-in wallet, else ask the SDK', () async {
-      await services.preferences.lastPair();
-      expect(sdk.auth.currentUserReads, 1);
+    test('preferences require a valid session and never read a replacement '
+        'wallet', () async {
+      expect(await services.preferences.lastPair(), isNull);
+      expect(sdk.auth.currentUserReads, 0);
 
       await signIn(userOf('alice'));
       await services.preferences.recentAssets();
       await services.terms.hasAccepted();
 
-      expect(sdk.auth.currentUserReads, 1);
+      expect(sdk.auth.currentUserReads, 0);
+
+      // The SDK revokes synchronously; the user/session streams may still
+      // describe Alice until their queued notifications are delivered.
+      sdk.auth.sessions.invalidate();
+      expect(sdk.auth.current, isNotNull);
+      expect(await services.preferences.lastPair(), isNull);
+      expect(await services.preferences.recentAssets(), isEmpty);
+      expect(await services.terms.hasAccepted(), isFalse);
+      expect(sdk.auth.currentUserReads, 0);
     });
 
     test('after dispose, signing in follows nothing', () async {

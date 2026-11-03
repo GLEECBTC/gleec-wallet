@@ -30,7 +30,10 @@ void main() {
     test('refuses a quote without a routed offer as stale, sending '
         'nothing', () async {
       await expectLater(
-        executor.start(quoteOf(payload: 'not an offer')),
+        executor.start(
+          quoteOf(payload: 'not an offer'),
+          authorization: testSwapAuthorization(),
+        ),
         throwsA(
           isA<SwapStartRejectedException>().having(
             (e) => e.reason,
@@ -43,7 +46,10 @@ void main() {
     });
 
     test('starts the accepted offer and reports its first snapshot', () async {
-      final handle = await executor.start(quote);
+      final handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
 
       expect(manager.started.single, same(offer));
       expect(handle.id, 'r-1');
@@ -57,16 +63,17 @@ void main() {
 
     test('a lost start answer stays unconfirmed and keeps its cause', () async {
       final cause = StateError('socket closed');
-      manager.startError = RoutedSwapStartUnconfirmedException(cause);
+      manager.startError = RoutedSwapStartUnconfirmedException(
+        cause,
+        taskId: 42,
+      );
 
       await expectLater(
-        executor.start(quote),
+        executor.start(quote, authorization: testSwapAuthorization()),
         throwsA(
-          isA<SwapStartUnconfirmedException>().having(
-            (e) => e.cause,
-            'cause',
-            same(cause),
-          ),
+          isA<SwapStartUnconfirmedException>()
+              .having((e) => e.cause, 'cause', same(cause))
+              .having((e) => e.taskId, 'taskId', 42),
         ),
       );
     });
@@ -76,7 +83,7 @@ void main() {
       manager.startError = const AuthSessionChangedException();
 
       await expectLater(
-        executor.start(quote),
+        executor.start(quote, authorization: testSwapAuthorization()),
         throwsA(
           isA<SwapStartRejectedException>().having(
             (e) => e.reason,
@@ -94,7 +101,7 @@ void main() {
       );
 
       await expectLater(
-        executor.start(quote),
+        executor.start(quote, authorization: testSwapAuthorization()),
         throwsA(isA<SwapStartUnconfirmedException>()),
       );
     });
@@ -124,7 +131,7 @@ void main() {
       for (final refusal in refusals) {
         manager.startError = refusal;
         await expectLater(
-          executor.start(quote),
+          executor.start(quote, authorization: testSwapAuthorization()),
           throwsA(
             isA<SwapStartRejectedException>()
                 .having(
@@ -166,7 +173,7 @@ void main() {
         for (final refusal in refusals) {
           manager.startError = refusal;
           await expectLater(
-            executor.start(quote),
+            executor.start(quote, authorization: testSwapAuthorization()),
             throwsA(
               isA<SwapStartRejectedException>()
                   .having((e) => e.reason, 'reason', SwapStartRejection.unknown)
@@ -188,7 +195,7 @@ void main() {
         manager.startError = const FormatException('bad record');
 
         await expectLater(
-          executor.start(quote),
+          executor.start(quote, authorization: testSwapAuthorization()),
           throwsA(isA<FormatException>()),
         );
       },
@@ -206,7 +213,10 @@ void main() {
         guaranteed: '99',
       );
 
-      final handle = await executor.start(accepted);
+      final handle = await executor.start(
+        accepted,
+        authorization: testSwapAuthorization(),
+      );
 
       expect(handle.latest.from, btc);
       expect(handle.latest.to, gleec);
@@ -249,7 +259,10 @@ void main() {
 
   group('following', () {
     test('maps each engine snapshot until the swap finishes', () async {
-      final handle = await executor.start(quote);
+      final handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
       final engine = manager.live['r-1']!;
       final seen = <SwapExecutionSnapshot>[];
       var done = false;
@@ -283,7 +296,10 @@ void main() {
     });
 
     test('closing stops following without touching the swap', () async {
-      final handle = await executor.start(quote);
+      final handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
       final engine = manager.live['r-1']!;
 
       await handle.close();
@@ -301,7 +317,10 @@ void main() {
     late FakeRoutedHandle engine;
 
     setUp(() async {
-      handle = await executor.start(quote);
+      handle = await executor.start(
+        quote,
+        authorization: testSwapAuthorization(),
+      );
       engine = manager.live['r-1']!;
     });
 

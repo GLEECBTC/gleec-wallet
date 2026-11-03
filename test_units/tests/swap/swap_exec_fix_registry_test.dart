@@ -20,7 +20,7 @@ void main() {
 
     setUp(() {
       engine = _SlowExecutor();
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [engine],
         inFlight: () async => const [],
       );
@@ -28,18 +28,27 @@ void main() {
 
     tearDown(() => registry.dispose());
 
-    test('to a start leaves the swap unfollowed and unannounced, though the '
-        'caller learns it started', () async {
+    test('to a start stays unconfirmed with its known id, unfollowed and '
+        'unannounced in the replacement session', () async {
       final started = <SwapExecutionSnapshot>[];
       final subscription = registry.started.listen(started.add);
 
       final starting = registry.start(quoteOf(), registry.beginSubmission());
+      final unconfirmed = expectLater(
+        starting,
+        throwsA(
+          isA<SwapStartUnconfirmedException>().having(
+            (error) => error.executionId,
+            'known execution id',
+            'routed-1',
+          ),
+        ),
+      );
       await registry.reset();
       engine.gate.complete();
-      final snapshot = await starting;
+      await unconfirmed;
       await pumpEventQueue();
 
-      expect(snapshot.id, 'routed-1');
       expect(registry.current, isEmpty);
       expect(started, isEmpty);
       expect(engine.handle!.closed, isTrue);
@@ -69,7 +78,7 @@ void main() {
     final handle = executor.resumable['r-1'] = FakeHandle(
       snapshotOf(id: 'r-1'),
     );
-    final registry = SwapExecutionRegistry(
+    final registry = testSwapRegistry(
       executors: [executor],
       inFlight: () async => const [],
     );
@@ -100,9 +109,10 @@ void main() {
         'MakerPaymentSpent',
         'Finished',
       ]);
-    final registry = SwapExecutionRegistry(
+    final registry = testSwapRegistry(
       executors: [
         AtomicSwapExecutor(
+          auth: testSwapAuth,
           dexRepository: dex,
           orders: FakeOrders(),
           networks: () => execNetworks,
@@ -136,7 +146,13 @@ class _SlowExecutor implements SwapExecutor {
   SwapLiquiditySource get source => SwapLiquiditySource.routed;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) => _open('routed-1');
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) {
+    authorization.beforeDispatch();
+    return _open('routed-1');
+  }
 
   @override
   Future<SwapExecutionHandle?> resume(String id) => _open(id);

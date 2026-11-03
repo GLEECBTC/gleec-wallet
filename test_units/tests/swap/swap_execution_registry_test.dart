@@ -23,7 +23,7 @@ void main() {
     routed = FakeExecutor(SwapLiquiditySource.routed);
     atomic = FakeExecutor(SwapLiquiditySource.atomic);
     inFlight = [];
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [routed, atomic],
       inFlight: () async => inFlight,
     );
@@ -174,7 +174,7 @@ void main() {
 
     test('a reset during resume never leaks the old wallet\'s swaps', () async {
       final gate = Completer<List<SwapExecutionRef>>();
-      final slow = SwapExecutionRegistry(
+      final slow = testSwapRegistry(
         executors: [routed],
         inFlight: () => gate.future,
       );

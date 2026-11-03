@@ -55,11 +55,15 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (event.text == state.inputText && !state.maxRequested) return;
+    if (_startInDoubt) return;
+    _startVersion++;
     _invalidate();
     emit(
       _validated(
         state.copyWith(
           inputText: event.text,
+          view: UnifiedSwapView.form,
+          clearReview: true,
           clearConverted: true,
           clearMaxApplied: true,
           checkingMax: false,
@@ -122,7 +126,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     // Also set beside the review on a wide screen.
     final leaveReview = state.view == UnifiedSwapView.review;
     if (leaveReview && _startInDoubt) return;
-    if (leaveReview) _startVersion++;
+    _startVersion++;
     _invalidate();
     emit(
       _validated(

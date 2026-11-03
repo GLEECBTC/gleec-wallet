@@ -49,7 +49,7 @@ void main() {
     setUp(() {
       previousObserver = Bloc.observer;
       Bloc.observer = observer = RecordingBlocObserver();
-      registry = SwapExecutionRegistry(
+      registry = testSwapRegistry(
         executors: [FakeExecutor(SwapLiquiditySource.routed)],
         inFlight: () async => const [],
       );

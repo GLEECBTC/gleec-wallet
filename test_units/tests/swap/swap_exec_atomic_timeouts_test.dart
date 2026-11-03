@@ -1,3 +1,4 @@
+import 'swap_test_fixtures.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,7 +6,6 @@ import 'package:web_dex/bloc/swap_execution/swap_execution_bloc.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
-import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 
@@ -105,7 +105,7 @@ void main() {
         rig.dex.swaps['a-9'] = atomicSwapOf('a-9', paid);
         rig.dex.statusGate = Completer<void>();
         rig.orders.statusGate = Completer<void>();
-        final registry = SwapExecutionRegistry(
+        final registry = testSwapRegistry(
           executors: [rig.executor],
           inFlight: () async => const [],
         );
@@ -140,7 +140,7 @@ void main() {
         rig.dex.swaps['a-1'] = atomicSwapOf('a-1', paid);
         rig.dex.swaps['a-2'] = atomicSwapOf('a-2', paid);
         rig.dex.gates['a-1'] = Completer<void>();
-        final registry = SwapExecutionRegistry(
+        final registry = testSwapRegistry(
           executors: [rig.executor],
           inFlight: () async => [
             (id: 'a-1', source: SwapLiquiditySource.atomic),
