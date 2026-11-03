@@ -38,6 +38,13 @@ class RoutedSwapExecutor implements SwapExecutor {
       handle = await manager.start(offer);
     } on RoutedSwapStartUnconfirmedException catch (error) {
       throw SwapStartUnconfirmedException(error.cause);
+    } on AuthSessionChangedException {
+      // Thrown before anything is sent. A change once the engine has been
+      // asked arrives as unconfirmed, above.
+      throw const SwapStartRejectedException(
+        SwapStartRejection.quoteStale,
+        detail: 'The wallet session it was quoted in has ended.',
+      );
     } on RoutedSwapRpcException catch (error) {
       throw SwapStartRejectedException(switch (error) {
         RoutedSwapCoinNotActiveException() ||
