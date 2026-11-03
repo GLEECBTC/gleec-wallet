@@ -36,5 +36,6 @@
 - [Consuming SDK and KDF updates](docs/SDK_SUBMODULE_MANAGEMENT.md)
 - [Transaction history persistence](docs/TRANSACTION_HISTORY_PERSISTENCE.md)
 - [Gitflow and branching strategy](docs/GITFLOW_BRANCHING.md)
+- [GitHub branch protection and audit runbook](docs/BRANCH_PROTECTION.md)
 - [Issue: create and maintain](docs/ISSUE.md) ...in progress
 - [Contribution guide](docs/CONTRIBUTION_GUIDE.md)

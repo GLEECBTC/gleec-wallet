@@ -47,7 +47,7 @@
 ## 7. Create a PR (checklist)
 
 - [ ] Sync your work branch with the latest changes from the target branch (again :), push it to the remote
-- [ ] Make sure that you're opening a PR from your work branch to the proper target branch (`dev` or `main`)
+- [ ] Check the destination, source and merge method in [Gitflow](GITFLOW_BRANCHING.md#branch-flow-and-merge-methods). Ordinary work targets `dev` with squash; release/main promotions use merge commits.
 - [ ] Provide a clear and concise title for your PR
   - [ ] Avoid using generic titles like "Fix" or "Update"
   - [ ] Avoid using the issue number in the title
@@ -59,7 +59,7 @@
 - [ ] Move related issue to the "Review" column on the project board
 - [ ] After code review is done, request testing from QA team
 - [ ] Move related issue to the "Testing" column on the project board
-- [ ] When QA team approves the changes, merge the PR, move related issue to the "Done" column on the project board
+- [ ] When QA approves and required reviews/checks pass, select the destination's allowed merge method explicitly, then move the issue to "Done". Main promotion belongs to the release owner.
 
 ## 8. Maintain your PR
 

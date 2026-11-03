@@ -3,7 +3,7 @@ run-name: Building desktop apps 🖥️
 
 on:
   pull_request:
-    branches: [dev, main, fix/*, add/*, release/*, hotfix/*, feature/*]
+    branches: [dev, main, fix/*, add/*, release/*, release-*, hotfix/*, hotfix-*, feature/*]
   workflow_dispatch:
   release:
     types: [created]
