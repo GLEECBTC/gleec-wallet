@@ -7,6 +7,36 @@ preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
+## Validated KDF and coins roll — 3 November
+
+This development candidate pins SDK `0766626bb3db6706ecb177a921752029630b6412`;
+SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) must be
+accepted into dev before the normal SDK [#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431)
+carry and the app's focused dev/RC carries. These candidate pins are provisional
+until branch acceptance; main release PRs SDK #416 and app #3575 stay open.
+
+- [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
+  builds and all 17 test jobs passed. Original failures and their passing retries
+  remain in SDK `docs/KDF_ARTIFACTS_2026-11-03.json`.
+- [x] Frozen coins `efd3a6471709f7e13e0b03277e37548e11840aae`: three exact
+  files, all 445 icons and provider parsing verified; no new omitted assets.
+- [x] All seven archives match GitHub artifact digests, ZIP integrity and
+  ordinary mirrors. Strict CLI and fresh-unfunded native quote/funding/fee/Max
+  smoke passed. No funded action, deployment, publication or tag is included.
+- [x] Final SDK: 16 suites, **3,112 passed /14 skipped**; browser/WASM core
+  **249**, framework **10**, auth **10**. App **3,991 passed /4 skipped** and
+  Chrome/WASM authorization **84 passed**. Analysis: zero errors, 55 existing
+  warnings and 2,144 infos; changed Dart files formatted, lockfile unchanged.
+- [x] Release web/WASM build passed with recorded production defines and legal
+  gate enabled. Ten bundled engine files match the verified KDF archive; three
+  generated coin files match exact-commit source bytes. Hashes are in the inputs.
+- [x] Rechecked unchanged `ETH_PAYMENT=155000` / `ETH_SENDER_REFUND=125000`
+  in exact a51 source; updated the source comment and exact-pin regression.
+- [ ] Record focused dev squashes, normal RC carries, hosted checks/review and
+  refreshed final preview identity after accepted branch heads are known.
+
+Historical sections below retain their original revisions and dispositions.
+
 ## Opsec swap authorization — 3 November
 
 The offer/session and pending-confirmation defects are release blockers. The
@@ -134,11 +164,11 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 
 - [x] App/SDK changelogs and versions include unpublished prior fixes and
   user-facing SDK changes. Internal package constraints are aligned.
-- [x] Current SDK gitlink is `da20524e6947833b40c4d70fee5249fc9ae1a911` on frozen
+- [x] The 29 October SDK gitlink was `da20524e6947833b40c4d70fee5249fc9ae1a911` on frozen
   `release-0.9.0` ([SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)).
   SDK main promotion and final app main repin are distribution steps after
   review, not prerequisites for freezing this exact RC source.
-- [x] Frozen KDF `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev, specs
+- [x] The 29 October frozen KDF was `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev, specs
   `7c388ea7b91cb7c657435d416bc03e5349b46162`, bundled coins
   `2b0aefb78b184091ab086c66e513d8b03f5d5a01`. All seven rebuilt archives
   verified; independent provenance is SDK `docs/KDF_ARTIFACTS_2026-10-29.json`.
