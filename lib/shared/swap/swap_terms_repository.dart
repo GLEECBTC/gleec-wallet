@@ -124,14 +124,19 @@ class SwapTermsRepository {
   }
 
   /// Records acceptance for the current wallet.
+  ///
+  /// The wallet is read when this runs, which can be after a sign-out or a
+  /// switch, so [stillCurrent] is asked once it is known and before anything
+  /// is written: terms are recorded only for the wallet that was shown them.
   Future<void> recordAcceptance({
     DateTime? at,
     LegalConsentSnapshot? snapshot,
+    bool Function()? stillCurrent,
   }) async {
     final presented = snapshot ?? await loadSnapshot();
     if (!presented.covers(swapConsentDocuments)) return;
     final key = await _key();
-    if (key == null) return;
+    if (key == null || !(stillCurrent?.call() ?? true)) return;
     await _storage.write(
       key,
       SwapTermsAcceptance(

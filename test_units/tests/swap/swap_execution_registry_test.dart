@@ -37,6 +37,7 @@ void main() {
 
     final snapshot = await registry.start(
       quoteOf(source: SwapLiquiditySource.atomic),
+      registry.beginSubmission(),
     );
     await pumpEventQueue();
 
@@ -52,7 +53,7 @@ void main() {
     routed.startError = const SwapStartUnconfirmedException('timeout');
 
     await expectLater(
-      registry.start(quoteOf()),
+      registry.start(quoteOf(), registry.beginSubmission()),
       throwsA(isA<SwapStartUnconfirmedException>()),
     );
     expect(registry.current, isEmpty);
@@ -62,7 +63,7 @@ void main() {
     Future<List<SwapExecutionNotice>> run(SwapExecutionSnapshot end) async {
       final notices = <SwapExecutionNotice>[];
       final sub = registry.notices.listen(notices.add);
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       routed.lastStarted!.push(end);
       await pumpEventQueue();
       await sub.cancel();
@@ -113,7 +114,7 @@ void main() {
     test('asks for action once when the route needs it', () async {
       final notices = <SwapExecutionNotice>[];
       final sub = registry.notices.listen(notices.add);
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       final action = snapshotOf(
         id: 'routed-1',
         stage: SwapProgressStage.actionRequired,
@@ -203,12 +204,40 @@ void main() {
   });
 
   test('reset forgets swaps and releases their handles', () async {
-    await registry.start(quoteOf());
+    await registry.start(quoteOf(), registry.beginSubmission());
     final handle = routed.lastStarted!;
 
     await registry.reset();
 
     expect(registry.current, isEmpty);
     expect(handle.closed, isTrue);
+  });
+
+  test('a start confirmed before a reset never reaches its executor', () async {
+    final submission = registry.beginSubmission();
+    await registry.reset();
+
+    expect(registry.isCurrent(submission), isFalse);
+    await expectLater(
+      registry.start(quoteOf(), submission),
+      throwsA(
+        isA<SwapStartRejectedException>().having(
+          (e) => e.reason,
+          'reason',
+          SwapStartRejection.quoteStale,
+        ),
+      ),
+    );
+    expect(routed.started, isEmpty);
+    expect(registry.current, isEmpty);
+  });
+
+  test('a start confirmed after a reset goes ahead', () async {
+    await registry.reset();
+
+    await registry.start(quoteOf(), registry.beginSubmission());
+
+    expect(routed.started, hasLength(1));
+    expect(registry.current, hasLength(1));
   });
 }

@@ -52,7 +52,10 @@ void main() {
   test(
     'the snapshot the watch opens with is not live; later ones are',
     () async {
-      final started = await registry.start(quoteOf());
+      final started = await registry.start(
+        quoteOf(),
+        registry.beginSubmission(),
+      );
       final handle = executor.lastStarted!;
       final bloc = watching(started.id, seed: registry.snapshotOf(started.id));
       await pumpEventQueue();
@@ -83,9 +86,9 @@ void main() {
   });
 
   test('following another swap starts again from not live', () async {
-    final first = await registry.start(quoteOf());
+    final first = await registry.start(quoteOf(), registry.beginSubmission());
     final firstHandle = executor.lastStarted!;
-    final second = await registry.start(quoteOf());
+    final second = await registry.start(quoteOf(), registry.beginSubmission());
     final secondHandle = executor.lastStarted!;
     final bloc = watching(first.id);
     await pumpEventQueue();
@@ -104,7 +107,7 @@ void main() {
   });
 
   test('a cancel answer keeps whether the snapshot was live', () async {
-    final started = await registry.start(quoteOf());
+    final started = await registry.start(quoteOf(), registry.beginSubmission());
     final handle = executor.lastStarted!;
     final bloc = watching(started.id);
     await pumpEventQueue();

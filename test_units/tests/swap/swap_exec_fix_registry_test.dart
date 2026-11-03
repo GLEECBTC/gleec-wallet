@@ -33,7 +33,7 @@ void main() {
       final started = <SwapExecutionSnapshot>[];
       final subscription = registry.started.listen(started.add);
 
-      final starting = registry.start(quoteOf());
+      final starting = registry.start(quoteOf(), registry.beginSubmission());
       await registry.reset();
       engine.gate.complete();
       final snapshot = await starting;

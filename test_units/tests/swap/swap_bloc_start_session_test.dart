@@ -139,6 +139,17 @@ void main() {
       expect(bloc.state.review, isNull);
     });
 
+    swapBlocTest('that fails returns to the form, starting nothing', (h) {
+      final bloc = _startingWithTermsHeld(h);
+
+      h.termsGate!.completeError(StateError('signing out'));
+      h.settle();
+
+      expect(h.routedExecutor.started, isEmpty);
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.review, isNull);
+    });
+
     swapBlocTest('records no terms for the wallet signed in meanwhile', (h) {
       final bloc = _startingWithTermsHeld(h)..add(_signedOut);
       h.settle();

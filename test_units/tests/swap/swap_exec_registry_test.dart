@@ -60,9 +60,9 @@ void main() {
   test('feeds every change of every followed swap, one at a time', () async {
     final changes = <SwapExecutionSnapshot>[];
     final subscription = registry.updates.listen(changes.add);
-    await registry.start(quoteOf());
+    await registry.start(quoteOf(), registry.beginSubmission());
     final first = routed.lastStarted!;
-    await registry.start(quoteOf());
+    await registry.start(quoteOf(), registry.beginSubmission());
     final second = routed.lastStarted!;
     await pumpEventQueue();
     final (firstStart, secondStart) = (first.latest, second.latest);
@@ -101,8 +101,8 @@ void main() {
       inFlight: () async => const [],
     );
 
-    await twins.start(quoteOf());
-    await twins.start(quoteOf());
+    await twins.start(quoteOf(), twins.beginSubmission());
+    await twins.start(quoteOf(), twins.beginSubmission());
     await pumpEventQueue();
 
     expect(twins.current, hasLength(1));
