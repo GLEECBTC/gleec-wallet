@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:decimal/decimal.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_response.dart';
 import 'package:web_dex/model/swap.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
@@ -38,6 +40,7 @@ bool _answered(Object error, String words) =>
 class AtomicSwapExecutor implements SwapExecutor {
   /// Creates an executor over the DEX repository and order service.
   AtomicSwapExecutor({
+    required KomodoDefiLocalAuth auth,
     required DexRepository dexRepository,
     required MyOrdersService orders,
     required SwapNetworks Function() networks,
@@ -46,7 +49,8 @@ class AtomicSwapExecutor implements SwapExecutor {
     int missesBeforeNoMatch = 3,
     int delayedAfterFailures = 3,
     DateTime Function()? now,
-  }) : _dex = dexRepository,
+  }) : _auth = auth,
+       _dex = dexRepository,
        _orders = orders,
        _networks = networks,
        _resolveAsset = resolveAsset,
@@ -55,6 +59,7 @@ class AtomicSwapExecutor implements SwapExecutor {
        _delayedAfterFailures = delayedAfterFailures,
        _now = now ?? DateTime.now;
 
+  final KomodoDefiLocalAuth _auth;
   final DexRepository _dex;
   final MyOrdersService _orders;
   final SwapNetworks Function() _networks;
@@ -68,25 +73,39 @@ class AtomicSwapExecutor implements SwapExecutor {
   SwapLiquiditySource get source => SwapLiquiditySource.atomic;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
     final plan = quote.payload;
     if (plan is! AtomicSwapPlan) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
     }
 
-    final response = await _dex
-        .sellOrThrow(
-          SellRequest(
-            base: plan.base.id,
-            rel: plan.rel.id,
-            volume: Rational.parse(plan.volume.toString()),
-            price: plan.orderPrice,
-            orderType: SellBuyOrderType.fillOrKill,
-          ),
-        )
-        .catchError(
-          (Object error) => throw SwapStartUnconfirmedException(error),
-        );
+    final request = SellRequest(
+      base: plan.base.id,
+      rel: plan.rel.id,
+      volume: Rational.parse(plan.volume.toString()),
+      price: plan.orderPrice,
+      orderType: SellBuyOrderType.fillOrKill,
+    );
+    var dispatched = false;
+    final SellResponse response;
+    try {
+      response = await _auth.runWithSession(authorization.session, () {
+        authorization.beforeDispatch();
+        _auth.ensureSessionContextCurrent(authorization.session);
+        dispatched = true;
+        // Only the submission holds the lease, not polling or recovery.
+        return _dex.sellOrThrow(request);
+      });
+    } on AuthSessionChangedException catch (error) {
+      if (dispatched) throw SwapStartUnconfirmedException(error);
+      throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
+    } on Object catch (error) {
+      if (!dispatched) rethrow;
+      throw SwapStartUnconfirmedException(error);
+    }
 
     final error = response.error;
     if (error != null) {
@@ -94,6 +113,12 @@ class AtomicSwapExecutor implements SwapExecutor {
       throw SwapStartRejectedException(
         SwapStartRejection.unknown,
         detail: error.message,
+      );
+    }
+    if (!_auth.isSessionContextCurrent(authorization.session)) {
+      throw SwapStartUnconfirmedException(
+        const AuthSessionChangedException(),
+        executionId: response.result?.uuid,
       );
     }
     final uuid = response.result?.uuid;

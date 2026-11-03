@@ -27,7 +27,7 @@ void main() {
     routed = _Executor(SwapLiquiditySource.routed);
     atomic = _Executor(SwapLiquiditySource.atomic);
     inFlight = [];
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [routed, atomic],
       inFlight: () async => inFlight,
     );
@@ -51,7 +51,10 @@ void main() {
         ? atomic
         : routed;
     executor.next = snapshot;
-    await registry.start(quoteOf(source: snapshot.source));
+    await registry.start(
+      quoteOf(source: snapshot.source),
+      registry.beginSubmission(),
+    );
     await pumpEventQueue();
     return executor.last!;
   }
@@ -419,8 +422,13 @@ class _Executor implements SwapExecutor {
   FakeHandle? last;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async =>
-      last = FakeHandle(next!);
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
+    authorization.beforeDispatch();
+    return last = FakeHandle(next!);
+  }
 
   @override
   Future<SwapExecutionHandle?> resume(String id) async => resumable[id];

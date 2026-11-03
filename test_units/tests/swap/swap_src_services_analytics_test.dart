@@ -9,6 +9,7 @@ import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/views/swap/notices/swap_notices.dart';
 
 import 'swap_exec_fakes.dart' show FakeRoutedHandle, progressOf;
@@ -74,6 +75,7 @@ void main() {
       quoteOf(
         payload: offerOf(from: eth, to: usdc),
       ),
+      services.registry.beginSubmission(),
     );
 
     test(
@@ -102,12 +104,14 @@ void main() {
       expect(events.whereType<SwapSucceededEventData>(), hasLength(1));
     });
 
-    test('report no wallet type when nobody is signed in', () async {
-      await start();
-      await pumpEventQueue();
-
-      expect(events.whereType<SwapInitiatedEventData>().single.hdType, '');
-    });
+    test(
+      'a signed-out start is refused and emits no initiation analytics',
+      () async {
+        expect(start, throwsA(isA<SwapStartRejectedException>()));
+        await pumpEventQueue();
+        expect(events.whereType<SwapInitiatedEventData>(), isEmpty);
+      },
+    );
   });
 
   testWidgets('a swap that ran through a menu change has its outcome '
@@ -138,7 +142,9 @@ void main() {
     sdk.routedSwaps.inFlightIds = ['r-1'];
     await showMenu('dex');
     sdk.auth.users.add(userOf('alice'));
+    await tester.runAsync(() => pumpEventQueue());
     await tester.pumpAndSettle();
+    expect(services.registry.snapshotOf('r-1'), isNotNull);
 
     await showMenu('wallet');
     // Lets the old layout finish tearing down, as it would in the app.

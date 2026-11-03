@@ -4,6 +4,7 @@ import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
@@ -21,6 +22,7 @@ part 'unified_swap_bloc_intent.dart';
 part 'unified_swap_bloc_offers.dart';
 part 'unified_swap_bloc_review.dart';
 part 'unified_swap_bloc_rules.dart';
+part 'unified_swap_bloc_start.dart';
 
 /// One asset the wallet holds, with its value, for choosing a default pair.
 typedef SwapHolding = ({AssetId asset, Decimal usdValue});
@@ -107,6 +109,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapFollowUpRequested>(_onFollowUpRequested);
     on<UnifiedSwapVisibilityChanged>(_onVisibilityChanged);
     on<UnifiedSwapCapabilitiesChanged>(_onCapabilitiesChanged);
+    on<UnifiedSwapSessionInvalidated>(_onSessionInvalidated);
+    _sessionInvalidations = registry.invalidations.listen((_) {
+      add(const UnifiedSwapSessionInvalidated());
+    });
     on<UnifiedSwapBalancesRefreshed>(_onBalancesRefreshed);
     on<UnifiedSwapCatalogRefreshRequested>(_onCatalogRefreshRequested);
     on<UnifiedSwapCatalogArrived>(_onCatalogArrived);
@@ -127,6 +133,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   final SwapExecutionRegistry _registry;
   final SwapTermsRepository _terms;
   late final StreamSubscription<void> _legalChanges;
+  late final StreamSubscription<void> _sessionInvalidations;
   final SwapPreferences _preferences;
   final Future<Decimal?> Function(AssetId asset) _spendableBalance;
   final Future<String?> Function(AssetId asset) _addressOf;
@@ -160,9 +167,15 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// re-pricing is abandoned rather than executed behind the user's back.
   int _startVersion = 0;
 
+  /// Ownership of the facts shown in the review, captured before its reads.
+  /// This token is never submitted; each Start creates its own one-use token.
+  SwapSubmission? _reviewSubmission;
+
   /// Only the latest legal read may update the presented review documents.
   int _legalVersion = 0;
-  bool _waitingForLegalSubmission = false;
+  int? _legalSubmissionVersion;
+  bool get _waitingForLegalSubmission =>
+      _legalSubmissionVersion == _startVersion;
 
   /// Bumped when a wallet signs in or out, so reads for the previous one are
   /// dropped.
@@ -455,7 +468,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
       UnifiedSwapTimerFired() ||
       UnifiedSwapBalancesRefreshed() ||
       UnifiedSwapCatalogArrived() ||
-      UnifiedSwapCapabilitiesChanged() => false,
+      UnifiedSwapCapabilitiesChanged() ||
+      UnifiedSwapSessionInvalidated() => false,
       UnifiedSwapLegalRequested(:final retry) => retry,
       UnifiedSwapEvaluationRequested(:final quiet) => !quiet,
       UnifiedSwapOffersRequested(:final quiet) => !quiet,
@@ -469,6 +483,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   @override
   Future<void> close() {
     _closing = true;
+    _startVersion++;
+    _legalVersion++;
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();
@@ -476,6 +492,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     _offersWatch?.cancel();
     unawaited(_arrivals.cancel());
     unawaited(_legalChanges.cancel());
+    unawaited(_sessionInvalidations.cancel());
     return super.close();
   }
 

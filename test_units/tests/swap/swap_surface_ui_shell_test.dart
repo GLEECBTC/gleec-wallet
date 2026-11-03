@@ -127,7 +127,7 @@ void main() {
 
       setUp(() {
         routed = FakeExecutor(SwapLiquiditySource.routed);
-        registry = SwapExecutionRegistry(
+        registry = testSwapRegistry(
           executors: [routed],
           inFlight: () async => const [],
         );
@@ -201,8 +201,8 @@ void main() {
       testWidgets('counts running swaps on Activity, for a screen reader too', (
         tester,
       ) async {
-        await registry.start(quoteOf());
-        await registry.start(quoteOf(id: 'q2'));
+        await registry.start(quoteOf(), registry.beginSubmission());
+        await registry.start(quoteOf(id: 'q2'), registry.beginSubmission());
         await show(tester);
 
         final dot = tester.widget<SwapCountDot>(find.byType(SwapCountDot));
@@ -214,7 +214,7 @@ void main() {
       });
 
       testWidgets('reads the Activity count once', (tester) async {
-        await registry.start(quoteOf());
+        await registry.start(quoteOf(), registry.beginSubmission());
         await show(tester);
 
         expect(
@@ -226,7 +226,7 @@ void main() {
       testWidgets('turns the count to a warning when a swap needs attention', (
         tester,
       ) async {
-        await registry.start(quoteOf());
+        await registry.start(quoteOf(), registry.beginSubmission());
         await show(tester);
 
         routed.lastStarted!.push(

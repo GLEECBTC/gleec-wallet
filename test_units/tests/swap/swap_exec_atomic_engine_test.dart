@@ -30,6 +30,7 @@ void main() {
   setUp(() {
     rpc = _Rpc();
     executor = AtomicSwapExecutor(
+      auth: testSwapAuth,
       dexRepository: DexRepository(rpc),
       orders: MyOrdersService(rpc),
       networks: () => execNetworks,
@@ -41,7 +42,7 @@ void main() {
     rpc.sellAnswer = {'error': 'Not enough ETH for the swap'};
 
     await expectLater(
-      executor.start(atomicQuoteOf()),
+      executor.start(atomicQuoteOf(), authorization: testSwapAuthorization()),
       throwsA(
         isA<SwapStartRejectedException>().having(
           (e) => e.detail,
@@ -67,7 +68,9 @@ void main() {
           orderPrice: Rational.one,
         ),
       );
-      executor.start(quote).then((value) => handle = value);
+      executor
+          .start(quote, authorization: testSwapAuthorization())
+          .then((value) => handle = value);
       async.flushMicrotasks();
       expect(rpc.sells.single.base, usdc.id);
       expect(rpc.sells.single.orderType, SellBuyOrderType.fillOrKill);
@@ -79,7 +82,9 @@ void main() {
   test('an order the engine placed is followed from matching', () {
     fakeAsync((async) {
       SwapExecutionHandle? handle;
-      executor.start(atomicQuoteOf()).then((h) => handle = h);
+      executor
+          .start(atomicQuoteOf(), authorization: testSwapAuthorization())
+          .then((h) => handle = h);
       async.flushMicrotasks();
 
       expect(rpc.sells.single.orderType, SellBuyOrderType.fillOrKill);
@@ -94,7 +99,7 @@ void main() {
       rpc.sellError = TimeoutException('no answer from KDF');
 
       await expectLater(
-        executor.start(atomicQuoteOf()),
+        executor.start(atomicQuoteOf(), authorization: testSwapAuthorization()),
         throwsA(isA<SwapStartUnconfirmedException>()),
       );
     },
@@ -104,7 +109,9 @@ void main() {
       'but its status is delayed', () {
     fakeAsync((async) {
       SwapExecutionHandle? handle;
-      executor.start(atomicQuoteOf()).then((h) => handle = h);
+      executor
+          .start(atomicQuoteOf(), authorization: testSwapAuthorization())
+          .then((h) => handle = h);
       async.flushMicrotasks();
       async.elapse(const Duration(seconds: 30));
 

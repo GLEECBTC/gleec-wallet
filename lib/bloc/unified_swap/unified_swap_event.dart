@@ -17,6 +17,11 @@ final class UnifiedSwapStarted extends UnifiedSwapEvent {
   const UnifiedSwapStarted();
 }
 
+/// The registry's wallet-session scope ended, even if signedIn stayed true.
+final class UnifiedSwapSessionInvalidated extends UnifiedSwapEvent {
+  const UnifiedSwapSessionInvalidated();
+}
+
 /// Prefill the form from a deep link, another screen, or across a sign-in.
 final class UnifiedSwapIntentApplied extends UnifiedSwapEvent {
   const UnifiedSwapIntentApplied({

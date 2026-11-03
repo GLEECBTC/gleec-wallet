@@ -15,6 +15,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
+import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import '../../support/legal_documents_fixture.dart';
 
@@ -86,11 +87,14 @@ class SwapBlocHarness {
   );
   final routedExecutor = GatedExecutor(SwapLiquiditySource.routed);
   final atomicExecutor = GatedExecutor(SwapLiquiditySource.atomic);
+  final auth = TestSwapAuth(fullIdentity: false);
   late final registry = SwapExecutionRegistry(
     executors: [routedExecutor, atomicExecutor],
     inFlight: () async => const [],
+    currentSession: () => auth.currentSession,
+    isSessionCurrent: auth.isSessionContextCurrent,
   );
-  final storage = MemoryStorage();
+  final storage = SwapBlocStorage();
   final prices = FakePriceSource({eth: d('3000'), usdc: d('1')});
   final balances = <AssetId, Decimal>{
     eth: d('2'),
@@ -107,15 +111,19 @@ class SwapBlocHarness {
   Completer<void>? catalogGate;
   Completer<void>? holdingsGate;
   Completer<void>? termsGate;
+  Completer<void>? legalSnapshotGate;
   Completer<void>? balanceGate;
   final _blocs = <UnifiedSwapBloc>[];
+
+  /// The signed-in wallet, as the terms read it when they are recorded.
+  String wallet = 'wallet';
 
   SwapPreferences get preferences =>
       SwapPreferences(walletKey: () async => 'wallet', storage: storage);
 
   SwapTermsRepository get terms => SwapTermsRepository(
     legalDocuments: legalDocuments,
-    walletKey: () async => 'wallet',
+    walletKey: () async => wallet,
     storage: storage,
   );
 
@@ -149,14 +157,7 @@ class SwapBlocHarness {
         },
       ),
       registry: registry,
-      terms: SwapTermsRepository(
-        legalDocuments: legalDocuments,
-        walletKey: () async {
-          await termsGate?.future;
-          return 'wallet';
-        },
-        storage: storage,
-      ),
+      terms: _HarnessTerms(this),
       preferences: preferences,
       spendableBalance: (asset) async {
         await balanceGate?.future;
@@ -277,10 +278,79 @@ class GatedExecutor extends FakeExecutor {
   GatedExecutor(super.source);
 
   Completer<void>? gate;
+  Completer<void>? dispatchGate;
 
   @override
-  Future<SwapExecutionHandle> start(SwapQuote quote) async {
+  Future<SwapExecutionHandle> start(
+    SwapQuote quote, {
+    required SwapExecutionAuthorization authorization,
+  }) async {
+    await dispatchGate?.future;
+    // A held engine response remains post-dispatch, matching the existing
+    // uncertain-start tests. dispatchGate models cancellable preparation.
+    final result = super.start(quote, authorization: authorization);
+    result.ignore();
     await gate?.future;
-    return super.start(quote);
+    return result;
+  }
+}
+
+/// Separately blocks the actual storage write, after the wallet key is frozen.
+class SwapBlocStorage extends MemoryStorage {
+  Completer<void>? consentWriteGate;
+  int consentWrites = 0;
+
+  @override
+  Future<bool> write(String key, dynamic data) async {
+    if (key.startsWith('routed_swap_terms_acceptance_v1:')) {
+      consentWrites++;
+      await consentWriteGate?.future;
+    }
+    return super.write(key, data);
+  }
+}
+
+class _HarnessTerms extends SwapTermsRepository {
+  _HarnessTerms(this.h)
+    : super(
+        legalDocuments: h.legalDocuments,
+        storage: h.storage,
+        walletKey: () async {
+          await h.termsGate?.future;
+          return h.wallet;
+        },
+      );
+
+  final SwapBlocHarness h;
+
+  @override
+  Future<LegalConsentSnapshot> loadSnapshot() async {
+    await h.legalSnapshotGate?.future;
+    return super.loadSnapshot();
+  }
+
+  @override
+  Future<bool> hasAccepted({
+    LegalConsentSnapshot? snapshot,
+    String? walletKey,
+  }) async {
+    await h.termsGate?.future;
+    return super.hasAccepted(snapshot: snapshot, walletKey: walletKey);
+  }
+
+  @override
+  Future<void> recordAcceptance({
+    DateTime? at,
+    LegalConsentSnapshot? snapshot,
+    String? walletKey,
+    bool Function()? stillCurrent,
+  }) async {
+    await h.termsGate?.future;
+    return super.recordAcceptance(
+      at: at,
+      snapshot: snapshot,
+      walletKey: walletKey,
+      stillCurrent: stillCurrent,
+    );
   }
 }

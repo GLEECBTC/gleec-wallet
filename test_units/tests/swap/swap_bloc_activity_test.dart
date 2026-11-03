@@ -29,7 +29,7 @@ void main() {
 
   setUp(() {
     executor = FakeExecutor(SwapLiquiditySource.routed);
-    registry = SwapExecutionRegistry(
+    registry = testSwapRegistry(
       executors: [executor],
       inFlight: () async => const [],
     );
@@ -182,7 +182,7 @@ void main() {
     () async {
       history.entries[activeView] = [snapshotOf(id: 'routed-1')];
       final bloc = await started();
-      await registry.start(quoteOf());
+      await registry.start(quoteOf(), registry.beginSubmission());
       await pumpEventQueue();
       expect(bloc.state.entries.single.stage, SwapProgressStage.preparing);
 
