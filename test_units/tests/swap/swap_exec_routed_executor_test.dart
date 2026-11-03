@@ -71,6 +71,34 @@ void main() {
       );
     });
 
+    test('a wallet session that ended before the engine was asked is a '
+        'refusal, so the review can price again', () async {
+      manager.startError = const AuthSessionChangedException();
+
+      await expectLater(
+        executor.start(quote),
+        throwsA(
+          isA<SwapStartRejectedException>().having(
+            (e) => e.reason,
+            'reason',
+            SwapStartRejection.quoteStale,
+          ),
+        ),
+      );
+    });
+
+    test('a wallet session that ended after the engine was asked stays '
+        'unconfirmed', () async {
+      manager.startError = RoutedSwapStartUnconfirmedException(
+        const AuthSessionChangedException(),
+      );
+
+      await expectLater(
+        executor.start(quote),
+        throwsA(isA<SwapStartUnconfirmedException>()),
+      );
+    });
+
     test('a refusal about the pair or amount reads as not available', () async {
       const refusals = <RoutedSwapRpcException>[
         RoutedSwapCoinNotActiveException(coin: 'ETH', message: 'inactive'),
