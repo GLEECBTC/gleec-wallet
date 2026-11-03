@@ -8,6 +8,7 @@ on:
       - dev
       - main
       - release/*
+      - release-*
   workflow_dispatch:
     inputs:
       rc_legal_availability_bypass:
