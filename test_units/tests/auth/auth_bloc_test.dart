@@ -6,11 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 // directly - the same reach the coins-bloc suites make into SDK internals.
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_local_auth/src/auth/auth_session.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
+    show PrivateKeyPolicy;
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:logging/logging.dart';
 import 'package:web_dex/analytics/wallet_load_timeline.dart';
+import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
@@ -22,8 +26,12 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/stored_settings.dart';
 import 'package:web_dex/model/wallet.dart';
 
+part 'auth_bloc_trezor_cases.dart';
+
 /// Auth operations publish SDK-owned metadata and preserve typed failures.
 void testAuthBloc() {
+  _trezorSignInCases();
+
   group('AuthBloc sign-in', () {
     late _FakeAuth auth;
     late _FakeSdk sdk;
@@ -750,13 +758,18 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   Future<void> Function()? onRegister;
   Future<void> Function()? onSessionUpdate;
   int sessionUpdates = 0;
+  List<AuthenticationState> signInStates = const [];
+  bool _inAuthTransition = false;
 
   @override
-  Future<AuthSessionContext> captureSessionContext() async =>
-      sessions.current ?? (throw const AuthSessionChangedException());
+  Future<AuthSessionContext> captureSessionContext() async {
+    if (_inAuthTransition) throw const AuthSessionChangedException();
+    return sessions.current ?? (throw const AuthSessionChangedException());
+  }
+
   @override
   bool isSessionContextCurrent(AuthSessionContext context) =>
-      sessions.isCurrent(context);
+      !_inAuthTransition && sessions.isCurrent(context);
   @override
   void ensureSessionContextCurrent(AuthSessionContext context) {
     if (!isSessionContextCurrent(context)) {
@@ -837,6 +850,25 @@ class _FakeAuth implements KomodoDefiLocalAuth {
     return userToReturn ?? _user();
   }
 
+  // Like the SDK, the stream holds an auth transition open until it ends.
+  @override
+  Stream<AuthenticationState> signInStream({
+    required String walletName,
+    required String password,
+    AuthOptions options = const AuthOptions(
+      derivationMethod: DerivationMethod.hdWallet,
+    ),
+  }) async* {
+    sessions.invalidate();
+    _inAuthTransition = true;
+    try {
+      yield* Stream.fromIterable(signInStates);
+    } finally {
+      _inAuthTransition = false;
+      sessions.observe(userToReturn);
+    }
+  }
+
   @override
   Future<void> signOut() async {
     signOutCalls++;
@@ -909,6 +941,9 @@ class _FakeSdk implements KomodoDefiSdk {
 
   @override
   final AssetManager assets = _FakeAssetManager();
+
+  @override
+  late final WalletAssetSelection walletAssets = WalletAssetSelection(auth);
 
   @override
   void connectStreaming() {}
