@@ -148,6 +148,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     UnifiedSwapAmountSuggested event,
     Emitter<UnifiedSwapState> emit,
   ) {
+    if (_startInDoubt) return;
     _invalidate();
     emit(
       _validated(
