@@ -1,0 +1,25 @@
+# Shows on every pull request whether the app's SDK pin is on one of the
+# SDK's long-lived branches. A pin only a pull-request branch carries stops
+# resolving once that branch is deleted, so this stays red until the SDK
+# change has merged and the app is repinned to the merged commit.
+name: SDK pin is merged
+run-name: ${{ github.actor }} is checking the SDK pin
+
+on:
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  sdk_pin_merged:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the app
+        uses: actions/checkout@v4
+
+      - name: Test the pin check
+        run: .github/scripts/test_check_sdk_pin_merged.sh
+
+      - name: Check the SDK pin is merged
+        run: .github/scripts/check_sdk_pin_merged.sh sdk
