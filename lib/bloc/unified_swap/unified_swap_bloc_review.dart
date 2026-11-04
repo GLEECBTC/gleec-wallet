@@ -15,8 +15,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     try {
       reviewedIn = _registry.beginSubmission();
     } on SwapStartRejectedException {
-      // No session yet, as just after signing in: Review stays off until the
-      // registry's next session, which also re-prices the form.
+      // The session lapsed since this form was built: Review stays off until
+      // the registry announces the next one.
       emit(state.copyWith(sessionReady: false));
       return;
     }
