@@ -217,6 +217,9 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final ticker = pay == null ? '' : SwapFormat.ticker(pay);
     final balance = state.balance;
     final address = state.selectedQuote?.fromAddress ?? state.payAddress;
+    // A swap that may be running keeps its amount: nothing typed here would
+    // be taken until its answer is seen.
+    final locked = state.startInDoubt;
 
     // While Max asks, the whole balance shown may still change.
     final amountStyle = state.checkingMax
@@ -230,7 +233,7 @@ class _SwapPayCardState extends State<SwapPayCard> {
       // A phone's decimal pad has no key to put it away: a tap anywhere else
       // does, as dragging the form does.
       onTapOutside: (_) => _focus.unfocus(),
-      enabled: pay != null,
+      enabled: pay != null && !locked,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         _DecimalInputFormatter(
@@ -322,7 +325,7 @@ class _SwapPayCardState extends State<SwapPayCard> {
                 if (pay != null && balance != null)
                   SwapLinkButton(
                     label: LocaleKeys.max.tr(),
-                    onPressed: widget.onMax,
+                    onPressed: locked ? null : widget.onMax,
                     busy: state.checkingMax,
                   ),
               ],
@@ -334,6 +337,7 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final state = widget.state;
     final price = widget.usdPrice;
     final palette = SwapPalette.of(context);
+    final toggle = state.startInDoubt ? null : widget.onModeToggled;
     if (state.pay == null) {
       return Text(r'$0.00', style: SwapText.small(context));
     }
@@ -355,12 +359,12 @@ class _SwapPayCardState extends State<SwapPayCard> {
         : LocaleKeys.swapEnterInUsd.tr();
     return SwapButtonSemantics(
       label: '$text. $label',
-      onTap: widget.onModeToggled,
+      onTap: toggle,
       child: Tooltip(
         message: label,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: widget.onModeToggled,
+          onTap: toggle,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 48),
             child: Row(

@@ -93,8 +93,8 @@ their older pending/passing statements do not replace the current snapshot.
 ## Opsec swap authorization — 3 November
 
 The offer/session and pending-confirmation defects are release blockers. The
-focused correction and deliberately deferred proxy trust redesign are tracked
-in [the remediation record](OPSEC_SWAP_SESSION_REMEDIATION_2026-11-03.md).
+focused correction is tracked in
+[the remediation record](OPSEC_SWAP_SESSION_REMEDIATION_2026-11-03.md).
 App implementation `33bf94a7c` pins SDK `3730b456` ([SDK #429](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/429)).
 The full app aggregator passes **3,991 tests / four skipped**; SDK, local-auth,
 affected package and both replay suites pass. Chrome/WASM authorization tests
@@ -107,6 +107,21 @@ Hosted checks, branch acceptance and refreshed preview identity remain separate
 gates on the final PR heads. KDF and coin inputs remain frozen. Production
 promotion remains a separate action. Entries below retain historical results
 for their recorded revisions.
+
+### Carry and pin order
+
+- A carry merges after its dev PR: squash the dev PR first, confirm the carry's
+  change equals that squash
+  (`git diff <dev squash> <carry merge> -- lib test_units .github` is empty),
+  then merge the carry with a merge commit. The carry #3583 merged before its
+  dev PR #3584; that comparison was made afterwards and the trees are
+  identical.
+- Before merging, repin `sdk` to the merged SDK commit, never a pull-request
+  head. Dev squash `422c6b90f` pinned SDK `0cd7578e`, which only the PR branch
+  carried; #3586 (`1249c500c`) repinned dev to SDK `db73613c`, and #3588 later
+  moved it to `7ce3962d`. The "SDK pin is merged" check now runs on every pull
+  request and goes red when the pin is on none of the SDK's `dev`, `main`,
+  `release-X.Y.Z` or `release/X.Y.Z` branches. It is not a required check.
 
 ## Atomic token restoration — 29 October
 

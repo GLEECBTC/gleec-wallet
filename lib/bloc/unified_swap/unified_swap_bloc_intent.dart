@@ -85,7 +85,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) {
     final pay = state.pay;
-    if (pay == null) return;
+    if (pay == null || _startInDoubt) return;
     final price = _repository.pricing.prices.usdPrice(pay);
     if (price == null || price <= Decimal.zero) return;
     // Convert what is typed, so toggling never changes the amount traded.
@@ -148,6 +148,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     UnifiedSwapAmountSuggested event,
     Emitter<UnifiedSwapState> emit,
   ) {
+    if (_startInDoubt) return;
     _invalidate();
     emit(
       _validated(
@@ -175,6 +176,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final receive = state.receive;
     final balance = state.balance;
     if (pay == null || balance == null || state.checkingMax) return;
+    if (_startInDoubt) return;
     if (receive == null) {
       // Without a destination no source can say what fees to keep; the whole
       // balance is the honest upper bound until one is chosen.

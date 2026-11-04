@@ -13,9 +13,12 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     if (!_visible && !_startInDoubt) {
       // Switching tabs keeps this BLoC alive but removes the confirming form.
       // Revoke preparation without treating an engine dispatch as cancelled.
+      // Read before the bump, which ends the legal wait it would report.
+      final preparing =
+          _waitingForLegalSubmission ||
+          state.review?.status == SwapReviewStatus.revalidating;
       _startVersion++;
-      if (_waitingForLegalSubmission ||
-          state.review?.status == SwapReviewStatus.revalidating) {
+      if (preparing) {
         emit(state.copyWith(view: UnifiedSwapView.form, clearReview: true));
       }
     }
@@ -105,6 +108,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
           clearReceiveAddress: true,
           evaluation: SwapEvaluationStatus.idle,
           structuralNotice: false,
+          sessionReady: _registry.acceptsSubmissions,
         ),
       ),
     );
