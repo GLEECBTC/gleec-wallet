@@ -146,6 +146,7 @@ class UnifiedSwapState extends Equatable {
     this.clockValid = true,
     this.signedIn = true,
     this.hardwareWallet = false,
+    this.sessionReady = true,
     this.hints = const SwapOrderBookHints(),
   });
 
@@ -261,6 +262,10 @@ class UnifiedSwapState extends Equatable {
   /// false whatever the location allows.
   final bool hardwareWallet;
 
+  /// False while the wallet session a swap would start in is not ready yet,
+  /// as just after signing in: a review cannot open until it is.
+  final bool sessionReady;
+
   /// What the order book offers for the chosen assets.
   final SwapOrderBookHints hints;
 
@@ -290,10 +295,14 @@ class UnifiedSwapState extends Equatable {
     return null;
   }
 
+  /// Whether a reviewed swap may be running; see [SwapReview.startInDoubt].
+  bool get startInDoubt => review?.startInDoubt ?? false;
+
   /// Whether the review may be opened.
   bool get canReview =>
       view == UnifiedSwapView.form &&
       tradingEnabled &&
+      sessionReady &&
       evaluation == SwapEvaluationStatus.ready &&
       issue == null &&
       selectedQuote != null;
@@ -334,6 +343,7 @@ class UnifiedSwapState extends Equatable {
     clockValid,
     signedIn,
     hardwareWallet,
+    sessionReady,
     hints,
   ];
 
@@ -375,6 +385,7 @@ class UnifiedSwapState extends Equatable {
     bool? clockValid,
     bool? signedIn,
     bool? hardwareWallet,
+    bool? sessionReady,
     SwapOrderBookHints? hints,
     bool clearPay = false,
     bool clearReceive = false,
@@ -435,6 +446,7 @@ class UnifiedSwapState extends Equatable {
       clockValid: clockValid ?? this.clockValid,
       signedIn: signedIn ?? this.signedIn,
       hardwareWallet: hardwareWallet ?? this.hardwareWallet,
+      sessionReady: sessionReady ?? this.sessionReady,
       hints: hints ?? this.hints,
     );
   }
