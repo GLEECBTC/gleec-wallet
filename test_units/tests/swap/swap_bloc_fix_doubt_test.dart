@@ -54,6 +54,7 @@ void main() {
     'a typed amount': const UnifiedSwapAmountChanged('0.5'),
     'Max': const UnifiedSwapMaxRequested(),
     'the unit switch': const UnifiedSwapAmountModeToggled(),
+    'a suggested amount': UnifiedSwapAmountSuggested(d('0.25')),
   };
 
   for (final (stage, reach) in [
