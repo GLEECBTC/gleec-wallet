@@ -113,6 +113,29 @@ void main() {
     });
   });
 
+  testWidgets('while its swap may be running, the amount takes no edits', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      swapPricedForm().copyWith(
+        review: SwapReview(
+          quote: quoteOf(),
+          status: SwapReviewStatus.unconfirmed,
+        ),
+      ),
+    );
+    final before = List.of(swap.events);
+
+    final field = find.byKey(const Key('swap-amount'));
+    expect(tester.widget<TextField>(field).enabled, isFalse);
+    await tester.tap(find.text('Max'));
+    await tester.tap(find.byTooltip('Enter amount in USD'));
+    await tester.pump();
+
+    expect(swap.events, before);
+  });
+
   testWidgets('each asset button names its side, asset and network', (
     tester,
   ) async {
