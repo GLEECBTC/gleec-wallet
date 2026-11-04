@@ -20,6 +20,8 @@ are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
 This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
+- Refreshed the verified KDF engine and frozen coins bundle, adding TAR/TAR-segwit and TEL-BASE, updating TEL ERC-20/Polygon contracts and decimals, and preserving GLEEC/GRC-20 Trezor support.
+
 - Typed routed quotes and execution, KDF-owned Max, exact accepted minima,
   durable UUID recovery, required/locked balances and separate measured versus
   provider-reported payouts ([SDK#389](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/389), [SDK#407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)).
