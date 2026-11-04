@@ -29,45 +29,29 @@ dispatch serialization, and invalidation throughout asynchronous preparation.
 - Consent and successful-pair persistence use the original wallet key. A write
   already in progress may finish for that wallet, but cannot authorize a later
   submission or be attributed to a replacement wallet.
-- `runWithSession` holds the existing auth read lease around the raw routed
-  `init` or unified atomic `sell` request. Auth transitions revoke synchronously
-  and take the write lease before changing the engine. The caller's intent is
-  checked again after acquiring the read lease. Authentication reads, status
-  lookup and polling remain outside it to avoid nested-lock deadlocks.
+- `runWithSession` holds an engine lease around the raw routed `init` or
+  unified atomic `sell` request. Auth transitions revoke synchronously, and
+  only stopping or starting the engine waits for the lease, so identity reads
+  never delay a start. The caller's intent is checked again after acquiring the
+  lease. Authentication reads, status lookup and polling remain outside it to
+  avoid nested-lock deadlocks.
 - Before dispatch, invalidation is a definite rejection with zero RPC calls.
   After dispatch may have occurred, a lost answer or session change remains
   unconfirmed. Closing the form suppresses obsolete UI work without promising
   cancellation. Registry/history recovery remains independent of the form;
   there is no automatic resubmission.
 
-The dispatch lease deliberately survives a UI timeout until the actual transport
-future settles. A stalled request can delay logout or wallet switching. Releasing
-the lease using `Future.timeout` would let an old request reach a replacement
-engine. A genuinely abortable transport deadline is deferred rather than
-weakening this ownership guarantee.
+The dispatch lease survives a UI timeout until the actual transport future
+settles, for at most 10 seconds. Past that bound, logout or a wallet switch may
+stop the engine, which fails the unanswered request and resets the HTTP client
+before any replacement engine starts. A request the engine never answers
+therefore cannot hold off logout, and an old request never reaches a
+replacement engine.
 
-## Deferred proxy trust hardening
+## Engine follow-ups
 
-The RC still trusts Komodo Defi Proxy for provider responses. At the unchanged
-KDF pin `e40ac2fb4319d352bf9c93683eb2518ce9f939e0`, the execution-contract policy
-is derived from `/chains`' `diamondAddress`; transaction targets and approval
-spenders are checked against that same policy. Quotes and `/chains` share the
-configured proxy. Internally consistent malicious responses therefore need not
-fail those checks. Client request signatures and successful transaction
-simulation do not independently authenticate provider response contents.
-
-This is a material trust dependency, not evidence that the proxy is compromised.
-The signing boundary belongs in KDF; a late Flutter-only address check would not
-provide a complete remedy. The next security architecture work must define and
-test an independently authenticated, versioned contract policy with update and
-revocation behavior, and verify transaction intent against coordinated malicious
-catalog, approval, recipient and calldata responses. Address pinning alone is
-not sufficient. Its engine changes require all-platform artifact validation.
-
-Source evidence at the exact RC engine:
-[catalog policy](https://github.com/GLEECBTC/kdf-internal/blob/e40ac2fb4319d352bf9c93683eb2518ce9f939e0/mm2src/mm2_main/src/routed_swap/context.rs#L104),
-[target and spender checks](https://github.com/GLEECBTC/kdf-internal/blob/e40ac2fb4319d352bf9c93683eb2518ce9f939e0/mm2src/mm2_main/src/routed_swap/swap_task.rs#L1514),
-[shared proxy base](https://github.com/GLEECBTC/kdf-internal/blob/e40ac2fb4319d352bf9c93683eb2518ce9f939e0/mm2src/trading_api/src/lifi_api/client.rs#L147).
+Engine-side follow-ups are outside this remediation and are tracked privately
+with the engine team.
 
 ## Validation and promotion
 
