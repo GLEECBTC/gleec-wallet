@@ -99,6 +99,10 @@ interim routed-swap APIs.
   EVM assets; it has no external-recipient parameter. Additional provider
   backends and routed hardware signing are not established by this candidate.
   Hardware wallets remain wallet-only, as in app 0.9.7-1.
+- **Native Trezor sessions:** after an app restart, a failed engine health
+  check can restart the engine signed out, so sign in with the device again.
+  Locking the device during an attempt returns `Unexpected message` until you
+  reconnect and unlock it.
 - **Atomic EVM tokens:** trading follows app 0.9.7-1 behavior. The engine may
   reuse an allowance or grant unlimited permission when the trade matches.
   The existing review describes that behavior without inventing a spender,
