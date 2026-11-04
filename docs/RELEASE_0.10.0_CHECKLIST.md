@@ -1,11 +1,42 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current RC inputs: 3 November 2026. App `0.10.0+0` and SDK `0.9.0` are release
+Current record audited 4 November 2026, with inputs from the 3 November roll.
+App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
+
+## Current accepted snapshot — 4 November 2026
+
+- App RC `da3214d80f3c75aa0cc6fe718f75403226df6f30`; SDK gitlink
+  `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. The
+  [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
+  accepted change after #3575 opened at `ffcac834`.
+- [x] Actual source/carry acceptance recorded in the input manifest: app
+  #3586 squash / #3587 normal merge and SDK #430 squash / #431 normal merge.
+  Accepted trees matched tested candidates; current hosted source/carry/main
+  app checks passed **14/9/17** and SDK main checks passed **5**.
+- [x] Rechecked the ordinary main-RC preview's source-tree identity, SDK pin,
+  JavaScript and all 13 served config/coin/engine files. The
+  [dated proof](RC_0.10.0_PREVIEW_2026-11-04.json) has legal bypass **false**
+  and production approval **false**. Recheck live identity after later carries;
+  this is not a signed-installer or production approval record.
+- [ ] Accept the pending SDK #435 and app #3590/#3589 fixes through their
+  required current checks/review. Update exact pins, both changelogs, this
+  manifest and preview evidence after acceptance; pending work is not shipped
+  content in the snapshot above.
+- [ ] Reproduce and resolve, or record an explicit scoped disposition for, the
+  native Trezor restart health-check/sign-out
+  observation and device-lock `Unexpected message` attempts on the final
+  candidate. The separate successful default-selection reconnect round does
+  not certify automatic session recovery or a complete native balance view.
+- [ ] Retain final promotion review, approved legal text, signed packaging,
+  install/upgrade evidence and the eventual accepted SDK main pin as separate
+  distribution gates. Main SDK #416 and app #3575 remain open with no
+  automatic merge. No main promotion, tag, publication or production deploy
+  is authorized by this preparation update.
 
 ## Validated KDF and coins roll — 3 November
 
@@ -14,8 +45,9 @@ SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) was
 squash merged into dev as `db73613cd34a2c0779da024a71338052e4bbb030`; normal RC carry
 [#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431) is
 `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. Both accepted trees match their validated sources.
-App #3586 and #3587 acceptance remains gated on current hosted checks. Main
-release PRs SDK #416 and app #3575 stay open.
+App #3586 was squash accepted as `1249c500c96a7dc139ae7b86d8667e8304bd6a1b`;
+normal carry #3587 is `da3214d80f3c75aa0cc6fe718f75403226df6f30`. Main release
+PRs SDK #416 and app #3575 stay open.
 
 - [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
   builds and all 17 test jobs passed. Original failures and their passing retries
@@ -36,10 +68,11 @@ release PRs SDK #416 and app #3575 stay open.
   in exact a51 source; updated the source comment and exact-pin regression.
 - [x] SDK dev squash #430 and normal RC carry #431 accepted after all SDK
   checks passed, using only the owner-authorized approval override.
-- [ ] Complete app #3586 dev squash and #3587 normal RC carry after all current
-  checks pass with the named Banxa deferral, then record accepted heads and
-  refreshed final preview identity. The Windows runner disconnect before
-  compilation remains an infrastructure failure requiring a passing current run.
+- [x] App #3586 dev squash and #3587 normal RC carry accepted after current
+  checks passed with the named Banxa deferral. Final current-head Windows
+  validation passed; the earlier runner disconnect remains historical evidence.
+  iOS simulator setup exit 70 occurred before compilation and passed on its
+  single actual retry. Accepted heads and ordinary preview identity are recorded.
 - [x] The owner explicitly deferred `Banxa on-ramp quotes and selection` for
   0.10.0. It is visibly skipped in the integration aggregator, not reported as
   a quote pass; existing Ramp deferral remains separate. Original Chrome/Safari
@@ -50,10 +83,12 @@ release PRs SDK #416 and app #3575 stay open.
 The first final RC Chrome run stopped at `Run wallet tests` /
 `failure_withdraw`: a global animation settle timed out after MARTY activated.
 The focused test repair waits for the balance view, followed by the unchanged
-actual funded-balance and withdrawal assertions. Read-only probes reached the
-funded balance; current full browser validation remains required.
+actual funded-balance and withdrawal assertions. Both Chrome/Safari source and
+carry GUI suites subsequently passed the repaired path. The two separate
+read-only receive/copy probes remained incomplete and are not full passes.
 
-Historical sections below retain their original revisions and dispositions.
+Historical sections below retain their original revisions and dispositions;
+their older pending/passing statements do not replace the current snapshot.
 
 ## Opsec swap authorization — 3 November
 

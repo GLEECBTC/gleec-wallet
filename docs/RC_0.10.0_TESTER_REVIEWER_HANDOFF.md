@@ -1,10 +1,38 @@
 # Gleec Wallet 0.10.0 RC: tester and reviewer handoff
 
-Updated 29 October 2026. This candidate is available for code review and a
+Updated 4 November 2026. This candidate is available for code review and a
 controlled testing round. Production promotion remains gated below. The release
 owner sends invitations; this handoff does not request reviews or contact testers.
 
-## Atomic trading restoration — 29 October
+## Current accepted candidate — 4 November
+
+Use app RC `da3214d80f3c75aa0cc6fe718f75403226df6f30` with frozen SDK
+`3b4629048d8513af8f8a9d17a5cdf7eb5763d206`, KDF `a51d69a` and coins
+`efd3a647`. The [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md)
+maps accepted fixes since #3575 first opened. Pending SDK #435 and app
+#3590/#3589 updates are separate; do not assume a branch or open PR is included.
+
+The ordinary [main-RC preview](https://walletrc--pull-3575-merge-ynyfywb3.web.app)
+was [reverified on 4 November](RC_0.10.0_PREVIEW_2026-11-04.json): its virtual
+merge tree equals the accepted RC, the SDK pin/JavaScript and all 13 served
+config/coin/engine files match, legal bypass is false and production approval
+is false. Read `rc-test-build.json` again before each round or after a carry;
+this dated result does not qualify a later deployment.
+
+Saved qualification for this runtime: app **3,991 passed /4 skipped**, browser
+WASM **84**, hosted source/carry/main checks **14/9/17**; SDK 16 suites
+**3,112 passed /14 skipped** and browser **249 +10 +10**. All ten exact-pin
+KDF builds and 17 test jobs passed. The owner's named Banxa quote/selection
+deferral remains separate from Ramp and is not a successful quote test.
+Signed packaging, install/upgrade, approved legal text and promotion remain
+separate gates; no new KDF tests or funded actions were run for this update.
+
+The native Trezor restart health-check/sign-out observation and lock-interrupted
+`Unexpected message` attempts still need final-candidate disposition. A separate
+successful saved-default selection/reconnect check is not an automatic-session
+recovery or full balance-view pass.
+
+## Atomic trading restoration — 29 October (historical validation)
 
 App [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) restores the
 previous atomic EVM-token behavior and corrects the existing permission row,
@@ -18,7 +46,7 @@ inputs and prior SDK/Melos evidence remain unchanged. Use the refreshed build
 identity on #3575 to test this restoration; earlier previews do not certify it.
 No fresh funded atomic settlement is claimed by the unit/widget tests.
 
-## Accepted engine inputs — 29 October
+## Accepted engine inputs — 29 October (superseded inputs)
 
 SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
 was squash merged into dev. Focused frozen-branch carry
@@ -52,11 +80,11 @@ records the current immutable SDK/KDF inputs.
 | --- | --- |
 | App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
 | SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
-| Tested app runtime source | `34bad84020e68bf4fe4547ea7990287d050c3aa0`; accepted dev `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c` has the identical complete tree |
-| SDK gitlink | `da20524e6947833b40c4d70fee5249fc9ae1a911` |
-| KDF | `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev |
+| Tested app RC source | `d732a2c127e3734bde1d0bb2903720ab315aa0bd`; accepted normal carry `da3214d80f3c75aa0cc6fe718f75403226df6f30` has the identical complete tree |
+| SDK gitlink | `3b4629048d8513af8f8a9d17a5cdf7eb5763d206` |
+| KDF | `a51d69a11ff937ecf9678e9b37632af578252846` on dev, `3.2.0-beta` |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
-| Bundled coins | `2b0aefb78b184091ab086c66e513d8b03f5d5a01`; runtime updates enabled |
+| Bundled coins | `efd3a6471709f7e13e0b03277e37548e11840aae`; runtime updates enabled |
 
 The [input manifest](RELEASE_0.10.0_INPUTS.json) records archive/config/lockfile
 hashes. The final deployed preview's `rc-test-build.json` records its full app
