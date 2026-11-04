@@ -8,6 +8,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
+import 'package:web_dex/shared/swap/swap_execution.dart';
 
 import '../../support/legal_documents_fixture.dart';
 import 'swap_bloc_fakes.dart';
@@ -22,7 +23,8 @@ const _wallet = KdfUser(
 );
 
 /// Covers a Start waiting on the provider's terms when its tab is left, and a
-/// review asked for before the wallet session it would start in is ready.
+/// review asked for before the wallet session it would start in is ready,
+/// including a form built before that session arrives.
 void main() {
   test(
     'leaving the tab while Start waits for the terms returns to the form',
@@ -84,5 +86,38 @@ void main() {
     bloc.add(const UnifiedSwapReviewOpened());
     h.settle();
     expect(bloc.state.view, UnifiedSwapView.review);
+  });
+
+  swapBlocTest('a form built before the wallet session keeps Review off', (h) {
+    // Signed in, but the session has not reached the swap services yet.
+    h.auth.sessions.invalidate();
+    final bloc = h.open();
+    expect(bloc.state.sessionReady, isFalse);
+    expect(bloc.state.canReview, isFalse);
+
+    h.auth.sessions.observe(_wallet);
+    unawaited(h.registry.reset());
+    h.settle();
+    expect(bloc.state.sessionReady, isTrue);
+    expect(bloc.state.canReview, isTrue);
+  });
+
+  swapBlocTest('the registry accepts a start only in a current session', (h) {
+    final registry = h.registry;
+    expect(registry.acceptsSubmissions, isTrue);
+    final submission = registry.beginSubmission();
+    expect(registry.isCurrent(submission), isTrue);
+
+    h.auth.sessions.invalidate();
+    expect(registry.acceptsSubmissions, isFalse);
+    expect(
+      registry.beginSubmission,
+      throwsA(isA<SwapStartRejectedException>()),
+    );
+    expect(registry.isCurrent(submission), isFalse);
+
+    h.auth.sessions.observe(_wallet);
+    expect(registry.acceptsSubmissions, isTrue);
+    expect(registry.isCurrent(submission), isFalse);
   });
 }
