@@ -10,6 +10,11 @@ This is release preparation. The latest published app release is **0.9.7-1**.
 Final CI, legal/provider availability, review and signed installation gates
 are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
+Updated 4 November 2026 against accepted RC `3f2058c8`. The
+[post-opening audit](docs/RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
+accepted change since PR #3575 opened at `ffcac834`; no carry is pending at
+this snapshot.
+
 ## 🚀 New Features
 
 - **One Swap Surface** ([@CharlVS], [#3507](https://github.com/GLEECBTC/gleec-wallet/pull/3507), [#3557](https://github.com/GLEECBTC/gleec-wallet/pull/3557)) — Swap compares supported atomic and routed sources by minimum return after costs. The picker activates assets on demand, preserves Hide 0 balance assets, and explains unsupported pairs or insufficient funds. Advanced trading remains available.
@@ -20,7 +25,22 @@ are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
 This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
-- Refreshed the verified KDF engine and frozen coins bundle, adding TAR/TAR-segwit and TEL-BASE, updating TEL ERC-20/Polygon contracts and decimals, and preserving GLEEC/GRC-20 Trezor support.
+- Refreshed the verified KDF engine and frozen coins bundle, adding TAR/TAR-segwit and TEL-BASE, removing TEL-KRC20, updating TEL ERC-20/Polygon contracts and decimals, and preserving GLEEC/GRC-20 Trezor support ([SDK#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430), [SDK#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431)).
+
+- Bound executable routed offers and their copies to the manager and wallet
+  session that priced them. Wallet transitions cannot replace the session
+  underneath dispatch; a lost answer after dispatch remains unconfirmed
+  ([SDK#426](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/426),
+  [SDK#427](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/427)).
+- Recovered every in-flight history page after a cold start and rejected a
+  recovery read if the wallet changes during pagination
+  ([SDK#417](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/417),
+  [SDK#418](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/418)).
+- Recovered Trezor wallet files without a saved local record, restored prior
+  placeholder policy after failed claims and required successful initialization plus a
+  readable active wallet before completing sign-in
+  ([SDK#424](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/424),
+  [SDK#425](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/425)).
 
 - Typed routed quotes and execution, KDF-owned Max, exact accepted minima,
   durable UUID recovery, required/locked balances and separate measured versus
@@ -31,19 +51,15 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 - Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
   encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
 - Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
-  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/da20524e6947833b40c4d70fee5249fc9ae1a911/docs/RELEASE_0.9.0.md).
+  See the [SDK release-branch changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/release-0.9.0/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/release-0.9.0/docs/RELEASE_0.9.0.md); immutable runtime pins are recorded below.
 
 ## 🐛 Bug Fixes
 
-- **First Trezor Sign-In** — Save the default coin selection after device
-  authentication finishes, and prevent session restoration from publishing the
-  wallet before setup completes.
+- **First Trezor Sign-In** ([@CharlVS], [#3590](https://github.com/GLEECBTC/gleec-wallet/pull/3590), [#3589](https://github.com/GLEECBTC/gleec-wallet/pull/3589)) — Save the default coin selection after device authentication finishes, and prevent session restoration from publishing the wallet before setup completes.
 
-- **Swap Start Ownership** ([@CharlVS]) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching for at most 10 seconds, so a request the engine never answers cannot hold off sign-out; SDK offers cannot be rebound to another session. While a start may be running, its amount, Max and unit switch are locked, and Review stays off until a just-signed-in wallet's session is ready. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
+- **Swap Start Ownership** ([@CharlVS], [#3583](https://github.com/GLEECBTC/gleec-wallet/pull/3583), [#3584](https://github.com/GLEECBTC/gleec-wallet/pull/3584), [#3592](https://github.com/GLEECBTC/gleec-wallet/pull/3592), [#3593](https://github.com/GLEECBTC/gleec-wallet/pull/3593)) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching for at most 10 seconds, so a request the engine never answers cannot hold off sign-out; SDK offers cannot be rebound to another session. While a start may be running, its amount, Max and unit switch are locked, and Review stays off until a just-signed-in wallet's session is ready. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
 
-- **Trezor Sign-In** ([@CharlVS], [SDK#424](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/424)) — Sign in when a "My Trezor" wallet file has no saved record, instead of failing with "Wallet already exists". A wallet file the app cannot open, such as another app's in a shared folder, stays untouched and a new local wallet is used. The error dialog now says sign-in failed and mentions Trezor Suite only as a possible cause.
-
-- **Cold-Start Swap Recovery** ([@CharlVS], [SDK#417](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/417)) — Recover active routed swaps across every history page instead of silently stopping at page 20. A wallet change during later pagination rejects the entire read.
+- **Trezor Sign-In Errors** ([@CharlVS], [#3581](https://github.com/GLEECBTC/gleec-wallet/pull/3581), [#3582](https://github.com/GLEECBTC/gleec-wallet/pull/3582)) — Replaced the misleading Trezor Suite-only explanation with a general sign-in failure and Suite as one possible cause. The wallet-file recovery itself is covered under SDK Updates above.
 
 - **Wallet History** ([@CharlVS], [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572), [#3566](https://github.com/GLEECBTC/gleec-wallet/issues/3566), [SDK#413](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/413)) — Preserve outgoing direction across reconnect/cache refresh, restore ETC through its verified explorer, distinguish self-transfer principal from native fees, and keep unavailable fiat separate from a real zero. Token valuations use their normalized symbol and identify current spot values.
 
@@ -61,12 +77,14 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 - **macOS** ([@DeckerSU], #3541) — Sign the KDF helper with hardened runtime and timestamp for notarization. Signed packaging and fresh-install validation remain release gates.
 - **GasFree TRON** ([@CharlVS], #3546, #3549) — Enable production GasFree defaults in ordinary and shared-CI builds. The four production defines remain pinned for release validation.
-- **Frozen Inputs** ([@CharlVS], #3557, [SDK#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)) — KDF source `e40ac2f` from merged `dev`, specs `7c388ea`, bundled coins `2b0aefb7`; runtime coin updates remain enabled independently. Seven platform archives have independent build/download verification. Runtime sources and the ERC-20 payment validation shipped in 0.9.7-1 are unchanged from the prior candidate.
+- **Frozen Inputs** ([@CharlVS], [#3586](https://github.com/GLEECBTC/gleec-wallet/pull/3586), [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587), [SDK#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430), [SDK#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431), [#3594](https://github.com/GLEECBTC/gleec-wallet/pull/3594), [#3595](https://github.com/GLEECBTC/gleec-wallet/pull/3595), [SDK#439](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/439), [SDK#440](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/440), [SDK#434](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/434), [SDK#435](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/435)) — Accepted SDK `caab72b9` pins KDF `a51d69a` (`3.2.0-beta`), specs `7c388ea` and coins `cc8249e8`. That final coins roll replaces `efd3a647`; it adds Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON, and removes no coin. Failed build-time GitHub API calls in the SDK no longer log authorization headers. Runtime coin updates remain independent. All ten KDF platform builds and 17 test jobs passed; seven archives match independent artifact digests and mirror bytes. The engine retains the ERC-20 payment validation shipped in 0.9.7-1. Earlier `e40ac2f` / `2b0aefb7` inputs are superseded preparation history.
+- **RC Previews** ([@CharlVS], [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587)) — Enabled ordinary preview updates for hyphenated frozen release branches while retaining the legal-document availability gate.
 
 ## Compatibility and Known Limits
 
-SDK 0.9.0 has migration requirements for custom CoinPaprika/activation adapters
-and adopters of interim routed-swap APIs.
+SDK 0.9.0 has migration requirements for custom CoinPaprika/activation and
+authentication adapters, including session-owned dispatch, and adopters of
+interim routed-swap APIs.
 
 - **LI.FI defaults:** supported same-chain/cross-chain quotes, cheapest/fastest
   selection, exact and Max amounts, approval handling, Activity, recovery and
@@ -86,11 +104,13 @@ and adopters of interim routed-swap APIs.
   The existing review describes that behavior without inventing a spender,
   exact amount or reset requirement. Start, Advanced orders and bot starts keep
   their previous interaction flow; existing recovery/cancellation stays usable.
-- **Release qualification:** approved hosted legal text, Safari, signed packaging
-  and upstream review/CI still need their checklist evidence or disposition.
-  The owner accepted documented KDF failures for RC testing only. Five-person
-  usability and live fiat testing were explicitly deferred; Banxa #3559 is after
-  0.10.0. These deferrals are recorded, not passing test results.
+- **Release qualification:** Chrome/Safari checks and the exact pinned KDF jobs
+  passed for the accepted runtime. Final promotion review, approved hosted
+  legal text, signed packaging and install/upgrade evidence retain their
+  checklist gates. Older engine failures remain dated history. Five-person
+  usability and live fiat testing were explicitly deferred; the named Banxa
+  on-ramp quote/selection deferral remains separate from Ramp. Neither is a
+  passing provider test or a claim that the upstream service is available.
 
 **Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
 

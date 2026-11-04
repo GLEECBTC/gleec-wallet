@@ -1,21 +1,68 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current RC inputs: 3 November 2026. App `0.10.0+0` and SDK `0.9.0` are release
+Current record audited 4 November 2026, with inputs from the 3 November roll.
+App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
+## Current accepted snapshot — 4 November 2026
+
+- App RC `3f2058c801d823eceb5d5dcadbb9324e163d9115`; SDK gitlink
+  `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge
+  `bb5b4187bf49f844c01672799b451b50a5b08808` (SDK `release-0.9.0`
+  `8cae3c91125fc6003fcc637a168b827adb57287f` adds only changelogs and release
+  docs); coins `cc8249e85e54467bc2684c2712857711eab55fd2`. The
+  [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
+  accepted change after #3575 opened at `ffcac834`.
+- [x] Actual source/carry acceptance recorded in the input manifest: app
+  #3586 squash / #3587 normal merge and SDK #430 squash / #431 normal merge.
+  Accepted trees matched tested candidates; current hosted source/carry/main
+  app checks passed **14/9/17** and SDK main checks passed **5**.
+- [x] Session follow-ups: app #3592 squash `d7c369cef` / #3593 normal merge
+  `62d6ded1e`, and SDK #437 squash `34dd5feb` / #438 normal merge `ad179927`.
+  Accepted trees matched tested candidates. The full app unit gate passed
+  **4,004 / 4 skipped** on both branches; the SDK suites are in SDK #436.
+- [x] Final coins roll: app #3594 squash `30e71b79a` / #3595 normal merge
+  `42be44e92`, and SDK #439 squash `ab29d57a` / #440 normal merge `7636f554`.
+  Accepted trees matched tested candidates; app gate **4,004 / 4 skipped** on
+  both branches. The frozen-coins item below records the evidence.
+- [ ] Refresh the ordinary main-RC preview for the final head and recheck its
+  tree, SDK pin and served files. The dated proof below covers `da3214d8` only.
+- [x] Rechecked the ordinary main-RC preview's source-tree identity, SDK pin,
+  JavaScript and all 13 served config/coin/engine files. The
+  [dated proof](RC_0.10.0_PREVIEW_2026-11-04.json) has legal bypass **false**
+  and production approval **false**. Recheck live identity after later carries;
+  this is not a signed-installer or production approval record.
+- [x] Accepted SDK #435 (normal merge `bb5b4187`, carrying #434 squash
+  `1205d305`) and app #3590 squash `5b2e21962` / #3589 normal merge
+  `3f2058c80`, which pins SDK `caab72b9`. Accepted trees matched tested
+  candidates; the app gate passed **4,008 / 4 skipped** on both branches.
+  Hosted checks passed apart from macOS jobs that GitHub cancelled because no
+  runner picked them up.
+- [ ] Reproduce and resolve, or record an explicit scoped disposition for, the
+  native Trezor restart health-check/sign-out
+  observation and device-lock `Unexpected message` attempts on the final
+  candidate. The separate successful default-selection reconnect round does
+  not certify automatic session recovery or a complete native balance view.
+- [ ] Retain final promotion review, approved legal text, signed packaging,
+  install/upgrade evidence and the eventual accepted SDK main pin as separate
+  distribution gates. Main SDK #416 and app #3575 remain open with no
+  automatic merge. No main promotion, tag, publication or production deploy
+  is authorized by this preparation update.
+
 ## Validated KDF and coins roll — 3 November
 
-This RC candidate pins accepted SDK `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`.
+That candidate pinned accepted SDK `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`.
 SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) was
 squash merged into dev as `db73613cd34a2c0779da024a71338052e4bbb030`; normal RC carry
 [#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431) is
 `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. Both accepted trees match their validated sources.
-App #3586 and #3587 acceptance remains gated on current hosted checks. Main
-release PRs SDK #416 and app #3575 stay open.
+App #3586 was squash accepted as `1249c500c96a7dc139ae7b86d8667e8304bd6a1b`;
+normal carry #3587 is `da3214d80f3c75aa0cc6fe718f75403226df6f30`. Main release
+PRs SDK #416 and app #3575 stay open.
 
 - [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
   builds and all 17 test jobs passed. Original failures and their passing retries
@@ -38,10 +85,11 @@ release PRs SDK #416 and app #3575 stay open.
   in exact a51 source; updated the source comment and exact-pin regression.
 - [x] SDK dev squash #430 and normal RC carry #431 accepted after all SDK
   checks passed, using only the owner-authorized approval override.
-- [ ] Complete app #3586 dev squash and #3587 normal RC carry after all current
-  checks pass with the named Banxa deferral, then record accepted heads and
-  refreshed final preview identity. The Windows runner disconnect before
-  compilation remains an infrastructure failure requiring a passing current run.
+- [x] App #3586 dev squash and #3587 normal RC carry accepted after current
+  checks passed with the named Banxa deferral. Final current-head Windows
+  validation passed; the earlier runner disconnect remains historical evidence.
+  iOS simulator setup exit 70 occurred before compilation and passed on its
+  single actual retry. Accepted heads and ordinary preview identity are recorded.
 - [x] The owner explicitly deferred `Banxa on-ramp quotes and selection` for
   0.10.0. It is visibly skipped in the integration aggregator, not reported as
   a quote pass; existing Ramp deferral remains separate. Original Chrome/Safari
@@ -52,10 +100,12 @@ release PRs SDK #416 and app #3575 stay open.
 The first final RC Chrome run stopped at `Run wallet tests` /
 `failure_withdraw`: a global animation settle timed out after MARTY activated.
 The focused test repair waits for the balance view, followed by the unchanged
-actual funded-balance and withdrawal assertions. Read-only probes reached the
-funded balance; current full browser validation remains required.
+actual funded-balance and withdrawal assertions. Both Chrome/Safari source and
+carry GUI suites subsequently passed the repaired path. The two separate
+read-only receive/copy probes remained incomplete and are not full passes.
 
-Historical sections below retain their original revisions and dispositions.
+Historical sections below retain their original revisions and dispositions;
+their older pending/passing statements do not replace the current snapshot.
 
 ## Opsec swap authorization — 3 November
 

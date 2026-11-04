@@ -1,5 +1,5 @@
 {
-  "status": "Validated KDF/coins roll; SDK development and RC accepted; app hosted checks and acceptance pending with the explicit owner-approved Banxa deferral for0.10.0; not a published artifact manifest",
+  "status": "Accepted RC runtime snapshot 3f2058c8 with frozen SDK caab72b9 (tree of SDK #435 merge bb5b4187; release-0.9.0 8cae3c91 adds only changelogs and release docs) and coins cc8249e8. The session follow-ups, the final coins roll, the Trezor default-coins fix and the SDK build-log redaction passed the full local app gate on both branches; the da3214d8 hosted qualification and preview do not cover this head. Later carries and production distribution retain separate gates; not a published artifact manifest.",
   "prepared_on": "2026-11-03",
   "app": {
     "version": "0.10.0+0",
@@ -8,12 +8,19 @@
     "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6",
     "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
     "release_branch": "release-0.10.0",
-    "runtime_validation_commit": "5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c",
+    "runtime_validation_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
     "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)",
-    "sdk_pointer_dev_pr": 3576,
-    "sdk_pointer_release_pr": 3577,
+    "sdk_pointer_dev_pr": 3586,
+    "sdk_pointer_release_pr": 3587,
     "atomic_trading_restoration_pr": 3579,
-    "tested_source_commit": "33bf94a7cc4ed9b4ba5bc04f2694a344445908a1"
+    "tested_source_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
+    "previous_runtime_validation_commit": "5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c",
+    "previous_tested_source_commit": "33bf94a7cc4ed9b4ba5bc04f2694a344445908a1",
+    "accepted_development_commit": "1249c500c96a7dc139ae7b86d8667e8304bd6a1b",
+    "accepted_release_commit": "3f2058c801d823eceb5d5dcadbb9324e163d9115",
+    "accepted_runtime_tree": "b0483953af99d9ac8d11f590bad22635f995a515",
+    "previous_sdk_pointer_dev_pr": 3576,
+    "previous_sdk_pointer_release_pr": 3577
   },
   "sdk": {
     "version": "0.9.0",
@@ -23,7 +30,7 @@
     "preparation_pr": 409,
     "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "candidate_commit": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
     "melos_validation_pr": 411,
     "release_branch": "release-0.9.0",
     "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
@@ -32,7 +39,7 @@
     "recovery_pagination_pr": 417,
     "release_repair_pr": 418,
     "previous_frozen_candidate_commit": "55bd00c64f5721177d26a78df297751b4b61f540",
-    "candidate_pin_status": "Exact accepted SDK RC pin. SDK#430 squash and normal SDK#431 RC carry accepted after all SDK checks passed, using the authorized approval-only override. App acceptance awaits current hosted checks.",
+    "candidate_pin_status": "Exact accepted SDK RC pin: the head of logging carry #435 (normal merge bb5b4187 onto release-0.9.0), consumed by app RC carry #3589. It descends from the KDF roll (#430/#431), the session follow-ups (#437/#438) and the final coins roll (#439/#440).",
     "kdf_roll_dev_pr": 430,
     "kdf_roll_release_pr": 431,
     "artifact_roll_validation_commit": "0766626bb3db6706ecb177a921752029630b6412",
@@ -40,7 +47,8 @@
     "previous_kdf_roll_release_pr": 420,
     "previous_kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e",
     "kdf_roll_dev_squash_commit": "db73613cd34a2c0779da024a71338052e4bbb030",
-    "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206"
+    "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "release_head": "8cae3c91125fc6003fcc637a168b827adb57287f"
   },
   "kdf": {
     "source": "a51d69a11ff937ecf9678e9b37632af578252846",
@@ -193,7 +201,7 @@
     "date": "2026-11-03",
     "kdf_source": "a51d69a11ff937ecf9678e9b37632af578252846",
     "coins_source": "efd3a6471709f7e13e0b03277e37548e11840aae",
-    "scope": "KDF, SDK and local app gates passed. SDK430/431 accepted. All current app3586/3587 checks must pass with Banxa visibly deferred by the owner for0.10.0; no other check waiver.",
+    "scope": "Exact KDF/SDK/app gates passed; SDK430/431 and app3586/3587 accepted after required current checks. Banxa quote/selection is visibly deferred by the owner for0.10.0, separately from Ramp; no other check waiver.",
     "previous_app_rc": "99ae9bec0ce60a045f6b95d73e1c45309d248221",
     "previous_sdk_rc": "3730b456d1bb9046ab899a0d367e5c1a2eb9055a",
     "candidate_kind": "RC",
@@ -278,7 +286,8 @@
       "app_rc_head": "35fa13db20f41ac6ee6a3d1c80c1cadfc113707e",
       "gui_test": "Banxa on-ramp quotes and selection",
       "gui_failure": "No usable USD50 -> BTC quote within45s; Chrome/Linux and Safari/macOS failed on both candidates. No waiver. Subsequently accepted by the release owner as a named0.10.0 deferral; the test is visibly skipped in the integration aggregator.",
-      "windows_dev_build": "Hosted runner lost communication during environment setup before compilation. Original annotation retained; new current-head validation required."
+      "windows_dev_build": "Hosted runner lost communication during environment setup before compilation. Original annotation retained; new current-head validation required.",
+      "current_disposition": "Original failures retained; final source14/carry9/main17 checks passed on recorded heads. Windows validation passed; iOS simulator setup exit70 occurred before compilation and passed its single actual retry. Banxa alone has the named provider deferral."
     },
     "banxa_release_exception": {
       "release": "0.10.0",
@@ -300,7 +309,145 @@
         "errors": 0,
         "warnings": 55,
         "infos": 2144
+      },
+      "hosted_result": "Both Chrome/Safari source and carry GUI suites passed the repaired path on tested source2a7771e7 and carryd732a2c1 before app acceptance. The separate incomplete read-only probes remain incomplete."
+    },
+    "app_development_pr": 3586,
+    "app_release_pr": 3587,
+    "app_development_squash": "1249c500c96a7dc139ae7b86d8667e8304bd6a1b",
+    "app_release_merge": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+    "accepted_on": "2026-11-04",
+    "hosted_acceptance": {
+      "app_main": {
+        "pr": 3575,
+        "head": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+        "checks_passed": 17,
+        "state": "OPEN",
+        "autoMergeRequest": null,
+        "pr_url": "https://github.com/GLEECBTC/gleec-wallet/pull/3575"
+      },
+      "sdk_main": {
+        "pr": 416,
+        "head": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+        "checks_passed": 5,
+        "state": "OPEN",
+        "autoMergeRequest": null,
+        "pr_url": "https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416"
+      },
+      "app_focused_source": {
+        "pr": 3586,
+        "accepted": "1249c500c96a7dc139ae7b86d8667e8304bd6a1b",
+        "method": "squash",
+        "checks_passed": 14,
+        "pr_url": "https://github.com/GLEECBTC/gleec-wallet/pull/3586"
+      },
+      "app_focused_carry": {
+        "pr": 3587,
+        "accepted": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+        "method": "merge",
+        "checks_passed": 9,
+        "pr_url": "https://github.com/GLEECBTC/gleec-wallet/pull/3587"
       }
     }
+  },
+  "updated_on": "2026-11-04",
+  "validation_records_scope": "The existing validation object retains its dated 29 October input/results. The accepted 3 November roll qualification and 4 November acceptance are in accepted_rc_validation and kdf_coins_roll; later carries are in session_followups, final_coins_roll and trezor_defaults_and_log_carry. No record qualifies a later head.",
+  "accepted_rc_validation": {
+    "app_rc_commit": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+    "sdk_rc_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "tested_app_rc_source": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
+    "local_validation_record": "#/kdf_coins_roll/validation",
+    "hosted_validation_record": "#/kdf_coins_roll/hosted_acceptance",
+    "source": "Recorded exact-input qualification reused for this documentation audit. The existing validation object is the historical29October record. No KDF repository tests or new builds were run."
+  },
+  "changelog_audit": {
+    "date": "2026-11-04",
+    "record": "RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md",
+    "initial_rc": "ffcac83447af92e427dee47a3498cc4819c674ee",
+    "accepted_rc": "3f2058c801d823eceb5d5dcadbb9324e163d9115",
+    "sdk_initial_rc": "22e14ac94fb555776eda370de08f1dafd5ca4019",
+    "sdk_accepted_rc": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
+    "boundary_evidence": "First hosted Actions runs after each PR opened match the exact initial heads."
+  },
+  "ordinary_preview_snapshot": {
+    "record": "RC_0.10.0_PREVIEW_2026-11-04.json",
+    "url": "https://walletrc--pull-3575-merge-ynyfywb3.web.app",
+    "app_commit": "ea490accabbf45c73ffcc9baea679b798dbfd2cb",
+    "accepted_rc": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+    "sdk_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "javascript_sha256": "0efabd511806077bf3536e0800334115e58132acbe2756a9cf834d569529f570",
+    "legal_availability_bypass": false,
+    "production_approved": false,
+    "served_assets_verified": 13,
+    "scope": "Dated snapshot only; verify current live identity after later carries and before each testing round."
+  },
+  "pending_release_work": [
+    {
+      "area": "native Trezor qualification",
+      "status": "Retain the restart version-null health-check/sign-out observation and the device-lock-interrupted `Unexpected message` attempts for final-candidate reproduction/disposition. The Safe5 selection round on the #3590 source shows selection persistence only; it is not automatic-session recovery or a full balance-view pass."
+    }
+  ],
+  "session_followups": {
+    "date": "2026-11-04",
+    "app_dev_pr": 3592,
+    "app_dev_squash": "d7c369cef50e235f9e0272d86d4e83404c72e62a",
+    "app_rc_pr": 3593,
+    "app_rc_merge": "62d6ded1e5e9c9156cc0a126fe908b4589f679f2",
+    "app_rc_tested_head": "172ebe5d3e76dfab71081296897e252650abf911",
+    "sdk_dev_pr": 437,
+    "sdk_dev_squash": "34dd5febb45193c7c66b649b89b68ef3d90f3675",
+    "sdk_rc_pr": 438,
+    "sdk_rc_merge": "ad1799272121c18c7391287b9744247f89c04e44",
+    "sdk_rc_carry_head": "0c69bd35082a10bff445ebf5c5a24de1d948b6ee",
+    "app_passed": 4004,
+    "app_skipped": 4,
+    "sdk_core_passed": 1239,
+    "sdk_core_skipped": 1,
+    "local_auth_passed": 163,
+    "framework_passed": 104,
+    "routed_harness_passed": 60,
+    "scope": "Accepted trees matched tested candidates on all four PRs."
+  },
+  "final_coins_roll": {
+    "date": "2026-11-04",
+    "coins_source": "cc8249e85e54467bc2684c2712857711eab55fd2",
+    "previous_coins_source": "efd3a6471709f7e13e0b03277e37548e11840aae",
+    "coins_commits": 22,
+    "sdk_dev_pr": 439,
+    "sdk_dev_squash": "ab29d57aa05aa48240ab7430c6d51a4f5e60a579",
+    "sdk_rc_pr": 440,
+    "sdk_rc_merge": "7636f554c77b0d4bfa02d20dc030f1a95596a755",
+    "sdk_rc_carry_head": "ff43a0bad14577b2f5649fae22233a5fe9fe02c4",
+    "app_dev_pr": 3594,
+    "app_dev_squash": "30e71b79aee94b9b46095fc84be1f0774a13a311",
+    "app_rc_pr": 3595,
+    "app_rc_merge": "42be44e92d111a12ef5ec5e62f84349118465fae",
+    "app_rc_tested_head": "232d211083950b2ad89da628fcef9cdc9085bc63",
+    "kdf_compatibility": "KDF a51d69a parses every fee_model used (EthFeeModel); its signature_version and decimals defaults match the dropped values; segwit inputs always sign as WitnessV0.",
+    "app_passed": 4004,
+    "app_skipped": 4,
+    "sdk_suites": "komodo_coins 143, komodo_coin_updates 106, komodo_defi_types 191 (3 skipped), framework 104, local_auth 163, sdk 1239 (1 skipped), routed harness 60, on both SDK branches",
+    "validation_record": "#/coins/validation"
+  },
+  "trezor_defaults_and_log_carry": {
+    "date": "2026-11-04",
+    "app_dev_pr": 3590,
+    "app_dev_tested_head": "dead509650212050dcead9b4b8bba2cf11b20c37",
+    "app_dev_squash": "5b2e219627762e4d8e9da47c9992e50efc56d61c",
+    "app_rc_pr": 3589,
+    "app_rc_tested_head": "72592009c579238ea3a310117a2146edc7544a43",
+    "app_rc_merge": "3f2058c801d823eceb5d5dcadbb9324e163d9115",
+    "sdk_dev_pr": 434,
+    "sdk_dev_squash": "1205d305febccd5edd6e45f78fa7b55ceda25b28",
+    "sdk_rc_pr": 435,
+    "sdk_rc_carry_head": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
+    "sdk_rc_merge": "bb5b4187bf49f844c01672799b451b50a5b08808",
+    "sdk_notes_pr": 436,
+    "sdk_notes_merge": "8cae3c91125fc6003fcc637a168b827adb57287f",
+    "app_passed": 4008,
+    "app_skipped": 4,
+    "sdk_validation": "SDK #434 records the full build-transformer package passing 125 tests and its new regression file passing 6.",
+    "hosted": "Every hosted check on #3590 and #3589 passed except macOS jobs that GitHub cancelled without acquiring a runner: Test web-app-macos on both, and Build Desktop (macos) and Build Mobile (iOS) on #3590.",
+    "scope": "Accepted trees equal the tested heads (dead5096 and squash 5b2e2196; 72592009 and merge 3f2058c8). The dev and RC changes outside the SDK gitlink have the same patch-id."
   }
 }
