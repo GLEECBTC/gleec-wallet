@@ -52,8 +52,10 @@ PRs SDK #416 and app #3575 stay open.
 - [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
   builds and all 17 test jobs passed. Original failures and their passing retries
   remain in SDK `docs/KDF_ARTIFACTS_2026-11-03.json`.
-- [x] Frozen coins `efd3a6471709f7e13e0b03277e37548e11840aae`: three exact
-  files, all 445 icons and provider parsing verified; no new omitted assets.
+- [x] Frozen coins `cc8249e85e54467bc2684c2712857711eab55fd2`, the final roll
+  on 4 November (SDK #439 / RC #440), replacing `efd3a647`: three exact files,
+  all 446 icons and provider parsing verified; no new omitted assets. It adds
+  Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON.
 - [x] All seven archives match GitHub artifact digests, ZIP integrity and
   ordinary mirrors. Strict CLI and fresh-unfunded native quote/funding/fee/Max
   smoke passed. No funded action, deployment, publication or tag is included.

@@ -96,14 +96,15 @@
     "upstream_test_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/41650695853"
   },
   "coins": {
-    "bundled_source": "efd3a6471709f7e13e0b03277e37548e11840aae",
+    "bundled_source": "cc8249e85e54467bc2684c2712857711eab55fd2",
+    "previous_source": "efd3a6471709f7e13e0b03277e37548e11840aae",
     "update_commit_on_build": false,
     "runtime_updates_enabled": true,
-    "validation": "All three mapped files match exact raw bytes; 445 icons SHA256 verified. Local provider736/772 vs734/770 with the same36 omissions and no new omissions.",
+    "validation": "All three mapped files match exact raw bytes at cc8249e8; all 446 icons match the upstream icons tree blobs. Local provider 737/773 vs 736/772 with the same 36 omissions and no new omissions; YTN parses.",
     "generated_file_sha256": {
-      "coins_config.json": "13a060ffb3f01d5f565f203ee190bde9573eb0ae29223c61b8bfe19720e37d9f",
-      "coins.json": "8f212e78ffc6455d8266aa0c72c78e3843a0782b6daf93b60768c65598c92ecf",
-      "seed_nodes.json": "2755231cdd598dc89238cd9ad38d7df8acf00853c738aca7e467b2ea9622c756"
+      "coins_config.json": "70f9191b8152c49b61cf2f5f45008fdd4e996ff10ee2c82bce73e9c6bb1d4976",
+      "coins.json": "652be7d79b27d53fa4f6096217358c94213fd71af7bcc20a6c934b7171026d47",
+      "seed_nodes.json": "9f8a0ebdfdea513844a72b1bcae01948cdf8f231ba0bd4e505b6d18d2e15f354"
     }
   },
   "specs": "7c388ea7b91cb7c657435d416bc03e5349b46162",
