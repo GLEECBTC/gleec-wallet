@@ -5,6 +5,12 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
   KomodoDefiSdk get _sdk;
   Logger get _log;
 
+  static const _terminalStatuses = {
+    AuthenticationStatus.completed,
+    AuthenticationStatus.error,
+    AuthenticationStatus.cancelled,
+  };
+
   /// Registers handlers for Trezor specific events.
   void setupTrezorEventHandlers() {
     on<AuthTrezorInitAndAuthStarted>(_onTrezorInitAndAuth);
@@ -25,6 +31,11 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
   /// [AuthenticationStatus.initializing] and leave the UI stuck loading.
   Future<void> _pauseAuthUserWatcher();
 
+  /// Marks an explicit auth flow, so session restore leaves it alone.
+  /// Implemented in [AuthBloc].
+  Object _beginAuthOperation();
+  void _endAuthOperation(Object operation);
+
   /// Filters out geo-blocked assets from a list of coin IDs.
   /// Implemented in [AuthBloc].
   List<String> _filterBlockedAssets(List<String> coinIds);
@@ -33,6 +44,7 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
     AuthTrezorInitAndAuthStarted event,
     Emitter<AuthBlocState> emit,
   ) async {
+    final operation = _beginAuthOperation();
     try {
       await _pauseAuthUserWatcher();
       emit(AuthBlocState.loading());
@@ -48,17 +60,23 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
         options: authOptions,
       );
 
+      AuthenticationState? terminalState;
       await for (final authState in authStream) {
-        final mappedState = await _handleAuthenticationState(authState);
-        emit(mappedState);
-        if (authState.status == AuthenticationStatus.completed ||
-            authState.status == AuthenticationStatus.error ||
-            authState.status == AuthenticationStatus.cancelled) {
-          _listenToAuthStateChanges();
+        if (_terminalStatuses.contains(authState.status)) {
+          terminalState = authState;
           break;
         }
+        emit(await _handleAuthenticationState(authState));
       }
-    } on WalletChangedDisconnectException {
+      if (terminalState == null) return;
+
+      // Handle the terminal state only once `break` has closed the SDK stream.
+      // The stream holds the SDK's auth transition open until it ends, and the
+      // SDK refuses the wallet-asset write in `_setupTrezorWallet` until then.
+      emit(await _handleAuthenticationState(terminalState));
+      _listenToAuthStateChanges();
+    } on WalletChangedDisconnectException catch (e, s) {
+      _log.warning('Trezor sign-in stopped: wallet session changed', e, s);
       _listenToAuthStateChanges();
       return;
     } catch (e) {
@@ -68,6 +86,8 @@ mixin TrezorAuthMixin on Bloc<AuthBlocEvent, AuthBlocState> {
           AuthException(e.toString(), type: AuthExceptionType.generalAuthError),
         ),
       );
+    } finally {
+      _endAuthOperation(operation);
     }
   }
 
