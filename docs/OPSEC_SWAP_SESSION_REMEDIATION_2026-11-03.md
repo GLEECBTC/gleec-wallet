@@ -44,13 +44,14 @@ dispatch serialization, and invalidation throughout asynchronous preparation.
 The dispatch lease survives a UI timeout until the actual transport future
 settles, for at most 10 seconds. Past that bound, logout or a wallet switch may
 stop the engine, which fails the unanswered request and resets the HTTP client
-before any replacement engine starts. A stalled engine therefore cannot hold
-off logout, and an old request never reaches a replacement engine.
+before any replacement engine starts. A request the engine never answers
+therefore cannot hold off logout, and an old request never reaches a
+replacement engine.
 
-## Deferred engine hardening
+## Engine follow-ups
 
-Further engine-side hardening of provider responses is outside this
-remediation and is tracked privately with the engine team.
+Engine-side follow-ups are outside this remediation and are tracked privately
+with the engine team.
 
 ## Validation and promotion
 

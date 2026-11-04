@@ -83,9 +83,10 @@ for their recorded revisions.
   identical.
 - Before merging, repin `sdk` to the merged SDK commit, never a pull-request
   head. Dev squash `422c6b90f` pinned SDK `0cd7578e`, which only the PR branch
-  carried; #3588 repinned dev. The "SDK pin is merged" check now goes red on
-  any pull request whose pin is on none of the SDK's dev, main or release
-  branches.
+  carried; #3586 (`1249c500c`) repinned dev to SDK `db73613c`, and #3588 later
+  moved it to `7ce3962d`. The "SDK pin is merged" check now runs on every pull
+  request and goes red when the pin is on none of the SDK's `dev`, `main`,
+  `release-X.Y.Z` or `release/X.Y.Z` branches. It is not a required check.
 
 ## Atomic token restoration — 29 October
 
