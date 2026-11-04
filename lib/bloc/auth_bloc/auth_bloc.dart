@@ -65,11 +65,13 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   int _authRevision = 0;
   Object? _authOperation;
 
+  @override
   Object _beginAuthOperation() {
     _authRevision++;
     return _authOperation = Object();
   }
 
+  @override
   void _endAuthOperation(Object operation) {
     if (identical(_authOperation, operation)) _authOperation = null;
   }
