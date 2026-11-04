@@ -10,13 +10,16 @@ published signed-artifact manifest.
 
 ## Current accepted snapshot — 4 November 2026
 
-- App RC `3f2058c801d823eceb5d5dcadbb9324e163d9115`; SDK gitlink
+- Runtime: app RC `3f2058c801d823eceb5d5dcadbb9324e163d9115`; SDK gitlink
   `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge
   `bb5b4187bf49f844c01672799b451b50a5b08808` (SDK `release-0.9.0`
   `8cae3c91125fc6003fcc637a168b827adb57287f` adds only changelogs and release
   docs); coins `cc8249e85e54467bc2684c2712857711eab55fd2`. The
   [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
-  accepted change after #3575 opened at `ffcac834`.
+  accepted change after #3575 opened at `ffcac834`. The docs-only merges after
+  it, #3591 (`4d52eb0e`) and this handover update, change no runtime input.
+  Unchecked boxes in the dated sections below are historical; this list and
+  the required dispositions further down are current.
 - [x] Actual source/carry acceptance recorded in the input manifest: app
   #3586 squash / #3587 normal merge and SDK #430 squash / #431 normal merge.
   Accepted trees matched tested candidates; current hosted source/carry/main
@@ -29,8 +32,13 @@ published signed-artifact manifest.
   `42be44e92`, and SDK #439 squash `ab29d57a` / #440 normal merge `7636f554`.
   Accepted trees matched tested candidates; app gate **4,004 / 4 skipped** on
   both branches. The frozen-coins item below records the evidence.
-- [ ] Refresh the ordinary main-RC preview for the final head and recheck its
-  tree, SDK pin and served files. The dated proof below covers `da3214d8` only.
+- [x] Refreshed the ordinary main-RC preview at `3f2058c8` (run 41870423603)
+  and at the docs-only head `4d52eb0e` (run 41878902785). Each build's source
+  tree equals its head, the SDK is `caab72b9`, legal bypass and production
+  approval are **false**, the JavaScript matches its identity, and all 13
+  served config/coin/engine files are byte-identical across both builds. The
+  JavaScript hash changes with every head because the build embeds the short
+  commit and a timestamp, so compare the served files, not that hash.
 - [x] Rechecked the ordinary main-RC preview's source-tree identity, SDK pin,
   JavaScript and all 13 served config/coin/engine files. The
   [dated proof](RC_0.10.0_PREVIEW_2026-11-04.json) has legal bypass **false**
@@ -42,11 +50,21 @@ published signed-artifact manifest.
   candidates; the app gate passed **4,008 / 4 skipped** on both branches.
   Hosted checks passed apart from macOS jobs that GitHub cancelled because no
   runner picked them up.
-- [ ] Reproduce and resolve, or record an explicit scoped disposition for, the
-  native Trezor restart health-check/sign-out
-  observation and device-lock `Unexpected message` attempts on the final
-  candidate. The separate successful default-selection reconnect round does
-  not certify automatic session recovery or a complete native balance view.
+- [x] Owner disposition (4 November): the native Trezor restart
+  health-check/sign-out observation and device-lock `Unexpected message`
+  attempts ship as a known limit, with a follow-up after release. After a
+  restart a failed health check can restart the engine signed out; a locked
+  device answers `Unexpected message` until a fresh reconnect and unlock. The
+  successful default-selection reconnect round does not certify automatic
+  session recovery or a complete native balance view.
+- [x] Owner decision (4 November): production builds pass
+  `--dart-define=LIFI_INTEGRATOR_NAME=gleec-dex-production`. The RC's compiled
+  default stays `gleec-dex-staging`; every other LI.FI value equals the RC
+  default (proxy `https://quicknode.gleec.com/lifi`, integrator enabled, fee
+  178 bps, LI.FI fee 22 bps). Wallet #3585's profile file and CI enforcement
+  move to the next release. On each unpacked output (unzip AAB, APK and IPA
+  packages first), `grep -r -a -o -h 'gleec-dex-[a-z]*' <output> | sort -u`
+  must print only `gleec-dex-production`.
 - [ ] Retain final promotion review, approved legal text, signed packaging,
   install/upgrade evidence and the eventual accepted SDK main pin as separate
   distribution gates. Main SDK #416 and app #3575 remain open with no
@@ -341,20 +359,28 @@ its final preparation adds documentation and the immutable SDK candidate pin.
   Synthetic/native/browser regressions and the public-address CORS probe pass.
   Private chain evidence remains local; this is not an unbounded internal-call
   history or new funded-settlement certification.
-- [ ] Approved LI.FI text must replace the hosted placeholder before production.
-  The owner-authorized manual RC legal-testing bypass keeps the notice and
-  cannot record missing terms as accepted. Ordinary builds remain gated.
-- [ ] Explicit disposition of optional X06/X07 liquidity and stalled DOC/MARTY
-  testnet refund cases. They are blocked, not successful execution evidence.
-- [ ] KDF review: status-polling rate-limit backoff and native bridge-fee
-  restriction remain open. Specs review still needs the history-method question
-  and stale-thread disposition. Already implemented envelope fixes are not
+- [ ] Publish Ilya's approved LI.FI text at
+  `https://privacy.gleec.com/tos_lifi_gleec_wallet.md` before the release is
+  published; the owner expects it to be live by then. On 4 November the hosted
+  file was still the placeholder, with its marker removed for RC testing, so
+  ordinary builds, including the RC preview, accept it like final terms.
+  Confirm the hosted text is final immediately before publishing.
+- [x] Explicit disposition of optional X06/X07 liquidity and stalled DOC/MARTY
+  testnet refund cases: the owner accepted them as known limits on 4 November,
+  with a follow-up. They are blocked, not successful execution evidence.
+- [x] KDF review: status-polling rate-limit backoff and the native bridge-fee
+  restriction remain open upstream. On 4 November the owner accepted them, with
+  the specs-review history-method question and stale-thread disposition, as
+  known limits with a follow-up. Already implemented envelope fixes are not
   reported as current schema defects.
-- [ ] Proxy/backend deployment provenance, capacity/recovery and upstream failed
-  tests `validate_dex_fee_invalid_sender_erc`, `firo_lelantus_tx_details`,
-  `test_block_header_utxo_loop` (run `39776341104`) need concrete disposition.
-  Pinned source consumption does not require a mechanical KDF/spec branch merge;
-  a changed KDF source requires seven new archives and renewed validation.
+- [x] Upstream failed tests `validate_dex_fee_invalid_sender_erc`,
+  `firo_lelantus_tx_details` and `test_block_header_utxo_loop` (run
+  `39776341104`): the owner accepted them as known limits on 4 November, with a
+  follow-up. Pinned source consumption does not require a mechanical KDF/spec
+  branch merge; a changed KDF source requires seven new archives and renewed
+  validation.
+- [ ] Proxy/backend deployment provenance and capacity/recovery evidence for
+  the production KDP routes (Decker).
 - [ ] Supported signed platforms: Safari/device behavior, fresh install, upgrade,
   signing/notarization/store evidence. Compilation alone does not satisfy these.
 
@@ -391,7 +417,8 @@ advance release branches to unrelated dev work.
    release PR (`release-0.10.0` → `main`) using a **merge commit**. Reconcile
    release changes back into dev through a focused **squash** PR as needed.
    No automatic merge is enabled and no main admin bypass is assumed.
-4. Before app tagging/publication, run the SDK tag/version/ancestry preflight in
+4. Build as in the [production build](RELEASE_0.10.0_PRODUCTION_BUILD.md).
+   Before app tagging/publication, run the SDK tag/version/ancestry preflight in
    [BUILD_RELEASE.md](BUILD_RELEASE.md#github-release-preflight). Build/publish
    from the recorded main commits. Record output and generated coin hashes,
    configuration/defines and signing identity. Preserve at least the prior

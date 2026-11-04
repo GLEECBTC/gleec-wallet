@@ -1,5 +1,9 @@
 # Build Release version of the App
 
+For 0.10.0, follow the [production build](RELEASE_0.10.0_PRODUCTION_BUILD.md).
+Its defines, flags and output checks were verified against that release and
+take precedence where this generic guide differs.
+
 ## Environment setup
 
 Before building the app, make sure you have all the necessary tools installed. Follow the instructions in the [Environment Setup](./PROJECT_SETUP.md) document. Alternatively, you can use the Docker image as described here: (TODO!).
@@ -74,9 +78,9 @@ Run `flutter build {TARGET}` command with one of the following targets:
 - `apk` - builds Android APK (output to `build/app/outputs/flutter-apk` folder)
 - `appbundle` - builds Android bundle (output to `build/app/outputs/bundle/release` folder)
 - `ios` - builds for iOS (output to `build/ios/iphoneos` folder)
-- `macos` - builds for macOS (output to `build/macos/Build/Products/Release` folder)
+- `macos` - builds for macOS (output to `build/macos/Build/Products/Release` folder). Distribution builds add `--flavor production`, which outputs to `Release-production` and signs for notarization; see [contrib/README.md](../contrib/README.md).
 - `linux` - builds for Linux (output to `build/linux/x64/release/bundle` folder)
-- `windows` - builds for Windows (output to `build/windows/runner/Release` folder)
+- `windows` - builds for Windows (output to `build/windows/x64/runner/Release` folder)
 
 Example:
 
@@ -97,13 +101,15 @@ GasFree TRON (sending and receiving TRC-20 tokens without holding TRX) is on by 
 
 To build without it, pass `--dart-define=TRON_GASLESS_ENABLED=false` and `--dart-define=TRON_GASLESS_RECEIVE_ENABLED=false`.
 
-To check a finished build, look for the base URL in the compiled app. It is absent when GasFree is off:
+To check a finished web build, read its build-policy marker; it must say
+`send=enabled;receive=enabled`:
 
 ```bash
-strings build/linux/x64/release/bundle/lib/libapp.so | grep -c quicknode.gleec.com/gasfree/tron
+grep -a -o -h 'gleec-gasfree-build-policy-v1:[a-z=;]*' build/web/main.dart.js | sort -u
 ```
 
-On macOS the compiled app is `Gleec DEX.app/Contents/Frameworks/App.framework/App`.
+The marker is only compiled into web builds. Don't check for the GasFree base
+URL: it is compiled in whether or not GasFree is on.
 
 ## Docker builds
 
@@ -115,40 +121,16 @@ git submodule update --init --recursive
 git config fetch.recurseSubmodules on-demand
 ```
 
-### Build for web
+`.docker/build.sh <target> <mode>` builds the `komodo/android-sdk:35` and
+`komodo/komodo-wallet` images from `.docker/android-sdk.dockerfile` and
+`.docker/komodo-wallet-android.dockerfile`. It then runs
+`flutter build <target> --no-pub --<mode>` twice inside the container, writing
+to `./build`. The target is a `flutter build` subcommand:
 
 ```bash
 sh .docker/build.sh web release
-```
-
-Alternatively, you can run the docker build commands directly:
-
-```bash
-# Build the supporting images
-docker build -f .docker/kdf-android.dockerfile . -t komodo/kdf-android --build-arg KDF_BRANCH=main
-docker build -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:34
-docker build -f .docker/gleec-wallet-android.dockerfile . -t gleec/gleec-wallet
-# Build the app
-mkdir -p build
-docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build web --no-pub --release --wasm"
-```
-
-### Build for Android
-
-```bash
-sh .docker/build.sh android release
-```
-
-Alternatively, you can run the docker build commands directly:
-
-```bash
-# Build the supporting images
-docker build -f .docker/kdf-android.dockerfile . -t komodo/kdf-android --build-arg KDF_BRANCH=main
-docker build -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:34
-docker build -f .docker/gleec-wallet-android.dockerfile . -t gleec/gleec-wallet
-# Build the app
-mkdir -p build
-docker run --rm -v ./build:/app/build gleec/gleec-wallet:latest bash -c "flutter pub get --enforce-lockfile && flutter build apk --no-pub --release"
+sh .docker/build.sh apk release
+sh .docker/build.sh appbundle release
 ```
 
 ## WebAssembly hosting headers
@@ -158,7 +140,7 @@ For Flutter web `--wasm` builds with multi-threading, set these response headers
 - `Cross-Origin-Embedder-Policy: credentialless` (or `require-corp`)
 - `Cross-Origin-Opener-Policy: same-origin`
 
-Project defaults already include these headers in:
-
-- `firebase.json` (Firebase Hosting)
-- `roles/nginx/templates/airdex.conf.j2` (nginx deployment template)
+`roles/nginx/templates/airdex.conf.j2` (the nginx deployment template) sets
+them. `firebase.json` does not; read
+[WEB_HOSTING_TOPOLOGY.md](WEB_HOSTING_TOPOLOGY.md) before adding COEP to
+Firebase Hosting.

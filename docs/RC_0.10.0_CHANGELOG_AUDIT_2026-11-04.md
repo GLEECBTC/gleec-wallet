@@ -82,15 +82,15 @@ No carry is pending: SDK logging carry
 [#435](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/435) and wallet
 default-selection source [#3590](https://github.com/GLEECBTC/gleec-wallet/pull/3590)
 / carry [#3589](https://github.com/GLEECBTC/gleec-wallet/pull/3589) are
-accepted above. A fresh preview of the final head and the release gates in the
-checklist still need qualification.
+accepted above. The fresh preview of the final runtime is verified in the
+checklist; its remaining release gates still apply.
 
 The separate Safe5 selection round on the #3590 source showed defaults
 persisting after app/USB restart and fresh authentication. It did not certify
 automatic authenticated-session recovery or a complete native balance view.
 The version-null health-check/sign-out observation and device-lock-interrupted
-`Unexpected message` attempts retain their own reproducibility/disposition
-gate on the final candidate; a successful reconnect does not erase them.
+`Unexpected message` attempts ship as a known limit by owner disposition on
+4 November; a successful reconnect does not erase them.
 
 Approved legal text, final promotion review, signed packaging/install/upgrade
 evidence and any final SDK main pin remain separate release gates. The owner's

@@ -13,11 +13,13 @@ maps accepted fixes since #3575 first opened. SDK #435 and app #3590/#3589
 are included; no carry is pending.
 
 The ordinary [main-RC preview](https://walletrc--pull-3575-merge-ynyfywb3.web.app)
-was [reverified on 4 November](RC_0.10.0_PREVIEW_2026-11-04.json) at
-`da3214d8`: its virtual merge tree equalled that RC, the SDK pin/JavaScript and
-all 13 served config/coin/engine files matched, legal bypass was false and
-production approval was false. That dated result does not qualify `3f2058c8`
-or a later deployment; read `rc-test-build.json` again before each round.
+was rechecked on 4 November at the final runtime `3f2058c8` and again at the
+docs-only head `4d52eb0e`: each build's source tree equals its head, the SDK is
+`caab72b9`, legal bypass and production approval are false, and all 13 served
+config/coin/engine files are byte-identical across both builds (details in the
+[checklist](RELEASE_0.10.0_CHECKLIST.md)). The
+[earlier proof](RC_0.10.0_PREVIEW_2026-11-04.json) covers `da3214d8` only.
+Read `rc-test-build.json` again before each round.
 
 Saved qualification at `da3214d8`: app **3,991 passed /4 skipped**, browser
 WASM **84**, hosted source/carry/main checks **14/9/17**; SDK 16 suites
@@ -87,6 +89,7 @@ records the current immutable SDK/KDF inputs.
 | KDF | `a51d69a11ff937ecf9678e9b37632af578252846` on dev, `3.2.0-beta` |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
 | Bundled coins | `cc8249e85e54467bc2684c2712857711eab55fd2`; runtime updates enabled |
+| Production build | [Private-machine recipe, defines and output checks](RELEASE_0.10.0_PRODUCTION_BUILD.md) |
 
 The [input manifest](RELEASE_0.10.0_INPUTS.json) records archive/config/lockfile
 hashes. The final deployed preview's `rc-test-build.json` records its full app
@@ -107,8 +110,11 @@ The owner authorized testing while the LI.FI document is unpublished. The local
 LI.FI draft is now marker-free and all five legal text files are ignored, local-only
 handoff copies. Removing that local marker does not upload or approve the text.
 Only the explicit, manually dispatched RC test build
-sets `BYPASS_LEGAL_DOCUMENT_GATE=true`. The notice remains visible and missing
-or placeholder terms never become acceptance records. Trading policy, funding,
+sets `BYPASS_LEGAL_DOCUMENT_GATE=true`. The notice remains visible, and missing
+documents or files carrying the placeholder marker never become acceptance
+records. The hosted LI.FI file had that marker removed for RC testing, so
+ordinary builds, including the RC preview, record acceptance of it like final
+terms until Ilya's approved text replaces it. Trading policy, funding,
 quote review and uncertain-start checks still apply. This exception does not
 establish legal approval or production readiness.
 

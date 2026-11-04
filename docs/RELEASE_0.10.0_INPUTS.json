@@ -1,5 +1,5 @@
 {
-  "status": "Accepted RC runtime snapshot 3f2058c8 with frozen SDK caab72b9 (tree of SDK #435 merge bb5b4187; release-0.9.0 8cae3c91 adds only changelogs and release docs) and coins cc8249e8. The session follow-ups, the final coins roll, the Trezor default-coins fix and the SDK build-log redaction passed the full local app gate on both branches; the da3214d8 hosted qualification and preview do not cover this head. Later carries and production distribution retain separate gates; not a published artifact manifest.",
+  "status": "Accepted RC runtime snapshot 3f2058c8 with frozen SDK caab72b9 (tree of SDK #435 merge bb5b4187; release-0.9.0 8cae3c91 adds only changelogs and release docs) and coins cc8249e8. The session follow-ups, the final coins roll, the Trezor default-coins fix and the SDK build-log redaction passed the full local app gate on both branches; the da3214d8 hosted qualification and preview do not cover this head. Docs-only merges #3591 (4d52eb0e) and the handover update change no runtime input. Owner dispositions and the production integrator decision of 4 November are in owner_dispositions; production distribution keeps the gates in distribution_evidence_still_required. Not a published artifact manifest.",
   "prepared_on": "2026-11-03",
   "app": {
     "version": "0.10.0+0",
@@ -53,7 +53,8 @@
   "kdf": {
     "source": "a51d69a11ff937ecf9678e9b37632af578252846",
     "branch": "dev",
-    "build_config_sha256": "667a9e28268e691857712f2410a0d29564aca4dbd7dff8eb3a53848785bcca64",
+    "build_config_sha256": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
+    "build_config_note": "SDK caab72b9's build_config.json. SDK 3b462904's (667a9e28…) differs only in its coins section.",
     "archives": {
       "web": [
         "5389d81b8ab6f126caa24782e4f8f15c5205cc7b5103c9602d8e5b554e390c51"
@@ -126,11 +127,20 @@
     "LIFI_INTEGRATOR_FEE_BPS": "178",
     "LIFI_FEE_BPS": "22"
   },
+  "production_build_overrides": {
+    "LIFI_INTEGRATOR_NAME": "gleec-dex-production",
+    "decided": "2026-11-04, owner",
+    "scope": "Every production build. The RC's compiled default stays gleec-dex-staging; every other LI.FI value equals the defines above. Wallet #3585's profile file and CI enforcement move to the next release.",
+    "verify": "grep -r -a -o -h 'gleec-dex-[a-z]*' <unpacked output> | sort -u prints only gleec-dex-production; unzip AAB, APK and IPA packages first.",
+    "doc": "RELEASE_0.10.0_PRODUCTION_BUILD.md"
+  },
   "distribution_evidence_still_required": [
     "final app and SDK main commits",
     "signed output hashes and signatures",
-    "final build configuration and integrator policy",
-    "required gate dispositions and install/upgrade verification"
+    "final build configuration as built (integrator decided: production_build_overrides)",
+    "required gate dispositions and install/upgrade verification",
+    "approved LI.FI text live at https://privacy.gleec.com/tos_lifi_gleec_wallet.md before publication",
+    "proxy/backend deployment provenance and capacity/recovery evidence for the production KDP routes"
   ],
   "merge_strategy": {
     "pull_requests_into_dev": "squash",
@@ -381,12 +391,7 @@
     "served_assets_verified": 13,
     "scope": "Dated snapshot only; verify current live identity after later carries and before each testing round."
   },
-  "pending_release_work": [
-    {
-      "area": "native Trezor qualification",
-      "status": "Retain the restart version-null health-check/sign-out observation and the device-lock-interrupted `Unexpected message` attempts for final-candidate reproduction/disposition. The Safe5 selection round on the #3590 source shows selection persistence only; it is not automatic-session recovery or a full balance-view pass."
-    }
-  ],
+  "pending_release_work": [],
   "session_followups": {
     "date": "2026-11-04",
     "app_dev_pr": 3592,
@@ -449,5 +454,65 @@
     "sdk_validation": "SDK #434 records the full build-transformer package passing 125 tests and its new regression file passing 6.",
     "hosted": "Every hosted check on #3590 and #3589 passed except macOS jobs that GitHub cancelled without acquiring a runner: Test web-app-macos on both, and Build Desktop (macos) and Build Mobile (iOS) on #3590.",
     "scope": "Accepted trees equal the tested heads (dead5096 and squash 5b2e2196; 72592009 and merge 3f2058c8). The dev and RC changes outside the SDK gitlink have the same patch-id."
-  }
+  },
+  "owner_dispositions": {
+    "date": "2026-11-04",
+    "decided_by": "owner",
+    "known_limits_with_follow_ups": [
+      "Native Trezor: after a restart a failed KDF health check can restart the engine signed out; a device locked mid-attempt answers 'Unexpected message' until a fresh reconnect and unlock. Automatic authenticated-session recovery and a complete native balance view are not claimed.",
+      "Optional X06/X07 liquidity and stalled DOC/MARTY testnet refund cases: blocked, untested, not failed.",
+      "KDF review points: status-polling rate-limit backoff, the native bridge-fee restriction, and the specs-review history-method and stale-thread questions.",
+      "Unattributed upstream KDF failures validate_dex_fee_invalid_sender_erc, firo_lelantus_tx_details and test_block_header_utxo_loop from run 39776341104."
+    ],
+    "lifi_terms": "The owner expects Ilya's approved LI.FI text to be live before publication. On 2026-11-04 the hosted file was the placeholder with its marker removed for RC testing, so ordinary builds accept it like final terms; confirm the final text immediately before publishing.",
+    "deferred_to_next_release": [
+      "wallet #3585 (LI.FI production build profile, Docker switch, CI enforcement)",
+      "SDK #432 (SDK CI validation inputs and manifest parity)"
+    ]
+  },
+  "final_preview_rechecks": [
+    {
+      "date": "2026-11-04",
+      "rc_head": "3f2058c801d823eceb5d5dcadbb9324e163d9115",
+      "run": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/41870423603",
+      "preview_merge_commit": "9c5624d6c5e9f5240a8b903a1947a8c6a371a848",
+      "tree": "b0483953af99d9ac8d11f590bad22635f995a515",
+      "sdk_commit": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
+      "javascript_sha256": "6e70a0d60289b8d4c13321d5fd12a62200904b6918e16f2fd0da5d5af746a9dd",
+      "kdf_config_sha256": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
+      "served_assets_verified": 13,
+      "legal_availability_bypass": false,
+      "production_approved": false,
+      "served_files_sha256": {
+        "assets/packages/komodo_defi_framework/app_build/build_config.json": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
+        "assets/packages/komodo_defi_framework/assets/config/coins_config.json": "70f9191b8152c49b61cf2f5f45008fdd4e996ff10ee2c82bce73e9c6bb1d4976",
+        "assets/packages/komodo_defi_framework/assets/config/coins.json": "652be7d79b27d53fa4f6096217358c94213fd71af7bcc20a6c934b7171026d47",
+        "assets/packages/komodo_defi_framework/assets/config/seed_nodes.json": "9f8a0ebdfdea513844a72b1bcae01948cdf8f231ba0bd4e505b6d18d2e15f354",
+        "kdf/kdf/bin/kdflib.d.ts": "f5fe0b1a44d35cc28ee3ee29b55a162a6fbb65ae4f2eaa1e4afe53e5ba636851",
+        "kdf/kdf/bin/kdflib.js": "cbeda42d407d11d59730f4b5ec85bd18e2a6c2eb2e2fc7e65c0381788de91776",
+        "kdf/kdf/bin/package.json": "6ea6bbaa7ba699935182b3096d984a6f7f733e93c5cf07315c7f15dd9a818be6",
+        "kdf/kdf/bin/kdflib_bg.wasm.d.ts": "b21c15e4c0af09ea3ba14bf2c388f98bb5772595dcd8245df992354ccefdec05",
+        "kdf/kdf/bin/snippets/libp2p-wasm-ext-7e5f5edb880ee0f5/src/websockets.js": "bd1472d656c119fdbe76333c56098c0295d913e5c532ef583efda1a59db41a5a",
+        "kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline1.js": "e8bccdb5f7ea2a2affcc10bfff045989d40490101a0575290a30d53009902f0a",
+        "kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline0.js": "fcaa05077e433b5cfb174377954dfe44cd466be81336b965c8e885395ca9f90e",
+        "kdf/kdf/bin/snippets/web3-3a881fca17d19cd8/inline0.js": "e0bb201521f4b8f1376499755278783ad46f4cc7a86bc803fef2dc5b6d264ba9",
+        "kdf/kdf/bin/kdflib_bg.wasm": "3224d8c5652a4ee1624bd44b9be940d06a168d23666e39243b814ada5fe34570"
+      }
+    },
+    {
+      "date": "2026-11-04",
+      "rc_head": "4d52eb0e0fba2f3a7d8f119b746d536c899a7bca",
+      "run": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/41878902785",
+      "preview_merge_commit": "a03bb4e7c4fcb15ca4b41ce8f6681c88c49dcc42",
+      "tree": "2b18a1b7787f833d6542f5ebed2cdda3206ea94e",
+      "sdk_commit": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
+      "javascript_sha256": "8a46996f63ac9c3b07d3b9fbe1434ff9d8df4abdad29f87631719f9ce12d7436",
+      "kdf_config_sha256": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
+      "served_assets_verified": 13,
+      "served_assets_identical_to_previous": true,
+      "legal_availability_bypass": false,
+      "production_approved": false,
+      "note": "The JavaScript embeds the head's short commit and a timestamp, so its hash changes with every head."
+    }
+  ]
 }
