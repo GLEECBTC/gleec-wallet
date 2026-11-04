@@ -10,10 +10,10 @@ This is release preparation. The latest published app release is **0.9.7-1**.
 Final CI, legal/provider availability, review and signed installation gates
 are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
-Updated 4 November 2026 against accepted RC `42be44e9`. The
+Updated 4 November 2026 against accepted RC `3f2058c8`. The
 [post-opening audit](docs/RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
-accepted change since PR #3575 opened at `ffcac834`; pending carries remain
-separate from these release notes.
+accepted change since PR #3575 opened at `ffcac834`; no carry is pending at
+this snapshot.
 
 ## 🚀 New Features
 
@@ -55,9 +55,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
-- **First Trezor Sign-In** — Save the default coin selection after device
-  authentication finishes, and prevent session restoration from publishing the
-  wallet before setup completes.
+- **First Trezor Sign-In** ([@CharlVS], [#3590](https://github.com/GLEECBTC/gleec-wallet/pull/3590), [#3589](https://github.com/GLEECBTC/gleec-wallet/pull/3589)) — Save the default coin selection after device authentication finishes, and prevent session restoration from publishing the wallet before setup completes.
 
 - **Swap Start Ownership** ([@CharlVS], [#3583](https://github.com/GLEECBTC/gleec-wallet/pull/3583), [#3584](https://github.com/GLEECBTC/gleec-wallet/pull/3584), [#3592](https://github.com/GLEECBTC/gleec-wallet/pull/3592), [#3593](https://github.com/GLEECBTC/gleec-wallet/pull/3593)) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching for at most 10 seconds, so a request the engine never answers cannot hold off sign-out; SDK offers cannot be rebound to another session. While a start may be running, its amount, Max and unit switch are locked, and Review stays off until a just-signed-in wallet's session is ready. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
 
@@ -79,7 +77,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 - **macOS** ([@DeckerSU], #3541) — Sign the KDF helper with hardened runtime and timestamp for notarization. Signed packaging and fresh-install validation remain release gates.
 - **GasFree TRON** ([@CharlVS], #3546, #3549) — Enable production GasFree defaults in ordinary and shared-CI builds. The four production defines remain pinned for release validation.
-- **Frozen Inputs** ([@CharlVS], [#3586](https://github.com/GLEECBTC/gleec-wallet/pull/3586), [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587), [SDK#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430), [SDK#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431), [#3594](https://github.com/GLEECBTC/gleec-wallet/pull/3594), [#3595](https://github.com/GLEECBTC/gleec-wallet/pull/3595), [SDK#439](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/439), [SDK#440](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/440)) — Accepted SDK `ff43a0ba` pins KDF `a51d69a` (`3.2.0-beta`), specs `7c388ea` and coins `cc8249e8`. That final coins roll replaces `efd3a647`; it adds Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON, and removes no coin. Runtime coin updates remain independent. All ten KDF platform builds and 17 test jobs passed; seven archives match independent artifact digests and mirror bytes. The engine retains the ERC-20 payment validation shipped in 0.9.7-1. Earlier `e40ac2f` / `2b0aefb7` inputs are superseded preparation history.
+- **Frozen Inputs** ([@CharlVS], [#3586](https://github.com/GLEECBTC/gleec-wallet/pull/3586), [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587), [SDK#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430), [SDK#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431), [#3594](https://github.com/GLEECBTC/gleec-wallet/pull/3594), [#3595](https://github.com/GLEECBTC/gleec-wallet/pull/3595), [SDK#439](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/439), [SDK#440](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/440), [SDK#434](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/434), [SDK#435](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/435)) — Accepted SDK `caab72b9` pins KDF `a51d69a` (`3.2.0-beta`), specs `7c388ea` and coins `cc8249e8`. That final coins roll replaces `efd3a647`; it adds Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON, and removes no coin. Failed build-time GitHub API calls in the SDK no longer log authorization headers. Runtime coin updates remain independent. All ten KDF platform builds and 17 test jobs passed; seven archives match independent artifact digests and mirror bytes. The engine retains the ERC-20 payment validation shipped in 0.9.7-1. Earlier `e40ac2f` / `2b0aefb7` inputs are superseded preparation history.
 - **RC Previews** ([@CharlVS], [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587)) — Enabled ordinary preview updates for hyphenated frozen release branches while retaining the legal-document availability gate.
 
 ## Compatibility and Known Limits

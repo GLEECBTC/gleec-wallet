@@ -6,22 +6,24 @@ owner sends invitations; this handoff does not request reviews or contact tester
 
 ## Current accepted candidate — 4 November
 
-Use app RC `42be44e92d111a12ef5ec5e62f84349118465fae` with frozen SDK
-`ff43a0bad14577b2f5649fae22233a5fe9fe02c4`, KDF `a51d69a` and coins
+Use app RC `3f2058c801d823eceb5d5dcadbb9324e163d9115` with frozen SDK
+`caab72b973c3fa74a4b6a11a663e4e67798023e1`, KDF `a51d69a` and coins
 `cc8249e8`. The [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md)
-maps accepted fixes since #3575 first opened. Pending SDK #435 and app
-#3590/#3589 updates are separate; do not assume a branch or open PR is included.
+maps accepted fixes since #3575 first opened. SDK #435 and app #3590/#3589
+are included; no carry is pending.
 
 The ordinary [main-RC preview](https://walletrc--pull-3575-merge-ynyfywb3.web.app)
-was [reverified on 4 November](RC_0.10.0_PREVIEW_2026-11-04.json): its virtual
-merge tree equals the accepted RC, the SDK pin/JavaScript and all 13 served
-config/coin/engine files match, legal bypass is false and production approval
-is false. Read `rc-test-build.json` again before each round or after a carry;
-this dated result does not qualify a later deployment.
+was [reverified on 4 November](RC_0.10.0_PREVIEW_2026-11-04.json) at
+`da3214d8`: its virtual merge tree equalled that RC, the SDK pin/JavaScript and
+all 13 served config/coin/engine files matched, legal bypass was false and
+production approval was false. That dated result does not qualify `3f2058c8`
+or a later deployment; read `rc-test-build.json` again before each round.
 
-Saved qualification for this runtime: app **3,991 passed /4 skipped**, browser
+Saved qualification at `da3214d8`: app **3,991 passed /4 skipped**, browser
 WASM **84**, hosted source/carry/main checks **14/9/17**; SDK 16 suites
-**3,112 passed /14 skipped** and browser **249 +10 +10**. All ten exact-pin
+**3,112 passed /14 skipped** and browser **249 +10 +10**. The later carries
+passed the full local app gate on both branches, **4,008 passed /4 skipped** at
+`3f2058c8`. All ten exact-pin
 KDF builds and 17 test jobs passed. The owner's named Banxa quote/selection
 deferral remains separate from Ramp and is not a successful quote test.
 Signed packaging, install/upgrade, approved legal text and promotion remain
@@ -80,8 +82,8 @@ records the current immutable SDK/KDF inputs.
 | --- | --- |
 | App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
 | SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
-| Tested app RC source | `232d211083950b2ad89da628fcef9cdc9085bc63`; accepted normal carry `42be44e92d111a12ef5ec5e62f84349118465fae` has the identical complete tree |
-| SDK gitlink | `ff43a0bad14577b2f5649fae22233a5fe9fe02c4`, the tree of `release-0.9.0` `7636f554c77b0d4bfa02d20dc030f1a95596a755` |
+| Tested app RC source | `72592009c579238ea3a310117a2146edc7544a43`; accepted normal carry `3f2058c801d823eceb5d5dcadbb9324e163d9115` has the identical complete tree |
+| SDK gitlink | `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge `bb5b4187bf49f844c01672799b451b50a5b08808`; `release-0.9.0` `8cae3c91125fc6003fcc637a168b827adb57287f` adds only changelogs and release docs |
 | KDF | `a51d69a11ff937ecf9678e9b37632af578252846` on dev, `3.2.0-beta` |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
 | Bundled coins | `cc8249e85e54467bc2684c2712857711eab55fd2`; runtime updates enabled |

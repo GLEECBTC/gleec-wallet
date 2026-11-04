@@ -10,9 +10,11 @@ published signed-artifact manifest.
 
 ## Current accepted snapshot — 4 November 2026
 
-- App RC `42be44e92d111a12ef5ec5e62f84349118465fae`; SDK gitlink
-  `ff43a0bad14577b2f5649fae22233a5fe9fe02c4`, the tree of SDK `release-0.9.0`
-  `7636f554c77b0d4bfa02d20dc030f1a95596a755`; coins `cc8249e85e54467bc2684c2712857711eab55fd2`. The
+- App RC `3f2058c801d823eceb5d5dcadbb9324e163d9115`; SDK gitlink
+  `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge
+  `bb5b4187bf49f844c01672799b451b50a5b08808` (SDK `release-0.9.0`
+  `8cae3c91125fc6003fcc637a168b827adb57287f` adds only changelogs and release
+  docs); coins `cc8249e85e54467bc2684c2712857711eab55fd2`. The
   [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
   accepted change after #3575 opened at `ffcac834`.
 - [x] Actual source/carry acceptance recorded in the input manifest: app
@@ -27,17 +29,19 @@ published signed-artifact manifest.
   `42be44e92`, and SDK #439 squash `ab29d57a` / #440 normal merge `7636f554`.
   Accepted trees matched tested candidates; app gate **4,004 / 4 skipped** on
   both branches. The frozen-coins item below records the evidence.
-- [ ] Refresh the ordinary main-RC preview for `42be44e9` and recheck its
+- [ ] Refresh the ordinary main-RC preview for the final head and recheck its
   tree, SDK pin and served files. The dated proof below covers `da3214d8` only.
 - [x] Rechecked the ordinary main-RC preview's source-tree identity, SDK pin,
   JavaScript and all 13 served config/coin/engine files. The
   [dated proof](RC_0.10.0_PREVIEW_2026-11-04.json) has legal bypass **false**
   and production approval **false**. Recheck live identity after later carries;
   this is not a signed-installer or production approval record.
-- [ ] Accept the pending SDK #435 and app #3590/#3589 fixes through their
-  required current checks/review. Update exact pins, both changelogs, this
-  manifest and preview evidence after acceptance; pending work is not shipped
-  content in the snapshot above.
+- [x] Accepted SDK #435 (normal merge `bb5b4187`, carrying #434 squash
+  `1205d305`) and app #3590 squash `5b2e21962` / #3589 normal merge
+  `3f2058c80`, which pins SDK `caab72b9`. Accepted trees matched tested
+  candidates; the app gate passed **4,008 / 4 skipped** on both branches.
+  Hosted checks passed apart from macOS jobs that GitHub cancelled because no
+  runner picked them up.
 - [ ] Reproduce and resolve, or record an explicit scoped disposition for, the
   native Trezor restart health-check/sign-out
   observation and device-lock `Unexpected message` attempts on the final
