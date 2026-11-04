@@ -184,13 +184,16 @@ class SwapExecutionRegistry {
   Stream<DateTime> checksOf(String id) =>
       _checks.stream.where((check) => check.id == id).map((check) => check.at);
 
+  /// Whether a start can be confirmed now: a wallet session is current here.
+  bool get acceptsSubmissions {
+    final session = _currentSession();
+    return !_disposed && session != null && _isSessionCurrent(session);
+  }
+
   /// A start confirmed now, in this session.
   SwapSubmission beginSubmission() {
-    final session = _currentSession();
-    if (_disposed || session == null || !_isSessionCurrent(session)) {
-      throw _staleSubmission;
-    }
-    return SwapSubmission._(_owner, _generation, session);
+    if (!acceptsSubmissions) throw _staleSubmission;
+    return SwapSubmission._(_owner, _generation, _currentSession()!);
   }
 
   /// Whether [submission] was confirmed in this session.

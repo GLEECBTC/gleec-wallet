@@ -3,10 +3,7 @@ part of 'unified_swap_bloc.dart';
 /// The review and the start, which re-prices before committing.
 extension _UnifiedSwapReview on UnifiedSwapBloc {
   /// Whether the reviewed swap may be running, its start unanswered or lost.
-  bool get _startInDoubt => switch (state.review?.status) {
-    SwapReviewStatus.starting || SwapReviewStatus.unconfirmed => true,
-    _ => false,
-  };
+  bool get _startInDoubt => state.startInDoubt;
 
   Future<void> _onReviewOpened(
     UnifiedSwapReviewOpened event,
@@ -18,6 +15,9 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     try {
       reviewedIn = _registry.beginSubmission();
     } on SwapStartRejectedException {
+      // No session yet, as just after signing in: Review stays off until the
+      // registry's next session, which also re-prices the form.
+      emit(state.copyWith(sessionReady: false));
       return;
     }
     final version = ++_startVersion;
