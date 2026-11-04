@@ -5,10 +5,12 @@
 name: SDK pin is merged
 run-name: ${{ github.actor }} is checking the SDK pin
 
+# Every pull request, whatever its base, stacked ones included.
 on:
   pull_request:
-    branches:
-      - "*"
+
+permissions:
+  contents: read
 
 jobs:
   sdk_pin_merged:
@@ -17,6 +19,8 @@ jobs:
     steps:
       - name: Check out the app
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Test the pin check
         run: .github/scripts/test_check_sdk_pin_merged.sh
