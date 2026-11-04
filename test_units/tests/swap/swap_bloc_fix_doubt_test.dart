@@ -49,6 +49,34 @@ void main() {
     ),
   };
 
+  // The amount beside a swap that may be running: typed, Max, or its unit.
+  final amountEdits = <String, UnifiedSwapEvent>{
+    'a typed amount': const UnifiedSwapAmountChanged('0.5'),
+    'Max': const UnifiedSwapMaxRequested(),
+    'the unit switch': const UnifiedSwapAmountModeToggled(),
+  };
+
+  for (final (stage, reach) in [
+    ('asked to start', starting),
+    ('with its answer lost', unconfirmed),
+  ]) {
+    for (final MapEntry(key: name, value: edit) in amountEdits.entries) {
+      swapBlocTest('$name leaves the amount of a swap $stage', (h) {
+        final bloc = reach(h);
+        final before = bloc.state;
+        bloc
+          ..add(const UnifiedSwapReviewClosed())
+          ..add(edit);
+        h.settle();
+
+        expect(bloc.state.inputText, before.inputText);
+        expect(bloc.state.amountMode, before.amountMode);
+        expect(bloc.state.maxRequested, isFalse);
+        expect(bloc.state.review!.status, before.review!.status);
+      });
+    }
+  }
+
   group('while the engine is asked to start', () {
     for (final MapEntry(key: name, value: edit) in edits.entries) {
       swapBlocTest('$name waits for the answer', (h) {
