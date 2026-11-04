@@ -6,9 +6,9 @@ owner sends invitations; this handoff does not request reviews or contact tester
 
 ## Current accepted candidate — 4 November
 
-Use app RC `da3214d80f3c75aa0cc6fe718f75403226df6f30` with frozen SDK
-`3b4629048d8513af8f8a9d17a5cdf7eb5763d206`, KDF `a51d69a` and coins
-`efd3a647`. The [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md)
+Use app RC `42be44e92d111a12ef5ec5e62f84349118465fae` with frozen SDK
+`ff43a0bad14577b2f5649fae22233a5fe9fe02c4`, KDF `a51d69a` and coins
+`cc8249e8`. The [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md)
 maps accepted fixes since #3575 first opened. Pending SDK #435 and app
 #3590/#3589 updates are separate; do not assume a branch or open PR is included.
 
@@ -80,11 +80,11 @@ records the current immutable SDK/KDF inputs.
 | --- | --- |
 | App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
 | SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
-| Tested app RC source | `d732a2c127e3734bde1d0bb2903720ab315aa0bd`; accepted normal carry `da3214d80f3c75aa0cc6fe718f75403226df6f30` has the identical complete tree |
-| SDK gitlink | `3b4629048d8513af8f8a9d17a5cdf7eb5763d206` |
+| Tested app RC source | `232d211083950b2ad89da628fcef9cdc9085bc63`; accepted normal carry `42be44e92d111a12ef5ec5e62f84349118465fae` has the identical complete tree |
+| SDK gitlink | `ff43a0bad14577b2f5649fae22233a5fe9fe02c4`, the tree of `release-0.9.0` `7636f554c77b0d4bfa02d20dc030f1a95596a755` |
 | KDF | `a51d69a11ff937ecf9678e9b37632af578252846` on dev, `3.2.0-beta` |
 | RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
-| Bundled coins | `efd3a6471709f7e13e0b03277e37548e11840aae`; runtime updates enabled |
+| Bundled coins | `cc8249e85e54467bc2684c2712857711eab55fd2`; runtime updates enabled |
 
 The [input manifest](RELEASE_0.10.0_INPUTS.json) records archive/config/lockfile
 hashes. The final deployed preview's `rc-test-build.json` records its full app

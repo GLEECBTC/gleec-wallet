@@ -1,5 +1,5 @@
 {
-  "status": "Accepted RC runtime snapshot da3214d8 with frozen SDK3b462904; current recorded qualification passed with the named Banxa deferral. Later carries and production distribution retain separate gates; not a published artifact manifest.",
+  "status": "Accepted RC runtime snapshot 42be44e9 with frozen SDK ff43a0ba (tree of SDK release-0.9.0 7636f554) and coins cc8249e8. The session follow-ups and the final coins roll passed the full local app gate on both branches; the da3214d8 hosted qualification and preview do not cover this head. Later carries and production distribution retain separate gates; not a published artifact manifest.",
   "prepared_on": "2026-11-03",
   "app": {
     "version": "0.10.0+0",
@@ -17,7 +17,7 @@
     "previous_runtime_validation_commit": "5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c",
     "previous_tested_source_commit": "33bf94a7cc4ed9b4ba5bc04f2694a344445908a1",
     "accepted_development_commit": "1249c500c96a7dc139ae7b86d8667e8304bd6a1b",
-    "accepted_release_commit": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+    "accepted_release_commit": "42be44e92d111a12ef5ec5e62f84349118465fae",
     "accepted_runtime_tree": "4cb5b83ff1a255d9e8b2ef3a33b9152d2a143cbc",
     "previous_sdk_pointer_dev_pr": 3576,
     "previous_sdk_pointer_release_pr": 3577
@@ -30,7 +30,7 @@
     "preparation_pr": 409,
     "promotion_pr": 416,
     "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "candidate_commit": "ff43a0bad14577b2f5649fae22233a5fe9fe02c4",
     "melos_validation_pr": 411,
     "release_branch": "release-0.9.0",
     "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
@@ -47,7 +47,8 @@
     "previous_kdf_roll_release_pr": 420,
     "previous_kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e",
     "kdf_roll_dev_squash_commit": "db73613cd34a2c0779da024a71338052e4bbb030",
-    "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206"
+    "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "release_head": "7636f554c77b0d4bfa02d20dc030f1a95596a755"
   },
   "kdf": {
     "source": "a51d69a11ff937ecf9678e9b37632af578252846",
@@ -363,9 +364,9 @@
     "date": "2026-11-04",
     "record": "RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md",
     "initial_rc": "ffcac83447af92e427dee47a3498cc4819c674ee",
-    "accepted_rc": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+    "accepted_rc": "42be44e92d111a12ef5ec5e62f84349118465fae",
     "sdk_initial_rc": "22e14ac94fb555776eda370de08f1dafd5ca4019",
-    "sdk_accepted_rc": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "sdk_accepted_rc": "ff43a0bad14577b2f5649fae22233a5fe9fe02c4",
     "boundary_evidence": "First hosted Actions runs after each PR opened match the exact initial heads."
   },
   "ordinary_preview_snapshot": {
@@ -397,5 +398,47 @@
       "area": "native Trezor qualification",
       "status": "Retain restart version-null health-check/sign-out observation and lock-interruptedUnexpectedmessage attempts for final-candidate reproduction/disposition. Selection persistence on a separate pending source is not automatic-session recovery or a full balance-view pass."
     }
-  ]
+  ],
+  "session_followups": {
+    "date": "2026-11-04",
+    "app_dev_pr": 3592,
+    "app_dev_squash": "d7c369cef50e235f9e0272d86d4e83404c72e62a",
+    "app_rc_pr": 3593,
+    "app_rc_merge": "62d6ded1e5e9c9156cc0a126fe908b4589f679f2",
+    "app_rc_tested_head": "172ebe5d3e76dfab71081296897e252650abf911",
+    "sdk_dev_pr": 437,
+    "sdk_dev_squash": "34dd5febb45193c7c66b649b89b68ef3d90f3675",
+    "sdk_rc_pr": 438,
+    "sdk_rc_merge": "ad1799272121c18c7391287b9744247f89c04e44",
+    "sdk_rc_carry_head": "0c69bd35082a10bff445ebf5c5a24de1d948b6ee",
+    "app_passed": 4004,
+    "app_skipped": 4,
+    "sdk_core_passed": 1239,
+    "sdk_core_skipped": 1,
+    "local_auth_passed": 163,
+    "framework_passed": 104,
+    "routed_harness_passed": 60,
+    "scope": "Accepted trees matched tested candidates on all four PRs."
+  },
+  "final_coins_roll": {
+    "date": "2026-11-04",
+    "coins_source": "cc8249e85e54467bc2684c2712857711eab55fd2",
+    "previous_coins_source": "efd3a6471709f7e13e0b03277e37548e11840aae",
+    "coins_commits": 22,
+    "sdk_dev_pr": 439,
+    "sdk_dev_squash": "ab29d57aa05aa48240ab7430c6d51a4f5e60a579",
+    "sdk_rc_pr": 440,
+    "sdk_rc_merge": "7636f554c77b0d4bfa02d20dc030f1a95596a755",
+    "sdk_rc_carry_head": "ff43a0bad14577b2f5649fae22233a5fe9fe02c4",
+    "app_dev_pr": 3594,
+    "app_dev_squash": "30e71b79aee94b9b46095fc84be1f0774a13a311",
+    "app_rc_pr": 3595,
+    "app_rc_merge": "42be44e92d111a12ef5ec5e62f84349118465fae",
+    "app_rc_tested_head": "232d211083950b2ad89da628fcef9cdc9085bc63",
+    "kdf_compatibility": "KDF a51d69a parses every fee_model used (EthFeeModel); its signature_version and decimals defaults match the dropped values; segwit inputs always sign as WitnessV0.",
+    "app_passed": 4004,
+    "app_skipped": 4,
+    "sdk_suites": "komodo_coins 143, komodo_coin_updates 106, komodo_defi_types 191 (3 skipped), framework 104, local_auth 163, sdk 1239 (1 skipped), routed harness 60, on both SDK branches",
+    "validation_record": "#/coins/validation"
+  }
 }

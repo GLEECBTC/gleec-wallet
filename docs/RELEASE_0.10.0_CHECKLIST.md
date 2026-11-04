@@ -10,14 +10,25 @@ published signed-artifact manifest.
 
 ## Current accepted snapshot — 4 November 2026
 
-- App RC `da3214d80f3c75aa0cc6fe718f75403226df6f30`; SDK gitlink
-  `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. The
+- App RC `42be44e92d111a12ef5ec5e62f84349118465fae`; SDK gitlink
+  `ff43a0bad14577b2f5649fae22233a5fe9fe02c4`, the tree of SDK `release-0.9.0`
+  `7636f554c77b0d4bfa02d20dc030f1a95596a755`; coins `cc8249e85e54467bc2684c2712857711eab55fd2`. The
   [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
   accepted change after #3575 opened at `ffcac834`.
 - [x] Actual source/carry acceptance recorded in the input manifest: app
   #3586 squash / #3587 normal merge and SDK #430 squash / #431 normal merge.
   Accepted trees matched tested candidates; current hosted source/carry/main
   app checks passed **14/9/17** and SDK main checks passed **5**.
+- [x] Session follow-ups: app #3592 squash `d7c369cef` / #3593 normal merge
+  `62d6ded1e`, and SDK #437 squash `34dd5feb` / #438 normal merge `ad179927`.
+  Accepted trees matched tested candidates. The full app unit gate passed
+  **4,004 / 4 skipped** on both branches; the SDK suites are in SDK #436.
+- [x] Final coins roll: app #3594 squash `30e71b79a` / #3595 normal merge
+  `42be44e92`, and SDK #439 squash `ab29d57a` / #440 normal merge `7636f554`.
+  Accepted trees matched tested candidates; app gate **4,004 / 4 skipped** on
+  both branches. The frozen-coins item below records the evidence.
+- [ ] Refresh the ordinary main-RC preview for `42be44e9` and recheck its
+  tree, SDK pin and served files. The dated proof below covers `da3214d8` only.
 - [x] Rechecked the ordinary main-RC preview's source-tree identity, SDK pin,
   JavaScript and all 13 served config/coin/engine files. The
   [dated proof](RC_0.10.0_PREVIEW_2026-11-04.json) has legal bypass **false**
@@ -40,7 +51,7 @@ published signed-artifact manifest.
 
 ## Validated KDF and coins roll — 3 November
 
-This RC candidate pins accepted SDK `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`.
+That candidate pinned accepted SDK `3b4629048d8513af8f8a9d17a5cdf7eb5763d206`.
 SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) was
 squash merged into dev as `db73613cd34a2c0779da024a71338052e4bbb030`; normal RC carry
 [#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431) is
