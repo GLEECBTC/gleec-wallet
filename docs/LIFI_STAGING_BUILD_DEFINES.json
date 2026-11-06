@@ -1,7 +1,0 @@
-{
-  "LIFI_PROXY_URL": "https://quicknode.gleec.com/lifi",
-  "LIFI_INTEGRATOR_ENABLED": "true",
-  "LIFI_INTEGRATOR_NAME": "gleec-dex-staging",
-  "LIFI_INTEGRATOR_FEE_BPS": "178",
-  "LIFI_FEE_BPS": "22"
-}

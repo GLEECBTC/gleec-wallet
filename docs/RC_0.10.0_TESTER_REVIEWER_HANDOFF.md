@@ -7,8 +7,8 @@ owner sends invitations; this handoff does not request reviews or contact tester
 ## Current build policy — 6 November
 
 Wallet #3585 is carried into the RC at the owner's request. LI.FI defaults to
-`gleec-dex-production`, including ordinary GitHub previews; staging is used only
-when explicitly selected. The SDK stays at merged main `09bde8c6978433d509ffabe6696d495fe5923745`
+`gleec-dex-production` everywhere, including GitHub previews. Staging is no
+longer offered while KDP is configured for the production integration. The SDK stays at merged main `09bde8c6978433d509ffabe6696d495fe5923745`
 from #3603, with KDF `a51d69a1` and coins `cc8249e8`. The release PR
 [#3575](https://github.com/GLEECBTC/gleec-wallet/pull/3575) records the current
 carry head and its validation. Before testing, re-read the preview's

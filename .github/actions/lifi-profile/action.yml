@@ -2,11 +2,11 @@ name: Select LI.FI build profile
 description: Select a validated public profile from the triggering event
 inputs:
   requested:
-    description: Explicit build profile; published releases always use production
+    description: Build profile; only production is supported
     default: production
 outputs:
   environment:
-    description: Validated staging or production profile
+    description: Validated production profile
     value: ${{ steps.select.outputs.environment }}
 runs:
   using: composite

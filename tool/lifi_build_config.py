@@ -19,7 +19,6 @@ PUBLIC_DEFAULTS = {
     "LIFI_FEE_BPS": "22",
 }
 PROFILES = {
-    "staging": ("docs/LIFI_STAGING_BUILD_DEFINES.json", "gleec-dex-staging"),
     "production": ("docs/LIFI_PRODUCTION_BUILD_DEFINES.json", "gleec-dex-production"),
 }
 
@@ -42,8 +41,8 @@ def load_build_defines(path=None):
     require(all(isinstance(value, str) for value in values.values()),
             "LI.FI build define values must be strings")
     require(values["LIFI_INTEGRATOR_ENABLED"] == "true", "Fee validation requires the integrator enabled")
-    require(re.fullmatch(r"[a-z0-9-]{3,48}", values["LIFI_INTEGRATOR_NAME"])
-            and values["LIFI_INTEGRATOR_NAME"] != "lifi", "Invalid integration identifier")
+    require(values["LIFI_INTEGRATOR_NAME"] == "gleec-dex-production",
+            "Only the production LI.FI integration is supported")
     require((values["LIFI_INTEGRATOR_FEE_BPS"], values["LIFI_FEE_BPS"]) == ("178", "22"),
             "This build policy requires the approved 178 + 22 bps allocation")
     try:
@@ -69,7 +68,7 @@ def deployment_config(build_defines=None):
 
 
 def select_build_config(environment, root=None):
-    require(environment in PROFILES, "LI.FI build environment must be staging or production")
+    require(environment in PROFILES, "Only the production LI.FI build profile is supported")
     relative, integration = PROFILES[environment]
     root = Path(root) if root is not None else Path(__file__).resolve().parent.parent
     values = load_build_defines(root / relative)
@@ -79,11 +78,9 @@ def select_build_config(environment, root=None):
 
 
 def event_environment(event, requested="production"):
-    """Default to production; previews may explicitly select staging."""
-    if event == "release":
-        return "production"
-    require(requested in PROFILES, "Invalid LI.FI profile")
-    return requested
+    """Every event uses production; reject retired staging requests."""
+    require(requested in PROFILES, "Only the production LI.FI build profile is supported")
+    return "production"
 
 
 def validate_build_command(command):

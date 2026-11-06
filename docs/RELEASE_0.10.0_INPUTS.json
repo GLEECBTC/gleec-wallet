@@ -130,7 +130,7 @@
   "production_build_overrides": {
     "LIFI_INTEGRATOR_NAME": "gleec-dex-production",
     "decided": "2026-11-06, owner; supersedes 2026-11-04",
-    "scope": "Production is the compiled and build-workflow default. Wallet #3585 is included in the RC; staging requires explicit preview selection. All five public fields are pinned by docs/LIFI_PRODUCTION_BUILD_DEFINES.json.",
+    "scope": "Production is the only supported build profile, including GitHub previews. Staging requests are rejected before Flutter starts. All five public fields are pinned by docs/LIFI_PRODUCTION_BUILD_DEFINES.json.",
     "verify": "grep -r -a -o -h 'gleec-dex-[a-z]*' <unpacked output> | sort -u prints only gleec-dex-production; unzip AAB, APK and IPA packages first.",
     "doc": "RELEASE_0.10.0_PRODUCTION_BUILD.md"
   },
@@ -520,9 +520,15 @@
     "base_rc": "94fc24553d00a9500fb12b39fc63e69bb7b08fd6",
     "sdk_commit": "09bde8c6978433d509ffabe6696d495fe5923745",
     "default": "production",
-    "staging": "explicit preview selection only",
+    "staging": "Unavailable; the owner requested production everywhere because the KDP route uses the production integration key.",
     "production_profile": "docs/LIFI_PRODUCTION_BUILD_DEFINES.json",
     "sdk_432": "remains deferred; not a dependency of wallet validation",
     "acceptance_record": "Release PR #3575 records accepted carry, hosted checks and refreshed preview identity."
+  },
+  "lifi_production_only_followup": {
+    "date": "2026-11-06",
+    "base_rc": "928db11549b0e9c299b9babd80e425c016a3fa00",
+    "scope": "Remove staging profile/preview choices and reject staging before builds. Production runtime defaults, SDK, KDF and coins remain unchanged.",
+    "validation_record": "Release PR #3575 records the accepted source/carry and current preview."
   }
 }

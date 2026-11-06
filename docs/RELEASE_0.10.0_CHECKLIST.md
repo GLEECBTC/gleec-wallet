@@ -11,6 +11,8 @@ published signed-artifact manifest.
 ## LI.FI production-default carry — 6 November 2026
 
 Wallet #3585 adds public profiles, compiled-profile checks and artifact records.
+The 6 November follow-up supports production only, including GitHub previews,
+because staging has no separately verified KDP integration/key route.
 This carry changes the app's default integrator to production; the rest of the
 accepted runtime is retained. SDK `09bde8c6978433d509ffabe6696d495fe5923745`
 remains pinned from #3603, with KDF `a51d69a1` and coins `cc8249e8`.
@@ -69,8 +71,8 @@ Older dated preview and test records below do not certify this changed default.
 - [x] Owner decision (6 November), superseding the 4 November deferral:
   carry wallet #3585 into this RC. Production (`gleec-dex-production`) is the
   compiled default and the default for shared actions, Docker and GitHub
-  workflows. Staging requires explicit selection for a preview. Published
-  native releases always use production. The public profiles preserve the
+  workflows. The subsequent 6 November instruction removes staging entirely
+  from supported build profiles and preview choices. The production profile preserves the
   proxy, enabled integrator and 178 + 22 bps fee allocation. SDK #432 remains
   deferred; this wallet carry does not change the accepted SDK/KDF/coins pins.
   Use the [production build guide](RELEASE_0.10.0_PRODUCTION_BUILD.md), verify
