@@ -100,12 +100,15 @@ jobs:
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Flutter only forwards Xcode overrides with the FLUTTER_XCODE_ prefix.
-          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'NO' || '' }}
-          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'NO' || '' }}
-          FLUTTER_XCODE_CODE_SIGN_IDENTITY: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '' || '' }}
-          FLUTTER_XCODE_CODE_SIGN_STYLE: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && 'Manual' || '' }}
-          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '' || '' }}
-          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ${{ matrix.platform == 'macos' && github.event_name == 'pull_request' && '' || '' }}
+          # Build macOS unsigned unless signing material exists: setup-macos
+          # imports it only in KomodoPlatform/komodo-wallet, so release and
+          # manual runs here would otherwise fail at signing.
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: ${{ matrix.platform == 'macos' && (github.event_name == 'pull_request' || github.repository != 'KomodoPlatform/komodo-wallet') && 'NO' || '' }}
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: ${{ matrix.platform == 'macos' && (github.event_name == 'pull_request' || github.repository != 'KomodoPlatform/komodo-wallet') && 'NO' || '' }}
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: ${{ matrix.platform == 'macos' && (github.event_name == 'pull_request' || github.repository != 'KomodoPlatform/komodo-wallet') && '' || '' }}
+          FLUTTER_XCODE_CODE_SIGN_STYLE: ${{ matrix.platform == 'macos' && (github.event_name == 'pull_request' || github.repository != 'KomodoPlatform/komodo-wallet') && 'Manual' || '' }}
+          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ matrix.platform == 'macos' && (github.event_name == 'pull_request' || github.repository != 'KomodoPlatform/komodo-wallet') && '' || '' }}
+          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ${{ matrix.platform == 'macos' && (github.event_name == 'pull_request' || github.repository != 'KomodoPlatform/komodo-wallet') && '' || '' }}
         uses: ./.github/actions/generate-assets
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

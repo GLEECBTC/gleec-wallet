@@ -15,7 +15,7 @@ work; it does not authorize merges, deployment or funded transactions.
 |---|---|
 | Seven matching KDF archives | Complete. Linux rerun succeeded; all seven downloads and sidecars match the strict manifest. Coins pin preserved. |
 | Frozen bundled coins | Build-time advancement disabled; pinned source and Git blob hashes verified. Runtime coin updates remain enabled. See the candidate manifest. |
-| Commission | Confirmed: `gleec-dex-staging`, 178 + 22 bps. Wallet supplies typed startup policy, KDF requests/validates it, proxy retains API key. Defaults, overrides, disable and invalid settings covered. |
+| Commission | Confirmed: 178 + 22 bps, under `gleec-dex-staging` for this delivery. Every build uses `gleec-dex-production` since 6 November (#3585, #3605). Wallet supplies typed startup policy, KDF requests/validates it, proxy retains API key. Defaults, overrides, disable and invalid settings covered. |
 | Fee models | SDK supplies missing Base `op_stack`, Mantle `mantle`, Monad `monad`, Avalanche `avalanche` settings for bundled/cached/refreshed configs. Explicit settings remain authoritative; tokens inherit platforms. |
 | Max and accepted minimum | KDF Max replaces client reserve multipliers. Concrete comparisons and execution; exact provider minimum, no extra 0.3% reduction. Review snapshots and reacceptance covered. |
 | Funding and payouts | Required balance remains separate from estimated spending; measured/provider amounts remain optional and distinct. Approval/gas evidence retained on failures. |

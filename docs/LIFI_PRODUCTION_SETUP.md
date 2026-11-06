@@ -75,8 +75,17 @@ Native and Docker artifacts include the profile in their names. Matching
 - `SHA256SUMS`: hashes using repository-relative build paths.
 - Resolved Wallet dependencies and, when separately resolved, SDK dependencies.
 
-CI retains these records for 30 days. They describe build inputs and bytes;
-they are not signatures or evidence that a deployment or transaction occurred.
+CI keeps these records for 14 days, the repository's artifact retention limit;
+the workflows request 30. They describe build inputs and bytes; they are not
+signatures or evidence that a deployment or transaction occurred. A record
+names the checked-out commit and does not detect local edits made before the
+build, such as the Docker Android job's `build.gradle` change or the production
+Firebase patch.
+
+The tool only reads artifacts under `build/` and writes `build-provenance/`
+unless you pass `--output`. When you record several targets, give each its own
+`--output` directory, and record and verify each one before a later clean step
+deletes its files.
 
 For a local web artifact, record its completed output directory:
 
