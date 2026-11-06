@@ -9,6 +9,10 @@ inputs:
     description: "The flutter build command to run to generate assets for the deployment build"
     required: false
     default: "flutter build web --no-pub --release"
+  LIFI_BUILD_ENVIRONMENT:
+    description: "Public LI.FI build profile (staging or production); API keys stay on KDP"
+    required: false
+    default: "production"
 
   # Optional Trello feedback provider configuration
   TRELLO_API_KEY:
@@ -92,9 +96,9 @@ runs:
           echo "Using git HEAD SHA: $COMMIT_HASH"
         fi
         # Export for subsequent steps
-        echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
+        echo "COMMIT_HASH=$COMMIT_HASH" >> "$GITHUB_ENV"
         BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%MZ')
-        echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+        echo "BUILD_DATE=$BUILD_DATE" >> "$GITHUB_ENV"
     - name: Fetch packages and generate assets
       id: fetch_and_build
       shell: bash
@@ -115,6 +119,8 @@ runs:
         TRON_GASLESS_SERVICE_PROVIDER: ${{ inputs.TRON_GASLESS_SERVICE_PROVIDER }}
         TRON_GASLESS_REQUIRED_NETWORK: ${{ inputs.TRON_GASLESS_REQUIRED_NETWORK }}
         TRON_GASLESS_CONFIG_VALIDATOR: ${{ github.action_path }}/../../scripts/validate_tron_gasless_config.sh
+        LIFI_BUILD_ENVIRONMENT: ${{ inputs.LIFI_BUILD_ENVIRONMENT }}
+        BUILD_COMMAND: ${{ inputs.BUILD_COMMAND }}
       run: |
         echo "Running \`flutter build\` to generate assets for the deployment build"
 
@@ -128,7 +134,12 @@ runs:
         # Now COMMIT_HASH comes from the previous step, not recalculated here.
 
         # Prepare build command with feedback service credentials
-        BUILD_CMD="${{ inputs.BUILD_COMMAND }}"
+        BUILD_CMD="$BUILD_COMMAND"
+
+        # Both asset generation and the final build use the same public profile.
+        # The selector rejects unknown fields, including credential bundles.
+        LIFI_BUILD_DEFINES=$(python3 tool/lifi_build_config.py "$LIFI_BUILD_ENVIRONMENT" --validate-build-command)
+        BUILD_CMD="$BUILD_CMD --dart-define-from-file=$LIFI_BUILD_DEFINES"
 
         # Add commit hash and build date to build command
         BUILD_CMD="$BUILD_CMD --dart-define=COMMIT_HASH=$COMMIT_HASH"

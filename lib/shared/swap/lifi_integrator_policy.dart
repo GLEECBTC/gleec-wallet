@@ -8,7 +8,7 @@ LifiIntegratorConfig? gleecLifiIntegratorConfig({
   ),
   String name = const String.fromEnvironment(
     'LIFI_INTEGRATOR_NAME',
-    defaultValue: 'gleec-dex-staging',
+    defaultValue: 'gleec-dex-production',
   ),
   String feeBps = const String.fromEnvironment(
     'LIFI_INTEGRATOR_FEE_BPS',

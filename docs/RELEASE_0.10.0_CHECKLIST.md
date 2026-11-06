@@ -8,7 +8,16 @@ preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
-## Current accepted snapshot — 4 November 2026
+## LI.FI production-default carry — 6 November 2026
+
+Wallet #3585 adds public profiles, compiled-profile checks and artifact records.
+This carry changes the app's default integrator to production; the rest of the
+accepted runtime is retained. SDK `09bde8c6978433d509ffabe6696d495fe5923745`
+remains pinned from #3603, with KDF `a51d69a1` and coins `cc8249e8`.
+The current PR head, hosted checks and refreshed preview are recorded in #3575.
+Older dated preview and test records below do not certify this changed default.
+
+## Accepted snapshot — 4 November 2026 (historical)
 
 - Runtime: app RC `3f2058c801d823eceb5d5dcadbb9324e163d9115`; SDK gitlink
   `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge
@@ -57,14 +66,15 @@ published signed-artifact manifest.
   device answers `Unexpected message` until a fresh reconnect and unlock. The
   successful default-selection reconnect round does not certify automatic
   session recovery or a complete native balance view.
-- [x] Owner decision (4 November): production builds pass
-  `--dart-define=LIFI_INTEGRATOR_NAME=gleec-dex-production`. The RC's compiled
-  default stays `gleec-dex-staging`; every other LI.FI value equals the RC
-  default (proxy `https://quicknode.gleec.com/lifi`, integrator enabled, fee
-  178 bps, LI.FI fee 22 bps). Wallet #3585's profile file and CI enforcement
-  move to the next release. On each unpacked output (unzip AAB, APK and IPA
-  packages first), `grep -r -a -o -h 'gleec-dex-[a-z]*' <output> | sort -u`
-  must print only `gleec-dex-production`.
+- [x] Owner decision (6 November), superseding the 4 November deferral:
+  carry wallet #3585 into this RC. Production (`gleec-dex-production`) is the
+  compiled default and the default for shared actions, Docker and GitHub
+  workflows. Staging requires explicit selection for a preview. Published
+  native releases always use production. The public profiles preserve the
+  proxy, enabled integrator and 178 + 22 bps fee allocation. SDK #432 remains
+  deferred; this wallet carry does not change the accepted SDK/KDF/coins pins.
+  Use the [production build guide](RELEASE_0.10.0_PRODUCTION_BUILD.md), verify
+  every artifact's integrator and retain the new profile/dependency/hash records.
 - [ ] Retain final promotion review, approved legal text, signed packaging,
   install/upgrade evidence and the eventual accepted SDK main pin as separate
   distribution gates. Main SDK #416 and app #3575 remain open with no
@@ -428,8 +438,8 @@ advance release branches to unrelated dev work.
    hosted legal text and clean-profile consent verification. The marker-free
    local LI.FI draft is not evidence that hosting or legal approval changed.
    Retire the manual RC exception/channel after testing. Web deployment and
-   GitHub publication are separate operations; inspect legacy `release: created`
-   native triggers.
+   GitHub publication are separate operations. Native validation artifacts now
+   build on `release: published` with the production LI.FI profile.
 
 Code freeze does not certify a public release. The outstanding operational,
 legal, reviewer and signed-platform items above remain distribution gates.

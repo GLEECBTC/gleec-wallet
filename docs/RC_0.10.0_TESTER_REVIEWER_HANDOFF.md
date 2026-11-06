@@ -1,10 +1,22 @@
 # Gleec Wallet 0.10.0 RC: tester and reviewer handoff
 
-Updated 4 November 2026. This candidate is available for code review and a
+Updated 6 November 2026. This candidate is available for code review and a
 controlled testing round. Production promotion remains gated below. The release
 owner sends invitations; this handoff does not request reviews or contact testers.
 
-## Current accepted candidate — 4 November
+## Current build policy — 6 November
+
+Wallet #3585 is carried into the RC at the owner's request. LI.FI defaults to
+`gleec-dex-production`, including ordinary GitHub previews; staging is used only
+when explicitly selected. The SDK stays at merged main `09bde8c6978433d509ffabe6696d495fe5923745`
+from #3603, with KDF `a51d69a1` and coins `cc8249e8`. The release PR
+[#3575](https://github.com/GLEECBTC/gleec-wallet/pull/3575) records the current
+carry head and its validation. Before testing, re-read the preview's
+`rc-test-build.json`: verify its app/SDK revisions and `lifi_build_defines`,
+with legal bypass and production approval both false. Earlier preview proof
+covers only its recorded revision and staging policy.
+
+## Accepted candidate — 4 November (historical)
 
 Use app RC `3f2058c801d823eceb5d5dcadbb9324e163d9115` with frozen SDK
 `caab72b973c3fa74a4b6a11a663e4e67798023e1`, KDF `a51d69a` and coins

@@ -4,7 +4,8 @@ This is for the release owner who builds, signs and publishes 0.10.0 on a
 private machine. No workflow in this repository signs or publishes: CI builds
 unsigned validation artifacts, and its signing steps only run in the upstream
 KomodoPlatform repository. Every value below was checked against this release's
-tree on 4 November 2026.
+tree on 4 November 2026; LI.FI profile instructions were updated on 6 November
+for the owner-requested carry of wallet #3585.
 
 ## Order
 
@@ -56,7 +57,7 @@ Pass these to every build (bash or zsh):
 
 ```bash
 DEFINES=(
-  --dart-define=LIFI_INTEGRATOR_NAME=gleec-dex-production
+  --dart-define-from-file=docs/LIFI_PRODUCTION_BUILD_DEFINES.json
   --dart-define=TRON_GASLESS_ENABLED=true
   --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true
   --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron
@@ -74,10 +75,16 @@ DEFINES=(
 )
 ```
 
-- `LIFI_INTEGRATOR_NAME` is the owner's decision of 4 November; the compiled
-  default is `gleec-dex-staging`. The other LI.FI values already default to the
-  production values (proxy `https://quicknode.gleec.com/lifi`, integrator
-  enabled, 178 and 22 bps), so don't pass them.
+- Production is the compiled default, including builds without defines. The
+  public profile pins all five LI.FI values: `gleec-dex-production`, proxy
+  `https://quicknode.gleec.com/lifi`, integrator enabled, 178 and 22 bps. Use
+  the same profile in both passes. The shared CI action selects it through
+  `LIFI_BUILD_ENVIRONMENT: production`; do not add conflicting LI.FI defines
+  or another define file to that action's `BUILD_COMMAND`.
+- GitHub previews use staging only when explicitly selected. Manual preview
+  workflows offer `lifi_environment: staging`; ordinary automatic previews
+  use production. Published native releases always select production. See
+  [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md).
 - The four `TRON_GASLESS_*` values equal the compiled defaults; passing them
   pins the release configuration, as CI does.
 - `COMMIT_HASH` and `BUILD_DATE` appear in Settings and in feedback metadata.
@@ -147,8 +154,9 @@ Follow [SIGN_RELEASE.md](SIGN_RELEASE.md) and the 0.9.7-1 process. For 0.10.0:
 
 1. **Integrator:** on each unpacked output (unzip AAB, APK and IPA packages
    first), `grep -r -a -o -h 'gleec-dex-[a-z]*' <output> | sort -u` must print
-   only `gleec-dex-production`. The RC preview, built with defaults, prints only
-   `gleec-dex-staging`.
+   only `gleec-dex-production`. Ordinary RC previews now use production too;
+   only an explicitly selected staging preview should print `gleec-dex-staging`.
+   Earlier preview records remain evidence for their stated revisions.
 2. **GasFree (web):**
    `grep -a -o -h 'gleec-gasfree-build-policy-v1:[a-z=;]*' build/web/main.dart.js | sort -u`
    must print `gleec-gasfree-build-policy-v1:send=enabled;receive=enabled`. The
@@ -184,6 +192,12 @@ Follow [SIGN_RELEASE.md](SIGN_RELEASE.md) and the 0.9.7-1 process. For 0.10.0:
    `tool/verify_web_deploy.sh https://dex.gleec.com` and recheck the served
    files against the list above.
 
+For every final output, retain and verify the profile, dependency and artifact
+records using `tool/lifi_build_provenance.py` as described in
+[LI.FI artifact verification](LIFI_PRODUCTION_SETUP.md#artifact-records). Record
+bytes after signing and packaging; later modifications require new trusted build
+evidence. These records supplement the detached signatures above.
+
 ## Before and after publishing
 
 - **Before:**
@@ -207,5 +221,6 @@ These are the owner's dispositions of 4 November; the
   changelog's known limits.
 - The optional X06/X07 liquidity and stalled DOC/MARTY testnet cases, the open
   KDF review points and three unattributed upstream KDF test failures.
-- Deferred to the next release: wallet #3585 (the LI.FI build profile and its
-  CI enforcement) and SDK #432.
+- SDK #432 remains deferred. On 6 November the owner brought wallet #3585
+  into this RC, with production as the default and staging explicitly selected
+  for GitHub previews. SDK #432 is not required for the wallet-side checks.

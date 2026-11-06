@@ -197,6 +197,9 @@ dependencies:
   flutter_window_close: ^1.3.0
 
 dev_dependencies:
+  yaml: ^3.1.3
+  komodo_defi_framework:
+    path: sdk/packages/komodo_defi_framework
   test: ^1.30.0 # dart.dev
 
   # The "flutter_lints" package below contains a set of recommended lints to
