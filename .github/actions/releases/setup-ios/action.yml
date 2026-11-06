@@ -36,7 +36,7 @@ runs:
   steps:
     - name: Setup Xcode version
       id: setup_xcode
-      uses: maxim-lobanov/setup-xcode@v1
+      uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
       with:
         xcode-version: ${{ inputs.xcode-version }}
 
@@ -61,7 +61,7 @@ runs:
     - name: Import iOS certificates
       id: import_certs
       if: inputs.p12-file-base64 != '' && 'KomodoPlatform/komodo-wallet' == github.repository
-      uses: apple-actions/import-codesign-certs@v3
+      uses: apple-actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3
       with:
         p12-file-base64: ${{ inputs.p12-file-base64 }}
         p12-password: ${{ inputs.p12-password }}
@@ -69,7 +69,7 @@ runs:
     - name: Download iOS provisioning profile
       id: download_profile
       if: inputs.issuer-id != '' && 'KomodoPlatform/komodo-wallet' == github.repository
-      uses: apple-actions/download-provisioning-profiles@v1
+      uses: apple-actions/download-provisioning-profiles@3167792207a5b26099bc0ca22b5010a323dd2a0b # v1
       with:
         bundle-id: ${{ inputs.bundle-id }}
         profile-type: ${{ inputs.profile-type }}

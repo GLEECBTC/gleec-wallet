@@ -17,10 +17,22 @@ on:
       ]
     paths:
       - ".docker/**"
+      - "docs/LIFI_*BUILD_DEFINES.json"
+      - "tool/lifi_build_config.py"
       - "linux/**"
       - "pubspec.yaml"
       - "pubspec.lock"
   workflow_dispatch:
+    inputs:
+      lifi_environment:
+        description: "LI.FI integration for this test build (production requires the matching KDP key)"
+        type: choice
+        options: [production, staging]
+        default: production
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
   build-linux-docker:
@@ -28,12 +40,19 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Select public LI.FI profile
+        id: lifi_profile
+        uses: ./.github/actions/lifi-profile
+        with:
+          requested: ${{ inputs.lifi_environment || 'production' }}
 
       - name: Build Linux Desktop
         id: build_linux
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LIFI_BUILD_ENVIRONMENT: ${{ steps.lifi_profile.outputs.environment }}
           # Optional feedback provider secrets to embed dart-defines
           TRELLO_API_KEY: ${{ secrets.TRELLO_API_KEY }}
           TRELLO_TOKEN: ${{ secrets.TRELLO_TOKEN }}
@@ -50,12 +69,21 @@ jobs:
       - name: Compute short commit SHA
         id: vars
         shell: bash
-        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Upload Linux bundle artifact
         id: upload_artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: komodo-wallet-linux-docker-${{ steps.vars.outputs.short_sha }}.zip
+          name: komodo-wallet-linux-docker-${{ steps.vars.outputs.short_sha }}-${{ steps.lifi_profile.outputs.environment }}.zip
           path: build/linux/x64/release/bundle/*
-          retention-days: 5
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+      - name: Attach public build provenance
+        uses: ./.github/actions/build-provenance
+        with:
+          environment: ${{ steps.lifi_profile.outputs.environment }}
+          artifact_path: build/linux/x64/release/bundle/*
+          artifact_name: komodo-wallet-linux-docker-${{ steps.vars.outputs.short_sha }}-${{ steps.lifi_profile.outputs.environment }}.zip
