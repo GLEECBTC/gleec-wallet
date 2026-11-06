@@ -1,7 +1,9 @@
 # LI.FI build configuration
 
-The Wallet supports versioned public LI.FI build profiles. These settings are
-compiled into the application and are not credentials. Provider API keys must
+The Wallet defaults to the production LI.FI integration, including direct Flutter
+builds without defines. Versioned public profiles keep builds explicit and
+verifiable. These settings are compiled into the application and are not
+credentials. Provider API keys must
 remain outside the application, build arguments and repository.
 
 ## Public profiles
@@ -35,11 +37,17 @@ aliases, and additional define files that could override the selected profile.
 | Entry point | Selection |
 |---|---|
 | Mobile/desktop published releases, including prereleases | Production |
-| Manual web, native and Docker workflows | `lifi_environment` input; staging by default |
-| Automatic PR previews and dev RC builds | Staging |
-| Docker helper | `LIFI_BUILD_ENVIRONMENT`; staging by default |
+| Manual web, native and Docker workflows | `lifi_environment` input; production by default |
+| Automatic PR previews and dev RC builds | Production unless staging is explicitly selected for the preview |
+| Docker helper | `LIFI_BUILD_ENVIRONMENT`; production by default |
 
-For a direct Flutter build, supply the public file explicitly:
+For a staging GitHub preview, select `staging` in the manual workflow
+`lifi_environment` input, or explicitly set the preview action
+`LIFI_BUILD_ENVIRONMENT: staging`. Published native releases always select
+production, even if staging was requested. Ordinary automatic previews use
+production.
+
+For a direct Flutter build, supply the public production file explicitly:
 
 ```sh
 flutter build web --release \

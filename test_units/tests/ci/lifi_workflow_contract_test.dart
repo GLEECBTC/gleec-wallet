@@ -7,6 +7,42 @@ YamlMap workflow(String name) =>
     loadYaml(File('.github/workflows/$name.yml').readAsStringSync()) as YamlMap;
 
 void main() {
+  test('builds default to production and previews offer explicit staging', () {
+    for (final action in ['lifi-profile', 'generate-assets']) {
+      final config =
+          loadYaml(
+                File('.github/actions/$action/action.yml').readAsStringSync(),
+              )
+              as YamlMap;
+      final input = action == 'lifi-profile'
+          ? 'requested'
+          : 'LIFI_BUILD_ENVIRONMENT';
+      expect(config['inputs'][input]['default'], 'production');
+    }
+    for (final name in [
+      'firebase-hosting-pull-request',
+      'mobile-builds',
+      'desktop-builds',
+      'docker-android-build',
+      'docker-linux-build',
+    ]) {
+      final config = workflow(name);
+      final input =
+          config['on']['workflow_dispatch']['inputs']['lifi_environment'];
+      expect(input['default'], 'production');
+      expect(input['options'], containsAll(['production', 'staging']));
+      final jobs = config['jobs'] as Map;
+      final steps = jobs.values.single['steps'] as List;
+      final selection = steps.singleWhere(
+        (dynamic step) => step['uses'] == './.github/actions/lifi-profile',
+      );
+      expect(
+        selection['with']['requested'],
+        contains("inputs.lifi_environment || 'production'"),
+      );
+    }
+  });
+
   test('both LI.FI consumers run inside the existing required merge check', () {
     final config = workflow('validate-code-guidelines');
     expect(config['on']['pull_request']['paths'], isNull);

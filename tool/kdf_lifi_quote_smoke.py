@@ -134,7 +134,7 @@ def main():
         "engine_commit": manifest["api"]["api_commit_hash"],
         "coins_commit": manifest["coins"]["bundled_coins_repo_commit"],
         "proxy": "https://quicknode.gleec.com/lifi",
-        "integrator": {"name": "gleec-dex-staging", "fee_bps": 178, "lifi_fee_bps": 22},
+        "integrator": {"name": "gleec-dex-production", "fee_bps": 178, "lifi_fee_bps": 22},
         "scope": "fresh unfunded wallet; version, activation, quote and stop only",
         "checks": [],
         "passed": False,

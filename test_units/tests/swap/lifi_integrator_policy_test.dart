@@ -32,7 +32,7 @@ void main() {
     // overridden production defines cannot be mistaken for a passing fixture.
     const environment = String.fromEnvironment(
       'LIFI_TEST_EXPECTED_ENVIRONMENT',
-      defaultValue: 'staging',
+      defaultValue: 'production',
     );
     expect(environment, anyOf('staging', 'production'));
     final expected = {

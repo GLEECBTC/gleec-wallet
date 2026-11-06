@@ -30,13 +30,26 @@ def build_environment(work, environment):
 
 class LifiBuildConfigTest(unittest.TestCase):
     def test_event_selection(self):
-        for event in ["pull_request", "push", "schedule"]:
-            self.assertEqual(event_environment(event, "production"), "staging")
+        for event in ["pull_request", "push", "schedule", "workflow_dispatch", "release"]:
+            self.assertEqual(event_environment(event), "production")
         for requested in PROFILES:
             self.assertEqual(event_environment("release", requested), "production")
-            self.assertEqual(event_environment("workflow_dispatch", requested), requested)
-        with self.assertRaises(ValueError):
-            event_environment("workflow_dispatch", "invalid")
+            for event in ["pull_request", "workflow_dispatch"]:
+                self.assertEqual(event_environment(event, requested), requested)
+        for event in ["pull_request", "workflow_dispatch", "push"]:
+            with self.assertRaises(ValueError):
+                event_environment(event, "invalid")
+
+    def test_cli_defaults_to_production_without_profile_arguments(self):
+        script = str(ROOT / "tool/lifi_build_config.py")
+        for args, expected in [([], PROFILES["production"][0]),
+                               (["--event", "pull_request"], "production"),
+                               (["staging", "--event", "pull_request"], "staging"),
+                               (["staging", "--event", "release"], "production")]:
+            result = subprocess.run([sys.executable, script, *args],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), expected)
 
     def test_conflicting_defines_and_files_are_rejected_without_values(self):
         for option in ["--dart-define=", "--dart-define ", "--dart-defines=", "-D", "-D "]:
@@ -124,7 +137,7 @@ class LifiBuildConfigTest(unittest.TestCase):
                     self.assertNotIn("LIFI_API_KEY", build)
 
     def test_docker_passes_the_profile_to_both_builds_and_rejects_unknown_profiles(self):
-        for environment in [*PROFILES, "invalid"]:
+        for environment in [*PROFILES, "", "invalid"]:
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as directory:
                 work = Path(directory)
                 (work / "bin").mkdir()
@@ -147,7 +160,7 @@ class LifiBuildConfigTest(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     runs = [line for line in calls.read_text().splitlines() if line.startswith("run ")]
                     self.assertEqual(len(runs), 1)
-                    self.assertEqual(runs[0].count("--dart-define-from-file=" + PROFILES[environment][0]), 2)
+                    self.assertEqual(runs[0].count("--dart-define-from-file=" + PROFILES[environment or "production"][0]), 2)
 
 
 if __name__ == "__main__":

@@ -9,8 +9,8 @@ on:
       lifi_environment:
         description: "LI.FI integration for this test build (production requires the matching KDP key)"
         type: choice
-        options: [staging, production]
-        default: staging
+        options: [production, staging]
+        default: production
         required: true
   release:
     types: [published]
@@ -52,7 +52,7 @@ jobs:
         id: lifi_profile
         uses: ./.github/actions/lifi-profile
         with:
-          requested: ${{ inputs.lifi_environment || 'staging' }}
+          requested: ${{ inputs.lifi_environment || 'production' }}
 
       - name: Install Flutter and dependencies
         id: install_flutter

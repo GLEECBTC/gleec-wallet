@@ -15,7 +15,7 @@ class QuoteSmokeTest(unittest.TestCase):
         self.assertEqual(config["integrator"],
                          {"name": "gleec-dex-production", "fee_bps": 178, "lifi_fee_bps": 22})
         self.assertEqual(config["proxy"], "https://quicknode.gleec.com/lifi")
-        self.assertEqual(deployment_config()["integrator"]["name"], "gleec-dex-staging")
+        self.assertEqual(deployment_config()["integrator"]["name"], "gleec-dex-production")
 
     def test_rejects_credentials_and_wrong_fee_policy_before_startup(self):
         path = Path(__file__).resolve().parent.parent / "docs/LIFI_PRODUCTION_BUILD_DEFINES.json"

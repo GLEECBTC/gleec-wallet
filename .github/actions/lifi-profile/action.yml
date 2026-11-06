@@ -2,8 +2,8 @@ name: Select LI.FI build profile
 description: Select a validated public profile from the triggering event
 inputs:
   requested:
-    description: Manual workflow choice; ignored for automatic events
-    default: staging
+    description: Explicit build profile; published releases always use production
+    default: production
 outputs:
   environment:
     description: Validated staging or production profile
@@ -16,5 +16,5 @@ runs:
       env:
         REQUESTED_PROFILE: ${{ inputs.requested }}
       run: |
-        profile=$(python3 tool/lifi_build_config.py "${REQUESTED_PROFILE:-staging}" --event "$GITHUB_EVENT_NAME")
+        profile=$(python3 tool/lifi_build_config.py "${REQUESTED_PROFILE:-production}" --event "$GITHUB_EVENT_NAME")
         echo "environment=$profile" >> "$GITHUB_OUTPUT"

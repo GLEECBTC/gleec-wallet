@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 PUBLIC_DEFAULTS = {
     "LIFI_PROXY_URL": "https://quicknode.gleec.com/lifi",
     "LIFI_INTEGRATOR_ENABLED": "true",
-    "LIFI_INTEGRATOR_NAME": "gleec-dex-staging",
+    "LIFI_INTEGRATOR_NAME": "gleec-dex-production",
     "LIFI_INTEGRATOR_FEE_BPS": "178",
     "LIFI_FEE_BPS": "22",
 }
@@ -78,14 +78,12 @@ def select_build_config(environment, root=None):
     return relative
 
 
-def event_environment(event, requested="staging"):
-    """Release publication always builds production; other automatic runs stage."""
+def event_environment(event, requested="production"):
+    """Default to production; previews may explicitly select staging."""
     if event == "release":
         return "production"
-    if event == "workflow_dispatch":
-        require(requested in PROFILES, "Invalid manual LI.FI profile")
-        return requested
-    return "staging"
+    require(requested in PROFILES, "Invalid LI.FI profile")
+    return requested
 
 
 def validate_build_command(command):
@@ -108,7 +106,7 @@ def validate_build_command(command):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("environment", nargs="?", default="staging")
+    parser.add_argument("environment", nargs="?", default="production")
     parser.add_argument("--event", help="Select the profile for a GitHub event")
     parser.add_argument("--validate-build-command", action="store_true",
                         help="Validate BUILD_COMMAND from the environment without printing it")

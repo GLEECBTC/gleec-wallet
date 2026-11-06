@@ -23,7 +23,7 @@ echo "Building with target: $BUILD_TARGET, mode: $BUILD_MODE"
 
 # Select public LI.FI settings before any expensive build steps. The credential
 # bundle must never be used as a Dart defines file or passed into this container.
-LIFI_BUILD_DEFINES=$(python3 tool/lifi_build_config.py "${LIFI_BUILD_ENVIRONMENT:-staging}") || exit 1
+LIFI_BUILD_DEFINES=$(python3 tool/lifi_build_config.py "${LIFI_BUILD_ENVIRONMENT:-production}") || exit 1
 
 # Ensure submodule is initialized and pinned to the recorded commit
 if command -v git >/dev/null 2>&1; then

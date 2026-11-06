@@ -58,7 +58,7 @@ to no integrator. Wallet defaults, confirmed for this integration, are:
 | Build define | Default |
 |---|---|
 | `LIFI_INTEGRATOR_ENABLED` | `true` |
-| `LIFI_INTEGRATOR_NAME` | `gleec-dex-staging` |
+| `LIFI_INTEGRATOR_NAME` | `gleec-dex-production` |
 | `LIFI_INTEGRATOR_FEE_BPS` | `178` |
 | `LIFI_FEE_BPS` | `22` |
 

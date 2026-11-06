@@ -12,7 +12,7 @@ inputs:
   LIFI_BUILD_ENVIRONMENT:
     description: "Public LI.FI build profile (staging or production); API keys stay on KDP"
     required: false
-    default: "staging"
+    default: "production"
 
   # Optional Trello feedback provider configuration
   TRELLO_API_KEY:
