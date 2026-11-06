@@ -271,10 +271,9 @@ into dev, carry only that reviewed fix to release, and repeat affected checks.
    [release checklist](RELEASE_0.10.0_CHECKLIST.md): approved production legal
    text, blocked-case dispositions, upstream operational signoff and signed
    platform install/upgrade evidence remain separate from source freeze.
-2. Promote SDK #416 from `release-0.9.0` to `main` with a **merge commit** after
-   its gates pass. Record the actual main SHA; squash an app dev PR pinning it,
-   carry that bookkeeping fix into the app release branch, and refresh the
-   manifest/consumer checks. Confirm the SDK runtime matches the frozen one.
+2. **Done:** SDK #416 merged into `main` with a **merge commit** as `09bde8c6`,
+   and #3603 pinned it into the app release branch with the runtime unchanged.
+   App dev was deliberately not repinned (see #3575).
 3. Promote the app `release-0.10.0` PR to `main` with a **merge commit** after
    app gates pass. Every PR into dev uses squash, including focused release
    reconciliation. No automatic merge or main admin bypass is assumed.

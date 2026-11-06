@@ -12,11 +12,11 @@ for the owner-requested carry of wallet #3585 and the production-only follow-up.
 Follow the checklist's
 [promotion order](RELEASE_0.10.0_CHECKLIST.md#freeze-boundary-and-promotion-order):
 
-1. Merge SDK #416 (`release-0.9.0` → `main`) with a merge commit and record
-   the SDK `main` SHA.
-2. Squash an app dev PR that pins `sdk` to that SHA, carry it into
-   `release-0.10.0` with a merge commit, and prove the runtime still matches
-   the frozen candidate.
+1. **Done:** SDK #416 (`release-0.9.0` → `main`) merged with a merge commit as
+   `09bde8c6978433d509ffabe6696d495fe5923745`.
+2. **Done for this RC:** #3603 pinned `sdk` to that SHA in `release-0.10.0`
+   with a merge commit, and its preview showed the runtime unchanged. App
+   `dev` was deliberately not repinned (see #3575).
 3. Merge app #3575 (`release-0.10.0` → `main`) with a merge commit.
 4. Tag `komodo_defi_sdk-v0.9.0` and the approved package tags on the SDK
    `main` SHA. Then run the
@@ -192,11 +192,13 @@ Follow [SIGN_RELEASE.md](SIGN_RELEASE.md) and the 0.9.7-1 process. For 0.10.0:
    `tool/verify_web_deploy.sh https://dex.gleec.com` and recheck the served
    files against the list above.
 
-For every final output, retain and verify the profile, dependency and artifact
-records using `tool/lifi_build_provenance.py` as described in
-[LI.FI artifact verification](LIFI_PRODUCTION_SETUP.md#artifact-records). Record
-bytes after signing and packaging; later modifications require new trusted build
-evidence. These records supplement the detached signatures above.
+Optionally, record each final output with `tool/lifi_build_provenance.py` (see
+[LI.FI artifact records](LIFI_PRODUCTION_SETUP.md#artifact-records)). It is not
+a publishing gate and doesn't replace the detached signatures above. The tool
+only reads files under `build/`, and the next target's clean step deletes them.
+So keep a target's signed and packaged files under `build/`, then record and
+verify it with its own `--output` (for example `--output build-provenance/macos`)
+before building the next target.
 
 ## Before and after publishing
 
@@ -206,6 +208,9 @@ evidence. These records supplement the detached signatures above.
     marker removed for RC testing, so the app accepts it like final terms. The
     owner expects the final text to be live by publication.
   - The production KDP `/lifi` route must hold the production LI.FI key.
+  - Hand the signed builds to Charl first. He tests them and confirms that KDF
+    collects the LI.FI fees (`gleec-dex-production`, 178 + 22 bps). Publish
+    only after his go-ahead.
   - Install fresh and upgrade from 0.9.7-1 on every platform you publish.
 - **After:**
   - Update `https://defistats.gleec.com/api/v3/dex_version`. The in-app update

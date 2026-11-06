@@ -75,11 +75,13 @@ Older dated preview and test records below do not certify this changed default.
   from supported build profiles and preview choices. The production profile preserves the
   proxy, enabled integrator and 178 + 22 bps fee allocation. SDK #432 remains
   deferred; this wallet carry does not change the accepted SDK/KDF/coins pins.
-  Use the [production build guide](RELEASE_0.10.0_PRODUCTION_BUILD.md), verify
-  every artifact's integrator and retain the new profile/dependency/hash records.
+  Use the [production build guide](RELEASE_0.10.0_PRODUCTION_BUILD.md) and
+  verify every artifact's integrator; the profile/dependency/hash records are
+  optional.
 - [ ] Retain final promotion review, approved legal text, signed packaging,
-  install/upgrade evidence and the eventual accepted SDK main pin as separate
-  distribution gates. Main SDK #416 and app #3575 remain open with no
+  install/upgrade evidence and Charl's LI.FI fee-collection test on the signed
+  builds as separate distribution gates. SDK #416 merged into `main` as
+  `09bde8c6`, which #3603 pinned into this RC. App #3575 remains open with no
   automatic merge. No main promotion, tag, publication or production deploy
   is authorized by this preparation update.
 
@@ -418,13 +420,13 @@ make each repair on a focused branch, squash it into dev, carry only that
 reviewed fix into the release branch and repeat affected validation. Do not
 advance release branches to unrelated dev work.
 
-1. Complete SDK release gates, then merge [SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)
-   (`release-0.9.0` → `main`) using a **merge commit**. Record its actual
-   immutable main SHA. Tags/publication follow the approved release process.
-2. Open and **squash merge** an app dev PR pinning that SDK main SHA. Carry
-   that reviewed bookkeeping commit into `release-0.10.0`, reconcile the
-   manifest/checklists and repeat consumer checks as appropriate. Prove that
-   the promoted SDK runtime matches the frozen candidate; investigate any diff.
+1. **Done:** [SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)
+   (`release-0.9.0` → `main`) merged with a **merge commit** as
+   `09bde8c6978433d509ffabe6696d495fe5923745`. Tags/publication follow the
+   approved release process.
+2. **Done for this RC:** #3603 pinned that SDK main SHA into `release-0.10.0`
+   with a merge commit, and its preview showed the runtime unchanged. App dev
+   was deliberately not repinned (see #3575).
 3. Complete app release gates and review the final diff/checks. Merge the app
    release PR (`release-0.10.0` → `main`) using a **merge commit**. Reconcile
    release changes back into dev through a focused **squash** PR as needed.
