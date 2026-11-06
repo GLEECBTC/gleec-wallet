@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart' show lowerBound;
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -41,36 +42,55 @@ class ProfitLossCalculator {
       coinId,
       transactionDates,
     );
-    final currentPrice =
-        coinUsdPrices[todayAtMidnight] ?? coinUsdPrices.values.last;
+    if (coinUsdPrices.isEmpty) {
+      throw Exception('No USD price history for ${coinId.id}');
+    }
+    final prices = _NearestPrices(coinUsdPrices);
+    final currentPrice = coinUsdPrices[todayAtMidnight] ?? prices.latest;
     final priceStampedTransactions = _priceStampTransactions(
       transactions,
-      coinUsdPrices,
+      prices,
+      coinId,
     );
 
     return _calculateProfitLosses(priceStampedTransactions, currentPrice);
   }
 
+  /// A date without a price, such as one older than the price source's
+  /// history, takes the nearest known price. Skipping its transaction instead
+  /// would leave later sales selling coins that were never bought.
   List<UsdPriceStampedTransaction> _priceStampTransactions(
     List<Transaction> transactions,
-    Map<DateTime, Decimal> usdPrices,
+    _NearestPrices prices,
+    AssetId coinId,
   ) {
-    return transactions.map((transaction) {
-      final DateTime midnightDate = _getDateAtMidnight(transaction.timestamp);
-      final Decimal? usdPrice = usdPrices[midnightDate];
+    var approximated = 0;
+    final stamped = <UsdPriceStampedTransaction>[];
+    for (final transaction in transactions) {
+      final date = _getDateAtMidnight(transaction.timestamp);
+      var usdPrice = prices.exact(date);
       if (usdPrice == null) {
-        _log.warning(
-          'No USD price found for transaction ${transaction.id} '
-          'at $midnightDate. Available prices: ${usdPrices.keys}',
-        );
-        throw Exception('No USD price found for transaction ${transaction.id}');
+        approximated++;
+        usdPrice = prices.nearest(date);
       }
-      return UsdPriceStampedTransaction(transaction, usdPrice.toDouble());
-    }).toList();
+      stamped.add(UsdPriceStampedTransaction(transaction, usdPrice.toDouble()));
+    }
+    if (approximated > 0) {
+      _log.warning(
+        'Priced $approximated of ${transactions.length} ${coinId.id} '
+        'transactions at the nearest date with a USD price',
+      );
+    }
+    return stamped;
   }
 
+  /// UTC, so each date reaches the price history as the day
+  /// [_getDateAtMidnight] looks up.
   List<DateTime> _getTransactionDates(List<Transaction> transactions) {
-    return transactions.map((tx) => tx.timestamp).toList()..add(DateTime.now());
+    return [
+      for (final tx in transactions) tx.timestamp.toUtc(),
+      DateTime.now().toUtc(),
+    ];
   }
 
   DateTime _getDateAtMidnight(DateTime date) {
@@ -211,4 +231,30 @@ class _ProfitLossState {
   final double realizedProfitLoss;
   final double totalInvestment;
   final double currentHoldings;
+}
+
+/// USD prices by UTC midnight, answering a date without a price with the
+/// closest date that has one.
+class _NearestPrices {
+  _NearestPrices(this._prices) : _dates = _prices.keys.toList()..sort();
+
+  final Map<DateTime, Decimal> _prices;
+  final List<DateTime> _dates;
+
+  Decimal? exact(DateTime date) => _prices[date];
+
+  Decimal get latest => _prices[_dates.last]!;
+
+  Decimal nearest(DateTime date) {
+    final index = lowerBound(_dates, date);
+    if (index == 0) return _prices[_dates.first]!;
+    if (index == _dates.length) return latest;
+
+    final before = _dates[index - 1];
+    final after = _dates[index];
+    final closer = date.difference(before) <= after.difference(date)
+        ? before
+        : after;
+    return _prices[closer]!;
+  }
 }

@@ -8,6 +8,7 @@ import 'package:komodo_persistence_layer/komodo_persistence_layer.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
+import 'package:web_dex/bloc/cex_market_data/common/update_frequency_backoff_strategy.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/demo_profit_loss_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/adapters/adapters.dart';
@@ -23,10 +24,12 @@ class ProfitLossRepository {
     required TransactionHistoryRepo transactionHistoryRepo,
     required ProfitLossCalculator profitLossCalculator,
     required KomodoDefiSdk sdk,
+    DateTime Function() clock = DateTime.now,
   }) : _transactionHistoryRepo = transactionHistoryRepo,
        _profitLossCacheProvider = profitLossCacheProvider,
        _profitLossCalculator = profitLossCalculator,
-       _sdk = sdk;
+       _sdk = sdk,
+       _clock = clock;
 
   /// Return a new instance of [ProfitLossRepository] with default values.
   ///
@@ -59,6 +62,10 @@ class ProfitLossRepository {
   final TransactionHistoryRepo _transactionHistoryRepo;
   final ProfitLossCalculator _profitLossCalculator;
   final KomodoDefiSdk _sdk;
+  final DateTime Function() _clock;
+
+  /// Keyed like [ProfitLossCache]; a success removes the entry.
+  final Map<String, _FailureBackoff> _recentFailures = {};
 
   final _log = Logger('profit-loss-repository');
 
@@ -78,6 +85,7 @@ class ProfitLossRepository {
     final stopwatch = Stopwatch()..start();
     _log.fine('Clearing profit/loss cache');
 
+    _recentFailures.clear();
     await _profitLossCacheProvider.deleteAll();
 
     stopwatch.stop();
@@ -121,14 +129,15 @@ class ProfitLossRepository {
       return <ProfitLoss>[];
     }
 
+    final String compoundKey = ProfitLossCache.getPrimaryKey(
+      coinId: coinId.id,
+      fiatCurrency: fiatCoinId,
+      walletId: walletId,
+      isHdWallet: isHdWallet,
+    );
+
     if (useCache) {
       final cacheStopwatch = Stopwatch()..start();
-      final String compoundKey = ProfitLossCache.getPrimaryKey(
-        coinId: coinId.id,
-        fiatCurrency: fiatCoinId,
-        walletId: walletId,
-        isHdWallet: isHdWallet,
-      );
       final ProfitLossCache? profitLossCache = await _profitLossCacheProvider
           .get(compoundKey);
       final bool cacheExists = profitLossCache != null;
@@ -149,6 +158,44 @@ class ProfitLossRepository {
       );
     }
 
+    final failure = _recentFailures[compoundKey];
+    if (failure != null && _clock().isBefore(failure.retryAt)) {
+      _log.fine(
+        'Not recomputing profit/loss for ${coinId.id} before '
+        '${failure.retryAt}; it last failed with: ${failure.error}',
+      );
+      Error.throwWithStackTrace(failure.error, failure.stackTrace);
+    }
+
+    try {
+      final profitLosses = await _computeProfitLoss(
+        coinId,
+        fiatCoinId,
+        walletId,
+        isHdWallet: isHdWallet,
+        compoundKey: compoundKey,
+        methodStopwatch: methodStopwatch,
+      );
+      _recentFailures.remove(compoundKey);
+      return profitLosses;
+    } catch (error, stackTrace) {
+      (_recentFailures[compoundKey] ??= _FailureBackoff()).record(
+        error,
+        stackTrace,
+        failedAt: _clock(),
+      );
+      rethrow;
+    }
+  }
+
+  Future<List<ProfitLoss>> _computeProfitLoss(
+    AssetId coinId,
+    String fiatCoinId,
+    String walletId, {
+    required bool isHdWallet,
+    required String compoundKey,
+    required Stopwatch methodStopwatch,
+  }) async {
     final txStopwatch = Stopwatch()..start();
     _log.fine('Fetching transactions for ${coinId.id}');
     final transactions = await _transactionHistoryRepo
@@ -162,12 +209,6 @@ class ProfitLossRepository {
     if (transactions.isEmpty) {
       _log.fine('No transactions found for ${coinId.id}');
 
-      final String compoundKey = ProfitLossCache.getPrimaryKey(
-        coinId: coinId.id,
-        fiatCurrency: fiatCoinId,
-        walletId: walletId,
-        isHdWallet: isHdWallet,
-      );
       final existingCache = await _profitLossCacheProvider.get(compoundKey);
       if (existingCache != null && existingCache.profitLosses.isNotEmpty) {
         _log.fine(
@@ -233,6 +274,26 @@ class ProfitLossRepository {
     );
     methodStopwatch.stop();
     return profitLosses;
+  }
+}
+
+/// When a coin whose profit/loss failed may be computed again. Each refresh
+/// recomputes every coin without a cached result, so a coin that cannot be
+/// priced would otherwise fetch its history and prices again every minute.
+class _FailureBackoff {
+  final _intervals = UpdateFrequencyBackoffStrategy();
+  late Object error;
+  late StackTrace stackTrace;
+  late DateTime retryAt;
+
+  void record(
+    Object error,
+    StackTrace stackTrace, {
+    required DateTime failedAt,
+  }) {
+    this.error = error;
+    this.stackTrace = stackTrace;
+    retryAt = failedAt.add(_intervals.getNextInterval());
   }
 }
 

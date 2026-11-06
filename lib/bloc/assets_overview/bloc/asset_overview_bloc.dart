@@ -34,6 +34,7 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
   final KomodoDefiSdk _sdk;
   final _log = Logger('AssetOverviewBloc');
   Timer? _updateTimer;
+  int _portfolioLoadsInFlight = 0;
 
   Future<void> _onLoad(
     AssetOverviewLoadRequested event,
@@ -87,6 +88,7 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
     PortfolioAssetsOverviewLoadRequested event,
     Emitter<AssetOverviewState> emit,
   ) async {
+    _portfolioLoadsInFlight++;
     try {
       if (event.coins.isEmpty) {
         _log.warning('No coins to load portfolio overview for');
@@ -155,6 +157,8 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
       if (state is! PortfolioAssetsOverviewLoadSuccess) {
         emit(AssetOverviewLoadFailure(error: e.toString()));
       }
+    } finally {
+      _portfolioLoadsInFlight--;
     }
   }
 
@@ -196,6 +200,9 @@ class AssetOverviewBloc extends Bloc<AssetOverviewEvent, AssetOverviewState> {
 
     _updateTimer?.cancel();
     _updateTimer = Timer.periodic(event.updateFrequency, (_) {
+      // A load can outlast the period on a large wallet; stacking another
+      // would repeat every uncached coin's history and price requests.
+      if (_portfolioLoadsInFlight > 0) return;
       add(
         PortfolioAssetsOverviewLoadRequested(
           coins: event.coins,
