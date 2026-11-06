@@ -18,7 +18,7 @@ the current release PR records the later SDK-main pin and LI.FI carry.
 
 ## Build and release configuration
 
-- **LI.FI production by default** ([#3585](https://github.com/GLEECBTC/gleec-wallet/pull/3585)) — Direct builds, Docker and GitHub builds select the production integrator. Staging remains an explicit preview choice. Public profiles, required compiled-profile checks and artifact/dependency records make the selected configuration verifiable. SDK, KDF and coin pins are unchanged by this carry.
+- **LI.FI production by default** ([#3585](https://github.com/GLEECBTC/gleec-wallet/pull/3585)) — Direct builds, Docker and GitHub builds select the production integrator. Staging is unavailable; previews use the same production profile while KDP is configured for the production integration. Public profiles, required compiled-profile checks and artifact/dependency records make the selected configuration verifiable. SDK, KDF and coin pins are unchanged by this carry.
 
 ## 🚀 New Features
 

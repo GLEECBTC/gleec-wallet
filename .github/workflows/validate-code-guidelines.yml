@@ -43,7 +43,7 @@ jobs:
 
       # Keep LI.FI inside this existing required check; a separate optional
       # path-filtered workflow must not allow a broken production profile to merge.
-      - name: Test staging and production LI.FI consumers
+      - name: Test production LI.FI configuration
         timeout-minutes: 10
         run: bash .github/scripts/test_lifi_profiles.sh
 

@@ -5,7 +5,7 @@ private machine. No workflow in this repository signs or publishes: CI builds
 unsigned validation artifacts, and its signing steps only run in the upstream
 KomodoPlatform repository. Every value below was checked against this release's
 tree on 4 November 2026; LI.FI profile instructions were updated on 6 November
-for the owner-requested carry of wallet #3585.
+for the owner-requested carry of wallet #3585 and the production-only follow-up.
 
 ## Order
 
@@ -81,9 +81,9 @@ DEFINES=(
   the same profile in both passes. The shared CI action selects it through
   `LIFI_BUILD_ENVIRONMENT: production`; do not add conflicting LI.FI defines
   or another define file to that action's `BUILD_COMMAND`.
-- GitHub previews use staging only when explicitly selected. Manual preview
-  workflows offer `lifi_environment: staging`; ordinary automatic previews
-  use production. Published native releases always select production. See
+- Every GitHub preview, manual workflow, native release and Docker build uses
+  production. Staging is unavailable while KDP is configured for the production
+  integration; old staging requests are rejected before Flutter starts. See
   [LI.FI build configuration](LIFI_PRODUCTION_SETUP.md).
 - The four `TRON_GASLESS_*` values equal the compiled defaults; passing them
   pins the release configuration, as CI does.
@@ -154,9 +154,9 @@ Follow [SIGN_RELEASE.md](SIGN_RELEASE.md) and the 0.9.7-1 process. For 0.10.0:
 
 1. **Integrator:** on each unpacked output (unzip AAB, APK and IPA packages
    first), `grep -r -a -o -h 'gleec-dex-[a-z]*' <output> | sort -u` must print
-   only `gleec-dex-production`. Ordinary RC previews now use production too;
-   only an explicitly selected staging preview should print `gleec-dex-staging`.
-   Earlier preview records remain evidence for their stated revisions.
+   only `gleec-dex-production`, including RC previews. Staging is not a supported
+   build profile. Earlier preview records remain evidence for their stated
+   revisions.
 2. **GasFree (web):**
    `grep -a -o -h 'gleec-gasfree-build-policy-v1:[a-z=;]*' build/web/main.dart.js | sort -u`
    must print `gleec-gasfree-build-policy-v1:send=enabled;receive=enabled`. The
@@ -222,5 +222,5 @@ These are the owner's dispositions of 4 November; the
 - The optional X06/X07 liquidity and stalled DOC/MARTY testnet cases, the open
   KDF review points and three unattributed upstream KDF test failures.
 - SDK #432 remains deferred. On 6 November the owner brought wallet #3585
-  into this RC, with production as the default and staging explicitly selected
-  for GitHub previews. SDK #432 is not required for the wallet-side checks.
+  into this RC. The subsequent 6 November decision uses production everywhere
+  and removes staging from GitHub previews. SDK #432 is not required for the wallet-side checks.

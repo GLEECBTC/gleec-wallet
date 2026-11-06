@@ -6,10 +6,13 @@ verifiable. These settings are compiled into the application and are not
 credentials. Provider API keys must
 remain outside the application, build arguments and repository.
 
-## Public profiles
+## Public profile
 
-- [Staging](LIFI_STAGING_BUILD_DEFINES.json)
-- [Production](LIFI_PRODUCTION_BUILD_DEFINES.json)
+[Production](LIFI_PRODUCTION_BUILD_DEFINES.json) is the only supported profile,
+including GitHub previews. Staging is unavailable while KDP is configured for
+the production integration; the selector rejects staging before running Flutter.
+A separate staging profile should return only after matching proxy/key routing
+is configured and verified.
 
 Each profile contains exactly five fields:
 
@@ -28,24 +31,12 @@ requested allocation; they do not establish an executed payout.
 
 ## Selecting a profile
 
-The shared build action accepts `LIFI_BUILD_ENVIRONMENT: staging` or
-`LIFI_BUILD_ENVIRONMENT: production`. It validates the selected file before
-running Flutter and supplies it to both asset generation and the final build.
-It rejects explicit `LIFI_*` defines, including the `-D` and `--dart-defines`
-aliases, and additional define files that could override the selected profile.
-
-| Entry point | Selection |
-|---|---|
-| Mobile/desktop published releases, including prereleases | Production |
-| Manual web, native and Docker workflows | `lifi_environment` input; production by default |
-| Automatic PR previews and dev RC builds | Production unless staging is explicitly selected for the preview |
-| Docker helper | `LIFI_BUILD_ENVIRONMENT`; production by default |
-
-For a staging GitHub preview, select `staging` in the manual workflow
-`lifi_environment` input, or explicitly set the preview action
-`LIFI_BUILD_ENVIRONMENT: staging`. Published native releases always select
-production, even if staging was requested. Ordinary automatic previews use
-production.
+The shared build action uses `LIFI_BUILD_ENVIRONMENT: production`. It validates
+that public file before running Flutter and supplies it to both asset generation
+and the final build. It rejects staging, explicit `LIFI_*` defines (including
+`-D` and `--dart-defines` aliases), and additional define files that could
+replace the selected configuration. Native, web, Docker and GitHub previews
+all use production; there is no staging workflow choice.
 
 For a direct Flutter build, supply the public production file explicitly:
 
@@ -68,7 +59,7 @@ bash .github/scripts/test_lifi_profiles.sh
 ```
 
 The required `validate_code_guidelines` job runs this gate on every PR. It checks
-both compiled profiles against independently expected identities and verifies
+the production default and explicit profile against an independent identity and verifies
 the proxy, fee allocation and SDK/KDF startup fields. It also covers conflicting
 arguments, release selection, SDK manifest consistency and action pinning.
 The separate `lifi_profile_validation` job provides fast Python-only feedback.
@@ -110,5 +101,5 @@ would replace the evidence being checked. The tool verifies consistency and
 does not publish artifacts or access provider credentials.
 
 See [build instructions](BUILD_RUN_APP.md#lifi-commission) and
-[testing](TESTING.md#lifi-stagingproduction-ci-gate) for the application-side
+[testing](TESTING.md#lifi-production-ci-gate) for the application-side
 configuration and test coverage.
