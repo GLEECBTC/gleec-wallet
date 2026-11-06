@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Called by the existing required validate_code_guidelines job. Each profile
-# is compiled by Flutter, then checked against an independent expected identity.
+# Called by the existing required validate_code_guidelines job. Check production
+# both as the compiled default and through the explicit public profile.
 python3 -m unittest discover -s tool -p 'test_*lifi*.py' -v
 # Also compile without a profile: a direct Flutter build must default to production.
 flutter test --no-pub --no-test-assets \
   test_units/tests/swap/lifi_integrator_policy_test.dart \
   --dart-define=LIFI_TEST_EXPECTED_ENVIRONMENT=production
-for profile in staging production; do
+for profile in production; do
   defines=$(python3 tool/lifi_build_config.py "$profile")
   flutter test --no-pub --no-test-assets \
     test_units/tests/swap/lifi_integrator_policy_test.dart \

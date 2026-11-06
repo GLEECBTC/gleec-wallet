@@ -10,7 +10,7 @@ inputs:
     required: false
     default: "flutter build web --no-pub --release"
   LIFI_BUILD_ENVIRONMENT:
-    description: "Public LI.FI build profile (staging or production); API keys stay on KDP"
+    description: "Public LI.FI build profile (production only); API keys stay on KDP"
     required: false
     default: "production"
 

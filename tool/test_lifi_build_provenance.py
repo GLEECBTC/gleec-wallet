@@ -30,7 +30,6 @@ class BuildProvenanceTest(unittest.TestCase):
             root = Path(directory)
             fixture = {
                 PROFILES['production'][0]: json.dumps({**PUBLIC_DEFAULTS, 'LIFI_INTEGRATOR_NAME': 'gleec-dex-production'}),
-                PROFILES['staging'][0]: json.dumps({**PUBLIC_DEFAULTS, 'LIFI_INTEGRATOR_NAME': 'gleec-dex-staging'}),
                 'pubspec.lock': 'public resolved Wallet dependencies',
                 'sdk/pubspec.lock': 'public resolved SDK dependencies',
                 '.fvmrc': json.dumps({'flutter': '3.41.4'}),

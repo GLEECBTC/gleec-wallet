@@ -36,7 +36,7 @@ class LifiBuildConfigTest(unittest.TestCase):
             self.assertEqual(event_environment("release", requested), "production")
             for event in ["pull_request", "workflow_dispatch"]:
                 self.assertEqual(event_environment(event, requested), requested)
-        for event in ["pull_request", "workflow_dispatch", "push"]:
+        for event in ["pull_request", "workflow_dispatch", "push", "release"]:
             with self.assertRaises(ValueError):
                 event_environment(event, "invalid")
 
@@ -44,12 +44,22 @@ class LifiBuildConfigTest(unittest.TestCase):
         script = str(ROOT / "tool/lifi_build_config.py")
         for args, expected in [([], PROFILES["production"][0]),
                                (["--event", "pull_request"], "production"),
-                               (["staging", "--event", "pull_request"], "staging"),
-                               (["staging", "--event", "release"], "production")]:
+                               (["production", "--event", "release"], "production")]:
             result = subprocess.run([sys.executable, script, *args],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.strip(), expected)
+
+    def test_staging_is_rejected_for_all_events_and_direct_builds(self):
+        script = str(ROOT / "tool/lifi_build_config.py")
+        for event in [None, "pull_request", "workflow_dispatch", "push", "release"]:
+            args = [sys.executable, script, "staging"]
+            if event:
+                args += ["--event", event]
+            result = subprocess.run(args, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("Only the production", result.stderr)
 
     def test_conflicting_defines_and_files_are_rejected_without_values(self):
         for option in ["--dart-define=", "--dart-define ", "--dart-defines=", "-D", "-D "]:
@@ -104,6 +114,7 @@ class LifiBuildConfigTest(unittest.TestCase):
         script = "\n".join(line[8:] if line.startswith("        ") else line
                            for line in body.splitlines())
         for environment, extra in [(p, "") for p in PROFILES] + [
+            ("staging", ""),
             ("production", " --dart-define=LIFI_INTEGRATOR_NAME=gleec-dex-staging"),
             ("production", " --dart-define=LIFI_INTEGRATOR_ENABLED=false"),
             ("production", " --dart-define=LIFI_INTEGRATOR_FEE_BPS=0"),
@@ -125,7 +136,7 @@ class LifiBuildConfigTest(unittest.TestCase):
                                         env={**build_environment(work, environment), "FLUTTER_CALLS": str(calls),
                                              "BUILD_COMMAND": "flutter build web --no-pub --release" + extra},
                                         capture_output=True, text=True)
-                if extra:
+                if extra or environment == "staging":
                     self.assertNotEqual(result.returncode, 0)
                     self.assertFalse(calls.exists(), "Overrides must fail before running Flutter")
                     continue
@@ -137,7 +148,7 @@ class LifiBuildConfigTest(unittest.TestCase):
                     self.assertNotIn("LIFI_API_KEY", build)
 
     def test_docker_passes_the_profile_to_both_builds_and_rejects_unknown_profiles(self):
-        for environment in [*PROFILES, "", "invalid"]:
+        for environment in [*PROFILES, "", "staging", "invalid"]:
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as directory:
                 work = Path(directory)
                 (work / "bin").mkdir()
@@ -153,7 +164,7 @@ class LifiBuildConfigTest(unittest.TestCase):
                 result = subprocess.run(["sh", str(ROOT / ".docker/build.sh"), "apk", "release"], cwd=work,
                                         env={**build_environment(work, environment), "DOCKER_CALLS": str(calls)},
                                         capture_output=True, text=True)
-                if environment == "invalid":
+                if environment in ["staging", "invalid"]:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertFalse(calls.exists())
                 else:

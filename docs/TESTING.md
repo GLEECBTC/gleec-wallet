@@ -123,13 +123,13 @@ KDF_HARNESS=1 KDF_TEST_SEED='<throwaway funded seed>' flutter test --tags proces
   `sdk/pubspec.lock`, and `sdk/packages/komodo_defi_framework/app_build/build_config.json`;
   the PR gate fails on a dirty tree.
 
-### LI.FI staging/production CI gate
+### LI.FI production CI gate
 
 Run `bash .github/scripts/test_lifi_profiles.sh` after resolving the locked Wallet
 dependencies. The existing required `validate_code_guidelines` job runs this on
 every PR. It runs the public configuration/command regressions and compiles the
-same Dart policy tests once per profile, checking independently expected names,
-178/22 bps, the proxy and serialized KDF startup fields. No API key, server or
+Dart policy tests for the compiled default and explicit production profile, checking the expected identity,
+178/22 bps, the proxy and serialized KDF startup fields. Staging requests must fail before Flutter starts. No API key, server or
 funded wallet is required. The SDK reference YAML must match its canonical JSON;
 release event, artifact naming and pinned-action checks are included. The Dart
 tests are also imported by `test_units/main.dart`.
