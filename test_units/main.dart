@@ -283,6 +283,8 @@ import 'tests/swap/swap_bloc_start_test.dart' as swap_bloc_start_test;
 import 'tests/swap/swap_bloc_start_path_test.dart' as swap_bloc_start_path_test;
 import 'tests/swap/swap_bloc_start_refund_test.dart'
     as swap_bloc_start_refund_test;
+import 'tests/swap/swap_bloc_session_followups_test.dart'
+    as swap_bloc_session_followups_test;
 import 'tests/swap/swap_bloc_start_session_test.dart'
     as swap_bloc_start_session_test;
 import 'tests/swap/swap_submission_authorization_test.dart'
@@ -771,6 +773,7 @@ void main() {
   swap_bloc_start_test.main();
   swap_bloc_start_path_test.main();
   swap_bloc_start_refund_test.main();
+  swap_bloc_session_followups_test.main();
   swap_bloc_start_session_test.main();
   swap_submission_authorization_test.main();
   swap_bloc_timers_test.main();

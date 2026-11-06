@@ -82,7 +82,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
        _idleLimit = idleLimit,
        _offersInterval = offersInterval,
        _offersIdleLimit = offersIdleLimit,
-       super(const UnifiedSwapState()) {
+       super(UnifiedSwapState(sessionReady: registry.acceptsSubmissions)) {
     on<UnifiedSwapStarted>(_onStarted);
     on<UnifiedSwapIntentApplied>(_onIntentApplied);
     on<UnifiedSwapPayAssetChanged>(_onPayAssetChanged);

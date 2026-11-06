@@ -20,6 +20,8 @@ are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
 This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
+- Refreshed the verified KDF engine and frozen coins bundle, adding TAR/TAR-segwit and TEL-BASE, updating TEL ERC-20/Polygon contracts and decimals, and preserving GLEEC/GRC-20 Trezor support.
+
 - Typed routed quotes and execution, KDF-owned Max, exact accepted minima,
   durable UUID recovery, required/locked balances and separate measured versus
   provider-reported payouts ([SDK#389](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/389), [SDK#407](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/407)).
@@ -33,7 +35,11 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 ## 🐛 Bug Fixes
 
-- **Swap Start Ownership** ([@CharlVS]) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching; SDK offers cannot be rebound to another session. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
+- **First Trezor Sign-In** — Save the default coin selection after device
+  authentication finishes, and prevent session restoration from publishing the
+  wallet before setup completes.
+
+- **Swap Start Ownership** ([@CharlVS]) — Pending routed and order-book swaps are revoked when the review is cancelled, replaced or hidden, or its wallet session ends. Reviews and legal consent remain tied to the original session, including logout and login to the same wallet. Submission is serialized with wallet switching for at most 10 seconds, so a request the engine never answers cannot hold off sign-out; SDK offers cannot be rebound to another session. While a start may be running, its amount, Max and unit switch are locked, and Review stays off until a just-signed-in wallet's session is ready. Once a request may have reached the engine, a lost answer remains unconfirmed and is recovered through Activity rather than automatically retried.
 
 - **Trezor Sign-In** ([@CharlVS], [SDK#424](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/424)) — Sign in when a "My Trezor" wallet file has no saved record, instead of failing with "Wallet already exists". A wallet file the app cannot open, such as another app's in a shared folder, stays untouched and a new local wallet is used. The error dialog now says sign-in failed and mentions Trezor Suite only as a possible cause.
 

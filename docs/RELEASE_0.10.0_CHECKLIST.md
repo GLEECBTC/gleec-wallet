@@ -7,11 +7,61 @@ preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
 
+## Validated KDF and coins roll — 3 November
+
+This development candidate pins accepted SDK `db73613cd34a2c0779da024a71338052e4bbb030`.
+SDK [#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430) was
+squash merged into dev as `db73613cd34a2c0779da024a71338052e4bbb030`; normal RC carry
+[#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431) is
+`3b4629048d8513af8f8a9d17a5cdf7eb5763d206`. Both accepted trees match their validated sources.
+App #3586 and #3587 acceptance remains gated on current hosted checks. Main
+release PRs SDK #416 and app #3575 stay open.
+
+- [x] Exact KDF `a51d69a11ff937ecf9678e9b37632af578252846`: ten platform
+  builds and all 17 test jobs passed. Original failures and their passing retries
+  remain in SDK `docs/KDF_ARTIFACTS_2026-11-03.json`.
+- [x] Frozen coins `cc8249e85e54467bc2684c2712857711eab55fd2`, the final roll
+  on 4 November (SDK #439 / RC #440), replacing `efd3a647`: three exact files,
+  all 446 icons and provider parsing verified; no new omitted assets. It adds
+  Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON.
+- [x] All seven archives match GitHub artifact digests, ZIP integrity and
+  ordinary mirrors. Strict CLI and fresh-unfunded native quote/funding/fee/Max
+  smoke passed. No funded action, deployment, publication or tag is included.
+- [x] Final SDK: 16 suites, **3,112 passed /14 skipped**; browser/WASM core
+  **249**, framework **10**, auth **10**. App **3,991 passed /4 skipped** and
+  Chrome/WASM authorization **84 passed**. Analysis: zero errors, 55 existing
+  warnings and 2,144 infos; changed Dart files formatted, lockfile unchanged.
+- [x] Release web/WASM build passed with recorded production defines and legal
+  gate enabled. Ten bundled engine files match the verified KDF archive; three
+  generated coin files match exact-commit source bytes. Hashes are in the inputs.
+- [x] Rechecked unchanged `ETH_PAYMENT=155000` / `ETH_SENDER_REFUND=125000`
+  in exact a51 source; updated the source comment and exact-pin regression.
+- [x] SDK dev squash #430 and normal RC carry #431 accepted after all SDK
+  checks passed, using only the owner-authorized approval override.
+- [ ] Complete app #3586 dev squash and #3587 normal RC carry after all current
+  checks pass with the named Banxa deferral, then record accepted heads and
+  refreshed final preview identity. The Windows runner disconnect before
+  compilation remains an infrastructure failure requiring a passing current run.
+- [x] The owner explicitly deferred `Banxa on-ramp quotes and selection` for
+  0.10.0. It is visibly skipped in the integration aggregator, not reported as
+  a quote pass; existing Ramp deferral remains separate. Original Chrome/Safari
+  failures (no USD50 -> BTC quote within45s) are retained. Restore Banxa proxy
+  access before re-enabling: production returned40104/401; test mode returned
+  a Cloudflare block page. All other GUI tests and checks remain required.
+
+The first final RC Chrome run stopped at `Run wallet tests` /
+`failure_withdraw`: a global animation settle timed out after MARTY activated.
+The focused test repair waits for the balance view, followed by the unchanged
+actual funded-balance and withdrawal assertions. Read-only probes reached the
+funded balance; current full browser validation remains required.
+
+Historical sections below retain their original revisions and dispositions.
+
 ## Opsec swap authorization — 3 November
 
 The offer/session and pending-confirmation defects are release blockers. The
-focused correction and deliberately deferred proxy trust redesign are tracked
-in [the remediation record](OPSEC_SWAP_SESSION_REMEDIATION_2026-11-03.md).
+focused correction is tracked in
+[the remediation record](OPSEC_SWAP_SESSION_REMEDIATION_2026-11-03.md).
 App implementation `33bf94a7c` pins SDK `3730b456` ([SDK #429](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/429)).
 The full app aggregator passes **3,991 tests / four skipped**; SDK, local-auth,
 affected package and both replay suites pass. Chrome/WASM authorization tests
@@ -24,6 +74,21 @@ Hosted checks, branch acceptance and refreshed preview identity remain separate
 gates on the final PR heads. KDF and coin inputs remain frozen. Production
 promotion remains a separate action. Entries below retain historical results
 for their recorded revisions.
+
+### Carry and pin order
+
+- A carry merges after its dev PR: squash the dev PR first, confirm the carry's
+  change equals that squash
+  (`git diff <dev squash> <carry merge> -- lib test_units .github` is empty),
+  then merge the carry with a merge commit. The carry #3583 merged before its
+  dev PR #3584; that comparison was made afterwards and the trees are
+  identical.
+- Before merging, repin `sdk` to the merged SDK commit, never a pull-request
+  head. Dev squash `422c6b90f` pinned SDK `0cd7578e`, which only the PR branch
+  carried; #3586 (`1249c500c`) repinned dev to SDK `db73613c`, and #3588 later
+  moved it to `7ce3962d`. The "SDK pin is merged" check now runs on every pull
+  request and goes red when the pin is on none of the SDK's `dev`, `main`,
+  `release-X.Y.Z` or `release/X.Y.Z` branches. It is not a required check.
 
 ## Merged-dev KDF roll — 29 October
 
@@ -134,11 +199,11 @@ merged. #3557's resulting runtime tree matched tested integration `5202777ea`.
 
 - [x] App/SDK changelogs and versions include unpublished prior fixes and
   user-facing SDK changes. Internal package constraints are aligned.
-- [x] Current SDK gitlink is `da20524e6947833b40c4d70fee5249fc9ae1a911` on frozen
+- [x] The 29 October SDK gitlink was `da20524e6947833b40c4d70fee5249fc9ae1a911` on frozen
   `release-0.9.0` ([SDK #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416)).
   SDK main promotion and final app main repin are distribution steps after
   review, not prerequisites for freezing this exact RC source.
-- [x] Frozen KDF `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev, specs
+- [x] The 29 October frozen KDF was `e40ac2fb4319d352bf9c93683eb2518ce9f939e0` on dev, specs
   `7c388ea7b91cb7c657435d416bc03e5349b46162`, bundled coins
   `2b0aefb78b184091ab086c66e513d8b03f5d5a01`. All seven rebuilt archives
   verified; independent provenance is SDK `docs/KDF_ARTIFACTS_2026-10-29.json`.

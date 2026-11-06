@@ -40,14 +40,13 @@ runs:
       with:
         xcode-version: ${{ inputs.xcode-version }}
 
-    # Download iOS platform to avoid the missing platform error from xcode 15
-    # https://github.com/flutter/flutter/issues/129558
-    # https://developer.apple.com/documentation/xcode/installing-additional-simulator-runtimes#Install-and-manage-Simulator-runtimes-from-the-command-line
+    # Device builds need the installed iPhoneOS SDK, not a simulator runtime.
+    # Downloading a runtime can fail when the runner's CoreSimulator is unavailable.
     - name: Install iOS dependencies
       id: install_deps
       shell: bash
       run: |
-        xcodebuild -downloadPlatform iOS
+        xcodebuild -sdk iphoneos -version SDKVersion
         flutter pub get --enforce-lockfile
 
         export GITHUB_API_PUBLIC_READONLY_TOKEN="${{ github.token }}"
