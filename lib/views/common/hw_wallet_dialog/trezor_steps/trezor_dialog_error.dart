@@ -25,7 +25,7 @@ class TrezorDialogError extends StatelessWidget {
           child: SvgPicture.asset('$assetsPath/ui_icons/error.svg'),
         ),
         ErrorDisplay(
-          message: LocaleKeys.trezorErrorBusy.tr(),
+          message: LocaleKeys.trezorErrorSignInFailed.tr(),
           detailedMessage: error,
           showIcon: false,
         ),

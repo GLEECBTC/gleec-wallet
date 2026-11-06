@@ -1,4 +1,6 @@
 import 'package:decimal/decimal.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/model/cex_price.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +33,7 @@ class _FakeTransactionHistoryBloc extends Cubit<TransactionHistoryState>
 }
 
 class _FakeCoinsBloc extends Cubit<CoinsState> implements CoinsBloc {
-  _FakeCoinsBloc() : super(CoinsState.initial());
+  _FakeCoinsBloc([CoinsState? state]) : super(state ?? CoinsState.initial());
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -39,6 +41,159 @@ class _FakeCoinsBloc extends Cubit<CoinsState> implements CoinsBloc {
 
 void testTransactionViewsWidgets() {
   group('Transaction views widgets', () {
+    for (final (name, net, spent, received, label) in [
+      ('outgoing net-only proxy row', '-1', '0', '0', LocaleKeys.send),
+      ('incoming component-only row', '0', '0', '2', LocaleKeys.receive),
+      ('unknown gross movement', '0', '0', '0', LocaleKeys.unknown),
+      (
+        'native self-transfer plus fee',
+        '-0.01',
+        '1.01',
+        '1',
+        LocaleKeys.txInternalTransfer,
+      ),
+    ]) {
+      testWidgets('$name preserves direction without inventing fiat', (
+        tester,
+      ) async {
+        final coin = buildTestCoin();
+        final tx = buildTestTransaction(
+          assetId: coin.id,
+          netChange: Decimal.parse(net),
+          spentByMe: Decimal.parse(spent),
+          receivedByMe: Decimal.parse(received),
+          fee: FeeInfo.utxoFixed(
+            coin: coin.abbr,
+            amount: Decimal.parse('0.01'),
+          ),
+        );
+        final coins = _FakeCoinsBloc();
+        addTearDown(coins.close);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: BlocProvider<CoinsBloc>.value(
+                value: coins,
+                child: TransactionListRow(
+                  transaction: tx,
+                  setTransaction: (_) {},
+                  coinAbbr: coin.abbr,
+                ),
+              ),
+            ),
+          ),
+        );
+        expect(find.text(label), findsOneWidget);
+        if (label != LocaleKeys.receive) {
+          expect(find.text(LocaleKeys.receive), findsNothing);
+        } else {
+          expect(find.textContaining('to-address'), findsWidgets);
+          expect(find.textContaining('from-address'), findsNothing);
+        }
+        expect(find.text('—'), findsOneWidget);
+        expect(find.textContaining(r'$0.00'), findsNothing);
+      });
+    }
+
+    for (final price in ['1', '0']) {
+      testWidgets(
+        'token history resolves normalized price $price and preserves real zero',
+        (tester) async {
+          final coin = buildTestCoin(abbr: 'USDC-PLG20');
+          final tx = buildTestTransaction(
+            assetId: coin.id,
+            netChange: Decimal.parse('-2'),
+          );
+          final coins = _FakeCoinsBloc(
+            CoinsState.initial().copyWith(
+              prices: {
+                'USDC': CexPrice(
+                  assetId: coin.id,
+                  price: Decimal.parse(price),
+                  change24h: null,
+                  lastUpdated: DateTime.utc(2026, 10, 28),
+                ),
+              },
+            ),
+          );
+          addTearDown(coins.close);
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: BlocProvider<CoinsBloc>.value(
+                  value: coins,
+                  child: TransactionListRow(
+                    transaction: tx,
+                    setTransaction: (_) {},
+                    coinAbbr: coin.abbr,
+                  ),
+                ),
+              ),
+            ),
+          );
+          expect(
+            find.text(price == '0' ? r'- $0.00' : r'- $2.00'),
+            findsOneWidget,
+          );
+          expect(find.text('—'), findsNothing);
+        },
+      );
+    }
+
+    testWidgets(
+      'unknown detail valuations stay unavailable for principal and fee',
+      (tester) async {
+        final coin = buildTestCoin();
+        final tx = buildTestTransaction(
+          assetId: coin.id,
+          fee: FeeInfo.utxoFixed(
+            coin: coin.abbr,
+            amount: Decimal.parse('0.01'),
+          ),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: TransactionDetails(
+                transaction: tx,
+                coin: coin,
+                onClose: () {},
+                usdPriceResolver: (_, __) => null,
+              ),
+            ),
+          ),
+        );
+        expect(find.textContaining('(—)'), findsNWidgets(2));
+        expect(find.textContaining(r'$0.00'), findsNothing);
+      },
+    );
+
+    testWidgets('details use credit components when the net field is absent', (
+      tester,
+    ) async {
+      final coin = buildTestCoin();
+      final tx = buildTestTransaction(
+        assetId: coin.id,
+        netChange: Decimal.zero,
+        receivedByMe: Decimal.fromInt(2),
+        spentByMe: Decimal.zero,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TransactionDetails(
+              transaction: tx,
+              coin: coin,
+              onClose: () {},
+              usdPriceResolver: (_, __) => null,
+            ),
+          ),
+        ),
+      );
+      expect(find.textContaining('+ 2 KMD'), findsOneWidget);
+      expect(find.textContaining('- 2 KMD'), findsNothing);
+    });
+
     testWidgets('transaction table shows loading spinner while fetching', (
       tester,
     ) async {
@@ -182,7 +337,7 @@ void testTransactionViewsWidgets() {
       // Unsigned amounts: magnitude without a +/- prefix (a directional row
       // would render '+ $...' or '- $...' in the USD column).
       expect(find.textContaining('12.5'), findsWidgets);
-      expect(find.text(r'$0.00'), findsOneWidget);
+      expect(find.text('—'), findsOneWidget);
       expect(find.textContaining('+'), findsNothing);
       expect(find.textContaining(r'- $'), findsNothing);
       // The destination (custody) address is shown, not the sender.

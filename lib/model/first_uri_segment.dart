@@ -4,6 +4,9 @@ class FirstUriSegment {
   final String wallet = 'wallet';
   final String fiat = 'fiat';
   final String dex = 'dex';
+
+  /// An alias of [dex]: the Swap menu's own name for it.
+  final String swap = 'swap';
   final String nfts = 'nfts';
   final String walletManager = 'wallet-manager';
   final String marketMakerBot = 'trading-bot';

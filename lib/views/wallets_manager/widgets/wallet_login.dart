@@ -45,6 +45,7 @@ class _WalletLogInState extends State<WalletLogIn> {
   final TextEditingController _passwordController = TextEditingController();
   late bool _isHdMode;
   bool _isQuickLoginEnabled = false;
+  bool _waitingForLegal = false;
   KdfUser? _user;
   bool? _storedHdPreference;
 
@@ -92,7 +93,13 @@ class _WalletLogInState extends State<WalletLogIn> {
     super.dispose();
   }
 
-  void _submitLogin() {
+  void _submitLogin() async {
+    if (_waitingForLegal) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null) return;
+    final consentSnapshot = agreement.snapshot;
     final authState = context.read<AuthBloc>().state;
     if (authState.isLoading) {
       return;
@@ -108,9 +115,9 @@ class _WalletLogInState extends State<WalletLogIn> {
         config: widget.wallet.config.copyWith(type: derivedType),
       );
 
-      if (!mounted) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
-        const LegalAgreementSubmitted('wallet-login'),
+        LegalAgreementSubmitted('wallet-login', snapshot: consentSnapshot),
       );
       widget.onLogin(
         _passwordController.text,
@@ -179,16 +186,20 @@ class _WalletLogInState extends State<WalletLogIn> {
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                  child: UiPrimaryButton(
-                    height: 50,
-                    text: state.isLoading
-                        ? '${LocaleKeys.pleaseWait.tr()}...'
-                        : LocaleKeys.logIn.tr(),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                  child: LegalConsentAction(
+                    builder: (allowed) => UiPrimaryButton(
+                      height: 50,
+                      text: state.isLoading
+                          ? '${LocaleKeys.pleaseWait.tr()}...'
+                          : LocaleKeys.logIn.tr(),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      onPressed: !allowed || state.isLoading
+                          ? null
+                          : _submitLogin,
                     ),
-                    onPressed: state.isLoading ? null : _submitLogin,
                   ),
                 ),
                 const SizedBox(height: 8),

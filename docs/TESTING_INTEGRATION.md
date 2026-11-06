@@ -90,6 +90,60 @@ default test clipboard mock and records success-message visibility separately.
 | `suspended_assets_test/suspended_assets_test.dart` | **no** — hardcoded off | n/a |
 | `perf_tests/perf_tests.dart` | **no** — `-t` only, by design ([frame timing](TESTING.md#7-frame-timing)) | no |
 
+### Independent on-ramp checks
+
+The default `fiat_onramp_tests/fiat_onramp_tests.dart` target tests **Banxa**
+quotes and selection without requiring Ramp. It checks USD 50 → BTC, EUR 50 →
+BTC and EUR 50 → LTC, including a positive coin amount/price, matching quoted
+currencies/fiat amount and selection of the requested provider. Placeholder,
+zero and stale quotes fail. Profile/release modes use production provider APIs;
+debug uses their test mode.
+
+Ramp appears as an explicitly skipped, deferred case in that target. The user
+accepted its current unavailability for this release on 27 October 2026. When
+Ramp authorization is restored, run its independent target:
+
+```bash
+dart run_integration_tests.dart \
+  -t fiat_onramp_tests/ramp_onramp_tests.dart \
+  -d headless -n chrome -m profile --dart-define GEO_BLOCK=disabled
+```
+
+The default on-ramp gate is read-only: it does not submit a provider order.
+The former checkout-launch check is retained separately for a supervised run:
+
+```bash
+dart run_integration_tests.dart \
+  -t fiat_onramp_tests/banxa_checkout_tests.dart \
+  -d headless -n chrome -m profile --dart-define GEO_BLOCK=disabled
+```
+
+That explicit target creates a Banxa order and opens the checkout webview; it
+does not enter payment details or complete a purchase. Order creation, checkout
+and payment/delivery sign-off are distinct from a passing quote-only gate.
+No completed purchase is claimed by either automated target.
+
+### Live KDP browser diagnostic
+
+The explicit `kdf_tests/lifi_proxy_quote_smoke.dart` target checks the frozen
+`35f0bde` WASM engine against the live LI.FI proxy. It activates Arbitrum assets
+and verifies an exact quote, a positive minimum and the included 2% commission.
+Its RPC allowlist permits only version, activation and quoting. It submits no
+approval or swap and is not in the default GUI suite.
+
+```bash
+dart run_integration_tests.dart \
+  -t kdf_tests/lifi_proxy_quote_smoke.dart \
+  -d headless -n chrome -m profile \
+  --dart-define GEO_BLOCK=disabled \
+  --dart-define LIFI_PROXY_URL=https://quicknode.gleec.com/lifi
+```
+
+Use the candidate's default commission settings. An intentional engine repin or
+commission-policy change requires reviewing this frozen-candidate assertion.
+Like the native quote smoke, this is a live connectivity check, not funded
+execution or production-capacity evidence.
+
 `no_login_tests` is not entirely login-free: `no_login_taker_form_test.dart` calls
 `restoreWalletToTest` and must stay last in its group.
 

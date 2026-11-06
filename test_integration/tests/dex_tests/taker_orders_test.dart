@@ -7,6 +7,7 @@ import 'package:web_dex/main.dart' as app;
 import 'package:web_dex/shared/widgets/copied_text.dart';
 import 'package:web_dex/views/dex/entities_list/history/history_item.dart';
 
+import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
 import '../../common/widget_tester_action_extensions.dart';
 import '../../common/widget_tester_pump_extension.dart';
@@ -284,11 +285,12 @@ Future<void> _createTakerOrder(WidgetTester tester) async {
 Future<void> _openTakerOrderForm(WidgetTester tester) async {
   print('🔍 OPEN FORM: Navigating to taker order form');
 
-  final Finder dexSectionButton = find.byKey(const Key('main-menu-dex'));
   final Finder dexSectionSwapTab = find.byKey(const Key('dex-swap-tab'));
 
-  await tester.tap(dexSectionButton);
-  print('🔍 OPEN FORM: Opened DEX section');
+  // The taker form is part of the trading interface, which the Swap surface
+  // only mounts on its Advanced destination.
+  await goto.dexPage(tester);
+  print('🔍 OPEN FORM: Opened the trading interface');
   await tester.pumpAndSettle();
 
   await tester.tap(dexSectionSwapTab);

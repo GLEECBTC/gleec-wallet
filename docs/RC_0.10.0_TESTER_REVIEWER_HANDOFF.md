@@ -1,0 +1,293 @@
+# Gleec Wallet 0.10.0 RC: tester and reviewer handoff
+
+Updated 6 November 2026. This candidate is available for code review and a
+controlled testing round. Production promotion remains gated below. The release
+owner sends invitations; this handoff does not request reviews or contact testers.
+
+## Current build policy — 6 November
+
+Wallet #3585 is carried into the RC at the owner's request. LI.FI defaults to
+`gleec-dex-production` everywhere, including GitHub previews. Staging is no
+longer offered while KDP is configured for the production integration. The SDK stays at merged main `09bde8c6978433d509ffabe6696d495fe5923745`
+from #3603, with KDF `a51d69a1` and coins `cc8249e8`. The release PR
+[#3575](https://github.com/GLEECBTC/gleec-wallet/pull/3575) records the current
+carry head and its validation. Before testing, re-read the preview's
+`rc-test-build.json`: verify its app/SDK revisions and `lifi_build_defines`,
+with legal bypass and production approval both false. Earlier preview proof
+covers only its recorded revision and staging policy.
+
+## Accepted candidate — 4 November (historical)
+
+Use app RC `3f2058c801d823eceb5d5dcadbb9324e163d9115` with frozen SDK
+`caab72b973c3fa74a4b6a11a663e4e67798023e1`, KDF `a51d69a` and coins
+`cc8249e8`. The [post-opening audit](RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md)
+maps accepted fixes since #3575 first opened. SDK #435 and app #3590/#3589
+are included; no carry is pending.
+
+The ordinary [main-RC preview](https://walletrc--pull-3575-merge-ynyfywb3.web.app)
+was rechecked on 4 November at the final runtime `3f2058c8` and again at the
+docs-only head `4d52eb0e`: each build's source tree equals its head, the SDK is
+`caab72b9`, legal bypass and production approval are false, and all 13 served
+config/coin/engine files are byte-identical across both builds (details in the
+[checklist](RELEASE_0.10.0_CHECKLIST.md)). The
+[earlier proof](RC_0.10.0_PREVIEW_2026-11-04.json) covers `da3214d8` only.
+Read `rc-test-build.json` again before each round.
+
+Saved qualification at `da3214d8`: app **3,991 passed /4 skipped**, browser
+WASM **84**, hosted source/carry/main checks **14/9/17**; SDK 16 suites
+**3,112 passed /14 skipped** and browser **249 +10 +10**. The later carries
+passed the full local app gate on both branches, **4,008 passed /4 skipped** at
+`3f2058c8`. All ten exact-pin
+KDF builds and 17 test jobs passed. The owner's named Banxa quote/selection
+deferral remains separate from Ramp and is not a successful quote test.
+Signed packaging, install/upgrade, approved legal text and promotion remain
+separate gates; no new KDF tests or funded actions were run for this update.
+
+The native Trezor restart health-check/sign-out observation and lock-interrupted
+`Unexpected message` attempts still need final-candidate disposition. A separate
+successful saved-default selection/reconnect check is not an automatic-session
+recovery or full balance-view pass.
+
+## Atomic trading restoration — 29 October (historical validation)
+
+App [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) restores the
+previous atomic EVM-token behavior and corrects the existing permission row,
+with no new modal or confirmation step. Accepted dev squash `5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c` has
+the identical complete tree to tested source `34bad84020e68bf4fe4547ea7990287d050c3aa0`. The focused RC carry
+adds only that accepted change and documentation of its validation.
+
+The full app aggregator passed **3,922 tests / four skipped**; 95 focused
+regressions and analysis (zero errors; existing warnings/infos) pass. SDK/KDF
+inputs and prior SDK/Melos evidence remain unchanged. Use the refreshed build
+identity on #3575 to test this restoration; earlier previews do not certify it.
+No fresh funded atomic settlement is claimed by the unit/widget tests.
+
+## Accepted engine inputs — 29 October (superseded inputs)
+
+SDK [#419](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/419)
+was squash merged into dev. Focused frozen-branch carry
+[#420](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/420) is accepted
+at `da20524e6947833b40c4d70fee5249fc9ae1a911`, pinning merged KDF dev
+`e40ac2fb4319d352bf9c93683eb2518ce9f939e0`. App #3576/#3577 consume only
+that accepted input. Both main RC PRs remain open for testers and reviewers.
+
+The ten-platform build, seven independent archive checks, strict CLI, Melos
+bootstrap/prepare, all 16 SDK suites and both WASM gates passed. The native
+engine passed the unfunded Arbitrum/Base quote smoke. The app gate on the
+accepted frozen SDK pin passed **3,919 tests / four skipped**; analysis has
+zero errors and existing 55 warnings / 2,144 infos. Gas-limit defaults were
+rechecked at the exact new source before updating their pin assertion.
+
+The owner accepted documented upstream failures **as-is for RC testing only**.
+Integration and Sia Max failures remain production gates. Three Z-coin tests
+show a CI pass-to-fail regression since pre-merge dev `6afb05f4`, with code
+versus infrastructure cause unassigned. Most other integration failures
+pre-exist; Sia's regression is unconfirmed. Exact names, retry/baseline links
+and the owner disposition are in the SDK artifact provenance record.
+
+Use only the refreshed preview identity on app #3575 after the focused app
+RC carry. The prior 28 October snapshot remains historical; old preview build
+identities do not certify this engine roll. The [manifest](RELEASE_0.10.0_INPUTS.json)
+records the current immutable SDK/KDF inputs.
+
+## Review entry points and identity
+
+| Component | Review / pinned input |
+| --- | --- |
+| App 0.10.0+0 | [Frozen candidate](https://github.com/GLEECBTC/gleec-wallet/compare/main...release-0.10.0), `main...release-0.10.0` |
+| SDK 0.9.0 | [Release PR #416](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/416), `main...release-0.9.0` |
+| Tested app RC source | `72592009c579238ea3a310117a2146edc7544a43`; accepted normal carry `3f2058c801d823eceb5d5dcadbb9324e163d9115` has the identical complete tree |
+| SDK gitlink | `caab72b973c3fa74a4b6a11a663e4e67798023e1`, the tree of SDK #435's merge `bb5b4187bf49f844c01672799b451b50a5b08808`; `release-0.9.0` `8cae3c91125fc6003fcc637a168b827adb57287f` adds only changelogs and release docs |
+| KDF | `a51d69a11ff937ecf9678e9b37632af578252846` on dev, `3.2.0-beta` |
+| RPC specs | `7c388ea7b91cb7c657435d416bc03e5349b46162` |
+| Bundled coins | `cc8249e85e54467bc2684c2712857711eab55fd2`; runtime updates enabled |
+| Production build | [Private-machine recipe, defines and output checks](RELEASE_0.10.0_PRODUCTION_BUILD.md) |
+
+The [input manifest](RELEASE_0.10.0_INPUTS.json) records archive/config/lockfile
+hashes. The final deployed preview's `rc-test-build.json` records its full app
+and SDK commits, JavaScript hash, KDF configuration hash, build time, legal
+override and Actions run. Record that identity with every report; compare it
+with Settings and the release PR head. A version number alone is insufficient.
+The preview URL and verified deployment run are maintained in the current app
+release-branch PR. The old dev-headed app #3561 and SDK #410 are replaced,
+not merged; their historical discussions remain linked from the current PRs.
+
+The ordinary current release-PR preview retains the legal gate. It is separate
+from the manual RC legal-testing preview. Old #3557/#3561 previews are not the
+frozen candidate; use the identity recorded on the current release PR.
+
+## Temporary legal exception
+
+The owner authorized testing while the LI.FI document is unpublished. The local
+LI.FI draft is now marker-free and all five legal text files are ignored, local-only
+handoff copies. Removing that local marker does not upload or approve the text.
+Only the explicit, manually dispatched RC test build
+sets `BYPASS_LEGAL_DOCUMENT_GATE=true`. The notice remains visible, and missing
+documents or files carrying the placeholder marker never become acceptance
+records. The hosted LI.FI file had that marker removed for RC testing, so
+ordinary builds, including the RC preview, record acceptance of it like final
+terms until Ilya's approved text replaces it. Trading policy, funding,
+quote review and uncertain-start checks still apply. This exception does not
+establish legal approval or production readiness.
+
+The workflow accepts the exception only from `GLEECBTC/gleec-wallet` on `dev`,
+with `rc_expected_app_commit` equal to its full 40-character run SHA. It deploys
+to the isolated `rc-0-10-0-legal-testing` channel, expiring after seven days.
+Ordinary PR/dev builds keep the gate; the workflow does not deploy to production.
+
+To refresh it, resolve the reviewed `dev` SHA, then dispatch:
+
+```bash
+gh workflow run firebase-hosting-pull-request.yml \
+  --repo GLEECBTC/gleec-wallet --ref dev \
+  -f rc_legal_availability_bypass=true \
+  -f rc_expected_app_commit=<full-reviewed-dev-sha>
+```
+
+Read the deployed URL from that run's summary. Check `rc-test-build.json`, hash
+the served `main.dart.js` against its recorded SHA-256, and verify the legal
+warning before sharing. A moved dev head must fail the requested-commit guard.
+If the build expires, refresh explicitly and update the recorded identity.
+
+Before production: upload counsel-approved LI.FI text, deploy with the bypass
+disabled, and test clean-profile
+consent plus existing-wallet/recovery behavior. See [hosting handoff](legal-hosting/README.md).
+
+## Tester round
+
+Start with a clean disposable profile. Let the owner choose any funded wallet,
+assets, amounts and spend limit. A person enters credentials and presses every
+approval, Start, transfer or other control that commits funds. An agent may
+prepare a review and independently verify the result. Follow
+[How a round runs](SWAP_LIVE_TEST_BRIEF.md#how-a-round-runs).
+
+1. Verify the build identity, warning, wallet/network/account and token contract.
+   Check onboarding, unlock, receive/copy, activation and restart without funding.
+2. Exercise quotes, comparison, expiry/Refresh, slippage, rate limits and missing
+   gas. Check source-address spendable funds separately from HD totals. Do not
+   generate load against the shared LI.FI proxy without agreeing capacity.
+3. On review, compare principal, network, recipient, provider, minimum, fees and
+   permission evidence. Resize/reload, background/restore and change wallet or
+   pair while requests are pending. Stale facts must not start another swap.
+4. Check desktop at 100% and 200%, phone 360×800 and tablet 768×1024. Legal
+   warning, minimum, expiry and actions must remain reachable. Safari and signed
+   device builds need their own results.
+5. For an approved funded case, stop at review for the person to inspect and
+   submit. Verify source principal plus gas, destination recipient/contract and
+   received amount against independent chain evidence. Distinguish expected,
+   guaranteed, provider-reported and independently measured values.
+6. Reopen Activity and restart. Preserve approval and payment hashes separately.
+   An unanswered Start must remain uncertain until reconciled; do not resubmit
+   automatically. Exercise destructive/recovery faults only with fixtures.
+
+### Known restrictions and preserved evidence
+
+- **Atomic EVM-token trading follows the previous release's behavior.**
+  [#3579](https://github.com/GLEECBTC/gleec-wallet/pull/3579) removes #3569's
+  blanket refusal from unified swaps, Advanced orders and bot starts. The
+  existing permission row describes engine-managed allowance after matching,
+  including possible unlimited permission and reuse of existing allowance.
+  Start has no additional confirmation step. LI.FI's exact-approval/reset
+  contract stays separate. Use the recorded build identity to confirm the
+  restoration is included; no fresh funded atomic settlement is claimed here.
+- Native routed Max now selects a smaller, completely repriced amount with
+  twice the reported gas requirement retained. It makes at most three exact
+  quote requests after KDF Max and never falls back to unbuffered Max. Token
+  Max and atomic swaps follow their separate paths. Review the
+  [actual policy and limits](NATIVE_MAX_GAS_RESERVE.md).
+- Seven human-submitted settlements are already recorded, including the buffered
+  native-Max retest on `ed609b9`. The later `5202777` layout fix passed native
+  Chrome review checks at 200%, 100%, phone and tablet, including expiry/Refresh.
+  Later freeze repairs have synthetic/native/browser regression coverage.
+  They are not new funded-settlement evidence; further live checks remain
+  human-operated and should target the current frozen preview.
+- Optional X06/X07 have no observed order-book offers. DOC/MARTY real refund
+  testing is blocked by stalled configured testnet tips. Report these as blocked,
+  not failed executions or passing cases. Fixture refund coverage is separate.
+- Transfer review/input [#3570](https://github.com/GLEECBTC/gleec-wallet/pull/3570)
+  and native precision [#3571](https://github.com/GLEECBTC/gleec-wallet/pull/3571)
+  separate recipient principal, network fee and same-asset total; preserve exact
+  selectable/accessible amounts; and reject unsupported precision or mismatched
+  signed EVM principal before submission.
+- History [#3572](https://github.com/GLEECBTC/gleec-wallet/pull/3572) with SDK #413
+  preserves signed outgoing movements across cache/refetch, restores ETC through
+  its verified explorer, and distinguishes unknown gross direction, self-transfer
+  principal/fee and missing fiat. The explorer has a bounded 1,000-row per-address
+  history window; this does not establish unlimited internal-call completeness.
+- SDK #412 binds routed handles/polling/results to the authenticated session.
+  A start without its durable UUID stays unconfirmed; matching history amounts
+  cannot claim an existing swap. Native/browser regressions cover wallet changes
+  and late results. Private live evidence remains in its local ledger.
+- Five-person usability and live fiat testing were explicitly deferred by the
+  owner. Banxa follow-up [#3559](https://github.com/GLEECBTC/gleec-wallet/issues/3559)
+  is after 0.10.0; it is not a newly imposed RC prerequisite.
+
+## Evidence available to reviewers
+
+Flutter 3.41.4 / Dart 3.11.1; workspace Melos 7.8.1. Fresh preparation ran
+`melos bootstrap --offline --enforce-lockfile`, including both prepare hooks,
+and repeated `melos run prepare --no-select` with stable output. All 22 workspace
+packages resolved; regenerated platform barrels/parts were corrected in SDK #411.
+
+| Validation | Result |
+| --- | --- |
+| App unit aggregator, all four production GasFree defines | 3,919 passed / four skipped |
+| All 16 SDK native package suites through Melos | 3,057 passed / 14 skipped |
+| SDK Chrome/WASM / framework WASM | 215 / 10 passed |
+| Auth helper-boundary retest | 127 passed |
+| Full analysis | Zero errors; 55 warnings / 2,144 infos, no new changed-line diagnostic |
+| Consumer enforced offline lockfile, changed Dart formatting, diff checks | Passed |
+| RC preview guard: ordinary/default paths and invalid override rejection | 11 passed |
+| Existing legal repository, swap and onboarding suites, compiled bypass enabled | 53 passed; warning retained and missing-term acceptance absent |
+
+The full app aggregator was repeated on the combined runtime. Analysis has
+zero errors and the same 55 existing warnings; its nonzero exit reflects that
+backlog. Final enforced offline Melos bootstrap produced no tracked drift.
+SDK #417/#418 also repaired the frozen review finding that in-flight recovery
+stopped silently after 20 pages. All 99 pages are recovered; a wallet change
+while page 21 is pending rejects the whole read. These native/WASM regressions
+pass, and the final SDK branch tree equals the validated dev squash `e849cd0d`.
+The earlier `52f1181f` package CI and SDK/playground previews remain historical
+evidence. The current frozen-head
+checks remain authoritative: pending/running jobs are not passes. Record a
+specific failure and distinguish setup/network failures from code defects.
+Compilation does not establish signing, installation or upgrade behavior.
+
+For systematic review, use the [full-diff review prompt](SDK_APP_FULL_DIFF_REVIEW_PROMPT.md).
+Prioritize amounts/precision/fees, spender and approval scope, quote revalidation,
+uncertain starts, wallet isolation, persisted recovery, public SDK compatibility,
+native/WASM boundaries and frozen artifact integrity. Record files actually
+reviewed and open findings; do not turn this checklist into an approval claim.
+
+## Freeze and main promotion
+
+The RC source is frozen on `release-0.10.0` and `release-0.9.0`, both created
+from dev after the focused squash merges. Later dev work cannot enter these
+candidates automatically. Keep the release PRs open for tester/reviewer feedback.
+Only verified blockers should change a frozen branch; squash the focused fix
+into dev, carry only that reviewed fix to release, and repeat affected checks.
+
+1. Complete current-head reviews/checks and distribution gates in the
+   [release checklist](RELEASE_0.10.0_CHECKLIST.md): approved production legal
+   text, blocked-case dispositions, upstream operational signoff and signed
+   platform install/upgrade evidence remain separate from source freeze.
+2. **Done:** SDK #416 merged into `main` with a **merge commit** as `09bde8c6`,
+   and #3603 pinned it into the app release branch with the runtime unchanged.
+   App dev was deliberately not repinned (see #3575).
+3. Promote the app `release-0.10.0` PR to `main` with a **merge commit** after
+   app gates pass. Every PR into dev uses squash, including focused release
+   reconciliation. No automatic merge or main admin bypass is assumed.
+4. Run the SDK tag preflight in [BUILD_RELEASE.md](BUILD_RELEASE.md#github-release-preflight)
+   before app tagging/publication. Retain hashes, detached signatures and signed
+   SHA256SUMS at least to the 0.9.7-1 standard. Test final production builds with
+   the legal bypass disabled, then retire the isolated RC exception/channel.
+
+## Report a finding
+
+Include the preview/run, full app/SDK commits, platform/browser, profile type,
+network and token contract, reproducible steps, expected/actual behavior, impact,
+and whether any approval/payment was submitted. Name an exact failing test or
+blocked dependency. Put public-safe screenshots and minimal diagnostics in the
+issue; keep seeds, keys, wallet databases, private balances and transaction
+receipts out of public reports. Preserve the private evidence in its existing
+local ledger rather than copying it into release documentation.

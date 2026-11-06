@@ -19,8 +19,8 @@ Future<void> testMainMenu(WidgetTester tester) async {
   await goto.walletPage(tester);
   expect(find.byKey(const Key('wallet-page')), findsOneWidget);
 
-  await goto.dexPage(tester);
-  expect(find.byKey(const Key('dex-page')), findsOneWidget);
+  await goto.swapPage(tester);
+  expect(find.byKey(const Key('swap-shell')), findsOneWidget);
 
   await goto.nftsPage(tester);
   expect(find.byKey(const Key('nft-page')), findsOneWidget);

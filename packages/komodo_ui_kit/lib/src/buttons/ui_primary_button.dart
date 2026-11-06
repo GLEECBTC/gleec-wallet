@@ -55,7 +55,7 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
             _hasFocus = value;
           });
         },
-        onPressed: widget.onPressed ?? () {},
+        onPressed: widget.onPressed,
         key: widget.buttonKey,
         style: ElevatedButton.styleFrom(
           shape: _shape,
@@ -63,6 +63,10 @@ class _UiPrimaryButtonState extends State<UiPrimaryButton> {
           elevation: 1,
           backgroundColor: _backgroundColor,
           foregroundColor: _foregroundColor,
+          // UIBaseButton already dims disabled buttons. Keep that appearance
+          // while letting Material expose the real disabled/focus semantics.
+          disabledBackgroundColor: _backgroundColor,
+          disabledForegroundColor: _foregroundColor,
           padding: widget.padding,
         ),
         child: DefaultTextStyle(

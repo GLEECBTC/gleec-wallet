@@ -44,6 +44,7 @@ class _WalletCreationState extends State<WalletCreation> {
   );
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _inProgress = false;
+  bool _waitingForLegal = false;
   bool _rememberMe = false;
   bool _arePasswordsValid = false;
 
@@ -115,17 +116,21 @@ class _WalletCreationState extends State<WalletCreation> {
                 const SizedBox(height: 22),
                 TermsConsentText(actionLabel: LocaleKeys.create.tr()),
                 const SizedBox(height: 12),
-                UiPrimaryButton(
-                  key: const Key('confirm-password-button'),
-                  height: 50,
-                  text: _inProgress
-                      ? '${LocaleKeys.pleaseWait.tr()}...'
-                      : LocaleKeys.create.tr(),
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                LegalConsentAction(
+                  builder: (allowed) => UiPrimaryButton(
+                    key: const Key('confirm-password-button'),
+                    height: 50,
+                    text: _inProgress
+                        ? '${LocaleKeys.pleaseWait.tr()}...'
+                        : LocaleKeys.create.tr(),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    onPressed: allowed && _isCreateButtonEnabled
+                        ? _onCreate
+                        : null,
                   ),
-                  onPressed: _isCreateButtonEnabled ? _onCreate : null,
                 ),
                 const SizedBox(height: 20),
                 UiUnderlineTextButton(
@@ -194,6 +199,12 @@ class _WalletCreationState extends State<WalletCreation> {
   }
 
   void _onCreate() async {
+    if (_inProgress || _waitingForLegal) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null) return;
+    final consentSnapshot = agreement.snapshot;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _inProgress = true);
     // Async uniqueness check before proceeding
@@ -221,9 +232,9 @@ class _WalletCreationState extends State<WalletCreation> {
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       // Complete autofill session so password managers can save new credentials
       TextInput.finishAutofillContext(shouldSave: true);
-      if (!mounted) return;
+      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
       context.read<LegalAgreementBloc>().add(
-        const LegalAgreementSubmitted('wallet-creation'),
+        LegalAgreementSubmitted('wallet-creation', snapshot: consentSnapshot),
       );
       widget.onCreate(
         name: _nameController.text.trim(),

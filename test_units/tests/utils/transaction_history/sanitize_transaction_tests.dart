@@ -40,24 +40,22 @@ void testSanitizeTransaction() {
 
     group('Self-transfer edge case', () {
       test(
-          'leaves address untouched when to and from are identical (self-transfer)',
-          () {
-        final selfAddress = 'self1';
-        final tx = createTransaction(
-          from: [selfAddress],
-          to: [selfAddress],
-        );
-        final walletAddresses = {selfAddress};
+        'leaves address untouched when to and from are identical (self-transfer)',
+        () {
+          final selfAddress = 'self1';
+          final tx = createTransaction(from: [selfAddress], to: [selfAddress]);
+          final walletAddresses = {selfAddress};
 
-        final result = tx.sanitize(walletAddresses);
+          final result = tx.sanitize(walletAddresses);
 
-        // The address should remain in both to and from
-        expect(result.to, equals([selfAddress]));
-        expect(result.from, equals([selfAddress]));
-        // There should never be 0 to or from addresses
-        expect(result.to, isNotEmpty);
-        expect(result.from, isNotEmpty);
-      });
+          // The address should remain in both to and from
+          expect(result.to, equals([selfAddress]));
+          expect(result.from, equals([selfAddress]));
+          // There should never be 0 to or from addresses
+          expect(result.to, isNotEmpty);
+          expect(result.from, isNotEmpty);
+        },
+      );
     });
 
     group('Basic functionality', () {
@@ -97,10 +95,7 @@ void testSanitizeTransaction() {
       });
 
       test('handles case where sender is the only recipient', () {
-        final tx = createTransaction(
-          from: ['sender1'],
-          to: ['sender1'],
-        );
+        final tx = createTransaction(from: ['sender1'], to: ['sender1']);
         final walletAddresses = <String>{};
 
         final result = tx.sanitize(walletAddresses);
@@ -109,10 +104,7 @@ void testSanitizeTransaction() {
       });
 
       test('handles case where to list is empty', () {
-        final tx = createTransaction(
-          from: ['sender1'],
-          to: [],
-        );
+        final tx = createTransaction(from: ['sender1'], to: []);
         final walletAddresses = {'wallet1'};
 
         final result = tx.sanitize(walletAddresses);
@@ -137,54 +129,61 @@ void testSanitizeTransaction() {
         expect(result.to[0], anyOf('wallet1', 'wallet2'));
         expect(result.to[1], anyOf('wallet1', 'wallet2'));
         expect(
-            result.to[0] != result.to[1], isTrue); // They should be different
+          result.to[0] != result.to[1],
+          isTrue,
+        ); // They should be different
         // External addresses should come after
         expect(result.to[2], anyOf('external1', 'external2'));
         expect(result.to[3], anyOf('external1', 'external2'));
         expect(
-            result.to[2] != result.to[3], isTrue); // They should be different
-      });
-
-      test('sorts wallet addresses first when walletAddresses is not empty',
-          () {
-        final tx = createTransaction(
-          from: ['sender1'],
-          to: ['external1', 'wallet1', 'external2', 'wallet2', 'external3'],
-        );
-        final walletAddresses = {'wallet1', 'wallet2'};
-
-        final result = tx.sanitize(walletAddresses);
-
-        // First element should be a wallet address
-        expect(walletAddresses.contains(result.to.first), isTrue);
-
-        // Find where wallet addresses end
-        int walletAddressCount = 0;
-        for (final addr in result.to) {
-          if (walletAddresses.contains(addr)) {
-            walletAddressCount++;
-          } else {
-            break;
-          }
-        }
-
-        // Should have exactly 2 wallet addresses at the beginning
-        expect(walletAddressCount, equals(2));
+          result.to[2] != result.to[3],
+          isTrue,
+        ); // They should be different
       });
 
       test(
-          'does not sort when only one recipient remains after removing sender',
-          () {
-        final tx = createTransaction(
-          from: ['sender1'],
-          to: ['sender1', 'recipient1'],
-        );
-        final walletAddresses = {'wallet1'};
+        'sorts wallet addresses first when walletAddresses is not empty',
+        () {
+          final tx = createTransaction(
+            from: ['sender1'],
+            to: ['external1', 'wallet1', 'external2', 'wallet2', 'external3'],
+          );
+          final walletAddresses = {'wallet1', 'wallet2'};
 
-        final result = tx.sanitize(walletAddresses);
+          final result = tx.sanitize(walletAddresses);
 
-        expect(result.to, equals(['recipient1']));
-      });
+          // First element should be a wallet address
+          expect(walletAddresses.contains(result.to.first), isTrue);
+
+          // Find where wallet addresses end
+          int walletAddressCount = 0;
+          for (final addr in result.to) {
+            if (walletAddresses.contains(addr)) {
+              walletAddressCount++;
+            } else {
+              break;
+            }
+          }
+
+          // Should have exactly 2 wallet addresses at the beginning
+          expect(walletAddressCount, equals(2));
+        },
+      );
+
+      test(
+        'does not sort when only one recipient remains after removing sender',
+        () {
+          final tx = createTransaction(
+            from: ['sender1'],
+            to: ['sender1', 'recipient1'],
+          );
+          final walletAddresses = {'wallet1'};
+
+          final result = tx.sanitize(walletAddresses);
+
+          expect(result.to, equals(['recipient1']));
+        },
+      );
 
       test('does not sort when walletAddresses is empty', () {
         final tx = createTransaction(
@@ -219,10 +218,12 @@ void testSanitizeTransaction() {
         expect(result.to.length, equals(6));
 
         // Check that wallet addresses come first
-        final walletAddressesInResult =
-            result.to.where(walletAddresses.contains).toList();
-        final externalAddressesInResult =
-            result.to.where((addr) => !walletAddresses.contains(addr)).toList();
+        final walletAddressesInResult = result.to
+            .where(walletAddresses.contains)
+            .toList();
+        final externalAddressesInResult = result.to
+            .where((addr) => !walletAddresses.contains(addr))
+            .toList();
 
         expect(walletAddressesInResult.length, equals(3));
         expect(externalAddressesInResult.length, equals(3));
@@ -231,8 +232,9 @@ void testSanitizeTransaction() {
         expect(result.to.take(3).every(walletAddresses.contains), isTrue);
         // External addresses should be at the end
         expect(
-            result.to.skip(3).every((addr) => !walletAddresses.contains(addr)),
-            isTrue);
+          result.to.skip(3).every((addr) => !walletAddresses.contains(addr)),
+          isTrue,
+        );
       });
     });
 
@@ -267,23 +269,25 @@ void testSanitizeTransaction() {
         expect(result.to, contains('wallet1'));
       });
 
-      test('preserves transaction immutability by creating new transaction',
-          () {
-        final originalTo = ['sender1', 'recipient1', 'wallet1'];
-        final tx = createTransaction(
-          from: ['sender1'],
-          to: List<String>.from(originalTo),
-        );
-        final walletAddresses = {'wallet1'};
+      test(
+        'preserves transaction immutability by creating new transaction',
+        () {
+          final originalTo = ['sender1', 'recipient1', 'wallet1'];
+          final tx = createTransaction(
+            from: ['sender1'],
+            to: List<String>.from(originalTo),
+          );
+          final walletAddresses = {'wallet1'};
 
-        final result = tx.sanitize(walletAddresses);
+          final result = tx.sanitize(walletAddresses);
 
-        // Original transaction should be unchanged
-        expect(tx.to, equals(originalTo));
-        // Result should be different
-        expect(result.to, isNot(equals(originalTo)));
-        expect(result.to.contains('sender1'), isFalse);
-      });
+          // Original transaction should be unchanged
+          expect(tx.to, equals(originalTo));
+          // Result should be different
+          expect(result.to, isNot(equals(originalTo)));
+          expect(result.to.contains('sender1'), isFalse);
+        },
+      );
 
       test('handles empty wallet addresses set gracefully', () {
         final tx = createTransaction(
@@ -322,7 +326,9 @@ void testSanitizeTransaction() {
 
         expect(result.to, equals(['external1', 'external2', 'external3']));
         expect(
-            result.to.every((addr) => !walletAddresses.contains(addr)), isTrue);
+          result.to.every((addr) => !walletAddresses.contains(addr)),
+          isTrue,
+        );
       });
     });
 
@@ -341,22 +347,24 @@ void testSanitizeTransaction() {
         expect(walletAddresses.contains(result.to.first), isTrue);
       });
 
-      test('ensures first wallet address when multiple wallet addresses exist',
-          () {
-        final tx = createTransaction(
-          from: ['sender1'],
-          to: ['sender1', 'external1', 'wallet2', 'external2', 'wallet1'],
-        );
-        final walletAddresses = {'wallet1', 'wallet2'};
+      test(
+        'ensures first wallet address when multiple wallet addresses exist',
+        () {
+          final tx = createTransaction(
+            from: ['sender1'],
+            to: ['sender1', 'external1', 'wallet2', 'external2', 'wallet1'],
+          );
+          final walletAddresses = {'wallet1', 'wallet2'};
 
-        final result = tx.sanitize(walletAddresses);
+          final result = tx.sanitize(walletAddresses);
 
-        // The first address should be a wallet address
-        expect(walletAddresses.contains(result.to.first), isTrue);
-        // Both wallet addresses should be at the beginning
-        expect(walletAddresses.contains(result.to[0]), isTrue);
-        expect(walletAddresses.contains(result.to[1]), isTrue);
-      });
+          // The first address should be a wallet address
+          expect(walletAddresses.contains(result.to.first), isTrue);
+          // Both wallet addresses should be at the beginning
+          expect(walletAddresses.contains(result.to[0]), isTrue);
+          expect(walletAddresses.contains(result.to[1]), isTrue);
+        },
+      );
 
       test('maintains proper order for UI display priority', () {
         final tx = createTransaction(
@@ -382,8 +390,9 @@ void testSanitizeTransaction() {
         // External addresses should follow
         final remainingAddresses = result.to.skip(2).toList();
         expect(
-            remainingAddresses.every((addr) => !walletAddresses.contains(addr)),
-            isTrue);
+          remainingAddresses.every((addr) => !walletAddresses.contains(addr)),
+          isTrue,
+        );
 
         // Verify we can safely call .first for wallet address
         expect(walletAddresses.contains(result.to.first), isTrue);

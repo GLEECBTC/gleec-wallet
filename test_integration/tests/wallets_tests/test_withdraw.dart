@@ -112,7 +112,9 @@ Future<Finder> _activateMarty(WidgetTester tester) async {
   await tester.tapAndPump(martyCoinActive);
   print('🔍 ACTIVATE MARTY: Tapped on coin');
 
-  await tester.pumpAndSettle();
+  // Background indicators can keep animating after the details route opens.
+  // The caller separately requires a loaded, funded MARTY balance.
+  await tester.pumpUntilVisible(coinBalance);
   expect(coinBalance, findsOneWidget);
   print('🔍 ACTIVATE MARTY: Activation completed');
   return martyCoinItem;

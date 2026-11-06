@@ -150,7 +150,7 @@ class _CoinsManagerListItemDesktop extends StatelessWidget {
                             ? maskedBalanceText
                             : isZeroBalance
                             ? formatAmt(balance)
-                            : formatDexAmt(coin.balance),
+                            : formatDexAmt(balance),
                         style: TextStyle(
                           color: balanceColor,
                           fontSize: 14,

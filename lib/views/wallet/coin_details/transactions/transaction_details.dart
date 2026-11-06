@@ -165,26 +165,24 @@ class TransactionDetails extends StatelessWidget {
   }
 
   Widget _buildBalanceChanges(BuildContext context) {
-    // Internal transfers (e.g. an EOA→custody consolidation) net to zero;
-    // show the unsigned moved magnitude + a label instead of '- 0'.
+    // Internal moves show principal and their fee separately, rather than
+    // rendering a zero or the fee as the amount moved.
     final bool isInternal = transaction.isInternalTransfer;
-    final double amount = isInternal
-        ? transaction.balanceChanges.spentByMe.toDouble()
-        : transaction.amount.toDouble().abs();
+    final amount = transaction.displayedMovement.toDouble().abs();
     final String formatted = formatDexAmt(amount);
-    final String sign = isInternal
+    final String sign = isInternal || !transaction.hasKnownMovementDirection
         ? ''
-        : transaction.amount.toDouble() > 0
+        : transaction.displayedMovement > Decimal.zero
         ? '+ '
         : '- ';
-    final double? usd =
-        usdPriceResolver?.call(amount, transaction.assetId.id) ??
-        RepositoryProvider.of<CoinsRepo>(
-          context,
-        ).getUsdPriceForAmount(amount, transaction.assetId.id);
-    final String formattedUsd = formatAmt(usd ?? 0);
-    final String value =
-        '$sign$formatted ${Coin.normalizeAbbr(transaction.assetId.id)} (\$$formattedUsd)';
+    final double? usd = usdPriceResolver != null
+        ? usdPriceResolver!(amount, transaction.assetId.id)
+        : RepositoryProvider.of<CoinsRepo>(
+            context,
+          ).getUsdPriceForAmount(amount, transaction.assetId.id);
+    final formattedUsd = usd == null ? '—' : '\$${formatAmt(usd)}';
+    final value =
+        '$sign$formatted ${Coin.normalizeAbbr(transaction.assetId.id)} ($formattedUsd)';
 
     return Column(
       children: [
@@ -264,13 +262,13 @@ class TransactionDetails extends StatelessWidget {
     } else {
       final fee = transaction.fee!;
       final String feeAmount = formatDexAmt(fee.totalFee.toDouble());
-      final double? usd =
-          usdPriceResolver?.call(fee.totalFee.toDouble(), _feeCoin) ??
-          RepositoryProvider.of<CoinsRepo>(
-            context,
-          ).getUsdPriceForAmount(fee.totalFee.toDouble(), _feeCoin);
-      final String formattedUsd = formatAmt(usd ?? 0);
-      value = '- ${Coin.normalizeAbbr(_feeCoin)} $feeAmount (\$$formattedUsd)';
+      final double? usd = usdPriceResolver != null
+          ? usdPriceResolver!(fee.totalFee.toDouble(), _feeCoin)
+          : RepositoryProvider.of<CoinsRepo>(
+              context,
+            ).getUsdPriceForAmount(fee.totalFee.toDouble(), _feeCoin);
+      final formattedUsd = usd == null ? '—' : '\$${formatAmt(usd)}';
+      value = '- ${Coin.normalizeAbbr(_feeCoin)} $feeAmount ($formattedUsd)';
       valueStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
         fontSize: 14,
         fontWeight: FontWeight.w500,

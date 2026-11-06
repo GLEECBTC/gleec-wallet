@@ -84,24 +84,31 @@ class _ConnectWalletButtonState extends State<ConnectWalletButton> {
           );
   }
 
-  Future<void> onButtonPressed() async {
-    final TakerBloc takerBloc = context.read<TakerBloc>();
-    final BuildContext dialogContext = scaffoldKey.currentContext ?? context;
+  Future<void> onButtonPressed() =>
+      showConnectWalletDialog(context, eventType: widget.eventType);
+}
 
-    await AppDialog.showWithCallback<void>(
-      context: dialogContext,
-      barrierDismissible: false,
-      width: 320,
-      useRootNavigator: true,
-      childBuilder: (closeDialog) => WalletsManagerWrapper(
-        eventType: widget.eventType,
-        onCancel: closeDialog,
-        onSuccess: (_) async {
-          takerBloc.add(TakerReInit());
-          await reInitTradingForms(dialogContext);
-          closeDialog();
-        },
-      ),
-    );
-  }
+/// Opens the wallet manager to create, import or sign in to a wallet.
+Future<void> showConnectWalletDialog(
+  BuildContext context, {
+  required WalletsManagerEventType eventType,
+}) async {
+  final TakerBloc takerBloc = context.read<TakerBloc>();
+  final BuildContext dialogContext = scaffoldKey.currentContext ?? context;
+
+  await AppDialog.showWithCallback<void>(
+    context: dialogContext,
+    barrierDismissible: false,
+    width: 320,
+    useRootNavigator: true,
+    childBuilder: (closeDialog) => WalletsManagerWrapper(
+      eventType: eventType,
+      onCancel: closeDialog,
+      onSuccess: (_) async {
+        takerBloc.add(TakerReInit());
+        await reInitTradingForms(dialogContext);
+        closeDialog();
+      },
+    ),
+  );
 }
