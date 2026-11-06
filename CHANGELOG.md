@@ -1,3 +1,15 @@
+# Unreleased
+
+## 🐛 Bug Fixes
+
+- **Price History Retries** ([@CharlVS], [SDK#443](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/443)) — Coins priced only by CoinPaprika, such as BTCZ, LCC and DINGO, no longer request a year of price history again every minute.
+  - The first request starts on a day the free plan serves.
+  - A failed or rate-limited history is reported as a failure, so other price sources and backoff apply.
+  - Past days' prices stay cached.
+  - Profit/loss prices a transaction older than the available history at the nearest known price instead of failing.
+  - A coin whose profit/loss still fails is retried after 1, 1, 2, 2, 4… minutes, up to hourly, instead of every minute.
+  - The wallet overview no longer starts a refresh while the previous one is still running.
+
 # Gleec Wallet v0.10.0 Release Notes
 
 This candidate brings Swap, Activity and Advanced trading into one surface,

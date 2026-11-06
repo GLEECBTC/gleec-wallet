@@ -45,6 +45,12 @@ import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
 // reachable from here never runs - these 18 were silently skipped.
 import 'bloc/cex_market_data/common/update_frequency_backoff_strategy_test.dart'
     as update_frequency_backoff_strategy_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_calculator_test.dart'
+    as profit_loss_calculator_test;
+import 'bloc/cex_market_data/profit_loss/profit_loss_repository_test.dart'
+    as profit_loss_repository_test;
+import 'bloc/assets_overview/asset_overview_bloc_test.dart'
+    as asset_overview_bloc_test;
 import 'services/initializer/legacy_app_settings_migration_service_test.dart'
     as legacy_app_settings_migration_service_test;
 import 'shared/utils/formatters_test.dart' as formatters_test;
@@ -649,6 +655,9 @@ void main() {
   // Previously unreachable suites. Each declares its own groups inside its
   // `main()`, so calling it here is equivalent to running the file directly.
   update_frequency_backoff_strategy_test.main();
+  profit_loss_calculator_test.main();
+  profit_loss_repository_test.main();
+  asset_overview_bloc_test.main();
   legacy_app_settings_migration_service_test.main();
   formatters_test.main();
   quick_login_switch_test.main();
