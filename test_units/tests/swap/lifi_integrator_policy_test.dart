@@ -13,12 +13,12 @@ void main() {
       expect(const KomodoDefiSdkConfig().lifiIntegrator, isNull);
       final policy = gleecLifiIntegratorConfig(
         enabled: 'true',
-        name: 'gleec-dex-staging',
+        name: 'gleec-dex-production',
         feeBps: '178',
         lifiFeeBps: '22',
       )!;
       expect(policy.toJson(), {
-        'name': 'gleec-dex-staging',
+        'name': 'gleec-dex-production',
         'fee_bps': 178,
         'lifi_fee_bps': 22,
       });
@@ -34,7 +34,7 @@ void main() {
       'LIFI_TEST_EXPECTED_ENVIRONMENT',
       defaultValue: 'production',
     );
-    expect(environment, anyOf('staging', 'production'));
+    expect(environment, 'production');
     final expected = {
       'name': 'gleec-dex-$environment',
       'fee_bps': 178,

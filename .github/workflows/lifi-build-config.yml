@@ -12,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Validate both public profiles and regression checks
+      - name: Validate the production profile and regression checks
         run: |
-          python3 tool/lifi_build_config.py staging
           python3 tool/lifi_build_config.py production
           python3 -m unittest discover -s tool -p 'test_*lifi*.py' -v

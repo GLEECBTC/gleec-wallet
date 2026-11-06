@@ -11,12 +11,6 @@ on:
       - release-*
   workflow_dispatch:
     inputs:
-      lifi_environment:
-        description: "LI.FI integration for this test build (production requires the matching KDP key)"
-        type: choice
-        options: [production, staging]
-        default: production
-        required: true
       rc_legal_availability_bypass:
         description: "0.10.0 RC testing only: bypass unpublished legal documents on an isolated preview"
         type: boolean
@@ -84,7 +78,7 @@ jobs:
         id: lifi_profile
         uses: ./.github/actions/lifi-profile
         with:
-          requested: ${{ inputs.lifi_environment || 'production' }}
+          requested: production
 
       - name: Install Flutter and dependencies
         id: install_flutter
