@@ -5,7 +5,7 @@
     "version": "0.10.0+0",
     "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
     "previous_published_tag": "0.9.7-1",
-    "lockfile_sha256": "545db76fc5f2c5d7fc704a383f487f0364ac2733896db84c00881cb661ccfdc6",
+    "lockfile_sha256": "01455a499d30d836e4a6e5f74fb7c0a7f35ddb0a6b2896acb1058813ffa06be7",
     "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
     "release_branch": "release-0.10.0",
     "runtime_validation_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
@@ -54,7 +54,7 @@
     "source": "a51d69a11ff937ecf9678e9b37632af578252846",
     "branch": "dev",
     "build_config_sha256": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
-    "build_config_note": "SDK caab72b9's build_config.json. SDK 3b462904's (667a9e28…) differs only in its coins section.",
+    "build_config_note": "SDK caab72b9's build_config.json. SDK 3b462904's (667a9e28\u2026) differs only in its coins section.",
     "archives": {
       "web": [
         "5389d81b8ab6f126caa24782e4f8f15c5205cc7b5103c9602d8e5b554e390c51"
@@ -123,14 +123,14 @@
     "BYPASS_LEGAL_DOCUMENT_GATE": "false",
     "LIFI_PROXY_URL": "https://quicknode.gleec.com/lifi",
     "LIFI_INTEGRATOR_ENABLED": "true",
-    "LIFI_INTEGRATOR_NAME": "gleec-dex-staging",
+    "LIFI_INTEGRATOR_NAME": "gleec-dex-production",
     "LIFI_INTEGRATOR_FEE_BPS": "178",
     "LIFI_FEE_BPS": "22"
   },
   "production_build_overrides": {
     "LIFI_INTEGRATOR_NAME": "gleec-dex-production",
-    "decided": "2026-11-04, owner",
-    "scope": "Every production build. The RC's compiled default stays gleec-dex-staging; every other LI.FI value equals the defines above. Wallet #3585's profile file and CI enforcement move to the next release.",
+    "decided": "2026-11-06, owner; supersedes 2026-11-04",
+    "scope": "Production is the compiled and build-workflow default. Wallet #3585 is included in the RC; staging requires explicit preview selection. All five public fields are pinned by docs/LIFI_PRODUCTION_BUILD_DEFINES.json.",
     "verify": "grep -r -a -o -h 'gleec-dex-[a-z]*' <unpacked output> | sort -u prints only gleec-dex-production; unzip AAB, APK and IPA packages first.",
     "doc": "RELEASE_0.10.0_PRODUCTION_BUILD.md"
   },
@@ -466,7 +466,6 @@
     ],
     "lifi_terms": "The owner expects Ilya's approved LI.FI text to be live before publication. On 2026-11-04 the hosted file was the placeholder with its marker removed for RC testing, so ordinary builds accept it like final terms; confirm the final text immediately before publishing.",
     "deferred_to_next_release": [
-      "wallet #3585 (LI.FI production build profile, Docker switch, CI enforcement)",
       "SDK #432 (SDK CI validation inputs and manifest parity)"
     ]
   },
@@ -514,5 +513,16 @@
       "production_approved": false,
       "note": "The JavaScript embeds the head's short commit and a timestamp, so its hash changes with every head."
     }
-  ]
+  ],
+  "lifi_build_profile_carry": {
+    "date": "2026-11-06",
+    "source_pr": 3585,
+    "base_rc": "94fc24553d00a9500fb12b39fc63e69bb7b08fd6",
+    "sdk_commit": "09bde8c6978433d509ffabe6696d495fe5923745",
+    "default": "production",
+    "staging": "explicit preview selection only",
+    "production_profile": "docs/LIFI_PRODUCTION_BUILD_DEFINES.json",
+    "sdk_432": "remains deferred; not a dependency of wallet validation",
+    "acceptance_record": "Release PR #3575 records accepted carry, hosted checks and refreshed preview identity."
+  }
 }

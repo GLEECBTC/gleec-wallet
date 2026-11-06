@@ -720,7 +720,7 @@ packages:
     source: path
     version: "0.5.0"
   komodo_defi_framework:
-    dependency: "direct overridden"
+    dependency: "direct dev"
     description:
       path: "sdk/packages/komodo_defi_framework"
       relative: true
@@ -1654,7 +1654,7 @@ packages:
     source: hosted
     version: "6.6.1"
   yaml:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: yaml
       sha256: b9da305ac7c39faa3f030eccd175340f968459dae4af175130b3fc47e40d76ce

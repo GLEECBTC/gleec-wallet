@@ -10,10 +10,15 @@ This is release preparation. The latest published app release is **0.9.7-1**.
 Final CI, legal/provider availability, review and signed installation gates
 are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
 
-Updated 4 November 2026 against accepted RC `3f2058c8`. The
+Updated 6 November 2026 with the LI.FI production-default carry (#3585),
+on the RC based at `94fc2455` and SDK main `09bde8c6`. The
 [post-opening audit](docs/RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
-accepted change since PR #3575 opened at `ffcac834`; no carry is pending at
-this snapshot.
+accepted change through 4 November since PR #3575 opened at `ffcac834`;
+the current release PR records the later SDK-main pin and LI.FI carry.
+
+## Build and release configuration
+
+- **LI.FI production by default** ([#3585](https://github.com/GLEECBTC/gleec-wallet/pull/3585)) — Direct builds, Docker and GitHub builds select the production integrator. Staging remains an explicit preview choice. Public profiles, required compiled-profile checks and artifact/dependency records make the selected configuration verifiable. SDK, KDF and coin pins are unchanged by this carry.
 
 ## 🚀 New Features
 

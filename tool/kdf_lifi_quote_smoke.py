@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
+from lifi_build_config import deployment_config
+
 from kdf_latency_probe import (
     KdfProcess,
     _evm_nodes,
@@ -122,6 +124,8 @@ def main():
     parser.add_argument("--kdf", help="Native KDF binary; defaults to generated repo assets")
     parser.add_argument("--coins", help="Coins configuration; defaults to generated repo assets")
     parser.add_argument("--json", type=Path, help="Write a credential-free report")
+    parser.add_argument("--build-defines", type=Path,
+                        help="Public LI.FI build-defines JSON; never a credential file")
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     manifest = json.loads((root / "sdk/packages/komodo_defi_framework/app_build/build_config.json").read_text())
@@ -130,12 +134,14 @@ def main():
         "engine_commit": manifest["api"]["api_commit_hash"],
         "coins_commit": manifest["coins"]["bundled_coins_repo_commit"],
         "proxy": "https://quicknode.gleec.com/lifi",
-        "integrator": {"name": "gleec-dex-staging", "fee_bps": 178, "lifi_fee_bps": 22},
+        "integrator": {"name": "gleec-dex-production", "fee_bps": 178, "lifi_fee_bps": 22},
         "scope": "fresh unfunded wallet; version, activation, quote and stop only",
         "checks": [],
         "passed": False,
     }
     try:
+        report["phase"] = "configuration"
+        report.update(deployment_config(args.build_defines))
         binary, coins_path = find_kdf_binary(args.kdf), find_coins_config(args.coins)
         require(binary is not None and coins_path is not None, "Generate the native KDF and coin assets first")
         coins_bytes = Path(coins_path).read_bytes()
