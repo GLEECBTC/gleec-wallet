@@ -1,3 +1,4 @@
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
 import 'tests/swap/solana_trade_dispatch_test.dart'
     as solana_trade_dispatch_test;
 import 'tests/mm2/mm2_initialization_test.dart' as mm2_initialization_test;
@@ -507,6 +508,7 @@ void main() {
   solana_build_config_test.main();
   solana_trade_dispatch_test.main();
   mm2_initialization_test.main();
+  prefetch_native_kdf_test.main();
   solana_trading_test.main();
   solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();

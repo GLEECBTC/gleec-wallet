@@ -116,6 +116,13 @@ to the authentication workstream. Framework (114), RPC (388), types (203 plus
 three skips), UI (four), transformer (125), migration (14), CLI (30), market data
 (362 plus six skips), charts (17), logs (27) and symbols (one) pass.
 
+Native CI preparation now fetches and verifies the selected pinned platform
+before CMake/CocoaPods configuration. All 13 offline fixture cases pass, and
+preparation against the actual pinned Windows archive passes digest/provenance
+verification. The selected-platform helper and CI action contain no wallet
+authentication behavior changes. The macOS artifact-publication blocker and
+SDK-merged pin gate remain enforced.
+
 The fresh unfunded native smoke passes again in both derivation modes with the
 same exact development binary/catalog identities recorded above. It still
 performs no signing, export, withdrawal, broadcast or funded trading.
