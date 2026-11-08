@@ -18,6 +18,7 @@ import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/widgets/asset_amount_with_fiat.dart';
+import 'package:web_dex/shared/widgets/copied_text.dart' show CopiedTextV2;
 import 'package:web_dex/model/wallet.dart' show WalletType;
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
@@ -476,6 +477,13 @@ void testWithdrawFormConfirmReceipt() {
             );
             await tester.pumpWidget(
               _wrap(WithdrawPreviewDetails(state: state), assets: assets),
+            );
+            expect(
+              tester
+                  .widgetList<CopiedTextV2>(find.byType(CopiedTextV2))
+                  .first
+                  .copiedValue,
+              'sender',
             );
             expect(
               tester

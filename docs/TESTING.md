@@ -23,7 +23,7 @@ dart run_integration_tests.dart
 # KDF wallet-load harness, replay tier (gates every PR)
 cd sdk/packages/komodo_defi_harness && flutter test --exclude-tags bench
 
-# SDK package tests (gates PRs touching sdk/**)
+# SDK package tests (gates PRs updating the sdk gitlink or sdk/**)
 cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 ```
 
@@ -202,7 +202,7 @@ cd sdk/packages/komodo_defi_sdk && KDF_HARNESS="" flutter test
 
 `KDF_HARNESS` must stay empty: the suite has no process-tier tests, but asset generation
 fetches the KDF binary, so anything keying off binary-existence would spawn a real KDF.
-The workflow is path-scoped to `sdk/**`, so an app-only PR never runs it.
+The workflow is path-scoped to the `sdk` submodule gitlink and `sdk/**`, so an app-only PR never runs it.
 
 Every other SDK package has tests and **no CI**: `komodo_cex_market_data`,
 `komodo_defi_types`, `komodo_coin_updates`, `komodo_defi_rpc_methods`,

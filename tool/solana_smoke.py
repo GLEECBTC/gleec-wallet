@@ -27,7 +27,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from kdf_latency_probe import KdfProcess
-from solana_candidate import CandidateFailure, load_verified_manifest
+from solana_candidate import CandidateFailure, load_verified_manifest, matches_engine_version
 
 
 # Official cluster identity, not the illustrative getGenesisHash RPC example:
@@ -130,6 +130,9 @@ class UnfundedSolanaKdf(KdfProcess):
 
     def rpc(self, method, params=None, mmrpc=None, timeout=30.0, count=True):
         check(method in _ALLOWED_METHODS, "RPC is outside the unfunded smoke allowlist")
+        check(params is None or (isinstance(params, dict)
+              and not {"method", "userpass", "mmrpc", "params"}.intersection(params)),
+              "RPC parameters cannot override the unfunded smoke request envelope")
         payload = {"userpass": self.rpc_password, "method": method}
         if mmrpc is not None:
             payload.update({"mmrpc": mmrpc, "params": params or {}})
@@ -174,8 +177,7 @@ def zero_balance(balance, phase):
 
 def exercise_wallet(engine, endpoint, commit):
     version = engine.rpc("version").get("result")
-    check(isinstance(version, str)
-          and (version.endswith("_" + commit[:7]) or version.endswith("_" + commit)),
+    check(matches_engine_version(version, commit),
           "Running KDF version does not match the candidate manifest")
     params = {"ticker": PLATFORM, "nodes": [{"url": endpoint}],
               "tokens_params": [{"ticker": TOKEN}], "tx_history": True}

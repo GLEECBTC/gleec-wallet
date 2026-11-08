@@ -7,7 +7,7 @@ Validation on 2026-11-08 uses isolated checkouts based on wallet
 The original mixed workspace is not the source of the PR test results.
 Flutter is pinned to 3.41.4. SDK authentication is a separate prerequisite;
 Solana's final review diff excludes its shared dispatch guard and transport hooks.
-The SDK Solana commit is `f8c497c7c71e58a232897d37f0457e140b750c86`
+The initial SDK Solana commit was `f8c497c7c71e58a232897d37f0457e140b750c86`
 ([SDK PR #444](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/444)),
 stacked on the separately reviewed authentication commit
 `c8438ebfffcd72998c46aa454a9e4ae845422316`.
@@ -36,7 +36,7 @@ and wallet-only catalog SHA-256
 `5f91b1ade662ac4bcc89aad5d95df68bd11be5c13792f25f0d8cb632e29857bf`.
 It is development evidence, not proof of the eventual combined release engine.
 
-## Branch validation record
+## Initial branch validation record
 
 The final wallet gate on the published SDK commit passes **4,057 tests with four skips** using the
 prescribed four GasFree defines and freshly generated test assets. The full
@@ -84,6 +84,55 @@ a fully clean analyzer/whitespace run.
 The wallet dependency update requires only two test-double signature adaptations
 for the authentication SDK's optional registration parameter. Wallet auth UI and
 behavior changes remain in their separate workstream.
+
+## PR review validation
+
+The review updates keep authentication on the separate prerequisite and retain
+both production build configuration files byte-for-byte. Coins revision
+`3f40c90be9e97282f5f249b3ace94179e6308b01` passes all 37 registry tests and its
+[PR workflow](https://github.com/GLEECBTC/coins/actions/runs/42522100971).
+The 774 existing generated assets and candidate fixture hashes are unchanged.
+
+SDK review revision `f59d006e4536b0f7b88987b7fb48fa308b613e7e` passes 1,304 core
+tests (one skip), 147 coin tests, 112 update tests, and 225 harness tests per
+wallet mode (three opt-in process skips each). Four Chrome/Wasm storage tests
+verify actual IndexedDB isolation, reopen and custom-token restoration;
+38 Chrome/Wasm withdrawal tests include real cross-context lock exclusion and
+cancellation cleanup. The harness benchmark passes the 30% threshold
+(sign-in -0.6%, first balance -0.7%). Review-file analysis has no errors or
+warnings and 53 existing informational notices; formatting/diff checks pass.
+
+The final wallet gate passes **4,072 tests with four skips** using the prescribed
+GasFree defines. Full wallet analysis reports zero errors, 56 existing warnings
+and 2,145 informational notices; the final changed trading files analyze clean.
+The WebAssembly release build passes in 80.9 seconds and contains no debug-wallet
+fixture files or references. The 21 offline candidate/smoke-tool tests pass.
+
+The other SDK package suites pass except the unchanged authentication prerequisite:
+`TrezorAuthService - DI and basic behavior signInStreamed yields states and
+starts monitor on completion` fails at `trezor_auth_service_test.dart:510`;
+173 authentication tests pass. The failure reproduces individually and belongs
+to the authentication workstream. Framework (114), RPC (388), types (203 plus
+three skips), UI (four), transformer (125), migration (14), CLI (30), market data
+(362 plus six skips), charts (17), logs (27) and symbols (one) pass.
+
+The fresh unfunded native smoke passes again in both derivation modes with the
+same exact development binary/catalog identities recorded above. It still
+performs no signing, export, withdrawal, broadcast or funded trading.
+
+Review regressions cover late multi-token completion, disabled-engine cache
+shortcuts, custom SPL restore/identity, stale candidate caches, overlapping send
+confirmations, stale-wallet completion details, failed startup reuse, queued
+preview events, refreshed sender display, invalid candidate profiles, smoke RPC
+envelope overrides, changed funding/receive deductions, final transport
+freshness and policy, and routed/bot restrictions. Solana bot automation remains
+gated pending engine per-order funding/policy enforcement; manual devnet orders
+retain the existing opt-in and acceptance requirements. All new wallet tests
+are registered in `test_units/main.dart`.
+
+The SDK workflow now runs on every PR base, including the authentication stack.
+The wallet SDK workflow matches the actual `sdk` gitlink. These coverage fixes
+do not bypass native packaging checks or the SDK-merged pin gate.
 
 ## Production configuration and remaining acceptance
 

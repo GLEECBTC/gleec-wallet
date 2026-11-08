@@ -104,7 +104,11 @@ class SolanaBuildConfig {
     if (expected == null ||
         !const {'http', 'https'}.contains(expected.scheme) ||
         expected.host.isEmpty ||
+        !expected.hasPort ||
+        expected.port <= 0 ||
+        expected.port > 65535 ||
         expected.userInfo.isNotEmpty ||
+        RegExp(r'\s|\\').hasMatch(previewOrigin) ||
         (expected.path.isNotEmpty && expected.path != '/') ||
         expected.hasQuery ||
         expected.hasFragment ||
@@ -120,11 +124,12 @@ class SolanaBuildConfig {
   /// artifact digest; this check detects an unintended runtime binary.
   void verifyEngineVersion(String version) {
     if (!enabled) return;
-    final revisions = RegExp(
-      r'[a-fA-F0-9]{40}',
-    ).allMatches(version).map((match) => match.group(0)!.toLowerCase());
-    final taggedVersion = version.endsWith('_${engineCommit.substring(0, 7)}');
-    if (!revisions.contains(engineCommit) && !taggedVersion) {
+    validate();
+    final versionTag = RegExp(
+      r'^[A-Za-z0-9][A-Za-z0-9.+-]*_([a-f0-9]{7}|[a-f0-9]{40})$',
+    ).firstMatch(version)?.group(1);
+    if (versionTag != engineCommit &&
+        versionTag != engineCommit.substring(0, 7)) {
       throw StateError('The running KDF does not match the Solana candidate.');
     }
   }

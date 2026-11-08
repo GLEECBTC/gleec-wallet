@@ -7,7 +7,7 @@ from pathlib import Path
 
 from solana_candidate import (
     CandidateFailure, REFERENCE_COINS, REFERENCE_ENGINE, create_manifest,
-    load_verified_manifest, main, preview_defines,
+    load_verified_manifest, main, matches_engine_version, preview_defines,
 )
 
 
@@ -42,6 +42,16 @@ class CandidateTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(CandidateFailure):
                 create_manifest(self.binary, self.coins, value, REFERENCE_COINS)
 
+    def test_engine_version_requires_the_exact_terminal_revision_tag(self):
+        for suffix in (REFERENCE_ENGINE, REFERENCE_ENGINE[:7]):
+            self.assertTrue(matches_engine_version("3.1.0-beta_" + suffix, REFERENCE_ENGINE))
+        for version in (None, REFERENCE_ENGINE[:7], "unexpected " + REFERENCE_ENGINE,
+                        "3.1.0-beta_" + REFERENCE_ENGINE + "_wrong",
+                        "untrusted response_" + REFERENCE_ENGINE[:7],
+                        "3.1.0-beta_" + REFERENCE_COINS + "_" + REFERENCE_ENGINE[:7]):
+            with self.subTest(version=version):
+                self.assertFalse(matches_engine_version(version, REFERENCE_ENGINE))
+
     def test_release_manifest_cannot_run_as_an_isolated_candidate(self):
         self.manifest["production_ready"] = True
         self.save()
@@ -58,7 +68,10 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(defines["KDF_COINS_STORAGE_NAMESPACE"], "solana-preview-" + self.manifest["coins_snapshot_sha256"][:12])
 
     def test_profile_rejects_shared_default_origin_credentials_and_paths(self):
-        for origin in ("https://wallet.example", "https://u:p@localhost:18471", "http://localhost:18471/wallet", "file:///tmp/app"):
+        for origin in ("https://wallet.example", "https://wallet.example:443",
+                       "http://localhost:80", "http://localhost:0", "http://localhost:65536",
+                       " http://localhost:18471", "http://local\\host:18471",
+                       "https://u:p@localhost:18471", "http://localhost:18471/wallet", "file:///tmp/app"):
             with self.subTest(origin=origin), self.assertRaises(CandidateFailure):
                 preview_defines(self.manifest, origin)
 

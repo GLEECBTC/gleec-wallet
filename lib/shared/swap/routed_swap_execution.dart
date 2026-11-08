@@ -6,6 +6,7 @@ import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
 /// Executes routed swaps through the SDK and follows them to a terminal
 /// outcome.
@@ -34,6 +35,14 @@ class RoutedSwapExecutor implements SwapExecutor {
     final offer = quote.payload;
     if (offer is! RoutedSwapOffer) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
+    }
+    if ([
+      quote.from,
+      quote.to,
+      offer.from,
+      offer.to,
+    ].any(isSolanaTradingAsset)) {
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
     }
     final startedAt = _now();
     final RoutedSwapHandle handle;

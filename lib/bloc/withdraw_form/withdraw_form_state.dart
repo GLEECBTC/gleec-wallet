@@ -98,6 +98,9 @@ class WithdrawFormState extends Equatable {
   // Transaction state
   final WithdrawalPreview? preview;
   final Decimal? authorizedRecipientAmount;
+
+  /// Reviewed Solana owner retained for the receipt after signed data is cleared.
+  final String? solanaReviewedSourceAddress;
   final bool isSending;
   final WithdrawalResult? result;
 
@@ -372,6 +375,7 @@ class WithdrawFormState extends Equatable {
     this.selectedFeePriority,
     this.preview,
     this.authorizedRecipientAmount,
+    this.solanaReviewedSourceAddress,
     this.isSending = false,
     this.result,
     this.solanaSubmissionUnknownTxHash,
@@ -427,6 +431,7 @@ class WithdrawFormState extends Equatable {
     ValueGetter<WithdrawalFeeLevel?>? selectedFeePriority,
     ValueGetter<WithdrawalPreview?>? preview,
     ValueGetter<Decimal?>? authorizedRecipientAmount,
+    ValueGetter<String?>? solanaReviewedSourceAddress,
     bool? isSending,
     ValueGetter<WithdrawalResult?>? result,
     ValueGetter<String?>? solanaSubmissionUnknownTxHash,
@@ -496,6 +501,9 @@ class WithdrawFormState extends Equatable {
       authorizedRecipientAmount: authorizedRecipientAmount != null
           ? authorizedRecipientAmount()
           : this.authorizedRecipientAmount,
+      solanaReviewedSourceAddress: solanaReviewedSourceAddress != null
+          ? solanaReviewedSourceAddress()
+          : this.solanaReviewedSourceAddress,
       isSending: isSending ?? this.isSending,
       result: result != null ? result() : this.result,
       solanaSubmissionUnknownTxHash: solanaSubmissionUnknownTxHash != null
@@ -633,6 +641,7 @@ class WithdrawFormState extends Equatable {
     selectedFeePriority,
     preview,
     authorizedRecipientAmount,
+    solanaReviewedSourceAddress,
     isSending,
     result,
     solanaSubmissionUnknownTxHash,

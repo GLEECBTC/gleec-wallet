@@ -130,6 +130,15 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(payloads[1]["params"], {"coin": smoke.PLATFORM})
         self.assertEqual(payloads[1]["mmrpc"], "2.0")
 
+    def test_allowed_rpc_cannot_override_its_method_in_parameters(self):
+        engine = smoke.UnfundedSolanaKdf.__new__(smoke.UnfundedSolanaKdf)
+        with patch.object(smoke.urllib.request, "urlopen") as transport:
+            for key in ("method", "userpass", "mmrpc", "params"):
+                for mmrpc in (None, "2.0"):
+                    with self.subTest(key=key, mmrpc=mmrpc), self.assertRaises(smoke.SmokeFailure):
+                        engine.rpc("version", {key: "send_raw_transaction"}, mmrpc=mmrpc)
+            transport.assert_not_called()
+
     def test_contract_uses_one_owner_and_targetless_v2_history(self):
         engine = EngineDouble()
         self.assertTrue(smoke.exercise_wallet(engine, "https://api.devnet.solana.com", REFERENCE_ENGINE)["passed"])

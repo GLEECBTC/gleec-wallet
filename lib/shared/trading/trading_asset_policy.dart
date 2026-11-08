@@ -110,6 +110,12 @@ class TradingAssetPolicy {
     return true;
   }
 
+  /// The engine creates/reprices bot orders after startup, outside the
+  /// wallet's per-order funding checks. Solana automation needs independent
+  /// engine acceptance for receiving-side funding and live policy changes.
+  bool allowsMarketMakerPair(String base, String rel) =>
+      allowsPair(base, rel) && !isSolanaPair(base, rel);
+
   void requirePair(String base, String rel) {
     if (!allowsPair(base, rel)) {
       throw StateError('Trading is unavailable for this asset pair.');
@@ -129,4 +135,12 @@ class TradePreflightRejected implements Exception {
   final Object cause;
   @override
   String toString() => 'Trade preflight rejected: $cause';
+}
+
+/// Automated Solana orders need per-order engine funding acceptance first.
+class SolanaMarketMakerUnavailable implements Exception {
+  const SolanaMarketMakerUnavailable();
+
+  @override
+  String toString() => 'Solana market maker automation is unavailable';
 }

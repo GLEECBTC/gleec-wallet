@@ -22,17 +22,20 @@ void main() {
   final catalog = utf8.encode('{"SOL-DEV":{"coin":"SOL-DEV"}}');
   final digest = sha256.convert(catalog).toString();
 
-  SolanaBuildConfig candidate({bool splMax = false, bool token2022 = false}) =>
-      SolanaBuildConfig(
-        enabled: true,
-        splMaxEnabled: splMax,
-        token2022Enabled: token2022,
-        engineCommit: engine,
-        coinsCommit: coins,
-        catalogSha256: digest,
-        storageNamespace: 'solana-preview-${digest.substring(0, 12)}',
-        previewOrigin: 'http://localhost:8787',
-      );
+  SolanaBuildConfig candidate({
+    bool splMax = false,
+    bool token2022 = false,
+    String origin = 'http://localhost:8787',
+  }) => SolanaBuildConfig(
+    enabled: true,
+    splMaxEnabled: splMax,
+    token2022Enabled: token2022,
+    engineCommit: engine,
+    coinsCommit: coins,
+    catalogSha256: digest,
+    storageNamespace: 'solana-preview-${digest.substring(0, 12)}',
+    previewOrigin: origin,
+  );
 
   group('Solana candidate build boundaries', () {
     test('ordinary builds leave every experimental operation disabled', () {
@@ -114,6 +117,33 @@ void main() {
         () => config.verifyEngineVersion('3.2.0-beta_$coins'),
         throwsStateError,
       );
+      for (final version in [
+        'unexpected $engine output',
+        '3.2.0-beta_${engine}_wrong',
+        '3.2.0-beta_${coins}_${engine.substring(0, 7)}',
+      ]) {
+        expect(() => config.verifyEngineVersion(version), throwsStateError);
+      }
+    });
+
+    test('origin isolation requires a valid dedicated non-default port', () {
+      for (final origin in [
+        'https://wallet.example',
+        'https://wallet.example:443',
+        'http://localhost:80',
+        'http://localhost:0',
+        'http://localhost:65536',
+        ' http://localhost:8787',
+        'http://local\\host:8787',
+      ]) {
+        expect(
+          () => candidate(
+            origin: origin,
+          ).verifyPreviewOrigin(Uri.parse(origin.trim())),
+          throwsStateError,
+          reason: origin,
+        );
+      }
     });
 
     test(

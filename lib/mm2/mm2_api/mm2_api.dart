@@ -6,7 +6,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
     as typed_rpc;
 import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show KomodoDefiRpcMethodsExtension;
+    show KomodoDefiRpcMethodsExtension, RpcDispatchGuard, RpcDispatchRejected;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
@@ -89,7 +89,12 @@ class Mm2Api {
       }
     }
 
-    if (request is SellRequest) requirePair(request.base, request.rel);
+    if (request is SellRequest) {
+      requirePair(request.base, request.rel);
+      if (!(request.isQuoteCurrent?.call() ?? true)) {
+        throw TradePreflightRejected(StateError('The reviewed quote expired.'));
+      }
+    }
     if (request is SetPriceRequest) requirePair(request.base, request.rel);
     if (request is MarketMakerBotRequest &&
         request.method == 'start_simple_market_maker_bot') {
@@ -97,6 +102,10 @@ class Mm2Api {
           in request.params?.tradeCoinPairs?.values ??
               const <TradeCoinPairConfig>[]) {
         requirePair(pair.baseCoinId, pair.relCoinId);
+        if (_tradingPolicy?.isSolanaPair(pair.baseCoinId, pair.relCoinId) ??
+            false) {
+          throw const TradePreflightRejected(SolanaMarketMakerUnavailable());
+        }
       }
     }
   }
@@ -137,40 +146,94 @@ class Mm2Api {
       throw TradePreflightRejected(StateError('Unknown trading asset'));
     }
     try {
-      final preimage = await _sdk.client.rpc.trading.tradePreimage(
-        base: base,
-        rel: rel,
-        swapMethod: method,
-        volume: max
-            ? null
-            : volume.toDecimal(scaleOnInfinitePrecision: 18).toString(),
-        max: max,
-        price: price.toDecimal(scaleOnInfinitePrecision: 18).toString(),
-      );
+      final preimage = await _sdk.client.rpc.trading
+          .tradePreimage(
+            base: base,
+            rel: rel,
+            swapMethod: method,
+            volume: max
+                ? null
+                : volume.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+            max: max,
+            price: price.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+          )
+          .timeout(const Duration(seconds: 15));
       if (preimage.totalFees.isEmpty) {
         throw const FormatException('Missing funding requirements');
       }
+      final requirements = <String, Rational>{};
       for (final total in preimage.totalFees) {
         final required = Rational.parse(total.requiredBalance);
         if (required < Rational.zero) {
           throw const FormatException('Invalid funding amount');
         }
-        if (required == Rational.zero) continue;
-        final asset = assets
-            .where((asset) => asset.id.id == total.coin)
-            .firstOrNull;
-        if (asset == null) throw StateError('Unknown funding asset');
-        final balance = await _sdk.balances.getBalance(
-          asset.id,
-          forceRefresh: true,
-        );
+        requirements[total.coin] =
+            (requirements[total.coin] ?? Rational.zero) + required;
+      }
+      final estimated = <String, Rational>{};
+      final receiveFees = <String, Rational>{};
+      for (final fee in [
+        preimage.takerFee,
+        preimage.feeToSendTakerFee,
+        preimage.baseCoinFee,
+        preimage.relCoinFee,
+      ]) {
+        if (fee == null) continue;
+        final amount = Rational.parse(fee.amount);
+        if (amount < Rational.zero) {
+          throw const FormatException('Invalid fee amount');
+        }
+        if (!fee.paidFromTradingVol) {
+          estimated[fee.coin] = (estimated[fee.coin] ?? Rational.zero) + amount;
+        } else {
+          receiveFees[fee.coin] =
+              (receiveFees[fee.coin] ?? Rational.zero) + amount;
+        }
+      }
+      for (final entry in estimated.entries) {
+        if (entry.value > (requirements[entry.key] ?? Rational.zero)) {
+          requirements[entry.key] = entry.value;
+        }
+      }
+      final reviewed = request is SellRequest
+          ? request.reviewedFeeRequirements
+          : null;
+      if (reviewed != null &&
+          requirements.entries.any(
+            (entry) => entry.value > (reviewed[entry.key] ?? Rational.zero),
+          )) {
+        throw StateError('Trade funding changed. Review the quote again.');
+      }
+      final reviewedReceive = request is SellRequest
+          ? request.reviewedReceiveFees
+          : null;
+      if (reviewedReceive != null &&
+          receiveFees.entries.any(
+            (entry) =>
+                entry.value > (reviewedReceive[entry.key] ?? Rational.zero),
+          )) {
+        throw StateError('Trade receive fees changed. Review the quote again.');
+      }
+      // A total_fees row can be absent (or zero) for the sold currency.
+      // Its principal still has to be funded independently of the fees.
+      if (!max) {
         final paying = method == typed_rpc.SwapMethod.buy ? rel : base;
         final amount = method == typed_rpc.SwapMethod.buy
             ? volume * price
             : volume;
-        final principal = total.coin == paying && !max ? amount : Rational.zero;
-        if (balance.spendable.toRational() < required + principal) {
-          throw StateError('Insufficient ${total.coin} for trade funding');
+        requirements[paying] = (requirements[paying] ?? Rational.zero) + amount;
+      }
+      for (final entry in requirements.entries) {
+        if (entry.value == Rational.zero) continue;
+        final asset = assets
+            .where((asset) => asset.id.id == entry.key)
+            .firstOrNull;
+        if (asset == null) throw StateError('Unknown funding asset');
+        final balance = await _sdk.balances
+            .getBalance(asset.id, forceRefresh: true)
+            .timeout(const Duration(seconds: 15));
+        if (balance.spendable.toRational() < entry.value) {
+          throw StateError('Insufficient ${entry.key} for trade funding');
         }
       }
     } on Object catch (cause) {
@@ -180,18 +243,33 @@ class Mm2Api {
   }
 
   Future<JsonMap> _callTradingRequest(Object request) async {
-    _checkTradingRequest(request);
     try {
+      _checkTradingRequest(request);
       await _checkSolanaFunding(request);
+      // Catalog, quote and engine eligibility can change while funding is read.
+      _checkTradingRequest(request);
     } on TradePreflightRejected {
       rethrow;
     } on Object catch (cause) {
       // A catalog/balance read can fail before preimage handling begins too.
       throw TradePreflightRejected(cause);
     }
-    // Catalog and engine eligibility may change while funding is refreshed.
-    _checkTradingRequest(request);
-    return _tradingTransport(request);
+    try {
+      return await RpcDispatchGuard.run(
+        () => _checkTradingRequest(request),
+        () => _tradingTransport(request),
+        methods: const {
+          'buy',
+          'sell',
+          'setprice',
+          'start_simple_market_maker_bot',
+        },
+      );
+    } on RpcDispatchRejected catch (error) {
+      // The SDK checks after credentials/engine preparation, immediately
+      // before transport; a refusal there still proves nothing was sent.
+      throw TradePreflightRejected(error.cause);
+    }
   }
 
   // Ideally we will transition cleanly over to the SDK, but for methods

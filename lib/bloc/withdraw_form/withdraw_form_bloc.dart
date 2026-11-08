@@ -517,6 +517,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     final nextState = currentState.copyWith(
       preview: () => preview,
       authorizedRecipientAmount: () => authorizedRecipientAmount,
+      solanaReviewedSourceAddress: () =>
+          currentState.asset.protocol is SolanaProtocol ||
+              currentState.asset.protocol is SolanaTokenProtocol
+          ? preview.from.firstOrNull
+          : null,
       step: moveToConfirm ? WithdrawFormStep.confirm : currentState.step,
       previewError: () => null,
       transactionError: () => null,
@@ -1861,7 +1866,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormPreviewSubmitted event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (state.isSending ||
+        state.step != WithdrawFormStep.fill ||
+        state.hasUncertainSolanaSubmission) {
+      return;
+    }
     if (!await _authorizeWithdrawal(emit)) return;
+    if (state.isSending ||
+        state.step != WithdrawFormStep.fill ||
+        state.hasUncertainSolanaSubmission) {
+      return;
+    }
     if (state.isGaslessPendingStoreChecking) return;
     if (state.useGasless) {
       await _refreshGaslessStatus(emit, force: true);
@@ -2701,6 +2716,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
             preview: () => cause.preview,
             authorizedRecipientAmount: () =>
                 cause.preview.balanceChanges.totalAmount,
+            solanaReviewedSourceAddress: () => cause.preview.from.firstOrNull,
             memo: () => cause.preview.memo,
             confirmStepError: () =>
                 TextError(error: 'withdrawSolanaReviewChanged'.tr()),

@@ -142,7 +142,10 @@ class MarketMakerBotRepository {
     // still-permitted pairs, without recreating a restricted order.
     requestParams.tradeCoinPairs?.removeWhere(
       (_, pair) =>
-          !(_tradingPolicy?.allowsPair(pair.baseCoinId, pair.relCoinId) ??
+          !(_tradingPolicy?.allowsMarketMakerPair(
+                pair.baseCoinId,
+                pair.relCoinId,
+              ) ??
               canTradeAssetPair(pair.baseCoinId, pair.relCoinId)),
     );
 
@@ -272,6 +275,13 @@ class MarketMakerBotRepository {
   }
 
   void _assertTradePairAllowed(TradeCoinPairConfig tradePair) {
+    if (_tradingPolicy?.isSolanaPair(
+          tradePair.baseCoinId,
+          tradePair.relCoinId,
+        ) ??
+        false) {
+      throw const SolanaMarketMakerUnavailable();
+    }
     if (!(_tradingPolicy?.allowsPair(
           tradePair.baseCoinId,
           tradePair.relCoinId,

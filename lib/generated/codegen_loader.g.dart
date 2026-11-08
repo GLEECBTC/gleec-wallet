@@ -1961,4 +1961,5 @@ abstract class LocaleKeys {
   static const withdrawSolanaInvalidTokenRecipient =
       'withdrawSolanaInvalidTokenRecipient';
   static const swapFundingBalanceUnavailable = 'swapFundingBalanceUnavailable';
+  static const solanaMarketMakerUnavailable = 'solanaMarketMakerUnavailable';
 }

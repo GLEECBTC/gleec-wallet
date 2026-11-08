@@ -781,10 +781,11 @@ void testWithdrawFormBloc() {
         String fee = '0.000005',
         String amount = '1',
         String? memo,
+        String source = 'source-address',
       }) => WithdrawResult(
         txHash: hash,
         txHex: 'aa',
-        from: const ['source-address'],
+        from: [source],
         to: const ['recipient'],
         balanceChanges: BalanceChanges(
           netChange: -Decimal.one,
@@ -878,10 +879,12 @@ void testWithdrawFormBloc() {
         bloc.add(const WithdrawFormSubmitted());
         bloc.add(const WithdrawFormReset());
         bloc.add(const WithdrawFormStepReverted());
+        bloc.add(const WithdrawFormPreviewSubmitted());
         await _flush();
         expect(bloc.state.isSending, isTrue);
         expect(bloc.state.step, WithdrawFormStep.confirm);
         expect(withdrawals.executeCallCount, 1);
+        expect(withdrawals.previewCallCount, 1);
         completed.complete();
         await bloc.stream.firstWhereBounded(
           (state) => state.step == WithdrawFormStep.success,
@@ -924,6 +927,7 @@ void testWithdrawFormBloc() {
             fee: '0.000006',
             amount: '2',
             memo: 'Refreshed memo',
+            source: 'refreshed-owner',
           );
           var attempts = 0;
           final withdrawals = _FakeWithdrawalManager(
@@ -960,12 +964,18 @@ void testWithdrawFormBloc() {
           expect(changed.hasConfirmStepError, isTrue);
           expect(changed.authorizedRecipientAmount, Decimal.fromInt(2));
           expect(changed.memo, 'Refreshed memo');
+          expect(changed.solanaReviewedSourceAddress, 'refreshed-owner');
           expect(attempts, 1);
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          await _flush();
+          expect(bloc.state, changed);
+          expect(withdrawals.previewCallCount, 1);
           bloc.add(const WithdrawFormSubmitted());
           await bloc.stream.firstWhereBounded(
             (s) => s.step == WithdrawFormStep.success,
           );
           expect(attempts, 2);
+          expect(bloc.state.solanaReviewedSourceAddress, 'refreshed-owner');
         },
       );
       test(
@@ -1002,9 +1012,11 @@ void testWithdrawFormBloc() {
           bloc.add(const WithdrawFormReset());
           bloc.add(const WithdrawFormStepReverted());
           bloc.add(const WithdrawFormSubmitted());
+          bloc.add(const WithdrawFormPreviewSubmitted());
           await _flush();
           expect(bloc.state, uncertain);
           expect(withdrawals.executeCallCount, 1);
+          expect(withdrawals.previewCallCount, 1);
         },
       );
     });

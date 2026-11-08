@@ -69,6 +69,16 @@ AssetId _resolveFeeAssetId(BuildContext context, Asset asset, FeeInfo fee) {
 /// here read as a mismatch against the on-chain transfer. Native sends keep
 /// the signing address.
 String? _effectiveWithdrawSourceAddress(WithdrawFormState state) {
+  if (state.asset.protocol is SolanaProtocol ||
+      state.asset.protocol is SolanaTokenProtocol) {
+    // A refreshed review may change its signing owner. Show the signed
+    // transaction's source instead of the stale source loaded by the form.
+    final reviewedSource =
+        state.preview?.from.firstOrNull ?? state.solanaReviewedSourceAddress;
+    if (reviewedSource != null && reviewedSource.isNotEmpty) {
+      return reviewedSource;
+    }
+  }
   if (state.useGasless) {
     final custody =
         state.gaslessAccountStatus?.gasfreeAddress ??

@@ -1760,5 +1760,6 @@
   "swapReviewRequiredFundingExplanation": "Keep these amounts available in addition to the trade amount. They include conservative network and account-funding requirements; the refundable portion is not known in advance.",
   "withdrawSolanaInsufficientPlatformBalance": "Add {} to this wallet to cover network fees, recipient-account creation and any required minimum remaining balance.",
   "withdrawSolanaInvalidTokenRecipient": "Enter a Solana wallet address or a token account for this token’s mint.",
-  "swapFundingBalanceUnavailable": "The {} balance could not be checked. Try again before reviewing this swap."
+  "swapFundingBalanceUnavailable": "The {} balance could not be checked. Try again before reviewing this swap.",
+  "solanaMarketMakerUnavailable": "Solana market maker automation is unavailable. Use a manual order."
 }

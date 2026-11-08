@@ -12,6 +12,7 @@ import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
 part 'routed_swap_budget.dart';
 part 'routed_swap_offer.dart';
@@ -88,7 +89,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   }) async {
     final candidates = {
       for (final asset in known)
-        if (_isCandidate(asset)) asset,
+        if (!isSolanaTradingAsset(asset) && _isCandidate(asset)) asset,
     };
     final onceActive = candidates.difference(activated);
     // KDF lists active coins only, and its first call waits on the provider's
@@ -113,7 +114,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Set<AssetId> onceActive,
   ) async {
     try {
-      final eligible = await manager.eligibleAssets().timeout(_catalogTimeout);
+      final eligible = (await manager.eligibleAssets().timeout(
+        _catalogTimeout,
+      )).where((asset) => !isSolanaTradingAsset(asset)).toSet();
       _lastEligible = eligible;
       return SwapSourceAssets(
         source: source,
@@ -186,7 +189,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   }
 
   bool _blocked(AssetId from, AssetId to) =>
-      _tradingAllowed != null && !_tradingAllowed(from, to);
+      isSolanaTradingAsset(from) ||
+      isSolanaTradingAsset(to) ||
+      (_tradingAllowed != null && !_tradingAllowed(from, to));
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async {
@@ -283,6 +288,10 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     bool automatic = false,
     bool max = false,
   }) async {
+    // Max and cached/requoted routes share this boundary too.
+    if (_blocked(from, to)) {
+      return _rejected(SwapQuoteFailureKind.tradingBlocked);
+    }
     final pausedUntil = _budget.pausedUntil;
     if (pausedUntil != null) {
       return _rejected(SwapQuoteFailureKind.rateLimited, retryAt: pausedUntil);
@@ -328,6 +337,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
               .timeout(_timeout),
           retainedBalance: null,
         );
+      }
+      if (_blocked(from, to)) {
+        return _rejected(SwapQuoteFailureKind.tradingBlocked);
       }
       final quote = routedQuoteFromOffer(
         priced.offer,
