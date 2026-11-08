@@ -120,11 +120,14 @@ def main():
             if output.get("status") != "success" or set(output["result"]) != {SITE}:
                 raise GateError("Unexpected deployment result")
             completed = output["result"][SITE]
-            if not re.fullmatch(r"[a-zA-Z0-9]+", completed["version"]):
+            created_version = completed["version"]
+            if re.fullmatch(r"[a-zA-Z0-9]+", created_version):
+                created_version = f"sites/{SITE}/versions/{created_version}"
+            elif not re.fullmatch(r"sites/gleec-wallet-official/versions/[a-zA-Z0-9]+", created_version):
                 raise GateError("Unexpected created version identity")
             preview = request(f"sites/{SITE}/channels/{CHANNEL}")
             version = preview["release"]["version"]["name"]
-            if version != f"sites/{SITE}/versions/{completed['version']}":
+            if version != created_version:
                 raise GateError("Preview version changed during deployment")
             url = preview["url"]
             if url != completed["url"]:

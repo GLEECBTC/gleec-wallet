@@ -32,6 +32,7 @@ class HostingTest(unittest.TestCase):
         self.posts = 0
         self.cli_calls = []
         self.lose_response = False
+        self.returned_version = "new456"
         self.config = {"mode": "preview", "expectedLiveVersion": self.live,
                        "expectedLiveMainSha256": hashlib.sha256(b"original main").hexdigest(),
                        "previewVersion": self.target}
@@ -64,7 +65,7 @@ class HostingTest(unittest.TestCase):
         self.cli_calls.append(command)
         self.assertIn("--no-authorized-domains", command)
         self.assertNotIn("HOSTING_SERVICE_ACCOUNT", kwargs["env"])
-        value = {"status": "success", "result": {hosting.SITE: {"version": "new456", "url": self.url}}}
+        value = {"status": "success", "result": {hosting.SITE: {"version": self.returned_version, "url": self.url}}}
         return types.SimpleNamespace(returncode=0, stdout=json.dumps(value))
 
     def fetch(self, request, **kwargs):
@@ -98,6 +99,18 @@ class HostingTest(unittest.TestCase):
 
     def test_concurrent_preview_change_rejected(self):
         self.preview = "sites/gleec-wallet-official/versions/foreign789"
+        with self.assertRaises(ValueError):
+            hosting.main()
+        self.assertFalse(Path("hosting-operation-evidence.json").exists())
+
+    def test_same_site_full_resource_version_is_accepted(self):
+        self.returned_version = self.target
+        hosting.main()
+        evidence = json.loads(Path("hosting-operation-evidence.json").read_text())
+        self.assertEqual(evidence["version"], self.target)
+
+    def test_other_site_resource_is_rejected(self):
+        self.returned_version = "sites/other-site/versions/new456"
         with self.assertRaises(ValueError):
             hosting.main()
         self.assertFalse(Path("hosting-operation-evidence.json").exists())
