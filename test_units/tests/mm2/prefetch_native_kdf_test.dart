@@ -105,6 +105,118 @@ void main() {
     });
 
     test(
+      'checksum-valid Linux executable alone reports the native library block',
+      () async {
+        fixture.replaceArchive('linux', {
+          'kdf': [1, 2, 3],
+        });
+        final originalManifest = fixture.manifest.readAsStringSync();
+
+        await expectLater(
+          fixture.prepare('linux'),
+          throwsA(
+            isA<StateError>().having(
+              prefetch.describeNativeKdfPreparationFailure,
+              'safe actionable diagnostic',
+              'Native KDF preparation failed: The pinned linux archive has '
+                  'no required native library '
+                  '(libkdflib.so or libkdflib_static.so). '
+                  'Executable-only startup is disabled.',
+            ),
+          ),
+        );
+
+        expect(fixture.file('linux/bin/kdf').readAsBytesSync(), [1, 2, 3]);
+        expect(fixture.archiveRequests, [fixture.names['linux']]);
+        expect(fixture.manifest.readAsStringSync(), originalManifest);
+      },
+    );
+
+    for (final library in ['libkdflib.so', 'libkdflib_static.so']) {
+      test('Linux verifies its executable and $library together', () async {
+        fixture.replaceArchive('linux', {
+          'kdf': [1, 2, 3],
+          library: [4, 5, 6],
+        });
+        final originalManifest = fixture.manifest.readAsStringSync();
+
+        await fixture.prepare('linux');
+
+        expect(fixture.file('linux/bin/$library').readAsBytesSync(), [4, 5, 6]);
+        expect(fixture.archiveRequests, [fixture.names['linux']]);
+        expect(fixture.file('windows/bin/kdflib.dll').existsSync(), isFalse);
+        expect(fixture.manifest.readAsStringSync(), originalManifest);
+        await fixture.verify('linux');
+      });
+    }
+
+    test(
+      'Linux rejects a missing cached library with downloads disabled',
+      () async {
+        await fixture.prepare('linux');
+        fixture.updateManifest((json) {
+          (json['api'] as Map<String, dynamic>)['fetch_at_build_enabled'] =
+              false;
+        });
+        fixture.requests.clear();
+        fixture.file('linux/bin/libkdflib.so').deleteSync();
+
+        await expectLater(fixture.prepare('linux'), throwsStateError);
+
+        expect(fixture.file('linux/bin/kdf').existsSync(), isTrue);
+        expect(fixture.requests, isEmpty);
+      },
+    );
+
+    test(
+      'Linux runtime digest rejects altered library with unchanged executable',
+      () async {
+        await fixture.prepare('linux');
+        final executable = fixture.file('linux/bin/kdf').readAsBytesSync();
+        fixture.file('linux/bin/libkdflib.so').writeAsBytesSync([9, 8, 7]);
+
+        await expectLater(fixture.verify('linux'), throwsStateError);
+
+        expect(fixture.file('linux/bin/kdf').readAsBytesSync(), executable);
+      },
+    );
+
+    test(
+      'iOS prepares its pinned static library without other platforms',
+      () async {
+        final originalManifest = fixture.manifest.readAsStringSync();
+
+        await fixture.prepare('ios');
+
+        expect(fixture.file('ios/libkdf.a').readAsBytesSync(), [1, 2, 3]);
+        expect(fixture.archiveRequests, [fixture.names['ios']]);
+        expect(fixture.manifest.readAsStringSync(), originalManifest);
+        await fixture.verify('ios');
+      },
+    );
+
+    test('iOS rejects an altered static library', () async {
+      await fixture.prepare('ios');
+      fixture.file('ios/libkdf.a').writeAsBytesSync([9, 8, 7]);
+
+      await expectLater(fixture.verify('ios'), throwsStateError);
+    });
+
+    test('unknown preparation failures never expose exception messages', () {
+      const secret = 'https://user:password@example.invalid/private-token';
+      for (final error in [
+        StateError(secret),
+        const FileSystemException(secret, '/private/wallet-path'),
+        const FormatException(secret),
+      ]) {
+        expect(
+          prefetch.describeNativeKdfPreparationFailure(error),
+          'Native KDF preparation failed (${error.runtimeType}).',
+        );
+      }
+    });
+
+    test(
       'Android prepares and verifies both configured architectures',
       () async {
         await fixture.prepare('android');
@@ -242,6 +354,8 @@ class _ArtifactFixture {
       'required_platforms': [
         'windows',
         'macos',
+        'linux',
+        'ios',
         'android-armv7',
         'android-aarch64',
       ],
@@ -258,6 +372,13 @@ class _ArtifactFixture {
     fixture.replaceArchive('macos', {
       'kdf': [1, 2, 3],
       'libkdflib.dylib': [4, 5, 6],
+    });
+    fixture.replaceArchive('linux', {
+      'kdf': [1, 2, 3],
+      'libkdflib.so': [4, 5, 6],
+    });
+    fixture.replaceArchive('ios', {
+      'libkdf.a': [1, 2, 3],
     });
     fixture.replaceArchive('android-armv7', {
       'libkdf.a': [1, 2, 3],
@@ -310,7 +431,7 @@ class _ArtifactFixture {
       (api['platforms'] as Map<String, dynamic>)[platform] = {
         'matching_pattern': '^${RegExp.escape(name)}\$',
         'valid_zip_sha256_checksums': [sha256.convert(bytes).toString()],
-        'path': '$platform/bin',
+        'path': platform == 'ios' ? 'ios' : '$platform/bin',
       };
     });
   }

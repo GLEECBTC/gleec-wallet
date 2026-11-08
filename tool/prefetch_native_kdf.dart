@@ -28,7 +28,7 @@ Future<void> main(List<String> arguments) async {
       'komodo_defi_framework',
     );
     if (framework == null) {
-      throw StateError(
+      throw _NativeKdfPreparationFailure(
         'Framework package is unavailable; run flutter pub get.',
       );
     }
@@ -39,9 +39,20 @@ Future<void> main(List<String> arguments) async {
     );
     stdout.writeln('Verified native KDF preparation for ${arguments.single}.');
   } on Object catch (error) {
-    stderr.writeln('Native KDF preparation failed (${error.runtimeType}).');
+    stderr.writeln(describeNativeKdfPreparationFailure(error));
     exitCode = 1;
   }
+}
+
+/// Only locally authored failures can expose their actionable explanation.
+/// Transport and filesystem failures may contain credentials or local paths.
+String describeNativeKdfPreparationFailure(Object error) =>
+    error is _NativeKdfPreparationFailure
+    ? 'Native KDF preparation failed: ${error.message}'
+    : 'Native KDF preparation failed (${error.runtimeType}).';
+
+class _NativeKdfPreparationFailure extends StateError {
+  _NativeKdfPreparationFailure(super.message);
 }
 
 const nativeKdfTargets = <String, List<String>>{
@@ -55,6 +66,8 @@ const nativeKdfTargets = <String, List<String>>{
 const _requiredLibraries = <String, List<String>>{
   'windows': ['kdflib.dll'],
   'macos': ['libkdflib.dylib'],
+  // Linux CMake also bundles kdf, but the SDK runtime requires a native
+  // library. A verified executable alone cannot satisfy that requirement.
   'linux': ['libkdflib.so', 'libkdflib_static.so'],
   'ios': ['libkdf.a'],
   'android-armv7': ['libkdf.a'],
@@ -79,7 +92,9 @@ Future<void> prefetchNativeKdf({
   );
   for (final platform in platforms) {
     if (!config.apiConfig.platforms.containsKey(platform)) {
-      throw StateError('The pinned manifest does not configure $platform.');
+      throw _NativeKdfPreparationFailure(
+        'The pinned manifest does not configure $platform.',
+      );
     }
   }
   final fetch = FetchDefiApiStep.withBuildConfig(
@@ -101,7 +116,9 @@ Future<void> prefetchNativeKdf({
       config: config,
     );
     if (await manifest.readAsString() != originalManifest) {
-      throw StateError('The KDF manifest changed during native preparation.');
+      throw _NativeKdfPreparationFailure(
+        'The KDF manifest changed during native preparation.',
+      );
     }
   }
 }
@@ -116,7 +133,9 @@ Future<void> verifyNativeKdfArtifact({
   final platformConfig = config.apiConfig.platforms[platform];
   final libraries = _requiredLibraries[platform];
   if (platformConfig == null || libraries == null) {
-    throw StateError('The pinned manifest does not configure $platform.');
+    throw _NativeKdfPreparationFailure(
+      'The pinned manifest does not configure this native platform.',
+    );
   }
   final destination = resolveApiArtifactDestination(
     trustedRootFolder: frameworkDirectory.path,
@@ -129,7 +148,7 @@ Future<void> verifyNativeKdfArtifact({
         File(filename).lengthSync() > 0;
   });
   if (!hasLibrary) {
-    throw StateError(
+    throw _NativeKdfPreparationFailure(
       'The pinned $platform archive has no required native library '
       '(${libraries.join(' or ')}). Executable-only startup is disabled.',
     );
@@ -137,7 +156,9 @@ Future<void> verifyNativeKdfArtifact({
   final marker = File(path.join(destination, '.api_last_updated_$platform'));
   if (FileSystemEntity.typeSync(marker.path, followLinks: false) !=
       FileSystemEntityType.file) {
-    throw StateError('The $platform artifact provenance marker is missing.');
+    throw _NativeKdfPreparationFailure(
+      'The $platform artifact provenance marker is missing.',
+    );
   }
   final provenance = ApiArtifactProvenance.fromJson(
     jsonDecode(await marker.readAsString()) as Map<String, dynamic>,
@@ -157,7 +178,7 @@ Future<void> verifyNativeKdfArtifact({
         observedArtifactSha256: artifactDigest,
         observedRuntimeSetSha256: runtimeDigest,
       )) {
-    throw StateError(
+    throw _NativeKdfPreparationFailure(
       'The $platform library does not match its pinned artifact.',
     );
   }

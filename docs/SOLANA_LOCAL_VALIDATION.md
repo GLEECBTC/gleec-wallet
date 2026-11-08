@@ -109,7 +109,7 @@ HD sign-in -0.2% / first balance -0.5%; Iguana +0.2% / +0.6%.
 Review-file analysis has no errors or warnings; existing informational notices
 remain. Formatting and review diff checks pass.
 
-The final wallet gate passes **4,085 tests with four skips** using the prescribed
+The final wallet gate passes **4,093 tests with four skips** using the prescribed
 GasFree defines. Full wallet analysis reports zero errors, 55 existing warnings
 and 2,144 informational notices; the final changed trading files analyze clean.
 The WebAssembly release build passes in 92.1 seconds and contains no debug-wallet
@@ -129,11 +129,14 @@ regressions and original deletion tests pass; the production authorization guard
 is unchanged.
 
 Native CI preparation now fetches and verifies the selected pinned platform
-before CMake/CocoaPods configuration. All 13 offline fixture cases pass, and
+before CMake/CocoaPods configuration. All 21 offline fixture cases pass, and
 preparation against the actual pinned Windows archive passes digest/provenance
 verification. The selected-platform helper and CI action contain no wallet
-authentication behavior changes. The macOS artifact-publication blocker and
-SDK-merged pin gate remain enforced.
+authentication behavior changes. The macOS and Linux artifact-publication
+blockers and SDK-merged pin gate remain enforced. The Windows CI build is
+[green](https://github.com/GLEECBTC/gleec-wallet/actions/runs/42526474678/job/128871102830)
+on wallet `611e24a411737d2d91efa2d31b77f55d97396ce1`. The final follow-up only
+adds safe diagnostics, Linux/iOS fixture coverage and this validation record.
 
 The fresh unfunded native smoke passes again in both derivation modes with the
 same exact development binary/catalog identities recorded above. It still
@@ -169,7 +172,12 @@ atomic execution and recovery. Those rounds require a combined engine and the
 manual submission procedure in [SWAP_LIVE_TEST_BRIEF.md](SWAP_LIVE_TEST_BRIEF.md).
 Mainnet atomic trading and Solana routed execution remain unavailable.
 
-The separate authentication prerequisite deliberately rejects macOS native
-packaging when the pinned archives lack a usable library. That native app release
-check remains blocked; the unfunded process smoke above uses the explicit
-`KDF_BINARY` development override and does not prove native application packaging.
+The separate authentication prerequisite requires native libraries on desktop.
+The pinned macOS and Linux archives contain executables rather than the required
+usable dynamic libraries, so native preparation deliberately rejects them. The
+older Linux build could package its executable but could not establish startup
+with the current library-only runtime. Linux also needs its dynamic library bundled
+and loaded from the application installation; publication alone is insufficient.
+These native release checks remain blocked;
+the unfunded process smoke above uses the explicit `KDF_BINARY` development
+override and does not prove native application packaging.
