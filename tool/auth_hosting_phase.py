@@ -21,6 +21,75 @@ class GateError(ValueError):
     """A static diagnostic that is safe to report without provider details."""
 
 
+def uploaded_files(candidate):
+    caches = list((candidate / ".firebase").glob("hosting.*.cache"))
+    if len(caches) != 1 or caches[0].name != "hosting.cHVibGlj.cache":
+        raise GateError("Fresh hosting upload cache missing or ambiguous")
+    files = {}
+    for line in caches[0].read_text().splitlines():
+        fields = line.rsplit(",", 2)
+        if len(fields) != 3:
+            raise GateError("Malformed upload cache record")
+        path, mtime, digest = fields
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", mtime):
+            raise GateError("Malformed upload-cache modification time")
+        parsed = PurePosixPath(path)
+        if parsed.is_absolute() or ".." in parsed.parts or str(parsed) != path or "\\" in path:
+            raise GateError("Invalid upload cache path")
+        path = "/" + path
+        if path in files or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise GateError("Duplicate path or invalid upload digest")
+        files[path] = digest
+    if not files:
+        raise GateError("Empty upload cache")
+    return files
+
+
+def expected_version_config(hosting):
+    result = {}
+    if "appAssociation" in hosting:
+        result["appAssociation"] = hosting["appAssociation"]
+    if "headers" in hosting:
+        result["headers"] = [{"glob": entry["source"], "headers": {value["key"]: value["value"] for value in entry["headers"]}}
+                             for entry in hosting["headers"]]
+    if "rewrites" in hosting:
+        result["rewrites"] = [{"glob": entry["source"], "path": entry["destination"]} for entry in hosting["rewrites"]]
+    return result
+
+
+def verify_uploaded_version(request, version, candidate, hosting, generated):
+    expected = uploaded_files(candidate)
+    allowed = {"/__/firebase/init.js", "/__/firebase/init.json"}
+    if set(generated) - allowed:
+        raise GateError("Unexpected generated-file exception")
+    for path, digest in generated.items():
+        if path in expected or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise GateError("Invalid generated-file pin")
+        expected[path] = digest
+    prepared = request(version)
+    if prepared.get("status") != "FINALIZED" or prepared.get("config") != expected_version_config(hosting):
+        raise GateError("Preview finalization or complete configuration mismatch")
+    actual = {}
+    page = ""
+    pages = set()
+    while True:
+        query = urllib.parse.urlencode({"status": "ACTIVE", "pageSize": 1000, "pageToken": page})
+        result = request(version + "/files?" + query)
+        for row in result.get("files", []):
+            path, digest = row.get("path"), row.get("hash")
+            if not isinstance(path, str) or not path.startswith("/") or path in actual or not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+                raise GateError("Invalid remote file inventory")
+            actual[path] = digest
+        page = result.get("nextPageToken", "")
+        if not page:
+            break
+        if page in pages:
+            raise GateError("Repeated remote inventory page")
+        pages.add(page)
+    if actual != expected:
+        raise GateError("Preview complete file inventory differs from uploaded candidate")
+
+
 def main():
     config = json.loads(Path("hosting-operation.json").read_text())
     if config["mode"] not in ("preview", "promote"):
@@ -121,19 +190,29 @@ def main():
                 raise GateError("Unexpected deployment result")
             completed = output["result"][SITE]
             created_version = completed["version"]
-            if re.fullmatch(r"[a-zA-Z0-9]+", created_version):
+            if created_version == "":
+                # CLI 15.22.3 can omit this when its API response has a different
+                # resource prefix. Bind every uploaded byte and config field.
+                created_version = None
+            elif re.fullmatch(r"[a-zA-Z0-9]+", created_version):
                 created_version = f"sites/{SITE}/versions/{created_version}"
             elif not re.fullmatch(r"sites/gleec-wallet-official/versions/[a-zA-Z0-9]+", created_version):
                 raise GateError("Unexpected created version identity")
             preview = request(f"sites/{SITE}/channels/{CHANNEL}")
             version = preview["release"]["version"]["name"]
-            if version != created_version:
+            if not re.fullmatch(r"sites/gleec-wallet-official/versions/[a-zA-Z0-9]+", version):
+                raise GateError("Unexpected preview resource identity")
+            if created_version is not None and version != created_version:
                 raise GateError("Preview version changed during deployment")
             url = preview["url"]
             if url != completed["url"]:
                 raise GateError("Preview URL changed during deployment")
             if not re.fullmatch(r"https://gleec-wallet-official--auth-security-20261108-[a-z0-9]+\.web\.app", url):
                 raise GateError("Unexpected preview URL")
+            verify_uploaded_version(request, version, destination, hosting, config.get("generatedFiles", {}))
+            final_preview = request(f"sites/{SITE}/channels/{CHANNEL}")
+            if final_preview["release"]["version"]["name"] != version or final_preview["url"] != url:
+                raise GateError("Preview changed during full verification")
             if current() != config["expectedLiveVersion"]:
                 raise GateError("Live version changed during preview")
             evidence = {"mode": "preview", "url": url, "version": version,

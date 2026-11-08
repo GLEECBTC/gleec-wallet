@@ -2,5 +2,9 @@
   "mode": "preview",
   "expectedLiveVersion": "sites/gleec-wallet-official/versions/05f0079ed5c6ab96",
   "expectedLiveMainSha256": "185236d23e35594cb201a92065b690c2fd623905aef25ed54b8301caef9040c3",
-  "candidateSha256": "a26c400356a4327a86c423ee6e202af13314dc5cc54c0134c6b4794b04a17c0d"
+  "candidateSha256": "a26c400356a4327a86c423ee6e202af13314dc5cc54c0134c6b4794b04a17c0d",
+  "generatedFiles": {
+    "/__/firebase/init.js": "e04531bb170270fada20d61b173b54b4630783b114ef42a24f8189d41e739c8b",
+    "/__/firebase/init.json": "904fb8a0f68cecc98ee6b2f30556627dbdfbed4c70c2711240623f697f2d9cd7"
+  }
 }
