@@ -20,6 +20,7 @@ jobs:
           artifact-ids: 13639420824
           run-id: 42535292596
           github-token: ${{ github.token }}
+          merge-multiple: true
       - name: Test deployment guards without credentials
         run: python3 tool/auth_hosting_phase_test.py
       - run: cp tool/auth_hosting_operation.json hosting-operation.json
