@@ -5,6 +5,7 @@ import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/dex_repository.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/sell/sell_response.dart';
@@ -99,6 +100,11 @@ class AtomicSwapExecutor implements SwapExecutor {
         // Only the submission holds the lease, not polling or recovery.
         return _dex.sellOrThrow(request);
       });
+    } on TradePreflightRejected catch (error) {
+      throw SwapStartRejectedException(
+        SwapStartRejection.unknown,
+        detail: error.toString(),
+      );
     } on AuthSessionChangedException catch (error) {
       if (dispatched) throw SwapStartUnconfirmedException(error);
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);

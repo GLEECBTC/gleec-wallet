@@ -11,11 +11,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_sdk/src/assets/asset_manager.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/model/text_error.dart';
+import 'package:web_dex/shared/widgets/asset_amount_with_fiat.dart';
 import 'package:web_dex/model/wallet.dart' show WalletType;
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_balance_breakdown.dart';
@@ -147,10 +149,26 @@ class _FakeMarketData implements MarketDataManager {
 }
 
 class _FakeSdk implements KomodoDefiSdk {
-  _FakeSdk();
+  _FakeSdk({Set<Asset> assets = const {}}) : assets = _FakeAssetManager(assets);
+
+  @override
+  final AssetManager assets;
 
   @override
   final MarketDataManager marketData = _FakeMarketData();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeAssetManager implements AssetManager {
+  _FakeAssetManager(this._assets);
+
+  final Set<Asset> _assets;
+
+  @override
+  Set<Asset> findAssetsByConfigId(String ticker) =>
+      _assets.where((asset) => asset.id.id == ticker).toSet();
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -171,7 +189,7 @@ class _FakeWithdrawFormBloc extends Cubit<WithdrawFormState>
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _wrap(Widget child) {
+Widget _wrap(Widget child, {Set<Asset> assets = const {}}) {
   return MaterialApp(
     home: MediaQuery(
       data: const MediaQueryData(size: Size(1280, 1200)),
@@ -179,7 +197,7 @@ Widget _wrap(Widget child) {
         builder: (context) {
           updateScreenType(context);
           return RepositoryProvider<KomodoDefiSdk>.value(
-            value: _FakeSdk(),
+            value: _FakeSdk(assets: assets),
             child: Scaffold(body: SingleChildScrollView(child: child)),
           );
         },
@@ -380,6 +398,147 @@ WithdrawFormState _gaslessUnresolvedState({required bool submittedUnknown}) =>
     );
 
 void testWithdrawFormConfirmReceipt() {
+  group('Solana receipt amounts', () {
+    for (final token in [false, true]) {
+      for (final selfSend in [false, true]) {
+        testWidgets(
+          'review and receipt use transfer amount for token=$token self-send=$selfSend',
+          (tester) async {
+            final platform = Asset.fromJson({
+              'coin': 'SOL-DEV',
+              'type': 'SOLANA',
+              'fname': 'Solana Devnet',
+              'decimals': 9,
+              'is_testnet': true,
+              'protocol': {'type': 'SOLANA'},
+              'nodes': [
+                {'url': 'https://api.devnet.solana.com'},
+              ],
+            });
+            final asset = token
+                ? Asset.fromJson(
+                    {
+                      'coin': 'USDC-SOL-DEV',
+                      'type': 'SOLANATOKEN',
+                      'fname': 'USDC Devnet',
+                      'parent_coin': 'SOL-DEV',
+                      'is_testnet': true,
+                      'protocol': {
+                        'type': 'SOLANATOKEN',
+                        'protocol_data': {
+                          'platform': 'SOL-DEV',
+                          'decimals': 6,
+                          'mint_address':
+                              '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+                          'program_id':
+                              SolanaTokenProtocol.classicTokenProgramId,
+                        },
+                      },
+                    },
+                    knownIds: {platform.id},
+                  )
+                : platform;
+            final assets = {platform, asset};
+            final fee = FeeInfo.solana(
+              coin: 'SOL-DEV',
+              feeAmount: Decimal.parse('0.000005'),
+              rentAmount: Decimal.parse(token ? '0.00203928' : '0'),
+              totalAmount: Decimal.parse(token ? '0.00204428' : '0.000005'),
+            );
+            final changes = BalanceChanges(
+              netChange: Decimal.parse(
+                token
+                    ? (selfSend ? '0' : '-1')
+                    : (selfSend ? '-0.000005' : '-1.000005'),
+              ),
+              receivedByMe: selfSend ? Decimal.one : Decimal.zero,
+              spentByMe: Decimal.parse(token ? '1' : '1.000005'),
+              totalAmount: Decimal.one,
+            );
+            final preview = WithdrawResult(
+              txHash: 'AaCaseSensitiveSignature',
+              txHex: 'aa',
+              from: const ['sender'],
+              to: [selfSend ? 'sender' : 'recipient'],
+              balanceChanges: changes,
+              blockHeight: 0,
+              timestamp: 123,
+              fee: fee,
+              coin: asset.id.id,
+            );
+            final state = WithdrawFormState(
+              asset: asset,
+              step: WithdrawFormStep.confirm,
+              recipientAddress: preview.to.single,
+              amount: '1',
+              isGaslessFeatureConfigured: false,
+              preview: preview,
+            );
+            await tester.pumpWidget(
+              _wrap(WithdrawPreviewDetails(state: state), assets: assets),
+            );
+            expect(
+              tester
+                  .widgetList<AssetAmountWithFiat>(
+                    find.byType(AssetAmountWithFiat),
+                  )
+                  .first
+                  .amount,
+              Decimal.one,
+            );
+            expect(find.text('withdrawSolanaNetworkFee'), findsOneWidget);
+            expect(find.text('withdrawSolanaAccountDeposit'), findsOneWidget);
+            if (token) {
+              expect(
+                find.text('withdrawSolanaAccountDepositDescription'),
+                findsOneWidget,
+              );
+              expect(find.text('0.00203928 SOL-DEV'), findsOneWidget);
+              expect(
+                tester
+                    .widgetList<AssetAmountWithFiat>(
+                      find.byType(AssetAmountWithFiat),
+                    )
+                    .any(
+                      (widget) =>
+                          widget.assetId == platform.id &&
+                          widget.amount == fee.totalFee,
+                    ),
+                isTrue,
+              );
+            }
+            await tester.pumpWidget(
+              _wrap(
+                WithdrawSuccessReceipt(
+                  asset: asset,
+                  result: WithdrawalResult(
+                    txHash: preview.txHash,
+                    balanceChanges: changes,
+                    coin: asset.id.id,
+                    toAddress: preview.to.single,
+                    fee: fee,
+                  ),
+                  onClose: _noop,
+                ),
+                assets: assets,
+              ),
+            );
+            expect(
+              tester
+                  .widgetList<AssetAmountWithFiat>(
+                    find.byType(AssetAmountWithFiat),
+                  )
+                  .first
+                  .amount,
+              Decimal.one,
+            );
+            expect(tester.takeException(), isNull);
+          },
+        );
+      }
+    }
+  });
+
   group('Unknown GasFree transfer recovery acknowledgement', () {
     const openKey = Key('withdraw-gasless-clear-recovery');
     const confirmKey = Key('withdraw-gasless-clear-recovery-confirm');

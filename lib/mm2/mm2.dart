@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:web_dex/app_config/solana_build_config.dart';
+
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
@@ -27,8 +30,14 @@ TronGaslessProviderConfig buildGleecTronGaslessProviderConfig({
 
 final class MM2 {
   MM2() {
+    SolanaBuildConfig.environment.validate();
     _kdfSdk = KomodoDefiSdk(
       config: KomodoDefiSdkConfig(
+        solanaCapabilities: SolanaBuildConfig.environment.capabilities,
+        assetsAutoUpdate: !SolanaBuildConfig.environment.enabled,
+        assetsStorageNamespace: SolanaBuildConfig.environment.enabled
+            ? SolanaBuildConfig.environment.storageNamespace
+            : null,
         initialActivationPolicy: ActivationPolicySnapshot(
           status: ActivationPolicyStatus.loading,
         ),
@@ -96,9 +105,16 @@ final class MM2 {
     try {
       _isInitializing = true;
 
+      if (kIsWeb) {
+        SolanaBuildConfig.environment.verifyPreviewOrigin(Uri.base);
+      }
+      await SolanaBuildConfig.environment.verifyCatalog();
       await _kdfSdk.initialize();
       // Hack to ensure that kdf is running in noauth mode
       await _kdfSdk.auth.getUsers();
+      if (SolanaBuildConfig.environment.enabled) {
+        SolanaBuildConfig.environment.verifyEngineVersion(await version());
+      }
 
       _initCompleter.complete(_kdfSdk);
       return _kdfSdk;

@@ -300,6 +300,33 @@ void testTransactionViewsWidgets() {
       expect(bloc.events.single, isA<TransactionHistorySubscribe>());
     });
 
+    testWidgets('Solana transaction row preserves the ninth decimal', (
+      tester,
+    ) async {
+      final coin = buildTestCoin(abbr: 'SOL-DEV');
+      final tx = buildTestTransaction(
+        assetId: coin.id.copyWith(subClass: CoinSubClass.solana),
+        netChange: Decimal.parse('0.000000001'),
+      );
+      final coinsBloc = _FakeCoinsBloc();
+      addTearDown(coinsBloc.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlocProvider<CoinsBloc>.value(
+              value: coinsBloc,
+              child: TransactionListRow(
+                transaction: tx,
+                coinAbbr: coin.abbr,
+                setTransaction: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.textContaining('0.000000001'), findsOneWidget);
+    });
+
     testWidgets('transaction row labels net-zero transfer as internal move', (
       tester,
     ) async {

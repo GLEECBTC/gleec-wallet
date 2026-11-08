@@ -168,6 +168,32 @@ refreshed configurations. See the handover for
 [current validation](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#fresh-validation) and
 [historical results](KDF_LIFI_DECKER_HANDOVER_2026-10-27.md#historical-validation-before-the-combined-candidate).
 
+### Solana development acceptance
+
+The [integration guide](SOLANA_INTEGRATION.md) records the candidate manifest,
+immutable catalog, isolation requirements and validation evidence. Keep the
+[engine dependencies](SOLANA_KDF_DEPENDENCIES.md) open until corrected-engine
+runtime checks pass; fixtures do not close them.
+
+```sh
+# Safe runner/manifest unit checks, from the wallet root
+python3 -m unittest discover -s tool -p 'test_solana*.py'
+
+# Isolated, fresh, unfunded native wallet; never points at existing wallet data
+KDF_BINARY="$PWD/.solana/kdf-candidate" python3 tool/solana_smoke.py \
+  --coins .solana/coins_config.json \
+  --manifest .solana/candidate-manifest.json \
+  --json .solana/unfunded-smoke-report.json
+```
+
+Solana wallet tests, including deterministic atomic lifecycle/recovery cases,
+are registered in `test_units/main.dart`. SDK Solana fixtures run within the
+types, RPC, core SDK and harness package suites above. Registry scanner/generator
+tests live in the separate coins candidate checkout and run with
+`python3 -B -m unittest discover -s utils/tests -p 'test_solana_registry.py'`.
+Funded devnet rounds follow the existing live-swap brief and require a person to
+commit funds. Production artifacts and catalog pins are not changed by these checks.
+
 ## 5. SDK package tests
 
 ```bash

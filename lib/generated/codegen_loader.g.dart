@@ -1931,4 +1931,34 @@ abstract class LocaleKeys {
   static const swapSlippageSaveNone = 'swapSlippageSaveNone';
   static const swapAnnounceSlippage = 'swapAnnounceSlippage';
   static const swapReceiveAtLeastShort = 'swapReceiveAtLeastShort';
+  static const withdrawSolanaUnavailable = 'withdrawSolanaUnavailable';
+  static const withdrawSolanaToken2022Unavailable =
+      'withdrawSolanaToken2022Unavailable';
+  static const withdrawSolanaTokenMaxUnavailable =
+      'withdrawSolanaTokenMaxUnavailable';
+  static const withdrawSolanaOptionsUnsupported =
+      'withdrawSolanaOptionsUnsupported';
+  static const withdrawSolanaMemoTooLong = 'withdrawSolanaMemoTooLong';
+  static const withdrawSolanaInvalidAmount = 'withdrawSolanaInvalidAmount';
+  static const withdrawSolanaReviewChanged = 'withdrawSolanaReviewChanged';
+  static const withdrawSolanaSubmissionUnknown =
+      'withdrawSolanaSubmissionUnknown';
+  static const withdrawSolanaSubmissionUnknownTitle =
+      'withdrawSolanaSubmissionUnknownTitle';
+  static const withdrawSolanaSubmissionUnknownAdvice =
+      'withdrawSolanaSubmissionUnknownAdvice';
+  static const withdrawSolanaNetworkFee = 'withdrawSolanaNetworkFee';
+  static const withdrawSolanaAccountDeposit = 'withdrawSolanaAccountDeposit';
+  static const withdrawSolanaAccountDepositDescription =
+      'withdrawSolanaAccountDepositDescription';
+  static const privateKeyExportActiveWalletCoverage =
+      'privateKeyExportActiveWalletCoverage';
+  static const swapReviewRequiredFunding = 'swapReviewRequiredFunding';
+  static const swapReviewRequiredFundingExplanation =
+      'swapReviewRequiredFundingExplanation';
+  static const withdrawSolanaInsufficientPlatformBalance =
+      'withdrawSolanaInsufficientPlatformBalance';
+  static const withdrawSolanaInvalidTokenRecipient =
+      'withdrawSolanaInvalidTokenRecipient';
+  static const swapFundingBalanceUnavailable = 'swapFundingBalanceUnavailable';
 }

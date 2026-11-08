@@ -33,4 +33,6 @@ enum CoinType {
 
   /// Legacy glue for the Sia protocol (`CoinSubClass.sia`).
   sia,
+  solana,
+  solanaToken,
 }

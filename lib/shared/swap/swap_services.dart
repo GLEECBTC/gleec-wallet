@@ -5,6 +5,7 @@ import 'package:decimal/decimal.dart';
 import 'package:get_it/get_it.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/app_config/app_config.dart' show excludedAssetList;
 import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
@@ -58,8 +59,10 @@ class SwapServices {
     required Mm2Api mm2Api,
     BaseStorage? storage,
     void Function(AnalyticsEventData event)? logAnalytics,
+    TradingAssetPolicy? tradingPolicy,
   }) : _sdk = sdk,
        _coinsRepo = coinsRepo,
+       _tradingPolicy = tradingPolicy,
        _mm2Api = mm2Api {
     pricing = SwapPricingService(SdkSwapPriceSource(sdk.marketData));
     registry = SwapExecutionRegistry(
@@ -107,6 +110,7 @@ class SwapServices {
   final KomodoDefiSdk _sdk;
   final CoinsRepo _coinsRepo;
   final Mm2Api _mm2Api;
+  final TradingAssetPolicy? _tradingPolicy;
 
   late final SwapPricingService pricing;
   late final SwapExecutionRegistry registry;
@@ -400,7 +404,11 @@ class SwapServices {
           trading: _sdk.trading,
           networks: networks,
           addressOf: addressOf,
-          tradingAllowed: tradingAllowed,
+          tradingAllowed: (from, to) =>
+              tradingAllowed(from, to) &&
+              (_tradingPolicy?.allowsPair(from.id, to.id) ??
+                  canTradeAssetPair(from.id, to.id)),
+          assetAllowed: _tradingPolicy?.allowsAsset,
           clockValid: clockValid,
           isWalletOnly: isWalletOnly,
           tokenApproval: atomicTokenApproval,

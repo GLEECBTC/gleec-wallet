@@ -223,7 +223,11 @@ String getTxExplorerUrl(Coin coin, String txHash) {
     return '$explorerUrl$normalizedHash';
   }
 
-  return '$explorerUrl$explorerTxUrl$normalizedHash';
+  return ExplorerUrlPattern(baseUrl: Uri.tryParse(explorerUrl)).buildUrl(
+        explorerTxUrl,
+        {'HASH': normalizedHash, 'TX': normalizedHash},
+      )?.toString() ??
+      '';
 }
 
 String getAddressExplorerUrl(Coin coin, String address) {
@@ -231,7 +235,10 @@ String getAddressExplorerUrl(Coin coin, String address) {
   final String explorerAddressUrl = coin.explorerAddressUrl;
   if (explorerUrl.isEmpty || explorerAddressUrl.isEmpty) return '';
 
-  return '$explorerUrl$explorerAddressUrl$address';
+  return ExplorerUrlPattern(
+        baseUrl: Uri.tryParse(explorerUrl),
+      ).buildUrl(explorerAddressUrl, {'ADDRESS': address})?.toString() ??
+      '';
 }
 
 @Deprecated('Use the Protocol class\'s explorer URL methods')
@@ -401,6 +408,9 @@ Color getProtocolColor(CoinType type) {
     case CoinType.zhtlc:
     case CoinType.utxo:
       return const Color.fromRGBO(233, 152, 60, 1);
+    case CoinType.solana:
+    case CoinType.solanaToken:
+      return const Color(0xFF9945FF);
     case CoinType.sia:
       // Match SDK Sia subclass color: 0xFF29F06F
       return const Color(0xFF29F06F);
@@ -459,6 +469,8 @@ bool hasTxHistorySupport(Coin coin) {
     case CoinType.tendermint:
     case CoinType.tendermintToken:
     case CoinType.utxo:
+    case CoinType.solana:
+    case CoinType.solanaToken:
     case CoinType.sia:
     case CoinType.erc20:
     case CoinType.grc20:
@@ -519,6 +531,8 @@ String getNativeExplorerUrlByCoin(Coin coin, String? address) {
     case CoinType.ubiq:
     case CoinType.krc20:
     case CoinType.slp:
+    case CoinType.solana:
+    case CoinType.solanaToken:
     case CoinType.sia:
     case CoinType.trx:
     case CoinType.trc20:

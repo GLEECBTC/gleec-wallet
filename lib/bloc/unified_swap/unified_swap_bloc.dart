@@ -31,7 +31,11 @@ typedef SwapHolding = ({AssetId asset, Decimal usdValue});
 /// asset, refund gas.
 typedef SwapSpend = ({Decimal amount, Decimal fees, Decimal refundReserve});
 
-typedef _Held = ({Decimal? balance, Decimal? feeBalance});
+typedef _Held = ({
+  Decimal? balance,
+  Decimal? feeBalance,
+  Map<AssetId, Decimal?> fundingBalances,
+});
 
 /// Drives the swap screen: the intent, its automatic evaluation, the review
 /// and the start.
@@ -180,6 +184,7 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped when a wallet signs in or out, so reads for the previous one are
   /// dropped.
   var _walletEpoch = 0;
+  var _balanceReadVersion = 0;
 
   /// Bumped by every read of the order book's offers; only the latest lands.
   var _offersVersion = 0;

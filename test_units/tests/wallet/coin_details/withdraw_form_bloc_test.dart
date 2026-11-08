@@ -636,8 +636,10 @@ class _FakeWithdrawalManager implements WithdrawalManager {
   @override
   Stream<WithdrawalProgress> executeWithdrawal(
     WithdrawalPreview preview,
-    String assetId,
-  ) {
+    String assetId, {
+    void Function()? beforeBroadcast,
+  }) {
+    beforeBroadcast?.call();
     executeCallCount += 1;
     return _executeWithdrawalHandler?.call(preview, assetId) ??
         const Stream<WithdrawalProgress>.empty();
@@ -761,6 +763,252 @@ class _FakeMm2Api implements Mm2Api {
 
 void testWithdrawFormBloc() {
   group('WithdrawFormBloc', () {
+    group('Solana', () {
+      Asset solanaAsset() => _assetFromConfig({
+        'coin': 'SOL-DEV',
+        'type': 'SOLANA',
+        'fname': 'Solana Devnet',
+        'decimals': 9,
+        'is_testnet': true,
+        'derivation_path': "m/44'/501'",
+        'protocol': {'type': 'SOLANA'},
+        'nodes': [
+          {'url': 'https://api.devnet.solana.com'},
+        ],
+      });
+      WithdrawalPreview solanaPreview({
+        String hash = 'OriginalSignature',
+        String fee = '0.000005',
+        String amount = '1',
+        String? memo,
+      }) => WithdrawResult(
+        txHash: hash,
+        txHex: 'aa',
+        from: const ['source-address'],
+        to: const ['recipient'],
+        balanceChanges: BalanceChanges(
+          netChange: -Decimal.one,
+          receivedByMe: Decimal.zero,
+          spentByMe: Decimal.one,
+          totalAmount: Decimal.parse(amount),
+        ),
+        blockHeight: 0,
+        timestamp: 123,
+        coin: 'SOL-DEV',
+        memo: memo,
+        fee: FeeInfo.solana(
+          coin: 'SOL-DEV',
+          feeAmount: Decimal.parse(fee),
+          rentAmount: Decimal.zero,
+          totalAmount: Decimal.parse(fee),
+        ),
+      );
+      WithdrawFormBloc createBloc(
+        Asset asset,
+        _FakeWithdrawalManager withdrawals,
+      ) => WithdrawFormBloc(
+        asset: asset,
+        sdk: _FakeSdk(
+          addresses: _FakeAddressOperations(),
+          withdrawals: withdrawals,
+          pubkeys: _FakePubkeyManager({asset.id: _assetPubkeys(asset)}),
+          balances: _FakeBalanceManager({asset.id: _balance('5')}),
+        ),
+        mm2Api: _FakeMm2Api(),
+      );
+      test('single-address HD preview omits source and fee selectors', () {
+        final asset = solanaAsset();
+        final state = WithdrawFormState(
+          asset: asset,
+          step: WithdrawFormStep.fill,
+          recipientAddress: 'recipient',
+          amount: '0.000000001',
+          isGaslessFeatureConfigured: false,
+          selectedFeePriority: WithdrawalFeeLevel.high,
+          selectedSourceAddress: _pubkeyForAsset(
+            asset,
+            derivationPath: "m/44'/501'/0'/0'",
+          ),
+        );
+        final params = state.toWithdrawParameters();
+        expect(params.from, isNull);
+        expect(params.expirationSeconds, isNull);
+        expect(params.fee, isNull);
+        expect(params.feePriority, isNull);
+        expect(params.amount, Decimal.parse('0.000000001'));
+      });
+      test('initial preview rejects a changed recipient amount', () async {
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => solanaPreview(amount: '2'),
+        );
+        final bloc = createBloc(solanaAsset(), withdrawals);
+        addTearDown(bloc.close);
+        await _primeFillState(bloc, recipient: 'recipient', amount: '1');
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        final rejected = await bloc.stream.firstWhereBounded(
+          (state) => state.hasPreviewError,
+        );
+        expect(rejected.step, WithdrawFormStep.fill);
+        expect(rejected.preview, isNull);
+        expect(withdrawals.executeCallCount, 0);
+      });
+      test('in-flight send ignores duplicate submit, reset and back', () async {
+        final completed = Completer<void>();
+        final preview = solanaPreview();
+        final withdrawals = _FakeWithdrawalManager(
+          previewWithdrawalHandler: (_) async => preview,
+          executeWithdrawalHandler: (_, __) async* {
+            await completed.future;
+            yield WithdrawalProgress(
+              status: WithdrawalStatus.complete,
+              message: 'Submitted',
+              withdrawalResult: _resultFromPreview(preview),
+            );
+          },
+        );
+        final bloc = createBloc(solanaAsset(), withdrawals);
+        addTearDown(bloc.close);
+        await _primeFillState(bloc, recipient: 'recipient', amount: '1');
+        bloc.add(const WithdrawFormPreviewSubmitted());
+        await bloc.stream.firstWhereBounded(
+          (state) => state.step == WithdrawFormStep.confirm,
+        );
+        bloc.add(const WithdrawFormSubmitted());
+        await bloc.stream.firstWhereBounded((state) => state.isSending);
+        bloc.add(const WithdrawFormSubmitted());
+        bloc.add(const WithdrawFormReset());
+        bloc.add(const WithdrawFormStepReverted());
+        await _flush();
+        expect(bloc.state.isSending, isTrue);
+        expect(bloc.state.step, WithdrawFormStep.confirm);
+        expect(withdrawals.executeCallCount, 1);
+        completed.complete();
+        await bloc.stream.firstWhereBounded(
+          (state) => state.step == WithdrawFormStep.success,
+        );
+        expect(withdrawals.executeCallCount, 1);
+      });
+      test(
+        'restored unknown submission preserves its signature on preview',
+        () async {
+          final prior = solanaPreview(hash: 'OldUncertainSignature');
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => throw SdkError(
+              code: SdkErrorCode.general,
+              category: SdkErrorCategory.network,
+              messageKey: 'withdrawSolanaSubmissionUnknown',
+              fallbackMessage: 'Unknown',
+              source: SolanaWithdrawalSubmissionUnknown(prior),
+            ),
+          );
+          final bloc = createBloc(solanaAsset(), withdrawals);
+          addTearDown(bloc.close);
+          await _primeFillState(bloc, recipient: 'recipient', amount: '1');
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          final restored = await bloc.stream.firstWhereBounded(
+            (s) => s.hasUncertainSolanaSubmission,
+          );
+          expect(
+            restored.solanaSubmissionUnknownTxHash,
+            'OldUncertainSignature',
+          );
+          expect(restored.step, WithdrawFormStep.failed);
+          expect(withdrawals.executeCallCount, 0);
+        },
+      );
+      test(
+        'changed review stays in confirmation and submits only after a second action',
+        () async {
+          final refreshed = solanaPreview(
+            hash: 'FreshSignature',
+            fee: '0.000006',
+            amount: '2',
+            memo: 'Refreshed memo',
+          );
+          var attempts = 0;
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => solanaPreview(),
+            executeWithdrawalHandler: (_, __) async* {
+              if (++attempts == 1) {
+                throw SdkError(
+                  code: SdkErrorCode.general,
+                  category: SdkErrorCategory.validation,
+                  messageKey: 'withdrawSolanaReviewChanged',
+                  fallbackMessage: 'Review changed',
+                  source: SolanaWithdrawalReviewChanged(refreshed),
+                );
+              }
+              yield WithdrawalProgress(
+                status: WithdrawalStatus.complete,
+                message: 'Submitted',
+                withdrawalResult: _resultFromPreview(refreshed),
+              );
+            },
+          );
+          final bloc = createBloc(solanaAsset(), withdrawals);
+          addTearDown(bloc.close);
+          await _primeFillState(bloc, recipient: 'recipient', amount: '1');
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          await bloc.stream.firstWhereBounded(
+            (s) => s.step == WithdrawFormStep.confirm,
+          );
+          bloc.add(const WithdrawFormSubmitted());
+          final changed = await bloc.stream.firstWhereBounded(
+            (s) => identical(s.preview, refreshed) && !s.isSending,
+          );
+          expect(changed.step, WithdrawFormStep.confirm);
+          expect(changed.hasConfirmStepError, isTrue);
+          expect(changed.authorizedRecipientAmount, Decimal.fromInt(2));
+          expect(changed.memo, 'Refreshed memo');
+          expect(attempts, 1);
+          bloc.add(const WithdrawFormSubmitted());
+          await bloc.stream.firstWhereBounded(
+            (s) => s.step == WithdrawFormStep.success,
+          );
+          expect(attempts, 2);
+        },
+      );
+      test(
+        'ambiguous send retains signature and ignores retry, back and submit',
+        () async {
+          final refreshed = solanaPreview(hash: 'AaUncertainSignature');
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => solanaPreview(),
+            executeWithdrawalHandler: (_, __) => Stream.error(
+              SdkError(
+                code: SdkErrorCode.general,
+                category: SdkErrorCategory.network,
+                messageKey: 'withdrawSolanaSubmissionUnknown',
+                fallbackMessage: 'Unknown',
+                source: SolanaWithdrawalSubmissionUnknown(refreshed),
+              ),
+            ),
+          );
+          final bloc = createBloc(solanaAsset(), withdrawals);
+          addTearDown(bloc.close);
+          await _primeFillState(bloc, recipient: 'recipient', amount: '1');
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          await bloc.stream.firstWhereBounded(
+            (s) => s.step == WithdrawFormStep.confirm,
+          );
+          bloc.add(const WithdrawFormSubmitted());
+          final uncertain = await bloc.stream.firstWhereBounded(
+            (s) => s.hasUncertainSolanaSubmission,
+          );
+          expect(
+            uncertain.solanaSubmissionUnknownTxHash,
+            'AaUncertainSignature',
+          );
+          bloc.add(const WithdrawFormReset());
+          bloc.add(const WithdrawFormStepReverted());
+          bloc.add(const WithdrawFormSubmitted());
+          await _flush();
+          expect(bloc.state, uncertain);
+          expect(withdrawals.executeCallCount, 1);
+        },
+      );
+    });
+
     for (final (ticker, type, decimals, chain) in [
       ('USDC-PLG20', 'Polygon', 6, 137),
       ('ETC', 'Ethereum Classic', 18, 61),

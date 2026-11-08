@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart'
+    as typed_rpc;
+import 'package:komodo_defi_types/komodo_defi_types.dart'
+    show KomodoDefiRpcMethodsExtension;
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:rational/rational.dart';
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
@@ -52,15 +57,142 @@ import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_request.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/shared/utils/utils.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
+import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 
 class Mm2Api {
-  Mm2Api({required MM2 mm2, required KomodoDefiSdk sdk})
-    : _sdk = sdk,
-      _mm2 = mm2 {
+  Mm2Api({
+    required MM2 mm2,
+    required KomodoDefiSdk sdk,
+    TradingAssetPolicy? tradingPolicy,
+    Future<JsonMap> Function(Object request)? tradingTransport,
+  }) : _sdk = sdk,
+       _tradingPolicy = tradingPolicy,
+       _tradingTransport = tradingTransport ?? mm2.call,
+       _mm2 = mm2 {
     nft = Mm2ApiNft(_mm2.call);
   }
 
   final MM2 _mm2;
+
+  final TradingAssetPolicy? _tradingPolicy;
+  TradingAssetPolicy? get tradingPolicy => _tradingPolicy;
+  final Future<JsonMap> Function(Object request) _tradingTransport;
+
+  void _checkTradingRequest(Object request) {
+    void requirePair(String base, String rel) {
+      if (!(_tradingPolicy?.allowsPair(base, rel) ??
+          canTradeAssetPair(base, rel))) {
+        throw TradePreflightRejected(
+          StateError('Trading is unavailable for this asset pair.'),
+        );
+      }
+    }
+
+    if (request is SellRequest) requirePair(request.base, request.rel);
+    if (request is SetPriceRequest) requirePair(request.base, request.rel);
+    if (request is MarketMakerBotRequest &&
+        request.method == 'start_simple_market_maker_bot') {
+      for (final pair
+          in request.params?.tradeCoinPairs?.values ??
+              const <TradeCoinPairConfig>[]) {
+        requirePair(pair.baseCoinId, pair.relCoinId);
+      }
+    }
+  }
+
+  /// Recheck every engine-reported funding currency for Solana orders, also
+  /// for maker forms and restored entry points which do not use unified quotes.
+  Future<void> _checkSolanaFunding(Object request) async {
+    final String base;
+    final String rel;
+    final Rational volume;
+    final Rational price;
+    final typed_rpc.SwapMethod method;
+    final bool max;
+    if (request is SellRequest) {
+      base = request.base;
+      rel = request.rel;
+      volume = request.volume;
+      price = request.price;
+      method = request.method == 'buy'
+          ? typed_rpc.SwapMethod.buy
+          : typed_rpc.SwapMethod.sell;
+      max = false;
+    } else if (request is SetPriceRequest) {
+      base = request.base;
+      rel = request.rel;
+      volume = request.volume;
+      price = request.price;
+      method = typed_rpc.SwapMethod.setPrice;
+      max = request.max;
+    } else {
+      return;
+    }
+    if (!(_tradingPolicy?.isSolanaPair(base, rel) ?? false)) return;
+    final assets = _sdk.assets.available.values;
+    final from = assets.where((asset) => asset.id.id == base).firstOrNull;
+    final to = assets.where((asset) => asset.id.id == rel).firstOrNull;
+    if (from == null || to == null) {
+      throw TradePreflightRejected(StateError('Unknown trading asset'));
+    }
+    try {
+      final preimage = await _sdk.client.rpc.trading.tradePreimage(
+        base: base,
+        rel: rel,
+        swapMethod: method,
+        volume: max
+            ? null
+            : volume.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+        max: max,
+        price: price.toDecimal(scaleOnInfinitePrecision: 18).toString(),
+      );
+      if (preimage.totalFees.isEmpty) {
+        throw const FormatException('Missing funding requirements');
+      }
+      for (final total in preimage.totalFees) {
+        final required = Rational.parse(total.requiredBalance);
+        if (required < Rational.zero) {
+          throw const FormatException('Invalid funding amount');
+        }
+        if (required == Rational.zero) continue;
+        final asset = assets
+            .where((asset) => asset.id.id == total.coin)
+            .firstOrNull;
+        if (asset == null) throw StateError('Unknown funding asset');
+        final balance = await _sdk.balances.getBalance(
+          asset.id,
+          forceRefresh: true,
+        );
+        final paying = method == typed_rpc.SwapMethod.buy ? rel : base;
+        final amount = method == typed_rpc.SwapMethod.buy
+            ? volume * price
+            : volume;
+        final principal = total.coin == paying && !max ? amount : Rational.zero;
+        if (balance.spendable.toRational() < required + principal) {
+          throw StateError('Insufficient ${total.coin} for trade funding');
+        }
+      }
+    } on Object catch (cause) {
+      // No order was dispatched, so a local funding refusal is certain.
+      throw TradePreflightRejected(cause);
+    }
+  }
+
+  Future<JsonMap> _callTradingRequest(Object request) async {
+    _checkTradingRequest(request);
+    try {
+      await _checkSolanaFunding(request);
+    } on TradePreflightRejected {
+      rethrow;
+    } on Object catch (cause) {
+      // A catalog/balance read can fail before preimage handling begins too.
+      throw TradePreflightRejected(cause);
+    }
+    // Catalog and engine eligibility may change while funding is refreshed.
+    _checkTradingRequest(request);
+    return _tradingTransport(request);
+  }
 
   // Ideally we will transition cleanly over to the SDK, but for methods
   // which are deeply intertwined with the app and are broken by HD wallet
@@ -275,7 +407,7 @@ class Mm2Api {
 
   Future<Map<String, dynamic>> sell(SellRequest request) async {
     try {
-      return await _mm2.call(request);
+      return await _callTradingRequest(request);
     } catch (e, s) {
       log(
         'Error sell ${request.base}/${request.rel}: $e',
@@ -290,11 +422,11 @@ class Mm2Api {
   /// [sell] without turning a call that got no answer into an error answer:
   /// KDF's answer, error or not, and a throw when none arrived.
   Future<Map<String, dynamic>> sellOrThrow(SellRequest request) =>
-      _mm2.call(request);
+      _callTradingRequest(request);
 
   Future<Map<String, dynamic>?> setprice(SetPriceRequest request) async {
     try {
-      return await _mm2.call(request) as Map<String, dynamic>?;
+      return await _callTradingRequest(request) as Map<String, dynamic>?;
     } catch (e, s) {
       log(
         'Error setprice ${request.base}/${request.rel}: $e',
@@ -602,7 +734,7 @@ class Mm2Api {
     MarketMakerBotRequest marketMakerBotRequest,
   ) async {
     try {
-      final JsonMap response = await _mm2.call(marketMakerBotRequest.toJson());
+      final JsonMap response = await _callTradingRequest(marketMakerBotRequest);
       log(
         response.toString(),
         path: 'api => ${marketMakerBotRequest.method} => _call',

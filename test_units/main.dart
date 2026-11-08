@@ -1,3 +1,7 @@
+import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
+import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
+import 'tests/swap/solana_atomic_lifecycle_test.dart'
+    as solana_atomic_lifecycle_test;
 import 'package:flutter_test/flutter_test.dart';
 import 'services/file_loader/diagnostic_artifacts_test.dart'
     as diagnostic_artifacts_test;
@@ -497,6 +501,9 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  solana_build_config_test.main();
+  solana_trading_test.main();
+  solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();
   guarded_file_saver_test.main();
   safe_log_exporter_test.main();

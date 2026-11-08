@@ -136,6 +136,10 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         ),
       ),
     );
+    if (selected != null && state.signedIn) {
+      await _loadBalances(emit);
+      if (version != _evaluationVersion || emit.isDone) return;
+    }
     _armTimers(selected);
   }
 
@@ -375,10 +379,10 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     }
   }
 
-  void _onOptionSelected(
+  Future<void> _onOptionSelected(
     UnifiedSwapOptionSelected event,
     Emitter<UnifiedSwapState> emit,
-  ) {
+  ) async {
     final quotes = state.quotes;
     if (quotes == null || quotes.byId(event.id) == null) return;
     final previousSource = state.selectedQuote?.source;
@@ -401,6 +405,8 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         ),
       ),
     );
+    if (state.signedIn) await _loadBalances(emit);
+    if (emit.isDone) return;
     if (state.maxRequested) {
       if (previousSource != state.selectedQuote?.source) {
         add(const UnifiedSwapMaxRequested());

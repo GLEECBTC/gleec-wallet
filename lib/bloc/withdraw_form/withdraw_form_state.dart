@@ -101,6 +101,11 @@ class WithdrawFormState extends Equatable {
   final bool isSending;
   final WithdrawalResult? result;
 
+  /// A signed transfer may have reached Solana; never offer a blind retry.
+  final String? solanaSubmissionUnknownTxHash;
+  bool get hasUncertainSolanaSubmission =>
+      solanaSubmissionUnknownTxHash != null;
+
   /// Live gas-free relay status message shown while a gasless transfer is
   /// being relayed and confirmed (null for non-gasless flows).
   final String? gaslessStatusMessage;
@@ -369,6 +374,7 @@ class WithdrawFormState extends Equatable {
     this.authorizedRecipientAmount,
     this.isSending = false,
     this.result,
+    this.solanaSubmissionUnknownTxHash,
     this.gaslessStatusMessage,
     this.gaslessTraceState,
     this.gaslessTransferState,
@@ -423,6 +429,7 @@ class WithdrawFormState extends Equatable {
     ValueGetter<Decimal?>? authorizedRecipientAmount,
     bool? isSending,
     ValueGetter<WithdrawalResult?>? result,
+    ValueGetter<String?>? solanaSubmissionUnknownTxHash,
     ValueGetter<String?>? gaslessStatusMessage,
     ValueGetter<GaslessTraceState?>? gaslessTraceState,
     ValueGetter<GaslessTransferState?>? gaslessTransferState,
@@ -491,6 +498,9 @@ class WithdrawFormState extends Equatable {
           : this.authorizedRecipientAmount,
       isSending: isSending ?? this.isSending,
       result: result != null ? result() : this.result,
+      solanaSubmissionUnknownTxHash: solanaSubmissionUnknownTxHash != null
+          ? solanaSubmissionUnknownTxHash()
+          : this.solanaSubmissionUnknownTxHash,
       gaslessStatusMessage: gaslessStatusMessage != null
           ? gaslessStatusMessage()
           : this.gaslessStatusMessage,
@@ -550,6 +560,9 @@ class WithdrawFormState extends Equatable {
 
   WithdrawParameters toWithdrawParameters() {
     final derivationPath = selectedSourceAddress?.derivationPath;
+    final isSolana =
+        asset.protocol is SolanaProtocol ||
+        asset.protocol is SolanaTokenProtocol;
     final supportsHdSourceSelection =
         asset.protocol.supportsMultipleAddresses &&
         asset.protocol is! SiaProtocol;
@@ -560,8 +573,8 @@ class WithdrawFormState extends Equatable {
       amount: isMaxAmount
           ? null
           : Decimal.parse(normalizeDecimalString(amount)),
-      fee: isCustomFee ? customFee : null,
-      feePriority: isCustomFee ? null : selectedFeePriority,
+      fee: isCustomFee && !isSolana ? customFee : null,
+      feePriority: isCustomFee || isSolana ? null : selectedFeePriority,
       from: supportsHdSourceSelection && derivationPath != null
           ? WithdrawalSource.hdDerivationPath(derivationPath)
           : null,
@@ -622,6 +635,7 @@ class WithdrawFormState extends Equatable {
     authorizedRecipientAmount,
     isSending,
     result,
+    solanaSubmissionUnknownTxHash,
     gaslessStatusMessage,
     gaslessTraceState,
     gaslessTransferState,

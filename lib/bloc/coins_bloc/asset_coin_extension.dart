@@ -53,11 +53,13 @@ extension AssetCoinExtension on Asset {
     );
   }
 
-  String? get contractAddress => protocol.config.valueOrNull(
-    'protocol',
-    'protocol_data',
-    'contract_address',
-  );
+  String? get contractAddress => protocol is SolanaTokenProtocol
+      ? (protocol as SolanaTokenProtocol).mintAddress
+      : protocol.config.valueOrNull(
+          'protocol',
+          'protocol_data',
+          'contract_address',
+        );
   String? get platform =>
       protocol.config.valueOrNull('protocol', 'protocol_data', 'platform');
 }
@@ -78,6 +80,10 @@ extension CoinTypeExtension on CoinSubClass {
         return CoinType.ftm20;
       case CoinSubClass.arbitrum:
         return CoinType.arb20;
+      case CoinSubClass.solana:
+        return CoinType.solana;
+      case CoinSubClass.solanaToken:
+        return CoinType.solanaToken;
       case CoinSubClass.sia:
         return CoinType.sia;
       case CoinSubClass.slp:
@@ -175,6 +181,10 @@ extension CoinSubClassExtension on CoinType {
         return CoinSubClass.ftm20;
       case CoinType.arb20:
         return CoinSubClass.arbitrum;
+      case CoinType.solana:
+        return CoinSubClass.solana;
+      case CoinType.solanaToken:
+        return CoinSubClass.solanaToken;
       case CoinType.sia:
         return CoinSubClass.sia;
       case CoinType.slp:

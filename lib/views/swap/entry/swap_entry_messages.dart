@@ -35,6 +35,16 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       }
     }
 
+    if (state.fundingFailedAsset case final asset?) {
+      return [
+        SwapHelperLine(
+          text: 'swapFundingBalanceUnavailable'.tr(
+            args: [SwapFormat.ticker(asset)],
+          ),
+          tone: SwapTone.warning,
+        ),
+      ];
+    }
     final failed = _failureLines(state);
     if (failed.isNotEmpty) return failed;
 
@@ -224,7 +234,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   }
 
   String? _feeNeeded(UnifiedSwapState state) {
-    final parent = state.pay?.parentId;
+    final parent = state.insufficientFeeAsset ?? state.pay?.parentId;
     final quote = state.selectedQuote;
     if (parent == null || quote == null) return null;
     return SwapFormat.tokens(
@@ -251,8 +261,10 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   }
 
   String? _feeHeld(UnifiedSwapState state) {
-    final parent = state.pay?.parentId;
-    final held = state.feeBalance;
+    final parent = state.insufficientFeeAsset ?? state.pay?.parentId;
+    final held = parent == state.pay?.parentId
+        ? state.feeBalance
+        : state.fundingBalances[parent];
     if (parent == null || held == null) return null;
     return SwapFormat.tokens(
       held,

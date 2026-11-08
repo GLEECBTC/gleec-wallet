@@ -1,5 +1,6 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/views/wallet/coin_details/transactions/transaction_details.dart';
 
@@ -7,6 +8,67 @@ import 'coin_details_test_harness.dart';
 
 void testTransactionDetailsLogic() {
   group('TransactionDetails logic', () {
+    testWidgets(
+      'Solana history keeps one lamport and separates deposit from fee',
+      (tester) async {
+        final base = buildTestCoin(abbr: 'SOL-DEV');
+        final coin = base.copyWith(
+          id: base.id.copyWith(subClass: CoinSubClass.solana),
+        );
+        final tx = buildTestTransaction(
+          assetId: coin.id,
+          netChange: Decimal.parse('0.000000001'),
+          fee: FeeInfo.solana(
+            coin: 'SOL-DEV',
+            feeAmount: Decimal.parse('0.000005'),
+            rentAmount: Decimal.parse('0.00203928'),
+            totalAmount: Decimal.parse('0.00204428'),
+          ),
+        );
+        await tester.pumpWidget(
+          wrapWithMaterial(
+            TransactionDetails(
+              coin: coin,
+              transaction: tx,
+              onClose: () {},
+              usdPriceResolver: (_, __) => 0,
+            ),
+          ),
+        );
+        expect(find.textContaining('+ 0.000000001 SOL-DEV'), findsOneWidget);
+        expect(find.text('0.000005 SOL-DEV'), findsOneWidget);
+        expect(find.text('0.00203928 SOL-DEV'), findsOneWidget);
+        expect(find.text('withdrawSolanaAccountDeposit'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'missing Solana history addresses stay unknown rather than shielded',
+      (tester) async {
+        final base = buildTestCoin(abbr: 'SOL-DEV');
+        final coin = base.copyWith(
+          id: base.id.copyWith(subClass: CoinSubClass.solana),
+        );
+        final tx = buildTestTransaction(
+          assetId: coin.id,
+          from: const [],
+          to: const [],
+        );
+        await tester.pumpWidget(
+          wrapWithMaterial(
+            TransactionDetails(
+              coin: coin,
+              transaction: tx,
+              onClose: () {},
+              usdPriceResolver: (_, __) => 0,
+            ),
+          ),
+        );
+        expect(find.text(LocaleKeys.zhtlcShieldedAddress), findsNothing);
+        expect(find.text(LocaleKeys.unknown), findsWidgets);
+      },
+    );
+
     testWidgets('confirmations label returns count when confirmed', (
       tester,
     ) async {
