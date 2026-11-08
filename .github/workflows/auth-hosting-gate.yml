@@ -1,0 +1,23 @@
+name: Read onboarding hosting release evidence
+on:
+  push:
+    branches: ['auth/hosting-security-gate-20261108']
+    paths: ['.github/workflows/auth-hosting-gate.yml', 'tool/auth_hosting_snapshot.py']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Read exact live version and rollback metadata
+        env:
+          HOSTING_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLEEC_WALLET_OFFICIAL }}
+        run: python3 tool/auth_hosting_snapshot.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosting-live-snapshot
+          path: hosting-live-snapshot.json
+          if-no-files-found: error
+          retention-days: 30
