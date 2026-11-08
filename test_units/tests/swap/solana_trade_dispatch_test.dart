@@ -34,7 +34,7 @@ import 'swap_src_fakes.dart';
 import 'swap_src_sdk_fakes.dart';
 import 'swap_test_fixtures.dart';
 
-final _sol = assetOf('SOL-DEV', subClass: CoinSubClass.solana, decimals: 9);
+final _sol = assetOf('TESTSOL', subClass: CoinSubClass.solana, decimals: 9);
 final _btc = assetOf('BTC-TEST', subClass: CoinSubClass.utxo, decimals: 8);
 
 PreimageTotalFee _total(String coin, String required) => PreimageTotalFee(

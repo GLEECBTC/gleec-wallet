@@ -765,7 +765,7 @@ void testWithdrawFormBloc() {
   group('WithdrawFormBloc', () {
     group('Solana', () {
       Asset solanaAsset() => _assetFromConfig({
-        'coin': 'SOL-DEV',
+        'coin': 'TESTSOL',
         'type': 'SOLANA',
         'fname': 'Solana Devnet',
         'decimals': 9,
@@ -795,10 +795,10 @@ void testWithdrawFormBloc() {
         ),
         blockHeight: 0,
         timestamp: 123,
-        coin: 'SOL-DEV',
+        coin: 'TESTSOL',
         memo: memo,
         fee: FeeInfo.solana(
-          coin: 'SOL-DEV',
+          coin: 'TESTSOL',
           feeAmount: Decimal.parse(fee),
           rentAmount: Decimal.zero,
           totalAmount: Decimal.parse(fee),

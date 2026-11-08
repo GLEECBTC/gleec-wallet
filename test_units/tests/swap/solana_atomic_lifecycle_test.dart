@@ -19,13 +19,13 @@ import 'swap_exec_atomic_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 final _sol = assetOf(
-  'SOL-DEV',
+  'TESTSOL',
   name: 'Solana Devnet',
   subClass: CoinSubClass.solana,
   decimals: 9,
 );
 final _spl = assetOf(
-  'USDC-SOL-DEV',
+  'TESTUSDC-TESTSOL',
   subClass: CoinSubClass.solanaToken,
   parent: _sol,
   decimals: 6,

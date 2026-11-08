@@ -303,7 +303,7 @@ void testTransactionViewsWidgets() {
     testWidgets('Solana transaction row preserves the ninth decimal', (
       tester,
     ) async {
-      final coin = buildTestCoin(abbr: 'SOL-DEV');
+      final coin = buildTestCoin(abbr: 'TESTSOL');
       final tx = buildTestTransaction(
         assetId: coin.id.copyWith(subClass: CoinSubClass.solana),
         netChange: Decimal.parse('0.000000001'),

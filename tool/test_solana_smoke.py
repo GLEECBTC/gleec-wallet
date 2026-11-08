@@ -95,6 +95,15 @@ class SmokeTests(unittest.TestCase):
         self.assertTrue(all(row["wallet_only"] for row in coins))
         self.assertFalse(json.loads(self.coins.read_text())[0]["wallet_only"])
 
+    def test_smoke_refuses_retired_candidate_tickers(self):
+        rows = catalog()
+        rows[0]["coin"] = "SOL-DEV"
+        rows[1]["coin"] = "USDC-SOL-DEV"
+        rows[1]["protocol"]["protocol_data"]["platform"] = "SOL-DEV"
+        self.coins.write_text(json.dumps(rows))
+        with self.assertRaisesRegex(smoke.SmokeFailure, "lacks the two devnet assets"):
+            smoke.smoke_coins(self.coins)
+
     def test_smoke_refuses_mainnet_wrong_mint_program_or_precision(self):
         changes = ((0, "is_testnet", False), (1, "mint_address", "wrong"),
                    (1, "program_id", "Token2022"), (1, "decimals", 9))

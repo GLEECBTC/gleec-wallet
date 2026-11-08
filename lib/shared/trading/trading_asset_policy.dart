@@ -35,10 +35,20 @@ bool isSolanaTradingAsset(AssetId asset) =>
     asset.subClass == CoinSubClass.solana ||
     asset.subClass == CoinSubClass.solanaToken;
 
+// These retired preview names are never authorized for new trades, including
+// when restored metadata still describes an otherwise valid devnet asset.
+const _retiredSolanaTradingAssetIds = {'SOL-DEV', 'USDC-SOL-DEV'};
+
 // Legacy callers without a catalog cannot authorize the preview assets. The
 // injected policy below uses actual protocol metadata, never ticker inference.
-bool _isUnconfiguredSolana(String id) =>
-    const {'SOL', 'SOL-DEV', 'USDC-SOL', 'USDC-SOL-DEV'}.contains(id);
+// Retired preview names remain denial aliases for restored order requests.
+bool _isUnconfiguredSolana(String id) => const {
+  'SOL',
+  'TESTSOL',
+  'USDC-SOL',
+  'TESTUSDC-TESTSOL',
+  ..._retiredSolanaTradingAssetIds,
+}.contains(id);
 
 /// Live catalog and engine policy for starting trades. Cancellation, status
 /// tracking and recovery deliberately do not use this policy.
@@ -62,6 +72,7 @@ class TradingAssetPolicy {
   bool allowsAsset(AssetId id) => allowsAssetId(id.id);
 
   bool allowsAssetId(String id) {
+    if (_retiredSolanaTradingAssetIds.contains(id)) return false;
     if (isWalletOnlyTradingAssetId(id)) return false;
     final asset = _assetOf(id);
     if (asset == null || asset.isWalletOnly) return false;

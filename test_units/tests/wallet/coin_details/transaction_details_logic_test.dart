@@ -11,7 +11,7 @@ void testTransactionDetailsLogic() {
     testWidgets(
       'Solana history keeps one lamport and separates deposit from fee',
       (tester) async {
-        final base = buildTestCoin(abbr: 'SOL-DEV');
+        final base = buildTestCoin(abbr: 'TESTSOL');
         final coin = base.copyWith(
           id: base.id.copyWith(subClass: CoinSubClass.solana),
         );
@@ -19,7 +19,7 @@ void testTransactionDetailsLogic() {
           assetId: coin.id,
           netChange: Decimal.parse('0.000000001'),
           fee: FeeInfo.solana(
-            coin: 'SOL-DEV',
+            coin: 'TESTSOL',
             feeAmount: Decimal.parse('0.000005'),
             rentAmount: Decimal.parse('0.00203928'),
             totalAmount: Decimal.parse('0.00204428'),
@@ -35,9 +35,9 @@ void testTransactionDetailsLogic() {
             ),
           ),
         );
-        expect(find.textContaining('+ 0.000000001 SOL-DEV'), findsOneWidget);
-        expect(find.text('0.000005 SOL-DEV'), findsOneWidget);
-        expect(find.text('0.00203928 SOL-DEV'), findsOneWidget);
+        expect(find.textContaining('+ 0.000000001 TESTSOL'), findsOneWidget);
+        expect(find.text('0.000005 TESTSOL'), findsOneWidget);
+        expect(find.text('0.00203928 TESTSOL'), findsOneWidget);
         expect(find.text('withdrawSolanaAccountDeposit'), findsOneWidget);
       },
     );
@@ -45,7 +45,7 @@ void testTransactionDetailsLogic() {
     testWidgets(
       'missing Solana history addresses stay unknown rather than shielded',
       (tester) async {
-        final base = buildTestCoin(abbr: 'SOL-DEV');
+        final base = buildTestCoin(abbr: 'TESTSOL');
         final coin = base.copyWith(
           id: base.id.copyWith(subClass: CoinSubClass.solana),
         );

@@ -29,9 +29,9 @@ import 'swap_src_fakes.dart';
 import 'swap_test_fixtures.dart';
 
 void main() {
-  final sol = assetOf('SOL-DEV', subClass: CoinSubClass.solana, decimals: 9);
+  final sol = assetOf('TESTSOL', subClass: CoinSubClass.solana, decimals: 9);
   final spl = assetOf(
-    'USDC-SOL-DEV',
+    'TESTUSDC-TESTSOL',
     subClass: CoinSubClass.solanaToken,
     parent: sol,
     decimals: 6,
@@ -132,7 +132,99 @@ void main() {
       catalog[spl.id] = token(program: SolanaTokenProtocol.token2022ProgramId);
       expect(policy.allowsPair(spl.id, testBtc.id), isFalse);
       expect(canTradeAssetId(sol), isFalse);
+      expect(canTradeAssetPair('TESTSOL', 'BTC-TEST'), isFalse);
+      expect(canTradeAssetPair('BTC-TEST', 'TESTUSDC-TESTSOL'), isFalse);
       expect(canTradeAssetPair('SOL-DEV', 'BTC-TEST'), isFalse);
+      expect(canTradeAssetPair('BTC-TEST', 'USDC-SOL-DEV'), isFalse);
+    },
+  );
+
+  test(
+    'retired preview identifiers cannot start trades without a catalog policy',
+    () async {
+      final transport = _TradingTransport();
+      final api = Mm2Api(
+        mm2: MM2(),
+        tradingTransport: transport.call,
+        sdk: _UnusedTradingSdk(),
+      );
+      addTearDown(api.dispose);
+      for (final retired in ['SOL-DEV', 'USDC-SOL-DEV']) {
+        await expectLater(
+          api.sellOrThrow(
+            legacy_sell.SellRequest(
+              base: retired,
+              rel: testBtc.id,
+              volume: Rational.one,
+              price: Rational.one,
+              orderType: legacy_sell.SellBuyOrderType.fillOrKill,
+            ),
+          ),
+          throwsA(isA<TradePreflightRejected>()),
+        );
+      }
+      expect(transport.sent, isEmpty);
+    },
+  );
+
+  test(
+    'retired catalog-backed Solana identifiers cannot submit new trades',
+    () async {
+      final retiredSol = assetOf(
+        'SOL-DEV',
+        subClass: CoinSubClass.solana,
+        decimals: 9,
+      );
+      final retiredToken = assetOf(
+        'USDC-SOL-DEV',
+        subClass: CoinSubClass.solanaToken,
+        parent: retiredSol,
+        decimals: 6,
+      );
+      catalog[retiredSol.id] = native().copyWith(id: retiredSol);
+      catalog[retiredToken.id] = Asset(
+        id: retiredToken,
+        protocol: SolanaTokenProtocol.fromJson({
+          'is_testnet': true,
+          'protocol': {
+            'type': 'SOLANATOKEN',
+            'protocol_data': {
+              'platform': retiredSol.id,
+              'mint_address': 'Mint',
+              'program_id': SolanaTokenProtocol.classicTokenProgramId,
+              'decimals': 6,
+            },
+          },
+        }),
+        isWalletOnly: false,
+        signMessagePrefix: null,
+      );
+      expect(policy.allowsPair(sol.id, testBtc.id), isTrue);
+      expect(policy.allowsPair(spl.id, testBtc.id), isTrue);
+      final transport = _TradingTransport();
+      final api = Mm2Api(
+        mm2: MM2(),
+        tradingTransport: transport.call,
+        tradingPolicy: policy,
+        sdk: _UnusedTradingSdk(),
+      );
+      addTearDown(api.dispose);
+      for (final retired in [retiredSol.id, retiredToken.id]) {
+        expect(policy.allowsAssetId(retired), isFalse);
+        await expectLater(
+          api.sellOrThrow(
+            legacy_sell.SellRequest(
+              base: retired,
+              rel: testBtc.id,
+              volume: Rational.one,
+              price: Rational.one,
+              orderType: legacy_sell.SellBuyOrderType.fillOrKill,
+            ),
+          ),
+          throwsA(isA<TradePreflightRejected>()),
+        );
+      }
+      expect(transport.sent, isEmpty);
     },
   );
 

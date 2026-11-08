@@ -8,7 +8,7 @@ Solana support is developed alongside the upstream fixes. The integration recogn
 - Iguana and mnemonic-derived HD wallets each expose one owner address. `enable_hd` preserves the engine's distinct derivation; Solana requests never add HD account/discovery, withdrawal-address, or signing-address selectors.
 - SOL balances/history are the platform stream source. Balance events are arrays; history events are individual transaction objects with a `coin` discriminator. Polling, reconnect and cached-history behavior stay in the existing managers. V2 history omits an HD account target. Base58 addresses and signatures remain case-sensitive.
 - SOL uses nine decimal places; token precision comes from trusted metadata. Withdrawal uses normal `withdraw`, a review, a rebuilt signed transaction, and `send_raw_transaction`. The confirmation coordinator compares all review-relevant values before immediate broadcast. Ambiguous outcomes remain pending/uncertain and must not cause automatic resubmission.
-- `SolanaFeeInfo` carries `fee_amount`, `rent_amount` and `total_amount`. Its currency resolves through the SOL platform because KDF omits `coin`; devnet token fees remain `SOL-DEV`. Rent is an account-creation deposit, separate from token amount and network fee. Indexed history may omit memo/status and report no rent breakdown; do not infer those from a withdrawal preview.
+- `SolanaFeeInfo` carries `fee_amount`, `rent_amount` and `total_amount`. Its currency resolves through the SOL platform because KDF omits `coin`; devnet token fees remain `TESTSOL`. Rent is an account-creation deposit, separate from token amount and network fee. Indexed history may omit memo/status and report no rent breakdown; do not infer those from a withdrawal preview.
 - `orderbook`/`best_orders` retain their existing method names with the v2 envelope. `buy`/`sell`/`setprice` use the existing execution path; KDF chooses the Solana v1 swap protocol. Required funding must include every `trade_preimage.total_fees.required_balance` currency, including SOL on the receiving side. Present conservative requirements without inventing an exact refundable-rent split. KDF confirmation value `1` means finalized for Solana.
 - Mainnet and mixed-network new trades are blocked. Curated devnet atomic swaps require explicit opt-in. Solana market maker automation remains disabled until the engine can enforce funding and policy for each generated order. Restrictions on starting trades do not remove cancellation or recovery. Shielded offers and authoritative own-order IDs remain usable for self-trade prevention. Solana routed swaps, external/hardware wallets, multiple HD addresses and arbitrary mint-only discovery are outside the current engine contract.
 
@@ -26,7 +26,7 @@ the original mixed workspace intact.
 
 | Review unit | Main implementation surfaces | Validation |
 |---|---|---|
-| Coins repository ([PR #2103](https://github.com/GLEECBTC/coins/pull/2103)) | Initial four registry entries; `solana/`, Solana explorers, `utils/solana_registry.py`, scanner/generator integration and immutable fixtures. Swap fixtures additionally reuse MARTY. | 37 scanner/generator tests; standalone read-only node checks. |
+| Coins repository ([PR #2103](https://github.com/GLEECBTC/coins/pull/2103)) | Initial four registry entries; `solana/`, Solana explorers, `utils/solana_registry.py`, scanner/generator integration and immutable fixtures. Swap fixtures additionally reuse MARTY. | 40 scanner/generator tests; standalone read-only node checks. |
 | Vendored SDK ([PR #444](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/444)) | SOL/SPL types and typed RPCs; activation coordinator; platform stream routing; history persistence; withdrawal refresh/journal; authenticated signing/export; catalog capabilities and isolated storage. Primary new tests are `komodo_defi_sdk/test/solana/`, `test/withdrawals/solana_*`, RPC/type protocol tests and harness `test/solana_replay_test.dart`. | Affected package suites, harness replay and browser stream/catalog checks below. |
 | Wallet (this repository) | `lib/app_config/solana_build_config.dart`; SDK/bootstrap wiring; shared trading policy and funding discovery; existing withdrawal/history/key-export presentation; localized messages; candidate/smoke tools. | `test_units/main.dart`, including Solana build, trading and atomic-lifecycle tests plus existing withdrawal/history suites. |
 
@@ -37,9 +37,22 @@ the combined seven-platform engine repin remain separate release work.
 
 ## Candidate isolation
 
+Devnet uses `TESTSOL` and `TESTUSDC-TESTSOL`. These names avoid the `SOL`/`USDC`
+price prefixes and fit KDF's ticker/platform statistics convention. The earlier
+unreleased names `SOL-DEV` and `USDC-SOL-DEV` are retired; they remain denial-only
+aliases for trade starts, both with and without restored catalog metadata.
+Cancellation and recovery remain available.
+
+Regenerate the manifest/profile for the renamed snapshot and use fresh isolated
+preview storage and a dedicated browser origin. History rows and pending-send
+intents include the literal ticker; renaming does not migrate or clear them.
+Preserve old evidence and reconcile any old uncertain signature before a funded
+retry under the new names. The recorded native smoke uses fresh unfunded wallets,
+so this change requires no production-wallet migration.
+
 Candidate catalogs are prepared in the separate coins worktree/branch and identified by both the source base commit and the exact snapshot SHA256. A base commit alone does not identify uncommitted candidate entries. Generate/review the registry's Solana fixtures before making a profile; the fixture manifest identifies wallet-only and explicitly opt-in devnet swap variants separately.
 
-The reviewed devnet swap fixture contains `SOL-DEV`, `USDC-SOL-DEV` and the existing `MARTY` UTXO testnet configuration. Its `swap_coins_config.json` SHA256 is `c58d476b6a74b0fd4bcc45a83d2deb091a01cdd7675702e66d0573a61e4832ae`; raw `swap_coins.json` is `4507ab1203fd84a30c40f1c75e68a210338971024a977b5743d547d5a28b1613`. Existing MARTY endpoint configurations are preserved; their runtime availability is a separate funded-round prerequisite. Use that snapshot and a separately generated manifest/profile for atomic acceptance. Do not reuse the wallet-only catalog digest with a swap snapshot.
+The reviewed devnet swap fixture contains `TESTSOL`, `TESTUSDC-TESTSOL` and the existing `MARTY` UTXO testnet configuration. Its `swap_coins_config.json` SHA256 is `3b116790d8667afc89e69d09852efd64bf0703c68e36e16ed21d978c33349932`; raw `swap_coins.json` is `59b7020ae032af8a421922bfc56a05b0c1fb709990f2519402c850b4e65cc465`. Existing MARTY endpoint configurations are preserved; their runtime availability is a separate funded-round prerequisite. Use that snapshot and a separately generated manifest/profile for atomic acceptance. Do not reuse the wallet-only catalog digest with a swap snapshot.
 
 `tool/solana_candidate.py` writes an exclusive, immutable-input manifest and optional Flutter defines JSON. It records the binary SHA256, full engine commit, catalog SHA256 and catalog base commit. It never changes build configuration, production assets, or remote repositories.
 
@@ -76,7 +89,7 @@ python3 tool/solana_smoke.py \
   --json .solana/unfunded-smoke-report.json
 ```
 
-Python 3.10+ and a compatible native KDF are required. `KDF_BINARY` is the existing native override; `--kdf` may override it explicitly. `SOLANA_DEVNET_RPC_URL` can select an HTTPS provider. The runner proves the provider's devnet genesis before activation, includes only reviewed `SOL-DEV`/classic `USDC-SOL-DEV` entries, and forces wallet-only mode.
+Python 3.10+ and a compatible native KDF are required. `KDF_BINARY` is the existing native override; `--kdf` may override it explicitly. `SOLANA_DEVNET_RPC_URL` can select an HTTPS provider. The runner proves the provider's devnet genesis before activation, includes only reviewed `TESTSOL`/classic `TESTUSDC-TESTSOL` entries, and forces wallet-only mode.
 
 The runner generates a fresh disposable BIP39 mnemonic, uses separate temporary wallets for HD and Iguana, checks their distinct derived owners without reporting addresses, and deletes wallet files/logs on success or failure. It reads no existing wallet or seed environment variable. RPC dispatch permits only version, activation, balance, history, address validation, disable and stop. Signing, key export, withdrawal, broadcast, order placement and swap recovery are refused before transport. The report omits provider URLs, credentials, seeds, addresses and raw engine errors.
 

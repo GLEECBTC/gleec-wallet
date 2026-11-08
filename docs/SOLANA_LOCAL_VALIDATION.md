@@ -12,7 +12,7 @@ The initial SDK Solana commit was `f8c497c7c71e58a232897d37f0457e140b750c86`
 stacked on the separately reviewed authentication commit
 `c8438ebfffcd72998c46aa454a9e4ae845422316`.
 
-## Registry and native engine evidence
+## Initial registry and native engine evidence
 
 [Coins PR #2103](https://github.com/GLEECBTC/coins/pull/2103) contains the validated
 catalog commit `83ed4b75564a1e097d774d64ac5343b161fcb44c`.
@@ -89,15 +89,25 @@ behavior changes remain in their separate workstream.
 
 The review updates keep authentication on the separate prerequisite and retain
 both production build configuration files byte-for-byte. Coins revision
-`3f40c90be9e97282f5f249b3ace94179e6308b01` passes all 37 registry tests and its
-[PR workflow](https://github.com/GLEECBTC/coins/actions/runs/42522100971).
-The 774 existing generated assets and candidate fixture hashes are unchanged.
+`58534ebf14503c4c7b29928fb6b6730cc69eb4b7` passes all 40 registry tests.
+Maintainer feedback prompted the devnet rename to `TESTSOL` / `TESTUSDC-TESTSOL`,
+avoiding mainnet pricing prefixes and preserving KDF's ticker/platform statistics
+identity. Generator output retains the exact `-TESTSOL` suffix. All 774 existing
+raw/generated configurations and both mainnet Solana entries remain unchanged.
+The wallet-only catalog digest is now
+`5d10d969557cd0a681e4d60b605641606e76f55b8050e757597dc735d033451c`;
+[the candidate guide](SOLANA_INTEGRATION.md) records both swap-snapshot digests.
+The earlier snapshot and smoke evidence above are retained as history, not reused
+as the renamed candidate's manifest.
 
-Final SDK review revision `98e51d99013e9c626c0a93ff905a8a2b2bfd1339` is stacked
+Final SDK review revision `cd3a5bc8b3b5a4ae5fa1de79c36d6c24c5cd5b83` is stacked
 on the separate authentication prerequisite
 `cf69f4611b83bba7e05831e1b20c2447337ce867`. The authentication package has no
-diff relative to that base. Runtime suites passed on `a8c1553012521032ba1f11ee06665899a2cf87c1`;
-the final follow-up changes only the replay fixture and adds two lifecycle tests.
+diff relative to that base. The ticker follow-up changes only fixture/test names
+and symbol assertions. All five affected SDK suites and both replay/benchmark
+gates pass on the final frozen source. The two changed Chrome/Wasm fixtures pass;
+the full 268-test browser run recorded below also passed before this data-only
+follow-up and remains a CI requirement on the final commit.
 
 Final validation: 1,304 core tests (one skip), 147 coin tests, 112 update tests,
 and 227 harness tests per wallet mode (three opt-in process skips each).
@@ -105,15 +115,15 @@ Four Chrome/Wasm storage tests verify actual IndexedDB isolation, reopen and
 custom-token restoration. The exact 15-file Chrome/Wasm SDK workflow passes all
 268 tests, including 38 withdrawal tests with real cross-context lock exclusion
 and cancellation cleanup. Both harness benchmarks pass the 30% threshold:
-HD sign-in -0.2% / first balance -0.5%; Iguana +0.2% / +0.6%.
+HD sign-in +1.6% / first balance +1.1%; Iguana +0.6% / +0.1%.
 Review-file analysis has no errors or warnings; existing informational notices
 remain. Formatting and review diff checks pass.
 
-The final wallet gate passes **4,100 tests with four skips** using the prescribed
+The final wallet gate passes **4,102 tests with four skips** using the prescribed
 GasFree defines. Full wallet analysis reports zero errors, 55 existing warnings
 and 2,144 informational notices; the final changed trading files analyze clean.
-The WebAssembly release build passes in 92.1 seconds and contains no debug-wallet
-fixture files or references. The 21 offline candidate/smoke-tool tests pass.
+The WebAssembly release build passes in 68.9 seconds and contains no debug-wallet
+fixture files or references. The 22 offline candidate/smoke-tool tests pass.
 
 The authentication package now passes all 196 tests. Its earlier Trezor streamed
 sign-in timing failure was corrected on the separate authentication branch.
@@ -135,12 +145,18 @@ verification. The selected-platform helper and CI action contain no wallet
 authentication behavior changes. The macOS and Linux artifact-publication
 blockers and SDK-merged pin gate remain enforced. The Windows CI build is
 [green](https://github.com/GLEECBTC/gleec-wallet/actions/runs/42526474678/job/128871102830)
-on wallet `611e24a411737d2d91efa2d31b77f55d97396ce1`. The final follow-up only
-adds safe diagnostics, Linux/iOS fixture coverage and this validation record.
+on wallet `611e24a411737d2d91efa2d31b77f55d97396ce1` and again on `77b3d3c8364de10c8f2c25a764a2d9ee9ad6db0a`.
+Later checks add safe diagnostics and Linux/iOS fixture coverage while preserving
+the native-library prerequisites.
 
-The fresh unfunded native smoke passes again in both derivation modes with the
-same exact development binary/catalog identities recorded above. It still
-performs no signing, export, withdrawal, broadcast or funded trading.
+The fresh unfunded native smoke passes again in both derivation modes at
+2026-11-08 22:37 UTC using the same exact development binary above and the renamed
+catalog digest `5d10d969557cd0a681e4d60b605641606e76f55b8050e757597dc735d033451c`
+from coins commit `58534ebf14503c4c7b29928fb6b6730cc69eb4b7`. Retired identifiers
+cannot authorize a new trade, including with restored catalog metadata. A new immutable manifest
+and isolated preview profile were generated; old preview data was not migrated
+or cleared. The smoke performs no signing, export, withdrawal, broadcast or
+funded trading.
 
 Review regressions cover late multi-token completion, disabled-engine cache
 shortcuts, custom SPL restore/identity, stale candidate caches, overlapping send

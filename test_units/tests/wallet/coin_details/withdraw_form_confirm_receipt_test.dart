@@ -406,7 +406,7 @@ void testWithdrawFormConfirmReceipt() {
           'review and receipt use transfer amount for token=$token self-send=$selfSend',
           (tester) async {
             final platform = Asset.fromJson({
-              'coin': 'SOL-DEV',
+              'coin': 'TESTSOL',
               'type': 'SOLANA',
               'fname': 'Solana Devnet',
               'decimals': 9,
@@ -419,15 +419,15 @@ void testWithdrawFormConfirmReceipt() {
             final asset = token
                 ? Asset.fromJson(
                     {
-                      'coin': 'USDC-SOL-DEV',
+                      'coin': 'TESTUSDC-TESTSOL',
                       'type': 'SOLANATOKEN',
                       'fname': 'USDC Devnet',
-                      'parent_coin': 'SOL-DEV',
+                      'parent_coin': 'TESTSOL',
                       'is_testnet': true,
                       'protocol': {
                         'type': 'SOLANATOKEN',
                         'protocol_data': {
-                          'platform': 'SOL-DEV',
+                          'platform': 'TESTSOL',
                           'decimals': 6,
                           'mint_address':
                               '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
@@ -441,7 +441,7 @@ void testWithdrawFormConfirmReceipt() {
                 : platform;
             final assets = {platform, asset};
             final fee = FeeInfo.solana(
-              coin: 'SOL-DEV',
+              coin: 'TESTSOL',
               feeAmount: Decimal.parse('0.000005'),
               rentAmount: Decimal.parse(token ? '0.00203928' : '0'),
               totalAmount: Decimal.parse(token ? '0.00204428' : '0.000005'),
@@ -501,7 +501,7 @@ void testWithdrawFormConfirmReceipt() {
                 find.text('withdrawSolanaAccountDepositDescription'),
                 findsOneWidget,
               );
-              expect(find.text('0.00203928 SOL-DEV'), findsOneWidget);
+              expect(find.text('0.00203928 TESTSOL'), findsOneWidget);
               expect(
                 tester
                     .widgetList<AssetAmountWithFiat>(

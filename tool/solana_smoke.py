@@ -33,8 +33,8 @@ from solana_candidate import CandidateFailure, load_verified_manifest, matches_e
 # Official cluster identity, not the illustrative getGenesisHash RPC example:
 # https://beta.docs.solanalabs.com/clusters/available
 DEVNET_GENESIS = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
-PLATFORM = "SOL-DEV"
-TOKEN = "USDC-SOL-DEV"
+PLATFORM = "TESTSOL"
+TOKEN = "TESTUSDC-TESTSOL"
 TOKEN_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 _ALLOWED_METHODS = frozenset({

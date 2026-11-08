@@ -19,7 +19,7 @@ class _CatalogBundle extends CachingAssetBundle {
 void main() {
   const engine = 'b1ff8f05c880d6f118124cac9ef615aa9d91bb39';
   const coins = 'ca20611537fe84f9398d1a63f3d27a4386fb161d';
-  final catalog = utf8.encode('{"SOL-DEV":{"coin":"SOL-DEV"}}');
+  final catalog = utf8.encode('{"TESTSOL":{"coin":"TESTSOL"}}');
   final digest = sha256.convert(catalog).toString();
 
   SolanaBuildConfig candidate({
