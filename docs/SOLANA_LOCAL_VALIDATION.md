@@ -93,28 +93,40 @@ both production build configuration files byte-for-byte. Coins revision
 [PR workflow](https://github.com/GLEECBTC/coins/actions/runs/42522100971).
 The 774 existing generated assets and candidate fixture hashes are unchanged.
 
-SDK review revision `f59d006e4536b0f7b88987b7fb48fa308b613e7e` passes 1,304 core
-tests (one skip), 147 coin tests, 112 update tests, and 225 harness tests per
-wallet mode (three opt-in process skips each). Four Chrome/Wasm storage tests
-verify actual IndexedDB isolation, reopen and custom-token restoration;
-38 Chrome/Wasm withdrawal tests include real cross-context lock exclusion and
-cancellation cleanup. The harness benchmark passes the 30% threshold
-(sign-in -0.6%, first balance -0.7%). Review-file analysis has no errors or
-warnings and 53 existing informational notices; formatting/diff checks pass.
+Final SDK review revision `98e51d99013e9c626c0a93ff905a8a2b2bfd1339` is stacked
+on the separate authentication prerequisite
+`cf69f4611b83bba7e05831e1b20c2447337ce867`. The authentication package has no
+diff relative to that base. Runtime suites passed on `a8c1553012521032ba1f11ee06665899a2cf87c1`;
+the final follow-up changes only the replay fixture and adds two lifecycle tests.
 
-The final wallet gate passes **4,072 tests with four skips** using the prescribed
-GasFree defines. Full wallet analysis reports zero errors, 56 existing warnings
-and 2,145 informational notices; the final changed trading files analyze clean.
-The WebAssembly release build passes in 80.9 seconds and contains no debug-wallet
+Final validation: 1,304 core tests (one skip), 147 coin tests, 112 update tests,
+and 227 harness tests per wallet mode (three opt-in process skips each).
+Four Chrome/Wasm storage tests verify actual IndexedDB isolation, reopen and
+custom-token restoration. The exact 15-file Chrome/Wasm SDK workflow passes all
+268 tests, including 38 withdrawal tests with real cross-context lock exclusion
+and cancellation cleanup. Both harness benchmarks pass the 30% threshold:
+HD sign-in -0.2% / first balance -0.5%; Iguana +0.2% / +0.6%.
+Review-file analysis has no errors or warnings; existing informational notices
+remain. Formatting and review diff checks pass.
+
+The final wallet gate passes **4,085 tests with four skips** using the prescribed
+GasFree defines. Full wallet analysis reports zero errors, 55 existing warnings
+and 2,144 informational notices; the final changed trading files analyze clean.
+The WebAssembly release build passes in 92.1 seconds and contains no debug-wallet
 fixture files or references. The 21 offline candidate/smoke-tool tests pass.
 
-The other SDK package suites pass except the unchanged authentication prerequisite:
-`TrezorAuthService - DI and basic behavior signInStreamed yields states and
-starts monitor on completion` fails at `trezor_auth_service_test.dart:510`;
-173 authentication tests pass. The failure reproduces individually and belongs
-to the authentication workstream. Framework (114), RPC (388), types (203 plus
-three skips), UI (four), transformer (125), migration (14), CLI (30), market data
-(362 plus six skips), charts (17), logs (27) and symbols (one) pass.
+The authentication package now passes all 196 tests. Its earlier Trezor streamed
+sign-in timing failure was corrected on the separate authentication branch.
+Framework (114), RPC (388), types (203 plus three skips), UI (four), transformer
+(125), migration (14), CLI (30), market data (362 plus six skips), charts (17),
+logs (27) and symbols (one) pass.
+
+Two unused test mocks were replaced with real collaborators backed by their
+existing mocked clients to avoid the pinned Wasm compiler's private-forwarder
+defect; all test cases and assertions remain. The replay fixture now separates
+known wallets from active sessions after no-auth restart. Its two new lifecycle
+regressions and original deletion tests pass; the production authorization guard
+is unchanged.
 
 Native CI preparation now fetches and verifies the selected pinned platform
 before CMake/CocoaPods configuration. All 13 offline fixture cases pass, and
