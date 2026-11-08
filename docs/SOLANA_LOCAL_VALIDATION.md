@@ -109,7 +109,7 @@ HD sign-in -0.2% / first balance -0.5%; Iguana +0.2% / +0.6%.
 Review-file analysis has no errors or warnings; existing informational notices
 remain. Formatting and review diff checks pass.
 
-The final wallet gate passes **4,093 tests with four skips** using the prescribed
+The final wallet gate passes **4,100 tests with four skips** using the prescribed
 GasFree defines. Full wallet analysis reports zero errors, 55 existing warnings
 and 2,144 informational notices; the final changed trading files analyze clean.
 The WebAssembly release build passes in 92.1 seconds and contains no debug-wallet
@@ -155,6 +155,13 @@ are registered in `test_units/main.dart`.
 The SDK workflow now runs on every PR base, including the authentication stack.
 The wallet SDK workflow matches the actual `sdk` gitlink. These coverage fixes
 do not bypass native packaging checks or the SDK-merged pin gate.
+
+The browser integration runner now rejects nonzero process exits even if output
+contains a success marker, and also recognizes Flutter's plural failure summary.
+Seven focused regressions cover those outcomes and remain in the required unit
+entry point. The existing browser suite still skips Banxa/Ramp, and its bounded
+DEX check does not certify complete settlement. A green browser regression run
+therefore does not close the funded Solana acceptance gates below.
 
 ## Production configuration and remaining acceptance
 

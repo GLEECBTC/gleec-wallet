@@ -1,3 +1,5 @@
+import 'tests/integration_test_runner_test.dart'
+    as integration_test_runner_test;
 import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
 import 'tests/swap/solana_trade_dispatch_test.dart'
     as solana_trade_dispatch_test;
@@ -509,6 +511,7 @@ void main() {
   solana_trade_dispatch_test.main();
   mm2_initialization_test.main();
   prefetch_native_kdf_test.main();
+  integration_test_runner_test.main();
   solana_trading_test.main();
   solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();
