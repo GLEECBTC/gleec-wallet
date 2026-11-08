@@ -5,36 +5,21 @@ on:
     paths: ['.github/workflows/auth-hosting-gate.yml', 'tool/auth_hosting_*']
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: auth-hosting-security-gate
   cancel-in-progress: false
 jobs:
-  fetch-staging:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    # One-time exception requiring explicit approval; no hosting credentials.
-    permissions:
-      contents: write
-    steps:
-      - name: Download the exact reviewed draft asset
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download auth-hosting-security-7154c3c-20261108 --repo GLEECBTC/gleec-wallet --pattern hosting-candidate.zip
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: verified-hosting-staging
-          path: hosting-candidate.zip
-          if-no-files-found: error
-          retention-days: 30
   preview:
-    needs: fetch-staging
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: verified-hosting-staging
+          artifact-ids: 13639420824
+          run-id: 42535292596
+          github-token: ${{ github.token }}
       - name: Test deployment guards without credentials
         run: python3 tool/auth_hosting_phase_test.py
       - run: cp tool/auth_hosting_operation.json hosting-operation.json
