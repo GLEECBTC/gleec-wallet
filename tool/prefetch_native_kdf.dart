@@ -66,8 +66,8 @@ const nativeKdfTargets = <String, List<String>>{
 const _requiredLibraries = <String, List<String>>{
   'windows': ['kdflib.dll'],
   'macos': ['libkdflib.dylib'],
-  // Linux CMake also bundles kdf, but the SDK runtime requires a native
-  // library. A verified executable alone cannot satisfy that requirement.
+  // Linux packages a verified shared library. The companion executable remains
+  // part of archive provenance and cannot satisfy this requirement alone.
   'linux': ['libkdflib.so', 'libkdflib_static.so'],
   'ios': ['libkdf.a'],
   'android-armv7': ['libkdf.a'],

@@ -87,8 +87,9 @@ behavior changes remain in their separate workstream.
 
 ## PR review validation
 
-The review updates keep authentication on the separate prerequisite and retain
-both production build configuration files byte-for-byte. Coins revision
+The initial review updates keep authentication on the separate prerequisite and
+retain both production build configuration files byte-for-byte. The approved
+native archive follow-up below records the later two-platform exception. Coins revision
 `58534ebf14503c4c7b29928fb6b6730cc69eb4b7` passes all 40 registry tests.
 Maintainer feedback prompted the devnet rename to `TESTSOL` / `TESTUSDC-TESTSOL`,
 avoiding mainnet pricing prefixes and preserving KDF's ticker/platform statistics
@@ -183,8 +184,10 @@ therefore does not close the funded Solana acceptance gates below.
 
 The SDK production engine remains
 `f9632e0ec771668a6f21b37aede01a30110141cb`, and its catalog remains
-`cc8249e85e54467bc2684c2712857711eab55fd2`. Both build configuration files stay
-byte-for-byte unchanged from the SDK base. No candidate browser/mobile artifact
+`cc8249e85e54467bc2684c2712857711eab55fd2`. On 2026-11-09 the user approved
+updating only the Linux/macOS archive selectors and checksums in both build
+configuration files, plus Linux shared-library packaging. All other manifest
+fields stay unchanged from the SDK base. No candidate browser/mobile artifact
 replaces a production asset. Candidate catalogs require an immutable digest,
 isolated storage, dedicated browser origin and explicit `enableAutoUpdate:false`.
 
@@ -196,11 +199,33 @@ manual submission procedure in [SWAP_LIVE_TEST_BRIEF.md](SWAP_LIVE_TEST_BRIEF.md
 Mainnet atomic trading and Solana routed execution remain unavailable.
 
 The separate authentication prerequisite requires native libraries on desktop.
-The pinned macOS and Linux archives contain executables rather than the required
-usable dynamic libraries, so native preparation deliberately rejects them. The
-older Linux build could package its executable but could not establish startup
-with the current library-only runtime. Linux also needs its dynamic library bundled
-and loaded from the application installation; publication alone is insufficient.
-These native release checks remain blocked;
-the unfunded process smoke above uses the explicit `KDF_BINARY` development
-override and does not prove native application packaging.
+The original macOS/Linux archives were rejected because they lacked usable dynamic
+libraries. The approved replacements are built from the same exact production
+KDF commit and are published as [native library assets](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/releases/tag/native-library-assets-f9632e0-20261108):
+
+| Platform | Archive SHA-256 |
+| --- | --- |
+| macOS universal | `a77a26c9814008c958b4f57d928ef59ca01b04b3d0c2710ea49ed8a707cfabd8` |
+| Linux x64 | `beb961fe98dbb3d0b1542fb530c749317ecd573b57f94d63b720f4908841d899` |
+
+SDK commit `34faf005b2e092419d0cb12b84f21b02a6c7f0d6` contains the approved
+native artifact and packaging follow-up. Normal credential-free SDK downloads
+pass checksum/provenance checks for both.
+The actual Linux validator and macOS arm64/x86_64 validator pass. All 31 Linux
+ELF packaging cases and seven focused Flutter checks pass without skips. The
+complete updated framework suite passes all 117 tests. Changed-file analysis
+reports zero errors/warnings and one existing informational notice. Linux
+now bundles only validated shared libraries beside the app and loads them from
+that installation, with no executable copied into the user's home. SDK CI
+explicitly installs the fixture tools and selects GNU readelf; local validation
+uses LLVM readelf. Wallet Linux CI explicitly installs binutils for validation.
+
+The full wallet gate passes again on this approved SDK update: **4,102 tests,
+four skips**, with all four prescribed GasFree defines. Full wallet analysis
+again reports zero errors, 55 existing warnings and 2,144 informational notices.
+
+The production source/catalog pins, authentication separation, library checks
+and SDK-merged pin gate remain enforced. Application builds must validate the
+new artifacts on the updated PR head. The unfunded process smoke above uses the
+explicit `KDF_BINARY` development override and does not prove native application
+packaging or close the Solana combined-engine acceptance gates.

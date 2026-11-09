@@ -1,6 +1,6 @@
 # Solana integration development and acceptance
 
-Solana support is developed alongside the upstream fixes. The integration recognizes native SOL and SPL assets, uses the existing SDK coordinator and wallet flows, and keeps unverified capabilities behind explicit build gates. Production engine pins and catalog assets remain unchanged. See [SOLANA_KDF_DEPENDENCIES.md](SOLANA_KDF_DEPENDENCIES.md) for the engine dependencies and combined-candidate release requirement.
+Solana support is developed alongside the upstream fixes. The integration recognizes native SOL and SPL assets, uses the existing SDK coordinator and wallet flows, and keeps unverified capabilities behind explicit build gates. The production engine source commit and catalog assets remain unchanged; the approved Linux/macOS native-library archive update is recorded in [local validation](SOLANA_LOCAL_VALIDATION.md). See [SOLANA_KDF_DEPENDENCIES.md](SOLANA_KDF_DEPENDENCIES.md) for the engine dependencies and combined-candidate release requirement.
 
 ## Contract and boundaries
 
