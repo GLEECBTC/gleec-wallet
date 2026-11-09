@@ -371,15 +371,17 @@ jobs:
           API_COMMIT: ${{ inputs.api_commit }}
           SDK_BRANCH: ${{ inputs.sdk_branch }}
           SDK_SHA: ${{ steps.update_sdk_branch.outputs.sdk_sha }}
+          PREVIEW_URL: ${{ steps.firebase_deploy.outputs.details_url }}
+          PREVIEW_CHANNEL_ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}
         run: |
           echo "🚀 SDK Integration Preview deployed successfully!"
           printf '📦 SDK Branch: %s\n' "$SDK_BRANCH"
           printf '🔒 SDK Commit: %s\n' "$SDK_SHA"
           printf '🔧 API Branch: %s\n' "$API_BRANCH"
           printf '🔒 KDF Commit: %s\n' "$API_COMMIT"
-          echo "🏷 Channel ID: ${{ steps.get_preview_channel_id.outputs.preview_channel_id }}"
-          echo "🌐 Preview URL: ${{ steps.firebase_deploy.outputs.details_url }}"
+          printf '🏷 Channel ID: %s\n' "$PREVIEW_CHANNEL_ID"
+          printf '🌐 Preview URL: %s\n' "$PREVIEW_URL"
           echo "⏰ Preview expires in 7 days"
           echo ""
           echo "You can access your preview at:"
-          echo "${{ steps.firebase_deploy.outputs.details_url }}"
+          printf '%s\n' "$PREVIEW_URL"

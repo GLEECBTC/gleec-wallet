@@ -73,7 +73,7 @@ expect 'colourised output' \
   'https://walletrc--pr-1.web.app' \
   "$(printf '\033[32m+\033[39m  hosting:channel: Channel URL (\033[1mwalletrc\033[22m): https://walletrc--pr-1.web.app [expires 2026-09-03]')"
 
-# --debug is passed on every deploy, so the log is mostly API chatter.
+# Historical debug chatter must never become a deployment URL.
 expect 'ignores --debug chatter and the console link' \
   'https://walletrc.web.app' \
   '[debug] [2026-08-27T15:13:00.000Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/x/sites' \

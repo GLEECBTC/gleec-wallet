@@ -35,16 +35,40 @@ if [ ! -f "$log_path" ]; then
   exit 2
 fi
 
-# The CLI colourises these lines when it thinks it has a terminal, and the
-# escapes land in the middle of the URL's own line, so strip them first.
-url=$(sed $'s/\033\[[0-9;]*m//g' "$log_path" \
-  | sed -n \
-      -e 's/.*Hosting URL: *\(https:\/\/[^[:space:]]*\).*/\1/p' \
-      -e 's/.*Channel URL[^:]*: *\(https:\/\/[^[:space:]]*\).*/\1/p' \
-  | tail -n 1)
+# Treat this output as a CI output boundary: only complete Firebase host URLs
+# from canonical success lines are publishable, never provider response bodies.
+python3 - "$log_path" <<'PYURL'
+from pathlib import Path
+import re
+import sys
 
-if [ -z "$url" ]; then
-  exit 1
-fi
+try:
+    text = Path(sys.argv[1]).read_bytes().decode("utf-8", errors="replace")
+except OSError:
+    sys.exit(2)
 
-printf '%s\n' "$url"
+ansi = re.compile(r"\x1b\[[0-9;]*m")
+live = re.compile(r"^[ \t]*Hosting URL:[ \t]+(https://[^ \t]+)[ \t]*$")
+preview = re.compile(
+    r"^[ \t]*(?:[+✔✓][ \t]+)?hosting:channel:[ \t]+"
+    r"Channel URL \([^)]*\):[ \t]+(https://[^ \t]+)"
+    r"(?:[ \t]+\[(?:expires|version) [^]\r\n]*\])*[ \t]*$"
+)
+allowed = re.compile(r"https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.web\.app/?")
+urls = set()
+for raw in text.split("\n"):
+    line = ansi.sub("", raw)
+    match = live.fullmatch(line) or preview.fullmatch(line)
+    if not match:
+        continue
+    if any(ord(c) < 32 and c != "\t" for c in line):
+        sys.exit(1)
+    url = match[1]
+    if not allowed.fullmatch(url):
+        sys.exit(1)
+    urls.add(url)
+
+if len(urls) != 1:
+    sys.exit(1)
+print(urls.pop())
+PYURL
