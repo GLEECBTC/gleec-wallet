@@ -5,6 +5,21 @@ import 'dart:io';
 import '../integration_test_arguments.dart';
 import 'app_data.dart';
 
+/// A success message cannot override a failed Flutter process. Conversely,
+/// Flutter can report failed tests in its output while returning exit code zero.
+bool didIntegrationTestProcessFail(ProcessResult result) {
+  if (result.exitCode != 0) return true;
+
+  final caseInvariantConsoleOutput =
+      result.stdout.toString().toLowerCase() +
+      result.stderr.toString().toLowerCase();
+
+  return caseInvariantConsoleOutput.contains('failure details') ||
+      caseInvariantConsoleOutput.contains('test failed') ||
+      caseInvariantConsoleOutput.contains('tests failed') ||
+      !caseInvariantConsoleOutput.contains('all tests passed');
+}
+
 /// Runs integration tests for web or native apps using the `flutter drive`
 /// command.
 class IntegrationTestRunner {
@@ -66,7 +81,7 @@ class IntegrationTestRunner {
 
     // Flutter drive can return failed test results just as stdout message,
     // we need to parse this message and detect test failure manually
-    if (_didAnyTestFail(result)) {
+    if (didIntegrationTestProcessFail(result)) {
       throw ProcessException(
         'flutter',
         ['test $test'],
@@ -81,7 +96,7 @@ class IntegrationTestRunner {
     print('===== Process Output Start =====');
     stdout.write(result.stdout);
 
-    if (_didAnyTestFail(result)) {
+    if (didIntegrationTestProcessFail(result)) {
       print('----- STDERR -----');
       stderr.write(result.stderr);
       print('----- End of STDERR -----');
@@ -135,15 +150,5 @@ class IntegrationTestRunner {
       '--driver-port=${_args.driverPort}',
       '--timeout=600',
     ]);
-  }
-
-  bool _didAnyTestFail(ProcessResult result) {
-    final caseInvariantConsoleOutput =
-        result.stdout.toString().toLowerCase() +
-        result.stderr.toString().toLowerCase();
-
-    return caseInvariantConsoleOutput.contains('failure details') ||
-        caseInvariantConsoleOutput.contains('test failed') ||
-        !caseInvariantConsoleOutput.contains('all tests passed');
   }
 }

@@ -128,3 +128,6 @@ counterparty.log
 
 # Hosted legal text is maintained outside Git; retain the hosting README.
 /docs/legal-hosting/*_gleec_wallet.md
+
+# Isolated Solana integration artifacts and local evidence.
+/.solana/

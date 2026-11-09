@@ -8,6 +8,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_wallet_session.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_repository.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_status.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_error.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_order_list/market_maker_bot_order_list_repository.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
@@ -132,7 +133,11 @@ class MarketMakerBotBloc
           strategyType: 'simple',
         ),
       );
-      emit(const MarketMakerBotState.stopped().copyWith(error: e.toString()));
+      emit(
+        const MarketMakerBotState.stopped().copyWith(
+          error: marketMakerErrorMessage(e),
+        ),
+      );
     }
   }
 
@@ -192,7 +197,7 @@ class MarketMakerBotBloc
       }
 
       final stoppingState = const MarketMakerBotState.stopping().copyWith(
-        error: e.toString(),
+        error: marketMakerErrorMessage(e),
       );
       emit(stoppingState);
       // Log bot error
@@ -239,7 +244,7 @@ class MarketMakerBotBloc
       }
 
       final stoppingState = const MarketMakerBotState.stopping().copyWith(
-        error: e.toString(),
+        error: marketMakerErrorMessage(e),
       );
       emit(stoppingState);
       // Log bot error

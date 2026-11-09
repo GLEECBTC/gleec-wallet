@@ -109,7 +109,9 @@ class _TransactionListRowState extends State<TransactionListRow> {
   }
 
   Widget _buildBalanceChanges() {
-    final String formatted = formatDexAmt(_displayAmount.toDouble().abs());
+    final String formatted = widget.transaction.isSolanaTransaction
+        ? _displayAmount.abs().toString()
+        : formatDexAmt(_displayAmount.toDouble().abs());
     final Color? color = _amountColor(context);
 
     return Row(

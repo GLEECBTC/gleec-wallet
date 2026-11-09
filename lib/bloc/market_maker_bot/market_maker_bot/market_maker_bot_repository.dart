@@ -11,7 +11,13 @@ import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class MarketMakerBotRepository {
-  MarketMakerBotRepository(this._mm2Api, this._settingsRepository);
+  MarketMakerBotRepository(
+    this._mm2Api,
+    this._settingsRepository, {
+    TradingAssetPolicy? tradingPolicy,
+  }) : _tradingPolicy = tradingPolicy;
+
+  final TradingAssetPolicy? _tradingPolicy;
 
   /// The MM2 RPC API provider used to start/stop the market maker bot.
   final Mm2Api _mm2Api;
@@ -132,6 +138,16 @@ class MarketMakerBotRepository {
     for (final tradePair in tradeCoinPairConfig) {
       requestParams.tradeCoinPairs?.remove(tradePair.name);
     }
+    // Cancellation remains available after policy changes; restart only the
+    // still-permitted pairs, without recreating a restricted order.
+    requestParams.tradeCoinPairs?.removeWhere(
+      (_, pair) =>
+          !(_tradingPolicy?.allowsMarketMakerPair(
+                pair.baseCoinId,
+                pair.relCoinId,
+              ) ??
+              canTradeAssetPair(pair.baseCoinId, pair.relCoinId)),
+    );
 
     if (requestParams.tradeCoinPairs?.isEmpty ?? true) {
       yield MarketMakerBotStatus.stopped;
@@ -183,10 +199,16 @@ class MarketMakerBotRepository {
     }
 
     while (retries > 0) {
+      if (isStartRequest) {
+        for (final pair in request.params!.tradeCoinPairs!.values) {
+          _assertTradePairAllowed(pair);
+        }
+      }
       try {
         await _mm2Api.startStopMarketMakerBot(request);
         break;
       } catch (e, s) {
+        if (e is TradePreflightRejected) rethrow;
         if (retries <= 0) {
           rethrow;
         }
@@ -253,7 +275,18 @@ class MarketMakerBotRepository {
   }
 
   void _assertTradePairAllowed(TradeCoinPairConfig tradePair) {
-    if (!canTradeAssetPair(tradePair.baseCoinId, tradePair.relCoinId)) {
+    if (_tradingPolicy?.isSolanaPair(
+          tradePair.baseCoinId,
+          tradePair.relCoinId,
+        ) ??
+        false) {
+      throw const SolanaMarketMakerUnavailable();
+    }
+    if (!(_tradingPolicy?.allowsPair(
+          tradePair.baseCoinId,
+          tradePair.relCoinId,
+        ) ??
+        canTradeAssetPair(tradePair.baseCoinId, tradePair.relCoinId))) {
       throw ArgumentError(
         'Wallet-only assets cannot be used by the market maker bot.',
       );

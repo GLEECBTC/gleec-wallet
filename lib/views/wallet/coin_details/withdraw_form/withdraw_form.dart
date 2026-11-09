@@ -37,11 +37,15 @@ import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_clear_recovery_action.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/gasless_pending_transfer_panel.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/trezor_withdraw_progress_dialog.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/solana_withdrawal_fee_details.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/withdraw_form_header.dart';
 
 bool _isMemoSupportedProtocol(Asset asset) {
   final protocol = asset.protocol;
-  return protocol is TendermintProtocol || protocol is ZhtlcProtocol;
+  return protocol is TendermintProtocol ||
+      protocol is ZhtlcProtocol ||
+      protocol is SolanaProtocol ||
+      protocol is SolanaTokenProtocol;
 }
 
 bool _shouldStackWithdrawActions(BuildContext context, double maxWidth) {
@@ -65,6 +69,16 @@ AssetId _resolveFeeAssetId(BuildContext context, Asset asset, FeeInfo fee) {
 /// here read as a mismatch against the on-chain transfer. Native sends keep
 /// the signing address.
 String? _effectiveWithdrawSourceAddress(WithdrawFormState state) {
+  if (state.asset.protocol is SolanaProtocol ||
+      state.asset.protocol is SolanaTokenProtocol) {
+    // A refreshed review may change its signing owner. Show the signed
+    // transaction's source instead of the stale source loaded by the form.
+    final reviewedSource =
+        state.preview?.from.firstOrNull ?? state.solanaReviewedSourceAddress;
+    if (reviewedSource != null && reviewedSource.isNotEmpty) {
+      return reviewedSource;
+    }
+  }
   if (state.useGasless) {
     final custody =
         state.gaslessAccountStatus?.gasfreeAddress ??
@@ -646,6 +660,10 @@ class WithdrawPreviewDetails extends StatelessWidget {
                 useWideLayout: useWideLayout,
               ),
             ),
+            if (preview.fee case final SolanaFeeInfo fee) ...[
+              const SizedBox(height: 16),
+              _WithdrawSectionCard(child: SolanaWithdrawalFeeDetails(fee: fee)),
+            ],
             if (preview.fee is FeeInfoTronGasless) ...[
               const SizedBox(height: 16),
               _WithdrawGaslessDetailsCard(
@@ -2922,14 +2940,18 @@ class WithdrawFormFailedSection extends StatelessWidget {
         );
 
         final backButton = OutlinedButton(
-          onPressed: () => context.read<WithdrawFormBloc>().add(
-            const WithdrawFormStepReverted(),
-          ),
+          onPressed: state.hasUncertainSolanaSubmission
+              ? null
+              : () => context.read<WithdrawFormBloc>().add(
+                  const WithdrawFormStepReverted(),
+                ),
           child: Text(LocaleKeys.back.tr()),
         );
 
         final tryAgainButton = FilledButton(
-          onPressed: state.canRetryGaslessTransfer
+          onPressed:
+              state.canRetryGaslessTransfer &&
+                  !state.hasUncertainSolanaSubmission
               ? () => context.read<WithdrawFormBloc>().add(
                   const WithdrawFormReset(),
                 )
@@ -2949,7 +2971,9 @@ class WithdrawFormFailedSection extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              LocaleKeys.transactionFailed.tr(),
+              state.hasUncertainSolanaSubmission
+                  ? 'withdrawSolanaSubmissionUnknownTitle'.tr()
+                  : LocaleKeys.transactionFailed.tr(),
               style: theme.textTheme.headlineSmall?.copyWith(
                 color: theme.colorScheme.error,
               ),
@@ -2958,11 +2982,18 @@ class WithdrawFormFailedSection extends StatelessWidget {
             const SizedBox(height: 24),
             if (state.transactionError != null)
               WithdrawErrorCard(error: state.transactionError!),
+            if (state.solanaSubmissionUnknownTxHash
+                case final String signature) ...[
+              const SizedBox(height: 16),
+              SelectableText(signature),
+            ],
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                LocaleKeys.errorTryAgainSupportHint.tr(),
+                state.hasUncertainSolanaSubmission
+                    ? 'withdrawSolanaSubmissionUnknownAdvice'.tr()
+                    : LocaleKeys.errorTryAgainSupportHint.tr(),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

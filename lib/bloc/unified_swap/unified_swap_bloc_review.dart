@@ -238,10 +238,17 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
 
     if (review.status == SwapReviewStatus.materialUpdate &&
         !review.quote.isExpiredAt(_now())) {
-      // The user has seen the updated numbers side by side and accepted them.
+      // Acceptance is bound to the displayed update, but funding and the
+      // executable quote must be refreshed again before dispatch.
+      final fresh = await _revalidate(
+        emit,
+        review.copyWith(clearPrevious: true),
+        confirmation,
+      );
+      if (fresh == null) return;
       await _start(
         emit,
-        review.quote,
+        fresh,
         termsRequired: review.termsRequired,
         confirmation: confirmation,
       );
@@ -276,7 +283,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     // Read alongside the price, for the quote's own asset, which need not be
     // the form's.
     final epoch = _walletEpoch;
-    final reading = _heldOf(accepted.from);
+    final reading = _heldOf(accepted.from, quote: accepted);
     SwapQuoteResult result;
     try {
       result = await _repository.requote(accepted).timeout(_evaluationTimeout);
@@ -289,7 +296,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       );
     }
     if (!_continuePreparation(emit, confirmation)) return null;
-    final held = await reading;
+    var held = await reading;
     if (!_continuePreparation(emit, confirmation)) return null;
     _showHeld(emit, accepted.from, epoch, held);
 
@@ -309,6 +316,13 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         }
         return null;
       case SwapQuoteAvailable(quote: final fresh):
+        if (fresh.fundingAssets.any(
+          (asset) => !held.fundingBalances.containsKey(asset),
+        )) {
+          held = await _heldOf(fresh.from, quote: fresh);
+          if (!_continuePreparation(emit, confirmation)) return null;
+          _showHeld(emit, fresh.from, epoch, held);
+        }
         if (_isStructuralChange(accepted, fresh)) {
           // The steps themselves changed; consent to the old ones means
           // nothing. Evaluate afresh from the form.
@@ -321,6 +335,24 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
             ),
           );
           add(const UnifiedSwapEvaluationRequested());
+          return null;
+        }
+        if (held.balance == null ||
+            (fresh.from.parentId != null && held.feeBalance == null) ||
+            fresh.fundingAssets.any(
+              (asset) => held.fundingBalances[asset] == null,
+            )) {
+          emit(
+            state.copyWith(
+              review: review.copyWith(
+                status: SwapReviewStatus.revalidationFailed,
+                revalidationFailure: SwapQuoteFailure(
+                  source: fresh.source,
+                  kind: SwapQuoteFailureKind.serviceError,
+                ),
+              ),
+            ),
+          );
           return null;
         }
         // KDF's checks at the start leave out the gas to refund the payment,
@@ -341,7 +373,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
                   source: fresh.source,
                   kind: SwapQuoteFailureKind.insufficientFunds,
                   asset: short == SwapFormIssue.insufficientForFees
-                      ? fresh.from.parentId
+                      ? _shortFundingAsset(checked, held)
                       : fresh.from,
                 ),
               ),

@@ -100,6 +100,7 @@ class SwapBlocHarness {
     eth: d('2'),
     usdc: d('5000'),
     btc: d('1'),
+    gleec: d('1'),
   };
 
   /// Assets the wallet knows beyond ETH, USDC, BTC and GLEEC.

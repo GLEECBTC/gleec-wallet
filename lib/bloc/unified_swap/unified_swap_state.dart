@@ -124,6 +124,7 @@ class UnifiedSwapState extends Equatable {
     this.converted,
     this.balance,
     this.feeBalance,
+    this.fundingBalances = const {},
     this.maxApplied,
     this.checkingMax = false,
     this.maxRequested = false,
@@ -189,6 +190,9 @@ class UnifiedSwapState extends Equatable {
   /// Spendable balance of the coin that pays [pay]'s network fees, when that
   /// is not [pay] itself.
   final Decimal? feeBalance;
+
+  /// Spendable balances for every funding currency, including receiving SOL.
+  final Map<AssetId, Decimal?> fundingBalances;
 
   /// The Max last applied, so the form can say what was kept back.
   final SwapMaxAmount? maxApplied;
@@ -298,11 +302,50 @@ class UnifiedSwapState extends Equatable {
   /// Whether a reviewed swap may be running; see [SwapReview.startInDoubt].
   bool get startInDoubt => review?.startInDoubt ?? false;
 
+  /// Missing or failed funding reads cannot authorize a trade.
+  bool get fundingReady =>
+      signedIn &&
+      hasPair &&
+      balance != null &&
+      (pay!.parentId == null || feeBalance != null) &&
+      (selectedQuote?.fundingAssets.every(
+            (asset) =>
+                asset == pay ||
+                asset == pay!.parentId ||
+                fundingBalances[asset] != null,
+          ) ??
+          true);
+
+  /// A required currency whose latest balance lookup failed. A retry is
+  /// explicit so a failed endpoint cannot trigger an unbounded request loop.
+  AssetId? get fundingFailedAsset => !signedIn
+      ? null
+      : selectedQuote?.fundingAssets
+            .where(
+              (asset) =>
+                  fundingBalances.containsKey(asset) &&
+                  fundingBalances[asset] == null,
+            )
+            .firstOrNull;
+
+  /// The currency whose current funds cannot cover the quoted fees.
+  AssetId? get insufficientFeeAsset {
+    final quote = selectedQuote;
+    if (quote == null) return pay?.parentId;
+    for (final asset in quote.fundingAssets) {
+      if (asset == pay) continue;
+      final held = asset == pay?.parentId ? feeBalance : fundingBalances[asset];
+      if (held != null && held < quote.fundingOnTopIn(asset)) return asset;
+    }
+    return pay?.parentId;
+  }
+
   /// Whether the review may be opened.
   bool get canReview =>
       view == UnifiedSwapView.form &&
       tradingEnabled &&
       sessionReady &&
+      fundingReady &&
       evaluation == SwapEvaluationStatus.ready &&
       issue == null &&
       selectedQuote != null;
@@ -321,6 +364,7 @@ class UnifiedSwapState extends Equatable {
     converted,
     balance,
     feeBalance,
+    fundingBalances,
     maxApplied,
     checkingMax,
     maxRequested,
@@ -363,6 +407,7 @@ class UnifiedSwapState extends Equatable {
     ({AssetId asset, String text, Decimal amount})? converted,
     Decimal? balance,
     Decimal? feeBalance,
+    Map<AssetId, Decimal?>? fundingBalances,
     SwapMaxAmount? maxApplied,
     bool? checkingMax,
     bool? maxRequested,
@@ -418,6 +463,14 @@ class UnifiedSwapState extends Equatable {
       converted: clearConverted ? null : (converted ?? this.converted),
       balance: clearBalance ? null : (balance ?? this.balance),
       feeBalance: clearFeeBalance ? null : (feeBalance ?? this.feeBalance),
+      fundingBalances:
+          fundingBalances ??
+          (clearBalance ||
+                  clearReceive ||
+                  (pay != null && pay != this.pay) ||
+                  (receive != null && receive != this.receive)
+              ? const {}
+              : this.fundingBalances),
       maxApplied: clearMaxApplied ? null : (maxApplied ?? this.maxApplied),
       checkingMax: checkingMax ?? this.checkingMax,
       maxRequested:

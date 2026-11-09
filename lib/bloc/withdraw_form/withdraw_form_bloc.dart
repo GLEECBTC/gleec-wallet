@@ -517,6 +517,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     final nextState = currentState.copyWith(
       preview: () => preview,
       authorizedRecipientAmount: () => authorizedRecipientAmount,
+      solanaReviewedSourceAddress: () =>
+          currentState.asset.protocol is SolanaProtocol ||
+              currentState.asset.protocol is SolanaTokenProtocol
+          ? preview.from.firstOrNull
+          : null,
       step: moveToConfirm ? WithdrawFormStep.confirm : currentState.step,
       previewError: () => null,
       transactionError: () => null,
@@ -550,7 +555,10 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         normalizeDecimalString(requestState.amount),
       );
       if (explicitAmount != null && explicitAmount > Decimal.zero) {
-        if (requestState.asset.protocol is Erc20Protocol &&
+        final protocol = requestState.asset.protocol;
+        if ((protocol is Erc20Protocol ||
+                protocol is SolanaProtocol ||
+                protocol is SolanaTokenProtocol) &&
             explicitAmount != preview.balanceChanges.totalAmount) {
           throw FormatException(LocaleKeys.withdrawPreviewAmountChanged.tr());
         }
@@ -1791,6 +1799,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           throw Exception('Gas limit must be greater than 0');
         }
       },
+      solana: (_) {
+        throw Exception('Solana uses automatic network fees');
+      },
       tron: (_) {
         throw Exception('Custom TRON fees are not supported');
       },
@@ -1855,7 +1866,17 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormPreviewSubmitted event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (state.isSending ||
+        state.step != WithdrawFormStep.fill ||
+        state.hasUncertainSolanaSubmission) {
+      return;
+    }
     if (!await _authorizeWithdrawal(emit)) return;
+    if (state.isSending ||
+        state.step != WithdrawFormStep.fill ||
+        state.hasUncertainSolanaSubmission) {
+      return;
+    }
     if (state.isGaslessPendingStoreChecking) return;
     if (state.useGasless) {
       await _refreshGaslessStatus(emit, force: true);
@@ -1922,6 +1943,21 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
             isSending: false,
             isPreviewRefreshing: false,
             isAwaitingTrezorConfirmation: false,
+          ),
+        );
+        return;
+      }
+
+      final cause = e is SdkError ? e.source : e;
+      if (cause is SolanaWithdrawalSubmissionUnknown) {
+        emit(
+          state.copyWith(
+            step: WithdrawFormStep.failed,
+            preview: () => cause.preview,
+            solanaSubmissionUnknownTxHash: () => cause.transactionHash,
+            transactionError: () =>
+                TextError(error: 'withdrawSolanaSubmissionUnknown'.tr()),
+            isSending: false,
           ),
         );
         return;
@@ -2490,6 +2526,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormSubmitted event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    if (state.isSending || state.hasUncertainSolanaSubmission) return;
     if (!await _authorizeWithdrawal(emit)) return;
     if (state.isGaslessPendingStoreChecking) return;
     if (state.hasValidationErrors) return;
@@ -2568,9 +2605,8 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         throw Exception('Missing withdrawal preview');
       }
 
-      // Execute the previewed withdrawal: the transaction was already signed during preview,
-      // so executeWithdrawal() will NOT sign again. It simply broadcasts the pre-signed transaction,
-      // preserving the key behavior from the previous implementation.
+      // Solana refreshes its short-lived signed transaction here and requires
+      // another review if any recipient, amount, fee or memo detail changes.
       WithdrawalResult? result;
       await for (final progress in _sdk.withdrawals.executeWithdrawal(
         preview,
@@ -2672,6 +2708,37 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       return;
     } catch (e) {
       _cancelTronPreviewTimer();
+      final cause = e is SdkError ? e.source : e;
+      if (cause is SolanaWithdrawalReviewChanged) {
+        emit(
+          state.copyWith(
+            step: WithdrawFormStep.confirm,
+            preview: () => cause.preview,
+            authorizedRecipientAmount: () =>
+                cause.preview.balanceChanges.totalAmount,
+            solanaReviewedSourceAddress: () => cause.preview.from.firstOrNull,
+            memo: () => cause.preview.memo,
+            confirmStepError: () =>
+                TextError(error: 'withdrawSolanaReviewChanged'.tr()),
+            transactionError: () => null,
+            isSending: false,
+          ),
+        );
+        return;
+      }
+      if (cause is SolanaWithdrawalSubmissionUnknown) {
+        emit(
+          state.copyWith(
+            step: WithdrawFormStep.failed,
+            preview: () => cause.preview,
+            solanaSubmissionUnknownTxHash: () => cause.transactionHash,
+            transactionError: () =>
+                TextError(error: 'withdrawSolanaSubmissionUnknown'.tr()),
+            isSending: false,
+          ),
+        );
+        return;
+      }
 
       // Capture FD snapshot when KDF withdrawal submission fails
       if (PlatformTuner.isIOS) {
@@ -2823,7 +2890,11 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
   }
 
   void _onReset(WithdrawFormReset event, Emitter<WithdrawFormState> emit) {
-    if (_isDiscardingGaslessTransfer) return;
+    if (_isDiscardingGaslessTransfer ||
+        state.isSending ||
+        state.hasUncertainSolanaSubmission) {
+      return;
+    }
     _cancelTronPreviewTimer();
     final hasUnresolvedGaslessTransfer = state.hasUnresolvedGaslessTransfer;
     final resetToGasless =
@@ -2913,7 +2984,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormStepReverted event,
     Emitter<WithdrawFormState> emit,
   ) {
-    if (state.isSending || state.isPreviewRefreshing) {
+    if (state.isSending ||
+        state.isPreviewRefreshing ||
+        state.hasUncertainSolanaSubmission) {
       return;
     }
 

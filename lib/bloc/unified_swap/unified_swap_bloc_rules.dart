@@ -72,6 +72,7 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
       _shortfall(quote, _spendFor(next, quote), (
         balance: next.balance,
         feeBalance: next.feeBalance,
+        fundingBalances: next.fundingBalances,
       ));
 
   /// The balance [spend] of [quote] leaves short in [held], if any: the pay
@@ -90,6 +91,24 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
         feeBalance != null &&
         quote.fundingOnTopIn(feeAsset) > feeBalance) {
       return SwapFormIssue.insufficientForFees;
+    }
+    for (final asset in quote.fundingAssets) {
+      if (asset == quote.from || asset == feeAsset) continue;
+      final heldAmount = held.fundingBalances[asset];
+      if (heldAmount != null && quote.fundingOnTopIn(asset) > heldAmount) {
+        return SwapFormIssue.insufficientForFees;
+      }
+    }
+    return null;
+  }
+
+  AssetId? _shortFundingAsset(SwapQuote quote, _Held held) {
+    for (final asset in quote.fundingAssets) {
+      if (asset == quote.from) continue;
+      final amount = asset == quote.from.parentId
+          ? held.feeBalance
+          : held.fundingBalances[asset];
+      if (amount == null || quote.fundingOnTopIn(asset) > amount) return asset;
     }
     return null;
   }
@@ -162,6 +181,12 @@ bool _isStructuralChange(SwapQuote accepted, SwapQuote fresh) {
 /// exists to prevent. Costs may drift a little, not a lot.
 bool _isMaterialChange(SwapQuote accepted, SwapQuote fresh) {
   if (fresh.guaranteedReceive < accepted.guaranteedReceive) return true;
+  for (final entry in fresh.requiredFeeBalances.entries) {
+    if (entry.value >
+        (accepted.requiredFeeBalances[entry.key] ?? Decimal.zero)) {
+      return true;
+    }
+  }
   // Fees not read for the review are new at any amount.
   if (!accepted.feesKnown) return fresh.fees.isNotEmpty;
   final before = accepted.pricing.totalCostUsd;

@@ -1,4 +1,5 @@
 import 'package:app_theme/app_theme.dart';
+import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,6 +14,7 @@ import 'package:web_dex/shared/utils/extensions/transaction_extensions.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/copied_text.dart';
+import 'package:web_dex/views/wallet/coin_details/withdraw_form/widgets/solana_withdrawal_fee_details.dart';
 
 class TransactionDetails extends StatelessWidget {
   const TransactionDetails({
@@ -120,17 +122,17 @@ class TransactionDetails extends StatelessWidget {
                       context,
                       title: LocaleKeys.from.tr(),
                       value: transaction.from.isEmpty
-                          ? LocaleKeys.zhtlcShieldedAddress.tr()
+                          ? _missingAddressLabel
                           : transaction.from.first,
-                      isCopied: true,
+                      isCopied: transaction.from.isNotEmpty,
                     ),
                     _buildSimpleData(
                       context,
                       title: LocaleKeys.to.tr(),
                       value: transaction.to.isEmpty
-                          ? LocaleKeys.zhtlcShieldedAddress.tr()
+                          ? _missingAddressLabel
                           : transaction.to.first,
-                      isCopied: true,
+                      isCopied: transaction.to.isNotEmpty,
                     ),
                     SizedBox(height: 16),
                     _buildControls(context, isMobile),
@@ -168,8 +170,11 @@ class TransactionDetails extends StatelessWidget {
     // Internal moves show principal and their fee separately, rather than
     // rendering a zero or the fee as the amount moved.
     final bool isInternal = transaction.isInternalTransfer;
-    final amount = transaction.displayedMovement.toDouble().abs();
-    final String formatted = formatDexAmt(amount);
+    final exactAmount = transaction.displayedMovement.abs();
+    final amount = exactAmount.toDouble();
+    final String formatted = transaction.isSolanaTransaction
+        ? exactAmount.toString()
+        : formatDexAmt(amount);
     final String sign = isInternal || !transaction.hasKnownMovementDirection
         ? ''
         : transaction.displayedMovement > Decimal.zero
@@ -248,6 +253,12 @@ class TransactionDetails extends StatelessWidget {
   }
 
   Widget _buildFee(BuildContext context) {
+    if (transaction.fee case final SolanaFeeInfo fee) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 15),
+        child: SolanaWithdrawalFeeDetails(fee: fee),
+      );
+    }
     final String title = LocaleKeys.fees.tr();
 
     final String value;
@@ -393,6 +404,10 @@ class TransactionDetails extends StatelessWidget {
       ),
     );
   }
+
+  String get _missingAddressLabel => transaction.isSolanaTransaction
+      ? LocaleKeys.unknown.tr()
+      : LocaleKeys.zhtlcShieldedAddress.tr();
 
   String get _feeCoin {
     return transaction.fee != null && transaction.fee!.coin.isNotEmpty

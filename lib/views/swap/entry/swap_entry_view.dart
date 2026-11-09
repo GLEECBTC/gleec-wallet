@@ -357,6 +357,13 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     if (issue == SwapFormIssue.amountMissing) {
       return (LocaleKeys.swapCtaEnterAmount.tr(), null, false);
     }
+    if (state.fundingFailedAsset != null) {
+      return (
+        LocaleKeys.tryAgain.tr(),
+        () => _bloc.add(const UnifiedSwapBalancesRefreshed()),
+        false,
+      );
+    }
     final short = _shortOf(state);
     final review = short == null
         ? LocaleKeys.swapCtaReview.tr()
@@ -453,8 +460,8 @@ class _SwapEntryViewState extends State<SwapEntryView> {
     if (pay == null) return null;
     return switch (state.issue) {
       SwapFormIssue.insufficient => SwapFormat.ticker(pay),
-      SwapFormIssue.insufficientForFees ||
-      SwapFormIssue.noFeeBalance => SwapFormat.ticker(pay.parentId ?? pay),
+      SwapFormIssue.insufficientForFees || SwapFormIssue.noFeeBalance =>
+        SwapFormat.ticker(state.insufficientFeeAsset ?? pay.parentId ?? pay),
       _ => null,
     };
   }

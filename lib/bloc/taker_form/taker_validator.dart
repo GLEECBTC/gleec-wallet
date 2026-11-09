@@ -86,6 +86,44 @@ class TakerValidator {
       return false;
     }
 
+    final preimage = preimageData.data;
+    if (preimage != null) {
+      for (final fee in preimage.totalFees) {
+        final required = fee.requiredBalance;
+        if (required == null || required == Rational.zero) continue;
+        final coin = _coinsRepo.getCoin(fee.coin);
+        if (coin == null) {
+          add(
+            TakerAddError(
+              DexFormError(error: LocaleKeys.dexUnableToStartSwap.tr()),
+            ),
+          );
+          return false;
+        }
+        try {
+          final balance = await _coinsRepo.balance(coin.id);
+          final principal = fee.coin == state.sellCoin?.abbr
+              ? state.sellAmount ?? Rational.zero
+              : Rational.zero;
+          if (balance == null ||
+              balance.spendable.toRational() < required + principal) {
+            add(
+              TakerAddError(
+                _insufficientBalanceError(required + principal, fee.coin),
+              ),
+            );
+            return false;
+          }
+        } on Object {
+          add(
+            TakerAddError(
+              DexFormError(error: LocaleKeys.dexUnableToStartSwap.tr()),
+            ),
+          );
+          return false;
+        }
+      }
+    }
     add(TakerSetPreimage(preimageData.data));
     return true;
   }
@@ -160,7 +198,16 @@ class TakerValidator {
     if (state.selectedOrder == null) return false;
     final BestOrder selectedOrder = state.selectedOrder!;
 
+    if (selectedOrder.isMine == true) {
+      add(TakerAddError(_tradingWithSelfError()));
+      return true;
+    }
     final selectedOrderAddress = selectedOrder.address;
+    if (selectedOrderAddress.addressType == AddressType.shielded) {
+      // Shielded offers have no signing address; KDF supplies is_mine. Never
+      // derive a chain address from the peer-to-peer identity public key.
+      return false;
+    }
     final asset = _sdk.getSdkAsset(selectedOrder.coin);
     final cached = _sdk.pubkeys.lastKnown(asset.id);
     final ownPubkeys = cached ?? await _sdk.pubkeys.getPubkeys(asset);

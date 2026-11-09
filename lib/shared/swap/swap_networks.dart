@@ -56,6 +56,8 @@ class SwapNetworks {
     CoinSubClass.tendermint ||
     CoinSubClass.tendermintToken ||
     CoinSubClass.sia ||
+    CoinSubClass.solana ||
+    CoinSubClass.solanaToken ||
     CoinSubClass.zhtlc ||
     CoinSubClass.unknown => true,
     _ => false,

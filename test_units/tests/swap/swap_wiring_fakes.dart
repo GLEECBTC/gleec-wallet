@@ -167,6 +167,9 @@ class FakeSwapServices implements SwapServices {
 
 /// KDF's legacy API: raw swap data and the recent-swaps page.
 class FakeMm2Api implements Mm2Api {
+  @override
+  Null get tradingPolicy => null;
+
   FakeMm2Api({this.rawSwapData = '{"result":{"swaps":[]}}'});
 
   String rawSwapData;
