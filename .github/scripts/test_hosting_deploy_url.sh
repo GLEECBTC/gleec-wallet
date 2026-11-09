@@ -69,6 +69,11 @@ expect 'preview channel URL' \
   'i  hosting: uploading new files [12/12] complete' \
   '+  hosting:channel: Channel URL (walletrc): https://walletrc--pull-3514-merge-8l82t6ov.web.app [expires 2026-09-03] [version fingerprint abc]'
 
+expect 'preview deploy also reports the live hosting URL' \
+  'https://walletrc--pr-1.web.app' \
+  'Hosting URL: https://walletrc.web.app' \
+  '+  hosting:channel: Channel URL (walletrc): https://walletrc--pr-1.web.app [expires 2026-09-03]'
+
 expect 'colourised output' \
   'https://walletrc--pr-1.web.app' \
   "$(printf '\033[32m+\033[39m  hosting:channel: Channel URL (\033[1mwalletrc\033[22m): https://walletrc--pr-1.web.app [expires 2026-09-03]')"

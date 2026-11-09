@@ -109,7 +109,11 @@ done
 # building it from the target name -- a deploy target is not a site ID.
 # See the script for why, and .github/scripts/test_hosting_deploy_url.sh
 # for the output formats it depends on.
-if ! details_url=$("$URL_READER" "$deploy_log" 2>/dev/null); then
+url_mode=live
+if [ "$is_preview" = "true" ]; then
+  url_mode=preview
+fi
+if ! details_url=$("$URL_READER" "$deploy_log" "$url_mode" 2>/dev/null); then
   echo "Deploy succeeded but no URL was found in the Firebase CLI output."
   details_url=""
   if [ "$is_preview" = "true" ]; then

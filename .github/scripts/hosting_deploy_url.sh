@@ -3,7 +3,7 @@
 # Print the URL a Firebase Hosting deploy actually published, read out of the
 # CLI's own output.
 #
-#   hosting_deploy_url.sh <path-to-firebase-cli-log>
+#   hosting_deploy_url.sh <path-to-firebase-cli-log> [auto|live|preview]
 #
 # Exits 0 and prints the URL, or exits 1 and prints nothing.
 #
@@ -20,14 +20,14 @@
 #   preview channel "hosting:channel: Channel URL (<site>): https://<...>.web.app [expires ...]"
 #                   firebase-tools lib/commands/hosting-channel-deploy.js
 #
-# Both lines are emitted unconditionally on success, so an empty result here
-# means the deploy did not publish anything.
+# A preview deploy emits both forms. The caller can require the expected kind;
+# missing or ambiguous output is unverifiable and must never be guessed.
 
 set -uo pipefail
 
 log_path="${1:-}"
-if [ -z "$log_path" ]; then
-  echo "usage: $0 <path-to-firebase-cli-log>" >&2
+if [ -z "$log_path" ] || [ "$#" -gt 2 ]; then
+  echo "usage: $0 <path-to-firebase-cli-log> [auto|live|preview]" >&2
   exit 2
 fi
 if [ ! -f "$log_path" ]; then
@@ -37,10 +37,14 @@ fi
 
 # Treat this output as a CI output boundary: only complete Firebase host URLs
 # from canonical success lines are publishable, never provider response bodies.
-python3 - "$log_path" <<'PYURL'
+python3 - "$log_path" "${2:-auto}" <<'PYURL'
 from pathlib import Path
 import re
 import sys
+
+mode = sys.argv[2]
+if mode not in {"auto", "live", "preview"}:
+    sys.exit(2)
 
 try:
     text = Path(sys.argv[1]).read_bytes().decode("utf-8", errors="replace")
@@ -54,20 +58,37 @@ preview = re.compile(
     r"Channel URL \([^)]*\):[ \t]+(https://[^ \t]+)"
     r"(?:[ \t]+\[(?:expires|version) [^]\r\n]*\])*[ \t]*$"
 )
+live_prefix = re.compile(r"^[ \t]*Hosting URL:")
+preview_prefix = re.compile(
+    r"^[ \t]*(?:[+✔✓][ \t]+)?hosting:channel:[ \t]+Channel URL\b"
+)
 allowed = re.compile(r"https://[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.web\.app/?")
-urls = set()
+live_urls = set()
+preview_urls = set()
 for raw in text.split("\n"):
     line = ansi.sub("", raw)
-    match = live.fullmatch(line) or preview.fullmatch(line)
+    preview_match = preview.fullmatch(line)
+    match = preview_match or live.fullmatch(line)
     if not match:
+        if live_prefix.match(line) or preview_prefix.match(line):
+            sys.exit(1)
         continue
     if any(ord(c) < 32 and c != "\t" for c in line):
         sys.exit(1)
     url = match[1]
     if not allowed.fullmatch(url):
         sys.exit(1)
-    urls.add(url)
+    (preview_urls if preview_match else live_urls).add(url)
 
+# A preview deploy also reports its parent site's ordinary Hosting URL.
+# Publish only the unique channel URL when present; conflicting channels must
+# never fall back to the live site or be resolved by output order.
+if mode == "preview":
+    urls = preview_urls
+elif mode == "live":
+    urls = live_urls
+else:
+    urls = preview_urls or live_urls
 if len(urls) != 1:
     sys.exit(1)
 print(urls.pop())

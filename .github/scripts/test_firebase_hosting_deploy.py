@@ -81,6 +81,12 @@ elif scenario == "active-preview":
     print("The supplied version is already the current active version.")
     print("+ hosting:channel: Channel URL (test-site): https://test-site--privacy-check-abc123.web.app [expires 2026-11-16]")
     sys.exit(1)
+elif scenario in ("live-only", "active-live-only"):
+    print("Hosting URL: https://test-site.web.app")
+    if scenario == "active-live-only":
+        print("The supplied version is already the current active version.")
+        sys.exit(1)
+    sys.exit(0)
 elif scenario == "missing":
     sys.exit(0)
 elif scenario == "invalid-url":
@@ -90,6 +96,7 @@ elif scenario == "invalid-url":
 if "deploy" in args:
     print("Hosting URL: https://test-site.web.app")
 else:
+    print("Hosting URL: https://test-site.web.app")
     print("+ hosting:channel: Channel URL (test-site): https://test-site--privacy-check-abc123.web.app [expires 2026-11-16]")
 '''
 
@@ -260,6 +267,18 @@ class DeployPrivacyTest(unittest.TestCase):
         self.assert_private(result, 1)
         self.assertFalse(self.output.exists())
 
+    def test_preview_never_publishes_a_live_only_url(self):
+        result = self.run_deploy("live-only")
+        self.assertEqual(result.returncode, 1)
+        self.assert_private(result, 1)
+        self.assertFalse(self.output.exists())
+
+    def test_active_preview_never_publishes_a_live_only_url(self):
+        result = self.run_deploy("active-live-only")
+        self.assertEqual(result.returncode, 1)
+        self.assert_private(result, 1)
+        self.assertFalse(self.output.exists())
+
     def test_successful_preview_with_secret_url_fails_closed(self):
         result = self.run_deploy("invalid-url")
         self.assertEqual(result.returncode, 1)
@@ -310,11 +329,11 @@ class DeployPrivacyTest(unittest.TestCase):
 
 
 class HostingUrlBoundaryTest(unittest.TestCase):
-    def parse(self, contents):
+    def parse(self, contents, mode="auto"):
         with tempfile.TemporaryDirectory(prefix="hosting-url-boundary-") as directory:
             log = Path(directory) / "provider.log"
             log.write_bytes(contents.encode())
-            return subprocess.run(["bash", str(URL_READER), str(log)], capture_output=True, text=True, timeout=5)
+            return subprocess.run(["bash", str(URL_READER), str(log), mode], capture_output=True, text=True, timeout=5)
 
     def test_valid_live_preview_and_colored_lines(self):
         cases = [
@@ -357,6 +376,50 @@ class HostingUrlBoundaryTest(unittest.TestCase):
 
     def test_conflicting_success_lines_fail_closed(self):
         result = self.parse(f"Hosting URL: {LIVE_URL}\nHosting URL: https://another-site.web.app\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+
+    def test_preview_url_takes_precedence_over_live_url_in_either_order(self):
+        live_line = f"Hosting URL: {LIVE_URL}\n"
+        preview_line = f"+ hosting:channel: Channel URL (test-site): {PREVIEW_URL} [expires 2026-11-16]\n"
+        for contents in (live_line + preview_line, preview_line + live_line,
+                         live_line + preview_line + preview_line):
+            with self.subTest(contents=contents):
+                result = self.parse(contents)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, PREVIEW_URL + "\n")
+
+    def test_live_mode_selects_only_the_hosting_url(self):
+        result = self.parse(
+            f"Hosting URL: {LIVE_URL}\n"
+            f"+ hosting:channel: Channel URL (test-site): {PREVIEW_URL}\n",
+            mode="live",
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, LIVE_URL + "\n")
+
+    def test_malformed_channel_lines_cannot_hide_behind_a_valid_url(self):
+        malformed = [
+            "https://attacker.test", PREVIEW_URL + " [unknown metadata]",
+            PREVIEW_URL + "?secret=canary", "not-a-url",
+        ]
+        for url in malformed:
+            with self.subTest(url=url):
+                result = self.parse(
+                    f"Hosting URL: {LIVE_URL}\n"
+                    f"+ hosting:channel: Channel URL (test-site): {PREVIEW_URL}\n"
+                    f"+ hosting:channel: Channel URL (test-site): {url}\n",
+                    mode="preview",
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+
+    def test_conflicting_preview_urls_do_not_fall_back_to_live_url(self):
+        result = self.parse(
+            f"Hosting URL: {LIVE_URL}\n"
+            f"+ hosting:channel: Channel URL (test-site): {PREVIEW_URL}\n"
+            "+ hosting:channel: Channel URL (another-site): https://another-preview.web.app\n"
+        )
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stdout, "")
 
