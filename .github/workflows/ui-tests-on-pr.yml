@@ -26,7 +26,6 @@ jobs:
           - name: web-app-linux-profile
             os: ubuntu-latest
             browser: chrome
-            kdf_artifact: linux-x86-64
             kdf_platform: linux
             # A reserved wallet of its own: the two legs run at the same time and
             # would otherwise place orders from one wallet and spend one balance.
@@ -42,7 +41,6 @@ jobs:
           - name: web-app-macos
             os: macos-latest
             browser: safari
-            kdf_artifact: mac-universal
             kdf_platform: macos
             counterparty_slot: 1
             display: "headless" # has no affect with safaridriver
@@ -114,38 +112,12 @@ jobs:
         id: counterparty_binary
         run: |
           set -euo pipefail
-          CONFIG=sdk/packages/komodo_defi_framework/app_build/build_config.json
-          COMMIT=$(jq -er '.api.api_commit_hash' "$CONFIG")
-          # The digest comes from the repository, not from the server that
-          # serves the artefact. A checksum published beside its own zip proves
-          # only that the transfer was intact, which TLS already gives us -
-          # anyone who can replace one can replace the other. build_config.json
-          # already pins the accepted digests, and sdk-integration-preview.yml
-          # verifies against them the same way.
-          EXPECTED=$(jq -er '.api.platforms["${{ matrix.kdf_platform }}"].valid_zip_sha256_checksums[0]' "$CONFIG")
-          SHORT=${COMMIT:0:7}
-          NAME="kdf_${SHORT}-${{ matrix.kdf_artifact }}.zip"
-          # The mirror is laid out by branch, with `/` replaced by `-` - the same
-          # slug `dev_builds_artefact_downloader.dart` and `update_api_config.dart`
-          # build. Deriving it from the manifest instead of hardcoding `main`
-          # keeps this step working when the pin moves to a feature branch.
-          BRANCH=$(jq -er '.api.branch' "$CONFIG")
-          URL="https://devbuilds.gleec.com/${BRANCH//\//-}/${NAME}"
-          echo "Fetching ${NAME}"
+          # Use the SDK's manifest selectors and complete checksum/provenance
+          # checks. Archive naming can change without changing the KDF commit.
+          dart tool/prefetch_native_kdf.dart "${{ matrix.kdf_platform }}"
+          BINARY="sdk/packages/komodo_defi_framework/${{ matrix.kdf_platform }}/bin/kdf"
           mkdir -p .counterparty
-          curl -fsSL --retry 3 --retry-delay 5 -o ".counterparty/${NAME}" "${URL}"
-          if command -v sha256sum >/dev/null; then
-            ACTUAL=$(sha256sum ".counterparty/${NAME}" | awk '{print $1}')
-          else
-            ACTUAL=$(shasum -a 256 ".counterparty/${NAME}" | awk '{print $1}')
-          fi
-          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-            echo "Refusing ${NAME}: build_config.json pins ${EXPECTED}, downloaded ${ACTUAL}"
-            exit 1
-          fi
-          echo "Digest matches the pin in ${CONFIG}"
-          unzip -o -q ".counterparty/${NAME}" -d .counterparty
-          chmod +x .counterparty/kdf
+          install -m 0755 "$BINARY" .counterparty/kdf
           echo "path=$(pwd)/.counterparty/kdf" >> "$GITHUB_OUTPUT"
 
       - name: Start the DEX counterparty
