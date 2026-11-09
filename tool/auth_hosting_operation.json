@@ -6,5 +6,6 @@
   "generatedFiles": {
     "/__/firebase/init.js": "e04531bb170270fada20d61b173b54b4630783b114ef42a24f8189d41e739c8b",
     "/__/firebase/init.json": "904fb8a0f68cecc98ee6b2f30556627dbdfbed4c70c2711240623f697f2d9cd7"
-  }
+  },
+  "configurationSha256": "4ba5e021a0ce94f8e0b02f30635367d6586e0b31d31d052505faf020678c27fd"
 }

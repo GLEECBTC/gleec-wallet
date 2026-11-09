@@ -166,6 +166,12 @@ def main():
                     if total > 1024 * 1024 * 1024:
                         raise GateError("Oversized hosting candidate")
                 archive.extractall(destination)
+            configuration_sha = config.get("configurationSha256")
+            if configuration_sha is not None:
+                overlay = Path("hosting-configuration.json").read_bytes()
+                if hashlib.sha256(overlay).hexdigest() != configuration_sha:
+                    raise GateError("Reviewed hosting configuration digest mismatch")
+                (destination / "firebase.json").write_bytes(overlay)
             firebase_config = json.loads((destination / "firebase.json").read_text())
             if set(firebase_config) != {"hosting"}:
                 raise GateError("Non-hosting configuration rejected")
@@ -217,6 +223,7 @@ def main():
                 raise GateError("Live version changed during preview")
             evidence = {"mode": "preview", "url": url, "version": version,
                         "rollbackVersion": config["expectedLiveVersion"], "candidateSha256": config["candidateSha256"]}
+            evidence["configurationSha256"] = hashlib.sha256((destination / "firebase.json").read_bytes()).hexdigest()
         else:
             version = config["previewVersion"]
             if not re.fullmatch(r"sites/gleec-wallet-official/versions/[a-zA-Z0-9]+", version):

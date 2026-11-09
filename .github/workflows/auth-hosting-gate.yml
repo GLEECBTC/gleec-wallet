@@ -24,6 +24,7 @@ jobs:
       - name: Test deployment guards without credentials
         run: python3 tool/auth_hosting_phase_test.py
       - run: cp tool/auth_hosting_operation.json hosting-operation.json
+      - run: cp tool/auth_hosting_configuration.json hosting-configuration.json
       - name: Deploy only the verified preview candidate
         env:
           HOSTING_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLEEC_WALLET_OFFICIAL }}

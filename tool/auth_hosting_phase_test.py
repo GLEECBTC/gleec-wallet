@@ -152,6 +152,23 @@ class HostingTest(unittest.TestCase):
         hosting.main()
         self.assertTrue(Path("hosting-operation-evidence.json").exists())
 
+    def test_reviewed_config_overlay_is_bound_to_evidence(self):
+        raw = json.dumps(self.firebase).encode()
+        Path("hosting-configuration.json").write_bytes(raw)
+        self.config["configurationSha256"] = hashlib.sha256(raw).hexdigest()
+        self.prepare()
+        hosting.main()
+        evidence = json.loads(Path("hosting-operation-evidence.json").read_text())
+        self.assertEqual(evidence["configurationSha256"], self.config["configurationSha256"])
+
+    def test_changed_config_overlay_is_rejected(self):
+        Path("hosting-configuration.json").write_text("{}")
+        self.config["configurationSha256"] = "a" * 64
+        self.prepare()
+        with self.assertRaises(ValueError):
+            hosting.main()
+        self.assertFalse(self.cli_calls)
+
     def test_extra_remote_file_is_rejected_even_with_empty_cli_version(self):
         self.returned_version = ""
         self.extra_file = True
