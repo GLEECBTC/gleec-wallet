@@ -161,6 +161,7 @@ void main() {
                   .isHeader,
               isTrue,
             );
+            await expectLater(tester, meetsGuideline(textContrastGuideline));
             semantics.dispose();
           },
         );

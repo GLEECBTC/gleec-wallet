@@ -96,68 +96,84 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Wallet>>(
-      initialData:
-          context.read<WalletsRepository>().wallets ?? const <Wallet>[],
-      stream: _walletsStream,
-      builder: (context, snapshot) {
-        final wallets = snapshot.data ?? const <Wallet>[];
-        final hasWallets = wallets.isNotEmpty;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const WalletCredentialCleanupNotice(),
-            _OnboardingHeader(hasWallets: hasWallets),
-            if (!hasWallets) ...[
+    final theme = Theme.of(context);
+    // The legacy body styles apply opacity even to enabled action titles.
+    // Onboarding uses the existing opaque surface roles so Import stays visibly
+    // available and supporting instructions remain readable in both themes.
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(
+          bodyLarge: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface,
+          ),
+          bodySmall: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      child: StreamBuilder<List<Wallet>>(
+        initialData:
+            context.read<WalletsRepository>().wallets ?? const <Wallet>[],
+        stream: _walletsStream,
+        builder: (context, snapshot) {
+          final wallets = snapshot.data ?? const <Wallet>[];
+          final hasWallets = wallets.isNotEmpty;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const WalletCredentialCleanupNotice(),
+              _OnboardingHeader(hasWallets: hasWallets),
+              if (!hasWallets) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'authCreationProtectionNotice'.tr(),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 24),
+              if (hasWallets) ...[
+                WalletsList(
+                  walletType: WalletType.iguana,
+                  wallets: wallets,
+                  onWalletClick: (wallet, action) {
+                    widget.onUserIntent?.call();
+                    widget.onWalletSelected(wallet, action);
+                  },
+                ),
+                const SizedBox(height: 16),
+                const UiDivider(),
+                const SizedBox(height: 8),
+              ],
+              LegalConsentAction(
+                builder: (allowed) => _OnboardingActions(
+                  canCreate: allowed && !_creating,
+                  hasWallets: hasWallets,
+                  onAction: _onAction,
+                  onHardwareWallet: () {
+                    widget.onUserIntent?.call();
+                    widget.onHardwareWallet();
+                  },
+                ),
+              ),
               const SizedBox(height: 12),
-              Text(
-                'authCreationProtectionNotice'.tr(),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
+              TermsConsentText(
+                actionLabel: LocaleKeys.onboardingCreateWallet.tr(),
               ),
-            ],
-            const SizedBox(height: 24),
-            if (hasWallets) ...[
-              WalletsList(
-                walletType: WalletType.iguana,
-                wallets: wallets,
-                onWalletClick: (wallet, action) {
+              const SizedBox(height: 12),
+              UiUnderlineTextButton(
+                key: const Key('onboarding-cancel-button'),
+                text: widget.cancelLabel ?? LocaleKeys.cancel.tr(),
+                onPressed: () {
                   widget.onUserIntent?.call();
-                  widget.onWalletSelected(wallet, action);
+                  widget.onCancel();
                 },
               ),
-              const SizedBox(height: 16),
-              const UiDivider(),
-              const SizedBox(height: 8),
             ],
-            LegalConsentAction(
-              builder: (allowed) => _OnboardingActions(
-                canCreate: allowed && !_creating,
-                hasWallets: hasWallets,
-                onAction: _onAction,
-                onHardwareWallet: () {
-                  widget.onUserIntent?.call();
-                  widget.onHardwareWallet();
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-            TermsConsentText(
-              actionLabel: LocaleKeys.onboardingCreateWallet.tr(),
-            ),
-            const SizedBox(height: 12),
-            UiUnderlineTextButton(
-              key: const Key('onboarding-cancel-button'),
-              text: widget.cancelLabel ?? LocaleKeys.cancel.tr(),
-              onPressed: () {
-                widget.onUserIntent?.call();
-                widget.onCancel();
-              },
-            ),
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
