@@ -7,9 +7,58 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { webcrypto: crypto } = require('node:crypto');
 const { createWalletCredentials } = require('../../../web/services/wallet_credentials.js');
+const { LocalBrowser } = require('./web_release_test_driver.js');
 const text = new TextEncoder();
 const secret = 'Unfunded-test-credential-42@';
 const changedSecret = 'Rotated-unfunded-credential-84@';
+
+test('hosted acceptance rejects production and verifies the independently approved PR bundle', async () => {
+  const oldUrl = process.env.GLEEC_TEST_HOSTED_URL;
+  const oldHash = process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256;
+  const oldFetch = global.fetch;
+  const fixture = new LocalBrowser(path.resolve(__dirname, '../../..'));
+  const bundle = Buffer.from('disposable-public-compiled-fixture');
+  let requests = 0;
+  global.fetch = async () => { requests++; return new Response(bundle); };
+  process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256 = createHash('sha256').update(bundle).digest('hex');
+  try {
+    for (const host of [
+      'walletrc--pull-3612-merge-m7wcb5ap.web.app',
+      'gleec-wallet-official--pull-3612-merge-2c51371-m7wcb5ap.web.app',
+    ]) {
+      process.env.GLEEC_TEST_HOSTED_URL = `https://${host}/`;
+      await fixture.serve();
+    }
+    assert.equal(requests, 2);
+    for (const url of [
+      'https://dex.gleec.com/', 'https://walletrc.web.app/',
+      'https://unrelated--pull-3612-merge-m7wcb5ap.web.app/',
+      'https://walletrc--pull-3612-merge-m7wcb5ap.web.app.evil.example/',
+      'http://walletrc--pull-3612-merge-m7wcb5ap.web.app/',
+      'https://walletrc--pull-3612-merge-m7wcb5ap.web.app/wallet',
+      'https://walletrc--pull-3612-merge-m7wcb5ap.web.app/?override=1',
+      'https://user@walletrc--pull-3612-merge-m7wcb5ap.web.app/',
+      'https://walletrc--pull-3612-merge-m7wcb5ap.web.app:8443/',
+    ]) {
+      process.env.GLEEC_TEST_HOSTED_URL = url;
+      await assert.rejects(fixture.serve());
+    }
+    assert.equal(requests, 2, 'Reject unsafe targets before requesting any bytes');
+    process.env.GLEEC_TEST_HOSTED_URL = 'https://walletrc--pull-3612-merge-m7wcb5ap.web.app/';
+    delete process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256;
+    await assert.rejects(fixture.serve());
+    assert.equal(requests, 2);
+    process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256 = '0'.repeat(64);
+    await assert.rejects(fixture.serve(), /approved build/);
+  } finally {
+    global.fetch = oldFetch;
+    if (oldUrl === undefined) delete process.env.GLEEC_TEST_HOSTED_URL;
+    else process.env.GLEEC_TEST_HOSTED_URL = oldUrl;
+    if (oldHash === undefined) delete process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256;
+    else process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256 = oldHash;
+    await fixture.cleanup();
+  }
+});
 
 test('wallet HTML and hosting policy exclude external and arbitrary inline scripts', () => {
   const root = path.resolve(__dirname, '../../..');

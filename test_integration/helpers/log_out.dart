@@ -18,13 +18,16 @@ Future<void> logOut(WidgetTester tester) async {
   await tester.tap(confirmLogoutButton);
   // Engine shutdown is asynchronous and can outlast the dialog animation.
   // Do not start the next import while the old authenticated header is mounted.
-  if (auth.state.isSignedIn || auth.state.isLoading) {
-    await tester.runAsync(
-      () => auth.stream
-          .firstWhere((state) => !state.isSignedIn && !state.isLoading)
-          .timeout(const Duration(seconds: 60)),
-    );
+  final elapsed = Stopwatch()..start();
+  while ((auth.state.isSignedIn || auth.state.isLoading) &&
+      auth.state.authError == null &&
+      elapsed.elapsed < const Duration(seconds: 60)) {
+    // Browser storage and the lock overlay complete through scheduled frames.
+    // Keep driving the app while awaiting durable sign-out, as a real user does.
+    await tester.pump(const Duration(milliseconds: 250));
   }
-  await tester.pumpAndSettle();
+  expect(auth.state.authError, isNull, reason: 'Durable sign-out must succeed');
+  expect(auth.state.isLoading, isFalse);
   expect(auth.state.currentUser, isNull);
+  await tester.pumpAndSettle();
 }

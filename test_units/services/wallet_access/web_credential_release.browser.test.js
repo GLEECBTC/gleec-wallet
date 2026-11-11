@@ -242,6 +242,11 @@ async function main() {
     evidence.crossTabProtection.externalRevisionCancelsPending=true;
     console.log('PASS: real Web Locks reject concurrent prompts and external revisions abort stale reads');
 
+    // An aborted WebAuthn promise settles before its origin-wide lock is
+    // released. Wait for that release rather than racing the next fixture.
+    await browser.wait(page,`navigator.locks.query().then(state=>
+      !state.held.some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
+      {timeout:5000,label:'aborted ceremony releases the vault lock'});
     const corrupted=await page.evaluate(`(async()=>{
       const db=await new Promise(resolve=>{const request=indexedDB.open('gleec-wallet-credentials-v1');request.onsuccess=()=>resolve(request.result);});
       const slot='active:'+window.__walletKey;
@@ -258,6 +263,9 @@ async function main() {
     await browser.command('Target.closeTarget',{targetId:second.targetId});
 
     if(process.env.GLEEC_TEST_LIFECYCLE==='true'){
+      await browser.wait(page,`navigator.locks.query().then(state=>
+        !state.held.some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
+        {timeout:5000,label:'corrupt-envelope probe releases the vault lock'});
       await unlockApp(browser,page);
       await page.send('Emulation.setFocusEmulationEnabled',{enabled:false});
       await page.send('Page.bringToFront');

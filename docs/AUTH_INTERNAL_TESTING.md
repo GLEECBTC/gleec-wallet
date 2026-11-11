@@ -48,7 +48,7 @@ preview URL, source head, device/OS/browser/provider and pass/fail.
 - Recovery: generated-password phrase confirmation, requested-only browser
   export, independent phrase/file restoration and secret-diagnostic canaries
   pass. Passkey replacement and clean-origin missing-data cases also pass.
-- Browser-only protocol suite: 81 cases pass through the main CI aggregator.
+- Browser-only protocol suite: 82 cases pass through the main CI aggregator.
 - CI performs the same unfunded browser acceptance before publishing the PR
   preview, and publishes source/SDK/bundle identity afterward.
 
@@ -70,6 +70,15 @@ Install only the artifact linked from the accepted PR run. Start with an empty
 test wallet; build-to-build development signing may require a fresh install.
 Recovery/signing continuity for the actual production identity remains a separate
 acceptance check. Never import a funded personal wallet into this internal app.
+
+## Desktop installation
+
+The desktop CI archives use the regular application namespace. Open them only
+in a disposable OS account or virtual machine with no personal wallet data.
+Use the exact archive linked in the pinned handoff. A successful build or
+ad-hoc signature does not certify Keychain, Touch ID or Windows Hello behavior;
+trusted signing and real provider checks remain part of the device round.
+The unsigned iOS archive is a build check, not an installable team distribution.
 
 ## Device round owned by internal testers
 
