@@ -224,8 +224,9 @@ void main() {
               if (phase == 'canceled') {
                 access.enrollmentFailure = WalletAccessFailure.canceled;
               }
-              if (phase == 'creating')
+              if (phase == 'creating') {
                 access.enrollmentPending = Completer<void>();
+              }
               const key = Key('setup-state-capture');
               await LegalFormHarness().pump(
                 tester,
