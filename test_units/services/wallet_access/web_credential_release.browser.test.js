@@ -183,7 +183,13 @@ async function main() {
     await second.send('Page.bringToFront');
     const external=await second.evaluate('window.__revisionEvents');
     assert.ok(external.every(event=>event.fields.join(',')==='external,key,protection,revision'));
-    const crossTabRead=await second.evaluate(`(async()=>{
+    // Returning this already-open tab can start its one automatic unlock.
+    // Cancel that fixture ceremony before probing the old unattended path;
+    // cancellation releases the origin lock asynchronously.
+    await second.evaluate('gleecWalletCredentials.cancel();true');
+    let crossTabRead;
+    for(let attempt=0;attempt<100;attempt++){
+      crossTabRead=await second.evaluate(`(async()=>{
       let attempted=0;const original=navigator.credentials.get;
       navigator.credentials.get=async()=>{attempted++;throw new DOMException('','NotAllowedError');};
       try{
@@ -192,7 +198,10 @@ async function main() {
         try{await gleecWalletCredentials.read({key,requireAuthentication:false});return{attempted,unexpectedSuccess:true};}
         catch(error){return{attempted,failure:error.code};}
       }finally{navigator.credentials.get=original;}
-    })()`);
+      })()`);
+      if(crossTabRead.failure!=='busy')break;
+      await delay(50);
+    }
     assert.deepEqual(crossTabRead,{attempted:1,failure:'notCompleted'});
     evidence.crossTabProtection={revisionEvent:true,unattendedPathRemoved:true};
     console.log('PASS: another real tab loses unattended access after passkey enrollment');
