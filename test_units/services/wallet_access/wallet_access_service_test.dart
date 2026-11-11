@@ -75,6 +75,9 @@ class _Backend extends CredentialBackend {
   Future<PasswordManagerOutcome> Function()? onSave;
   Future<void> Function()? onProtectedWrite;
   Future<String?> Function()? onProtectedReadback;
+  Future<void> Function()? onPasskeyEnroll;
+  int passkeyEnrollments = 0;
+  CredentialRecordInfo? passkeyEnrollmentInfo;
   bool failDelete = false;
   bool failCancel = false;
   bool failNextWrite = false;
@@ -156,6 +159,24 @@ class _Backend extends CredentialBackend {
   Future<String?> prepareDelete(String key, {required String reason}) async {
     prepares++;
     return 'synthetic-delete-token';
+  }
+
+  @override
+  Future<void> enrollPasskey(
+    String key,
+    String value, {
+    required String label,
+  }) async {
+    passkeyEnrollments++;
+    await onPasskeyEnroll?.call();
+    values[key] = value;
+    infos[key] =
+        passkeyEnrollmentInfo ??
+        CredentialRecordInfo(
+          protection: CredentialProtection.passkey,
+          enrolled: true,
+          revision: (infos[key]?.revision ?? 0) + 1,
+        );
   }
 
   @override
@@ -521,6 +542,87 @@ void main() {
         WalletAccessFailure.staleOperation,
       ),
     );
+
+    group('verified passkey enrollment', () {
+      for (final invalidInfo in [
+        const CredentialRecordInfo(
+          protection: CredentialProtection.browserLocal,
+          enrolled: true,
+          revision: 1,
+        ),
+        const CredentialRecordInfo(
+          protection: CredentialProtection.passkey,
+          enrolled: true,
+        ),
+        const CredentialRecordInfo(
+          protection: CredentialProtection.passkey,
+          enrolled: false,
+          revision: 1,
+        ),
+      ]) {
+        test(
+          'rejects invalid passkey metadata ${invalidInfo.protection}/${invalidInfo.enrolled}/${invalidInfo.revision}',
+          () async {
+            final user = await install(protected: false);
+            backend.passkeyEnrollmentInfo = invalidInfo;
+            await expectLater(
+              service.enrollPasskey(walletId: user.walletId),
+              throwsA(
+                isA<WalletAccessException>().having(
+                  (error) => error.failure,
+                  'failure',
+                  WalletAccessFailure.invalidResponse,
+                ),
+              ),
+            );
+            expect(coordinator.state.requiresAuthentication, isFalse);
+          },
+        );
+      }
+
+      test(
+        'does not request a second vault unlock after verified enrollment',
+        () async {
+          final user = await install(protected: false);
+          final reads = backend.reads;
+          final verifications = auth.verifiedWallets.length;
+          backend.onProtectedReadback = () =>
+              throw StateError('redundant unlock');
+          await service.enrollPasskey(walletId: user.walletId);
+          expect(backend.passkeyEnrollments, 1);
+          expect(
+            backend.reads,
+            reads + 1,
+            reason:
+                'Only initial authorization reads the unattended credential',
+          );
+          expect(auth.verifiedWallets.length, greaterThan(verifications));
+          expect(
+            (await service.status(walletId: user.walletId)).protection,
+            CredentialProtection.passkey,
+          );
+          expect(coordinator.state.isLocked, isFalse);
+        },
+      );
+
+      test('a late enrollment cannot unlock after manual lock', () async {
+        final user = await install();
+        final reached = Completer<void>();
+        final finish = Completer<void>();
+        backend.onPasskeyEnroll = () {
+          reached.complete();
+          return finish.future;
+        };
+        final pending = service.enrollPasskey(walletId: user.walletId);
+        final rejected = expectLater(pending, stale());
+        await reached.future;
+        coordinator.lock();
+        finish.complete();
+        await rejected;
+        expect(coordinator.state.isLocked, isTrue);
+        expect(backend.passkeyEnrollments, 1);
+      });
+    });
 
     group('optional password-manager activity', () {
       for (final canceled in [false, true]) {

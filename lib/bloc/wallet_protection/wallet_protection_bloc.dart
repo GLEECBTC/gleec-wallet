@@ -122,7 +122,9 @@ class WalletProtectionBloc
       emit(state.copyWith(failure: WalletAccessFailure.unavailable));
       return;
     }
-    emit(state.copyWith(busy: true, clearNotice: true));
+    emit(
+      state.copyWith(busy: true, activeAction: event.action, clearNotice: true),
+    );
     try {
       final ensureCurrent = access.captureSensitiveOperation(walletId);
       final current = await access.status(walletId: walletId);

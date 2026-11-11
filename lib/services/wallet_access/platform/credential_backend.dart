@@ -32,6 +32,12 @@ abstract class CredentialBackend {
   /// freshly verified this password with the wallet engine. Always protected.
   Future<void> repairInvalidated(String key, String value) async =>
       throw const WalletAccessException(WalletAccessFailure.unavailable);
+
+  /// Creates a passkey and verifies a subsequent user-verified PRF assertion.
+  /// Before returning, authenticate-decrypt both the staged and promoted
+  /// envelope with that ceremony's key and compare with [value]. Only verified
+  /// staged material may replace unattended access. Callers must not unlock to
+  /// repeat this proof. Cancellation/failure must never downgrade protection.
   Future<void> enrollPasskey(
     String key,
     String value, {

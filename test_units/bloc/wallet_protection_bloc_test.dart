@@ -190,11 +190,13 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         expect(access.requests, [_id]);
         expect(bloc.state.busy, isTrue);
+        expect(bloc.state.activeAction, WalletProtectionAction.passkey);
         expect(bloc.state.status!.requiresAuthentication, isFalse);
         access.pending!.complete();
         final state = await finished.timeout(const Duration(seconds: 2));
         expect(state.status!.protection, CredentialProtection.passkey);
         expect(state.status!.requiresAuthentication, isTrue);
+        expect(state.activeAction, isNull);
         expect(access.requests, [_id]);
       },
     );

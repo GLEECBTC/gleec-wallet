@@ -10,6 +10,7 @@ final class WalletProtectionState extends Equatable {
     this.graceSeconds = 30,
     this.failure,
     this.completed,
+    this.activeAction,
   });
   final WalletAccessStatus? status;
   final CredentialCapabilities? capabilities;
@@ -19,6 +20,7 @@ final class WalletProtectionState extends Equatable {
   final int graceSeconds;
   final WalletAccessFailure? failure;
   final WalletProtectionAction? completed;
+  final WalletProtectionAction? activeAction;
 
   bool get canCreatePasskey =>
       capabilities?.available == true &&
@@ -39,6 +41,7 @@ final class WalletProtectionState extends Equatable {
     int? graceSeconds,
     WalletAccessFailure? failure,
     WalletProtectionAction? completed,
+    WalletProtectionAction? activeAction,
     bool clearNotice = false,
     bool clearFailure = false,
   }) => WalletProtectionState(
@@ -51,6 +54,9 @@ final class WalletProtectionState extends Equatable {
     graceSeconds: graceSeconds ?? this.graceSeconds,
     failure: clearNotice || clearFailure ? null : failure ?? this.failure,
     completed: clearNotice ? null : completed ?? this.completed,
+    activeAction: (busy ?? this.busy)
+        ? activeAction ?? this.activeAction
+        : null,
   );
 
   @override
@@ -63,5 +69,6 @@ final class WalletProtectionState extends Equatable {
     graceSeconds,
     failure,
     completed,
+    activeAction,
   ];
 }

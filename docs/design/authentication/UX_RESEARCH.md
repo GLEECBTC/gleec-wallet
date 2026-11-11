@@ -65,6 +65,10 @@ remain usable before backup with the previously agreed reminders.
 
 ## Observed baseline and scope
 
+The [12 November follow-up](../../AUTH_PASSKEY_UX_REVIEW.md) adds current official
+Exodus, Phantom, MetaMask and Base comparisons, the exact duplicate-assertion
+reproduction and the resulting create/protect/return changes.
+
 Current-run browser captures were saved and inspected at
 `/private/tmp/gleec-auth-internal-20261111/ux-audit-20261111/`:
 

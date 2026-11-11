@@ -47,9 +47,13 @@ light/dark phone/wide setup-state renders in `onboarding-ui-states`.
 The UX follow-up removes the application Save action and recommends optional
 passkey setup directly in the wallet. The provider handles saving confirmation;
 automatic saving may be unavailable and autofill requests do not confirm saving.
-Test cancellation separately from declined enrollment. Passkey setup may ask for
-two system confirmations; a returning enrolled wallet gets at most one automatic
-challenge. No personal password is required after phrase backup.
+Test cancellation separately from declined enrollment. Passkey setup creates one
+passkey and uses it once to verify unlock. A second unlock request after that
+verification is a regression. Providers control their own sheets and consent
+steps. A returning enrolled wallet gets at most one automatic challenge.
+No personal password is required after phrase backup. The
+[journey review](AUTH_PASSKEY_UX_REVIEW.md) records the duplicate-prompt root cause,
+competitor research and acceptance criteria.
 
 Engineering evidence includes fail/restart provisioning, password rotation,
 wallet-bound action invalidation, suspended-clock lock timing, full-process

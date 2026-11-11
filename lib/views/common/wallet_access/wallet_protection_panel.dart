@@ -85,6 +85,15 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
       final protected = status?.requiresAuthentication == true;
       final busy =
           state.busy || _collectingInput || state.waitingForPasswordManager;
+      final pendingMessage =
+          (state.waitingForPasswordManager
+                  ? 'authPasswordManagerPending'
+                  : state.activeAction == WalletProtectionAction.passkey ||
+                        state.activeAction ==
+                            WalletProtectionAction.replacePasskey
+                  ? 'authPasskeySetupPending'
+                  : 'authProtectionPending')
+              .tr();
       if (state.loading) {
         return Semantics(
           liveRegion: true,
@@ -158,12 +167,15 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
           ),
           const SizedBox(height: 8),
           Text(
-            (!widget.showLockSettings && (passkey || state.canCreatePasskey)
-                    ? passkey
-                          ? 'authPasskeyReadyCompactDescription'
-                          : 'authPasskeySetupCompactDescription'
-                    : description)
-                .tr(),
+            state.busy
+                ? pendingMessage
+                : (!widget.showLockSettings &&
+                              (passkey || state.canCreatePasskey)
+                          ? passkey
+                                ? 'authPasskeyReadyCompactDescription'
+                                : 'authPasskeySetupCompactDescription'
+                          : description)
+                      .tr(),
           ),
           if (widget.showLockSettings && state.canCreatePasskey) ...[
             const SizedBox(height: 8),
@@ -172,6 +184,10 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
           if (widget.showLockSettings && state.canCreatePasskey) ...[
             const SizedBox(height: 8),
             Text('authPasskeySetupConfirmations'.tr(), style: supportingStyle),
+          ],
+          if (!widget.showLockSettings && state.canCreatePasskey) ...[
+            const SizedBox(height: 8),
+            Text('authPasskeyLocalScopeCompact'.tr(), style: supportingStyle),
           ],
           if (state.canCreatePasskey || state.canEnableDevice) ...[
             const SizedBox(height: 16),
@@ -293,16 +309,14 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
             const SizedBox(height: 12),
             Semantics(
               liveRegion: true,
-              label:
-                  (state.waitingForPasswordManager
-                          ? 'authPasswordManagerPending'
-                          : 'pleaseWait')
-                      .tr(),
+              label: pendingMessage,
               child: ExcludeSemantics(
                 child: Column(
                   children: [
-                    if (state.waitingForPasswordManager)
-                      Text('authPasswordManagerPending'.tr()),
+                    if (!state.busy) ...[
+                      Text(pendingMessage),
+                      const SizedBox(height: 8),
+                    ],
                     TickerMode(
                       enabled: !MediaQuery.disableAnimationsOf(context),
                       child: const LinearProgressIndicator(),

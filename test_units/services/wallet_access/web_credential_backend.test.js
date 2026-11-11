@@ -147,7 +147,12 @@ class MemoryStore {
   failStage = false;
   corruptStage = false;
   failPromote = false;
-  async get(key) { return structuredClone(this.records.get(key) ?? null); }
+  corruptActiveRead = false;
+  async get(key) {
+    const row = structuredClone(this.records.get(key) ?? null);
+    if (row && this.corruptActiveRead) row.iv = random(12);
+    return row;
+  }
   async getStaged(slot) {
     const row = structuredClone(this.stages.get(slot));
     if (this.corruptStage) row.iv = random(12);
@@ -370,6 +375,30 @@ test('corrupted staged ciphertext leaves the previous durable credential untouch
   await assert.rejects(api.enrollPasskey({ key: 'wallet-1', value: secret }), { code: 'envelopeCorrupt' });
   assert.equal(await api.read({ key: 'wallet-1' }), secret);
   assert.equal((await api.metadata({ key: 'wallet-1' })).protection, 'browserLocal');
+});
+
+test('enrollment verifies the promoted record without another assertion', async () => {
+  const { api, store, state } = await environment();
+  await api.write({ key: 'wallet-1', value: secret });
+  const changes = [];
+  api.subscribe(event => changes.push(event));
+  const promote = store.promote.bind(store);
+  store.promote = async (...args) => {
+    await promote(...args);
+    store.corruptActiveRead = true;
+  };
+  await assert.rejects(api.enrollPasskey({ key: 'wallet-1', value: secret }),
+    { code: 'envelopeCorrupt' });
+  assert.equal(state.creates, 1);
+  assert.equal(state.gets, 1);
+  assert.equal(changes.length, 1, 'Promotion revokes other tabs even if active readback fails');
+  assert.equal(changes[0].protection, 'passkeyPrf');
+  assert.equal(store.stages.size, 0);
+  // The fault is in the read, not the durable record. It remains protected and
+  // unlockable when storage recovers; no unattended fallback is resurrected.
+  store.corruptActiveRead = false;
+  assert.equal(store.records.get('wallet-1').unattendedKey, undefined);
+  assert.equal(await api.read({ key: 'wallet-1' }), secret);
 });
 
 for (const point of ['failStage', 'failPromote']) {

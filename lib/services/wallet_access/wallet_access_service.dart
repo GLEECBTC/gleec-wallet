@@ -1304,20 +1304,29 @@ class WalletAccessService {
     _ensureRevision(revision);
     _sdk.auth.ensureSessionContextCurrent(session);
     _ensureSensitiveForeground();
-    await unlockCoordinator.runSystemPrompt(() async {
-      final readback = await _backend.read(
-        record.credentialKey,
-        reason: 'Confirm wallet protection',
-        purpose: 'verifyWrite',
-        requireAuthentication: true,
-      );
-      if (readback != password) {
-        throw const WalletAccessException(WalletAccessFailure.storageFailed);
-      }
-    }, waitForForeground: true);
+    if (!passkey) {
+      await unlockCoordinator.runSystemPrompt(() async {
+        final readback = await _backend.read(
+          record.credentialKey,
+          reason: 'Confirm wallet protection',
+          purpose: 'verifyWrite',
+          requireAuthentication: true,
+        );
+        if (readback != password) {
+          throw const WalletAccessException(WalletAccessFailure.storageFailed);
+        }
+      }, waitForForeground: true);
+    }
+    // Passkey enrollment verifies a fresh PRF assertion and the persisted
+    // envelope inside its ceremony. Reading it again would ask the user to
+    // unlock a second time. Native enrollment still needs its separate readback.
     final ensureReadbackCurrent = captureSensitiveOperation(walletId);
     final info = await _backend.metadata(record.credentialKey);
-    if (info == null || !info.enrolled) {
+    if (info == null ||
+        !info.enrolled ||
+        (passkey &&
+            (info.protection != CredentialProtection.passkey ||
+                info.revision < 1))) {
       throw const WalletAccessException(WalletAccessFailure.invalidResponse);
     }
     _ensureRevision(revision);

@@ -31,6 +31,7 @@ class _SetupAccess extends AccessibilityAccess {
   bool supported = true;
   WalletAccessFailure? enrollmentFailure;
   int enrollments = 0;
+  Completer<void>? enrollmentPending;
   @override
   Future<WalletAccessStatus> status({WalletId? walletId}) async =>
       WalletAccessStatus(
@@ -54,6 +55,7 @@ class _SetupAccess extends AccessibilityAccess {
     String? password,
   }) async {
     enrollments++;
+    await enrollmentPending?.future;
     if (enrollmentFailure != null) {
       throw WalletAccessException(enrollmentFailure!);
     }
@@ -202,7 +204,13 @@ void main() {
 
     for (final brightness in Brightness.values) {
       for (final size in [const Size(390, 844), const Size(1280, 900)]) {
-        for (final phase in ['ready', 'waiting', 'canceled', 'protected']) {
+        for (final phase in [
+          'ready',
+          'waiting',
+          'creating',
+          'canceled',
+          'protected',
+        ]) {
           testWidgets(
             'inline setup $phase $brightness $size is optional and recovery stays independent',
             (tester) async {
@@ -216,6 +224,8 @@ void main() {
               if (phase == 'canceled') {
                 access.enrollmentFailure = WalletAccessFailure.canceled;
               }
+              if (phase == 'creating')
+                access.enrollmentPending = Completer<void>();
               const key = Key('setup-state-capture');
               await LegalFormHarness().pump(
                 tester,
@@ -231,6 +241,15 @@ void main() {
                 await tester.pumpAndSettle();
                 expect(
                   find.text('authProtectionCanceled'.tr()),
+                  findsOneWidget,
+                );
+                expect(access.enrollments, 1);
+              }
+              if (phase == 'creating') {
+                await tester.tap(find.byKey(const Key('wallet-setup-protect')));
+                await tester.pumpAndSettle();
+                expect(
+                  find.text('authPasskeySetupPending'.tr()),
                   findsOneWidget,
                 );
                 expect(access.enrollments, 1);
@@ -252,7 +271,7 @@ void main() {
                   find.byKey(const Key('wallet-setup-protect')),
                   findsNothing,
                 );
-              } else if (phase == 'waiting') {
+              } else if (phase == 'waiting' || phase == 'creating') {
                 final action = find.byKey(const Key('wallet-setup-protect'));
                 expect(
                   tester
@@ -266,7 +285,12 @@ void main() {
                   isNull,
                 );
                 expect(
-                  find.text('authPasswordManagerPending'.tr()),
+                  find.text(
+                    (phase == 'waiting'
+                            ? 'authPasswordManagerPending'
+                            : 'authPasskeySetupPending')
+                        .tr(),
+                  ),
                   findsOneWidget,
                 );
               } else {
@@ -281,6 +305,12 @@ void main() {
                 key,
                 'setup-$phase-${brightness.name}-${size.width.toInt()}',
               );
+              if (phase == 'creating') {
+                access.enrollmentPending!.complete();
+                await tester.pumpAndSettle();
+                expect(find.text('authPasskeySetupPending'.tr()), findsNothing);
+                expect(find.text('authPasskeyReadyTitle'.tr()), findsOneWidget);
+              }
             },
           );
         }

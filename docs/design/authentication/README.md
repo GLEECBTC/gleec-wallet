@@ -16,6 +16,12 @@ styles is the recorded design exception, rather than introducing a new theme.
 
 ## States and actions
 
+The [12 November journey review](../../AUTH_PASSKEY_UX_REVIEW.md) documents the
+duplicate setup-unlock root cause and competitor comparison. Setup must issue
+one registration followed by one verification assertion. Public captures now
+include the creating state with action-specific feedback; returning to settings
+must not issue another ceremony.
+
 | Surface | State | Primary action | Secondary actions |
 | --- | --- | --- | --- |
 | Entry | New user | Create wallet | Import wallet, hardware wallet where supported |

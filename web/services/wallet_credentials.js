@@ -412,9 +412,17 @@
         }
         assertOperation(token);
         await store.promote(next.key, previous?.revision ?? null, stageSlot, next.revision);
+        // Promotion has already invalidated the old path, even if the active
+        // readback below encounters a storage error. Revoke other tabs now.
+        notify(next, next.key);
+        // Verify the active record with the key already authorized by this
+        // ceremony. A second credentials.get() would only repeat the OS prompt.
+        const active = validateRecord(await store.get(next.key), next.key);
+        if (active.revision !== next.revision ||
+            active.protection !== next.protection ||
+            await decrypt(active, encryptionKey) !== secret) fail('storageFailed');
         // No unattended or abandoned staging copy survives successful promotion.
         // A crash after promotion still has the verified new unlock path.
-        notify(next, next.key);
         assertOperation(token);
       } finally {
         // Staged records are never an unlock fallback. A later promotion/delete

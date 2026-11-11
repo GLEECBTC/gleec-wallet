@@ -128,7 +128,18 @@ async function main(){
     console.log('PASS: automatic provider saving disables setup until completion without another Save action or ceremony');
     await browser.click(page,'Create a passkey',{pointer:true});
     await waitForPasskeySettingsReady(browser,page);
-    console.log('CHECK: recovery wallet protected by a virtual passkey');
+    const enrollmentPrompts=await page.evaluate('__gleecReleaseProbe.metrics()');
+    assert.equal(enrollmentPrompts.registrations,1,'Setup creates one passkey');
+    assert.equal(enrollmentPrompts.challenges,1,'Setup verifies its new passkey once, without a second unlock');
+    await browser.click(page,'Wallet');
+    await browser.wait(page,buttonPresent('Gleec Wallet'),{label:'wallet after passkey setup'});
+    await browser.click(page,'Settings');await browser.click(page,'Security');
+    await waitForPasskeySettingsReady(browser,page);
+    const afterNavigation=await page.evaluate('__gleecReleaseProbe.metrics()');
+    assert.equal(afterNavigation.registrations,1,'Rebuilding setup must not save another passkey');
+    assert.equal(afterNavigation.challenges,1,'Returning to protection settings must not unlock again');
+    evidence.passkeySetup={registrations:1,verificationAssertions:1,extraPromptsOnNavigation:0};
+    console.log('CHECK: recovery wallet protected with one registration and one verification');
 
     // Download before phrase confirmation so existing phrase evidence cannot
     // hide an incorrect claim that a browser download completed a backup.
