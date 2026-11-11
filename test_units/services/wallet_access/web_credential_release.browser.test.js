@@ -161,6 +161,11 @@ async function main() {
     await browser.click(page,'Settings');await browser.click(page,'Security');
     await browser.click(page,'Set up local passkey');
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'passkey protection persisted'});
+    // The envelope is committed before the service finishes its authenticated
+    // readback. Keep this tab foreground until enrollment reports completion;
+    // otherwise the readback can still own the origin-wide ceremony lock.
+    await browser.wait(page,"document.body.textContent.includes('Device protection is ready.')",
+      {timeout:90000,label:'passkey enrollment and authenticated readback completed'});
     const protectedSummary=await page.evaluate(credentialsSummary);
     assert.equal(protectedSummary.unattended,0);assert.equal(protectedSummary.staged,0);
     assert.equal(virtual.counts.created,1);
