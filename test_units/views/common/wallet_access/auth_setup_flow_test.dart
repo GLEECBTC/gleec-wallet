@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -58,6 +59,15 @@ class _SetupAccess extends AccessibilityAccess {
     }
     this.protected = true;
   }
+}
+
+class _ManagerSetupAccess extends _SetupAccess {
+  bool pending = true;
+  final activity = StreamController<void>.broadcast(sync: true);
+  @override
+  bool get isPasswordManagerPending => pending;
+  @override
+  Stream<void> get changes => activity.stream;
 }
 
 Widget _setup(
@@ -155,13 +165,53 @@ void main() {
     });
     tearDown(() => Localization.load(const Locale('en')));
 
+    testWidgets(
+      'provider completion enables one explicit setup action without an extra save control',
+      (tester) async {
+        final access = _ManagerSetupAccess();
+        addTearDown(access.unlockCoordinator.dispose);
+        addTearDown(access.activity.close);
+        await LegalFormHarness().pump(
+          tester,
+          _setup(access),
+          disableAnimations: true,
+          scrollable: false,
+          size: const Size(390, 844),
+        );
+        final action = find.byKey(const Key('wallet-setup-protect'));
+        ElevatedButton button() => tester.widget<ElevatedButton>(
+          find.descendant(of: action, matching: find.byType(ElevatedButton)),
+        );
+        expect(button().onPressed, isNull);
+        expect(access.enrollments, 0);
+        expect(find.text('authPasswordManagerPending'.tr()), findsOneWidget);
+        access.pending = false;
+        access.activity.add(null);
+        await tester.pumpAndSettle();
+        expect(button().onPressed, isNotNull);
+        expect(find.text('authPasswordManagerPending'.tr()), findsNothing);
+        expect(access.enrollments, 0);
+        await tester.ensureVisible(action);
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(access.enrollments, 1);
+        expect(find.text('authPasskeyReadyTitle'.tr()), findsOneWidget);
+        expect(find.byKey(const Key('wallet-setup-backup')), findsOneWidget);
+      },
+    );
+
     for (final brightness in Brightness.values) {
       for (final size in [const Size(390, 844), const Size(1280, 900)]) {
-        for (final phase in ['ready', 'canceled', 'protected']) {
+        for (final phase in ['ready', 'waiting', 'canceled', 'protected']) {
           testWidgets(
             'inline setup $phase $brightness $size is optional and recovery stays independent',
             (tester) async {
-              final access = _SetupAccess()..protected = phase == 'protected';
+              final access =
+                  (phase == 'waiting' ? _ManagerSetupAccess() : _SetupAccess())
+                    ..protected = phase == 'protected';
+              if (access is _ManagerSetupAccess) {
+                addTearDown(access.activity.close);
+              }
               addTearDown(access.unlockCoordinator.dispose);
               if (phase == 'canceled') {
                 access.enrollmentFailure = WalletAccessFailure.canceled;
@@ -201,6 +251,23 @@ void main() {
                 expect(
                   find.byKey(const Key('wallet-setup-protect')),
                   findsNothing,
+                );
+              } else if (phase == 'waiting') {
+                final action = find.byKey(const Key('wallet-setup-protect'));
+                expect(
+                  tester
+                      .widget<ElevatedButton>(
+                        find.descendant(
+                          of: action,
+                          matching: find.byType(ElevatedButton),
+                        ),
+                      )
+                      .onPressed,
+                  isNull,
+                );
+                expect(
+                  find.text('authPasswordManagerPending'.tr()),
+                  findsOneWidget,
                 );
               } else {
                 final action = find.byKey(const Key('wallet-setup-protect'));

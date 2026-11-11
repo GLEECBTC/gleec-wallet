@@ -29,6 +29,8 @@ import '../../../support/legal_onboarding_harness.dart';
 import '../../../support/legal_documents_fixture.dart';
 
 class _Access extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
   final outcomes = <PasswordManagerOutcome>[];
   final managerRequests = <WalletId>[];
   PasswordManagerOutcome managerResult = PasswordManagerOutcome.unknown;

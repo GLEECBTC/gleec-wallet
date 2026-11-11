@@ -689,6 +689,8 @@ void testSeedBackupGate() {
 }
 
 class _Access extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
   _Access(this.walletId) {
     unlockCoordinator.attachWallet(
       'guarded-entry',

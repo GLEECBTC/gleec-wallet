@@ -99,7 +99,16 @@ async function main(){
       if(message.method==='Runtime.consoleAPICalled')consoleMessages.push((message.params.args??[])
         .map(arg=>typeof arg.value==='string'?arg.value:'').join(' '));
     });
-    const page=await browser.page({initialize:probe});
+    // Hold the optional provider reply to reproduce setup racing the automatic
+    // password save. This fixture never saves or returns a password credential.
+    const providerPending=`(() => {
+      navigator.credentials.store=async()=>{
+        window.__providerSaveReached=true;
+        await new Promise(resolve=>{window.__completeProviderSave=resolve;});
+        return null;
+      };
+    })();`;
+    const page=await browser.page({initialize:probe+'\n'+providerPending});
     await browser.navigate(page);await browser.semantics(page);
     await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded wallet created'});
@@ -108,7 +117,15 @@ async function main(){
     assert.equal(typeof generatedCredential,'string');
     const originalIdentity=await page.evaluate(publicIdentity);
     const virtual=await virtualAuthenticator(browser,page);
+    await browser.wait(page,"window.__providerSaveReached===true",{timeout:60000,label:'optional provider save is pending'});
     await browser.click(page,'Settings');await browser.click(page,'Security');
+    await browser.wait(page,`Array.from(document.querySelectorAll('[role=button]')).some(el=>
+      (el.getAttribute('aria-label')||el.textContent||'').trim()==='Create a passkey'&&el.getAttribute('aria-disabled')==='true')`,
+      {label:'protection waits for automatic provider save'});
+    assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().registrations'),0);
+    assert.equal(await page.evaluate(buttonPresent('Save to password manager')),false);
+    await page.evaluate('window.__completeProviderSave();true');
+    console.log('PASS: automatic provider saving disables setup until completion without another Save action or ceremony');
     await browser.click(page,'Create a passkey',{pointer:true});
     await waitForPasskeySettingsReady(browser,page);
     console.log('CHECK: recovery wallet protected by a virtual passkey');

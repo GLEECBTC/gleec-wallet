@@ -14,6 +14,9 @@ final _id = WalletId.withPubkeyHash(
 );
 
 class _Access extends Fake implements WalletAccessService {
+  bool managerPending = false;
+  @override
+  bool get isPasswordManagerPending => managerPending;
   bool supported = true;
   String entry = 'setup-entry';
   int generation = 0;
@@ -21,16 +24,19 @@ class _Access extends Fake implements WalletAccessService {
   bool protected = false;
   WalletAccessFailure? failure;
   Completer<void>? pending;
+  Completer<void>? pendingStatus;
   final requests = <WalletId>[];
   @override
   final unlockCoordinator = WalletUnlockCoordinator(
     operationGate: WalletOperationGate(),
   );
+  final activity = StreamController<void>.broadcast(sync: true);
   @override
-  Stream<void> get changes => const Stream.empty();
+  Stream<void> get changes => activity.stream;
   @override
   Future<WalletAccessStatus> status({WalletId? walletId}) async {
     expect(walletId, _id);
+    await pendingStatus?.future;
     return WalletAccessStatus(
       entryId: entry,
       protection: protected
@@ -78,6 +84,7 @@ Future<WalletProtectionBloc> _ready(_Access access) async {
   final bloc = WalletProtectionBloc(access: access, walletId: _id);
   addTearDown(() async {
     await bloc.close();
+    await access.activity.close();
     await access.unlockCoordinator.dispose();
   });
   await bloc.stream
@@ -88,6 +95,60 @@ Future<WalletProtectionBloc> _ready(_Access access) async {
 
 void main() {
   group('Wallet protection presentation boundary', () {
+    test(
+      'pending provider save blocks setup until completion without starting a ceremony',
+      () async {
+        final access = _Access()..managerPending = true;
+        final bloc = await _ready(access);
+        expect(bloc.state.waitingForPasswordManager, isTrue);
+        bloc.add(
+          const WalletProtectionRequested(WalletProtectionAction.passkey),
+        );
+        await Future<void>.delayed(Duration.zero);
+        expect(access.requests, isEmpty);
+        final ready = bloc.stream.firstWhere(
+          (state) => !state.waitingForPasswordManager,
+        );
+        access.managerPending = false;
+        access.activity.add(null);
+        await ready.timeout(const Duration(seconds: 2));
+        expect(access.requests, isEmpty);
+        final completed = bloc.stream.firstWhere(
+          (state) => state.completed != null,
+        );
+        bloc.add(
+          const WalletProtectionRequested(WalletProtectionAction.passkey),
+        );
+        await completed.timeout(const Duration(seconds: 2));
+        expect(access.requests, [_id]);
+      },
+    );
+    test(
+      'provider activity disables setup before a slow metadata refresh completes',
+      () async {
+        final access = _Access();
+        final bloc = await _ready(access);
+        final status = Completer<void>();
+        access.pendingStatus = status;
+        access.managerPending = true;
+        final waiting = bloc.stream.firstWhere(
+          (state) => state.waitingForPasswordManager,
+        );
+        access.activity.add(null);
+        await waiting.timeout(const Duration(seconds: 2));
+        expect(access.requests, isEmpty);
+        access.pendingStatus = null;
+        access.managerPending = false;
+        final ready = bloc.stream.firstWhere(
+          (state) => !state.waitingForPasswordManager,
+        );
+        access.activity.add(null);
+        await ready.timeout(const Duration(seconds: 2));
+        status.complete();
+        expect(access.requests, isEmpty);
+      },
+    );
+
     test('loading and refresh never start an authenticator ceremony', () async {
       final access = _Access();
       final bloc = await _ready(access);

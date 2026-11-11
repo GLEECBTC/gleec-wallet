@@ -606,6 +606,8 @@ class _RecordingExportBloc extends PrivateKeyExportBloc {
 }
 
 class _ExportAccess extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
   _ExportAccess() {
     unlockCoordinator.attachWallet(
       'synthetic-export-entry',

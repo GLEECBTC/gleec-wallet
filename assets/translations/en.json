@@ -1869,6 +1869,7 @@
   "authRecoveryImported": "Recovery phrase supplied during import",
   "authEncryptedWalletFileTitle": "Encrypted wallet file",
   "authEncryptedWalletFileDescription": "Restoring this file also requires its wallet password. If you do not know or have a saved password, back up your recovery phrase instead. A downloaded file alone does not confirm a recovery backup.",
+  "authPasswordManagerPending": "Waiting for the password manager…",
   "authProtectionBusy": "Finish the current device or password-manager prompt, then try again.",
   "authProtectionStale": "Wallet access changed. Unlock this wallet again before continuing."
 }

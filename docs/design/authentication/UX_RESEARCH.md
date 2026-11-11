@@ -147,6 +147,14 @@ identified low-contrast supporting text; security descriptions and secondary
 controls now use readable theme foregrounds, with contrast and target checks in
 both themes.
 
+A longer Linux qualification also found that automatic password saving could
+still be verifying or finishing when protection became available. The vault
+correctly rejected overlapping work. The UI now tracks the complete optional
+save request, disables protection with a clear waiting status, and enables it
+when the request finishes. This activity cannot authorize access or alter grace.
+A delayed-provider browser regression verifies the transition without an extra
+Save action, an overlapping ceremony, or an automatic enrollment retry.
+
 Local browser samples report application feedback and total opening separately
 from system confirmations. They are development-host measurements and do not
 establish the 100 ms/reference-device target or a physical-provider benchmark.

@@ -59,6 +59,13 @@ class WalletProtectionBloc
     Emitter<WalletProtectionState> emit,
   ) async {
     try {
+      if (state.waitingForPasswordManager != access.isPasswordManagerPending) {
+        emit(
+          state.copyWith(
+            waitingForPasswordManager: access.isPasswordManagerPending,
+          ),
+        );
+      }
       final status = await access.status(walletId: walletId);
       final capabilities = await access.capabilities();
       if (emit.isDone) return;
@@ -66,6 +73,7 @@ class WalletProtectionBloc
       emit(
         state.copyWith(
           status: status,
+          waitingForPasswordManager: access.isPasswordManagerPending,
           capabilities: capabilities,
           loading: false,
           graceSeconds: access.unlockCoordinator.backgroundGrace.inSeconds,
@@ -92,6 +100,14 @@ class WalletProtectionBloc
     Emitter<WalletProtectionState> emit,
   ) async {
     if (state.loading || state.busy || state.status == null) return;
+    if (state.waitingForPasswordManager || access.isPasswordManagerPending) {
+      emit(
+        state.copyWith(
+          waitingForPasswordManager: access.isPasswordManagerPending,
+        ),
+      );
+      return;
+    }
     final allowed = switch (event.action) {
       WalletProtectionAction.passkey => state.canCreatePasskey,
       WalletProtectionAction.device => state.canEnableDevice,

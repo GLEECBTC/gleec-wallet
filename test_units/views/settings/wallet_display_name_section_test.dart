@@ -16,6 +16,8 @@ import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 import '../../support/legal_onboarding_harness.dart';
 
 class _RenameAccess extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
   final renamed = <(WalletId, String, String?)>[];
   WalletAccessFailure? failure;
   @override

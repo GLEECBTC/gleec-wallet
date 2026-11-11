@@ -78,6 +78,7 @@ class WalletAccessService {
   late final StreamSubscription<void> _protectionSubscription;
   final Object _operationOwner = Object();
   int _revision = 0;
+  int _passwordManagerOperations = 0;
   final _preparedDeletionIds = <String, String>{};
   final _preparedDeletionScopes = <String, _PreparedDeletionAuthorization>{};
   final _deletedEntryIds = <String, Set<String>>{};
@@ -89,6 +90,10 @@ class WalletAccessService {
   bool _recoveringFailedSignOut = false;
   Object? _sessionIdentity;
   Stream<void> get changes => _changes.stream;
+
+  /// Presentation-only activity, including the save's fresh verification and
+  /// bookkeeping. The vault remains the authority for authorization and locks.
+  bool get isPasswordManagerPending => _passwordManagerOperations > 0;
 
   Future<void> initialize() async {
     final grace = await _storage.read(_graceKey);
@@ -1526,28 +1531,43 @@ class WalletAccessService {
   Future<PasswordManagerOutcome> saveToPasswordManager({
     required WalletId walletId,
     String? password,
-  }) => _runAccessOperation((revision) async {
-    final user = await _resolve(walletId);
-    final secret = await _authorize(
-      walletId,
-      password: password,
-      reason: 'Save wallet password',
-      revision: revision,
-    );
-    _ensureRevision(revision);
-    final outcome = await unlockCoordinator.runSystemPrompt(
-      () => _backend.savePassword(
-        username: 'gleec-${entryId(user)}',
-        password: secret,
-        title: user.wallet.displayName,
-      ),
-    );
-    _ensureRevision(revision);
-    final record = (await _records())[entryId(user)];
-    _ensureRevision(revision);
-    if (record != null) await _saveRecord(record.copyWith(manager: outcome));
-    return outcome;
-  });
+  }) async {
+    _passwordManagerOperations++;
+    if (_passwordManagerOperations == 1 && !_changes.isClosed) {
+      _changes.add(null);
+    }
+    try {
+      return await _runAccessOperation((revision) async {
+        final user = await _resolve(walletId);
+        final secret = await _authorize(
+          walletId,
+          password: password,
+          reason: 'Save wallet password',
+          revision: revision,
+        );
+        _ensureRevision(revision);
+        final outcome = await unlockCoordinator.runSystemPrompt(
+          () => _backend.savePassword(
+            username: 'gleec-${entryId(user)}',
+            password: secret,
+            title: user.wallet.displayName,
+          ),
+        );
+        _ensureRevision(revision);
+        final record = (await _records())[entryId(user)];
+        _ensureRevision(revision);
+        if (record != null) {
+          await _saveRecord(record.copyWith(manager: outcome));
+        }
+        return outcome;
+      });
+    } finally {
+      _passwordManagerOperations--;
+      if (_passwordManagerOperations == 0 && !_changes.isClosed) {
+        _changes.add(null);
+      }
+    }
+  }
 
   Future<void> recordPasswordManagerOutcome({
     required WalletId walletId,

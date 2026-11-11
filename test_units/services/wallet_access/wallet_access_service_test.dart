@@ -72,6 +72,7 @@ class _Backend extends CredentialBackend {
   Completer<void>? readReached;
   Completer<void>? pendingCancel;
   Completer<void>? cancelReached;
+  Future<PasswordManagerOutcome> Function()? onSave;
   Future<void> Function()? onProtectedWrite;
   Future<String?> Function()? onProtectedReadback;
   bool failDelete = false;
@@ -218,7 +219,7 @@ class _Backend extends CredentialBackend {
     required String username,
     required String password,
     required String title,
-  }) async => PasswordManagerOutcome.unknown;
+  }) async => await onSave?.call() ?? PasswordManagerOutcome.unknown;
 }
 
 class _Auth extends Fake implements KomodoDefiLocalAuth {
@@ -520,6 +521,82 @@ void main() {
         WalletAccessFailure.staleOperation,
       ),
     );
+
+    group('optional password-manager activity', () {
+      for (final canceled in [false, true]) {
+        test(
+          'covers fresh verification and provider completion, canceled=$canceled',
+          () async {
+            final user = await install(protected: false);
+            auth.verificationReached = Completer<void>();
+            auth.pendingVerification = Completer<void>();
+            final saveReached = Completer<void>();
+            final reply = Completer<PasswordManagerOutcome>();
+            backend.onSave = () {
+              saveReached.complete();
+              return reply.future;
+            };
+            final pending = service.saveToPasswordManager(
+              walletId: user.walletId,
+            );
+            final result = canceled
+                ? expectLater(pending, throwsA(isA<WalletAccessException>()))
+                : expectLater(
+                    pending,
+                    completion(PasswordManagerOutcome.unknown),
+                  );
+            expect(service.isPasswordManagerPending, isTrue);
+            await auth.verificationReached!.future;
+            expect(service.isPasswordManagerPending, isTrue);
+            expect(saveReached.isCompleted, isFalse);
+            auth.pendingVerification!.complete();
+            await saveReached.future;
+            expect(service.isPasswordManagerPending, isTrue);
+            if (canceled) {
+              reply.completeError(
+                const WalletAccessException(WalletAccessFailure.canceled),
+              );
+            } else {
+              reply.complete(PasswordManagerOutcome.unknown);
+            }
+            await result;
+            expect(service.isPasswordManagerPending, isFalse);
+            expect(coordinator.state.isLocked, isFalse);
+          },
+        );
+      }
+      test(
+        'a queued optional save cannot clear another save’s activity',
+        () async {
+          final user = await install(protected: false);
+          final firstReached = Completer<void>();
+          final secondReached = Completer<void>();
+          final firstReply = Completer<PasswordManagerOutcome>();
+          final secondReply = Completer<PasswordManagerOutcome>();
+          var calls = 0;
+          backend.onSave = () {
+            calls++;
+            if (calls == 1) {
+              firstReached.complete();
+              return firstReply.future;
+            }
+            secondReached.complete();
+            return secondReply.future;
+          };
+          final first = service.saveToPasswordManager(walletId: user.walletId);
+          await firstReached.future;
+          final second = service.saveToPasswordManager(walletId: user.walletId);
+          expect(service.isPasswordManagerPending, isTrue);
+          firstReply.complete(PasswordManagerOutcome.unknown);
+          await first;
+          await secondReached.future;
+          expect(service.isPasswordManagerPending, isTrue);
+          secondReply.complete(PasswordManagerOutcome.unknown);
+          await second;
+          expect(service.isPasswordManagerPending, isFalse);
+        },
+      );
+    });
 
     group('sensitive operation foreground authority', () {
       for (final deleting in [false, true]) {

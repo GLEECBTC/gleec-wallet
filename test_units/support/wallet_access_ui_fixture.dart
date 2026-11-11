@@ -20,6 +20,8 @@ KdfUser accessibilityUser() => KdfUser(
 );
 
 class AccessibilityAccess extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
   bool protected = true;
   final renamed = <String>[];
   final authorized = <String?>[];

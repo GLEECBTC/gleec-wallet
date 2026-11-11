@@ -31,6 +31,8 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
     if (_collectingInput ||
         state.loading ||
         state.busy ||
+        state.waitingForPasswordManager ||
+        bloc.access.isPasswordManagerPending ||
         state.status == null) {
       return;
     }
@@ -81,7 +83,8 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
       final status = state.status;
       final passkey = status?.protection == CredentialProtection.passkey;
       final protected = status?.requiresAuthentication == true;
-      final busy = state.busy || _collectingInput;
+      final busy =
+          state.busy || _collectingInput || state.waitingForPasswordManager;
       if (state.loading) {
         return Semantics(
           liveRegion: true,
@@ -290,10 +293,22 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
             const SizedBox(height: 12),
             Semantics(
               liveRegion: true,
-              label: 'pleaseWait'.tr(),
-              child: TickerMode(
-                enabled: !MediaQuery.disableAnimationsOf(context),
-                child: const LinearProgressIndicator(),
+              label:
+                  (state.waitingForPasswordManager
+                          ? 'authPasswordManagerPending'
+                          : 'pleaseWait')
+                      .tr(),
+              child: ExcludeSemantics(
+                child: Column(
+                  children: [
+                    if (state.waitingForPasswordManager)
+                      Text('authPasswordManagerPending'.tr()),
+                    TickerMode(
+                      enabled: !MediaQuery.disableAnimationsOf(context),
+                      child: const LinearProgressIndicator(),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

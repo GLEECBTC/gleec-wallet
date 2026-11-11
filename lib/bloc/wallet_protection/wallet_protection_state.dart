@@ -6,6 +6,7 @@ final class WalletProtectionState extends Equatable {
     this.capabilities,
     this.loading = true,
     this.busy = false,
+    this.waitingForPasswordManager = false,
     this.graceSeconds = 30,
     this.failure,
     this.completed,
@@ -14,6 +15,7 @@ final class WalletProtectionState extends Equatable {
   final CredentialCapabilities? capabilities;
   final bool loading;
   final bool busy;
+  final bool waitingForPasswordManager;
   final int graceSeconds;
   final WalletAccessFailure? failure;
   final WalletProtectionAction? completed;
@@ -33,6 +35,7 @@ final class WalletProtectionState extends Equatable {
     CredentialCapabilities? capabilities,
     bool? loading,
     bool? busy,
+    bool? waitingForPasswordManager,
     int? graceSeconds,
     WalletAccessFailure? failure,
     WalletProtectionAction? completed,
@@ -43,6 +46,8 @@ final class WalletProtectionState extends Equatable {
     capabilities: capabilities ?? this.capabilities,
     loading: loading ?? this.loading,
     busy: busy ?? this.busy,
+    waitingForPasswordManager:
+        waitingForPasswordManager ?? this.waitingForPasswordManager,
     graceSeconds: graceSeconds ?? this.graceSeconds,
     failure: clearNotice || clearFailure ? null : failure ?? this.failure,
     completed: clearNotice ? null : completed ?? this.completed,
@@ -54,6 +59,7 @@ final class WalletProtectionState extends Equatable {
     capabilities,
     loading,
     busy,
+    waitingForPasswordManager,
     graceSeconds,
     failure,
     completed,

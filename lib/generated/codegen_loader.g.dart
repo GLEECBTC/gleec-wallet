@@ -2080,6 +2080,7 @@ abstract class LocaleKeys {
   static const authEncryptedWalletFileTitle = 'authEncryptedWalletFileTitle';
   static const authEncryptedWalletFileDescription =
       'authEncryptedWalletFileDescription';
+  static const authPasswordManagerPending = 'authPasswordManagerPending';
   static const authProtectionBusy = 'authProtectionBusy';
   static const authProtectionStale = 'authProtectionStale';
 }
