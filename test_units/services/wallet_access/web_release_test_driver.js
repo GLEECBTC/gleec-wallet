@@ -30,7 +30,7 @@ class LocalBrowser {
     if (hosted) {
       const target = new URL(hosted);
       assert.equal(target.protocol, 'https:');
-      assert.match(target.hostname, /^(?:walletrc|gleec-wallet-official)--pull-\d+-merge-[a-z0-9]+\.web\.app$/);
+      assert.match(target.hostname, /^(?:walletrc|gleec-wallet-official)--pull-\d+-merge-[a-f0-9]{7,40}(?:-[a-z0-9]+)?\.web\.app$/);
       assert.equal(target.pathname, '/');
       assert.equal(target.search + target.hash + target.username + target.password + target.port, '');
       const expected = process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256;
