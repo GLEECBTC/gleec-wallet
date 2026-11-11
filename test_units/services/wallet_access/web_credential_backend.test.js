@@ -60,6 +60,21 @@ test('hosted acceptance rejects production and verifies the independently approv
   }
 });
 
+test('recovery diagnostics select the completed archive rather than browser staging files', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const {newDownload} = require('./web_wallet_recovery.browser.test.js');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gleec-completed-download-'));
+  try {
+    fs.writeFileSync(path.join(directory, '.org.chromium.staging'), 'temporary bytes');
+    fs.writeFileSync(path.join(directory, 'pending.txt.zip.crdownload'), 'partial bytes');
+    fs.writeFileSync(path.join(directory, 'wallet.json'), 'encrypted wallet fixture');
+    fs.writeFileSync(path.join(directory, 'komodo_wallet_log_fixture.txt.zip'), 'completed archive fixture');
+    const selected = await newDownload({downloads:directory},new Set(),{suffix:'.txt.zip'});
+    assert.equal(path.basename(selected),'komodo_wallet_log_fixture.txt.zip');
+  } finally { fs.rmSync(directory,{recursive:true,force:true}); }
+});
+
 test('wallet HTML and hosting policy exclude external and arbitrary inline scripts', () => {
   const root = path.resolve(__dirname, '../../..');
   const html = readFileSync(path.join(root, 'web/index.html'), 'utf8');

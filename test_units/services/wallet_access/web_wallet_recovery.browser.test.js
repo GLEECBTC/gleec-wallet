@@ -73,9 +73,13 @@ async function openImport(browser,page){
     {label:'import form ready'});
 }
 
-async function newDownload(browser,before){
+async function newDownload(browser,before,{suffix}={}){
   for(let attempt=0;attempt<150;attempt++){
-    const filename=fs.readdirSync(browser.downloads).find(name=>!before.has(name)&&!name.endsWith('.crdownload'));
+    // Chrome can expose a hidden staging file before renaming the completed
+    // download. Never decode that file as an encrypted wallet or log archive.
+    const filename=fs.readdirSync(browser.downloads).find(name=>
+      !before.has(name)&&!name.startsWith('.')&&!name.endsWith('.crdownload')&&
+      (!suffix||name.endsWith(suffix)));
     if(filename)return path.join(browser.downloads,filename);
     await delay(100);
   }
@@ -214,7 +218,7 @@ async function main(){
     await browser.click(page,'Settings');await browser.click(page,'General');
     const beforeLogs=new Set(fs.readdirSync(browser.downloads));
     await browser.click(page,'Download logs');
-    const logs=gunzipSync(fs.readFileSync(await newDownload(browser,beforeLogs))).toString('utf8');
+    const logs=gunzipSync(fs.readFileSync(await newDownload(browser,beforeLogs,{suffix:'.txt.zip'}))).toString('utf8');
     for(const diagnostic of [logs,...consoleMessages]){
       assert.equal(diagnostic.includes(phrase),false,'A fixture phrase must not enter diagnostics');
       assert.equal(diagnostic.includes(generatedCredential),false,'A fixture password must not enter diagnostics');
@@ -226,4 +230,4 @@ async function main(){
 }
 
 if(require.main===module)main().catch(error=>{console.error(error.name,error.message);console.error(error.stack?.split('\n').slice(1).join('\n'));process.exitCode=1;});
-module.exports={publicIdentity,recoverySummary};
+module.exports={publicIdentity,recoverySummary,newDownload};
