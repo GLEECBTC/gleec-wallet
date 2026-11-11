@@ -78,4 +78,22 @@ async function checkNoPasskeys(){
     console.log('PASS: missing passkey support still permits durable instant browser-local creation');
   }finally{await browser.cleanup();}
 }
-if(require.main===module)(async()=>{await checkProtectedGate();await checkNoPasskeys();})().catch(error=>{console.error(error.name,error.message);console.error(error.stack?.split('\n').slice(1).join('\n'));process.exitCode=1;});
+async function checkOfflineHelper(){
+  const browser=new LocalBrowser(path.resolve(__dirname,'../../..'));
+  try{
+    await browser.serve();await browser.launch();
+    const page=await browser.page({initialize:"window.__helperCsp=[];document.addEventListener('securitypolicyviolation',event=>__helperCsp.push(event.violatedDirective));"});
+    await browser.navigate(page,new URL('assets/packages/flutter_inappwebview/assets/t_rex_runner/t-rex.html',browser.base).href);
+    await browser.wait(page,"typeof window.Runner==='function'&&!!Runner.instance_",{timeout:10000,label:'audited offline-game scripts execute'});
+    assert.equal(await page.evaluate("document.querySelectorAll('script:not([src])').length"),0);
+    assert.deepEqual(await page.evaluate("Array.from(document.scripts,script=>new URL(script.src).pathname.split('/').pop()).sort()"),['gleec-t-rex-runner.js','gleec-t-rex-start.js']);
+    assert.deepEqual(await page.evaluate('window.__helperCsp'),[]);
+    await page.evaluate("(()=>{const script=document.createElement('script');script.textContent='window.__unreviewedGameScript=true';document.head.append(script);return true;})()");
+    await browser.wait(page,"window.__helperCsp.length===1",{label:'unreviewed inline game script blocked'});
+    assert.equal(await page.evaluate('window.__unreviewedGameScript===undefined'),true);
+    console.log('PASS: audited self-hosted offline game works under strict CSP; unreviewed inline execution is blocked');
+  }finally{await browser.cleanup();}
+}
+
+module.exports={checkOfflineHelper};
+if(require.main===module)(async()=>{await checkProtectedGate();await checkNoPasskeys();await checkOfflineHelper();})().catch(error=>{console.error(error.name,error.message);console.error(error.stack?.split('\n').slice(1).join('\n'));process.exitCode=1;});

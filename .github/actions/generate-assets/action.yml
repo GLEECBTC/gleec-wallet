@@ -312,6 +312,9 @@ runs:
         if ! command -v "$artifact_python" >/dev/null 2>&1; then
           artifact_python=python
         fi
+        if [ -f build/web/index.html ]; then
+          "$artifact_python" tool/prepare_wallet_web_assets.py build/web
+        fi
         "$artifact_python" tool/verify_wallet_artifacts.py build
 
         echo "Done fetching packages and generating assets"

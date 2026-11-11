@@ -26,6 +26,16 @@ void main() {
     },
   );
   test(
+    'public helper extraction rejects unreviewed executable changes',
+    () async {
+      final result = await Process.run(
+        Platform.isWindows ? 'python' : 'python3',
+        ['tool/test_prepare_wallet_web_assets.py'],
+      );
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+    },
+  );
+  test(
     'CI signing handles literal inputs without exposing them',
     () async {
       final result = await Process.run(
