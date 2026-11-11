@@ -312,7 +312,7 @@ runs:
         if ! command -v "$artifact_python" >/dev/null 2>&1; then
           artifact_python=python
         fi
-        if [ -f build/web/index.html ]; then
+        if [ -f build/web/assets/packages/flutter_inappwebview/assets/t_rex_runner/t-rex.html ]; then
           "$artifact_python" tool/prepare_wallet_web_assets.py build/web
         fi
         "$artifact_python" tool/verify_wallet_artifacts.py build
