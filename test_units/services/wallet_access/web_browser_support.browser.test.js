@@ -60,7 +60,7 @@ async function checkNoPasskeys(){
     await browser.navigate(page);await browser.semantics(page);
     console.log('CHECK: app loaded without passkey capability');
     assert.equal(await page.evaluate('!!document.querySelector("#browser-support")'),false);
-    await browser.click(page,'Connect wallet');
+    await browser.wait(page,buttonPresent('Create a new wallet'),{label:'inline no-passkey creation entry'});
     console.log('CHECK: no-passkey creation entry opened');
     await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'instant creation without passkey support'});

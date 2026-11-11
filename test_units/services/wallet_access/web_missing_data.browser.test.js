@@ -55,7 +55,6 @@ async function check(kind){
       assert.equal(await page.evaluate(`gleecWalletCredentials.read({key:${JSON.stringify(key)},requireAuthentication:true})`),null);
       assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'),0);
       assert.equal(await page.evaluate(walletRows),0);
-      await browser.click(page,'Connect wallet');
       await browser.wait(page,buttonPresent('Create a new wallet'),{label:'clean-origin create/import choice'});
       assert.equal(await page.evaluate(buttonPresent('Log In')),false);
       console.log('PASS: retained provider passkey and known password cannot restore a clean local origin without wallet data');
@@ -72,13 +71,11 @@ async function check(kind){
     if(kind==='wallet'){
       assert.deepEqual(after,vault);assert.equal(await page.evaluate(walletRows),0);
       assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')),false,'A credential alone must not present an unlocked wallet');
-      if(await page.evaluate(buttonPresent('Connect wallet')))await browser.click(page,'Connect wallet');
       await browser.wait(page,"Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('I already have a recovery phrase'))",{label:'missing-wallet recovery entry'});
       console.log('PASS: missing encrypted wallet preserves credential, offers import and does not create or claim a recovered wallet');
       return;
     }
     if(await page.evaluate(buttonPresent('Connect wallet'))){
-      await browser.click(page,'Connect wallet');
       const stored="Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim().startsWith('Gleec Wallet'))";
       await browser.wait(page,`!!(${stored})`,{label:'preserved wallet catalog entry'});
       await page.evaluate(`(${stored}).click();true`);
