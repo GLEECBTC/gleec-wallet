@@ -18,7 +18,16 @@ async function main(){
     credential=await page.evaluate('__gleecReleaseProbe.testCredential()');
     const oldProvider=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Create a passkey');
-    await browser.wait(page,buttonPresent('Replace passkey using password'),{label:'protected recovery action'});
+    await browser.wait(page, `(()=>{
+      const decode=key=>{let value=key?localStorage.getItem(key):null;for(let i=0;i<3&&typeof value==='string';i++){try{value=JSON.parse(value);}catch(_){break;}}return value;};
+      const keys=Object.keys(localStorage);
+      const last=decode(keys.find(key=>key.endsWith('wallet_access_last_v1')));
+      const records=decode(keys.find(key=>key.endsWith('wallet_access_records_v1')));
+      const record=records?.[last?.entryId];
+      const action=Array.from(document.querySelectorAll('[role=button]')).find(el=>
+        (el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true');
+      return record?.phase==='ready'&&record?.requiresAuthentication===true&&record?.protection==='passkey'&&!!action;
+    })()`,{timeout:90000,label:'protected recovery action after enrollment readback'});
     const before=await page.evaluate(credentialsSummary);
     console.log('CHECK: original passkey enrolled; removing only the virtual fixture provider');
     await page.send('WebAuthn.removeVirtualAuthenticator',{authenticatorId:oldProvider.authenticatorId});

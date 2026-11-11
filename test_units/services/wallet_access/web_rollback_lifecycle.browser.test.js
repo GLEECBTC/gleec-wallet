@@ -100,12 +100,11 @@ async function main() {
         await browser.wait(page, `__gleecReleaseProbe.metrics().challenges===${before + 1}`, {label: 'one automatic return challenge'});
         assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')), false);
         await page.evaluate('gleecWalletCredentials.cancel();true');
-        await browser.wait(page, buttonPresent('Unlock'), {label: 'stable explicit unlock after cancellation'});
+        await browser.wait(page, `${buttonPresent('Unlock')}||${buttonPresent('Unlock with passkey')}`, {label: 'stable explicit unlock after cancellation'});
         await delay(500);
         assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'), before + 1, 'Cancellation must not loop');
         await page.send('WebAuthn.setAutomaticPresenceSimulation', {authenticatorId: virtual.authenticatorId, enabled: true});
-        await browser.click(page, 'Unlock');
-        await browser.wait(page, buttonPresent('Gleec Wallet'), {label: 'explicit unlock after cancellation'});
+        await unlockApp(browser, page);
       } else {
         await browser.wait(page, buttonPresent('Gleec Wallet'), {label: 'existing session restored inside grace'});
         assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().challenges'), before);

@@ -433,7 +433,9 @@ class _WalletImportWrapperState extends State<WalletSimpleImport>
         const SizedBox(height: 8),
         Text(
           'authImportDerivationHint'.tr(),
-          style: Theme.of(context).textTheme.bodySmall,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
         const SizedBox(height: 20),
         UiDivider(text: LocaleKeys.seedOr.tr()),

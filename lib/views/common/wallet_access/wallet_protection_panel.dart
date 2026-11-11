@@ -75,6 +75,9 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
   ) => BlocBuilder<WalletProtectionBloc, WalletProtectionState>(
     builder: (context, state) {
       final theme = Theme.of(context);
+      final supportingStyle = theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurface,
+      );
       final status = state.status;
       final passkey = status?.protection == CredentialProtection.passkey;
       final protected = status?.requiresAuthentication == true;
@@ -161,17 +164,11 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
           ),
           if (widget.showLockSettings && state.canCreatePasskey) ...[
             const SizedBox(height: 8),
-            Text(
-              'authPasskeyLocalScope'.tr(),
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('authPasskeyLocalScope'.tr(), style: supportingStyle),
           ],
           if (widget.showLockSettings && state.canCreatePasskey) ...[
             const SizedBox(height: 8),
-            Text(
-              'authPasskeySetupConfirmations'.tr(),
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('authPasskeySetupConfirmations'.tr(), style: supportingStyle),
           ],
           if (state.canCreatePasskey || state.canEnableDevice) ...[
             const SizedBox(height: 16),
@@ -211,7 +208,10 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
             const SizedBox(height: 12),
             OutlinedButton(
               key: const Key('wallet-setup-protect'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 48),
+                foregroundColor: theme.colorScheme.onSurface,
+              ),
               onPressed: busy ? null : widget.onOpenSettings,
               child: Text('authReviewProtection'.tr()),
             ),
@@ -222,7 +222,10 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               key: const Key('enable-device-unlock'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 48),
+                foregroundColor: theme.colorScheme.onSurface,
+              ),
               onPressed: busy
                   ? null
                   : () => _request(WalletProtectionAction.device),
@@ -238,7 +241,10 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               key: const Key('replace-passkey-using-password'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 48),
+                foregroundColor: theme.colorScheme.onSurface,
+              ),
               onPressed: busy
                   ? null
                   : () => _request(WalletProtectionAction.replacePasskey),
@@ -278,10 +284,7 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              'authLockGraceDescription'.tr(),
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('authLockGraceDescription'.tr(), style: supportingStyle),
           ],
           if (busy) ...[
             const SizedBox(height: 12),
@@ -301,10 +304,7 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
           ],
           if (widget.showLockSettings) ...[
             const SizedBox(height: 16),
-            Text(
-              'authPasswordManagerAutomatic'.tr(),
-              style: theme.textTheme.bodySmall,
-            ),
+            Text('authPasswordManagerAutomatic'.tr(), style: supportingStyle),
             const SizedBox(height: 8),
             Text(switch (status.passwordManager) {
               PasswordManagerOutcome.accepted =>
@@ -317,7 +317,7 @@ class _WalletProtectionPanelState extends State<WalletProtectionPanel> {
               PasswordManagerOutcome.offered ||
               PasswordManagerOutcome.unknown =>
                 'authPasswordManagerUnknown'.tr(),
-            }, style: theme.textTheme.bodySmall),
+            }, style: supportingStyle),
           ],
         ],
       );

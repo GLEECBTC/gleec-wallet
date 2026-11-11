@@ -114,7 +114,8 @@ VoiceOver/TalkBack/provider and signing checks remain pending separately.
 ## Validation of the implemented follow-up
 
 On November 11, pinned Flutter 3.41.4 passed the complete production-GasFree
-app aggregator: **4,553 passed, 26 skipped, zero failures**. Whole-project analysis
+app aggregator before final contrast polish: **4,553 passed, 26 skipped, zero failures**.
+The final PR handoff binds the subsequent full CI run to the finished source. Whole-project analysis
 reported **zero errors**, with the inherited 55 warnings and 2,143 informational
 notices unchanged. The focused new presentation/password-provider round passed
 52 cases; subsequent race regressions are included in the complete aggregator.
@@ -136,7 +137,10 @@ committed value to the provider, its ordinary autofill fallback remains obscured
 and save failure never rolls back a completed password change. Recovery and
 password inputs remask on background; keyboard learning/suggestions are disabled
 without removing paste or autofill. Source and packaged copies retain the
-Apache license for the official passkey icon.
+Apache license for the official passkey icon. Real light/dark screen review also
+identified low-contrast supporting text; security descriptions and secondary
+controls now use readable theme foregrounds, with contrast and target checks in
+both themes.
 
 Local browser samples report application feedback and total opening separately
 from system confirmations. They are development-host measurements and do not

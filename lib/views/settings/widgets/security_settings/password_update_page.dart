@@ -101,7 +101,9 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
                       const SizedBox(height: 12),
                       Text(
                         'authPasswordChangeDisclosure'.tr(),
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                       const SizedBox(height: 21),
                       pageContent,

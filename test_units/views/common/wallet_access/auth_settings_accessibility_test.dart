@@ -17,14 +17,15 @@ import '../../../support/legal_onboarding_harness.dart';
 import '../../../support/wallet_access_ui_fixture.dart';
 
 class _ManagerStatusAccess extends AccessibilityAccess {
-  _ManagerStatusAccess(this.outcome);
+  _ManagerStatusAccess(this.outcome, {this.passkey = false});
   final PasswordManagerOutcome outcome;
+  final bool passkey;
   @override
   Future<WalletAccessStatus> status({walletId}) async {
     final previous = await super.status(walletId: walletId);
     return WalletAccessStatus(
       entryId: previous.entryId,
-      protection: previous.protection,
+      protection: passkey ? CredentialProtection.passkey : previous.protection,
       hasManagedCredential: previous.hasManagedCredential,
       requiresAuthentication: previous.requiresAuthentication,
       passwordManager: outcome,
@@ -72,6 +73,35 @@ void main() {
       );
     }
     for (final brightness in Brightness.values) {
+      testWidgets(
+        'passkey settings $brightness meets text contrast and target guidelines',
+        (tester) async {
+          final semantics = tester.ensureSemantics();
+          final access = _ManagerStatusAccess(
+            PasswordManagerOutcome.accepted,
+            passkey: true,
+          );
+          final harness = LegalFormHarness();
+          addTearDown(access.unlockCoordinator.dispose);
+          // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+          harness.auth.emit(AuthBlocState.loggedIn(accessibilityUser()));
+          await harness.pump(
+            tester,
+            RepositoryProvider<WalletAccessService>.value(
+              value: access,
+              child: const DeviceProtectionSection(),
+            ),
+            brightness: brightness,
+            size: const Size(900, 1600),
+            contentWidth: 600,
+            disableAnimations: true,
+          );
+          await expectLater(tester, meetsGuideline(textContrastGuideline));
+          await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+          await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+          semantics.dispose();
+        },
+      );
       testWidgets(
         'protected settings $brightness announces the selected grace interval',
         (tester) async {

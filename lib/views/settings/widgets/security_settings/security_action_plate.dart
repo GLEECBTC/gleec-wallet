@@ -320,9 +320,11 @@ class _ActionBody extends StatelessWidget {
     // TODO: See if possible to refactor theme to provide this text style in
     // accordance with the Material Design 3 typography guidelines. This is
     // used in other places as well. e.g. The seed backup notification.
-    final descriptionStyle = Theme.of(
-      context,
-    ).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w500, fontSize: 14);
+    final descriptionStyle = Theme.of(context).textTheme.bodyLarge!.copyWith(
+      fontWeight: FontWeight.w500,
+      fontSize: 14,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 100),
