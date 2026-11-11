@@ -74,9 +74,18 @@ async function virtualAuthenticator(browser,page) {
 }
 
 async function unlockApp(browser,page) {
-  if(await page.evaluate(buttonPresent('Unlock')))await browser.click(page,'Unlock');
-  await browser.wait(page,`${buttonPresent('Gleec Wallet')}||${buttonPresent('Unlock with passkey')}`,{label:'unlock choice'});
-  if(await page.evaluate(buttonPresent('Unlock with passkey')))await browser.click(page,'Unlock with passkey');
+  // Status loading and automatic return can finish between CDP requests. Wait
+  // for a live choice and activate it atomically, once per explicit stage.
+  const activate=labels=>`(()=>{
+    if(${buttonPresent('Gleec Wallet')})return 'wallet';
+    const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>${JSON.stringify(labels)}.includes((el.getAttribute('aria-label')||el.textContent||'').trim())&&el.getAttribute('aria-disabled')!=='true');
+    if(!element)return false;
+    const label=(element.getAttribute('aria-label')||element.textContent||'').trim();element.click();return label;
+  })()`;
+  const stage=await browser.wait(page,activate(['Unlock','Unlock with passkey']),
+    {timeout:60000,label:'wallet unlock entry'});
+  if(stage==='Unlock')await browser.wait(page,activate(['Unlock with passkey']),
+    {timeout:60000,label:'passkey unlock entry'});
   await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'wallet unlocked'});
 }
 
