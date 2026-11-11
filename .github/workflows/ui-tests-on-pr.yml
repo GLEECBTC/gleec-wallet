@@ -213,8 +213,7 @@ jobs:
       #   if: ${{ matrix.browser == 'chrome' }}
       #   continue-on-error: true
       #   uses: ./.github/actions/code-coverage
-      #   with:
-      #     test_file: 'test_integration'
+      #   # Requires an integration run that already produced coverage/lcov.info.
 
       - name: Fail workflow if tests failed
         id: check_test_result

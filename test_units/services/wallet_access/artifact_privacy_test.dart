@@ -36,6 +36,17 @@ void main() {
     },
   );
   test(
+    'coverage reports preserve the passing result and reject failures',
+    () async {
+      final result = await Process.run(
+        Platform.isWindows ? 'python' : 'python3',
+        ['tool/test_render_coverage.py'],
+      );
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+    },
+    skip: Platform.isWindows ? 'CI reporting uses POSIX tools' : false,
+  );
+  test(
     'CI signing handles literal inputs without exposing them',
     () async {
       final result = await Process.run(

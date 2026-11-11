@@ -51,7 +51,12 @@ if [[ "$apt_ready" != true ]]; then
   echo "Complete, signed Ubuntu package indexes could not be obtained."
   exit 1
 fi
-sudo env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y \
-  ninja-build libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev \
-  libjsoncpp-dev libsqlite3-dev libxdg-basedir-dev cmake pkg-config clang \
+packages=(
+  ninja-build libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev
+  libjsoncpp-dev libsqlite3-dev libxdg-basedir-dev cmake pkg-config clang
   binutils git xz-utils zip libglu1-mesa curl libstdc++-12-dev
+)
+if (( $# > 0 )); then
+  packages=("$@")
+fi
+sudo env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y -- "${packages[@]}"
