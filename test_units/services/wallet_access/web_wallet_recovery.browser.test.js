@@ -42,16 +42,27 @@ const recoverySummary=`(async()=>{
     exportConfirmed:metadata.encrypted_file_exported===true};
 })()`;
 
-async function signOut(browser,page){
+async function signOut(browser,page,{contend=false}={}){
   await browser.click(page,'Settings');await browser.click(page,'Log out');
   await browser.wait(page,"!!document.querySelector('[role=dialog]')",{label:'sign-out confirmation'});
+  if(contend){
+    await page.evaluate("window.__heldAccessLock=navigator.locks.request('gleec-wallet-access',()=>new Promise(resolve=>{window.__releaseAccessLock=resolve;}));true");
+    await browser.wait(page,"typeof window.__releaseAccessLock==='function'",{label:'short access-lock contention fixture'});
+  }
   await browser.click(page,'Log out');
+  if(contend){
+    await delay(250);
+    assert.equal(await page.evaluate(buttonPresent('Connect wallet')),false,
+      'Sign-out must remain covered until its durable preference is written');
+    await page.evaluate('window.__releaseAccessLock();window.__heldAccessLock.then(()=>true)');
+  }
   // Finish the current shutdown before testing a cold, explicitly signed-out
   // launch. A page reload must not interrupt the confirmation transition.
   await browser.wait(page,`(${buttonPresent('Connect wallet')})&&!document.querySelector('[role=dialog],[role=progressbar]')`,
     {timeout:60000,label:'completed explicit sign-out'});
   await browser.navigate(page);await browser.semantics(page);
   await browser.wait(page,buttonPresent('Connect wallet'),{label:'signed-out entry'});
+  if(contend)console.log('PASS: short access-lock contention retries sign-out without another user action and survives reload');
 }
 
 async function openImport(browser,page){
@@ -172,7 +183,7 @@ async function main(){
       return;
     }
 
-    await signOut(browser,page);await openImport(browser,page);
+    await signOut(browser,page,{contend:true});await openImport(browser,page);
     await browser.fill(page,'Wallet name','Seed Restore');
     await browser.fill(page,'Enter seed phrase',phrase);
     await browser.click(page,'Import');

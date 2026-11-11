@@ -242,29 +242,38 @@ async function main() {
     evidence.crossTabProtection.externalRevisionCancelsPending=true;
     console.log('PASS: real Web Locks reject concurrent prompts and external revisions abort stale reads');
 
-    // An aborted WebAuthn promise settles before its origin-wide lock is
-    // released. Wait for that release rather than racing the next fixture.
+    // Finish the multi-tab fixture before mutating ciphertext. A focus-driven
+    // app return can still own or be requesting a challenge on a slow runner.
+    await browser.command('Target.closeTarget',{targetId:second.targetId});
+    await page.evaluate('gleecWalletCredentials.cancel();true');
     await browser.wait(page,`navigator.locks.query().then(state=>
-      !state.held.some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
+      ![...state.held,...state.pending].some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
       {timeout:5000,label:'aborted ceremony releases the vault lock'});
     const corrupted=await page.evaluate(`(async()=>{
       const db=await new Promise(resolve=>{const request=indexedDB.open('gleec-wallet-credentials-v1');request.onsuccess=()=>resolve(request.result);});
       const slot='active:'+window.__walletKey;
       const original=await new Promise(resolve=>{const request=db.transaction('credentials').objectStore('credentials').get(slot);request.onsuccess=()=>resolve(request.result);});
       const write=row=>new Promise((resolve,reject)=>{const tx=db.transaction('credentials','readwrite');tx.objectStore('credentials').put(row);tx.oncomplete=resolve;tx.onabort=()=>reject(new Error('Fixture mutation failed'));});
-      const damaged=structuredClone(original);new Uint8Array(damaged.record.ciphertext)[0]^=1;await write(damaged);
-      let failure;try{await gleecWalletCredentials.read({key:window.__walletKey});failure='unexpectedSuccess';}catch(error){failure=error.code;}
-      await write(original);db.close();return failure;
+      const damaged=structuredClone(original);new Uint8Array(damaged.record.ciphertext)[0]^=1;
+      try{
+        await write(damaged);
+        let failure;
+        for(let attempt=0;attempt<100;attempt++){
+          try{await gleecWalletCredentials.read({key:window.__walletKey});failure='unexpectedSuccess';}
+          catch(error){failure=error.code;}
+          if(failure!=='busy')break;
+          await new Promise(resolve=>setTimeout(resolve,50));
+        }
+        return failure;
+      }finally{await write(original);db.close();}
     })()`);
     assert.equal(corrupted,'envelopeCorrupt');
     assert.deepEqual(await page.evaluate(credentialsSummary),protectedSummary);
     evidence.corruptEnvelope={authenticatedDecryptionRejected:true,recordPreserved:true};
     console.log('PASS: corrupt protected ciphertext fails closed without deleting or downgrading the wallet');
-    await browser.command('Target.closeTarget',{targetId:second.targetId});
-
     if(process.env.GLEEC_TEST_LIFECYCLE==='true'){
       await browser.wait(page,`navigator.locks.query().then(state=>
-        !state.held.some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
+        ![...state.held,...state.pending].some(lock=>lock.name==='gleec-wallet-credentials-v1'))`,
         {timeout:5000,label:'corrupt-envelope probe releases the vault lock'});
       await unlockApp(browser,page);
       await page.send('Emulation.setFocusEmulationEnabled',{enabled:false});

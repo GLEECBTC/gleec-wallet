@@ -1103,17 +1103,30 @@ class WalletAccessService {
       /* Revocation is already synchronous. */
     }
     try {
-      await withWalletAccessLock(() async {
-        if (_revision != revision) {
-          if (_signOutOwner == revision) {
-            _signOutPending = false;
-            _signOutOwner = null;
-            _recoveringFailedSignOut = true;
+      // A canceled browser ceremony or a short metadata operation can still
+      // own the access lock. Revocation above is immediate; give that owner a
+      // bounded chance to finish before reporting a durable sign-out failure.
+      for (var attempt = 0; ; attempt++) {
+        try {
+          await withWalletAccessLock(() async {
+            if (_revision != revision) {
+              if (_signOutOwner == revision) {
+                _signOutPending = false;
+                _signOutOwner = null;
+                _recoveringFailedSignOut = true;
+              }
+              return;
+            }
+            await _writeChecked(_signedOutKey, true);
+          });
+          break;
+        } on WalletAccessException catch (error) {
+          if (error.failure != WalletAccessFailure.busy || attempt >= 39) {
+            rethrow;
           }
-          return;
+          await Future<void>.delayed(const Duration(milliseconds: 50));
         }
-        await _writeChecked(_signedOutKey, true);
-      });
+      }
     } catch (_) {
       // The engine is still available. Keep it covered, but permit a new,
       // explicit credential verification to recover from failed persistence.
