@@ -13,7 +13,7 @@ async function main(){
     const page=await browser.page({initialize:probe});await browser.navigate(page);await browser.semantics(page);
     assert.equal(await page.evaluate("typeof gleecWalletCredentials.replacePasskeyAfterPasswordVerification"),'function',
       'Rebuild the app with explicit recovery APIs before this check');
-    await browser.click(page,'Connect wallet');await browser.click(page,'Create a new wallet');
+    await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded replacement fixture'});
     credential=await page.evaluate('__gleecReleaseProbe.testCredential()');
     const oldProvider=await virtualAuthenticator(browser,page);

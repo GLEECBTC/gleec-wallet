@@ -12,7 +12,7 @@ async function checkProtectedGate(){
     await browser.serve();await browser.launch();
     const page=await browser.page({initialize:probe});await browser.navigate(page);await browser.semantics(page);
     assert.equal(await page.evaluate('typeof gleecWalletBrowserSupport'),'object','Rebuild with the startup gate first');
-    await browser.click(page,'Connect wallet');await browser.click(page,'Create a new wallet');
+    await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'startup fixture wallet'});
     const provider=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Set up local passkey');

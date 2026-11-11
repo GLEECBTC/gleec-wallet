@@ -46,14 +46,20 @@ async function signOut(browser,page){
   await browser.click(page,'Settings');await browser.click(page,'Log out');
   await browser.wait(page,"!!document.querySelector('[role=dialog]')",{label:'sign-out confirmation'});
   await browser.click(page,'Log out');
-  // Explicit sign-out may show the app lock surface until a fresh page starts.
+  // Finish the current shutdown before testing a cold, explicitly signed-out
+  // launch. A page reload must not interrupt the confirmation transition.
+  await browser.wait(page,`(${buttonPresent('Connect wallet')})&&!document.querySelector('[role=dialog],[role=progressbar]')`,
+    {timeout:60000,label:'completed explicit sign-out'});
   await browser.navigate(page);await browser.semantics(page);
   await browser.wait(page,buttonPresent('Connect wallet'),{label:'signed-out entry'});
 }
 
 async function openImport(browser,page){
-  await browser.click(page,'Connect wallet');
-  await browser.wait(page,"(()=>{const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('I already have a recovery phrase'));if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()",{label:'import entry'});
+  // The signed-out wallet route already owns an inline manager. Opening the
+  // header dialog duplicates its controls and can target the obscured entry.
+  await browser.wait(page,"(()=>{const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('I already have a recovery phrase'));if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()",{label:'inline import entry'});
+  await browser.wait(page,"Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).some(el=>(el.getAttribute('aria-label')||'').split('\\n').some(part=>part.trim()==='Wallet name')&&!el.readOnly)",
+    {label:'import form ready'});
 }
 
 async function newDownload(browser,before){
@@ -80,7 +86,7 @@ async function main(){
     });
     const page=await browser.page({initialize:probe});
     await browser.navigate(page);await browser.semantics(page);
-    await browser.click(page,'Connect wallet');await browser.click(page,'Create a new wallet');
+    await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded wallet created'});
     console.log('CHECK: disposable recovery wallet created');
     generatedCredential=await page.evaluate('__gleecReleaseProbe.testCredential()');

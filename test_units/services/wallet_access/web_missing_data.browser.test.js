@@ -37,7 +37,7 @@ async function check(kind){
   try{
     await browser.serve();await browser.launch();
     let page=await browser.page({initialize:probe});await browser.navigate(page);await browser.semantics(page);
-    await browser.click(page,'Connect wallet');await browser.click(page,'Create a new wallet');
+    await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded fixture wallet'});
     credential=await page.evaluate('__gleecReleaseProbe.testCredential()');
     const identity=await page.evaluate(publicIdentity);
