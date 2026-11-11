@@ -29,7 +29,9 @@ The SDK merge safeguard remains enforced for production promotion.
 
 The preview publishes `/auth-test-build.json`, containing the source head,
 actual PR merge, SDK and bundle hashes, CI run, source-cleanliness result and an
-explicit `production_approved=false` marker. Tester reports should name the
+explicit `production_approved=false` marker. CI retains the same public records
+in `onboarding-browser-identity`, so the served bundle can be checked against
+the tested build independently. Tester reports should name the
 preview URL, source head, device/OS/browser/provider and pass/fail.
 
 ## Completed engineering checks for this candidate

@@ -172,6 +172,16 @@ jobs:
           AUTH_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 tool/write_auth_test_build_identity.py
 
+      - name: Retain tested browser identity
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: onboarding-browser-identity
+          path: |
+            build/web/auth-test-build.json
+            build/web/rc-test-build.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Deploy Gleec Wallet web feature preview (Expires in 7 days)
         id: deploy_preview
         uses: ./.github/actions/firebase-hosting-deploy
