@@ -148,8 +148,11 @@ async function main() {
         await round('custom-password', protectedByPassword);
       } else {
         await round('browserLocal', local);
-        await browser.click(page, await page.evaluate(buttonPresent('Create a passkey'))
-          ? 'Create a passkey' : 'Set up local passkey');
+        await browser.wait(page, `(()=>{
+          const action=Array.from(document.querySelectorAll('[role=button]')).find(el=>
+            ['Create a passkey','Set up local passkey'].includes((el.getAttribute('aria-label')||el.textContent||'').trim())&&el.getAttribute('aria-disabled')!=='true');
+          if(!action)return false;action.click();return true;
+        })()`, {label:'current or retained passkey enrollment action'});
         await browser.wait(page, `(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf'&&value.unattended===0)`,
           {label: 'verified PRF protection'});
         const protectedByPasskey = await page.evaluate(credentialsSummary);
