@@ -16,7 +16,16 @@ async function checkProtectedGate(){
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'startup fixture wallet'});
     const provider=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Set up local passkey');
-    await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'protected startup fixture'});
+    await browser.wait(page,`(()=>{
+      const decode=key=>{let value=key?localStorage.getItem(key):null;for(let i=0;i<3&&typeof value==='string';i++){try{value=JSON.parse(value);}catch(_){break;}}return value;};
+      const keys=Object.keys(localStorage);
+      const last=decode(keys.find(key=>key.endsWith('wallet_access_last_v1')));
+      const records=decode(keys.find(key=>key.endsWith('wallet_access_records_v1')));
+      const record=records?.[last?.entryId];
+      const action=Array.from(document.querySelectorAll('[role=button]')).find(el=>
+        (el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true');
+      return record?.phase==='ready'&&record?.requiresAuthentication===true&&record?.protection==='passkey'&&!!action;
+    })()`,{timeout:90000,label:'completed protected startup fixture and authenticated readback'});
     const before=await page.evaluate(credentialsSummary);
     const assertions=provider.counts.asserted;
     await page.send('Page.addScriptToEvaluateOnNewDocument',{source:"window.__fixtureLocks=navigator.locks;Object.defineProperty(navigator,'locks',{configurable:true,value:undefined});"});
