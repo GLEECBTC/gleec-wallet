@@ -6,6 +6,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/services/security/private_key_export_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
 import 'private_key_export_test_support.dart';
 
@@ -16,12 +17,138 @@ void testPrivateKeyExportService() {
     late _Auth auth;
     late _Security security;
     late SdkPrivateKeyExportService service;
+    late WalletOperationGate gate;
     setUp(() {
       auth = _Auth();
       security = _Security(auth);
-      service = SdkPrivateKeyExportService(_Sdk(auth, security));
+      gate = WalletOperationGate();
+      service = SdkPrivateKeyExportService(
+        _Sdk(auth, security),
+        operationGate: gate,
+      );
     });
     tearDown(() => auth.changes.close());
+
+    test(
+      'installed app lock refuses an export without a captured permit',
+      () async {
+        gate.attachWallet('entry', allowOperations: true);
+        final access = await service.begin();
+        await expectLater(
+          service.authenticateAndExport(
+            access,
+            SensitiveString(exportPasswordSentinel),
+          ),
+          throwsA(isA<PrivateKeyExportException>()),
+        );
+        expect(auth.calls, 0);
+        expect(security.exports, 0);
+      },
+    );
+
+    for (final interruption in ['lock', 'switch', 'background and resume']) {
+      test('$interruption revokes a queued private-key export', () async {
+        gate.attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        final access = await service.begin();
+        if (interruption == 'switch') {
+          gate.attachWallet('other', allowOperations: true);
+        } else {
+          gate.block();
+          if (interruption == 'background and resume') {
+            gate.allow(walletEntryId: 'entry');
+          }
+        }
+        await expectLater(
+          service.authenticateAndExport(
+            access,
+            SensitiveString(exportPasswordSentinel),
+            ensureAuthorized: permit.ensureCurrent,
+          ),
+          throwsA(isA<PrivateKeyExportException>()),
+        );
+        expect(auth.calls, 0);
+        expect(security.exports, 0);
+      });
+    }
+
+    for (final method in ['get_mnemonic', 'get_private_keys']) {
+      test('lock before $method transport prevents its dispatch', () async {
+        gate.attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        final access = await service.begin();
+        final waiting = Completer<void>();
+        final release = Completer<void>();
+        Future<void> beforeDispatch() async {
+          waiting.complete();
+          await release.future;
+        }
+
+        if (method == 'get_mnemonic') {
+          auth.beforeDispatch = beforeDispatch;
+        } else {
+          security.beforeDispatch = beforeDispatch;
+        }
+        final rejected = expectLater(
+          service.authenticateAndExport(
+            access,
+            SensitiveString(exportPasswordSentinel),
+            ensureAuthorized: permit.ensureCurrent,
+          ),
+          throwsA(isA<PrivateKeyExportException>()),
+        );
+        await waiting.future;
+        gate.block();
+        release.complete();
+        await rejected;
+        expect(auth.dispatches, method == 'get_mnemonic' ? 0 : 1);
+        expect(security.exports, 0);
+      });
+    }
+
+    test(
+      'returned private keys retain their original app-lock permit',
+      () async {
+        gate.attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        final access = await service.begin();
+        await service.authenticateAndExport(
+          access,
+          SensitiveString(exportPasswordSentinel),
+          ensureAuthorized: permit.ensureCurrent,
+        );
+        gate.block();
+        gate.allow(walletEntryId: 'entry');
+        expect(
+          () => service.ensureCurrentSync(access),
+          throwsA(isA<PrivateKeyExportException>()),
+        );
+      },
+    );
+
+    test('new authorization cannot adopt an older pending export', () async {
+      final access = await service.begin();
+      final firstReply = Completer<Mnemonic>();
+      auth.pending = firstReply;
+      final rejected = expectLater(
+        service.authenticateAndExport(
+          access,
+          SensitiveString(exportPasswordSentinel),
+        ),
+        throwsA(isA<PrivateKeyExportException>()),
+      );
+      await auth.started.future;
+      await Future<void>.delayed(Duration.zero);
+      auth.pending = null;
+      final replacement = await service.authenticateAndExport(
+        access,
+        SensitiveString(exportPasswordSentinel),
+      );
+      expect(replacement.hasKeys, isTrue);
+      firstReply.complete(Mnemonic.plaintext(_mnemonicSentinel));
+      await rejected;
+      expect(security.exports, 1);
+    });
 
     test('wrong password never starts key extraction', () async {
       final access = await service.begin();
@@ -183,6 +310,8 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   final started = Completer<void>();
   int generation = 1;
   int calls = 0;
+  int dispatches = 0;
+  Future<void> Function()? beforeDispatch;
   Object? error;
   Completer<Mnemonic>? pending;
 
@@ -198,6 +327,9 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   Future<Mnemonic> getMnemonicPlainText(String walletPassword) async {
     calls++;
     if (!started.isCompleted) started.complete();
+    await beforeDispatch?.call();
+    RpcDispatchGuard.ensureCurrent('get_mnemonic');
+    dispatches++;
     if (error case final error?) throw error;
     return pending == null
         ? Mnemonic.plaintext(_mnemonicSentinel)
@@ -210,6 +342,7 @@ class _Security extends Fake implements SecurityManager {
   final _Auth auth;
   final started = Completer<void>();
   int exports = 0;
+  Future<void> Function()? beforeDispatch;
   Completer<PrivateKeyExportResult>? pending;
 
   @override
@@ -235,6 +368,8 @@ class _Security extends Fake implements SecurityManager {
     PrivateKeyExportRequest request = const PrivateKeyExportRequest(),
     PrivateKeyExportSession? session,
   }) async {
+    await beforeDispatch?.call();
+    RpcDispatchGuard.ensureCurrent('get_private_keys');
     exports++;
     if (!started.isCompleted) started.complete();
     return pending == null ? exportTestResult() : await pending!.future;

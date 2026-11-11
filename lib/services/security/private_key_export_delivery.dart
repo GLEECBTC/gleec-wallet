@@ -12,6 +12,7 @@ abstract class PrivateKeyExportDelivery {
     required SensitiveString content,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   });
 }
 
@@ -34,6 +35,7 @@ class PlatformPrivateKeyExportDelivery implements PrivateKeyExportDelivery {
     required SensitiveString content,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   }) async {
     switch (action) {
       case PrivateKeyExportAction.copy:
@@ -48,6 +50,7 @@ class PlatformPrivateKeyExportDelivery implements PrivateKeyExportDelivery {
           data: content.value,
           beforeWrite: beforeWrite,
           beforeCommit: beforeCommit,
+          selectDestination: selectDestination,
         );
         return switch (outcome) {
           FileSaveOutcome.completed =>

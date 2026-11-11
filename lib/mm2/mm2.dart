@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:web_dex/app_config/solana_build_config.dart';
-
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart'
-    show GaslessServiceKomodoProxy, TronGaslessProviderConfig;
+    show GaslessServiceKomodoProxy, TronGaslessProviderConfig, RpcDispatchGuard;
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
+import 'package:web_dex/app_config/solana_build_config.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/swap/lifi_integrator_policy.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
@@ -143,12 +143,40 @@ final class MM2 {
                 ? requestWithUserpass.toJson() as JsonMap
                 : requestWithUserpass as JsonMap);
 
+      final method = jsonRequest['method'];
+      if (method is String && _userMutationMethods.contains(method)) {
+        final permit = WalletOperationGate.instance.capture();
+        return await RpcDispatchGuard.run(
+          permit.ensureCurrent,
+          () => _kdfSdk.client.executeRpc(jsonRequest),
+          methods: {method},
+        );
+      }
       return await _kdfSdk.client.executeRpc(jsonRequest);
     } catch (e) {
       log('RPC call error: $e', path: 'mm2 => call', isError: true).ignore();
       rethrow;
     }
   }
+
+  // These calls initiate user work. Status polling and work already accepted
+  // inside KDF deliberately stay outside the application lock authority.
+  static const _userMutationMethods = {
+    'withdraw',
+    'task::withdraw::init',
+    'withdraw_nft',
+    'send_raw_transaction',
+    'sell',
+    'buy',
+    'setprice',
+    'cancel_order',
+    'cancel_all_orders',
+    'recover_funds_of_swap',
+    'start_simple_market_maker_bot',
+    'stop_simple_market_maker_bot',
+    'task::routed_swap::init',
+    'task::routed_swap::cancel',
+  };
 
   // this is a necessary evil for now becuase of the RPC models that override
   // or use the `late String? userpass` field, which would require refactoring

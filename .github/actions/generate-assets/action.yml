@@ -8,7 +8,7 @@ inputs:
   BUILD_COMMAND:
     description: "The flutter build command to run to generate assets for the deployment build"
     required: false
-    default: "flutter build web --no-pub --release"
+    default: "flutter build web --no-pub --release --csp --no-web-resources-cdn"
   LIFI_BUILD_ENVIRONMENT:
     description: "Public LI.FI build profile (production only); API keys stay on KDP"
     required: false
@@ -306,5 +306,12 @@ runs:
             echo "Flutter build exited with status $exit_status"
             exit $exit_status
         fi
+
+        # Ignored local wallet fixtures must never reach a preview or release.
+        artifact_python=python3
+        if ! command -v "$artifact_python" >/dev/null 2>&1; then
+          artifact_python=python
+        fi
+        "$artifact_python" tool/verify_wallet_artifacts.py build
 
         echo "Done fetching packages and generating assets"

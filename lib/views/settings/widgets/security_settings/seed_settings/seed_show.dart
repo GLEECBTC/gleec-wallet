@@ -17,7 +17,6 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/widgets/coin_item/coin_item.dart';
-import 'package:web_dex/shared/widgets/dry_intrinsic.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_back_button.dart';
 import 'package:web_dex/views/wallet/coin_details/receive/qr_code_address.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
@@ -273,35 +272,16 @@ class _CopySeedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: () {
-          copyToClipBoard(context, seed);
-          context.read<SecuritySettingsBloc>().add(const ShowSeedCopiedEvent());
-        },
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.copy,
-                size: 16,
-                color: theme.currentGlobal.textTheme.bodySmall?.color,
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  LocaleKeys.seedPhraseShowingCopySeed.tr(),
-                  style: theme.currentGlobal.textTheme.bodySmall,
-                ),
-              ),
-            ],
-          ),
-        ),
+    return TextButton.icon(
+      style: TextButton.styleFrom(
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
       ),
+      icon: const Icon(Icons.copy, size: 16),
+      label: Text(LocaleKeys.seedPhraseShowingCopySeed.tr()),
+      onPressed: () {
+        copyToClipBoard(context, seed);
+        context.read<SecuritySettingsBloc>().add(const ShowSeedCopiedEvent());
+      },
     );
   }
 }
@@ -311,26 +291,53 @@ class _ShowingSwitcher extends StatelessWidget {
   Widget build(BuildContext context) {
     final bloc = context.read<SecuritySettingsBloc>();
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        UiSwitcher(
-          value: bloc.state.showSeedWords,
-          onChanged: (isChecked) => bloc.add(ShowSeedWordsEvent(isChecked)),
-          width: 38,
-          height: 21,
-        ),
-        const SizedBox(width: 6),
-        Flexible(
-          child: SelectableText(
-            LocaleKeys.seedPhraseShowingShowPhrase.tr(),
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w500,
-              fontSize: 12,
+    final shown = bloc.state.showSeedWords;
+    void toggle() => bloc.add(ShowSeedWordsEvent(!shown));
+    return MergeSemantics(
+      child: Semantics(
+        key: const Key('seed-show-switch'),
+        toggled: shown,
+        child: InkWell(
+          onTap: toggle,
+          borderRadius: BorderRadius.circular(18),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ExcludeFocus(
+                    child: ExcludeSemantics(
+                      child: IgnorePointer(
+                        child: UiSwitcher(
+                          key: MediaQuery.disableAnimationsOf(context)
+                              ? ValueKey(shown)
+                              : null,
+                          value: shown,
+                          onChanged: (_) => toggle(),
+                          width: 38,
+                          height: 21,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      LocaleKeys.seedPhraseShowingShowPhrase.tr(),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -404,30 +411,25 @@ class _WordsList extends StatelessWidget {
 
     final seedList = seedPhrase.split(' ');
 
-    return SizedBox(
-      width: double.infinity,
-      child: Wrap(
-        runSpacing: runSpacing,
-        alignment: WrapAlignment.spaceBetween,
-        children: seedList
-            .asMap()
-            .map<int, Widget>(
-              (index, w) => _buildSeedWord(index, w, showSeedWords),
-            )
-            .values
-            .toList(),
-      ),
-    );
-  }
-
-  MapEntry<int, Widget> _buildSeedWord(int i, String word, bool showSeedWords) {
-    return MapEntry(
-      i,
-      _SelectableSeedWord(
-        initialValue: word,
-        isSeedShown: showSeedWords,
-        index: i,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns =
+            (constraints.maxWidth / MediaQuery.textScalerOf(context).scale(140))
+                .floor()
+                .clamp(1, 4);
+        return Wrap(
+          runSpacing: runSpacing,
+          children: [
+            for (var index = 0; index < seedList.length; index++)
+              _SelectableSeedWord(
+                initialValue: seedList[index],
+                isSeedShown: showSeedWords,
+                index: index,
+                widthFactor: 1 / columns,
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -439,20 +441,20 @@ class _SelectableSeedWord extends StatelessWidget {
     required this.isSeedShown,
     required this.initialValue,
     required this.index,
+    required this.widthFactor,
   });
 
   final bool isSeedShown;
   final String initialValue;
   final int index;
+  final double widthFactor;
 
   @override
   Widget build(BuildContext context) {
     final numStyle = TextStyle(
       fontSize: 14,
       fontWeight: FontWeight.w500,
-      color: Theme.of(
-        context,
-      ).textTheme.bodyMedium?.color?.withValues(alpha: 0.4),
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
     final text = isSeedShown ? initialValue : '••••••';
 
@@ -460,17 +462,23 @@ class _SelectableSeedWord extends StatelessWidget {
       descendantsAreFocusable: true,
       skipTraversal: true,
       child: FractionallySizedBox(
-        widthFactor: isMobile ? 0.5 : 0.25,
+        widthFactor: widthFactor,
         child: Row(
           mainAxisSize: MainAxisSize.max,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            SizedBox(width: 21, child: Text('${index + 1}.', style: numStyle)),
+            ExcludeSemantics(
+              child: SizedBox(
+                width: MediaQuery.textScalerOf(context).scale(24),
+                child: Text('${index + 1}.', style: numStyle),
+              ),
+            ),
             Expanded(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 31),
-                child: DryIntrinsicWidth(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Semantics(
+                  label: '${index + 1}.',
                   child: UiTextFormField(
                     initialValue: text,
                     obscureText: !isSeedShown,
@@ -516,8 +524,9 @@ class _SeedPhraseConfirmButton extends StatelessWidget {
       selector: (state) => state.isSeedSaved,
       builder: (context, isSaved) {
         return UiPrimaryButton(
+          expandForText: true,
           width: width,
-          height: height,
+          height: height < 48 ? 48 : height,
           text: text,
           onPressed: isSaved ? onPressed : null,
         );

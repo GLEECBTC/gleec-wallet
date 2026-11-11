@@ -47,6 +47,24 @@ if (flutterVersionName == null) {
 
 def supportedReleaseAbis = ['armeabi-v7a', 'arm64-v8a']
 
+// Packaging checks deliberately bypass signing credentials. Distribution
+// builds may provide the existing CI key.properties contract, but never fall
+// back to the Android debug key when those credentials are absent.
+def unsignedRelease = providers.gradleProperty('gleecUnsignedRelease').orNull == 'true'
+// Explicit internal builds use a separate app sandbox and the development signer.
+def internalTesting = providers.gradleProperty('gleecInternalTesting').orNull == 'true'
+def releaseSigningProperties = new Properties()
+def releaseSigningPropertiesFile = rootProject.file('key.properties')
+def hasReleaseSigning = !unsignedRelease && releaseSigningPropertiesFile.exists()
+if (hasReleaseSigning) {
+    releaseSigningPropertiesFile.withInputStream { releaseSigningProperties.load(it) }
+    if (['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].any {
+        !releaseSigningProperties.getProperty(it)?.trim()
+    } || !file(releaseSigningProperties.getProperty('storeFile')).isFile()) {
+        throw new GradleException('Release signing configuration is incomplete. Provide a valid android/key.properties or use -PgleecUnsignedRelease=true for an unsigned packaging check.')
+    }
+}
+
 android {
     namespace 'com.gleec.gleecdex'
 
@@ -63,7 +81,8 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.gleec.gleecdex"
+        applicationId internalTesting ? "com.gleec.gleecdex.onboardinginternal" : "com.gleec.gleecdex"
+        manifestPlaceholders.walletAppLabel = internalTesting ? "Gleec Wallet Internal" : "Gleec Dex"
         minSdkVersion 28
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
@@ -71,6 +90,17 @@ android {
     }
 
     ndkVersion = "28.2.13676358"
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseSigningProperties.getProperty('storeFile'))
+                storePassword releaseSigningProperties.getProperty('storePassword')
+                keyAlias releaseSigningProperties.getProperty('keyAlias')
+                keyPassword releaseSigningProperties.getProperty('keyPassword')
+            }
+        }
+    }
 
     buildTypes {
         all { buildType ->
@@ -81,13 +111,17 @@ android {
             }
         }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig signingConfigs.debug
+            signingConfig internalTesting ? signingConfigs.debug : (hasReleaseSigning ? signingConfigs.release : null)
         }
     }
 }
 
 flutter {
     source '../..'
+}
+
+dependencies {
+    // Also used by local_auth; explicitly declared for the credential vault's
+    // CryptoObject integration (no Boolean-only authentication shortcut).
+    implementation "androidx.biometric:biometric:1.1.0"
 }

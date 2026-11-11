@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
@@ -25,6 +27,8 @@ class WalletLogIn extends StatefulWidget {
     required this.wallet,
     required this.onLogin,
     required this.onCancel,
+    this.onSwitchWallet,
+    this.onRecover,
     this.initialHdMode = false,
     this.initialQuickLogin = false,
     super.key,
@@ -33,6 +37,8 @@ class WalletLogIn extends StatefulWidget {
   final Wallet wallet;
   final void Function(String, Wallet, bool) onLogin;
   final void Function() onCancel;
+  final VoidCallback? onSwitchWallet;
+  final VoidCallback? onRecover;
   final bool initialHdMode;
   final bool initialQuickLogin;
 
@@ -48,6 +54,9 @@ class _WalletLogInState extends State<WalletLogIn> {
   bool _waitingForLegal = false;
   KdfUser? _user;
   bool? _storedHdPreference;
+  Future<WalletAccessStatus?>? _accessStatus;
+  bool _manualPassword = false;
+  bool _automaticAttempted = false;
 
   @override
   void initState() {
@@ -60,6 +69,33 @@ class _WalletLogInState extends State<WalletLogIn> {
     unawaited(_fetchKdfUser());
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _accessStatus ??=
+        context.read<WalletAccessService?>()?.statusForWallet(widget.wallet) ??
+        Future<WalletAccessStatus?>.value();
+  }
+
+  Future<void> _submitManaged({bool automatic = false}) async {
+    if (!automatic) _automaticAttempted = true;
+    if (_waitingForLegal || context.read<AuthBloc>().state.isLoading) return;
+    _waitingForLegal = true;
+    final agreement = await awaitLegalAgreement(context);
+    _waitingForLegal = false;
+    if (!mounted || agreement == null) return;
+    // Reopening a wallet must not accept new legal terms on the user's behalf.
+    if (automatic && agreement.status != LegalAgreementStatus.current) return;
+    if (!automatic) {
+      context.read<LegalAgreementBloc>().add(
+        LegalAgreementSubmitted('wallet-login', snapshot: agreement.snapshot),
+      );
+    }
+    context.read<AuthBloc>().add(
+      AuthManagedSignInRequested(wallet: widget.wallet, automatic: automatic),
+    );
+  }
+
   Future<void> _fetchKdfUser() async {
     final kdfSdk = RepositoryProvider.of<KomodoDefiSdk>(context);
     final users = await kdfSdk.auth.getUsers();
@@ -67,7 +103,7 @@ class _WalletLogInState extends State<WalletLogIn> {
       (user) => user.walletId.name == widget.wallet.name,
     );
 
-    if (user != null) {
+    if (mounted && user != null) {
       final fallbackHdMode =
           widget.initialHdMode ||
           user.wallet.config.type == WalletType.hdwallet;
@@ -89,7 +125,9 @@ class _WalletLogInState extends State<WalletLogIn> {
 
   @override
   void dispose() {
+    _passwordController.clear();
     _passwordController.dispose();
+    TextInput.finishAutofillContext(shouldSave: false);
     super.dispose();
   }
 
@@ -129,6 +167,11 @@ class _WalletLogInState extends State<WalletLogIn> {
 
   @override
   Widget build(BuildContext context) {
+    // Legal documents are published before the asynchronous acceptance lookup
+    // finishes. Wait for current acceptance without consuming the launch attempt.
+    final legalStatus = context.select(
+      (LegalAgreementBloc bloc) => bloc.state.status,
+    );
     return BlocBuilder<AuthBloc, AuthBlocState>(
       builder: (context, state) {
         final errorMessage =
@@ -136,85 +179,269 @@ class _WalletLogInState extends State<WalletLogIn> {
             ? LocaleKeys.incorrectPassword.tr()
             : state.authError?.message;
 
-        return AutofillGroup(
-          child: ScreenshotSensitive(
-            child: Column(
-              mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
-              children: [
-                Text(
-                  LocaleKeys.walletLogInTitle.tr(),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontSize: 18),
-                ),
-                const SizedBox(height: 24),
-                UiTextFormField(
-                  key: const Key('wallet-field'),
-                  initialValue: widget.wallet.name,
-                  readOnly: true,
-                  autocorrect: false,
-                  autofillHints: const [AutofillHints.username],
-                ),
-                const SizedBox(height: 16),
-                PasswordTextField(
-                  onFieldSubmitted: state.isLoading ? null : _submitLogin,
-                  controller: _passwordController,
-                  errorText: errorMessage,
-                  autofillHints: const [AutofillHints.password],
-                ),
-                const SizedBox(height: 32),
-                QuickLoginSwitch(
-                  value: _isQuickLoginEnabled,
-                  onChanged: (value) {
-                    setState(() => _isQuickLoginEnabled = value);
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (_user != null && _user!.isBip39Seed == true) ...[
-                  HDWalletModeSwitch(
-                    value: _isHdMode,
-                    onChanged: (value) {
-                      setState(() => _isHdMode = value);
-                      unawaited(
-                        storeHdWalletModePreference(widget.wallet.id, value),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                ],
-                TermsConsentText(actionLabel: LocaleKeys.logIn.tr()),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                  child: LegalConsentAction(
-                    builder: (allowed) => UiPrimaryButton(
-                      height: 50,
-                      text: state.isLoading
-                          ? '${LocaleKeys.pleaseWait.tr()}...'
-                          : LocaleKeys.logIn.tr(),
-                      textStyle: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+        return FutureBuilder<WalletAccessStatus?>(
+          future: _accessStatus,
+          builder: (context, snapshot) {
+            final status = snapshot.data;
+            if (status?.hasManagedCredential == true && !_manualPassword) {
+              if (widget.initialQuickLogin &&
+                  !_automaticAttempted &&
+                  legalStatus == LegalAgreementStatus.current) {
+                _automaticAttempted = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _submitManaged(automatic: true);
+                });
+              }
+              return _ManagedWalletUnlock(
+                walletDisplayName: widget.wallet.displayName,
+                status: status!,
+                loading: state.isLoading,
+                errorMessage: errorMessage,
+                onUnlock: () => _submitManaged(),
+                onPassword: () => setState(() {
+                  _manualPassword = true;
+                  _automaticAttempted = true;
+                }),
+                onSwitchWallet: widget.onSwitchWallet ?? widget.onCancel,
+                onRecover: widget.onRecover,
+                onCancel: widget.onCancel,
+              );
+            }
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            return AutofillGroup(
+              onDisposeAction: AutofillContextAction.cancel,
+              child: ScreenshotSensitive(
+                child: Column(
+                  mainAxisSize: isMobile ? MainAxisSize.max : MainAxisSize.min,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        LocaleKeys.walletLogInTitle.tr(),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleLarge?.copyWith(fontSize: 18),
                       ),
-                      onPressed: !allowed || state.isLoading
-                          ? null
-                          : _submitLogin,
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                    Text(
+                      widget.wallet.displayName,
+                      key: const Key('wallet-display-name'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Offstage(
+                      child: ExcludeFocus(
+                        child: UiTextFormField(
+                          key: const Key('wallet-field'),
+                          initialValue: widget.wallet.name,
+                          readOnly: true,
+                          autocorrect: false,
+                          autofillHints: const [AutofillHints.username],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    PasswordTextField(
+                      onFieldSubmitted: state.isLoading ? null : _submitLogin,
+                      controller: _passwordController,
+                      errorText: errorMessage,
+                      autofillHints: const [AutofillHints.password],
+                    ),
+                    const SizedBox(height: 32),
+                    QuickLoginSwitch(
+                      value: _isQuickLoginEnabled,
+                      onChanged: (value) {
+                        setState(() => _isQuickLoginEnabled = value);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    if (_user != null && _user!.isBip39Seed == true) ...[
+                      HDWalletModeSwitch(
+                        value: _isHdMode,
+                        onChanged: (value) {
+                          setState(() => _isHdMode = value);
+                          unawaited(
+                            storeHdWalletModePreference(
+                              widget.wallet.id,
+                              value,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    TermsConsentText(actionLabel: LocaleKeys.logIn.tr()),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                      child: LegalConsentAction(
+                        builder: (allowed) => UiPrimaryButton(
+                          expandForText: true,
+                          height: 50,
+                          text: state.isLoading
+                              ? '${LocaleKeys.pleaseWait.tr()}...'
+                              : LocaleKeys.logIn.tr(),
+                          textStyle: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          onPressed: !allowed || state.isLoading
+                              ? null
+                              : _submitLogin,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    UiUnderlineTextButton(
+                      key: _backKeyButton,
+                      onPressed: widget.onCancel,
+                      text: LocaleKeys.cancel.tr(),
+                    ),
+                    if (status?.hasManagedCredential == true)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onSurface,
+                        ),
+                        onPressed: state.isLoading
+                            ? null
+                            : () => setState(() => _manualPassword = false),
+                        child: Text('authUseDeviceUnlock'.tr()),
+                      ),
+                    if (widget.onRecover != null)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(
+                            context,
+                          ).colorScheme.onSurface,
+                        ),
+                        onPressed: state.isLoading ? null : widget.onRecover,
+                        child: Text('authRecoverWallet'.tr()),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                UiUnderlineTextButton(
-                  key: _backKeyButton,
-                  onPressed: widget.onCancel,
-                  text: LocaleKeys.cancel.tr(),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
   }
+}
+
+class _ManagedWalletUnlock extends StatelessWidget {
+  const _ManagedWalletUnlock({
+    required this.walletDisplayName,
+    required this.status,
+    required this.loading,
+    required this.errorMessage,
+    required this.onUnlock,
+    required this.onPassword,
+    required this.onSwitchWallet,
+    required this.onRecover,
+    required this.onCancel,
+  });
+  final String walletDisplayName;
+  final WalletAccessStatus status;
+  final bool loading;
+  final String? errorMessage;
+  final VoidCallback onUnlock;
+  final VoidCallback onPassword;
+  final VoidCallback onSwitchWallet;
+  final VoidCallback? onRecover;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Icon(
+        status.requiresAuthentication
+            ? Icons.lock_outline
+            : Icons.account_balance_wallet_outlined,
+        size: 36,
+      ),
+      const SizedBox(height: 16),
+      Semantics(
+        header: true,
+        child: Text(
+          'authUnlockTitle'.tr(),
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        walletDisplayName,
+        key: const Key('wallet-display-name'),
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
+      const SizedBox(height: 12),
+      Text(
+        status.requiresAuthentication
+            ? 'authUnlockDescription'.tr()
+            : 'authUnprotectedLocalDescription'.tr(),
+        textAlign: TextAlign.center,
+      ),
+      if (errorMessage != null) ...[
+        const SizedBox(height: 16),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            errorMessage!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      ],
+      const SizedBox(height: 24),
+      TermsConsentText(actionLabel: 'authUnlock'.tr()),
+      const SizedBox(height: 12),
+      LegalConsentAction(
+        builder: (allowed) => UiPrimaryButton(
+          expandForText: true,
+          key: const Key('managed-wallet-unlock'),
+          height: 52,
+          text: loading
+              ? LocaleKeys.pleaseWait.tr()
+              : status.protection == CredentialProtection.passkey
+              ? 'authUnlockWithPasskey'.tr()
+              : status.requiresAuthentication
+              ? 'authUseDeviceUnlock'.tr()
+              : 'authOpenWallet'.tr(),
+          onPressed: loading || !allowed ? null : onUnlock,
+        ),
+      ),
+      const SizedBox(height: 8),
+      TextButton(
+        style: TextButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+        ),
+        onPressed: loading ? null : onPassword,
+        child: Text('authUsePassword'.tr()),
+      ),
+      TextButton(
+        style: TextButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
+        ),
+        onPressed: loading ? null : onSwitchWallet,
+        child: Text('authSwitchWallet'.tr()),
+      ),
+      if (onRecover != null)
+        TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.onSurface,
+          ),
+          onPressed: loading ? null : onRecover,
+          child: Text('authRecoverWallet'.tr()),
+        ),
+      UiUnderlineTextButton(text: LocaleKeys.cancel.tr(), onPressed: onCancel),
+    ],
+  );
 }
 
 /// The password field never submits on its own.

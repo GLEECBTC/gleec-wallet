@@ -15,7 +15,9 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/services/arrr_activation/arrr_config.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
 import '../../helpers/runtime_auth_fixture.dart';
 
@@ -140,6 +142,121 @@ void testWalletOperationIdentity() {
         );
 
         expect(fileLoader.savedFileNames, isEmpty);
+      },
+    );
+
+    for (final interruption in ['lock', 'switch', 'background and resume']) {
+      test('$interruption rejects a queued encrypted-wallet export', () async {
+        final gate = WalletOperationGate()
+          ..attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        var mnemonicCalls = 0;
+        auth.readMnemonic = () async {
+          mnemonicCalls++;
+          return Mnemonic.plaintext('synthetic recovery phrase');
+        };
+        final files = _RecordingFileLoader();
+        final repository = WalletsRepository(
+          sdk,
+          _UnusedMm2Api(),
+          _UnusedStorage(),
+          fileLoader: files,
+        );
+        if (interruption == 'switch') {
+          gate.attachWallet('other', allowOperations: true);
+        } else {
+          gate.block();
+          if (interruption == 'background and resume') {
+            gate.allow(walletEntryId: 'entry');
+          }
+        }
+        await expectLater(
+          repository.downloadEncryptedWallet(
+            auth.user.wallet,
+            'synthetic password',
+            expectedWalletId: auth.user.walletId,
+            ensureAuthorized: permit.ensureCurrent,
+          ),
+          throwsA(isA<Exception>()),
+        );
+        expect(mnemonicCalls, 0);
+        expect(files.savedFileNames, isEmpty);
+      });
+    }
+
+    test('lock during RPC preparation prevents mnemonic transport', () async {
+      final gate = WalletOperationGate()
+        ..attachWallet('entry', allowOperations: true);
+      final permit = gate.capture();
+      final reached = Completer<void>();
+      final release = Completer<void>();
+      var dispatched = false;
+      auth.readMnemonic = () async {
+        reached.complete();
+        await release.future;
+        RpcDispatchGuard.ensureCurrent('get_mnemonic');
+        dispatched = true;
+        return Mnemonic.plaintext('synthetic recovery phrase');
+      };
+      final files = _RecordingFileLoader();
+      final repository = WalletsRepository(
+        sdk,
+        _UnusedMm2Api(),
+        _UnusedStorage(),
+        fileLoader: files,
+      );
+      final rejected = expectLater(
+        repository.downloadEncryptedWallet(
+          auth.user.wallet,
+          'synthetic password',
+          expectedWalletId: auth.user.walletId,
+          ensureAuthorized: permit.ensureCurrent,
+        ),
+        throwsA(isA<Exception>()),
+      );
+      await reached.future;
+      gate.block();
+      release.complete();
+      await rejected;
+      expect(dispatched, isFalse);
+      expect(files.savedFileNames, isEmpty);
+    });
+
+    test(
+      'lock while choosing export destination prevents file commit',
+      () async {
+        final gate = WalletOperationGate()
+          ..attachWallet('entry', allowOperations: true);
+        final permit = gate.capture();
+        auth.readMnemonic = () async =>
+            Mnemonic.plaintext('synthetic recovery phrase');
+        final reached = Completer<void>();
+        final release = Completer<void>();
+        final files = _RecordingFileLoader()
+          ..beforeCommit = () async {
+            reached.complete();
+            await release.future;
+          };
+        final repository = WalletsRepository(
+          sdk,
+          _UnusedMm2Api(),
+          _UnusedStorage(),
+          fileLoader: files,
+        );
+        final rejected = expectLater(
+          repository.downloadEncryptedWallet(
+            auth.user.wallet,
+            'synthetic password',
+            expectedWalletId: auth.user.walletId,
+            ensureAuthorized: permit.ensureCurrent,
+          ),
+          throwsA(isA<Exception>()),
+        );
+        await reached.future;
+        gate.block();
+        release.complete();
+        await rejected;
+        expect(files.savedFileNames, isEmpty);
       },
     );
 
@@ -294,13 +411,18 @@ class _FakeArrrActivationService implements ArrrActivationService {
 
 class _RecordingFileLoader implements FileLoader {
   final List<String> savedFileNames = [];
+  Future<void> Function()? beforeCommit;
 
   @override
   Future<void> save({
     required String fileName,
     required String data,
     required LoadFileType type,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    await beforeCommit?.call();
+    beforeWrite?.call();
     savedFileNames.add(fileName);
   }
 

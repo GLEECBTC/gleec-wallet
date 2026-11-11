@@ -161,7 +161,8 @@ class _MainMenuDesktopState extends State<MainMenuDesktop> {
                               menu: MainMenuValue.settings,
                               onTap: onTapItem,
                               needAttention:
-                                  currentWallet?.config.hasBackup == false,
+                                  currentWallet?.config.hasRecoveryPhrase ==
+                                  false,
                               isSelected: _checkSelectedItem(
                                 MainMenuValue.settings,
                               ),

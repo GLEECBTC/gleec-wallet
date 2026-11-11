@@ -35,12 +35,14 @@ void main() {
           const Size.square(40),
         );
         expect(tester.widget<AssetLogo>(find.byType(AssetLogo)).size, 40);
+        // The loaded image can add its own exclusion wrapper. Check the
+        // announced result so asset-cache state cannot change this contract.
         expect(
-          find.descendant(
-            of: find.byType(SwapTokenIcon),
-            matching: find.byType(ExcludeSemantics),
-          ),
-          findsOneWidget,
+          tester
+              .getSemantics(find.byType(SwapTokenIcon))
+              .getSemanticsData()
+              .label,
+          isEmpty,
         );
         semantics.dispose();
       });

@@ -7,6 +7,7 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/wallet_password_dialog.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/security_action_plate.dart';
 
@@ -17,7 +18,7 @@ class PlateSeedBackup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentWallet = context.read<AuthBloc>().state.currentUser?.wallet;
-    final hasBackup = currentWallet?.config.hasBackup ?? false;
+    final hasBackup = currentWallet?.config.hasRecoveryPhrase ?? false;
     final authBloc = context.read<AuthBloc>();
 
     final text = hasBackup
@@ -80,12 +81,27 @@ class _SeedActionButtons extends StatelessWidget {
                 authBloc.state.currentUser?.walletId != expectedWalletId) {
               return;
             }
-            authBloc.add(
-              AuthWalletDownloadRequested(
-                password: password,
-                expectedWalletId: expectedWalletId,
-              ),
-            );
+            try {
+              final access = context.read<WalletAccessService?>();
+              final authorization = await access?.captureSensitiveExport(
+                expectedWalletId,
+              );
+              if (!context.mounted ||
+                  authBloc.state.currentUser?.walletId != expectedWalletId) {
+                return;
+              }
+              authorization?.ensureCurrent();
+              authBloc.add(
+                AuthWalletDownloadRequested(
+                  password: password,
+                  expectedWalletId: expectedWalletId,
+                  ensureAuthorized: authorization?.ensureCurrent,
+                  selectDestination: authorization?.selectDestination,
+                ),
+              );
+            } on Object {
+              // Locking, leaving or switching revokes this export request.
+            }
           },
           width: width,
           height: height,

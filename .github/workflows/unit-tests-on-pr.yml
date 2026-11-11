@@ -39,6 +39,11 @@ jobs:
         id: install_flutter
         uses: ./.github/actions/flutter-deps
 
+      - name: Install browser security test runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
       - name: Fetch packages and generate assets
         id: generate_assets
         uses: ./.github/actions/generate-assets

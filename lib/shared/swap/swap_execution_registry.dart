@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart'
     show AuthSessionChangedException, AuthSessionContext;
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -65,12 +66,13 @@ class SwapInFlightIncomplete implements Exception {
 /// [SwapExecutionRegistry.reset], so a start confirmed before a sign-out or a
 /// wallet switch is never sent in the session that follows.
 final class SwapSubmission {
-  SwapSubmission._(this._owner, this._generation, this.session)
+  SwapSubmission._(this._owner, this._generation, this.session, this._permit)
     : walletKey = session.walletId.compoundId;
 
   final Object _owner;
   final int _generation;
   final AuthSessionContext session;
+  final WalletOperationPermit _permit;
   final String walletKey;
   bool _claimed = false;
   bool _dispatched = false;
@@ -93,15 +95,18 @@ class SwapExecutionRegistry {
     required AuthSessionContext? Function() currentSession,
     required bool Function(AuthSessionContext) isSessionCurrent,
     Duration retryDelay = const Duration(seconds: 10),
+    WalletOperationGate? operationGate,
   }) : _executors = {for (final e in executors) e.source: e},
        _inFlight = inFlight,
        _currentSession = currentSession,
        _isSessionCurrent = isSessionCurrent,
-       _retryDelay = retryDelay;
+       _retryDelay = retryDelay,
+       _operationGate = operationGate ?? WalletOperationGate.instance;
 
   final Map<SwapLiquiditySource, SwapExecutor> _executors;
   final Future<List<SwapExecutionRef>> Function() _inFlight;
   final Duration _retryDelay;
+  final WalletOperationGate _operationGate;
   final AuthSessionContext? Function() _currentSession;
   final bool Function(AuthSessionContext) _isSessionCurrent;
   final Object _owner = Object();
@@ -191,7 +196,12 @@ class SwapExecutionRegistry {
   SwapSubmission beginSubmission() {
     final session = _acceptingSession();
     if (session == null) throw _staleSubmission;
-    return SwapSubmission._(_owner, _generation, session);
+    return SwapSubmission._(
+      _owner,
+      _generation,
+      session,
+      _operationGate.capture(),
+    );
   }
 
   /// The session a start confirmed now belongs to, read once.
@@ -230,6 +240,7 @@ class SwapExecutionRegistry {
         !(stillCurrent?.call() ?? true)) {
       throw _staleSubmission;
     }
+    submission._permit.ensureCurrent();
     submission._claimed = true;
     final executor = _executors[quote.source];
     if (executor == null) {
@@ -247,6 +258,7 @@ class SwapExecutionRegistry {
               !(stillCurrent?.call() ?? true)) {
             throw _staleSubmission;
           }
+          submission._permit.ensureCurrent();
           submission._dispatched = true;
           onDispatch?.call();
           // The callback is synchronous, but may itself revoke the session.
@@ -322,6 +334,7 @@ class SwapExecutionRegistry {
 
   /// Stops [id] if that is still possible. See [SwapExecutionHandle.cancel].
   Future<void> cancel(String id) async {
+    _operationGate.capture().ensureCurrent();
     final handle = _handles[id];
     if (handle == null) {
       throw const SwapCancelRefusedException(SwapCancelRefusal.notSupported);

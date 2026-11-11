@@ -16,15 +16,16 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.Map;
 
-import io.flutter.embedding.android.FlutterActivity;
+import io.flutter.embedding.android.FlutterFragmentActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodChannel;
 
 
-public class MainActivity extends FlutterActivity {
+public class MainActivity extends FlutterFragmentActivity {
     private SensitiveExportChannel sensitiveExports;
+    private WalletCredentialVault credentialVault;
     private boolean isSafBytes = false;
     private MethodChannel.Result safResult;
     private String safData;
@@ -78,6 +79,8 @@ public class MainActivity extends FlutterActivity {
         // MRC: Needed so the custom SAF implementation doesn't break the file_picker plugin
         super.onActivityResult(requestCode, resultCode, resultData);
 
+        if (credentialVault != null && credentialVault.onActivityResult(requestCode, resultCode)) return;
+
         if (sensitiveExports != null &&
                 sensitiveExports.onActivityResult(requestCode, resultCode, resultData)) return;
 
@@ -128,11 +131,21 @@ public class MainActivity extends FlutterActivity {
         setupSaf(flutterEngine);
         sensitiveExports = new SensitiveExportChannel(
                 this, flutterEngine.getDartExecutor().getBinaryMessenger());
+        try {
+            credentialVault = new WalletCredentialVault(
+                    this, flutterEngine.getDartExecutor().getBinaryMessenger());
+        } catch (Exception ignored) {
+            // Never log platform exceptions which can contain credential data.
+            new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(),
+                    "gleec.wallet/credential_vault").setMethodCallHandler((call, result) ->
+                    result.error("unavailable", "Credential storage unavailable", null));
+        }
     }
 
     @Override
     protected void onDestroy() {
         if (sensitiveExports != null) sensitiveExports.dispose();
+        if (credentialVault != null) credentialVault.dispose();
         super.onDestroy();
     }
 }

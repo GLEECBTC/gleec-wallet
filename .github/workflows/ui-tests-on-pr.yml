@@ -110,6 +110,7 @@ jobs:
       # rather than being stubbed.
       - name: Fetch the KDF binary for the counterparty
         id: counterparty_binary
+        if: ${{ !startsWith(github.head_ref, 'auth/') }}
         run: |
           set -euo pipefail
           # Use the SDK's manifest selectors and complete checksum/provenance
@@ -122,6 +123,7 @@ jobs:
 
       - name: Start the DEX counterparty
         id: counterparty
+        if: ${{ !startsWith(github.head_ref, 'auth/') }}
         run: |
           set -euo pipefail
           : > counterparty.log
@@ -162,6 +164,7 @@ jobs:
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHROME_EXECUTABLE: ${{ matrix.browser == 'chrome' && steps.setup_chrome.outputs.chrome-path || '' }}
+          ONBOARDING_ONLY: ${{ startsWith(github.head_ref, 'auth/') }}
         run: |
           # Runners hold no geo policy credential and cannot reach the policy
           # service, so the lookup fails and the activation gate defers every
@@ -169,7 +172,13 @@ jobs:
           # the wallet list. These suites exercise wallet flows, not region
           # blocking. This define lives only in this integration-test build -
           # release builds keep the gate and are unaffected.
-          dart run_integration_tests.dart \
+          # Authentication candidates use disposable unfunded wallets. The
+          # live-funds trading round stays with the manual release checklist.
+          auth_args=()
+          if [[ "$ONBOARDING_ONLY" == "true" ]]; then
+            auth_args=(-t wallets_manager_tests/wallets_manager_tests.dart)
+          fi
+          dart run_integration_tests.dart "${auth_args[@]}" \
             -d ${{ matrix.display }} \
             -b ${{ matrix.resolution }} \
             -n ${{ matrix.browser }} \
@@ -177,7 +186,7 @@ jobs:
             --dart-define GEO_BLOCK=disabled
 
       - name: Stop the DEX counterparty
-        if: always()
+        if: ${{ always() && !startsWith(github.head_ref, 'auth/') }}
         run: |
           pkill -f dex_counterparty.dart || true
           pkill -f '\.counterparty/kdf' || true

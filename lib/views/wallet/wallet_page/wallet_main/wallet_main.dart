@@ -29,6 +29,10 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/model/main_menu_value.dart';
+import 'package:web_dex/model/settings_menu_value.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_setup_card.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/router/state/wallet_state.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
@@ -141,6 +145,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
         return ZhtlcConfigurationHandler(
           child: PageLayout(
+            showBackupNotice: false,
             noBackground: true,
             header: (isMobile && !isLoggedIn)
                 ? PageHeader(title: LocaleKeys.wallet.tr())
@@ -172,6 +177,12 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
                             onAssetsPressed: () => _tabController.animateTo(0),
                           ),
                         ),
+                        if (authState.currentUser?.wallet.isHW == false)
+                          SliverToBoxAdapter(
+                            child: _WalletSetupReminder(
+                              wallet: authState.currentUser!.wallet,
+                            ),
+                          ),
                         const SliverToBoxAdapter(child: Gap(24)),
                         if (showMultiAddressNotice) ...[
                           const SliverToBoxAdapter(
@@ -621,5 +632,38 @@ class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _SliverTabBarDelegate oldDelegate) {
     return tabBar != oldDelegate.tabBar;
+  }
+}
+
+/// Recovery and local protection are independent and never gate transactions.
+class _WalletSetupReminder extends StatelessWidget {
+  const _WalletSetupReminder({required this.wallet});
+  final Wallet wallet;
+
+  void _openSecurity() {
+    routingState.selectedMenu = MainMenuValue.settings;
+    routingState.settingsState.selectedMenu = SettingsMenuValue.security;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final access = context.read<WalletAccessService?>();
+    if (access == null) return const SizedBox.shrink();
+    return StreamBuilder<void>(
+      stream: access.changes,
+      builder: (context, _) => FutureBuilder<WalletAccessStatus>(
+        future: access.statusForWallet(wallet),
+        builder: (context, snapshot) {
+          // Keep a conservative reminder while discovering actual protection.
+          final status = snapshot.data;
+          return WalletSetupCard(
+            hasRecoveryPhrase: wallet.config.hasRecoveryPhrase,
+            hasDeviceProtection: status?.requiresAuthentication ?? false,
+            onBackup: _openSecurity,
+            onProtect: _openSecurity,
+          );
+        },
+      ),
+    );
   }
 }

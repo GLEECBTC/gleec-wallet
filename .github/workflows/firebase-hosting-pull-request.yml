@@ -6,6 +6,7 @@ on:
   pull_request:
     branches:
       - dev
+      - feat/solana-integration
       - main
       - release/*
       - release-*
@@ -90,7 +91,7 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUILD_COMMAND: >-
-            flutter build web --no-pub --release
+            flutter build web --no-pub --release --csp --no-web-resources-cdn
             --dart-define=BYPASS_LEGAL_DOCUMENT_GATE=${{ steps.get_preview_channel_id.outputs.legal_bypass }}
           # Optionally provide feedback service configuration if available
           FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
@@ -149,6 +150,27 @@ jobs:
               lifi_build_defines: $lifi_build_defines[0],
               javascript_sha256: $javascript_sha256, kdf_config_sha256: $kdf_config_sha256}' \
             > build/web/rc-test-build.json
+
+      - name: Install onboarding browser test runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Verify unfunded onboarding and recovery
+        timeout-minutes: 12
+        env:
+          GLEEC_TEST_LIFECYCLE: "true"
+        run: |
+          node test_units/services/wallet_access/web_credential_release.browser.test.js
+          node test_units/services/wallet_access/web_wallet_recovery.browser.test.js
+          node test_units/services/wallet_access/web_missing_data.browser.test.js
+          node test_units/services/wallet_access/web_passkey_replacement.browser.test.js
+          node test_units/services/wallet_access/web_browser_support.browser.test.js
+
+      - name: Bind the internal testing build
+        env:
+          AUTH_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 tool/write_auth_test_build_identity.py
 
       - name: Deploy Gleec Wallet web feature preview (Expires in 7 days)
         id: deploy_preview

@@ -3,25 +3,25 @@ import 'package:flutter/material.dart';
 
 class SeedWordButton extends StatelessWidget {
   const SeedWordButton({
-    Key? key,
+    super.key,
     required this.text,
     required this.onPressed,
     required this.isSelected,
-  }) : super(key: key);
+  });
   final String text;
   final VoidCallback onPressed;
   final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
-    final opacity = isSelected ? 0.4 : 1.0;
     final themeData = Theme.of(context);
     final color = themeData.colorScheme.secondary;
 
-    return Opacity(
-      opacity: opacity,
-      child: SizedBox(
-        height: 31,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: themeData.inputDecorationTheme.fillColor,
@@ -40,9 +40,12 @@ class SeedWordButton extends StatelessWidget {
                 children: [
                   Container(
                     alignment: Alignment.center,
-                    child: _Text(
-                      text: text,
-                      isSelected: isSelected,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      child: _Text(text: text, isSelected: isSelected),
                     ),
                   ),
                   if (isSelected)
@@ -54,7 +57,7 @@ class SeedWordButton extends StatelessWidget {
                         size: 13,
                         color: theme.custom.headerIconColor,
                       ),
-                    )
+                    ),
                 ],
               ),
             ),
@@ -75,13 +78,16 @@ class _Text extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          text,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: theme.custom.headerIconColor,
-                fontWeight: FontWeight.w500,
-                fontSize: 12,
-              ),
+        Flexible(
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: theme.custom.headerIconColor,
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+            ),
+          ),
         ),
       ],
     );

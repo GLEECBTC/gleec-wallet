@@ -39,13 +39,7 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
     switch (form) {
       'create' => WalletCreation(
         action: WalletsManagerAction.create,
-        onCreate:
-            ({
-              required name,
-              required password,
-              walletType,
-              required rememberMe,
-            }) => submitted(),
+        onCreate: submitted,
         onCancel: () {},
       ),
       'seed' => WalletSimpleImport(
@@ -84,8 +78,7 @@ Widget _form(String form, VoidCallback submitted, {String? fileContent}) =>
 Future<void> _fillForm(WidgetTester tester, String form) async {
   switch (form) {
     case 'create':
-      await enterLegalField(tester, 'name-wallet-field', 'My wallet');
-      await _passwords(tester);
+      break;
     case 'seed':
       await enterLegalField(tester, 'name-wallet-field', 'My wallet');
       await enterLegalField(tester, 'import-seed-field', legalTestSeed);
@@ -182,7 +175,7 @@ void main() {
           await tester.ensureVisible(button);
           await tester.tap(button);
           await tester.tap(button);
-          if (form != 'hardware') {
+          if (form != 'hardware' && form != 'create') {
             await tester.testTextInput.receiveAction(TextInputAction.done);
           }
           await tester.pump();
@@ -247,7 +240,7 @@ void main() {
           semantics.dispose();
           await tester.ensureVisible(button);
           await tester.tap(button, warnIfMissed: false);
-          if (form != 'hardware') {
+          if (form != 'hardware' && form != 'create') {
             await tester.testTextInput.receiveAction(TextInputAction.done);
           } else {
             await tester.sendKeyEvent(LogicalKeyboardKey.enter);

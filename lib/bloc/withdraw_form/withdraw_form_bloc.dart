@@ -13,6 +13,7 @@ import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_policy.dart';
 import 'package:web_dex/shared/utils/formatters.dart';
@@ -426,9 +427,15 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
 
   Future<WithdrawalPreview> _generatePreview(
     WithdrawFormState requestState,
+    WalletOperationPermit permit,
   ) async {
     final params = requestState.toWithdrawParameters();
-    return _sdk.withdrawals.previewWithdrawal(params);
+    permit.ensureCurrent();
+    return RpcDispatchGuard.run(
+      permit.ensureCurrent,
+      () => _sdk.withdrawals.previewWithdrawal(params),
+      methods: const {'withdraw', 'task::withdraw::init'},
+    );
   }
 
   bool _matchesPreviewRequest(
@@ -1871,6 +1878,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         state.hasUncertainSolanaSubmission) {
       return;
     }
+    final WalletOperationPermit permit;
+    try {
+      permit = WalletOperationGate.instance.capture();
+    } on WalletOperationDenied {
+      return;
+    }
     if (!await _authorizeWithdrawal(emit)) return;
     if (state.isSending ||
         state.step != WithdrawFormStep.fill ||
@@ -1919,7 +1932,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ),
       );
 
-      final preview = await _generatePreview(requestState);
+      final preview = await _generatePreview(requestState, permit);
       _emitPreviewState(emit, requestState, preview, moveToConfirm: true);
     } catch (e) {
       _cancelTronPreviewTimer();
@@ -2023,6 +2036,12 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     WithdrawFormTronPreviewRefreshRequested event,
     Emitter<WithdrawFormState> emit,
   ) async {
+    final WalletOperationPermit permit;
+    try {
+      permit = WalletOperationGate.instance.capture();
+    } on WalletOperationDenied {
+      return;
+    }
     if (!await _authorizeWithdrawal(emit)) return;
     final requestState = state;
     if (!_isTronAsset(requestState.asset) ||
@@ -2063,7 +2082,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
         ),
       );
 
-      final preview = await _generatePreview(requestState);
+      final preview = await _generatePreview(requestState, permit);
       _emitPreviewState(emit, requestState, preview, moveToConfirm: false);
     } catch (e) {
       if (!_matchesPreviewRequest(requestState, state)) {
@@ -2527,6 +2546,13 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
     Emitter<WithdrawFormState> emit,
   ) async {
     if (state.isSending || state.hasUncertainSolanaSubmission) return;
+    final WalletOperationPermit permit;
+    try {
+      permit = WalletOperationGate.instance.capture();
+    } on WalletOperationDenied {
+      emit(state.copyWith(isSending: false));
+      return;
+    }
     if (!await _authorizeWithdrawal(emit)) return;
     if (state.isGaslessPendingStoreChecking) return;
     if (state.hasValidationErrors) return;
@@ -2611,6 +2637,7 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
       await for (final progress in _sdk.withdrawals.executeWithdrawal(
         preview,
         state.asset.id.id,
+        beforeBroadcast: permit.ensureCurrent,
       )) {
         // Preserve the SDK's typed relay lifecycle before handling a generic
         // error status. In particular, a response can be financially ambiguous

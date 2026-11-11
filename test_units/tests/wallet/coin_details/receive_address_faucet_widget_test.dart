@@ -358,7 +358,10 @@ KdfUser _softwareUser(
   isBip39Seed: true,
   // Backed up, so these fixtures exercise the receive surfaces themselves
   // rather than the seed-backup gate. The gate has its own coverage.
-  metadata: {'has_backup': hasBackup},
+  metadata: {
+    'has_backup': hasBackup,
+    'recovery_evidence': hasBackup ? 'phraseConfirmed' : 'none',
+  },
 );
 
 GaslessAccountStatusResponse _gaslessAccountStatus(

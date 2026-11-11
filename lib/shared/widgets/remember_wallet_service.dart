@@ -8,6 +8,7 @@ import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
@@ -18,18 +19,63 @@ class RememberWalletService {
   static final _log = Logger('RememberWalletService');
   static bool _hasShownRememberMeDialogThisSession = false;
   static bool _hasBeenLoggedInThisSession = false;
+  static int _presentationGeneration = 0;
+  static bool _hasExplicitSetupIntent = false;
+
+  /// An explicit setup or browse choice takes precedence over a pending
+  /// startup lookup. It does not alter durable automatic-entry preferences.
+  static void cancelPendingAutomaticEntry() {
+    _presentationGeneration++;
+    _hasExplicitSetupIntent = true;
+  }
+
+  static bool _canPresent(BuildContext context, int generation) {
+    if (!context.mounted ||
+        generation != _presentationGeneration ||
+        _hasExplicitSetupIntent ||
+        _hasShownRememberMeDialogThisSession) {
+      return false;
+    }
+    final auth = context.read<AuthBloc>().state;
+    return auth.mode == AuthorizeMode.noLogin &&
+        !auth.isSignedIn &&
+        !auth.isLoading;
+  }
 
   /// Check and possibly show the remembered wallet dialog
   static Future<void> maybeShowRememberedWallet(BuildContext context) async {
-    final authState = context.read<AuthBloc>().state;
-    if (authState.mode != AuthorizeMode.noLogin ||
-        _hasShownRememberMeDialogThisSession) {
-      return;
+    final generation = _presentationGeneration;
+    if (!_canPresent(context, generation)) return;
+
+    final access = context.read<WalletAccessService?>();
+    if (access != null) {
+      if (await access.automaticEntrySuppressed) return;
+      if (!context.mounted || !_canPresent(context, generation)) return;
+      final wallet = await access.lastWallet();
+      if (!context.mounted || !_canPresent(context, generation)) return;
+      if (wallet != null) {
+        _hasShownRememberMeDialogThisSession = true;
+        await AppDialog.showWithCallback<void>(
+          context: context,
+          width: 360,
+          barrierDismissible: false,
+          childBuilder: (closeDialog) => WalletsManagerWrapper(
+            eventType: WalletsManagerEventType.header,
+            onCancel: closeDialog,
+            selectedWallet: wallet,
+            rememberMe: true,
+            onSuccess: (_) => closeDialog(),
+          ),
+        );
+        return;
+      }
     }
 
+    if (!context.mounted || !_canPresent(context, generation)) return;
     final storage = getStorage();
     final walletsRepo = context.read<WalletsRepository>();
     final storedWalletData = await storage.read(lastLoggedInWalletKey);
+    if (!context.mounted || !_canPresent(context, generation)) return;
     if (storedWalletData == null) return;
 
     WalletId walletId;
@@ -64,7 +110,7 @@ class RememberWalletService {
     try {
       final wallets = walletsRepo.wallets ?? await walletsRepo.getWallets();
 
-      if (!context.mounted) return;
+      if (!context.mounted || !_canPresent(context, generation)) return;
 
       // Match by wallet name and optionally by pubkey hash for more precise matching
       final wallet = wallets.where((w) {
@@ -87,7 +133,7 @@ class RememberWalletService {
 
       if (wallet == null) return;
 
-      if (!context.mounted) return;
+      if (!context.mounted || !_canPresent(context, generation)) return;
 
       // Use AppDialog - a replacement for deprecated PopupDispatcher
       // Allow AppDialog to use its default root navigator behavior to avoid navigation stack corruption
@@ -129,6 +175,8 @@ class RememberWalletService {
 
   /// Reset remember me dialog state when user logs out
   static void resetOnLogout() {
+    _presentationGeneration++;
+    _hasExplicitSetupIntent = false;
     _hasShownRememberMeDialogThisSession = false;
     _hasBeenLoggedInThisSession = false;
   }

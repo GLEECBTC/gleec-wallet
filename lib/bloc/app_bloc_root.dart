@@ -1,3 +1,4 @@
+import 'package:web_dex/views/common/wallet_access/wallet_access_boundary.dart';
 import 'dart:async';
 
 import 'package:app_theme/app_theme.dart';
@@ -398,7 +399,7 @@ class _MyAppViewState extends State<_MyAppView> {
           // The colour MaterialApp gives its own title, kept as the page's
           // theme colour.
           color: theme.global.light.primaryColor,
-          child: child ?? const SizedBox.shrink(),
+          child: WalletAccessBoundary(child: child ?? const SizedBox.shrink()),
         ),
       ),
     );
@@ -424,13 +425,7 @@ class _MyAppViewState extends State<_MyAppView> {
     if (kIsWeb) {
       _platformWebApi.setElementDisplay('main-content', 'block');
 
-      // Trigger the zoom out animation.
-      _platformWebApi.addElementClass('loading', 'init_done');
-
-      // Await 200ms so the user can see the animation.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      // Remove the loading indicator.
+      // Expose the ready application immediately, without a presentation delay.
       _platformWebApi.removeElement('loading');
 
       final delay = DateTime.now()
@@ -440,7 +435,7 @@ class _MyAppViewState extends State<_MyAppView> {
         PageInteractiveDelayEventData(
           pageName: 'app_root',
           interactiveDelayMs: delay,
-          spinnerTimeMs: 200,
+          spinnerTimeMs: 0,
         ),
       );
     }

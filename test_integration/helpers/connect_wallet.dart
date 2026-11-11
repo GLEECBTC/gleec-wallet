@@ -5,10 +5,20 @@ import 'package:web_dex/model/wallet.dart';
 import '../common/goto.dart' as goto;
 
 Future<void> tapOnAppBarConnectWallet(
-    WidgetTester tester, WalletType walletType) async {
+  WidgetTester tester,
+  WalletType walletType,
+) async {
+  // Signed-out wallet routes already show onboarding inline. Reuse it rather
+  // than opening a second manager on top of the same entry controls.
+  if (walletType == WalletType.iguana &&
+      find.byKey(const Key('create-wallet-button')).evaluate().isNotEmpty) {
+    await tester.ensureVisible(find.byKey(const Key('create-wallet-button')));
+    return;
+  }
   final Finder connectWallet = find.byKey(const Key('connect-wallet-header'));
-  final Finder connectAtomicDexWalletButton =
-      find.byKey(Key('wallet-type-list-item-${walletType.name}'));
+  final Finder connectAtomicDexWalletButton = find.byKey(
+    Key('wallet-type-list-item-${walletType.name}'),
+  );
   await tester.ensureVisible(connectWallet);
   await tester.tap(connectWallet);
   await tester.pumpAndSettle();
@@ -22,11 +32,21 @@ Future<void> tapOnAppBarConnectWallet(
 }
 
 Future<void> tapOnMobileConnectWallet(
-    WidgetTester tester, WalletType walletType) async {
+  WidgetTester tester,
+  WalletType walletType,
+) async {
+  // Signed-out wallet routes already show onboarding inline. Reuse it rather
+  // than opening a second manager on top of the same entry controls.
+  if (walletType == WalletType.iguana &&
+      find.byKey(const Key('create-wallet-button')).evaluate().isNotEmpty) {
+    await tester.ensureVisible(find.byKey(const Key('create-wallet-button')));
+    return;
+  }
   final mainMenuDexForm = find.byKey(const Key('main-menu-dex'));
   final Finder connectWallet = find.byKey(const Key('connect-wallet-dex'));
-  final Finder connectAtomicDexWalletButton =
-      find.byKey(Key('wallet-type-list-item-${walletType.name}'));
+  final Finder connectAtomicDexWalletButton = find.byKey(
+    Key('wallet-type-list-item-${walletType.name}'),
+  );
   await tester.tap(mainMenuDexForm);
   await tester.pumpAndSettle();
   // `connect-wallet-dex` belongs to the trading forms, which the Swap surface

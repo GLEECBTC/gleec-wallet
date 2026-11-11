@@ -21,6 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		A918DD713B5D4E1B90930001 /* WalletCredentialVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = A918DD713B5D4E1B90930002 /* WalletCredentialVault.swift */; };
 		0FECB4522D11D6AF00F11CB7 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
@@ -59,6 +60,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A918DD713B5D4E1B90930002 /* WalletCredentialVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../ios/Runner/WalletCredentialVault.swift; sourceTree = SOURCE_ROOT; };
 		077AAB0A45526CBA36D40E03 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		09D9D1FE76A3E9989DCFEFBD /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		1A3B6726B443457F0866C384 /* Pods-Runner.profile-production.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile-production.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile-production.xcconfig"; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 			children = (
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
+				A918DD713B5D4E1B90930002 /* WalletCredentialVault.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -215,7 +218,6 @@
 				33CC10EB2044A3C60003C045 /* Resources */,
 				33CC110E2044A8840003C045 /* Bundle Framework */,
 				3399D490228B24CF009A79C7 /* ShellScript */,
-				2F0A7C4B91D6E35A08B14C77 /* Sign KDF helper executable */,
 				9F7F68559C65826DCCC1B957 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
@@ -307,25 +309,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		2F0A7C4B91D6E35A08B14C77 /* Sign KDF helper executable */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Sign KDF helper executable";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# Sign the bundled KDF helper before the framework that contains it is sealed.\n#\n# The prebuilt kdf binary ships \"adhoc, linker-signed\" (what the Rust linker\n# emits). codesign treats linker-signed as \"not signed at all\", so sealing\n# komodo_defi_framework.framework fails, and the app signing fails after it.\n#\n# The pod's own signing step cannot do this: it lives in the\n# komodo_defi_framework target, where CocoaPods sets CODE_SIGNING_ALLOWED=NO,\n# so it always takes the \"Code Signing DISABLED\" branch. This phase runs in\n# Runner, where the app's identity is already resolved, and before\n# \"[CP] Embed Pods Frameworks\" copies and seals the framework.\n#\n# Sign with NO entitlements. kdf is a nested executable with no\n# embedded.provisionprofile of its own, so giving it the app's\n# com.apple.application-identifier makes AMFI SIGKILL it at exec -- which\n# surfaces as KDF exiting with code -9 and a black window at launch. This is\n# why OTHER_CODE_SIGN_FLAGS=--deep must not be used here: --deep reapplies the\n# app's entitlements to every nested binary.\n#\n# Enable the hardened runtime (and a secure timestamp): notarization rejects\n# any executable signed without it. kdf needs no entitlements for it.\n\nset -eu\n\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = \"NO\" ] || [ -z \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ]; then\n  echo \"note: code signing disabled; leaving kdf helper as-is\"\n  exit 0\nfi\n\nKDF_HELPER=\"${BUILT_PRODUCTS_DIR}/komodo_defi_framework/komodo_defi_framework.framework/Versions/A/Helpers/kdf\"\n\nif [ ! -f \"$KDF_HELPER\" ]; then\n  echo \"error: kdf helper not found at $KDF_HELPER\" >&2\n  exit 1\nfi\n\necho \"Code Signing $KDF_HELPER with Identity ${EXPANDED_CODE_SIGN_IDENTITY_NAME:-$EXPANDED_CODE_SIGN_IDENTITY}\"\n/usr/bin/codesign --force --options runtime --timestamp --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \"$KDF_HELPER\"\n";
-		};
+
 		3399D490228B24CF009A79C7 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -432,6 +416,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
+				A918DD713B5D4E1B90930001 /* WalletCredentialVault.swift in Sources */,
 				0FECB4522D11D6AF00F11CB7 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);
@@ -687,7 +672,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -878,7 +863,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;

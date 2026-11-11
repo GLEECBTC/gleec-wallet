@@ -11,6 +11,7 @@ import 'package:web_dex/bloc/coin_addresses/bloc/coin_addresses_state.dart';
 import 'package:web_dex/bloc/withdraw_form/withdraw_form_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/gasless/tron_gasless_consolidation_gate.dart';
 import 'package:web_dex/views/wallet/coin_details/withdraw_form/withdraw_form.dart';
 
@@ -191,8 +192,9 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
   }
 
   Future<List<_ConsolidationSource>> _loadSources(int generation) async {
-    await _requireExpectedWalletCurrent();
+    final permit = WalletOperationGate.instance.capture();
     final sdk = context.read<KomodoDefiSdk>();
+    await _requireExpectedWalletCurrent();
     final parentId = widget.asset.id.parentId;
     if (parentId == null) {
       throw StateError('A TRC-20 parent asset is required for consolidation');
@@ -249,17 +251,22 @@ class _GaslessConsolidationWizardState extends State<GaslessConsolidationWizard>
             (derivationPath == null || derivationPath.isEmpty)) {
           throw StateError('The Standard source derivation is unavailable');
         }
-        final preview = await sdk.withdrawals.previewWithdrawal(
-          WithdrawParameters(
-            asset: widget.asset.id.id,
-            toAddress: widget.custodyAddress,
-            amount: null,
-            from: derivationPath == null || derivationPath.isEmpty
-                ? null
-                : WithdrawalSource.hdDerivationPath(derivationPath),
-            expirationSeconds: WithdrawFormState.tronPreviewExpirationSeconds,
-            isMax: true,
+        permit.ensureCurrent();
+        final preview = await RpcDispatchGuard.run(
+          permit.ensureCurrent,
+          () => sdk.withdrawals.previewWithdrawal(
+            WithdrawParameters(
+              asset: widget.asset.id.id,
+              toAddress: widget.custodyAddress,
+              amount: null,
+              from: derivationPath == null || derivationPath.isEmpty
+                  ? null
+                  : WithdrawalSource.hdDerivationPath(derivationPath),
+              expirationSeconds: WithdrawFormState.tronPreviewExpirationSeconds,
+              isMax: true,
+            ),
           ),
+          methods: const {'withdraw', 'task::withdraw::init'},
         );
         await _requireExpectedWalletCurrent();
         if (preview.fee case final FeeInfoTron fee) {

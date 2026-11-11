@@ -14,6 +14,13 @@ import 'package:web_dex/bloc/coins_bloc/coins_bloc.dart';
 import 'package:web_dex/bloc/platform/platform_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/model/main_menu_value.dart';
+import 'package:web_dex/router/navigators/page_content/page_content_router_delegate.dart';
+import 'package:web_dex/router/navigators/page_menu/page_menu_router_delegate.dart';
+import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/shared/widgets/remember_wallet_service.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_entry_boundary.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/legal_documents/legal_acceptance.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
@@ -23,6 +30,7 @@ import 'package:web_dex/views/wallets_manager/widgets/hardware_wallets_manager.d
 import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 import '../../../support/legal_documents_fixture.dart';
+import '../../../support/wallet_access_ui_fixture.dart';
 
 class _EmptyAssetLoader extends AssetLoader {
   const _EmptyAssetLoader();
@@ -33,12 +41,26 @@ class _EmptyAssetLoader extends AssetLoader {
 
 class _FakeAuthBloc extends Cubit<AuthBlocState> implements AuthBloc {
   _FakeAuthBloc() : super(AuthBlocState.initial());
+  final events = <AuthBlocEvent>[];
+  void transition(AuthBlocState state) => emit(state);
 
   @override
-  void add(AuthBlocEvent event) {}
+  void add(AuthBlocEvent event) => events.add(event);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DelayedRememberedWallet extends AccessibilityAccess {
+  final lookup = Completer<Wallet?>();
+  bool lookupStarted = false;
+  @override
+  Future<bool> get automaticEntrySuppressed async => false;
+  @override
+  Future<Wallet?> lastWallet() {
+    lookupStarted = true;
+    return lookup.future;
+  }
 }
 
 class _FakeCoinsBloc extends Cubit<CoinsState> implements CoinsBloc {
@@ -159,6 +181,9 @@ Future<void> _pump(
   _FakeLegalDocumentsRepository? legal,
   VoidCallback? onCancel,
   _FakeWalletsRepository? wallets,
+  _FakeAuthBloc? auth,
+  WalletAccessService? access,
+  Widget? content,
 }) async {
   await tester.pumpWidget(
     EasyLocalization(
@@ -175,13 +200,15 @@ Future<void> _pump(
           localizationsDelegates: context.localizationDelegates,
           home: MultiBlocProvider(
             providers: [
-              BlocProvider<AuthBloc>(create: (_) => _FakeAuthBloc()),
+              BlocProvider<AuthBloc>(create: (_) => auth ?? _FakeAuthBloc()),
               BlocProvider<CoinsBloc>(create: (_) => _FakeCoinsBloc()),
               BlocProvider<PlatformBloc>(create: (_) => PlatformBloc()),
               BlocProvider<AnalyticsBloc>.value(value: analyticsBloc),
             ],
             child: MultiRepositoryProvider(
               providers: [
+                if (access != null)
+                  RepositoryProvider<WalletAccessService>.value(value: access),
                 RepositoryProvider<WalletsRepository>.value(
                   value: wallets ?? _FakeWalletsRepository(stored: stored),
                 ),
@@ -190,15 +217,17 @@ Future<void> _pump(
                 ),
               ],
               child: Scaffold(
-                body: SingleChildScrollView(
-                  child: mounted
-                      ? WalletsManagerWrapper(
-                          eventType: WalletsManagerEventType.header,
-                          onCancel: onCancel,
-                          onSuccess: (_) {},
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                body:
+                    content ??
+                    SingleChildScrollView(
+                      child: mounted
+                          ? WalletsManagerWrapper(
+                              eventType: WalletsManagerEventType.header,
+                              onCancel: onCancel,
+                              onSuccess: (_) {},
+                            )
+                          : const SizedBox.shrink(),
+                    ),
               ),
             ),
           ),
@@ -215,6 +244,141 @@ void main() {
 
     setUp(() => analyticsBloc = _FakeAnalyticsBloc());
     tearDown(() => analyticsBloc.close());
+    setUp(RememberWalletService.resetOnLogout);
+    tearDown(RememberWalletService.resetOnLogout);
+
+    for (final mobile in [true, false]) {
+      testWidgets(
+        'cold launch mobile=$mobile shows creation and import without opening a dialog',
+        (tester) async {
+          tester.view.physicalSize = const Size(390, 844);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final auth = _FakeAuthBloc();
+          final legal = _FakeLegalDocumentsRepository();
+          final oldMenu = routingState.selectedMenu;
+          routingState.selectedMenu = MainMenuValue.wallet;
+          routingState.walletState.reset();
+          addTearDown(() => routingState.selectedMenu = oldMenu);
+          await _pump(
+            tester,
+            analyticsBloc: analyticsBloc,
+            auth: auth,
+            legal: legal,
+            content: Builder(
+              builder: (context) => mobile
+                  ? PageMenuRouterDelegate().build(context)
+                  : PageContentRouterDelegate().build(context),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('create-wallet-button')).hitTestable(),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('import-wallet-button')).hitTestable(),
+            findsOneWidget,
+          );
+          expect(find.byType(TextFormField), findsNothing);
+          expect(find.text('public prices'), findsNothing);
+          expect(
+            find.byKey(const Key('legal-agreement-notice')),
+            findsOneWidget,
+          );
+          await tester.tap(find.byKey(const Key('create-wallet-button')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(
+            auth.events.whereType<AuthQuickCreateRequested>(),
+            hasLength(1),
+          );
+          expect(legal.recordedSurfaces, ['wallet-creation']);
+          expect(find.byType(TextFormField), findsNothing);
+        },
+      );
+    }
+
+    testWidgets(
+      'guest browsing survives a coin deep link and resets after sign-out',
+      (tester) async {
+        final atRoot = ValueNotifier(true);
+        addTearDown(atRoot.dispose);
+        final auth = _FakeAuthBloc();
+        await _pump(
+          tester,
+          analyticsBloc: analyticsBloc,
+          auth: auth,
+          content: WalletEntryScope(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: atRoot,
+              builder: (_, value, _) => WalletEntryBoundary(
+                key: ValueKey(value),
+                isWalletRoot: value,
+                child: Text(value ? 'public prices' : 'coin details'),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('onboarding-cancel-button')));
+        await tester.pumpAndSettle();
+        expect(find.text('public prices'), findsOneWidget);
+        expect(find.byKey(const Key('open-wallet-setup')), findsOneWidget);
+        atRoot.value = false;
+        await tester.pumpAndSettle();
+        expect(find.text('coin details'), findsOneWidget);
+        atRoot.value = true;
+        await tester.pumpAndSettle();
+        expect(find.text('public prices'), findsOneWidget);
+        auth.transition(AuthBlocState.loggedIn(accessibilityUser()));
+        await tester.pumpAndSettle();
+        expect(find.byType(WalletsManagerWrapper), findsNothing);
+        auth.transition(AuthBlocState.initial());
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('onboarding-cancel-button')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('open-wallet-setup')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
+      },
+    );
+
+    for (final action in ['create', 'import']) {
+      testWidgets(
+        '$action takes precedence over a delayed remembered-wallet lookup',
+        (tester) async {
+          final access = _DelayedRememberedWallet();
+          addTearDown(access.unlockCoordinator.dispose);
+          await _pump(
+            tester,
+            analyticsBloc: analyticsBloc,
+            access: access,
+            content: const WalletEntryBoundary(child: Text('public prices')),
+          );
+          await tester.pumpAndSettle();
+          final context = tester.element(find.byType(WalletEntryBoundary));
+          final lookup = RememberWalletService.maybeShowRememberedWallet(
+            context,
+          );
+          await tester.pump();
+          expect(access.lookupStarted, isTrue);
+          await tester.tap(find.byKey(Key('$action-wallet-button')));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 100));
+          access.lookup.complete(_storedWallet('Existing wallet'));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 100));
+          await lookup;
+          expect(find.byType(SimpleDialog), findsNothing);
+          expect(find.byType(WalletsManagerWrapper), findsOneWidget);
+          expect(find.byType(WalletLogIn), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
 
     testWidgets('shows create, import and hardware on one screen', (
       tester,
@@ -223,7 +387,7 @@ void main() {
 
       expect(find.byKey(const Key('create-wallet-button')), findsOneWidget);
       expect(find.byKey(const Key('import-wallet-button')), findsOneWidget);
-      expect(find.byKey(const Key('legal-agreement-notice')), findsNothing);
+      expect(find.byKey(const Key('legal-agreement-notice')), findsOneWidget);
       // The retired wallet-type router had permanently-disabled rows for these.
       expect(
         find.byKey(const Key('wallet-type-list-item-metamask')),
@@ -274,7 +438,7 @@ void main() {
       expect(viewed.parameters['existing_wallet_count'], 0);
     });
 
-    testWidgets('tapping Create completes the choice and opens the form', (
+    testWidgets('tapping Create completes the choice and submits creation', (
       tester,
     ) async {
       await _pump(tester, analyticsBloc: analyticsBloc);
@@ -286,6 +450,8 @@ void main() {
       expect(analyticsBloc.trace, [
         ('onboarding_step_completed', 'setup_action_select'),
         ('onboarding_step_viewed', 'create_form'),
+        ('onboarding_step_completed', 'create_form'),
+        ('onboarding_step_viewed', 'auth_submitted'),
       ]);
       expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
     });
@@ -349,7 +515,7 @@ void main() {
 
     for (final returning in [false, true]) {
       for (final accepted in [false, true]) {
-        testWidgets('create goes directly to its form without acceptance '
+        testWidgets('create accepts displayed terms and starts without fields '
             '(returning: $returning, accepted: $accepted)', (tester) async {
           final legal = _FakeLegalDocumentsRepository(accepted: accepted);
           await _pump(
@@ -364,15 +530,15 @@ void main() {
             find.byKey(const Key('agree-and-continue-button')),
             findsNothing,
           );
-          expect(find.byKey(const Key('legal-agreement-notice')), findsNothing);
-          await tester.tap(find.byKey(const Key('create-wallet-button')));
-          await tester.pump();
-          expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
           expect(
             find.byKey(const Key('legal-agreement-notice')),
             findsOneWidget,
           );
-          expect(legal.recordedSurfaces, isEmpty);
+          await tester.tap(find.byKey(const Key('create-wallet-button')));
+          await tester.pump();
+          expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
+          expect(find.byType(TextFormField), findsNothing);
+          expect(legal.recordedSurfaces, ['wallet-creation']);
         });
       }
       testWidgets(
@@ -397,28 +563,33 @@ void main() {
       );
     }
 
-    testWidgets('legal status lookup never delays opening a form', (
-      tester,
-    ) async {
-      final check = Completer<bool>();
-      final legal = _FakeLegalDocumentsRepository(
-        acceptanceCheck: check.future,
-      );
-      await _pump(
-        tester,
-        analyticsBloc: analyticsBloc,
-        stored: [_storedWallet('wallet-a')],
-        legal: legal,
-      );
-      await tester.tap(find.byKey(const Key('create-wallet-button')));
-      await tester.pump();
-      expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
-      expect(find.byKey(const Key('legal-agreement-notice')), findsOneWidget);
-      expect(legal.recordedSurfaces, isEmpty);
-      check.complete(false);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('agree-and-continue-button')), findsNothing);
-    });
+    testWidgets(
+      'cached legal snapshot permits creation during acceptance lookup',
+      (tester) async {
+        final check = Completer<bool>();
+        final legal = _FakeLegalDocumentsRepository(
+          acceptanceCheck: check.future,
+        );
+        await _pump(
+          tester,
+          analyticsBloc: analyticsBloc,
+          stored: [_storedWallet('wallet-a')],
+          legal: legal,
+        );
+        await tester.tap(find.byKey(const Key('create-wallet-button')));
+        await tester.pump();
+        expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
+        expect(legal.recordedSurfaces, ['wallet-creation']);
+        check.complete(false);
+        await tester.pump();
+        expect(find.byKey(const Key('wallet-creation')), findsOneWidget);
+        expect(legal.recordedSurfaces, ['wallet-creation']);
+        expect(
+          find.byKey(const Key('agree-and-continue-button')),
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('cancelling the chooser does not accept terms', (tester) async {
       var cancelled = false;

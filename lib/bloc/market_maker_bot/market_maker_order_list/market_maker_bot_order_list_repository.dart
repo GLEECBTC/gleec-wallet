@@ -11,6 +11,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_volume.dart';
 import 'package:web_dex/views/market_maker_bot/trade_volume_type.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/services/orders_service/my_orders_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
 class MarketMakerBotOrderListRepository {
   const MarketMakerBotOrderListRepository(
@@ -36,6 +37,7 @@ class MarketMakerBotOrderListRepository {
     MarketMakerBotWalletSession? walletSession,
     bool Function()? isSessionCurrent,
   }) async {
+    final permit = WalletOperationGate.instance.capture();
     final orders = await _ordersService.getOrders();
     final ordersToCancel = orders
         ?.where(
@@ -54,11 +56,15 @@ class MarketMakerBotOrderListRepository {
     }
 
     for (final order in ordersToCancel) {
+      permit.ensureCurrent();
       await _ordersService.cancelOrder(
         order.uuid,
-        beforeMutation: walletSession == null
-            ? null
-            : () => _requireWalletSession(walletSession, isSessionCurrent),
+        beforeMutation: () async {
+          if (walletSession != null) {
+            await _requireWalletSession(walletSession, isSessionCurrent);
+          }
+          permit.ensureCurrent();
+        },
       );
     }
   }
@@ -136,7 +142,7 @@ class MarketMakerBotOrderListRepository {
     final Decimal balance = baseCoin == null
         ? Decimal.zero
         : _coinsRepository.lastKnownBalance(baseCoin.id)?.spendable ??
-            Decimal.zero;
+              Decimal.zero;
 
     if (balance == Decimal.zero) return Rational.zero;
 
@@ -154,8 +160,9 @@ class MarketMakerBotOrderListRepository {
     if (usdPrice == null || usdPrice == Decimal.zero) return Rational.zero;
 
     final Rational usdPriceRational = usdPrice.toRational();
-    final Rational usdVolumeRational =
-        Rational.parse(maxVolume.value.toString());
+    final Rational usdVolumeRational = Rational.parse(
+      maxVolume.value.toString(),
+    );
     final Rational amountInBase = usdVolumeRational / usdPriceRational;
     return amountInBase > balanceRational ? balanceRational : amountInBase;
   }

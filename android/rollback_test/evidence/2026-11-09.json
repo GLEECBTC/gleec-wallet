@@ -1,0 +1,315 @@
+{
+  "schema": 1,
+  "scope": "Disposable API36 emulator functional acceptance; not physical hardware assurance",
+  "sourceSha256": "7de39fbcd7507abed6ff7a46f7cef3c441633cf8b2e9c47554aaa2621ba30fc0",
+  "coordinatorSha256": "ca9fa0477176670f1d1d312028198cd458e30cf75a88a7b7c7856bc816e5dbcd",
+  "profiles": {
+    "normal": {
+      "defines": {
+        "TRON_GASLESS_ENABLED": "true",
+        "TRON_GASLESS_RECEIVE_ENABLED": "true",
+        "TRON_GASLESS_BASE_URL": "https://quicknode.gleec.com/gasfree/tron",
+        "TRON_GASLESS_SERVICE_PROVIDER": "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird",
+        "WALLET_DEVICE_ENROLLMENT_ENABLED": "true",
+        "WALLET_PASSKEY_ENROLLMENT_ENABLED": "true",
+        "WALLET_IMMEDIATE_LOCK_REQUIRED": "false"
+      },
+      "unsignedApkSha256": "3a48fce796c84996b8e010a3a44518d190eab5b1ff289ca3c6f55f315551463f",
+      "testSignedApkSha256": "94ab4de2754cc3b89d98dd7f98b996a6f3b1134cf18b6188f9d2e12f743fcda3",
+      "elapsedSeconds": 81.44,
+      "privacy": "passed",
+      "appId": "com.gleec.gleecdex",
+      "testVersionCode": 1,
+      "testVersionName": "0.9.8"
+    },
+    "rollback": {
+      "defines": {
+        "TRON_GASLESS_ENABLED": "true",
+        "TRON_GASLESS_RECEIVE_ENABLED": "true",
+        "TRON_GASLESS_BASE_URL": "https://quicknode.gleec.com/gasfree/tron",
+        "TRON_GASLESS_SERVICE_PROVIDER": "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird",
+        "WALLET_DEVICE_ENROLLMENT_ENABLED": "false",
+        "WALLET_PASSKEY_ENROLLMENT_ENABLED": "false",
+        "WALLET_IMMEDIATE_LOCK_REQUIRED": "true"
+      },
+      "unsignedApkSha256": "0852d36f434d45cc75b7b63ddf2a908cb9fde06ed33df9848aab3f8cc2ded28b",
+      "testSignedApkSha256": "2194ec61147f5a14cfba9b731d1a17a26069a3b9127fab242812f98589fc7174",
+      "elapsedSeconds": 75.47,
+      "privacy": "passed",
+      "appId": "com.gleec.gleecdex",
+      "testVersionCode": 1,
+      "testVersionName": "0.9.8"
+    }
+  },
+  "packagedReaderProof": {
+    "schema": 1,
+    "result": "passed",
+    "sameInstallIdentity": true,
+    "normal": {
+      "nativeReaderMarkersPresent": true,
+      "nativeBytecodeSha256": "b547808d4dbd9d3c823015ae439f9cb4ff05e8ad78eec0ceae99491805b4b1b4",
+      "abis": {
+        "arm64-v8a": {
+          "dartReaderMarkersPresent": true,
+          "legacyExecutableMarkersAbsent": true,
+          "temporaryDiagnosticMarkersAbsent": true,
+          "nativeEnginePresent": true,
+          "appLibrarySha256": "21df9d3377b25edbb0ee93a6de0b505bfc47112f40f602d4c559c67e6234da02",
+          "nativeEngineSha256": "38c3b0b3d82bd543436599cbff7f657b5245c21fa8ed7eea83df80b923a3e4fa"
+        },
+        "armeabi-v7a": {
+          "dartReaderMarkersPresent": true,
+          "legacyExecutableMarkersAbsent": true,
+          "temporaryDiagnosticMarkersAbsent": true,
+          "nativeEnginePresent": true,
+          "appLibrarySha256": "87e21ed59294bbd8403ff243530ccf8829ead587d8f9305c6c799b048b4be38c",
+          "nativeEngineSha256": "f366dcab7b7f8f459f8195f6ef4193e93fc7313fbcea6360ded12bf700a268ca"
+        }
+      },
+      "apkSha256": "94ab4de2754cc3b89d98dd7f98b996a6f3b1134cf18b6188f9d2e12f743fcda3",
+      "applicationId": "com.gleec.gleecdex",
+      "versionCode": "1",
+      "signerSha256": "bb17b22a4393c3662fe2ddbdc20f99057acfae64c919bf08c295fa6193948e05"
+    },
+    "rollback": {
+      "nativeReaderMarkersPresent": true,
+      "nativeBytecodeSha256": "b547808d4dbd9d3c823015ae439f9cb4ff05e8ad78eec0ceae99491805b4b1b4",
+      "abis": {
+        "arm64-v8a": {
+          "dartReaderMarkersPresent": true,
+          "legacyExecutableMarkersAbsent": true,
+          "temporaryDiagnosticMarkersAbsent": true,
+          "nativeEnginePresent": true,
+          "appLibrarySha256": "1c27dc7619f7a0bcb492071fb8bebe1fdcc2f2f6d6f0f2ec3f244af07bd7c933",
+          "nativeEngineSha256": "38c3b0b3d82bd543436599cbff7f657b5245c21fa8ed7eea83df80b923a3e4fa"
+        },
+        "armeabi-v7a": {
+          "dartReaderMarkersPresent": true,
+          "legacyExecutableMarkersAbsent": true,
+          "temporaryDiagnosticMarkersAbsent": true,
+          "nativeEnginePresent": true,
+          "appLibrarySha256": "4511372e8b8de9b8b598c9bb2c29ed29e03a81b57ad77e0c7608a8d3d2b8589d",
+          "nativeEngineSha256": "f366dcab7b7f8f459f8195f6ef4193e93fc7313fbcea6360ded12bf700a268ca"
+        }
+      },
+      "apkSha256": "2194ec61147f5a14cfba9b731d1a17a26069a3b9127fab242812f98589fc7174",
+      "applicationId": "com.gleec.gleecdex",
+      "versionCode": "1",
+      "signerSha256": "bb17b22a4393c3662fe2ddbdc20f99057acfae64c919bf08c295fa6193948e05"
+    },
+    "scope": "packaged reader markers and native-library structure; runtime and source-profile verification are separate"
+  },
+  "normalGrace": [
+    {
+      "requestedSeconds": 29,
+      "awayBeforeLaunchSeconds": 29.029,
+      "launcherConfirmed": true,
+      "deviceChallenge": false,
+      "securityVisible": true
+    },
+    {
+      "requestedSeconds": 31,
+      "awayBeforeLaunchSeconds": 31.027,
+      "launcherConfirmed": true,
+      "deviceChallenge": true,
+      "securityVisible": false
+    }
+  ],
+  "runtime": {
+    "rollbackColdCancellation": {
+      "lastProtectedWalletSelected": true,
+      "nativeChallengeOnColdLaunch": true,
+      "canceledStableSeconds": 12.099,
+      "noRepeatedChallenge": true,
+      "fallbacksPresent": true
+    },
+    "rollbackProtectedReturn": {
+      "sameRenamedWallet": true,
+      "forcedImmediateSelected": true,
+      "deviceProtectionReported": true
+    },
+    "rollbackMaskedBackup": {
+      "freshDeviceChallenge": true,
+      "unknownPasswordNotRequested": true,
+      "phraseStillMasked": true
+    },
+    "rollbackBackupBackground": {
+      "closedSensitiveView": true,
+      "requiredFreshUnlock": true
+    },
+    "rollbackEncryptedExport": {
+      "initialDeviceChallenge": 1,
+      "returnDeviceChallenge": 1,
+      "bytesBeforeReturnAuthorization": 0,
+      "bytesAfterReturnAuthorization": 798,
+      "unknownPasswordNotRequested": true,
+      "recoveryReminderRemains": true,
+      "contentsRead": false,
+      "testFileRemoved": true
+    },
+    "rollbackExportCancellation": {
+      "emptyDestinationRemoved": true,
+      "lockedFallbackStable": true,
+      "contentsRead": false,
+      "testHarnessAdjustedForAppLockUnlockLabel": true
+    },
+    "rollbackLocalAccess": {
+      "existingWalletOpened": true,
+      "sameDisplayName": true,
+      "knownPasswordOnly": false,
+      "unknownPasswordNotRequested": true,
+      "recoveryReminderRemains": true,
+      "unprotectedStatusAccurate": true,
+      "newDeviceEnrollmentNotOffered": true
+    },
+    "rollbackPasswordAccess": {
+      "existingWalletOpened": true,
+      "sameDisplayName": true,
+      "knownPasswordOnly": true,
+      "unknownPasswordNotRequested": true,
+      "recoveryReminderRemains": true
+    },
+    "rollbackExplicitSignOut": {
+      "suppressesColdAutomaticEntry": true,
+      "allThreeExistingWalletsRemain": true
+    },
+    "upgradeInstallPreservesSignOut": {
+      "noAutomaticChallenge": true,
+      "allThreeWalletsRemain": true
+    },
+    "upgradeLocalAccess": {
+      "existingWalletOpened": true,
+      "sameDisplayName": true,
+      "knownPasswordOnly": false,
+      "unknownPasswordNotRequested": true,
+      "recoveryReminderRemains": true,
+      "unprotectedStatusAccurate": true
+    },
+    "upgradePasswordAccess": {
+      "existingWalletOpened": true,
+      "sameDisplayName": true,
+      "knownPasswordOnly": true,
+      "unknownPasswordNotRequested": true,
+      "recoveryReminderRemains": true
+    },
+    "upgradeExplicitSignOut": {
+      "suppressesColdAutomaticEntry": true,
+      "allThreeExistingWalletsRemain": true
+    },
+    "upgradeProtectedAccess": {
+      "sameExistingEnrollmentUnlocks": true,
+      "sameDisplayName": true,
+      "normalGracePreferenceStill30Seconds": true
+    },
+    "upgradeLastUsedWallet": {
+      "lastSuccessfullyUnlockedProtectedWalletSelected": true,
+      "coldAutomaticChallenge": true,
+      "noSelectorNavigation": true,
+      "noPersistedUnlockedSession": true
+    }
+  },
+  "correctedDiagnosticReturns": [
+    {
+      "iteration": 1,
+      "backgroundSeconds": 1.036,
+      "launcherConfirmed": true,
+      "before": {
+        "deviceChallenge": false,
+        "securityVisible": true,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      },
+      "after": {
+        "deviceChallenge": true,
+        "securityVisible": false,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      }
+    },
+    {
+      "iteration": 2,
+      "backgroundSeconds": 1.041,
+      "launcherConfirmed": true,
+      "before": {
+        "deviceChallenge": false,
+        "securityVisible": true,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      },
+      "after": {
+        "deviceChallenge": true,
+        "securityVisible": false,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      }
+    },
+    {
+      "iteration": 3,
+      "backgroundSeconds": 1.036,
+      "launcherConfirmed": true,
+      "before": {
+        "deviceChallenge": false,
+        "securityVisible": true,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      },
+      "after": {
+        "deviceChallenge": true,
+        "securityVisible": false,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      }
+    },
+    {
+      "iteration": 4,
+      "backgroundSeconds": 1.034,
+      "launcherConfirmed": true,
+      "before": {
+        "deviceChallenge": false,
+        "securityVisible": true,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      },
+      "after": {
+        "deviceChallenge": true,
+        "securityVisible": false,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      }
+    },
+    {
+      "iteration": 5,
+      "backgroundSeconds": 1.031,
+      "launcherConfirmed": true,
+      "before": {
+        "deviceChallenge": false,
+        "securityVisible": true,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      },
+      "after": {
+        "deviceChallenge": true,
+        "securityVisible": false,
+        "walletDashboardVisible": false,
+        "unlockCoverVisible": false
+      }
+    }
+  ],
+  "diagnosticPositiveControl": {
+    "diagnosticApkMarkerPresentBothAbis": true
+  },
+  "cleanup": {
+    "appUninstalled": true,
+    "syntheticExportFilesRemoved": true,
+    "dedicatedEmulatorStopped": true,
+    "dedicatedAvdAndUserStateRemoved": true,
+    "temporarySigningAndPasswordFilesRemoved": true,
+    "personalDevicesTouched": false,
+    "originalIgnoredFixtureTouched": false,
+    "evidenceAndApksRetained": true
+  },
+  "privateArtifactScans": "both clean APKs passed",
+  "realFundsUsed": false,
+  "secretRevealsOrClipboardUse": false,
+  "sourceMetadataIdentityRecoveryAssertions": "separate cross-process service-reader suite; not inferred from UI display names"
+}

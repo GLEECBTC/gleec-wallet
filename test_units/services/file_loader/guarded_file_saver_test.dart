@@ -122,6 +122,79 @@ void main() {
           .setMockMethodCallHandler(channel, null);
     });
 
+    test('revoked operation never opens the destination picker', () async {
+      await expectLater(
+        saver.save(
+          fileName: 'keys.json',
+          data: 'SECRET_SENTINEL',
+          beforeWrite: () async {},
+          beforeCommit: () => throw StateError('Session expired'),
+        ),
+        throwsStateError,
+      );
+      expect(calls, isEmpty);
+    });
+
+    test(
+      'owned selection failure still discards its returned native token',
+      () async {
+        await expectLater(
+          saver.save(
+            fileName: 'keys.json',
+            data: 'SECRET_SENTINEL',
+            beforeWrite: () async {},
+            beforeCommit: () {},
+            selectDestination: (choose) async {
+              expect(await choose(), 'opaque-token');
+              throw StateError('Foreground authorization expired');
+            },
+          ),
+          throwsStateError,
+        );
+        expect(calls.map((call) => call.method), [
+          'chooseDestination',
+          'discard',
+        ]);
+        expect(
+          calls.map((call) => call.arguments).toString(),
+          isNot(contains('SECRET_SENTINEL')),
+        );
+      },
+    );
+
+    test(
+      'owned selection finishes before any write authorization or bytes',
+      () async {
+        final order = <String>[];
+        final outcome = await saver.save(
+          fileName: 'keys.json',
+          data: 'SECRET_SENTINEL',
+          beforeCommit: () => order.add('guard'),
+          beforeWrite: () async => order.add('write'),
+          selectDestination: (choose) async {
+            order.add('owned-start');
+            final token = await choose();
+            expect(calls.map((call) => call.method), ['chooseDestination']);
+            order.add('owned-return');
+            return token;
+          },
+        );
+        expect(outcome, FileSaveOutcome.completed);
+        expect(order, [
+          'guard',
+          'owned-start',
+          'owned-return',
+          'write',
+          'guard',
+        ]);
+        expect(calls.map((call) => call.method), [
+          'chooseDestination',
+          'write',
+          'discard',
+        ]);
+      },
+    );
+
     test(
       'microtask revocation discards the destination without sending data',
       () async {

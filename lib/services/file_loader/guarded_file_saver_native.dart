@@ -31,8 +31,11 @@ class DesktopGuardedFileSaver implements GuardedFileSaver {
     required String data,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   }) async {
-    final destination = await _selectDestination(path.basename(fileName));
+    beforeCommit();
+    Future<String?> choose() => _selectDestination(path.basename(fileName));
+    final destination = await (selectDestination?.call(choose) ?? choose());
     if (destination == null || destination.isEmpty) {
       return FileSaveOutcome.cancelled;
     }
@@ -57,12 +60,20 @@ class AndroidGuardedFileSaver implements GuardedFileSaver {
     required String data,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   }) async {
-    final token = await _channel.invokeMethod<String>('chooseDestination', {
-      'fileName': path.basename(fileName),
-    });
-    if (token == null) return FileSaveOutcome.cancelled;
+    beforeCommit();
+    String? chosenToken;
+    Future<String?> choose() async {
+      chosenToken = await _channel.invokeMethod<String>('chooseDestination', {
+        'fileName': path.basename(fileName),
+      });
+      return chosenToken;
+    }
+
     try {
+      final token = await (selectDestination?.call(choose) ?? choose());
+      if (token == null) return FileSaveOutcome.cancelled;
       await beforeWrite();
       beforeCommit();
       await _channel.invokeMethod<void>('write', {
@@ -73,7 +84,9 @@ class AndroidGuardedFileSaver implements GuardedFileSaver {
     } finally {
       // The native side consumes successful writes. Otherwise this removes the
       // empty document and the destination capability, without sending data.
-      await _channel.invokeMethod<void>('discard', {'token': token});
+      if (chosenToken != null) {
+        await _channel.invokeMethod<void>('discard', {'token': chosenToken});
+      }
     }
   }
 }
@@ -97,6 +110,7 @@ class IosGuardedFileSaver implements GuardedFileSaver {
     required String data,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   }) async {
     final temporary = await _temporaryDirectory();
     final directory = await temporary.createTemp('key-export-');

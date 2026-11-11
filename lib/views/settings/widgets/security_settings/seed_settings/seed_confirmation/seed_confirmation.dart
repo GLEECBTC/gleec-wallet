@@ -335,18 +335,27 @@ class _ControlButtons extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Expanded(
-          child: UiBorderButton(
-            key: const Key('seed-confirm-clear-button'),
-            height: isMobile ? 52 : 40,
-            onPressed: onClearPressed,
-            text: LocaleKeys.clear.tr(),
+          child: Semantics(
+            button: true,
+            enabled: onClearPressed != null,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: UiBorderButton(
+                key: const Key('seed-confirm-clear-button'),
+                height: isMobile ? 52 : 40,
+                onPressed: onClearPressed,
+                text: LocaleKeys.clear.tr(),
+                allowMultiline: true,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: UiPrimaryButton(
+            expandForText: true,
             key: const Key('seed-confirm-check-button'),
-            height: isMobile ? 52 : 40,
+            height: 52,
             onPressed: onConfirmPressed,
             text: LocaleKeys.confirm.tr(),
           ),
