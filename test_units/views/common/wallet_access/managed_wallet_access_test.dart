@@ -30,6 +30,10 @@ import '../../../support/legal_documents_fixture.dart';
 
 class _Access extends Fake implements WalletAccessService {
   final outcomes = <PasswordManagerOutcome>[];
+  final managerRequests = <WalletId>[];
+  PasswordManagerOutcome managerResult = PasswordManagerOutcome.unknown;
+  WalletAccessException? managerError;
+  Future<void>? managerDelay;
   bool pendingCleanup = false;
   int cleanupRetries = 0;
   @override
@@ -113,7 +117,13 @@ class _Access extends Fake implements WalletAccessService {
   Future<PasswordManagerOutcome> saveToPasswordManager({
     required WalletId walletId,
     String? password,
-  }) async => PasswordManagerOutcome.unavailable;
+  }) async {
+    managerRequests.add(walletId);
+    await managerDelay;
+    if (managerError != null) throw managerError!;
+    return managerResult;
+  }
+
   @override
   Future<void> recordPasswordManagerOutcome({
     required WalletId walletId,
@@ -469,42 +479,46 @@ void main() {
       },
     );
 
-    testWidgets(
-      'autofill save is optional and reports unknown rather than accepted',
-      (tester) async {
+    for (final result in PasswordManagerOutcome.values) {
+      testWidgets('creation requests provider save once with $result', (
+        tester,
+      ) async {
         final harness = LegalFormHarness();
-        final access = _Access();
-        PasswordManagerOutcome? result;
+        final access = _Access()..managerResult = result;
+        addTearDown(access.unlockCoordinator.dispose);
+        var completed = false;
         await harness.pump(
           tester,
           Builder(
             builder: (context) => TextButton(
               onPressed: () async {
-                result = await saveWalletPassword(
+                await offerWalletPasswordSave(
                   context,
                   access: access,
                   walletId: _user().walletId,
                 );
+                completed = true;
               },
-              child: const Text('Offer save'),
+              child: const Text('Create wallet'),
             ),
           ),
         );
-        await tester.tap(find.text('Offer save'));
+        await tester.tap(find.text('Create wallet'));
         await tester.pumpAndSettle();
-        final field = tester.widget<TextField>(
-          find.byKey(const Key('password-manager-save-credential')),
+        expect(access.managerRequests, [_user().walletId]);
+        expect(completed, isTrue);
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(find.byType(TextField), findsNothing);
+        expect(
+          access.authorized,
+          isEmpty,
+          reason:
+              'The service owns authorization; UI never receives the password.',
         );
-        expect(field.obscureText, isTrue);
-        expect(field.enableInteractiveSelection, isFalse);
-        expect(access.authorized, [_user().walletId]);
-        expect(result, isNull);
-        await tester.tap(find.byKey(const Key('password-manager-save-submit')));
-        await tester.pumpAndSettle();
-        expect(result, PasswordManagerOutcome.unknown);
-        expect(access.outcomes, [PasswordManagerOutcome.unknown]);
-      },
-    );
+        expect(tester.takeException(), isNull);
+      });
+    }
 
     testWidgets('barrier dismissal revokes authorization during exit animation', (
       tester,
@@ -765,13 +779,66 @@ void main() {
       });
     }
 
-    testWidgets('password-manager offer closes without authorizing or saving', (
+    for (final failure in [
+      WalletAccessFailure.canceled,
+      WalletAccessFailure.unavailable,
+      WalletAccessFailure.staleOperation,
+    ]) {
+      testWidgets('optional provider $failure cannot fail creation or loop', (
+        tester,
+      ) async {
+        final harness = LegalFormHarness();
+        final access = _Access()..managerError = WalletAccessException(failure);
+        addTearDown(access.unlockCoordinator.dispose);
+        var completed = false;
+        await harness.pump(
+          tester,
+          Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                await offerWalletPasswordSave(
+                  context,
+                  access: access,
+                  walletId: _user().walletId,
+                );
+                completed = true;
+              },
+              child: const Text('Create wallet'),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Create wallet'));
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(seconds: 15));
+        expect(completed, isTrue);
+        expect(access.managerRequests, [_user().walletId]);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(
+          access.outcomes,
+          failure == WalletAccessFailure.staleOperation
+              ? isEmpty
+              : [
+                  failure == WalletAccessFailure.canceled
+                      ? PasswordManagerOutcome.declined
+                      : PasswordManagerOutcome.failed,
+                ],
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('late provider failure cannot record status after locking', (
       tester,
     ) async {
-      final harness = LegalFormHarness();
-      final access = _Access();
+      final pending = Completer<void>();
+      final access = _Access()
+        ..managerDelay = pending.future
+        ..managerError = const WalletAccessException(
+          WalletAccessFailure.canceled,
+        );
       addTearDown(access.unlockCoordinator.dispose);
-      await harness.pump(
+      await LegalFormHarness().pump(
         tester,
         Builder(
           builder: (context) => TextButton(
@@ -780,20 +847,16 @@ void main() {
               access: access,
               walletId: _user().walletId,
             ),
-            child: const Text('Offer password-manager save'),
+            child: const Text('Create wallet'),
           ),
         ),
       );
-      await tester.tap(find.text('Offer password-manager save'));
+      await tester.tap(find.text('Create wallet'));
+      await tester.pump();
+      access.unlockCoordinator.lock();
+      pending.complete();
       await tester.pumpAndSettle();
-      expect(find.byType(SnackBar), findsOneWidget);
-      expect(access.outcomes, [PasswordManagerOutcome.offered]);
-      await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(SnackBar), findsNothing);
-      expect(access.authorized, isEmpty);
-      expect(access.outcomes, [PasswordManagerOutcome.offered]);
+      expect(access.outcomes, isEmpty);
       expect(tester.takeException(), isNull);
     });
 

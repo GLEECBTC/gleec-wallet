@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -16,11 +13,11 @@ import 'package:web_dex/bloc/settings/settings_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/utils/validators.dart';
 import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/views/common/page_header/page_header.dart';
-import 'package:web_dex/views/common/wallet_password_dialog/password_manager_save.dart';
 
 class PasswordUpdatePage extends StatefulWidget {
   const PasswordUpdatePage({super.key});
@@ -31,6 +28,13 @@ class PasswordUpdatePage extends StatefulWidget {
 
 class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
   bool _passwordUpdated = false;
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +52,6 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
         },
       );
     }
-    final scrollController = ScrollController();
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       decoration: BoxDecoration(
@@ -69,11 +72,11 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
           Flexible(
             child: DexScrollbar(
               isMobile: isMobile,
-              scrollController: scrollController,
+              scrollController: _scrollController,
               child: SingleChildScrollView(
-                controller: ScrollController(),
-                child: SizedBox(
-                  width: 270,
+                controller: _scrollController,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -147,6 +150,7 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
     _oldController.clear();
     _newController.clear();
     _confirmController.clear();
+    if (mounted) setState(() => _isObscured = true);
   }
 
   @override
@@ -185,6 +189,20 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Offstage(
+                  child: ExcludeFocus(
+                    child: ExcludeSemantics(
+                      child: TextFormField(
+                        key: const Key('password-update-autofill-username'),
+                        initialValue: snapshot.data?.entryId == null
+                            ? _walletId?.name
+                            : 'gleec-${snapshot.data!.entryId}',
+                        readOnly: true,
+                        autofillHints: const [AutofillHints.username],
+                      ),
+                    ),
+                  ),
+                ),
                 if (_managed) ...[
                   Text('authPersonalPasswordOptional'.tr()),
                   const SizedBox(height: 16),
@@ -236,7 +254,9 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
   Future<void> _onUpdate() async {
     if (_busy || !(_formKey.currentState?.validate() ?? false)) return;
     final expected = _walletId;
-    if (expected == null) return;
+    final owner = context.read<AuthBloc>().state.currentUser;
+    if (expected == null || owner == null) return;
+    final expectedEntry = WalletAccessService.entryId(owner);
     final currentPassword = _managed ? null : _oldController.text;
     final newPassword = _newController.text;
 
@@ -263,24 +283,18 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
         await context.read<KomodoDefiSdk>().auth.updatePassword(
           currentPassword: currentPassword!,
           newPassword: newPassword,
+          expectedWalletId: expected,
         );
       }
-      if (!mounted ||
-          context.read<AuthBloc>().state.currentUser?.walletId != expected) {
-        return;
-      }
+      if (!_ownsWallet(expected, expectedEntry)) return;
       setState(() => _error = null);
-      TextInput.finishAutofillContext(shouldSave: false);
-      if (access != null) {
-        final navigator = Navigator.of(context, rootNavigator: true);
-        unawaited(
-          offerWalletPasswordSave(
-            navigator.context,
-            access: access,
-            walletId: expected,
-          ),
-        );
-      }
+      await _requestPasswordManagerUpdate(
+        access,
+        expected,
+        expectedEntry,
+        newPassword,
+      );
+      if (!_ownsWallet(expected, expectedEntry)) return;
       _newController.clear();
       _confirmController.clear();
       widget.onSuccess();
@@ -312,8 +326,67 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
         }
       });
     } finally {
-      _oldController.clear();
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        _oldController.clear();
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  bool _ownsWallet(WalletId id, String entry) {
+    if (!mounted) return false;
+    final user = context.read<AuthBloc>().state.currentUser;
+    return user?.walletId == id &&
+        user != null &&
+        WalletAccessService.entryId(user) == entry;
+  }
+
+  Future<void> _requestPasswordManagerUpdate(
+    WalletAccessService? access,
+    WalletId id,
+    String entry,
+    String password,
+  ) async {
+    try {
+      if (!_ownsWallet(id, entry)) return;
+      if (access != null) {
+        final outcome = await access.saveToPasswordManager(
+          walletId: id,
+          password: password,
+        );
+        if (outcome != PasswordManagerOutcome.unavailable) {
+          TextInput.finishAutofillContext(shouldSave: false);
+          return;
+        }
+      }
+      if (!_ownsWallet(id, entry)) return;
+      final ensureCurrent = access?.captureSensitiveOperation(id);
+      // Device confirmation may have cleared these controllers. Restore only
+      // after the fields are obscured, then submit the actual committed value
+      // through the ordinary autofill form. Never focus a hidden input.
+      setState(() => _isObscured = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!_ownsWallet(id, entry)) return;
+      ensureCurrent?.call();
+      _newController.text = password;
+      _confirmController.text = password;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!_ownsWallet(id, entry)) return;
+      ensureCurrent?.call();
+      TextInput.finishAutofillContext();
+      await access?.recordPasswordManagerOutcome(
+        walletId: id,
+        outcome: PasswordManagerOutcome.unknown,
+      );
+    } catch (_) {
+      // The password change is committed. Optional provider failures never
+      // roll it back or turn success into a misleading password error.
+      TextInput.finishAutofillContext(shouldSave: false);
+    } finally {
+      if (mounted) {
+        _newController.clear();
+        _confirmController.clear();
+      }
     }
   }
 
@@ -360,6 +433,7 @@ class _CurrentFieldState extends State<_CurrentField> {
         return null;
       },
       suffixIcon: PasswordVisibilityControl(
+        isObscured: widget.isObscured,
         onVisibilityChange: widget.onVisibilityChange,
       ),
     );
@@ -386,6 +460,7 @@ class _NewField extends StatelessWidget {
       autofillHints: const [AutofillHints.newPassword],
       validator: (password) => _validatePassword(password, context),
       suffixIcon: PasswordVisibilityControl(
+        isObscured: isObscured,
         onVisibilityChange: onVisibilityChange,
       ),
     );
@@ -427,6 +502,7 @@ class _ConfirmField extends StatelessWidget {
       validator: (String? confirmPassword) =>
           validateConfirmPassword(newController.text, confirmPassword ?? ''),
       suffixIcon: PasswordVisibilityControl(
+        isObscured: isObscured,
         onVisibilityChange: onVisibilityChange,
       ),
     );
@@ -453,13 +529,14 @@ class _PasswordField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return UiTextFormField(
-      autofocus: true,
       controller: controller,
       // Use .next, rather than done or go, as this is a generic password field
       // that is not guaranteed to be the last field in the forms it is
       // referenced in
       textInputAction: TextInputAction.next,
       autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       enableInteractiveSelection: true,
       obscureText: isObscured,
       maxLength: passwordMaxLength,

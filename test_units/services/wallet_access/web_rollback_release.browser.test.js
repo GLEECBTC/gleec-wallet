@@ -114,6 +114,7 @@ async function main() {
           if (kind === 'passkey') assert.ok(virtual.counts.asserted > challenges);
           await browser.click(page, 'Settings'); await browser.click(page, 'Security');
           if (profile === 'rollback') {
+            assert.equal(await page.evaluate(buttonPresent('Create a passkey')), false);
             assert.equal(await page.evaluate(buttonPresent('Set up local passkey')), false);
             assert.equal(await page.evaluate(buttonPresent('Replace passkey using password')), false);
           }
@@ -147,7 +148,8 @@ async function main() {
         await round('custom-password', protectedByPassword);
       } else {
         await round('browserLocal', local);
-        await browser.click(page, 'Set up local passkey');
+        await browser.click(page, await page.evaluate(buttonPresent('Create a passkey'))
+          ? 'Create a passkey' : 'Set up local passkey');
         await browser.wait(page, `(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf'&&value.unattended===0)`,
           {label: 'verified PRF protection'});
         const protectedByPasskey = await page.evaluate(credentialsSummary);

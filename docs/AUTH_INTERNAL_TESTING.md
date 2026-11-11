@@ -9,7 +9,8 @@ handoff is moved.
 
 Use a fresh browser profile and disposable, unfunded wallets. Create from the
 opening screen without typing a name or password. Check the displayed protection
-status, optional password-manager offer, cold return, cancel/retry, wallet switch,
+status, inline optional passkey/device setup, the provider’s save prompt, cold
+return, cancel/retry, wallet switch,
 rename, persistent sign-out, recovery-phrase confirmation and encrypted export.
 Confirm 29-second/31-second background returns and immediate locking. Normal
 transactions retain their ordinary review and confirmation flow.
@@ -34,27 +35,29 @@ in `onboarding-browser-identity`, so the served bundle can be checked against
 the tested build independently. Tester reports should name the
 preview URL, source head, device/OS/browser/provider and pass/fail.
 
-## Completed engineering checks for this candidate
+## Engineering validation and exact candidate
 
-- Clean-checkout app suite: **4,494 passed, 26 skipped**, zero failures. The 22
-  Linux-only cases run on Linux CI; four existing skips remain documented.
-- Whole-checkout analysis: **zero errors**, 55 existing warnings and 2,143
-  informational notices. Changed authentication files have scoped analysis.
-- SDK authentication: **196 passed**; SDK replay fixture corrections: **six
-  passed**, with **225 passed/four opt-in skips** in the complete replay round.
-- Browser release/lifecycle: instant creation, full process restart, passkeys,
-  cross-tab invalidation, corrupt ciphertext, provider loss and 29/31-second
-  background returns with frozen timers pass on the compiled app.
-- Recovery: generated-password phrase confirmation, requested-only browser
-  export, independent phrase/file restoration and secret-diagnostic canaries
-  pass. Passkey replacement and clean-origin missing-data cases also pass.
-- Browser-only protocol suite: 82 cases pass through the main CI aggregator.
-- CI performs the same unfunded browser acceptance before publishing the PR
-  preview, and publishes source/SDK/bundle identity afterward.
+The pinned PR handoff is the authoritative record of this candidate’s exact
+source, full app/SDK results, preview identity, rollback evidence and installer
+checks. Do not carry counts from an older candidate into a new invitation.
+CI runs the complete production-GasFree unit aggregator, browser protocol tests,
+compiled unfunded browser journeys and native builds. It also retains public
+light/dark phone/wide setup-state renders in `onboarding-ui-states`.
 
-These local results bind to the isolated integration source. The pinned PR
-handoff adds hosted CI outcomes and the independently verified served bundle;
-local results alone do not mark a hosted build accepted.
+The UX follow-up removes the application Save action and recommends optional
+passkey setup directly in the wallet. The provider handles saving confirmation;
+automatic saving may be unavailable and autofill requests do not confirm saving.
+Test cancellation separately from declined enrollment. Passkey setup may ask for
+two system confirmations; a returning enrolled wallet gets at most one automatic
+challenge. No personal password is required after phrase backup.
+
+Engineering evidence includes fail/restart provisioning, password rotation,
+wallet-bound action invalidation, suspended-clock lock timing, full-process
+browser return, cross-tab protection, missing/corrupt data and independent
+phrase/file restoration. Virtual authenticators and emulators establish those
+software paths; they do not certify hardware protection or actual providers.
+See [the state reference](design/authentication/README.md) and
+[the research record](design/authentication/UX_RESEARCH.md).
 
 ## Android installation
 

@@ -498,6 +498,35 @@ test('insecure origins and embedded frames cannot enroll or access credentials',
   await assert.rejects(api.write({ key: 'wallet-1', value: secret }), { code: 'unavailable' });
 });
 
+test('passkey offer requires reported PRF support when client capabilities are known', async () => {
+  const { api, env, state } = await environment();
+  env.PublicKeyCredential.getClientCapabilities = async () => ({ 'extension:prf': false });
+  assert.equal((await api.capabilities()).passkeys, false);
+  assert.equal(state.creates, 0);
+  env.PublicKeyCredential.getClientCapabilities = async () => ({ 'extension:prf': true });
+  assert.equal((await api.capabilities()).passkeys, true);
+});
+
+test('unresponsive optional PRF discovery cannot stall instant creation', async () => {
+  const { api, env } = await environment();
+  env.PublicKeyCredential.getClientCapabilities = () => new Promise(() => {});
+  const capability = await api.capabilities();
+  assert.equal(capability.available, true);
+  assert.equal(capability.passkeys, true, 'Unknown support remains a candidate requiring actual cryptographic proof');
+  await api.write({ key: 'wallet-capability-timeout', value: secret });
+  assert.equal(await api.read({ key: 'wallet-capability-timeout' }), secret);
+});
+
+test('capability changes never disable an existing passkey reader or downgrade its record', async () => {
+  const { api, env } = await environment();
+  await api.write({ key: 'wallet-reader', value: secret });
+  await api.enrollPasskey({ key: 'wallet-reader', value: secret, label: 'Reader wallet' });
+  env.PublicKeyCredential.getClientCapabilities = async () => ({ 'extension:prf': false });
+  assert.equal((await api.capabilities()).passkeys, false);
+  assert.equal(await api.read({ key: 'wallet-reader', requireAuthentication: true }), secret);
+  assert.equal((await api.metadata({ key: 'wallet-reader' })).enrolled, true);
+});
+
 test('password-manager storage reports unknown rather than assuming a durable save', async () => {
   const { api, env } = await environment();
   env.PasswordCredential = class { constructor(value) { Object.assign(this, value); } };

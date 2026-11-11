@@ -163,6 +163,7 @@ void main() {
         final button = find.byKey(const Key('replace-passkey-using-password'));
         await tester.ensureVisible(button);
         expect(button.hitTestable(), findsOneWidget);
+        expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
         expect(access.authorized, isEmpty);
         expect(access.replacements, isEmpty);
         expect(find.byType(PasswordDialogContent), findsNothing);
@@ -241,7 +242,7 @@ void main() {
           expect(
             find.text(
               (failure == WalletAccessFailure.canceled
-                      ? 'authUnlockCanceled'
+                      ? 'authProtectionCanceled'
                       : 'authProtectionFailed')
                   .tr(),
             ),

@@ -167,7 +167,7 @@ async function main() {
     await page.send('Page.bringToFront');
     const virtual=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');
-    await browser.click(page,'Set up local passkey');
+    await browser.click(page,'Create a passkey');
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'passkey protection persisted'});
     // The envelope is committed before the service finishes its authenticated
     // readback. Keep this tab foreground until enrollment reports completion;

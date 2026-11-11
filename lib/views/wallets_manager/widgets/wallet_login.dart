@@ -4,23 +4,24 @@ import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/shared/widgets/password_visibility_control.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/constants.dart';
-import 'package:web_dex/shared/utils/hd_wallet_mode_preference.dart';
-import 'package:web_dex/shared/widgets/quick_login_switch.dart';
-import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
-import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
+import 'package:web_dex/shared/utils/hd_wallet_mode_preference.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
+import 'package:web_dex/shared/widgets/password_visibility_control.dart';
+import 'package:web_dex/shared/widgets/quick_login_switch.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_passkey_icon.dart';
+import 'package:web_dex/views/wallets_manager/widgets/hdwallet_mode_switch.dart';
 
 class WalletLogIn extends StatefulWidget {
   const WalletLogIn({
@@ -238,6 +239,8 @@ class _WalletLogInState extends State<WalletLogIn> {
                           initialValue: widget.wallet.name,
                           readOnly: true,
                           autocorrect: false,
+                          enableSuggestions: false,
+                          enableIMEPersonalizedLearning: false,
                           autofillHints: const [AutofillHints.username],
                         ),
                       ),
@@ -309,7 +312,13 @@ class _WalletLogInState extends State<WalletLogIn> {
                         onPressed: state.isLoading
                             ? null
                             : () => setState(() => _manualPassword = false),
-                        child: Text('authUseDeviceUnlock'.tr()),
+                        child: Text(
+                          (snapshot.data?.protection ==
+                                      CredentialProtection.passkey
+                                  ? 'authUnlockWithPasskey'
+                                  : 'authUseDeviceUnlock')
+                              .tr(),
+                        ),
                       ),
                     if (widget.onRecover != null)
                       TextButton(
@@ -359,12 +368,15 @@ class _ManagedWalletUnlock extends StatelessWidget {
     mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Icon(
-        status.requiresAuthentication
-            ? Icons.lock_outline
-            : Icons.account_balance_wallet_outlined,
-        size: 36,
-      ),
+      if (status.protection == CredentialProtection.passkey)
+        const WalletPasskeyIcon(size: 36)
+      else
+        Icon(
+          status.requiresAuthentication
+              ? Icons.lock_outline
+              : Icons.account_balance_wallet_outlined,
+          size: 36,
+        ),
       const SizedBox(height: 16),
       Semantics(
         header: true,
@@ -470,18 +482,28 @@ class PasswordTextField extends StatefulWidget {
   State<PasswordTextField> createState() => _PasswordTextFieldState();
 }
 
-class _PasswordTextFieldState extends State<PasswordTextField> {
+class _PasswordTextFieldState extends State<PasswordTextField>
+    with WidgetsBindingObserver {
   bool _isPasswordObscured = true;
   late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _focusNode = FocusNode();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && mounted) {
+      setState(() => _isPasswordObscured = true);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusNode.dispose();
     super.dispose();
   }
@@ -495,6 +517,8 @@ class _PasswordTextFieldState extends State<PasswordTextField> {
           autofocus: true,
           textInputAction: TextInputAction.done,
           autocorrect: false,
+          enableSuggestions: false,
+          enableIMEPersonalizedLearning: false,
           controller: widget.controller,
           obscureText: _isPasswordObscured,
           errorText: widget.errorText,
@@ -503,6 +527,7 @@ class _PasswordTextFieldState extends State<PasswordTextField> {
           counterText: '',
           hintText: LocaleKeys.walletCreationPasswordHint.tr(),
           suffixIcon: PasswordVisibilityControl(
+            isObscured: _isPasswordObscured,
             onVisibilityChange: onVisibilityChange,
           ),
           onFieldSubmitted: (_) => widget.onFieldSubmitted?.call(),

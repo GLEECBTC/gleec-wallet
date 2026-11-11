@@ -45,7 +45,7 @@ async function check(kind){
     assert.equal(await page.evaluate(walletRows),1);
     if(kind==='passkeyOnly'){
       const provider=await virtualAuthenticator(browser,page);
-      await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Set up local passkey');
+      await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Create a passkey');
       await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'passkey before browser cleanup'});
       const key=await page.evaluate(`(async()=>{const db=await new Promise(resolve=>{const request=indexedDB.open('gleec-wallet-credentials-v1');request.onsuccess=()=>resolve(request.result);});const rows=await new Promise(resolve=>{const request=db.transaction('credentials').objectStore('credentials').getAll();request.onsuccess=()=>resolve(request.result);});db.close();return rows.find(row=>row.slot.startsWith('active:')).walletKey;})()`);
       await page.send('Storage.clearDataForOrigin',{origin:new URL(browser.base).origin,storageTypes:'indexeddb,local_storage,cache_storage,service_workers'});
@@ -71,7 +71,7 @@ async function check(kind){
     if(kind==='wallet'){
       assert.deepEqual(after,vault);assert.equal(await page.evaluate(walletRows),0);
       assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')),false,'A credential alone must not present an unlocked wallet');
-      await browser.wait(page,"Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('I already have a recovery phrase'))",{label:'missing-wallet recovery entry'});
+      await browser.wait(page,"Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('Import an existing wallet'))",{label:'missing-wallet recovery entry'});
       console.log('PASS: missing encrypted wallet preserves credential, offers import and does not create or claim a recovered wallet');
       return;
     }

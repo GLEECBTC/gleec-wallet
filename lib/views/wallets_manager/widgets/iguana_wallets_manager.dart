@@ -599,8 +599,8 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
     }
     context.read<CoinsBloc>().add(CoinsSessionStarted(currentUser));
     unawaited(_updateRememberedWallet(currentUser));
-    // Managed creation has no autofill fields. Its external save is offered
-    // after durable creation by WalletAccessService, not inferred here.
+    // Typed imports/logins use their submitted autofill form. Managed creation
+    // requests the provider's own prompt after the wallet has opened.
     TextInput.finishAutofillContext(
       shouldSave:
           action == WalletsManagerAction.import || _manualCredentialSubmitted,
@@ -616,6 +616,7 @@ class _IguanaWalletsManagerState extends State<IguanaWalletsManager> {
               navigator.context,
               access: access,
               walletId: currentUser.walletId,
+              expectedEntryId: WalletAccessService.entryId(currentUser),
             ),
           );
         }

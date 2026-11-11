@@ -68,7 +68,7 @@ async function signOut(browser,page,{contend=false}={}){
 async function openImport(browser,page){
   // The signed-out wallet route already owns an inline manager. Opening the
   // header dialog duplicates its controls and can target the obscured entry.
-  await browser.wait(page,"(()=>{const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('I already have a recovery phrase'));if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()",{label:'inline import entry'});
+  await browser.wait(page,"(()=>{const element=Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').startsWith('Import an existing wallet'));if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()",{label:'inline import entry'});
   await browser.wait(page,"Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).some(el=>(el.getAttribute('aria-label')||'').split('\\n').some(part=>part.trim()==='Wallet name')&&!el.readOnly)",
     {label:'import form ready'});
 }
@@ -109,9 +109,9 @@ async function main(){
     const originalIdentity=await page.evaluate(publicIdentity);
     const virtual=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');
-    await browser.click(page,'Set up local passkey');
+    await browser.click(page,'Create a passkey');
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'device protection completed'});
-    await browser.wait(page,`!(${buttonPresent('Set up local passkey')})`,{label:'protection settings refreshed'});
+    await browser.wait(page,`!(${buttonPresent('Create a passkey')})`,{label:'protection settings refreshed'});
     console.log('CHECK: recovery wallet protected by a virtual passkey');
 
     // Download before phrase confirmation so existing phrase evidence cannot
@@ -190,7 +190,7 @@ async function main(){
     await signOut(browser,page,{contend:true});await openImport(browser,page);
     await browser.fill(page,'Wallet name','Seed Restore');
     await browser.fill(page,'Enter seed phrase',phrase);
-    await browser.click(page,'Import');
+    await browser.click(page,'Continue');
     const restoreCredential='Unfunded-restore-fixture-42!';
     await browser.fill(page,'Wallet password',restoreCredential);
     await browser.fill(page,'Confirm password',restoreCredential);
@@ -204,7 +204,7 @@ async function main(){
 
     await signOut(browser,page);await openImport(browser,page);
     console.log('CHECK: encrypted-file import entry opened');
-    await browser.upload(page,'Upload seed phrase file',importFile);
+    await browser.upload(page,'Import encrypted wallet file',importFile);
     await browser.fill(page,'Wallet password',generatedCredential);
     await browser.click(page,'Import');
     await browser.wait(page,buttonPresent('File Restore'),{timeout:60000,label:'file-restored wallet opened'});

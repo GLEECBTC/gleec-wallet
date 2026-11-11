@@ -1990,7 +1990,6 @@ abstract class LocaleKeys {
   static const authDeviceProtectionTitle = 'authDeviceProtectionTitle';
   static const authEnableDeviceUnlock = 'authEnableDeviceUnlock';
   static const authEnablePasskeyUnlock = 'authEnablePasskeyUnlock';
-  static const authSavePassword = 'authSavePassword';
   static const authLockAfterTitle = 'authLockAfterTitle';
   static const authLockImmediately = 'authLockImmediately';
   static const authLockThirtySeconds = 'authLockThirtySeconds';
@@ -2012,9 +2011,6 @@ abstract class LocaleKeys {
   static const authProtectionFailed = 'authProtectionFailed';
   static const authPersonalPasswordOptional = 'authPersonalPasswordOptional';
   static const authDeletionAuthorization = 'authDeletionAuthorization';
-  static const authPasswordManagerOffer = 'authPasswordManagerOffer';
-  static const authPasswordManagerCompatibility =
-      'authPasswordManagerCompatibility';
   static const authShowPassword = 'authShowPassword';
   static const authHidePassword = 'authHidePassword';
   static const authWalletName = 'authWalletName';
@@ -2049,4 +2045,41 @@ abstract class LocaleKeys {
       'authRemoveWalletActivityWarning';
   static const authWalletRemovedSettingsPending =
       'authWalletRemovedSettingsPending';
+  static const authPasskeySetupTitle = 'authPasskeySetupTitle';
+  static const authPasskeySetupDescription = 'authPasskeySetupDescription';
+  static const authPasskeyLocalScope = 'authPasskeyLocalScope';
+  static const authCreatePasskey = 'authCreatePasskey';
+  static const authPasskeyReadyTitle = 'authPasskeyReadyTitle';
+  static const authDeviceReadyTitle = 'authDeviceReadyTitle';
+  static const authPasswordReadyTitle = 'authPasswordReadyTitle';
+  static const authUnprotectedTitle = 'authUnprotectedTitle';
+  static const authDeviceSetupTitle = 'authDeviceSetupTitle';
+  static const authDeviceSetupDescription = 'authDeviceSetupDescription';
+  static const authProtectionCanceled = 'authProtectionCanceled';
+  static const authPasskeyUnsupported = 'authPasskeyUnsupported';
+  static const authProtectionChecking = 'authProtectionChecking';
+  static const authProtectionCheckFailed = 'authProtectionCheckFailed';
+  static const authPasswordManagerAutomatic = 'authPasswordManagerAutomatic';
+  static const authLockPreferenceSaved = 'authLockPreferenceSaved';
+  static const authRecoveryReady = 'authRecoveryReady';
+  static const authRecoveryNotReady = 'authRecoveryNotReady';
+  static const authRecoveryIndependent = 'authRecoveryIndependent';
+  static const authReviewProtection = 'authReviewProtection';
+  static const authImportDerivationHint = 'authImportDerivationHint';
+  static const authImportPasswordPurpose = 'authImportPasswordPurpose';
+  static const authShowRecoveryPhrase = 'authShowRecoveryPhrase';
+  static const authHideRecoveryPhrase = 'authHideRecoveryPhrase';
+  static const authPasskeySetupConfirmations = 'authPasskeySetupConfirmations';
+  static const authPasskeySetupCompactDescription =
+      'authPasskeySetupCompactDescription';
+  static const authPasskeyReadyCompactDescription =
+      'authPasskeyReadyCompactDescription';
+  static const authRecoveryPhraseTitle = 'authRecoveryPhraseTitle';
+  static const authRecoveryPhraseDescription = 'authRecoveryPhraseDescription';
+  static const authRecoveryImported = 'authRecoveryImported';
+  static const authEncryptedWalletFileTitle = 'authEncryptedWalletFileTitle';
+  static const authEncryptedWalletFileDescription =
+      'authEncryptedWalletFileDescription';
+  static const authProtectionBusy = 'authProtectionBusy';
+  static const authProtectionStale = 'authProtectionStale';
 }

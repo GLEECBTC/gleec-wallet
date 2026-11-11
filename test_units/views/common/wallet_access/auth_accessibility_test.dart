@@ -345,26 +345,22 @@ void main() {
     for (final brightness in Brightness.values) {
       for (final size in [const Size(320, 568), const Size(844, 390)]) {
         testWidgets(
-          'password-manager save $brightness $size has obscured semantics and keyboard escape cancels',
+          'provider save $brightness $size adds no app dialog or secret semantics',
           (tester) async {
             final harness = LegalFormHarness();
             final access = AccessibilityAccess();
             addTearDown(access.unlockCoordinator.dispose);
             final semantics = tester.ensureSemantics();
-
-            PasswordManagerOutcome? outcome;
             await harness.pump(
               tester,
               Builder(
                 builder: (context) => TextButton(
-                  onPressed: () async {
-                    outcome = await saveWalletPassword(
-                      context,
-                      access: access,
-                      walletId: accessibilityUser().walletId,
-                    );
-                  },
-                  child: const Text('Offer save'),
+                  onPressed: () => offerWalletPasswordSave(
+                    context,
+                    access: access,
+                    walletId: accessibilityUser().walletId,
+                  ),
+                  child: const Text('Create wallet'),
                 ),
               ),
               size: size,
@@ -372,28 +368,16 @@ void main() {
               brightness: brightness,
               disableAnimations: true,
             );
-            await tester.tap(find.text('Offer save'));
+            await tester.tap(find.text('Create wallet'));
             await tester.pumpAndSettle();
-            final field = find.byKey(
-              const Key('password-manager-save-credential'),
+            expect(find.byType(AlertDialog), findsNothing);
+            expect(find.byType(TextField), findsNothing);
+            expect(
+              find.bySemanticsLabel(RegExp('synthetic-a11y-password')),
+              findsNothing,
             );
-            await tester.ensureVisible(field);
-            await tester.pumpAndSettle();
-            final data = tester
-                .getSemantics(
-                  find.descendant(
-                    of: field,
-                    matching: find.byType(EditableText),
-                  ),
-                )
-                .getSemanticsData();
-            expect(data.flagsCollection.isObscured, isTrue);
-            expect(data.value, isNot(contains('synthetic-a11y-password')));
+            expect(access.authorized, isEmpty);
             expect(tester.takeException(), isNull);
-            await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-            await tester.pumpAndSettle();
-            expect(outcome, PasswordManagerOutcome.declined);
-            expect(access.outcomes, [PasswordManagerOutcome.declined]);
             semantics.dispose();
           },
         );

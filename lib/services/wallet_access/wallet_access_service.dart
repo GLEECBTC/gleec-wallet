@@ -1284,7 +1284,7 @@ class WalletAccessService {
         () => _backend.enrollPasskey(
           record.credentialKey,
           password,
-          label: user.walletId.name,
+          label: user.wallet.displayName,
         ),
         waitForForeground: true,
       );
@@ -1539,7 +1539,7 @@ class WalletAccessService {
       () => _backend.savePassword(
         username: 'gleec-${entryId(user)}',
         password: secret,
-        title: user.walletId.name,
+        title: user.wallet.displayName,
       ),
     );
     _ensureRevision(revision);
@@ -1552,9 +1552,11 @@ class WalletAccessService {
   Future<void> recordPasswordManagerOutcome({
     required WalletId walletId,
     required PasswordManagerOutcome outcome,
-  }) => withWalletAccessLock(() async {
+  }) => _runAccessOperation((revision) async {
     final user = await _resolve(walletId);
+    _ensureRevision(revision);
     final record = (await _records())[entryId(user)];
+    _ensureRevision(revision);
     if (record != null) await _saveRecord(record.copyWith(manager: outcome));
   });
 

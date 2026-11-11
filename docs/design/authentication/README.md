@@ -24,7 +24,7 @@ styles is the recorded design exception, rather than introducing a new theme.
 | Unlock | Managed wallet | Unlock with device/passkey, or open unprotected wallet | Use password, switch wallet, recover wallet |
 | Unlock | Password fallback | Unlock | Return to device/passkey, switch wallet |
 | Unlock | Canceled or failed | Try again | Password and recovery remain visible |
-| Wallet setup | Protection or backup incomplete | Protect this device / back up recovery phrase | Save password, settings |
+| Wallet setup | Protection or backup incomplete | Create a passkey / enable device unlock | Back up recovery phrase, settings |
 | Security | Protected | Device/passkey status | Immediate/30-second app lock, optional password |
 | Wallet name | Current display label | Rename wallet | Existing engine identity stays fixed |
 | Wallet name | Editing or validation error | Save name after authorization | Cancel preserves the existing label |
@@ -48,6 +48,42 @@ within the app's return grace period.
 This state reference is implementation guidance, not a record that physical
 device, screenshot or accessibility validation has passed.
 
+## Passkeys in the default setup — November 11 follow-up
+
+The first browser wallet shows **Create a passkey** directly in its setup card
+when the current browser is a viable PRF candidate. Enrollment is optional and
+user initiated, after durable one-action creation. The explanation connects
+passkeys to face/fingerprint/screen lock and prepares the user for two possible
+system confirmations. Native apps offer their supported device unlock instead.
+Settings uses the same presentation and names the actual configured method.
+
+Passkeys protect access to this browser’s local wallet; they are not cloud
+recovery. The independent recovery-phrase reminder stays visible until the
+wallet has phrase evidence. Recovery words, phrase supplied during import and
+password-dependent encrypted-file export have distinct explanations and status.
+An exported file alone does not prove independent recovery.
+
+The password manager owns save/update confirmation. Creation requests the
+supported platform save API automatically after successful creation; completed
+password forms use ordinary autofill. Unsupported automatic saving is disclosed,
+without introducing an application Save action or an invisible focused form.
+Provider acceptance does not prove synchronization. Optional provider failure
+cannot undo a committed wallet creation or password change.
+
+The dedicated `auth_setup_flow_test.dart` renders public fixed-fixture setup
+states in both themes, phone and wide layouts. CI retains the PNGs in
+`onboarding-ui-states`; no secret-entry or recovery-word screens are captured.
+The tests also cover 200–300% text, cancellation, unsupported providers, separate
+recovery actions, password/recovery remasking and disabled keyboard learning.
+`password_update_provider_test.dart` exercises the real password form through
+an intervening device confirmation, unavailable/canceled provider saving,
+wallet switching and disposal. New presentation state is scoped to an immutable
+wallet entry and contains no raw password.
+
+Research, decisions, primary-source links and the complete state matrix are in
+[UX_RESEARCH.md](UX_RESEARCH.md). The historical counts below are dated evidence;
+use the pinned PR handoff for this candidate’s exact source and test results.
+
 ## Automated accessibility and layout evidence
 
 The release follow-up uses the existing light and dark application themes.
@@ -60,7 +96,7 @@ above remains in effect; the checks below do not replace visual sign-off.
 | Surface | Automated checks |
 | --- | --- |
 | Entry, managed unlock, setup, device enrollment and rename | Both themes; 320×568 at 200% text, 844×390 at 300%, and 1280×900 at 100%; rendered label bounds and reachable actions |
-| Password-manager compatibility dialog | Both themes; 320×568 at 200% and 844×390 at 300%; obscured credential semantics, reachable content, Escape cancellation and declined outcome |
+| Password-manager handoff | Provider controls the save/update prompt; no app Save button, snackbar action or credential-reveal dialog. Actual outcome is informational in settings. |
 | Root lock and password fallback | Wallet content excluded from semantics; recovery remains reachable with a 300-pixel keyboard inset and 200% text |
 | Recovery reveal and confirmation | Both themes; recovery field line height at 200%, hidden words absent from field semantics, switch state, 48-pixel confirmation targets, full selection/clear at 300%, keyboard activation |
 | Recovery completion | Both themes and all three viewport profiles; full completion label and return to security settings without a password step |

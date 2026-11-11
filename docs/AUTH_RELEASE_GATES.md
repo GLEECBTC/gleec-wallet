@@ -14,13 +14,13 @@ changes. The app pins SDK `34faf005`; its authentication prerequisite is now
 reviewable in [SDK #445](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/445).
 The source/SDK merge safeguard remains enforced for production promotion.
 
-The final local app aggregator passed **4,494 tests, 26 skipped**, zero failures.
-Clean-checkout analysis reports **zero errors**, 55 inherited warnings and 2,143
-infos. Actual browser creation, lifecycle, phrase/file recovery, lost-provider
-replacement and missing-data rounds pass on the compiled bundle. The PR preview
-must repeat unfunded acceptance and publish verifiable build identity. See
-[the internal tester handoff](AUTH_INTERNAL_TESTING.md) for access, exact-build
-checks, installation scope and the remaining physical acceptance round.
+The pinned [internal tester handoff](AUTH_INTERNAL_TESTING.md) and PR record
+identify the currently qualified source, full production-GasFree app results,
+analysis, hosted preview, rollback checks and native artifacts. Each new candidate
+must repeat the applicable checks before the handoff moves. The November 11 UX
+follow-up adds optional inline passkey/device setup, provider-owned password
+saving and separate recovery explanations; its primary-source basis and state
+matrix are [recorded here](design/authentication/UX_RESEARCH.md).
 
 The following tables retain the earlier November 8/9 validation history and
 platform limitations; they are not substitute build identities for this new PR.
@@ -111,8 +111,11 @@ Detailed evidence: [native](AUTH_NATIVE_VALIDATION.md),
 1. Start a clean test profile. Create from the opening screen without typing a
    name/password. Count application actions separately from OS confirmations.
 2. Accept device protection. Confirm the displayed protection matches the
-   capability. Cancel the password-manager offer, then repeat with acceptance;
-   its status must not claim independent wallet backup or guaranteed sync.
+   capability. In a compatible browser, create the passkey directly from the
+   setup card; the explanation must precede any system confirmation. Cancel and
+   retry it once. Cancel the provider’s password-save prompt if offered, then
+   repeat with acceptance. There must be no application Save action; its status
+   must not claim independent wallet backup or guaranteed sync.
 3. Quit/force-stop and reopen. The same last-used wallet should be selected with
    at most one automatic challenge. Cancel it: the screen must remain stable,
    with explicit unlock/password/switch/recovery actions and no prompt loop.

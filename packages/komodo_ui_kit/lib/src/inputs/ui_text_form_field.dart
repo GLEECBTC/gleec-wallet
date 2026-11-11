@@ -38,6 +38,8 @@ class UiTextFormField extends StatefulWidget {
     this.errorMaxLines,
     this.enableInteractiveSelection = true,
     this.autocorrect = true,
+    this.enableSuggestions = true,
+    this.enableIMEPersonalizedLearning = true,
     this.readOnly = false,
     this.autofocus = false,
     this.obscureText = false,
@@ -77,6 +79,8 @@ class UiTextFormField extends StatefulWidget {
   final int? errorMaxLines;
   final bool obscureText;
   final bool autocorrect;
+  final bool enableSuggestions;
+  final bool enableIMEPersonalizedLearning;
   final bool enabled;
   final bool enableInteractiveSelection;
   final bool autofocus;
@@ -231,6 +235,8 @@ class _UiTextFormFieldState extends State<UiTextFormField> {
       keyboardType: widget.keyboardType,
       obscureText: widget.obscureText,
       autocorrect: widget.autocorrect,
+      enableSuggestions: widget.enableSuggestions,
+      enableIMEPersonalizedLearning: widget.enableIMEPersonalizedLearning,
       autofocus: widget.autofocus,
       maxLines: widget.maxLines,
       readOnly: widget.readOnly,

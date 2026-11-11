@@ -1,3 +1,5 @@
+import 'package:web_dex/bloc/wallet_protection/wallet_protection_bloc.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_protection_panel.dart';
 import 'dart:async';
 
 import 'package:app_theme/app_theme.dart';
@@ -649,20 +651,47 @@ class _WalletSetupReminder extends StatelessWidget {
   Widget build(BuildContext context) {
     final access = context.read<WalletAccessService?>();
     if (access == null) return const SizedBox.shrink();
-    return StreamBuilder<void>(
-      stream: access.changes,
-      builder: (context, _) => FutureBuilder<WalletAccessStatus>(
-        future: access.statusForWallet(wallet),
-        builder: (context, snapshot) {
-          // Keep a conservative reminder while discovering actual protection.
-          final status = snapshot.data;
-          return WalletSetupCard(
-            hasRecoveryPhrase: wallet.config.hasRecoveryPhrase,
-            hasDeviceProtection: status?.requiresAuthentication ?? false,
-            onBackup: _openSecurity,
-            onProtect: _openSecurity,
-          );
-        },
+    final id = context.select(
+      (AuthBloc bloc) => bloc.state.currentUser?.walletId,
+    );
+    if (id == null) return const SizedBox.shrink();
+    return BlocProvider(
+      key: ValueKey((
+        id,
+        context
+            .read<AuthBloc>()
+            .state
+            .currentUser
+            ?.metadata['_wallet_entry_id'],
+      )),
+      create: (_) => WalletProtectionBloc(access: access, walletId: id),
+      child: BlocConsumer<WalletProtectionBloc, WalletProtectionState>(
+        listenWhen: (previous, current) =>
+            previous.completed != current.completed &&
+            current.completed != null,
+        listener: (context, state) =>
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(
+                content: Text(
+                  (state.status?.protection == CredentialProtection.passkey
+                          ? 'authPasskeyReadyTitle'
+                          : 'authProtectionEnabled')
+                      .tr(),
+                ),
+              ),
+            ),
+        builder: (context, state) => WalletSetupCard(
+          hasRecoveryPhrase: wallet.config.hasRecoveryPhrase,
+          hasDeviceProtection: state.status?.requiresAuthentication ?? false,
+          onBackup: _openSecurity,
+          onProtect: _openSecurity,
+          recoveryDescription:
+              state.canCreatePasskey ||
+                  state.status?.protection == CredentialProtection.passkey
+              ? 'authRecoveryIndependent'.tr()
+              : null,
+          protectionSetup: WalletProtectionPanel(onOpenSettings: _openSecurity),
+        ),
       ),
     );
   }

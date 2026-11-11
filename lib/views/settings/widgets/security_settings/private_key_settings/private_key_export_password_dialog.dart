@@ -143,6 +143,8 @@ class _PrivateKeyExportPasswordDialogState
                         controller: _passwordController,
                         autofocus: true,
                         autocorrect: false,
+                        enableSuggestions: false,
+                        enableIMEPersonalizedLearning: false,
                         obscureText: _isObscured,
                         enabled: !_isBusy && !_cancelled,
                         maxLength: passwordMaxLength,

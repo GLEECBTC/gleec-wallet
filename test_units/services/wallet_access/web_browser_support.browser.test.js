@@ -15,7 +15,7 @@ async function checkProtectedGate(){
     await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'startup fixture wallet'});
     const provider=await virtualAuthenticator(browser,page);
-    await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Set up local passkey');
+    await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Create a passkey');
     await browser.wait(page,`(()=>{
       const decode=key=>{let value=key?localStorage.getItem(key):null;for(let i=0;i<3&&typeof value==='string';i++){try{value=JSON.parse(value);}catch(_){break;}}return value;};
       const keys=Object.keys(localStorage);

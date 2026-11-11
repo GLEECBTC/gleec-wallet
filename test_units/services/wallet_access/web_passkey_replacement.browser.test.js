@@ -17,7 +17,7 @@ async function main(){
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'unfunded replacement fixture'});
     credential=await page.evaluate('__gleecReleaseProbe.testCredential()');
     const oldProvider=await virtualAuthenticator(browser,page);
-    await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Set up local passkey');
+    await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Create a passkey');
     await browser.wait(page,buttonPresent('Replace passkey using password'),{label:'protected recovery action'});
     const before=await page.evaluate(credentialsSummary);
     console.log('CHECK: original passkey enrolled; removing only the virtual fixture provider');

@@ -1,3 +1,6 @@
+import 'views/common/wallet_access/auth_setup_flow_test.dart'
+    as auth_setup_flow_test;
+import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
 import 'services/wallet_access/swap_submission_lock_test.dart'
     as swap_submission_lock_test;
 import 'services/wallet_access/wallet_credential_cleanup_test.dart'
@@ -36,6 +39,8 @@ import 'views/settings/wallet_display_name_section_test.dart'
     as wallet_display_name_section_test;
 import 'views/settings/passkey_replacement_section_test.dart'
     as passkey_replacement_section_tests;
+import 'views/settings/password_update_provider_test.dart'
+    as password_update_provider_tests;
 import 'views/settings/wallet_removal_section_test.dart'
     as wallet_removal_section_tests;
 import 'tests/integration_test_runner_test.dart'
@@ -547,6 +552,8 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  auth_setup_flow_test.main();
+  wallet_protection_bloc_test.main();
   swap_submission_lock_test.main();
   wallet_credential_cleanup_test.main();
   wallet_access_service_test.main();
@@ -567,6 +574,7 @@ void main() {
   unlock_coordinator_test.main();
   wallet_display_name_section_test.main();
   passkey_replacement_section_tests.main();
+  password_update_provider_tests.main();
   wallet_removal_section_tests.main();
   solana_build_config_test.main();
   solana_trade_dispatch_test.main();

@@ -615,6 +615,31 @@ void main() {
           expect(auth.enginePassword, _password);
         },
       );
+      test('queued password-manager status cannot cross an app lock', () async {
+        final user = await install();
+        auth.verificationReached = Completer<void>();
+        auth.pendingVerification = Completer<void>();
+        final authorization = expectLater(
+          service.authorize(walletId: user.walletId, password: _password),
+          stale(),
+        );
+        await auth.verificationReached!.future;
+        final outcome = expectLater(
+          service.recordPasswordManagerOutcome(
+            walletId: user.walletId,
+            outcome: PasswordManagerOutcome.accepted,
+          ),
+          stale(),
+        );
+        coordinator.lock();
+        auth.pendingVerification!.complete();
+        await authorization;
+        await outcome;
+        expect(
+          (await service.status(walletId: user.walletId)).passwordManager,
+          PasswordManagerOutcome.unavailable,
+        );
+      });
     });
 
     group('interactive protection persistence foreground return', () {

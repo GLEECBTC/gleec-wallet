@@ -208,6 +208,8 @@ class _AuthorizationContentState extends State<_AuthorizationContent>
                     controller: _passwordController,
                     autofocus: true,
                     autocorrect: false,
+                    enableSuggestions: false,
+                    enableIMEPersonalizedLearning: false,
                     obscureText: _obscured,
                     enabled: !_busy,
                     maxLength: passwordMaxLength,

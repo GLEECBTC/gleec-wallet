@@ -1,7 +1,6 @@
 import 'package:app_theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-import 'package:web_dex/common/screen.dart';
 
 /// Generic reusable widget for security actions in the settings page.
 ///
@@ -100,21 +99,22 @@ class _ResponsiveBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = !isMobile;
-
-    // Determine layout type based on screen size and platform
-    final useColumnLayout = isMobile || screenWidth < 600.0;
-
-    return Container(
-      padding: _getPadding(isDesktop),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.tertiary,
-        borderRadius: BorderRadius.circular(18.0),
-      ),
-      child: useColumnLayout
-          ? _buildColumnLayout(isDesktop)
-          : _buildRowLayout(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useColumnLayout =
+            constraints.maxWidth < 700 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.5;
+        return Container(
+          padding: _getPadding(!useColumnLayout),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.tertiary,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: useColumnLayout
+              ? _buildColumnLayout(false)
+              : _buildRowLayout(),
+        );
+      },
     );
   }
 
@@ -142,7 +142,7 @@ class _ResponsiveBody extends StatelessWidget {
         const SizedBox(height: 12),
         _ActionBody(description: description),
         SizedBox(height: isDesktop ? 16 : 8),
-        _buildTrailingWidget(),
+        _buildTrailingWidget(fullWidth: true),
         SizedBox(height: isDesktop ? 16 : 6),
       ],
     );
@@ -186,12 +186,13 @@ class _ResponsiveBody extends StatelessWidget {
   }
 
   /// Builds the trailing widget (either custom widget or default action button)
-  Widget _buildTrailingWidget() {
+  Widget _buildTrailingWidget({bool fullWidth = false}) {
     if (trailingWidget != null) {
       return trailingWidget!;
     }
 
     return _ActionButton(
+      fullWidth: fullWidth,
       actionText: actionText!,
       onActionPressed: onActionPressed!,
       buttonTextColor: buttonTextColor,
@@ -342,18 +343,21 @@ class _ActionButton extends StatelessWidget {
     required this.actionText,
     required this.onActionPressed,
     this.buttonTextColor,
+    this.fullWidth = false,
   });
 
+  final bool fullWidth;
   final String actionText;
   final VoidCallback onActionPressed;
   final Color? buttonTextColor;
 
   @override
   Widget build(BuildContext context) {
-    final width = isMobile ? double.infinity : 210.0;
-    final height = isMobile ? 52.0 : 40.0;
+    final width = fullWidth ? double.infinity : 210.0;
+    const height = 48.0;
 
     return UiPrimaryButton(
+      expandForText: true,
       onPressed: onActionPressed,
       width: width,
       height: height,

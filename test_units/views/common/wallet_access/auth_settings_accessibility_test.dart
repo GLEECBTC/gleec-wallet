@@ -16,6 +16,22 @@ import 'package:web_dex/views/settings/widgets/security_settings/device_protecti
 import '../../../support/legal_onboarding_harness.dart';
 import '../../../support/wallet_access_ui_fixture.dart';
 
+class _ManagerStatusAccess extends AccessibilityAccess {
+  _ManagerStatusAccess(this.outcome);
+  final PasswordManagerOutcome outcome;
+  @override
+  Future<WalletAccessStatus> status({walletId}) async {
+    final previous = await super.status(walletId: walletId);
+    return WalletAccessStatus(
+      entryId: previous.entryId,
+      protection: previous.protection,
+      hasManagedCredential: previous.hasManagedCredential,
+      requiresAuthentication: previous.requiresAuthentication,
+      passwordManager: outcome,
+    );
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   group('Security settings accessibility release checks', () {
@@ -25,6 +41,36 @@ void main() {
       await EasyLocalization.ensureInitialized();
     });
     tearDown(() => Localization.load(const Locale('en')));
+    for (final (outcome, key) in [
+      (PasswordManagerOutcome.accepted, 'authPasswordManagerAccepted'),
+      (PasswordManagerOutcome.declined, 'authPasswordManagerDeclined'),
+      (PasswordManagerOutcome.failed, 'authPasswordManagerFailed'),
+      (PasswordManagerOutcome.unavailable, 'authPasswordManagerUnavailable'),
+      (PasswordManagerOutcome.offered, 'authPasswordManagerUnknown'),
+      (PasswordManagerOutcome.unknown, 'authPasswordManagerUnknown'),
+    ]) {
+      testWidgets(
+        'password-manager $outcome is informational with no app save action',
+        (tester) async {
+          final access = _ManagerStatusAccess(outcome);
+          final harness = LegalFormHarness();
+          addTearDown(access.unlockCoordinator.dispose);
+          // ignore: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
+          harness.auth.emit(AuthBlocState.loggedIn(accessibilityUser()));
+          await harness.pump(
+            tester,
+            RepositoryProvider<WalletAccessService>.value(
+              value: access,
+              child: const DeviceProtectionSection(),
+            ),
+          );
+          expect(find.text(key.tr()), findsOneWidget);
+          expect(find.byKey(const Key('save-wallet-password')), findsNothing);
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
     for (final brightness in Brightness.values) {
       testWidgets(
         'protected settings $brightness announces the selected grace interval',
@@ -60,6 +106,10 @@ void main() {
               i == 1 ? Tristate.isTrue : Tristate.isFalse,
             );
             expect(options.at(i).hitTestable(), findsOneWidget);
+            expect(
+              tester.getSize(options.at(i)).height,
+              greaterThanOrEqualTo(48),
+            );
           }
           expect(tester.takeException(), isNull);
           semantics.dispose();

@@ -57,10 +57,11 @@ async function main() {
     await browser.wait(page, buttonPresent('Gleec Wallet'), {timeout: 90000, label: 'disposable wallet creation'});
     console.log('CHECK: disposable lifecycle wallet created');
     await browser.click(page, 'Settings'); await browser.click(page, 'Security');
-    await browser.click(page, 'Set up local passkey');
+    await browser.click(page, await page.evaluate(buttonPresent('Create a passkey'))
+          ? 'Create a passkey' : 'Set up local passkey');
     await browser.wait(page, `(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf'&&value.unattended===0)`,
       {label: 'PRF protection committed'});
-    await browser.wait(page, `!(${buttonPresent('Set up local passkey')})`, {label: 'enrollment UI settled'});
+    await browser.wait(page, `!(${buttonPresent('Create a passkey')})&&!(${buttonPresent('Set up local passkey')})`, {label: 'enrollment UI settled'});
     await delay(500);
     console.log('CHECK: lifecycle passkey enrollment settled');
     const identity = await page.evaluate(publicIdentity);

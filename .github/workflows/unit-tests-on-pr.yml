@@ -52,6 +52,19 @@ jobs:
         id: validate_build
         uses: ./.github/actions/validate-build
 
+      - name: Render public authentication states
+        id: auth_ux
+        timeout-minutes: 5
+        env:
+          AUTH_UX_CAPTURE_DIR: build/auth-ux
+        run: |
+          rm -rf build/auth-ux
+          flutter test test_units/views/common/wallet_access/auth_setup_flow_test.dart \
+            --dart-define=TRON_GASLESS_ENABLED=true \
+            --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+            --dart-define=TRON_GASLESS_BASE_URL="$TRON_GASLESS_MAINNET_BASE_URL" \
+            --dart-define=TRON_GASLESS_SERVICE_PROVIDER="$TRON_GASLESS_MAINNET_SERVICE_PROVIDER"
+
       - name: Test unit_test (unix)
         id: unit_tests
         continue-on-error: false
@@ -72,3 +85,11 @@ jobs:
         id: unit_test_coverage
         timeout-minutes: 10
         uses: ./.github/actions/code-coverage
+
+      - name: Retain public authentication state renders
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: onboarding-ui-states
+          path: build/auth-ux/*.png
+          if-no-files-found: error
+          retention-days: 14

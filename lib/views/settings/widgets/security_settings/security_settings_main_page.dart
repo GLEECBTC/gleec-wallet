@@ -24,9 +24,9 @@ class SecuritySettingsMainPage extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const WalletDisplayNameSection(),
-        const SizedBox(height: 12),
         const DeviceProtectionSection(),
+        const SizedBox(height: 12),
+        const WalletDisplayNameSection(),
         const SizedBox(height: 12),
         const LegacyMigrationCleanupPlate(),
         SizedBox(

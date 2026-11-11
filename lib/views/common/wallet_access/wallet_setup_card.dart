@@ -10,6 +10,8 @@ class WalletSetupCard extends StatelessWidget {
     required this.onBackup,
     required this.onProtect,
     this.protectionDescription,
+    this.protectionSetup,
+    this.recoveryDescription,
     super.key,
   });
 
@@ -18,6 +20,8 @@ class WalletSetupCard extends StatelessWidget {
   final VoidCallback onBackup;
   final VoidCallback onProtect;
   final String? protectionDescription;
+  final Widget? protectionSetup;
+  final String? recoveryDescription;
 
   @override
   Widget build(BuildContext context) {
@@ -32,16 +36,22 @@ class WalletSetupCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Semantics(
-              header: true,
-              child: Text(
-                'authWalletSetupTitle'.tr(),
-                style: Theme.of(context).textTheme.titleMedium,
+            if (protectionSetup == null)
+              Semantics(
+                header: true,
+                child: Text(
+                  'authWalletSetupTitle'.tr(),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
-            ),
             const SizedBox(height: 8),
-            if (!hasRecoveryPhrase) Text('authRecoveryReminder'.tr()),
-            if (!hasDeviceProtection) ...[
+            if (protectionSetup != null) ...[
+              protectionSetup!,
+              const SizedBox(height: 16),
+            ],
+            if (!hasRecoveryPhrase)
+              Text(recoveryDescription ?? 'authRecoveryReminder'.tr()),
+            if (!hasDeviceProtection && protectionSetup == null) ...[
               if (!hasRecoveryPhrase) const SizedBox(height: 8),
               Text(
                 protectionDescription ?? 'authDeviceProtectionReminder'.tr(),
@@ -62,7 +72,7 @@ class WalletSetupCard extends StatelessWidget {
                     icon: const Icon(Icons.key_outlined),
                     label: Text('authBackUpRecoveryPhrase'.tr()),
                   ),
-                if (!hasDeviceProtection)
+                if (!hasDeviceProtection && protectionSetup == null)
                   TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: Theme.of(context).colorScheme.onSurface,

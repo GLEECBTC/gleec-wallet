@@ -177,6 +177,7 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                             obscureText: true,
                             autocorrect: false,
                             enableSuggestions: false,
+                            enableIMEPersonalizedLearning: false,
                             autofillHints: const [AutofillHints.password],
                             enabled: !state.unlockInProgress,
                             decoration: InputDecoration(
@@ -210,7 +211,13 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                                       _password.clear();
                                       _usePassword = false;
                                     }),
-                              child: Text('authUseDeviceUnlock'.tr()),
+                              child: Text(
+                                (details.data?.protection ==
+                                            CredentialProtection.passkey
+                                        ? 'authUnlockWithPasskey'
+                                        : 'authUseDeviceUnlock')
+                                    .tr(),
+                              ),
                             ),
                           TextButton(
                             style: TextButton.styleFrom(
@@ -249,7 +256,12 @@ class _WalletAccessBoundaryState extends State<WalletAccessBoundary>
                   labels: WalletLockLabels(
                     title: 'authUnlockTitle'.tr(),
                     message: 'authUnlockDescription'.tr(),
-                    unlock: 'authUnlock'.tr(),
+                    unlock:
+                        (details.data?.protection ==
+                                    CredentialProtection.passkey
+                                ? 'authUnlockWithPasskey'
+                                : 'authUseDeviceUnlock')
+                            .tr(),
                     unlocking: LocaleKeys.pleaseWait.tr(),
                     usePassword: 'authUsePassword'.tr(),
                     switchWallet: 'authSwitchWallet'.tr(),

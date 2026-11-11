@@ -28,7 +28,8 @@ class CreationPasswordFields extends StatefulWidget {
   State<CreationPasswordFields> createState() => _CreationPasswordFieldsState();
 }
 
-class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
+class _CreationPasswordFieldsState extends State<CreationPasswordFields>
+    with WidgetsBindingObserver {
   final TextEditingController _confirmPasswordController =
       TextEditingController(text: '');
   bool _isObscured = true;
@@ -47,6 +48,8 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _confirmPasswordController.clear();
     _confirmPasswordController.dispose();
     super.dispose();
   }
@@ -57,6 +60,14 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
       widget.passwordController.text = '';
     }
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && mounted) {
+      setState(() => _isObscured = true);
+    }
   }
 
   Widget _buildPasswordConfirmationField() {
@@ -65,6 +76,8 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
       controller: _confirmPasswordController,
       textInputAction: TextInputAction.done,
       autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       obscureText: _isObscured,
       enableInteractiveSelection: true,
       validationMode: InputValidationMode.passive,
@@ -85,6 +98,8 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
       controller: widget.passwordController,
       textInputAction: TextInputAction.next,
       autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       enableInteractiveSelection: true,
       obscureText: _isObscured,
       maxLength: passwordMaxLength,
@@ -96,6 +111,7 @@ class _CreationPasswordFieldsState extends State<CreationPasswordFields> {
       autofillHints: const [AutofillHints.newPassword],
       hintText: LocaleKeys.walletCreationPasswordHint.tr(),
       suffixIcon: PasswordVisibilityControl(
+        isObscured: _isObscured,
         onVisibilityChange: (bool isPasswordObscured) {
           setState(() {
             _isObscured = isPasswordObscured;

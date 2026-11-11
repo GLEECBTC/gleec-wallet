@@ -475,8 +475,25 @@
       async capabilities() {
         try {
           context();
-          const passkeys = !!(environment.PublicKeyCredential && environment.navigator?.credentials &&
+          let passkeys = !!(environment.PublicKeyCredential && environment.navigator?.credentials &&
             environment.navigator?.locks && crypto?.subtle);
+          if (passkeys && typeof environment.PublicKeyCredential.getClientCapabilities === 'function') {
+            let capabilityTimer;
+            try {
+              const supported = await Promise.race([
+                environment.PublicKeyCredential.getClientCapabilities(),
+                new Promise(resolve => { capabilityTimer = setTimeout(() => resolve(null), 1000); }),
+              ]);
+              // An API existing is not proof of PRF. This controls new offers
+              // only; enrolled credential readers never depend on this hint.
+              if (supported != null) passkeys = supported['extension:prf'] === true;
+            } catch (_) {
+              // Older or temporarily unavailable detection remains a candidate;
+              // the actual ceremony still must prove PRF output and decryption.
+            } finally {
+              clearTimeout(capabilityTimer);
+            }
+          }
           return { available: !!(environment.indexedDB || testOptions.store),
             protection: 'browserLocal', deviceAuthentication: false, passkeys,
             automaticPrompt: !!environment.navigator?.locks };
