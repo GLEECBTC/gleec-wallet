@@ -175,10 +175,10 @@ class LocalBrowser {
     }finally{this.events.delete(listener);}
   }
 
-  async wait(page, expression, {timeout=30000, label='browser condition'}={}) {
+  async wait(page, expression, {timeout=30000, label='browser condition', accept}={}) {
     const until=performance.now()+timeout;
     while(performance.now()<until){
-      try {const result=await page.evaluate(expression);if(result)return result;} catch(_) {}
+      try {const result=await page.evaluate(expression);if(result&&(!accept||accept(result)))return result;} catch(_) {}
       await delay(100);
     }
     throw new Error(`Timed out waiting for ${label}`);
@@ -193,11 +193,34 @@ class LocalBrowser {
     return page.evaluate("Array.from(document.querySelectorAll('[role=button]')).map(el=>el.getAttribute('aria-label')||el.textContent||'')");
   }
 
-  async click(page, label) {
+  async click(page, label, {pointer=false}={}) {
     const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})`;
-    // Flutter can rebuild the semantics tree between separate CDP requests.
-    // Resolve, validate and activate the current control in one browser task.
-    await this.wait(page,`(()=>{const element=${expression};if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()`,{label:`button ${label}`});
+    if(!pointer){
+      // Resolve and activate in one task so a rebuild cannot detach the node
+      // between lookup and the semantics action.
+      await this.wait(page,`(()=>{const element=${expression};if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()`,{label:`button ${label}`});
+      return;
+    }
+    // Use genuine pointer activation for the system-credential handoff. Flutter
+    // can expose a route's semantics before its transition accepts input. Wait
+    // for a stable painted target, then activate exactly once, without retrying
+    // an authentication action. This adds no delay to the application itself.
+    let candidate;
+    let stableSince=0;
+    const settled=await this.wait(page,`(()=>{
+      const element=${expression};
+      if(!element||element.getAttribute('aria-disabled')==='true'||element.closest('[aria-hidden=true]'))return false;
+      const r=element.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;
+      if(r.width<=0||r.height<=0||x<0||y<0||x>=innerWidth||y>=innerHeight)return false;
+      const hit=document.elementFromPoint(x,y);
+      return hit&&(hit===element||element.contains(hit))?{x,y,id:element.id}:false;
+    })()`,{label:`settled button ${label}`,accept:point=>{
+      const same=candidate&&point.id===candidate.id&&Math.abs(point.x-candidate.x)<0.5&&Math.abs(point.y-candidate.y)<0.5;
+      if(!same){candidate=point;stableSince=performance.now();return false;}
+      return performance.now()-stableSince>=500;
+    }});
+    await page.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:settled.x,y:settled.y});
+    await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:settled.x,y:settled.y});
   }
 
   async fill(page, label, value) {

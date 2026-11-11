@@ -7,7 +7,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {gunzipSync}=require('node:zlib');
 const {LocalBrowser,delay}=require('./web_release_test_driver.js');
-const {probe,credentialsSummary,buttonPresent,virtualAuthenticator}=require('./web_credential_release.browser.test.js');
+const {probe,credentialsSummary,buttonPresent,virtualAuthenticator,waitForPasskeySettingsReady}=require('./web_credential_release.browser.test.js');
 
 const publicIdentity=`(async()=>{
   const key=Object.keys(localStorage).find(key=>key.endsWith('wallet_access_last_v1'));
@@ -109,9 +109,8 @@ async function main(){
     const originalIdentity=await page.evaluate(publicIdentity);
     const virtual=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');
-    await browser.click(page,'Create a passkey');
-    await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'device protection completed'});
-    await browser.wait(page,`!(${buttonPresent('Create a passkey')})`,{label:'protection settings refreshed'});
+    await browser.click(page,'Create a passkey',{pointer:true});
+    await waitForPasskeySettingsReady(browser,page);
     console.log('CHECK: recovery wallet protected by a virtual passkey');
 
     // Download before phrase confirmation so existing phrase evidence cannot

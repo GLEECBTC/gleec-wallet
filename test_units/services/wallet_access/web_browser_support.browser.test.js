@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {LocalBrowser}=require('./web_release_test_driver.js');
-const {probe,credentialsSummary,buttonPresent,virtualAuthenticator}=require('./web_credential_release.browser.test.js');
+const {probe,credentialsSummary,buttonPresent,virtualAuthenticator,waitForPasskeySettingsReady}=require('./web_credential_release.browser.test.js');
 
 async function checkProtectedGate(){
   const browser=new LocalBrowser(path.resolve(__dirname,'../../..'));
@@ -15,17 +15,8 @@ async function checkProtectedGate(){
     await browser.click(page,'Create a new wallet');
     await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'startup fixture wallet'});
     const provider=await virtualAuthenticator(browser,page);
-    await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Create a passkey');
-    await browser.wait(page,`(()=>{
-      const decode=key=>{let value=key?localStorage.getItem(key):null;for(let i=0;i<3&&typeof value==='string';i++){try{value=JSON.parse(value);}catch(_){break;}}return value;};
-      const keys=Object.keys(localStorage);
-      const last=decode(keys.find(key=>key.endsWith('wallet_access_last_v1')));
-      const records=decode(keys.find(key=>key.endsWith('wallet_access_records_v1')));
-      const record=records?.[last?.entryId];
-      const action=Array.from(document.querySelectorAll('[role=button]')).find(el=>
-        (el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true');
-      return record?.phase==='ready'&&record?.requiresAuthentication===true&&record?.protection==='passkey'&&!!action;
-    })()`,{timeout:90000,label:'completed protected startup fixture and authenticated readback'});
+    await browser.click(page,'Settings');await browser.click(page,'Security');await browser.click(page,'Create a passkey',{pointer:true});
+    await waitForPasskeySettingsReady(browser,page);
     const before=await page.evaluate(credentialsSummary);
     const assertions=provider.counts.asserted;
     await page.send('Page.addScriptToEvaluateOnNewDocument',{source:"window.__fixtureLocks=navigator.locks;Object.defineProperty(navigator,'locks',{configurable:true,value:undefined});"});

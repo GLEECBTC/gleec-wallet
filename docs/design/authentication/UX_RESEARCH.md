@@ -114,7 +114,7 @@ VoiceOver/TalkBack/provider and signing checks remain pending separately.
 ## Validation of the implemented follow-up
 
 On November 11, pinned Flutter 3.41.4 passed the complete production-GasFree
-app aggregator before final contrast polish: **4,553 passed, 26 skipped, zero failures**.
+app aggregator after the contrast and target fixes: **4,555 passed, 26 skipped, zero failures**.
 The final PR handoff binds the subsequent full CI run to the finished source. Whole-project analysis
 reported **zero errors**, with the inherited 55 warnings and 2,143 informational
 notices unchanged. The focused new presentation/password-provider round passed
@@ -125,7 +125,12 @@ PNGs, inspected across ready/canceled/protected, light/dark and phone/wide state
 The real release-browser round exercises durable creation, process restart,
 optional passkey enrollment, loss/cancellation, corrupted data, tab invalidation,
 phrase/file recovery, missing data and unsupported-browser behavior. It uses
-virtual PRF authenticators and disposable profiles. Local provider/OS behavior,
+virtual PRF authenticators and disposable profiles. The same runner enables
+frozen-renderer lifecycle checks locally and in CI, pins the compiled bundle,
+and retains only public per-suite pass/fail metadata. Passkey enrollment uses
+a single real pointer activation after the rendered route settles; completion
+requires committed protection metadata and authenticated readback, not merely
+a simulated accessibility click. Local provider/OS behavior,
 reference-device timing, screen-reader focus and signed-device key protection
 remain separate acceptance gates. The PR handoff records the exact accepted
 bundle, hosted run and installer identities after CI qualification.

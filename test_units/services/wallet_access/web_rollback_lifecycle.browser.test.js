@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {createHash} = require('node:crypto');
 const {LocalBrowser, delay} = require('./web_release_test_driver.js');
-const {probe, credentialsSummary, buttonPresent, virtualAuthenticator, unlockApp} =
+const {probe, credentialsSummary, buttonPresent, virtualAuthenticator, unlockApp, waitForPasskeySettingsReady} =
   require('./web_credential_release.browser.test.js');
 const {publicIdentity} = require('./web_wallet_recovery.browser.test.js');
 const {directoryDigest, toolsFingerprint} = require('./rollback_evidence.js');
@@ -62,9 +62,7 @@ async function main() {
         ['Create a passkey','Set up local passkey'].includes((el.getAttribute('aria-label')||el.textContent||'').trim())&&el.getAttribute('aria-disabled')!=='true');
       if(!action)return false;action.click();return true;
     })()`, {label:'current or retained passkey enrollment action'});
-    await browser.wait(page, `(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf'&&value.unattended===0)`,
-      {label: 'PRF protection committed'});
-    await browser.wait(page, `!(${buttonPresent('Create a passkey')})&&!(${buttonPresent('Set up local passkey')})`, {label: 'enrollment UI settled'});
+    await waitForPasskeySettingsReady(browser,page);
     await delay(500);
     console.log('CHECK: lifecycle passkey enrollment settled');
     const identity = await page.evaluate(publicIdentity);

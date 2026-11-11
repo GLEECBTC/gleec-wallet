@@ -10,7 +10,7 @@ const { LocalBrowser, delay } = require('./web_release_test_driver.js');
 
 const probe = `(() => {
   const secrets=new Set();
-  const measures={challenges:0,registrations:0,systemMilliseconds:0,cspViolations:0};
+  const measures={challenges:0,fulfilledAssertions:0,registrations:0,systemMilliseconds:0,cspViolations:0};
   let api;
   Object.defineProperty(window,'gleecWalletCredentials',{configurable:true,get:()=>api,set(value){
     api=Object.freeze({...value,write:async args=>{secrets.add(args.value);return value.write(args);}});
@@ -19,7 +19,11 @@ const probe = `(() => {
     const original=navigator.credentials[method].bind(navigator.credentials);
     navigator.credentials[method]=async options=>{
       if(options.publicKey)measures[method==='get'?'challenges':'registrations']++;
-      const start=performance.now();try{return await original(options);}
+      const start=performance.now();try{
+        const credential=await original(options);
+        if(options.publicKey&&method==='get'&&credential?.type==='public-key')measures.fulfilledAssertions++;
+        return credential;
+      }
       finally{if(options.publicKey)measures.systemMilliseconds+=performance.now()-start;}
     };
   }
@@ -58,6 +62,33 @@ const credentialsSummary = `(async()=>{
 
 const buttonPresent = label => `Array.from(document.querySelectorAll('[role=button]')).some(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})`;
 
+async function waitForPasskeySettingsReady(browser,page) {
+  try {
+    await browser.wait(page, `(()=>{
+    const decode=key=>{let value=key?localStorage.getItem(key):null;for(let i=0;i<3&&typeof value==='string';i++){try{value=JSON.parse(value);}catch(_){break;}}return value;};
+    const keys=Object.keys(localStorage);
+    const last=decode(keys.find(key=>key.endsWith('wallet_access_last_v1')));
+    const records=decode(keys.find(key=>key.endsWith('wallet_access_records_v1')));
+    const record=records?.[last?.entryId];
+    const action=Array.from(document.querySelectorAll('[role=button]')).find(el=>
+      (el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true');
+    return record?.phase==='ready'&&record?.requiresAuthentication===true&&record?.protection==='passkey'&&!!action;
+    })()`,{timeout:90000,label:'passkey protection and authenticated readback completed'});
+  } catch(error) {
+    console.log('PUBLIC_SETUP_STATUS',JSON.stringify(await page.evaluate(`(()=>{
+      const metrics=__gleecReleaseProbe.metrics();
+      return {challenges:metrics.challenges,registrations:metrics.registrations,
+        createAction:${buttonPresent('Create a passkey')},replaceAction:${buttonPresent('Replace passkey using password')},
+        canceled:document.body.textContent.includes('Setup canceled'),
+        stale:document.body.textContent.includes('Wallet access changed'),
+        busy:document.body.textContent.includes('Finish the current device'),
+        unsupported:document.body.textContent.includes('This browser or provider'),
+        failed:document.body.textContent.includes('This change could not be completed')};
+    })()`)));
+    throw error;
+  }
+}
+
 async function virtualAuthenticator(browser,page) {
   await page.send('WebAuthn.enable');
   const {authenticatorId}=await page.send('WebAuthn.addVirtualAuthenticator',{options:{
@@ -87,6 +118,53 @@ async function unlockApp(browser,page) {
   if(stage==='Unlock')await browser.wait(page,activate(['Unlock with passkey']),
     {timeout:60000,label:'passkey unlock entry'});
   await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'wallet unlocked'});
+}
+
+async function verifiedBrowserReturn(browser,page,before) {
+  const snapshot=`(()=>({
+    ...__gleecReleaseProbe.metrics(),walletVisible:${buttonPresent('Gleec Wallet')},
+    retryAvailable:Array.from(document.querySelectorAll('[role=button]')).some(el=>
+      ['Unlock','Unlock with passkey'].includes((el.getAttribute('aria-label')||el.textContent||'').trim())&&el.getAttribute('aria-disabled')!=='true')
+  }))()`;
+  // Browser focus and user-activation policies differ. A return may either
+  // finish its one automatic challenge or require an explicit retry. Count
+  // fulfilled browser assertions before the vault receives them; CDP event
+  // delivery is not the authorization boundary after a frozen renderer.
+  const started=performance.now();
+  const deadline=started+60000;
+  while(performance.now()<deadline){
+    const state=await page.evaluate(snapshot);
+    const attempts=state.challenges-before.challenges;
+    const assertions=state.fulfilledAssertions-before.fulfilledAssertions;
+    assert.ok(attempts<=1,'Return must initiate at most one automatic challenge');
+    assert.ok(assertions<=1,'Return must not duplicate successful assertions');
+    if(assertions===1){
+      await browser.wait(page,buttonPresent('Gleec Wallet'),{label:'freshly authenticated browser return'});
+      return {automaticAttempts:attempts,automaticAssertions:1,explicitRetry:false};
+    }
+    assert.equal(state.walletVisible,false,'Expired grace must not expose the wallet before a fresh assertion');
+    if(state.retryAvailable&&(attempts>0||performance.now()-started>=1000)){
+      await delay(500);
+      const stable=await page.evaluate(snapshot);
+      assert.ok(stable.challenges-before.challenges<=1,'An automatic failure must not prompt again');
+      if(stable.fulfilledAssertions===before.fulfilledAssertions+1){
+        await browser.wait(page,buttonPresent('Gleec Wallet'),{label:'verified automatic return during handoff'});
+        return {automaticAttempts:stable.challenges-before.challenges,automaticAssertions:1,explicitRetry:false};
+      }
+      if(stable.challenges!==state.challenges||!stable.retryAvailable)continue;
+      assert.equal(stable.walletVisible,false);
+      assert.equal(stable.challenges,state.challenges,'An automatic failure must not prompt again');
+      assert.equal(stable.fulfilledAssertions,before.fulfilledAssertions);
+      await unlockApp(browser,page);
+      const completed=await page.evaluate(snapshot);
+      assert.equal(completed.fulfilledAssertions,before.fulfilledAssertions+1,
+        'Explicit retry must obtain one fresh browser assertion');
+      assert.equal(completed.challenges,before.challenges+attempts+1);
+      return {automaticAttempts:attempts,automaticAssertions:0,explicitRetry:true};
+    }
+    await delay(100);
+  }
+  throw new Error('No verified browser return or stable explicit unlock fallback');
 }
 
 async function main() {
@@ -167,24 +245,14 @@ async function main() {
     await page.send('Page.bringToFront');
     const virtual=await virtualAuthenticator(browser,page);
     await browser.click(page,'Settings');await browser.click(page,'Security');
-    await browser.click(page,'Create a passkey');
+    await browser.click(page,'Create a passkey',{pointer:true});
     await browser.wait(page,`(${credentialsSummary}).then(value=>value.protections[0]==='passkeyPrf')`,{label:'passkey protection persisted'});
     // The envelope is committed before the service finishes its authenticated
     // readback. Keep this tab foreground until enrollment reports completion;
     // otherwise the readback can still own the origin-wide ceremony lock.
-    const enrollmentReady = `(()=>{
-      const decode=key=>{let value=key?localStorage.getItem(key):null;for(let i=0;i<3&&typeof value==='string';i++){try{value=JSON.parse(value);}catch(_){break;}}return value;};
-      const keys=Object.keys(localStorage);
-      const last=decode(keys.find(key=>key.endsWith('wallet_access_last_v1')));
-      const records=decode(keys.find(key=>key.endsWith('wallet_access_records_v1')));
-      const record=records?.[last?.entryId];
-      const action=Array.from(document.querySelectorAll('[role=button]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()==='Replace passkey using password'&&el.getAttribute('aria-disabled')!=='true');
-      return record?.phase==='ready'&&record?.requiresAuthentication===true&&record?.protection==='passkey'&&!!action;
-    })()`;
     // The success notice can be outside the viewport's semantics. Bind to the
     // wallet's committed app record and the enabled completed-action control.
-    await browser.wait(page,enrollmentReady,
-      {timeout:90000,label:'passkey enrollment and authenticated readback completed'});
+    await waitForPasskeySettingsReady(browser,page);
     const protectedSummary=await page.evaluate(credentialsSummary);
     assert.equal(protectedSummary.unattended,0);assert.equal(protectedSummary.staged,0);
     assert.equal(virtual.counts.created,1);
@@ -284,6 +352,7 @@ async function main() {
         await page.send('Page.bringToFront');
         await browser.wait(page,"document.visibilityState==='visible'",{label:'visible wallet before background'});
         const assertionsBefore=virtual.counts.asserted;
+        const requestsBefore=await page.evaluate('__gleecReleaseProbe.metrics()');
         await background.send('Page.bringToFront');
         await browser.wait(page,"document.visibilityState==='hidden'",{label:'real background visibility'});
         await page.send('Page.setWebLifecycleState',{state:'frozen'});
@@ -295,16 +364,14 @@ async function main() {
         if(seconds===29){
           await browser.wait(page,buttonPresent('Gleec Wallet'),{label:'grace restores existing session'});
           assert.equal(virtual.counts.asserted,assertionsBefore);
+          const current=await page.evaluate('__gleecReleaseProbe.metrics()');
+          assert.equal(current.fulfilledAssertions,requestsBefore.fulfilledAssertions);
+          assert.equal(current.challenges,requestsBefore.challenges);
           returns.push({seconds,elapsedMs:Math.round(performance.now()-began),locked:false,additionalAssertions:0});
         }else{
-          // The product automatically starts its enrolled unlock on resume.
-          // A virtual provider can finish before a lock-screen frame is seen;
-          // require the fresh cryptographic assertion, not a transient button.
-          const deadline=performance.now()+10000;
-          while(virtual.counts.asserted===assertionsBefore&&performance.now()<deadline)await delay(100);
-          assert.equal(virtual.counts.asserted,assertionsBefore+1);
-          await browser.wait(page,buttonPresent('Gleec Wallet'),{label:'expired grace authenticated return'});
-          returns.push({seconds,elapsedMs:Math.round(performance.now()-began),locked:true,additionalAssertions:1});
+          const result=await verifiedBrowserReturn(browser,page,requestsBefore);
+          returns.push({seconds,elapsedMs:Math.round(performance.now()-began),locked:true,
+            additionalAssertions:1,...result});
         }
       }
       evidence.frozenBackgroundGrace=returns;
@@ -349,5 +416,5 @@ async function main() {
   } finally { generatedCredential=null;await browser.cleanup(); }
 }
 
-module.exports={probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp};
+module.exports={probe,credentialsSummary,buttonPresent,virtualAuthenticator,unlockApp,waitForPasskeySettingsReady};
 if(require.main===module)main().catch(error=>{console.error(error.name,error.message);process.exitCode=1;});

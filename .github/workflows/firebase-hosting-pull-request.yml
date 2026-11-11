@@ -160,12 +160,16 @@ jobs:
         timeout-minutes: 12
         env:
           GLEEC_TEST_LIFECYCLE: "true"
-        run: |
-          node test_units/services/wallet_access/web_credential_release.browser.test.js
-          node test_units/services/wallet_access/web_wallet_recovery.browser.test.js
-          node test_units/services/wallet_access/web_missing_data.browser.test.js
-          node test_units/services/wallet_access/web_passkey_replacement.browser.test.js
-          node test_units/services/wallet_access/web_browser_support.browser.test.js
+        run: python3 tool/run_auth_browser_acceptance.py
+
+      - name: Retain public browser acceptance results
+        if: ${{ always() && hashFiles('build/auth-browser-acceptance.json') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: onboarding-browser-acceptance
+          path: build/auth-browser-acceptance.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Bind the internal testing build
         env:
