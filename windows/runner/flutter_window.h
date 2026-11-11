@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "win32_window.h"
+#include "credential_vault_channel.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -36,6 +37,7 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       reduced_motion_channel_;
   bool reduced_motion_ = false;
+  std::unique_ptr<CredentialVaultChannel> credential_vault_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

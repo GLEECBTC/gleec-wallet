@@ -19,7 +19,7 @@ class WalletListItem extends StatelessWidget {
     final theme = Theme.of(context);
     return UiPrimaryButton(
       backgroundColor: theme.cardColor,
-      text: wallet.name,
+      text: wallet.displayName,
       prefix: DecoratedBox(
         decoration: const BoxDecoration(shape: BoxShape.circle),
         child: Icon(
@@ -49,7 +49,7 @@ class WalletListItem extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  wallet.name,
+                  wallet.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyLarge?.copyWith(

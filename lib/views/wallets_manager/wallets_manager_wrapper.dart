@@ -21,18 +21,24 @@ class WalletsManagerWrapper extends StatefulWidget {
     required this.eventType,
     this.onSuccess,
     this.selectedWallet,
+    this.initialAction = WalletsManagerAction.none,
     this.initialHdMode = false,
     this.rememberMe = false,
     this.onCancel,
+    this.entryCancelLabel,
+    this.onUserIntent,
     super.key = const Key('wallets-manager-wrapper'),
   });
 
   final Function(Wallet)? onSuccess;
   final WalletsManagerEventType eventType;
   final Wallet? selectedWallet;
+  final WalletsManagerAction initialAction;
   final bool initialHdMode;
   final bool rememberMe;
   final VoidCallback? onCancel;
+  final String? entryCancelLabel;
+  final VoidCallback? onUserIntent;
 
   @override
   State<WalletsManagerWrapper> createState() => _WalletsManagerWrapperState();
@@ -48,7 +54,7 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
   /// True when the dialog opened straight onto a wallet's login form (the
   /// remembered-wallet prompt). There is no entry screen behind it, so Back
   /// must dismiss rather than reveal one the user never chose to open.
-  late final bool _enteredDirectly;
+  late bool _enteredDirectly;
 
   late final OnboardingFunnel _funnel;
 
@@ -59,6 +65,10 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
     _pendingWallet = widget.selectedWallet;
     _enteredDirectly = widget.selectedWallet != null;
     if (_enteredDirectly) _route = _WalletsManagerRoute.iguana;
+    if (widget.initialAction == WalletsManagerAction.import) {
+      _pendingAction = WalletsManagerAction.import;
+      _route = _WalletsManagerRoute.iguana;
+    }
 
     final walletsRepository = context.read<WalletsRepository>();
     _funnel = OnboardingFunnel(
@@ -106,11 +116,21 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
           onHardwareWallet: _onHardwareWallet,
           onWalletSelected: _onWalletSelected,
           onCancel: _handleCancel,
+          cancelLabel: widget.entryCancelLabel,
+          onUserIntent: widget.onUserIntent,
         );
 
       case _WalletsManagerRoute.iguana:
       case _WalletsManagerRoute.trezor:
         return WalletsManager(
+          key: ValueKey((
+            _pendingWallet?.id,
+            _pendingAction,
+            _pendingWalletAction,
+            _route,
+          )),
+          onSwitchWallet: _showWalletSelector,
+          onRecover: () => _onAction(WalletsManagerAction.import),
           eventType: widget.eventType,
           walletType: _route == _WalletsManagerRoute.trezor
               ? WalletType.trezor
@@ -148,6 +168,15 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
       _pendingAction = action;
       _pendingWallet = null;
       _route = _WalletsManagerRoute.iguana;
+    });
+  }
+
+  void _showWalletSelector() {
+    setState(() {
+      _enteredDirectly = false;
+      _pendingWallet = null;
+      _pendingAction = WalletsManagerAction.none;
+      _route = _WalletsManagerRoute.entry;
     });
   }
 

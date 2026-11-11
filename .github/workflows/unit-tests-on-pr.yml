@@ -22,11 +22,9 @@ env:
 jobs:
   unit_tests:
     runs-on: ubuntu-latest
-    # Setup plus two full suite runs (tests, then coverage): 14-15 minutes by
-    # 2026-09-28, 20 by 2026-10-07, and past 25 on a slow runner on 2026-10-14.
-    # Each step keeps its own 15-minute bound against a wedge, so the job
-    # allows setup plus both of those.
-    timeout-minutes: 40
+    # One complete test run collects coverage with the same pinned defines.
+    # Reporting reuses that result and uses bounded, signed package mirrors.
+    timeout-minutes: 50
 
     steps:
       - name: Setup GH Actions
@@ -39,6 +37,11 @@ jobs:
         id: install_flutter
         uses: ./.github/actions/flutter-deps
 
+      - name: Install browser security test runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
       - name: Fetch packages and generate assets
         id: generate_assets
         uses: ./.github/actions/generate-assets
@@ -49,16 +52,30 @@ jobs:
         id: validate_build
         uses: ./.github/actions/validate-build
 
+      - name: Render public authentication states
+        id: auth_ux
+        timeout-minutes: 5
+        env:
+          AUTH_UX_CAPTURE_DIR: build/auth-ux
+        run: |
+          rm -rf build/auth-ux
+          flutter test test_units/views/common/wallet_access/auth_setup_flow_test.dart \
+            --dart-define=TRON_GASLESS_ENABLED=true \
+            --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
+            --dart-define=TRON_GASLESS_BASE_URL="$TRON_GASLESS_MAINNET_BASE_URL" \
+            --dart-define=TRON_GASLESS_SERVICE_PROVIDER="$TRON_GASLESS_MAINNET_SERVICE_PROVIDER"
+
       - name: Test unit_test (unix)
         id: unit_tests
         continue-on-error: false
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
           TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
         run: |
-          flutter test test_units/main.dart \
+          rm -f coverage/lcov.info
+          flutter test --coverage test_units/main.dart \
             --dart-define=TRON_GASLESS_ENABLED=true \
             --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
             --dart-define=TRON_GASLESS_BASE_URL="$TRON_GASLESS_BASE_URL" \
@@ -66,14 +83,13 @@ jobs:
 
       - name: Generate unit test coverage report
         id: unit_test_coverage
-        timeout-minutes: 15
+        timeout-minutes: 10
         uses: ./.github/actions/code-coverage
+
+      - name: Retain public authentication state renders
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          test_file: "test_units/main.dart"
-          # The coverage run is a second `flutter test`; without the same
-          # defines it reproduces the wedge this job was timing out on.
-          dart_defines: >-
-            --dart-define=TRON_GASLESS_ENABLED=true
-            --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true
-            --dart-define=TRON_GASLESS_BASE_URL=${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
-            --dart-define=TRON_GASLESS_SERVICE_PROVIDER=${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
+          name: onboarding-ui-states
+          path: build/auth-ux/*.png
+          if-no-files-found: error
+          retention-days: 14

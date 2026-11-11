@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 /// #644: We want the password to be obscured most of the time
 /// in order to workaround the problem of some devices ignoring `TYPE_TEXT_FLAG_NO_SUGGESTIONS`,
@@ -6,8 +7,14 @@ import 'package:flutter/material.dart';
 class PasswordVisibilityControl extends StatefulWidget {
   const PasswordVisibilityControl({
     required this.onVisibilityChange,
+    this.isObscured,
+    this.showLabel,
+    this.hideLabel,
   });
   final void Function(bool) onVisibilityChange;
+  final bool? isObscured;
+  final String? showLabel;
+  final String? hideLabel;
 
   @override
   State<PasswordVisibilityControl> createState() =>
@@ -16,6 +23,7 @@ class PasswordVisibilityControl extends StatefulWidget {
 
 class _PasswordVisibilityControlState extends State<PasswordVisibilityControl> {
   bool _isObscured = true;
+  bool get _obscured => widget.isObscured ?? _isObscured;
 
   void _setObscureTo(bool isObscured) {
     if (!mounted) {
@@ -29,20 +37,16 @@ class _PasswordVisibilityControlState extends State<PasswordVisibilityControl> {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      mouseCursor: SystemMouseCursors.click,
-      onTap: () => _setObscureTo(!_isObscured),
-      child: SizedBox(
-        width: 60,
-        child: Icon(
-            _isObscured
-                ? Icons.visibility_off_outlined
-                : Icons.visibility_outlined,
-            color: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.color
-                ?.withValues(alpha: 0.7)),
+    return IconButton(
+      tooltip: _obscured
+          ? widget.showLabel ?? 'authShowPassword'.tr()
+          : widget.hideLabel ?? 'authHidePassword'.tr(),
+      onPressed: () => _setObscureTo(!_obscured),
+      icon: Icon(
+        _obscured ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+        color: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
       ),
     );
   }

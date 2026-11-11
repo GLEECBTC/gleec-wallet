@@ -1,0 +1,24 @@
+{
+  "checks": [
+    {
+      "repository": "GLEECBTC/gleec-wallet",
+      "commit": "c6839e245554337379b62ea10651d36fcb7833b6",
+      "workflow": ".github/workflows/auth-hosting-gate.yml",
+      "workflowSha256": "639c225fbb4fe89aaaaf3154fd594568ed524056f4ca8a956f094508a1765a14",
+      "run": 42538745323,
+      "conclusion": "success",
+      "contentsPermission": "read",
+      "writePermissionPresent": false
+    },
+    {
+      "repository": "GLEECBTC/kdf-internal",
+      "commit": "a67739d1ed1c820a776f4377b61b9a28d5390e8e",
+      "workflow": ".github/workflows/auth-native-artifact-gate.yml",
+      "workflowSha256": "ceaf93bac783b8773eb55e5e132e3012cf93f0b1f697e0a6e98074822573ed18",
+      "run": 42537351151,
+      "conclusion": "success",
+      "contentsPermission": "read",
+      "writePermissionPresent": false
+    }
+  ]
+}

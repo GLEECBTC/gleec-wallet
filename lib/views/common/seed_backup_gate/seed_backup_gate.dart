@@ -15,6 +15,7 @@ import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/mnemonic_prompt.dart';
@@ -113,18 +114,32 @@ class _SeedBackupGateDialog extends StatefulWidget {
   State<_SeedBackupGateDialog> createState() => _SeedBackupGateDialogState();
 }
 
-class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
+class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog>
+    with WidgetsBindingObserver {
   /// Held only for the life of this dialog and dropped on the way out. Dart
   /// strings are immutable, so this matches the existing convention of
   /// releasing the reference rather than claiming zeroisation.
   String _seed = '';
   bool _backingUp = false;
   bool _closing = false;
+  bool _awaitingMnemonic = false;
+  int _revealGeneration = 0;
   StreamSubscription<AuthSessionContext?>? _sessionSubscription;
+  StreamSubscription<void>? _sensitiveViewSubscription;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final coordinator = context.read<WalletAccessService?>()?.unlockCoordinator;
+    _sensitiveViewSubscription = coordinator?.sensitiveViewsMustClose.listen((
+      _,
+    ) {
+      if (_backingUp || (_awaitingMnemonic && !coordinator.hasSystemPrompt)) {
+        _revealGeneration++;
+        _close(false);
+      }
+    });
     _sessionSubscription = widget.sdk.auth.watchSessionContext().listen((_) {
       if (!_isCurrentWallet) _close(false);
     });
@@ -135,9 +150,34 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _seed = '';
     _sessionSubscription?.cancel();
+    _sensitiveViewSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) return;
+    // Secret views never inherit the ordinary wallet's background grace.
+    if (_backingUp || _seed.isNotEmpty) {
+      _revealGeneration++;
+      _close(false);
+      return;
+    }
+    final systemPrompt =
+        context
+            .read<WalletAccessService?>()
+            ?.unlockCoordinator
+            .hasSystemPrompt ??
+        false;
+    if (_awaitingMnemonic &&
+        state != AppLifecycleState.inactive &&
+        !systemPrompt) {
+      _revealGeneration++;
+      _close(false);
+    }
   }
 
   void _close(bool proceed) {
@@ -186,19 +226,31 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
   }
 
   Future<void> _startBackup() async {
+    if (_awaitingMnemonic || _closing) return;
     if (!_isCurrentWallet) {
       _close(false);
       return;
     }
-    final seed = await promptForPlaintextMnemonic(context);
-    if (!mounted) return;
-    if (!_isCurrentWallet) {
+    final generation = _revealGeneration;
+    _awaitingMnemonic = true;
+    final String? seed;
+    try {
+      seed = await promptForPlaintextMnemonic(context);
+    } finally {
+      _awaitingMnemonic = false;
+    }
+    if (!mounted || _closing) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (!_isCurrentWallet ||
+        generation != _revealGeneration ||
+        (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
       _close(false);
       return;
     }
-    if (seed == null) return;
+    final plaintext = seed;
+    if (plaintext == null) return;
     setState(() {
-      _seed = seed;
+      _seed = plaintext;
       _backingUp = true;
     });
   }

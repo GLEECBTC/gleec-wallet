@@ -9,11 +9,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_bloc.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_event.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
+import 'package:web_dex/services/security/private_key_export_delivery.dart';
+import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_asset_section.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_flow_listener.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_password_dialog.dart';
@@ -47,52 +53,63 @@ void testPrivateKeyExportFlow() {
       bool pending = false,
       bool ownExportBloc = false,
       ThemeData? appTheme,
+      _ExportAccess? walletAccess,
+      FakePrivateKeyExportDelivery? exportDelivery,
     }) async {
       ownsBloc = ownExportBloc;
       service = FakePrivateKeyExportService();
-      delivery = FakePrivateKeyExportDelivery();
+      delivery = exportDelivery ?? FakePrivateKeyExportDelivery();
       if (pending) service.pendingExport = Completer<PrivateKeyExportResult>();
-      bloc = PrivateKeyExportBloc(service: service, delivery: delivery);
+      bloc = _RecordingExportBloc(service: service, delivery: delivery);
       navigation = SecuritySettingsBloc(
         SecuritySettingsState.initialState(),
         kdfSdk: null,
       );
-      await tester.pumpWidget(
-        EasyLocalization(
-          supportedLocales: const [Locale('en')],
-          startLocale: const Locale('en'),
-          saveLocale: false,
-          path: 'assets/translations',
-          assetLoader: const _ExportTestTranslations(),
-          child: Builder(
-            builder: (context) => MaterialApp(
-              locale: context.locale,
-              supportedLocales: context.supportedLocales,
-              localizationsDelegates: context.localizationDelegates,
-              // Both slots get the same object so the result cannot depend on
-              // the ambient platform brightness, and the animation is zeroed
-              // so Theme.of never returns an interpolated mid-transition
-              // colour to a contrast assertion.
-              theme: appTheme,
-              darkTheme: appTheme,
-              themeAnimationDuration: Duration.zero,
-              home: MultiBlocProvider(
-                providers: [
-                  if (ownExportBloc)
-                    BlocProvider<PrivateKeyExportBloc>(create: (_) => bloc)
-                  else
-                    BlocProvider.value(value: bloc),
-                  BlocProvider.value(value: navigation),
-                ],
-                child: const Scaffold(
-                  body: PrivateKeyExportFlowListener(
-                    child: SingleChildScrollView(child: PrivateKeyShow()),
-                  ),
+      final app = EasyLocalization(
+        supportedLocales: const [Locale('en')],
+        startLocale: const Locale('en'),
+        saveLocale: false,
+        path: 'assets/translations',
+        assetLoader: const _ExportTestTranslations(),
+        child: Builder(
+          builder: (context) => MaterialApp(
+            locale: context.locale,
+            supportedLocales: context.supportedLocales,
+            localizationsDelegates: context.localizationDelegates,
+            // Both slots get the same object so the result cannot depend on
+            // the ambient platform brightness, and the animation is zeroed
+            // so Theme.of never returns an interpolated mid-transition
+            // colour to a contrast assertion.
+            theme: appTheme,
+            darkTheme: appTheme,
+            themeAnimationDuration: Duration.zero,
+            home: MultiBlocProvider(
+              providers: [
+                if (ownExportBloc)
+                  BlocProvider<PrivateKeyExportBloc>(create: (_) => bloc)
+                else
+                  BlocProvider.value(value: bloc),
+                BlocProvider.value(value: navigation),
+              ],
+              child: const Scaffold(
+                body: PrivateKeyExportFlowListener(
+                  child: SingleChildScrollView(child: PrivateKeyShow()),
                 ),
               ),
             ),
           ),
         ),
+      );
+      await tester.pumpWidget(
+        walletAccess == null
+            ? app
+            : RepositoryProvider<WalletAccessService>.value(
+                value: walletAccess,
+                child: BlocProvider<AuthBloc>(
+                  create: (_) => _ExportAuth(),
+                  child: app,
+                ),
+              ),
       );
       await tester.pumpAndSettle();
     }
@@ -112,6 +129,128 @@ void testPrivateKeyExportFlow() {
       await tester.pumpAndSettle();
       expect(find.byType(PrivateKeyExportPasswordDialog), findsNothing);
       expect(bloc.state.phase, PrivateKeyExportPhase.ready);
+    }
+
+    Future<void> submitManualPassword(WidgetTester tester) async {
+      bloc.add(PrivateKeyExportRequested());
+      await tester.pumpAndSettle();
+      final field = find.byKey(const Key('private-key-export-password'));
+      expect(field, findsOneWidget);
+      await tester.enterText(field, exportPasswordSentinel);
+      await tester.tap(
+        find.byKey(const Key('private-key-export-password-submit')),
+      );
+      await tester.pump();
+    }
+
+    testWidgets(
+      'manual dialog submits its captured export authorization pair',
+      (tester) async {
+        final access = _ExportAccess()..captureReady = Completer<void>();
+        addTearDown(access.unlockCoordinator.dispose);
+        await pump(tester, walletAccess: access);
+        await submitManualPassword(tester);
+        expect(access.capturedWallets, [_exportUser().walletId]);
+        expect(service.authentications, 0);
+        expect((bloc as _RecordingExportBloc).submitted, isEmpty);
+
+        access.captureReady!.complete();
+        await tester.pumpAndSettle();
+
+        final submitted = (bloc as _RecordingExportBloc).submitted.single;
+        expect(submitted.ensureAuthorized, isNotNull);
+        expect(submitted.selectDestination, isNotNull);
+        expect(submitted.password.value, exportPasswordSentinel);
+        expect(service.authentications, 1);
+        expect(bloc.state.phase, PrivateKeyExportPhase.ready);
+        expect(find.byType(PrivateKeyExportPasswordDialog), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('lock rejects a delayed export authorization capture', (
+      tester,
+    ) async {
+      final access = _ExportAccess()..captureReady = Completer<void>();
+      addTearDown(access.unlockCoordinator.dispose);
+      await pump(tester, walletAccess: access);
+      await submitManualPassword(tester);
+      expect(access.capturedWallets, [_exportUser().walletId]);
+
+      access.unlockCoordinator.lock();
+      access.captureReady!.complete();
+      await tester.pumpAndSettle();
+
+      expect((bloc as _RecordingExportBloc).submitted, isEmpty);
+      expect(service.authentications, 0);
+      expect(bloc.state.phase, PrivateKeyExportPhase.idle);
+      expect(bloc.state.result, isNull);
+      expect(find.byType(PrivateKeyExportPasswordDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final manualLock in [false, true]) {
+      testWidgets(
+        manualLock
+            ? 'manual lock cancels the export during its owned picker'
+            : 'owned picker hides secrets while retaining its pending export',
+        (tester) async {
+          final access = _ExportAccess();
+          final pickerDelivery = _PickerDelivery();
+          addTearDown(access.unlockCoordinator.dispose);
+          await pump(
+            tester,
+            walletAccess: access,
+            exportDelivery: pickerDelivery,
+          );
+          await submitManualPassword(tester);
+          await tester.pumpAndSettle();
+          expect(bloc.state.phase, PrivateKeyExportPhase.ready);
+          bloc.add(const PrivateKeyExportVisibilityChanged(true));
+          bloc.add(
+            PrivateKeyExportKeyVisibilityToggled(exportTestAsset('BTC'), 0),
+          );
+          await tester.pumpAndSettle();
+          expect(find.text(exportKeySentinel), findsOneWidget);
+
+          final download = find.byKey(const Key('private-key-export-download'));
+          await tester.ensureVisible(download);
+          await tester.tap(download);
+          await tester.pump();
+          expect(pickerDelivery.receivedSelector, isTrue);
+          expect(access.unlockCoordinator.hasSystemPrompt, isTrue);
+          expect(bloc.state.isDelivering, isTrue);
+
+          access.unlockCoordinator.inactive();
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.inactive,
+          );
+          await tester.pump();
+          expect(find.text(exportKeySentinel), findsNothing);
+          expect(bloc.state.showKeys, isFalse);
+          expect(bloc.state.phase, PrivateKeyExportPhase.ready);
+          expect(bloc.state.result, isNotNull);
+
+          if (manualLock) {
+            access.unlockCoordinator.lock();
+            await tester.pump();
+            expect(bloc.state.phase, PrivateKeyExportPhase.idle);
+            expect(bloc.state.result, isNull);
+          }
+          access.unlockCoordinator.resume();
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          pickerDelivery.destination.complete('/synthetic/export.txt');
+          await tester.pumpAndSettle();
+
+          expect(access.unlockCoordinator.hasSystemPrompt, isFalse);
+          expect(pickerDelivery.delivered, manualLock ? isNull : isNotNull);
+          expect(bloc.state.hasExported, !manualLock);
+          expect(find.text(exportKeySentinel), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
 
     testWidgets('shows TRON unavailable and no raw key by default', (
@@ -436,4 +575,151 @@ class _ExportTestTranslations extends AssetLoader {
   Future<Map<String, dynamic>> load(String path, Locale locale) async =>
       jsonDecode(File('$path/en.json').readAsStringSync())
           as Map<String, dynamic>;
+}
+
+KdfUser _exportUser() => KdfUser(
+  walletId: WalletId.withPubkeyHash(
+    'Synthetic wallet',
+    const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+    'synthetic-export-identity',
+  ),
+  isBip39Seed: true,
+);
+
+class _ExportAuth extends Cubit<AuthBlocState> implements AuthBloc {
+  _ExportAuth() : super(AuthBlocState.loggedIn(_exportUser()));
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingExportBloc extends PrivateKeyExportBloc {
+  _RecordingExportBloc({required super.service, required super.delivery});
+
+  final submitted = <PrivateKeyExportPasswordSubmitted>[];
+
+  @override
+  void add(PrivateKeyExportEvent event) {
+    if (event is PrivateKeyExportPasswordSubmitted) submitted.add(event);
+    super.add(event);
+  }
+}
+
+class _ExportAccess extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
+  _ExportAccess() {
+    unlockCoordinator.attachWallet(
+      'synthetic-export-entry',
+      requiresAuthentication: true,
+      authenticated: true,
+    );
+  }
+
+  Completer<void>? captureReady;
+  final capturedWallets = <WalletId>[];
+
+  @override
+  final unlockCoordinator = WalletUnlockCoordinator(
+    operationGate: WalletOperationGate(),
+  );
+
+  @override
+  Future<WalletAccessStatus> status({WalletId? walletId}) async =>
+      const WalletAccessStatus(
+        entryId: 'synthetic-export-entry',
+        protection: CredentialProtection.password,
+        hasManagedCredential: false,
+        requiresAuthentication: true,
+        generatedPassword: false,
+      );
+
+  @override
+  void Function() captureSensitiveOperation(WalletId walletId) {
+    if (walletId != _exportUser().walletId) {
+      throw const WalletAccessException(WalletAccessFailure.staleOperation);
+    }
+    final authorization = unlockCoordinator.authorizationGeneration;
+    final permit = unlockCoordinator.operationGate.capture(
+      expectedWalletEntryId: 'synthetic-export-entry',
+    );
+    return () {
+      if (authorization != unlockCoordinator.authorizationGeneration ||
+          !unlockCoordinator.state.isForeground ||
+          unlockCoordinator.state.isLocked) {
+        throw const WalletAccessException(WalletAccessFailure.staleOperation);
+      }
+      permit.ensureCurrent();
+    };
+  }
+
+  @override
+  Future<SensitiveExportAuthorization> captureSensitiveExport(
+    WalletId walletId,
+  ) async {
+    capturedWallets.add(walletId);
+    var ensureWrite = captureSensitiveOperation(walletId);
+    final generation = unlockCoordinator.state.generation;
+    final authorization = unlockCoordinator.authorizationGeneration;
+    void ensureScope() {
+      if (generation != unlockCoordinator.state.generation ||
+          authorization != unlockCoordinator.authorizationGeneration) {
+        throw const WalletAccessException(WalletAccessFailure.staleOperation);
+      }
+    }
+
+    await captureReady?.future;
+    ensureWrite();
+    return _CapturedExport(
+      ensureCurrent: () {
+        ensureScope();
+        ensureWrite();
+      },
+      selectDestination: (select) async {
+        ensureScope();
+        ensureWrite();
+        final destination = await unlockCoordinator
+            .runSystemDialogAwaitingForeground(select);
+        ensureScope();
+        ensureWrite = captureSensitiveOperation(walletId);
+        ensureWrite();
+        return destination;
+      },
+    );
+  }
+}
+
+class _CapturedExport extends Fake implements SensitiveExportAuthorization {
+  _CapturedExport({
+    required this.ensureCurrent,
+    required this.selectDestination,
+  });
+
+  @override
+  final void Function() ensureCurrent;
+  @override
+  final GuardedDestinationSelector selectDestination;
+}
+
+class _PickerDelivery extends FakePrivateKeyExportDelivery {
+  final destination = Completer<String?>();
+  bool receivedSelector = false;
+
+  @override
+  Future<PrivateKeyExportDeliveryOutcome> deliver({
+    required PrivateKeyExportAction action,
+    required SensitiveString content,
+    required Future<void> Function() beforeWrite,
+    required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
+  }) async {
+    calls++;
+    receivedSelector = selectDestination != null;
+    final path = await selectDestination!(() => destination.future);
+    if (path == null) return PrivateKeyExportDeliveryOutcome.cancelled;
+    await beforeWrite();
+    beforeCommit();
+    delivered = content;
+    return PrivateKeyExportDeliveryOutcome.completed;
+  }
 }

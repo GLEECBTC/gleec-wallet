@@ -40,6 +40,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  credential_vault_ = std::make_unique<CredentialVaultChannel>(
+      GetHandle(), flutter_controller_->engine()->messenger());
   reduced_motion_ = ReadReducedMotion();
   reduced_motion_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -64,13 +66,14 @@ bool FlutterWindow::OnCreate() {
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the
   // window is shown. It is a no-op if the first frame hasn't completed yet.
-  flutter_controller_->ForceRedraw(); 
+  flutter_controller_->ForceRedraw();
 
   return true;
 }
 
 void FlutterWindow::OnDestroy() {
-  // The channel sends through the engine's messenger, so it goes first.
+  // The channels send through the engine's messenger, so they go first.
+  credential_vault_ = nullptr;
   reduced_motion_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -83,6 +86,9 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (credential_vault_ && credential_vault_->HandleMessage(message, wparam)) {
+    return 0;
+  }
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

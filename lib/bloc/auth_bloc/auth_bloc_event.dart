@@ -49,6 +49,24 @@ class AuthRegisterRequested extends AuthBlocEvent {
   final String password;
 }
 
+class AuthQuickCreateRequested extends AuthBlocEvent {
+  const AuthQuickCreateRequested({
+    this.walletType = WalletType.hdwallet,
+    this.useDeviceProtection = true,
+  });
+  final WalletType walletType;
+  final bool useDeviceProtection;
+}
+
+class AuthManagedSignInRequested extends AuthBlocEvent {
+  const AuthManagedSignInRequested({
+    required this.wallet,
+    this.automatic = false,
+  });
+  final Wallet wallet;
+  final bool automatic;
+}
+
 class AuthRestoreRequested extends AuthBlocEvent {
   const AuthRestoreRequested({
     required this.wallet,
@@ -113,9 +131,13 @@ class AuthWalletDownloadRequested extends AuthBlocEvent {
   const AuthWalletDownloadRequested({
     required this.password,
     required this.expectedWalletId,
+    this.ensureAuthorized,
+    this.selectDestination,
   });
   final String password;
   final WalletId expectedWalletId;
+  final void Function()? ensureAuthorized;
+  final GuardedDestinationSelector? selectDestination;
 }
 
 /// Dispatched to restore authentication state after the SDK has been

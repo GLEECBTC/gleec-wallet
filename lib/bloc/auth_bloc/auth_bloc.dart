@@ -20,6 +20,11 @@ import 'package:web_dex/model/authorize_mode.dart';
 import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/prepared_legacy_migration.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/file_loader/file_loader.dart'
+    show FileSaveCancelledException, FileSaveUnconfirmedException;
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
+    show GuardedDestinationSelector;
 
 part 'auth_bloc_event.dart';
 part 'auth_bloc_state.dart';
@@ -38,14 +43,18 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     this._kdfSdk,
     this._walletsRepository,
     this._settingsRepository,
-    this._tradingStatusService,
-  ) : super(AuthBlocState.initial()) {
+    this._tradingStatusService, {
+    WalletAccessService? walletAccessService,
+  }) : _walletAccess = walletAccessService,
+       super(AuthBlocState.initial()) {
     on<AuthModeChanged>(_onAuthChanged);
     on<AuthStateClearRequested>(_onClearState);
     on<AuthSignOutRequested>(_onLogout);
     on<AuthSignInRequested>(_onLogIn);
     on<AuthErrorReported>(_onErrorReported);
     on<AuthRegisterRequested>(_onRegister);
+    on<AuthQuickCreateRequested>(_onQuickCreate);
+    on<AuthManagedSignInRequested>(_onManagedSignIn);
     on<AuthRestoreRequested>(_onRestore);
     on<AuthImportRequested>(_onImport);
     on<AuthLegacyMigrationRequested>(_onLegacyMigration);
@@ -60,6 +69,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   final WalletsRepository _walletsRepository;
   final SettingsRepository _settingsRepository;
   final TradingStatusService _tradingStatusService;
+  final WalletAccessService? _walletAccess;
   StreamSubscription<KdfUser?>? _authChangesSubscription;
 
   int _authRevision = 0;
@@ -68,6 +78,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   @override
   Object _beginAuthOperation() {
     _authRevision++;
+    _walletAccess?.invalidatePendingOperations();
     return _authOperation = Object();
   }
 
@@ -141,6 +152,29 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   ) async {
     final operation = _beginAuthOperation();
     _log.info('Logging out from a wallet');
+    final previousUser = state.currentUser;
+    try {
+      await _walletAccess?.signOut();
+    } catch (_) {
+      // Persisting explicit sign-out is part of its promise across relaunches.
+      // Leave the existing engine locked if that write could not be verified.
+      if (_ownsAuthOperation(operation, emit)) {
+        emit(
+          AuthBlocState(
+            mode: previousUser == null
+                ? AuthorizeMode.noLogin
+                : AuthorizeMode.logIn,
+            currentUser: previousUser,
+            authError: AuthException(
+              LocaleKeys.authSignOutFailed.tr(),
+              type: AuthExceptionType.generalAuthError,
+            ),
+          ),
+        );
+      }
+      _endAuthOperation(operation);
+      return;
+    }
     await _pauseAuthUserWatcher();
     if (!_ownsAuthOperation(operation, emit)) return;
     emit(AuthBlocState.loading());
@@ -162,10 +196,13 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       if (_ownsAuthOperation(operation, emit)) {
         await _authChangesSubscription?.cancel();
         if (_ownsAuthOperation(operation, emit)) {
-          _endAuthOperation(operation);
-          WalletLoadTimeline.instance.reset();
-          logAuthEvent(const AuthLogoutEventData(reason: 'user_initiated'));
-          emit(AuthBlocState.initial());
+          await _walletAccess?.observeEngineUser(null);
+          if (_ownsAuthOperation(operation, emit)) {
+            _endAuthOperation(operation);
+            WalletLoadTimeline.instance.reset();
+            logAuthEvent(const AuthLogoutEventData(reason: 'user_initiated'));
+            emit(AuthBlocState.initial());
+          }
         }
       }
     }
@@ -176,6 +213,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     Emitter<AuthBlocState> emit,
   ) async {
     final operation = _beginAuthOperation();
+    final accessAttempt = _walletAccess?.captureAuthenticationAttempt();
     final revision = _authRevision;
     try {
       if (event.wallet.isLegacyWallet) {
@@ -199,6 +237,11 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       WalletLoadTimeline.instance.mark(WalletLoadMark.signInStarted);
       final weakPasswordsAllowed = await _areWeakPasswordsAllowed();
       if (!_ownsAuthOperation(operation, emit)) return;
+      await _walletAccess?.recoverPasswordRotation(
+        event.wallet,
+        event.password,
+      );
+      if (!_ownsAuthOperation(operation, emit)) return;
       // `signIn` already returns the authenticated user, so the two
       // `currentUser` round trips this used to make were re-asking KDF for
       // something it had just handed over.
@@ -213,6 +256,14 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         ),
       );
 
+      if (!_ownsAuthOperation(operation, emit)) return;
+      if (_walletAccess != null) {
+        await _walletAccess.didAuthenticate(
+          currentUser,
+          expectedAttempt: accessAttempt,
+          password: event.password,
+        );
+      }
       if (!_ownsAuthOperation(operation, emit)) return;
       _log.info('Successfully logged in to wallet');
       _emitLoggedInState(emit, currentUser);
@@ -299,6 +350,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     }
 
     if (event.currentUser != null) {
+      await _walletAccess?.observeEngineUser(event.currentUser);
+      if (emit.isDone) return;
       emit(
         AuthBlocState(
           mode: event.mode,
@@ -309,6 +362,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         ),
       );
     } else {
+      await _walletAccess?.observeEngineUser(null);
+      if (emit.isDone) return;
       final priorAuthState = state.authenticationState;
       final preserveErrorState =
           priorAuthState?.status == AuthenticationStatus.error;
@@ -335,6 +390,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     Emitter<AuthBlocState> emit,
   ) async {
     final revision = ++_authRevision;
+    _walletAccess?.invalidatePendingOperations();
     _authOperation = null;
     await _authChangesSubscription?.cancel();
     if (revision != _authRevision || emit.isDone) return;
@@ -346,6 +402,93 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     AuthRegisterRequested event,
     Emitter<AuthBlocState> emit,
   ) => _createWallet(event.wallet, event.password, emit);
+
+  Future<void> _onQuickCreate(
+    AuthQuickCreateRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    if (_authOperation != null) return;
+    final access = _walletAccess;
+    if (access == null) {
+      emit(
+        AuthBlocState.error(
+          AuthException(
+            'Wallet creation is unavailable',
+            type: AuthExceptionType.generalAuthError,
+          ),
+        ),
+      );
+      return;
+    }
+    final operation = _beginAuthOperation();
+    try {
+      await _pauseAuthUserWatcher();
+      emit(AuthBlocState.loading());
+      WalletLoadTimeline.instance.mark(WalletLoadMark.signInStarted);
+      final user = await access.createWallet(
+        walletType: event.walletType,
+        useDeviceProtection: event.useDeviceProtection,
+        initialMetadata: _initialWalletMetadata(
+          walletType: event.walletType,
+          provenance: WalletProvenance.generated,
+          createdAt: DateTime.now(),
+          hasBackup: false,
+          activatedCoins: _filterBlockedAssets(enabledByDefaultCoins).toSet(),
+        ),
+      );
+      if (!_ownsAuthOperation(operation, emit)) return;
+      _emitLoggedInState(emit, user);
+      _listenToAuthStateChanges();
+    } catch (error, stack) {
+      if (!_ownsAuthOperation(operation, emit)) return;
+      await _emitAuthFailure(
+        emit: emit,
+        errorMsg:
+            'Unable to finish creating your wallet. Retry to continue safely.',
+        error: error,
+        stackTrace: stack,
+        flow: AuthFlow.register,
+      );
+    } finally {
+      _endAuthOperation(operation);
+    }
+  }
+
+  Future<void> _onManagedSignIn(
+    AuthManagedSignInRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    if (_authOperation != null) return;
+    final access = _walletAccess;
+    if (access == null) return;
+    final operation = _beginAuthOperation();
+    try {
+      await _pauseAuthUserWatcher();
+      emit(AuthBlocState.loading());
+      final user = await access.signInManaged(
+        event.wallet,
+        automatic: event.automatic,
+      );
+      if (!_ownsAuthOperation(operation, emit)) return;
+      _emitLoggedInState(emit, user);
+      _listenToAuthStateChanges();
+    } catch (error) {
+      if (!_ownsAuthOperation(operation, emit)) return;
+      emit(
+        AuthBlocState.error(
+          AuthException(
+            error is WalletAccessException &&
+                    error.failure == WalletAccessFailure.canceled
+                ? 'Unlock canceled. Try again or use your wallet password.'
+                : 'Unable to unlock. Try your wallet password or recovery phrase.',
+            type: AuthExceptionType.generalAuthError,
+          ),
+        ),
+      );
+    } finally {
+      _endAuthOperation(operation);
+    }
+  }
 
   Future<void> _onRestore(
     AuthRestoreRequested event,
@@ -364,6 +507,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     String? seed,
   }) async {
     final operation = _beginAuthOperation();
+    final accessAttempt = _walletAccess?.captureAuthenticationAttempt();
     try {
       await _pauseAuthUserWatcher();
       if (!_ownsAuthOperation(operation, emit)) return;
@@ -395,9 +539,20 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
               : WalletProvenance.imported,
           createdAt: DateTime.now(),
           hasBackup: seed != null && wallet.config.hasBackup,
+          recoveryEvidence: seed != null && wallet.config.hasBackup
+              ? RecoveryEvidence.phraseSupplied
+              : RecoveryEvidence.none,
           activatedCoins: activatedCoins,
         ),
       );
+      if (!_ownsAuthOperation(operation, emit)) return;
+      if (_walletAccess != null) {
+        await _walletAccess.didAuthenticate(
+          user,
+          expectedAttempt: accessAttempt,
+          password: password,
+        );
+      }
       if (!_ownsAuthOperation(operation, emit)) return;
       _emitLoggedInState(emit, user);
       _listenToAuthStateChanges();
@@ -642,6 +797,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     required WalletProvenance provenance,
     required DateTime createdAt,
     required bool hasBackup,
+    RecoveryEvidence? recoveryEvidence,
     required Iterable<String> activatedCoins,
     LegacyWalletSource? migratedSource,
     LegacyMigrationCleanupStatus? cleanupStatus,
@@ -652,6 +808,12 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
     metadata['wallet_provenance'] = provenance.name;
     metadata['wallet_created_at'] = createdAt.millisecondsSinceEpoch;
     metadata['has_backup'] = hasBackup;
+    metadata['recovery_evidence'] =
+        (recoveryEvidence ??
+                (hasBackup
+                    ? RecoveryEvidence.legacyUnknown
+                    : RecoveryEvidence.none))
+            .name;
     metadata['activated_coins'] = <String>{...activatedCoins}.toList();
 
     if (migratedSource != null) {
@@ -781,22 +943,47 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   ) async {
     final expectedWalletId = event.expectedWalletId;
     try {
+      final ensureAuthorized = event.ensureAuthorized;
+      if (_walletAccess != null && ensureAuthorized == null) return;
+      ensureAuthorized?.call();
       final user = await _kdfSdk.auth.currentUser;
       if (emit.isDone || user?.walletId != expectedWalletId) return;
       final wallet = user!.wallet;
+      final session = await _kdfSdk.auth.captureSessionContext();
+      if ((await _kdfSdk.auth.currentUser)?.walletId != expectedWalletId ||
+          !_kdfSdk.auth.isSessionContextCurrent(session)) {
+        return;
+      }
 
-      await _walletsRepository.downloadEncryptedWallet(
-        wallet,
-        event.password,
-        expectedWalletId: expectedWalletId,
-      );
+      var confirmed = true;
+      try {
+        await _walletsRepository.downloadEncryptedWallet(
+          wallet,
+          event.password,
+          expectedWalletId: expectedWalletId,
+          ensureAuthorized: ensureAuthorized,
+          selectDestination: event.selectDestination,
+        );
+      } on FileSaveUnconfirmedException {
+        confirmed = false;
+      }
 
-      await _kdfSdk.confirmSeedBackup(expectedWalletId: expectedWalletId);
+      ensureAuthorized?.call();
+      if (!_kdfSdk.auth.isSessionContextCurrent(session)) return;
+      await _kdfSdk.auth.updateMetadataForSession(session, {
+        'encrypted_file_export_requested': true,
+        if (confirmed) 'encrypted_file_exported': true,
+        if (confirmed && !wallet.config.hasRecoveryPhrase)
+          'recovery_evidence': RecoveryEvidence.encryptedFileExported.name,
+      });
       final updatedUser = await _kdfSdk.auth.currentUser;
+      ensureAuthorized?.call();
       if (emit.isDone || updatedUser?.walletId != expectedWalletId) return;
       emit(AuthBlocState(mode: AuthorizeMode.logIn, currentUser: updatedUser));
     } on WalletChangedDisconnectException {
       // The export belongs to the original wallet, not its replacement.
+      return;
+    } on FileSaveCancelledException {
       return;
     } catch (e, s) {
       _log.shout('Failed to download wallet data', e, s);
@@ -850,6 +1037,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           user == null) {
         return;
       }
+      await _walletAccess?.observeEngineUser(user);
+      if (emit.isDone || revision != _authRevision) return;
       _emitLoggedInState(emit, user);
       _listenToAuthStateChanges();
     } on AuthSessionChangedException {

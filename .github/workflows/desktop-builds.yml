@@ -3,7 +3,7 @@ run-name: Building desktop apps 🖥️
 
 on:
   pull_request:
-    branches: [dev, main, fix/*, add/*, release/*, hotfix/*, feature/*]
+    branches: [dev, main, feat/solana-integration, fix/*, add/*, release/*, hotfix/*, feature/*]
   workflow_dispatch:
   release:
     types: [published]
@@ -41,7 +41,10 @@ jobs:
             artifact_path: build/windows/x64/runner/Release/*
             artifact_name: komodo-wallet-windows
           - platform: linux
-            runner: ubuntu-latest
+            # Build against the supported Ubuntu 22.04 / glibc 2.35 baseline.
+            # Newer images link secure storage against GLIBC_2.38 and produce
+            # an app that cannot even open on that baseline.
+            runner: ubuntu-22.04
             build_command: flutter build linux --no-pub --release
             artifact_path: build/linux/x64/release/bundle/*
             artifact_name: komodo-wallet-linux
@@ -71,7 +74,7 @@ jobs:
         with:
           p12-file-base64: ${{ secrets.MACOS_P12_BASE64 }}
           p12-password: ${{ secrets.MACOS_P12_PASSWORD }}
-          bundle-id: "com.komodo.wallet"
+          bundle-id: "com.GleecDEX.wallet"
           profile-type: "MAC_APP_DEVELOPMENT"
           issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
@@ -127,6 +130,11 @@ jobs:
           TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
           TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
           TRON_GASLESS_REQUIRED_NETWORK: "tron"
+
+      - name: Verify Linux runtime dependencies
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: python3 tool/verify_linux_runtime.py build/linux/x64/release/bundle
 
       - name: Compute short commit SHA
         id: vars

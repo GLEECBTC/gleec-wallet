@@ -29,6 +29,8 @@ import 'package:web_dex/views/settings/widgets/security_settings/private_key_set
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_flow_listener.dart';
 import 'package:web_dex/services/security/private_key_export_service.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
@@ -44,18 +46,55 @@ class SecuritySettingsPage extends StatefulWidget {
   State<SecuritySettingsPage> createState() => _SecuritySettingsPageState();
 }
 
-class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
+class _SecuritySettingsPageState extends State<SecuritySettingsPage>
+    with WidgetsBindingObserver {
   String _seed = '';
+  int _seedRevision = 0;
   AuthSessionContext? _seedSession;
   StreamSubscription<AuthSessionContext?>? _seedSessionSubscription;
+  StreamSubscription<void>? _seedAccessSubscription;
   SecuritySettingsBloc? _seedFlowBloc;
   final Map<Coin, String> _privKeys = {};
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _seedAccessSubscription ??= context
+        .read<WalletAccessService?>()
+        ?.unlockCoordinator
+        .sensitiveViewsMustClose
+        .listen((_) => _revokeSeedReveal());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) return;
+    _revokeSeedReveal();
+  }
+
+  void _revokeSeedReveal() {
+    _seedRevision++;
+    final hadSecrets = _seed.isNotEmpty || _seedSession != null;
+    _clearAllSensitiveData();
+    final bloc = _seedFlowBloc;
+    if (hadSecrets && bloc != null && !bloc.isClosed) {
+      bloc.add(const ResetEvent());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // Ensure sensitive data is cleared when widget is disposed
     _clearAllSensitiveData();
     _seedSessionSubscription?.cancel();
+    _seedAccessSubscription?.cancel();
     super.dispose();
   }
 
@@ -191,53 +230,81 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
     if (!context.mounted) return;
 
     final String? pass = await walletPasswordDialog(context);
-    if (pass == null || !mounted) return;
+    if (pass == null || !mounted || !context.mounted) return;
     if (!kdfSdk.auth.isSessionContextCurrent(session)) return;
+    final revealRevision = _seedRevision;
+    try {
+      final ensureAccess =
+          context.read<WalletAccessService?>()?.captureSensitiveOperation(
+            session.walletId,
+          ) ??
+          WalletOperationGate.instance.capture().ensureCurrent;
+      void ensureCurrent() {
+        final lifecycle = WidgetsBinding.instance.lifecycleState;
+        if (!mounted ||
+            revealRevision != _seedRevision ||
+            !kdfSdk.auth.isSessionContextCurrent(session) ||
+            (lifecycle != null && lifecycle != AppLifecycleState.resumed)) {
+          throw const WalletAccessException(WalletAccessFailure.staleOperation);
+        }
+        ensureAccess();
+      }
 
-    final mnemonic = await kdfSdk.auth.getMnemonicPlainText(pass);
-    if (!mounted || !kdfSdk.auth.isSessionContextCurrent(session)) {
-      return;
+      await RpcDispatchGuard.run(ensureCurrent, () async {
+        ensureCurrent();
+        final mnemonic = await kdfSdk.auth.getMnemonicPlainText(pass);
+        ensureCurrent();
+        final privateKeys = <Coin, String>{};
+        final parentCoins = coinsBloc.state.walletCoins.values.where(
+          (coin) =>
+              !coin.id.isChildAsset &&
+              coin.id.subClass != CoinSubClass.sia &&
+              // TRON keys must stay unavailable in this legacy seed backup path
+              // until KDF supports exporting them correctly.
+              coin.id.subClass != CoinSubClass.trx &&
+              coin.id.subClass != CoinSubClass.trc20,
+        );
+        for (final coin in parentCoins) {
+          ensureCurrent();
+          final result = await mm2Api.showPrivKey(
+            ShowPrivKeyRequest(coin: coin.abbr),
+          );
+          ensureCurrent();
+          if (result != null) {
+            privateKeys[coin] = result.privKey;
+          }
+        }
+
+        await _seedSessionSubscription?.cancel();
+        ensureCurrent();
+        _seed = mnemonic.plaintextMnemonic ?? '';
+        _seedSession = session;
+        _seedFlowBloc = securitySettingsBloc;
+        _seedSessionSubscription = kdfSdk.auth.watchSessionContext().listen((
+          _,
+        ) {
+          final original = _seedSession;
+          if (original != null &&
+              !kdfSdk.auth.isSessionContextCurrent(original)) {
+            _clearAllSensitiveData();
+            final bloc = _seedFlowBloc;
+            if (bloc != null && !bloc.isClosed) bloc.add(const ResetEvent());
+          }
+        });
+        _privKeys
+          ..clear()
+          ..addAll(privateKeys);
+        securitySettingsBloc.add(const ShowSeedEvent());
+      }, methods: const {'get_mnemonic', 'show_priv_key'});
+    } on WalletAccessException {
+      _revokeSeedReveal();
+    } on WalletOperationDenied {
+      _revokeSeedReveal();
+    } on RpcDispatchRejected {
+      _revokeSeedReveal();
+    } on AuthSessionChangedException {
+      _revokeSeedReveal();
     }
-
-    final privateKeys = <Coin, String>{};
-    final parentCoins = coinsBloc.state.walletCoins.values.where(
-      (coin) =>
-          !coin.id.isChildAsset &&
-          coin.id.subClass != CoinSubClass.sia &&
-          // TRON keys must stay unavailable in this legacy seed backup path
-          // until KDF supports exporting them correctly.
-          coin.id.subClass != CoinSubClass.trx &&
-          coin.id.subClass != CoinSubClass.trc20,
-    );
-    for (final coin in parentCoins) {
-      final result = await mm2Api.showPrivKey(
-        ShowPrivKeyRequest(coin: coin.abbr),
-      );
-      if (!mounted || !kdfSdk.auth.isSessionContextCurrent(session)) {
-        return;
-      }
-      if (result != null) {
-        privateKeys[coin] = result.privKey;
-      }
-    }
-
-    await _seedSessionSubscription?.cancel();
-    if (!mounted || !kdfSdk.auth.isSessionContextCurrent(session)) return;
-    _seed = mnemonic.plaintextMnemonic ?? '';
-    _seedSession = session;
-    _seedFlowBloc = securitySettingsBloc;
-    _seedSessionSubscription = kdfSdk.auth.watchSessionContext().listen((_) {
-      final original = _seedSession;
-      if (original != null && !kdfSdk.auth.isSessionContextCurrent(original)) {
-        _clearAllSensitiveData();
-        final bloc = _seedFlowBloc;
-        if (bloc != null && !bloc.isClosed) bloc.add(const ResetEvent());
-      }
-    });
-    _privKeys
-      ..clear()
-      ..addAll(privateKeys);
-    securitySettingsBloc.add(const ShowSeedEvent());
   }
 
   void onViewPrivateKeysPressed(BuildContext context) {

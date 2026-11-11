@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_bloc.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_event.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
@@ -11,6 +13,7 @@ import 'package:web_dex/bloc/security_settings/security_settings_bloc.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_labels.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_password_dialog.dart';
@@ -28,11 +31,67 @@ class PrivateKeyExportFlowListener extends StatefulWidget {
 }
 
 class _PrivateKeyExportFlowListenerState
-    extends State<PrivateKeyExportFlowListener> {
+    extends State<PrivateKeyExportFlowListener>
+    with WidgetsBindingObserver {
   DialogRoute<void>? _passwordRoute;
   DialogRoute<void>? _qrRoute;
   int _lastDeliveryRevision = 0;
   int _lastOperation = 0;
+  int? _destinationOperation;
+  int? _destinationGeneration;
+  int? _destinationAuthorization;
+  StreamSubscription<void>? _sensitiveViews;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sensitiveViews ??= context
+        .read<WalletAccessService?>()
+        ?.unlockCoordinator
+        .sensitiveViewsMustClose
+        .listen((_) => _revokeSensitivePresentation());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) return;
+    _revokeSensitivePresentation();
+  }
+
+  void _revokeSensitivePresentation() {
+    if (!mounted) return;
+    final bloc = context.read<PrivateKeyExportBloc>();
+    final coordinator = context.read<WalletAccessService?>()?.unlockCoordinator;
+    final ownedDestination =
+        _destinationOperation == bloc.state.operationId &&
+        coordinator != null &&
+        coordinator.hasSystemPrompt &&
+        _destinationGeneration == coordinator.state.generation &&
+        _destinationAuthorization == coordinator.authorizationGeneration;
+    if (ownedDestination) {
+      // Only this export's exact destination chooser may keep prepared data.
+      // Visible secrets and QR routes still close immediately. Manual/device
+      // locks or wallet changes invalidate the captured ceremony generations.
+      bloc.add(const PrivateKeyExportVisibilityChanged(false));
+      _remove(_qrRoute);
+      _qrRoute = null;
+      return;
+    }
+    // Device authorization has not yielded secrets in awaitingPassword. Avoid
+    // canceling that native dialog; actual export/reveal is revoked immediately.
+    if (bloc.state.phase == PrivateKeyExportPhase.ready ||
+        bloc.state.phase == PrivateKeyExportPhase.exporting) {
+      bloc.add(const PrivateKeyExportCancelled());
+      _remove(_qrRoute);
+      _qrRoute = null;
+    }
+  }
 
   static void _remove(DialogRoute<void>? route) {
     if (route?.isActive ?? false) route!.navigator?.removeRoute(route);
@@ -116,9 +175,8 @@ class _PrivateKeyExportFlowListenerState
                   errorText: state.error == null
                       ? null
                       : privateKeyExportErrorText(state.error!),
-                  onSubmit: (password) => bloc.add(
-                    PrivateKeyExportPasswordSubmitted(operation, password),
-                  ),
+                  onSubmit: (password) =>
+                      _submitPassword(bloc, operation, password),
                   onCancel: () => bloc.add(const PrivateKeyExportCancelled()),
                 ),
               ),
@@ -138,6 +196,80 @@ class _PrivateKeyExportFlowListenerState
         }
       }),
     );
+  }
+
+  Future<void> _submitPassword(
+    PrivateKeyExportBloc bloc,
+    int operation,
+    SensitiveString password,
+  ) async {
+    if (!mounted || bloc.isClosed || bloc.state.operationId != operation) {
+      return;
+    }
+    try {
+      final auth = context.read<AuthBloc?>();
+      final walletId = auth?.state.currentUser?.walletId;
+      final access = context.read<WalletAccessService?>();
+      if (access != null &&
+          (walletId == null || walletId.name != bloc.state.walletName)) {
+        throw const WalletAccessException(WalletAccessFailure.staleOperation);
+      }
+      final authorization = walletId == null
+          ? null
+          : await access?.captureSensitiveExport(walletId);
+      if (!mounted ||
+          bloc.isClosed ||
+          bloc.state.operationId != operation ||
+          !bloc.state.needsPasswordDialog ||
+          auth?.state.currentUser?.walletId != walletId) {
+        return;
+      }
+      authorization?.ensureCurrent();
+      bloc.add(
+        PrivateKeyExportPasswordSubmitted(
+          operation,
+          password,
+          ensureAuthorized: authorization?.ensureCurrent,
+          selectDestination: authorization == null
+              ? null
+              : (select) async {
+                  if (!mounted ||
+                      bloc.isClosed ||
+                      bloc.state.operationId != operation) {
+                    throw const WalletAccessException(
+                      WalletAccessFailure.staleOperation,
+                    );
+                  }
+                  final coordinator = access!.unlockCoordinator;
+                  _destinationOperation = operation;
+                  _destinationGeneration = coordinator.state.generation;
+                  _destinationAuthorization =
+                      coordinator.authorizationGeneration;
+                  try {
+                    final destination = await authorization.selectDestination(
+                      select,
+                    );
+                    if (!mounted ||
+                        bloc.isClosed ||
+                        bloc.state.operationId != operation) {
+                      throw const WalletAccessException(
+                        WalletAccessFailure.staleOperation,
+                      );
+                    }
+                    return destination;
+                  } finally {
+                    _destinationOperation = null;
+                    _destinationGeneration = null;
+                    _destinationAuthorization = null;
+                  }
+                },
+        ),
+      );
+    } on Object {
+      if (!bloc.isClosed && bloc.state.operationId == operation) {
+        bloc.add(const PrivateKeyExportCancelled());
+      }
+    }
   }
 
   void _openQr(BuildContext context, int operation) {
@@ -160,6 +292,8 @@ class _PrivateKeyExportFlowListenerState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sensitiveViews?.cancel();
     final password = _passwordRoute;
     final qr = _qrRoute;
     // Route removal during a parent route's disposal can lock the navigator.

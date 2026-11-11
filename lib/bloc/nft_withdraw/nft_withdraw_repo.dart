@@ -1,4 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart' show RpcDispatchGuard;
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/mm2/mm2_api/mm2_api.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
@@ -12,17 +13,31 @@ import 'package:web_dex/mm2/mm2_api/rpc/withdraw/withdraw_errors.dart';
 import 'package:web_dex/model/coin.dart';
 import 'package:web_dex/model/nft.dart';
 import 'package:web_dex/model/text_error.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 class NftWithdrawRepo {
-  const NftWithdrawRepo({required Mm2Api api}) : _api = api;
+  const NftWithdrawRepo({
+    required Mm2Api api,
+    WalletOperationGate? operationGate,
+  }) : _api = api,
+       _operationGate = operationGate;
 
   final Mm2Api _api;
+  final WalletOperationGate? _operationGate;
+  WalletOperationGate get _gate =>
+      _operationGate ?? WalletOperationGate.instance;
   Future<WithdrawNftResponse> withdraw({
     required NftToken nft,
     required String address,
     int? amount,
   }) async {
+    final WalletOperationPermit permit;
+    try {
+      permit = _gate.capture();
+    } on WalletOperationDenied {
+      throw ApiError(message: LocaleKeys.somethingWrong.tr());
+    }
     final request = WithdrawNftRequest(
       type: nft.contractType,
       chain: nft.chain,
@@ -31,15 +46,23 @@ class NftWithdrawRepo {
       tokenId: nft.tokenId,
       amount: amount,
     );
+    permit.ensureCurrent();
     final Map<String, dynamic> json = await _api.nft.withdraw(request);
+    try {
+      permit.ensureCurrent();
+    } on WalletOperationDenied {
+      throw ApiError(message: LocaleKeys.somethingWrong.tr());
+    }
     if (json['error'] != null) {
       log(
         json['error'] as String? ?? 'unknown error',
         path: 'nft_main_repo => getNfts',
         isError: true,
       ).ignore();
-      final BaseError error =
-          withdrawErrorFactory.getError(json, nft.parentCoin.abbr);
+      final BaseError error = withdrawErrorFactory.getError(
+        json,
+        nft.parentCoin.abbr,
+      );
       throw ApiError(message: error.message);
     }
 
@@ -61,8 +84,14 @@ class NftWithdrawRepo {
     String txHex,
   ) async {
     try {
+      final permit = _gate.capture();
       final request = SendRawTransactionRequest(coin: coin, txHex: txHex);
-      final response = await _api.sendRawTransaction(request);
+      permit.ensureCurrent();
+      final response = await RpcDispatchGuard.run(
+        permit.ensureCurrent,
+        () => _api.sendRawTransaction(request),
+        methods: const {'send_raw_transaction'},
+      );
       return response;
     } catch (e) {
       return SendRawTransactionResponse(
@@ -77,8 +106,10 @@ class NftWithdrawRepo {
     String address,
   ) async {
     try {
-      final Map<String, dynamic>? responseRaw =
-          await _api.validateAddress(coin.abbr, address);
+      final Map<String, dynamic>? responseRaw = await _api.validateAddress(
+        coin.abbr,
+        address,
+      );
       if (responseRaw == null) {
         throw ApiError(message: LocaleKeys.somethingWrong.tr());
       }

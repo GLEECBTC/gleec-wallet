@@ -188,11 +188,16 @@ extension KdfAuthMetadataExtension on KomodoDefiSdk {
     bool hasBackup = true,
     required WalletId expectedWalletId,
   }) async {
-    await auth.setOrRemoveActiveUserKeyValue(
-      'has_backup',
-      hasBackup,
-      expectedWalletId: expectedWalletId,
-    );
+    final session = await auth.captureSessionContext();
+    if ((await auth.currentUser)?.walletId != expectedWalletId) {
+      throw const AuthSessionChangedException();
+    }
+    await auth.updateMetadataForSession(session, {
+      'has_backup': hasBackup,
+      'recovery_evidence': hasBackup
+          ? RecoveryEvidence.phraseConfirmed.name
+          : RecoveryEvidence.none.name,
+    });
   }
 
   /// Sets the wallet type for the current user.

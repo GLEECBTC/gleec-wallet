@@ -13,6 +13,8 @@ class WalletsManager extends StatelessWidget {
     required this.close,
     required this.onSuccess,
     this.selectedWallet,
+    this.onSwitchWallet,
+    this.onRecover,
     this.initialHdMode = false,
     this.rememberMe = false,
     this.initialAction = WalletsManagerAction.none,
@@ -23,6 +25,8 @@ class WalletsManager extends StatelessWidget {
   final VoidCallback close;
   final Function(Wallet) onSuccess;
   final Wallet? selectedWallet;
+  final VoidCallback? onSwitchWallet;
+  final VoidCallback? onRecover;
   final bool initialHdMode;
   final bool rememberMe;
 
@@ -40,6 +44,8 @@ class WalletsManager extends StatelessWidget {
           close: close,
           onSuccess: onSuccess,
           eventType: eventType,
+          onSwitchWallet: onSwitchWallet,
+          onRecover: onRecover,
           initialWallet: selectedWallet,
           initialHdMode: initialHdMode,
           rememberMe: rememberMe,

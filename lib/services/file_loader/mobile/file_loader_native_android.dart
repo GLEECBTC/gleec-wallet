@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 import 'package:web_dex/shared/utils/zip.dart';
 
@@ -16,7 +17,19 @@ class FileLoaderNativeAndroid implements FileLoader {
     required String fileName,
     required String data,
     LoadFileType type = LoadFileType.text,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    if (beforeWrite != null) {
+      await saveGuardedTextFile(
+        fileName: fileName,
+        data: data,
+        type: type,
+        beforeWrite: beforeWrite,
+        selectDestination: selectDestination,
+      );
+      return;
+    }
     switch (type) {
       case LoadFileType.text:
         if (p.extension(fileName).toLowerCase() == '.json') {
@@ -36,8 +49,9 @@ class FileLoaderNativeAndroid implements FileLoader {
     // On mobile, the file bytes are used to create the file to be saved.
     // On desktop a file is created first, then a file is saved.
     final Uint8List fileBytes = utf8.encode(data);
-    final String suggestedName =
-        p.extension(fileName).isEmpty ? '$fileName.txt' : fileName;
+    final String suggestedName = p.extension(fileName).isEmpty
+        ? '$fileName.txt'
+        : fileName;
     final String? fileFullPath = await FilePicker.platform.saveFile(
       fileName: suggestedName,
       bytes: fileBytes,
@@ -58,8 +72,9 @@ class FileLoaderNativeAndroid implements FileLoader {
     } catch (_) {}
 
     final Uint8List fileBytes = utf8.encode(prettyData);
-    final String suggestedName =
-        p.extension(fileName).isEmpty ? '$fileName.json' : fileName;
+    final String suggestedName = p.extension(fileName).isEmpty
+        ? '$fileName.json'
+        : fileName;
     final String? fileFullPath = await FilePicker.platform.saveFile(
       fileName: suggestedName,
       bytes: fileBytes,
@@ -74,8 +89,10 @@ class FileLoaderNativeAndroid implements FileLoader {
     required String fileName,
     required String data,
   }) async {
-    final Uint8List compressedBytes =
-        createZipOfSingleFile(fileName: fileName, fileContent: data);
+    final Uint8List compressedBytes = createZipOfSingleFile(
+      fileName: fileName,
+      fileContent: data,
+    );
     final String? fileFullPath = await FilePicker.platform.saveFile(
       fileName: '$fileName.zip',
       bytes: compressedBytes,

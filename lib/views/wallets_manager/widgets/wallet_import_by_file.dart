@@ -49,7 +49,8 @@ class WalletImportByFile extends StatefulWidget {
   State<WalletImportByFile> createState() => _WalletImportByFileState();
 }
 
-class _WalletImportByFileState extends State<WalletImportByFile> {
+class _WalletImportByFileState extends State<WalletImportByFile>
+    with WidgetsBindingObserver {
   final TextEditingController _filePasswordController = TextEditingController(
     text: '',
   );
@@ -80,6 +81,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // The field has no onChanged, so the button needs a listener to re-enable.
     _filePasswordController.addListener(_onFilePasswordChanged);
   }
@@ -119,6 +121,8 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                     autofocus: true,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
+                    enableSuggestions: false,
+                    enableIMEPersonalizedLearning: false,
                     enableInteractiveSelection: true,
                     obscureText: _isObscured,
                     maxLength: passwordMaxLength,
@@ -130,6 +134,7 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
                     errorMaxLines: 6,
                     hintText: LocaleKeys.walletCreationPasswordHint.tr(),
                     suffixIcon: PasswordVisibilityControl(
+                      isObscured: _isObscured,
                       onVisibilityChange: (bool isPasswordObscured) {
                         setState(() {
                           _isObscured = isPasswordObscured;
@@ -219,8 +224,17 @@ class _WalletImportByFileState extends State<WalletImportByFile> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && mounted) {
+      setState(() => _isObscured = true);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _filePasswordController.removeListener(_onFilePasswordChanged);
+    _filePasswordController.clear();
     _filePasswordController.dispose();
 
     super.dispose();

@@ -1,255 +1,134 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
-import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
-import 'package:web_dex/blocs/wallets_repository.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
-import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
-
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
-import 'package:web_dex/shared/widgets/quick_login_switch.dart';
-import 'package:web_dex/views/wallets_manager/widgets/creation_password_fields.dart';
-import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
+/// Creation has no credential form. The service owns naming, generation and
+/// crash-safe persistence; this view only presents progress and retry.
 class WalletCreation extends StatefulWidget {
   const WalletCreation({
     super.key,
     required this.action,
     required this.onCreate,
     required this.onCancel,
+    this.acceptedOnEntry = false,
   });
 
   final WalletsManagerAction action;
-  final void Function({
-    required String name,
-    required String password,
-    WalletType? walletType,
-    required bool rememberMe,
-  })
-  onCreate;
-  final void Function() onCancel;
+  final VoidCallback onCreate;
+  final VoidCallback onCancel;
+  final bool acceptedOnEntry;
 
   @override
   State<WalletCreation> createState() => _WalletCreationState();
 }
 
 class _WalletCreationState extends State<WalletCreation> {
-  final TextEditingController _nameController = TextEditingController(text: '');
-  final TextEditingController _passwordController = TextEditingController(
-    text: '',
-  );
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  bool _inProgress = false;
+  bool _submitted = false;
   bool _waitingForLegal = false;
-  bool _rememberMe = false;
-  bool _arePasswordsValid = false;
-
-  late final WalletsRepository _walletsRepository;
 
   @override
   void initState() {
     super.initState();
-
-    _nameController.addListener(() {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _walletsRepository = context.read<WalletsRepository>();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthBlocState>(
-      listener: (context, state) {
-        if (!state.isLoading) {
-          setState(() => _inProgress = false);
-        }
-
-        if (state.isError) {
-          final theme = Theme.of(context);
-          final message =
-              state.authError?.message ?? LocaleKeys.somethingWrong.tr();
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                message,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onErrorContainer,
-                ),
-              ),
-              backgroundColor: theme.colorScheme.errorContainer,
-            ),
-          );
-        }
-      },
-      child: AutofillGroup(
-        child: ScreenshotSensitive(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  // Keyed on `import` rather than `create` so the neutral
-                  // `none` state - which this widget also renders, including
-                  // for the frame where the dialog is dismissing after a
-                  // successful create - reads as "Create wallet" instead of
-                  // briefly flipping to "Import wallet".
-                  widget.action == WalletsManagerAction.import
-                      ? LocaleKeys.walletImportTitle.tr()
-                      : LocaleKeys.walletCreationTitle.tr(),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontSize: 18),
-                ),
-                const SizedBox(height: 24),
-                _buildFields(),
-                const SizedBox(height: 22),
-                TermsConsentText(actionLabel: LocaleKeys.create.tr()),
-                const SizedBox(height: 12),
-                LegalConsentAction(
-                  builder: (allowed) => UiPrimaryButton(
-                    key: const Key('confirm-password-button'),
-                    height: 50,
-                    text: _inProgress
-                        ? '${LocaleKeys.pleaseWait.tr()}...'
-                        : LocaleKeys.create.tr(),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    onPressed: allowed && _isCreateButtonEnabled
-                        ? _onCreate
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                UiUnderlineTextButton(
-                  onPressed: widget.onCancel,
-                  text: LocaleKeys.cancel.tr(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Widget _buildFields() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildNameField(),
-        const SizedBox(height: 20),
-        const UiDivider(),
-        const SizedBox(height: 20),
-        CreationPasswordFields(
-          passwordController: _passwordController,
-          onValidityChanged: (isValid) {
-            if (mounted) setState(() => _arePasswordsValid = isValid);
-          },
-          onFieldSubmitted: (_) {
-            if (_isCreateButtonEnabled) _onCreate();
-          },
-        ),
-        const SizedBox(height: 20),
-        QuickLoginSwitch(
-          key: const Key('checkbox-one-click-login-signup'),
-          value: _rememberMe,
-          onChanged: (value) {
-            setState(() => _rememberMe = value);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNameField() {
-    final walletsRepository = _walletsRepository;
-    return UiTextFormField(
-      key: const Key('name-wallet-field'),
-      controller: _nameController,
-      autofocus: true,
-      autocorrect: false,
-      textInputAction: TextInputAction.next,
-      enableInteractiveSelection: true,
-      autofillHints: const [AutofillHints.username],
-      validator: (String? name) =>
-          _inProgress ? null : walletsRepository.validateWalletName(name ?? ''),
-      inputFormatters: [LengthLimitingTextInputFormatter(40)],
-      hintText: LocaleKeys.walletCreationNameHint.tr(),
-    );
-  }
-
-  void _onCreate() async {
-    if (_inProgress || _waitingForLegal) return;
-    _waitingForLegal = true;
-    final agreement = await awaitLegalAgreement(context);
-    _waitingForLegal = false;
-    if (!mounted || agreement == null) return;
-    final consentSnapshot = agreement.snapshot;
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() => _inProgress = true);
-    // Async uniqueness check before proceeding
-    final uniquenessError = await _walletsRepository
-        .validateWalletNameUniqueness(_nameController.text);
-    if (uniquenessError != null) {
-      if (mounted) {
-        setState(() => _inProgress = false);
-        final theme = Theme.of(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              uniquenessError,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onErrorContainer,
-              ),
-            ),
-            backgroundColor: theme.colorScheme.errorContainer,
-          ),
-        );
-      }
-      return;
+    if (widget.acceptedOnEntry) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _submit(accepted: true);
+      });
     }
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      // Complete autofill session so password managers can save new credentials
-      TextInput.finishAutofillContext(shouldSave: true);
-      if (!mounted || !context.read<LegalAgreementBloc>().canComplete) return;
+  Future<void> _submit({bool accepted = false}) async {
+    if (_submitted || _waitingForLegal) return;
+    if (!accepted) {
+      _waitingForLegal = true;
+      final agreement = await awaitLegalAgreement(context);
+      _waitingForLegal = false;
+      if (!mounted || agreement == null) return;
       context.read<LegalAgreementBloc>().add(
-        LegalAgreementSubmitted('wallet-creation', snapshot: consentSnapshot),
+        LegalAgreementSubmitted(
+          'wallet-creation',
+          snapshot: agreement.snapshot,
+        ),
       );
-      widget.onCreate(
-        name: _nameController.text.trim(),
-        password: _passwordController.text,
-        walletType: WalletType.hdwallet,
-        rememberMe: _rememberMe,
-      );
-    });
+    }
+    if (!mounted) return;
+    setState(() => _submitted = true);
+    widget.onCreate();
   }
 
-  bool get _isCreateButtonEnabled {
-    final nameError = _walletsRepository.validateWalletName(
-      _nameController.text,
-    );
-    final isNameValid = nameError == null;
-    return !_inProgress && isNameValid && _arePasswordsValid;
-  }
+  @override
+  Widget build(BuildContext context) => BlocConsumer<AuthBloc, AuthBlocState>(
+    listener: (context, state) {
+      if (!state.isLoading && mounted) setState(() => _submitted = false);
+    },
+    builder: (context, state) {
+      final busy = _submitted || state.isLoading;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            busy
+                ? 'authCreatingWallet'.tr()
+                : LocaleKeys.walletCreationTitle.tr(),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'authInstantCreationDescription'.tr(),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          if (state.isLoading)
+            Semantics(
+              liveRegion: true,
+              label: 'authCreatingWallet'.tr(),
+              child: TickerMode(
+                enabled: !MediaQuery.disableAnimationsOf(context),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
+          if (state.isError) ...[
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                'authCreationRetryDescription'.tr(),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (!widget.acceptedOnEntry) ...[
+            TermsConsentText(actionLabel: LocaleKeys.create.tr()),
+            const SizedBox(height: 12),
+          ],
+          if (!busy)
+            LegalConsentAction(
+              builder: (allowed) => UiPrimaryButton(
+                expandForText: true,
+                key: const Key('confirm-password-button'),
+                height: 50,
+                text: state.isError
+                    ? LocaleKeys.tryAgain.tr()
+                    : LocaleKeys.create.tr(),
+                onPressed: allowed
+                    ? () => _submit(accepted: widget.acceptedOnEntry)
+                    : null,
+              ),
+            ),
+          const SizedBox(height: 16),
+          UiUnderlineTextButton(
+            text: LocaleKeys.cancel.tr(),
+            onPressed: busy ? null : widget.onCancel,
+          ),
+        ],
+      );
+    },
+  );
 }

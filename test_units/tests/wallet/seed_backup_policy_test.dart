@@ -4,6 +4,7 @@ import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
 
 Wallet _wallet({
   required bool hasBackup,
+  RecoveryEvidence? recoveryEvidence,
   WalletType type = WalletType.hdwallet,
   WalletProvenance provenance = WalletProvenance.generated,
 }) {
@@ -14,6 +15,7 @@ Wallet _wallet({
       seedPhrase: '',
       activatedCoins: const [],
       hasBackup: hasBackup,
+      recoveryEvidence: recoveryEvidence,
       type: type,
       provenance: provenance,
     ),
@@ -26,9 +28,36 @@ void testSeedBackupPolicy() {
       expect(seedBackupGateRequired(wallet: null), isFalse);
     });
 
-    test('a backed-up wallet is never gated', () {
-      expect(seedBackupGateRequired(wallet: _wallet(hasBackup: true)), isFalse);
-    });
+    for (final evidence in [
+      RecoveryEvidence.phraseConfirmed,
+      RecoveryEvidence.phraseSupplied,
+    ]) {
+      test('a wallet with ${evidence.name} is not interrupted', () {
+        expect(
+          seedBackupGateRequired(
+            wallet: _wallet(hasBackup: true, recoveryEvidence: evidence),
+          ),
+          isFalse,
+        );
+      });
+    }
+
+    for (final evidence in [
+      RecoveryEvidence.legacyUnknown,
+      RecoveryEvidence.encryptedFileExported,
+    ]) {
+      test(
+        '${evidence.name} does not prove possession of the recovery phrase',
+        () {
+          expect(
+            seedBackupGateRequired(
+              wallet: _wallet(hasBackup: true, recoveryEvidence: evidence),
+            ),
+            isTrue,
+          );
+        },
+      );
+    }
 
     test('an un-backed-up wallet on mainnet is gated', () {
       expect(seedBackupGateRequired(wallet: _wallet(hasBackup: false)), isTrue);

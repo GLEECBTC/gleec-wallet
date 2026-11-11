@@ -51,7 +51,8 @@ class WalletSimpleImport extends StatefulWidget {
 
 enum WalletSimpleImportSteps { nameAndSeed, password }
 
-class _WalletImportWrapperState extends State<WalletSimpleImport> {
+class _WalletImportWrapperState extends State<WalletSimpleImport>
+    with WidgetsBindingObserver {
   static const int _maxSeedSuggestions = 8;
   WalletSimpleImportSteps _step = WalletSimpleImportSteps.nameAndSeed;
   final TextEditingController _nameController = TextEditingController(text: '');
@@ -148,7 +149,10 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
                         key: const Key('confirm-seed-button'),
                         text: _inProgress
                             ? '${LocaleKeys.pleaseWait.tr()}...'
+                            : _step == WalletSimpleImportSteps.nameAndSeed
+                            ? LocaleKeys.continueText.tr()
                             : LocaleKeys.import.tr(),
+                        expandForText: true,
                         height: 50,
                         textStyle: const TextStyle(
                           fontSize: 14,
@@ -179,6 +183,7 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _seedController.addListener(_onSeedChanged);
     unawaited(_loadBip39Wordlist());
   }
@@ -283,9 +288,22 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed || !mounted) return;
+    setState(() {
+      _isSeedHidden = true;
+      _clearSeedWordSuggestions();
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _nameController.dispose();
+    _seedController.removeListener(_onSeedChanged);
+    _seedController.clear();
     _seedController.dispose();
+    _passwordController.clear();
     _passwordController.dispose();
     super.dispose();
   }
@@ -327,6 +345,8 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
   Widget _buildPasswordStep() {
     return Column(
       children: [
+        Text('authImportPasswordPurpose'.tr()),
+        const SizedBox(height: 16),
         CreationPasswordFields(
           passwordController: _passwordController,
           onValidityChanged: (isValid) {
@@ -410,6 +430,13 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
             _refreshFormValidationState();
           },
         ),
+        const SizedBox(height: 8),
+        Text(
+          'authImportDerivationHint'.tr(),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
         const SizedBox(height: 20),
         UiDivider(text: LocaleKeys.seedOr.tr()),
         const SizedBox(height: 20),
@@ -427,6 +454,8 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       controller: _nameController,
       autofocus: true,
       autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.username],
       validator: (String? name) =>
@@ -444,12 +473,17 @@ class _WalletImportWrapperState extends State<WalletSimpleImport> {
       validator: _validateSeed,
       textInputAction: TextInputAction.done,
       autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
       obscureText: _isSeedHidden,
       maxLines: _isSeedHidden ? 1 : null,
       errorMaxLines: 4,
       style: Theme.of(context).textTheme.bodyMedium,
       hintText: LocaleKeys.importSeedEnterSeedPhraseHint.tr(),
       suffixIcon: PasswordVisibilityControl(
+        isObscured: _isSeedHidden,
+        showLabel: 'authShowRecoveryPhrase'.tr(),
+        hideLabel: 'authHideRecoveryPhrase'.tr(),
         onVisibilityChange: (bool isObscured) {
           setState(() {
             _isSeedHidden = isObscured;

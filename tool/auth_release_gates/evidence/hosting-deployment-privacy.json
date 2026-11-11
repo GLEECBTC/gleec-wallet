@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "scope": "Shared deployment wrapper privacy and correct preview URL; Solana preview, not full onboarding UI acceptance",
+  "repository": "GLEECBTC/gleec-wallet",
+  "run": 42542882339,
+  "job": 128921491560,
+  "conclusion": "success",
+  "sourceHead": "c9f14d34dc793dd7680da72088ed06aea340b8ad",
+  "previewUrl": "https://walletrc--pull-3611-merge-8wrn0cav.web.app",
+  "identity": {
+    "run": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/42542882339",
+    "app_commit": "b607818561e93dfa747f0b87b9fd1adf4a9602a5",
+    "sdk_commit": "34faf005b2e092419d0cb12b84f21b02a6c7f0d6",
+    "kdf_config_sha256": "137fa2b780ea57e7ec46b3fa0245fe97adfaae2557615d6e6ffced7977c62b22",
+    "javascript_sha256": "16514b07ef12e75048b51d4c18d104e48cb257343508cbc87151b14f206c404e",
+    "production_approved": false,
+    "legal_availability_bypass": false,
+    "built_at": "2026-11-09T01:02:24Z"
+  },
+  "independentlyVerified": [
+    "GitHub run success and source head",
+    "HTTPS public build identity"
+  ],
+  "coordinatingTaskLogChecks": {
+    "completionMarkerPresent": true,
+    "providerFieldMarkersAbsent": [
+      "hashConfig",
+      "signerKey",
+      "[apiv2][body]"
+    ],
+    "rawValuesCopied": false
+  },
+  "localChecks": {
+    "privacyTests": 27,
+    "urlFixtures": 8,
+    "shellcheck": "passed",
+    "independentReview": "clear"
+  },
+  "historicalLogsDeleted": false,
+  "credentialsRotated": false
+}

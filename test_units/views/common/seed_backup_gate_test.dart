@@ -15,7 +15,11 @@ import 'package:web_dex/bloc/analytics/analytics_state.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/password_dialog_content.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_show.dart';
@@ -88,9 +92,19 @@ class _FakeAuth implements KomodoDefiLocalAuth {
   Stream<AuthSessionContext?> watchSessionContext() => sessions.changes;
   @override
   Future<KdfUser?> get currentUser async => bloc.state.currentUser;
+  Future<Mnemonic> Function()? onReadMnemonic;
+  Future<void>? beforeMnemonicDispatch;
+  int mnemonicCalls = 0;
+  int mnemonicDispatches = 0;
   @override
-  Future<Mnemonic> getMnemonicPlainText(String password) async =>
-      Mnemonic.plaintext('single-token-test-seed');
+  Future<Mnemonic> getMnemonicPlainText(String password) async {
+    mnemonicCalls++;
+    await beforeMnemonicDispatch;
+    RpcDispatchGuard.ensureCurrent('get_mnemonic');
+    mnemonicDispatches++;
+    return onReadMnemonic?.call() ??
+        Mnemonic.plaintext('single-token-test-seed');
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -115,6 +129,7 @@ class _FakeSdk implements KomodoDefiSdk {
 
 KdfUser _user({
   required bool hasBackup,
+  String? recoveryEvidence,
   String provenance = 'generated',
   String pubkeyHash = 'first-wallet-pubkey-hash',
 }) => KdfUser(
@@ -127,6 +142,7 @@ KdfUser _user({
   metadata: {
     'type': 'hdwallet',
     'has_backup': hasBackup,
+    if (recoveryEvidence != null) 'recovery_evidence': recoveryEvidence,
     'wallet_provenance': provenance,
   },
 );
@@ -135,11 +151,14 @@ KdfUser _user({
 Future<List<bool>> _pumpGate(
   WidgetTester tester, {
   required _FakeAuthBloc authBloc,
+  void Function(_FakeAuth)? configureAuth,
+  _Access? access,
 }) async {
   final previousScreenSize = Size(screenWidth, screenHeight);
   final results = <bool>[];
   final analyticsBloc = _FakeAnalyticsBloc();
   final sdk = _FakeSdk(authBloc);
+  configureAuth?.call(sdk.auth as _FakeAuth);
   addTearDown(analyticsBloc.close);
 
   await tester.pumpWidget(
@@ -151,8 +170,12 @@ Future<List<bool>> _pumpGate(
       path: 'assets/translations',
       assetLoader: const _EmptyAssetLoader(),
       child: Builder(
-        builder: (context) => RepositoryProvider<KomodoDefiSdk>.value(
-          value: sdk,
+        builder: (context) => MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<KomodoDefiSdk>.value(value: sdk),
+            if (access != null)
+              RepositoryProvider<WalletAccessService>.value(value: access),
+          ],
           child: MultiBlocProvider(
             providers: [
               BlocProvider<AuthBloc>.value(value: authBloc),
@@ -188,6 +211,10 @@ Future<List<bool>> _pumpGate(
   );
   await tester.pump();
   addTearDown(() async {
+    // Paused lifecycle disables scheduled frames. Resume before rebuilding the
+    // restoration widget, otherwise updateScreenType never runs and later
+    // tests inherit this dialog's tablet/desktop globals.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pumpWidget(
       MediaQuery(
         data: MediaQueryData(size: previousScreenSize),
@@ -215,7 +242,9 @@ void testSeedBackupGate() {
       tester,
     ) async {
       final authBloc = _FakeAuthBloc(
-        AuthBlocState.loggedIn(_user(hasBackup: true)),
+        AuthBlocState.loggedIn(
+          _user(hasBackup: true, recoveryEvidence: 'phraseConfirmed'),
+        ),
       );
       addTearDown(authBloc.close);
 
@@ -359,6 +388,178 @@ void testSeedBackupGate() {
       );
     });
 
+    testWidgets(
+      'a legacy backup flag still receives the dismissible reminder',
+      (tester) async {
+        final authBloc = _FakeAuthBloc(
+          AuthBlocState.loggedIn(_user(hasBackup: true)),
+        );
+        addTearDown(authBloc.close);
+        final results = await _pumpGate(tester, authBloc: authBloc);
+        await tester.tap(find.text('reveal'));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('seed-backup-gate-notice')),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const Key('seed-backup-gate-continue-button')),
+        );
+        await tester.pumpAndSettle();
+        expect(results, [true]);
+      },
+    );
+
+    testWidgets('secret view closes on inactivity without a grace period', (
+      tester,
+    ) async {
+      final authBloc = _FakeAuthBloc(
+        AuthBlocState.loggedIn(_user(hasBackup: false)),
+      );
+      addTearDown(authBloc.close);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      final results = await _pumpGate(tester, authBloc: authBloc);
+      await tester.tap(find.text('reveal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('seed-backup-gate-backup-button')));
+      await tester.pumpAndSettle();
+      tester
+          .widget<PasswordDialogContent>(find.byType(PasswordDialogContent))
+          .onSuccess('test-password');
+      await tester.pumpAndSettle();
+      expect(find.byType(SeedShow), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pumpAndSettle();
+      expect(find.byType(SeedShow), findsNothing);
+      expect(results, [false]);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byType(SeedShow), findsNothing);
+    });
+
+    testWidgets('a late mnemonic cannot reopen after backgrounding', (
+      tester,
+    ) async {
+      final authBloc = _FakeAuthBloc(
+        AuthBlocState.loggedIn(_user(hasBackup: false)),
+      );
+      addTearDown(authBloc.close);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      final phrase = Completer<Mnemonic>();
+      final results = await _pumpGate(
+        tester,
+        authBloc: authBloc,
+        configureAuth: (auth) {
+          auth.onReadMnemonic = () => phrase.future;
+        },
+      );
+      await tester.tap(find.text('reveal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('seed-backup-gate-backup-button')));
+      await tester.pumpAndSettle();
+      tester
+          .widget<PasswordDialogContent>(find.byType(PasswordDialogContent))
+          .onSuccess('test-password');
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      phrase.complete(Mnemonic.plaintext('single-token-test-seed'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SeedShow), findsNothing);
+      expect(results, [false]);
+    });
+
+    for (final interruption in ['lock', 'pause', 'wallet switch']) {
+      for (final boundary in ['before dispatch', 'late result']) {
+        testWidgets('rejects $interruption at mnemonic $boundary', (
+          tester,
+        ) async {
+          final user = _user(hasBackup: false);
+          final authBloc = _FakeAuthBloc(AuthBlocState.loggedIn(user));
+          final access = _Access(user.walletId);
+          final delay = Completer<void>();
+          final phrase = Completer<Mnemonic>();
+          late _FakeAuth auth;
+          addTearDown(authBloc.close);
+          addTearDown(access.unlockCoordinator.dispose);
+          tester.binding.handleAppLifecycleStateChanged(
+            AppLifecycleState.resumed,
+          );
+          addTearDown(
+            () => tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.resumed,
+            ),
+          );
+          final results = await _pumpGate(
+            tester,
+            authBloc: authBloc,
+            access: access,
+            configureAuth: (value) {
+              auth = value;
+              if (boundary == 'before dispatch') {
+                auth.beforeMnemonicDispatch = delay.future;
+              } else {
+                auth.onReadMnemonic = () => phrase.future;
+              }
+            },
+          );
+          await tester.tap(find.text('reveal'));
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const Key('seed-backup-gate-backup-button')),
+          );
+          await tester.pumpAndSettle();
+          tester
+              .widget<PasswordDialogContent>(find.byType(PasswordDialogContent))
+              .onSuccess('test-password');
+          await tester.pumpAndSettle();
+          expect(auth.mnemonicCalls, 1);
+          expect(access.captures, 1);
+          if (interruption == 'lock') {
+            access.unlockCoordinator.lock();
+          } else if (interruption == 'pause') {
+            access.unlockCoordinator.background();
+            tester.binding.handleAppLifecycleStateChanged(
+              AppLifecycleState.paused,
+            );
+          } else {
+            authBloc.updateUser(
+              _user(hasBackup: false, pubkeyHash: 'replacement-hash'),
+            );
+            access.unlockCoordinator.attachWallet(
+              'replacement',
+              requiresAuthentication: true,
+              authenticated: true,
+            );
+          }
+          if (boundary == 'before dispatch') {
+            delay.complete();
+          } else {
+            phrase.complete(Mnemonic.plaintext('single-token-test-seed'));
+          }
+          await tester.pumpAndSettle();
+          expect(
+            auth.mnemonicDispatches,
+            boundary == 'before dispatch' ? 0 : 1,
+          );
+          expect(find.byType(SeedShow), findsNothing);
+          expect(results, [false]);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+
     testWidgets('acknowledging never marks the seed as backed up', (
       tester,
     ) async {
@@ -376,7 +577,7 @@ void testSeedBackupGate() {
       await tester.pumpAndSettle();
 
       // The banner, the menu indicator and the settings label all read
-      // has_backup as proof the user holds their words. Acknowledging is not
+      // recovery evidence as proof the user holds their words. Acknowledging is not
       // that proof, so it must not dispatch a backup confirmation.
       expect(
         authBloc.addedEvents.whereType<AuthSeedBackupConfirmed>(),
@@ -485,4 +686,40 @@ void testSeedBackupGate() {
       },
     );
   });
+}
+
+class _Access extends Fake implements WalletAccessService {
+  @override
+  bool get isPasswordManagerPending => false;
+  _Access(this.walletId) {
+    unlockCoordinator.attachWallet(
+      'guarded-entry',
+      requiresAuthentication: true,
+      authenticated: true,
+    );
+  }
+  final WalletId walletId;
+  int captures = 0;
+  @override
+  final unlockCoordinator = WalletUnlockCoordinator(
+    operationGate: WalletOperationGate(),
+  );
+  @override
+  Stream<void> get changes => const Stream.empty();
+  @override
+  Future<WalletAccessStatus> status({WalletId? walletId}) async =>
+      const WalletAccessStatus(
+        entryId: 'guarded-entry',
+        protection: CredentialProtection.authenticationBound,
+        hasManagedCredential: true,
+        requiresAuthentication: true,
+      );
+  @override
+  Future<WalletAccessStatus> statusForWallet(Wallet wallet) => status();
+  @override
+  void Function() captureSensitiveOperation(WalletId walletId) {
+    expectSync(walletId, this.walletId);
+    captures++;
+    return unlockCoordinator.operationGate.capture().ensureCurrent;
+  }
 }
