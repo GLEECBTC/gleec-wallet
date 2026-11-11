@@ -175,10 +175,10 @@ class LocalBrowser {
     }finally{this.events.delete(listener);}
   }
 
-  async wait(page, expression, {timeout=30000, label='browser condition', accept}={}) {
+  async wait(page, expression, {timeout=30000, label='browser condition'}={}) {
     const until=performance.now()+timeout;
     while(performance.now()<until){
-      try {const result=await page.evaluate(expression);if(result&&(!accept||accept(result)))return result;} catch(_) {}
+      try {const result=await page.evaluate(expression);if(result)return result;} catch(_) {}
       await delay(100);
     }
     throw new Error(`Timed out waiting for ${label}`);
@@ -195,32 +195,45 @@ class LocalBrowser {
 
   async click(page, label, {pointer=false}={}) {
     const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})`;
-    if(!pointer){
-      // Resolve and activate in one task so a rebuild cannot detach the node
-      // between lookup and the semantics action.
-      await this.wait(page,`(()=>{const element=${expression};if(!element||element.getAttribute('aria-disabled')==='true')return false;element.click();return true;})()`,{label:`button ${label}`});
-      return;
-    }
-    // Use genuine pointer activation for the system-credential handoff. Flutter
-    // can expose a route's semantics before its transition accepts input. Wait
-    // for a stable painted target, then activate exactly once, without retrying
-    // an authentication action. This adds no delay to the application itself.
+    // A semantics node can precede the route's painted, interactive frame.
+    // Navigate and activate like a real user: settle the painted target and
+    // scroll it into view, then click exactly once. Never retry the action or
+    // an OS ceremony. These waits belong to this driver, not the application.
+    const deadline=performance.now()+30000;
     let candidate;
     let stableSince=0;
-    const settled=await this.wait(page,`(()=>{
-      const element=${expression};
-      if(!element||element.getAttribute('aria-disabled')==='true'||element.closest('[aria-hidden=true]'))return false;
-      const r=element.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;
-      if(r.width<=0||r.height<=0||x<0||y<0||x>=innerWidth||y>=innerHeight)return false;
-      const hit=document.elementFromPoint(x,y);
-      return hit&&(hit===element||element.contains(hit))?{x,y,id:element.id}:false;
-    })()`,{label:`settled button ${label}`,accept:point=>{
+    while(performance.now()<deadline){
+      const point=await page.evaluate(`(()=>{
+        const element=${expression};
+        if(!element||element.getAttribute('aria-disabled')==='true'||element.closest('[aria-hidden=true]'))return null;
+        const r=element.getBoundingClientRect();if(r.width<=0||r.height<=0)return null;
+        const x=r.x+r.width/2,y=r.y+r.height/2;
+        const inView=x>=0&&y>=0&&x<innerWidth&&y<innerHeight;
+        const hit=inView?document.elementFromPoint(x,y):null;
+        return {x,y,id:element.id,inView,hit:!!hit&&(hit===element||element.contains(hit)),
+          scrollX:Math.max(1,Math.min(innerWidth-1,x)),scrollY:Math.max(1,Math.min(innerHeight-1,y))};
+      })()`);
+      if(point&&!point.inView){
+        candidate=undefined;
+        await page.send('Input.dispatchMouseEvent',{type:'mouseWheel',x:point.scrollX,y:point.scrollY,
+          deltaX:0,deltaY:point.y<0?-400:400});
+        await delay(150);continue;
+      }
+      if(!point?.hit){candidate=undefined;await delay(100);continue;}
       const same=candidate&&point.id===candidate.id&&Math.abs(point.x-candidate.x)<0.5&&Math.abs(point.y-candidate.y)<0.5;
-      if(!same){candidate=point;stableSince=performance.now();return false;}
-      return performance.now()-stableSince>=500;
-    }});
-    await page.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:settled.x,y:settled.y});
-    await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:settled.x,y:settled.y});
+      if(!same){candidate=point;stableSince=performance.now();}
+      else if(performance.now()-stableSince>=500){
+        if(pointer){
+          await page.send('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:point.x,y:point.y});
+          await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:point.x,y:point.y});
+        }else{
+          await page.evaluate(`(()=>{const element=${expression};if(!element||element.id!==${JSON.stringify(point.id)}||element.getAttribute('aria-disabled')==='true')throw new Error('Control changed before activation');element.click();return true;})()`);
+        }
+        return;
+      }
+      await delay(100);
+    }
+    throw new Error(`Timed out waiting for painted button ${label}`);
   }
 
   async fill(page, label, value) {
