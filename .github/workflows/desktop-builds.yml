@@ -41,7 +41,10 @@ jobs:
             artifact_path: build/windows/x64/runner/Release/*
             artifact_name: komodo-wallet-windows
           - platform: linux
-            runner: ubuntu-latest
+            # Build against the supported Ubuntu 22.04 / glibc 2.35 baseline.
+            # Newer images link secure storage against GLIBC_2.38 and produce
+            # an app that cannot even open on that baseline.
+            runner: ubuntu-22.04
             build_command: flutter build linux --no-pub --release
             artifact_path: build/linux/x64/release/bundle/*
             artifact_name: komodo-wallet-linux
@@ -127,6 +130,11 @@ jobs:
           TRON_GASLESS_BASE_URL: ${{ env.TRON_GASLESS_MAINNET_BASE_URL }}
           TRON_GASLESS_SERVICE_PROVIDER: ${{ env.TRON_GASLESS_MAINNET_SERVICE_PROVIDER }}
           TRON_GASLESS_REQUIRED_NETWORK: "tron"
+
+      - name: Verify Linux runtime dependencies
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: python3 tool/verify_linux_runtime.py build/linux/x64/release/bundle
 
       - name: Compute short commit SHA
         id: vars
