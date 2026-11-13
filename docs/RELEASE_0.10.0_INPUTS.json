@@ -1,101 +1,42 @@
 {
-  "status": "Accepted RC runtime snapshot 3f2058c8 with frozen SDK caab72b9 (tree of SDK #435 merge bb5b4187; release-0.9.0 8cae3c91 adds only changelogs and release docs) and coins cc8249e8. The session follow-ups, the final coins roll, the Trezor default-coins fix and the SDK build-log redaction passed the full local app gate on both branches; the da3214d8 hosted qualification and preview do not cover this head. Docs-only merges #3591 (4d52eb0e) and the handover update change no runtime input. Owner dispositions and the production integrator decision of 4 November are in owner_dispositions; production distribution keeps the gates in distribution_evidence_still_required. Not a published artifact manifest.",
+  "status": "13 November 2026 preparation for app 0.10.0+0 and a draft GitHub release. SDK main carries official KDF f9632e0, with unchanged coins cc8249e8. Current-head hosted qualification and accepted merge identities are recorded in PR #3575 and the focused carry PRs. Not a published or signed-artifact manifest.",
   "prepared_on": "2026-11-03",
   "app": {
     "version": "0.10.0+0",
-    "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
-    "previous_published_tag": "0.9.7-1",
-    "lockfile_sha256": "01455a499d30d836e4a6e5f74fb7c0a7f35ddb0a6b2896acb1058813ffa06be7",
-    "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
     "release_branch": "release-0.10.0",
-    "runtime_validation_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
-    "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)",
-    "sdk_pointer_dev_pr": 3586,
-    "sdk_pointer_release_pr": 3587,
-    "atomic_trading_restoration_pr": 3579,
-    "tested_source_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
-    "previous_runtime_validation_commit": "5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c",
-    "previous_tested_source_commit": "33bf94a7cc4ed9b4ba5bc04f2694a344445908a1",
-    "accepted_development_commit": "1249c500c96a7dc139ae7b86d8667e8304bd6a1b",
-    "accepted_release_commit": "3f2058c801d823eceb5d5dcadbb9324e163d9115",
-    "accepted_runtime_tree": "b0483953af99d9ac8d11f590bad22635f995a515",
-    "previous_sdk_pointer_dev_pr": 3576,
-    "previous_sdk_pointer_release_pr": 3577
+    "previous_published_tag": "0.9.7-1",
+    "preparation_base": "098603b47adf5779dd343039951fbe7b02c44126",
+    "lockfile_sha256": "01455a499d30d836e4a6e5f74fb7c0a7f35ddb0a6b2896acb1058813ffa06be7",
+    "candidate_commit_record": "PR #3575 head and the refreshed deployed rc-test-build.json; the final main merge must have the tested candidate tree."
   },
   "sdk": {
     "version": "0.9.0",
-    "integration_source": "03a3cb1adf666952a16f0cd80e67b8173076f4c1",
-    "final_main_pin_required": true,
-    "preparation_commit": "cc9a585504ab2cd723043399937ac04e1dee4dd1",
-    "preparation_pr": 409,
-    "promotion_pr": 416,
-    "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
-    "candidate_commit": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
-    "melos_validation_pr": 411,
-    "release_branch": "release-0.9.0",
-    "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
-    "previous_dev_headed_rc_pr": 410,
-    "final_main_pin_required_for": "production distribution, after SDK review/promotion; frozen RC uses candidate_commit",
-    "recovery_pagination_pr": 417,
-    "release_repair_pr": 418,
-    "previous_frozen_candidate_commit": "55bd00c64f5721177d26a78df297751b4b61f540",
-    "candidate_pin_status": "Exact accepted SDK RC pin: the head of logging carry #435 (normal merge bb5b4187 onto release-0.9.0), consumed by app RC carry #3589. It descends from the KDF roll (#430/#431), the session follow-ups (#437/#438) and the final coins roll (#439/#440).",
-    "kdf_roll_dev_pr": 430,
-    "kdf_roll_release_pr": 431,
-    "artifact_roll_validation_commit": "0766626bb3db6706ecb177a921752029630b6412",
-    "previous_kdf_roll_dev_pr": 419,
-    "previous_kdf_roll_release_pr": 420,
-    "previous_kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e",
-    "kdf_roll_dev_squash_commit": "db73613cd34a2c0779da024a71338052e4bbb030",
-    "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
-    "release_head": "8cae3c91125fc6003fcc637a168b827adb57287f"
+    "candidate_commit": "554087ee7401c8ea019494273134d92aea6f767a",
+    "main_commit": "554087ee7401c8ea019494273134d92aea6f767a",
+    "main_carry_pr": 446,
+    "final_main_pin_required": false,
+    "required_tag": "komodo_defi_sdk-v0.9.0",
+    "tag_preflight": "Verify the upstream tag package version and ancestry against this exact pin before app promotion, and again after the main merge."
   },
   "kdf": {
-    "source": "a51d69a11ff937ecf9678e9b37632af578252846",
-    "branch": "dev",
-    "build_config_sha256": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
-    "build_config_note": "SDK caab72b9's build_config.json. SDK 3b462904's (667a9e28\u2026) differs only in its coins section.",
-    "archives": {
-      "web": [
-        "5389d81b8ab6f126caa24782e4f8f15c5205cc7b5103c9602d8e5b554e390c51"
-      ],
-      "ios": [
-        "fb6f7a42cf43506478cd4cc7e398f0bde3a118778e03c2694ddefefc5e4c9c37"
-      ],
-      "macos": [
-        "62fe0d767548987ecb901e4182f6d88efb65d019ceba20ab8510ce4d7a1e8626"
-      ],
-      "android-armv7": [
-        "f5daf08c2089cefaa9c78ad9bdfb4895f452cfd0f27e368f4306298064797b3b"
-      ],
-      "android-aarch64": [
-        "7b4b30d98ecc4b0a9fdc1a9b9a7a562c6269450f16087f82459239fe61dfe738"
-      ],
-      "linux": [
-        "522fb3a5ec0524588be10a2fc71085b87d9333b459e68e52baef64f7ff13eb52"
-      ],
-      "windows": [
-        "2f8a7f7ba3c659aaa685db9363b1d42cef5574a8a945e0d63b2e4bbcd222a0ef"
-      ]
+    "source": "f9632e0ec771668a6f21b37aede01a30110141cb",
+    "branch": "main",
+    "release": "v3.2.0-beta",
+    "version": "Komodo DeFi Framework: 3.2.0-beta_f9632e0",
+    "previous_source": "a51d69a11ff937ecf9678e9b37632af578252846",
+    "source_delta": "Only CHANGELOG.md differs from the previous pin; no engine runtime source change.",
+    "artifact_record": "https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/554087ee7401c8ea019494273134d92aea6f767a/docs/KDF_ARTIFACTS_2026-11-13.json",
+    "archive_sha256": {
+      "web": "a661362498a434ef29b4578bbab80edfc65086045cf19a3b8abb882f3d5e61f1",
+      "ios": "d59f17e446854d5de6fc57ac2831e89dc4c7ee7f1f9266a2abce1cfe9e21ec93",
+      "macos": "6dfc9149ac7b1017e518163788fe8c8a6d45c1270aae66cc74b83f8e20d34835",
+      "android-armv7": "4ed0faff8d258f1db77c5babeca24b0a861878ec3babc48fdff8558db0fe0e46",
+      "android-aarch64": "661c98a26e846c9be5d3b387e0c82a7d5d043b61188deda643ec6a58db317d89",
+      "linux": "dac943647d2f307204a6a01a6a5c34e33c00e8695b88e1ceaf2a7893eba50ff2",
+      "windows": "61b9b981744f6d252cb36dbdc125b9d98ee4896bede6053f19426c93a56004e6"
     },
-    "workflow_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/41650681364",
-    "artifact_provenance": "sdk/docs/KDF_ARTIFACTS_2026-11-03.json",
-    "upstream_tests": "All17 jobs passed in run41650695853 attempt10 at exact a51d69a. Original Linux Tendermint timeout and macOS Telegram assertion failure are retained alongside one passing actual retry each. Apple capacity cancellations never acquired runners.",
-    "atomic_refund_defaults": {
-      "eth_payment": 155000,
-      "eth_sender_refund": 125000,
-      "source": "mm2src/coins/eth.rs gas_limit module at a51d69a11ff937ecf9678e9b37632af578252846",
-      "eth_rs_git_blob": "73ccdeb00aed5d1bcf98d0ea8b3a1d7a9b6dce83",
-      "comparison": "eth.rs is unchanged from e40ac2f; ETH_PAYMENT=155000 and ETH_SENDER_REFUND=125000. Unconditional ERC-20 payment amount validation retained."
-    },
-    "previous_rc_source": "e40ac2fb4319d352bf9c93683eb2518ce9f939e0",
-    "historical_previous_rc_disposition": {
-      "accepted_by": "release owner",
-      "date": "2026-10-29",
-      "scope": "RC testing only; upstream failures remain production gates",
-      "regression_assessment": "Three Z-coin activation tests passed on pre-merge dev 6afb05f4 in run 31990542840 and fail now: confirmed CI regression, code/infrastructure cause unassigned. Most other integration failures pre-existed. Sia regression unconfirmed; no runtime-source delta from previous RC 35f0bde."
-    },
-    "upstream_test_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/41650695853"
+    "payment_gas": 155000,
+    "sender_refund_gas": 125000
   },
   "coins": {
     "bundled_source": "cc8249e85e54467bc2684c2712857711eab55fd2",
@@ -135,12 +76,11 @@
     "doc": "RELEASE_0.10.0_PRODUCTION_BUILD.md"
   },
   "distribution_evidence_still_required": [
-    "final app and SDK main commits",
-    "signed output hashes and signatures",
-    "final build configuration as built (integrator decided: production_build_overrides)",
-    "required gate dispositions and install/upgrade verification",
-    "approved LI.FI text live at https://privacy.gleec.com/tos_lifi_gleec_wallet.md before publication",
-    "proxy/backend deployment provenance and capacity/recovery evidence for the production KDP routes"
+    "Signed packaged outputs, detached signatures and signed SHA256SUMS at least to the 0.9.7-1 standard.",
+    "Fresh-install and upgrade verification on every advertised signed platform.",
+    "Charl tests the signed builds and confirms KDF collects the production LI.FI fees (178 + 22 bps), then authorizes publication.",
+    "Legal-owner approval of the hosted LI.FI terms; their HTTP availability and bytes alone are not approval evidence.",
+    "Production KDP /lifi key/configuration and backend provenance/capacity/recovery evidence."
   ],
   "merge_strategy": {
     "pull_requests_into_dev": "squash",
@@ -530,5 +470,151 @@
     "base_rc": "928db11549b0e9c299b9babd80e425c016a3fa00",
     "scope": "Remove staging profile/preview choices and reject staging before builds. Production runtime defaults, SDK, KDF and coins remain unchanged.",
     "validation_record": "Release PR #3575 records the accepted source/carry and current preview."
+  },
+  "draft_finalization_2026_11_13": {
+    "owner_authorization": "Complete preparation, select KDF main f9632e0, use an override for missing approval only after checks pass, merge the app with a merge commit, create tag 0.10.0 and a draft GitHub release. No publication or production deployment.",
+    "sdk_main_commit": "554087ee7401c8ea019494273134d92aea6f767a",
+    "sdk_tag": "komodo_defi_sdk-v0.9.0",
+    "app_release_pr": 3575,
+    "publication": "draft only",
+    "served_files_sha256": {
+      "assets/packages/komodo_defi_framework/app_build/build_config.json": "86d016de7fa7da5ff3d32bff43892121a54e3b918e31035b6a612a9a85cba161",
+      "assets/packages/komodo_defi_framework/assets/config/coins_config.json": "70f9191b8152c49b61cf2f5f45008fdd4e996ff10ee2c82bce73e9c6bb1d4976",
+      "assets/packages/komodo_defi_framework/assets/config/coins.json": "652be7d79b27d53fa4f6096217358c94213fd71af7bcc20a6c934b7171026d47",
+      "assets/packages/komodo_defi_framework/assets/config/seed_nodes.json": "9f8a0ebdfdea513844a72b1bcae01948cdf8f231ba0bd4e505b6d18d2e15f354",
+      "kdf/kdf/bin/kdflib.d.ts": "f5fe0b1a44d35cc28ee3ee29b55a162a6fbb65ae4f2eaa1e4afe53e5ba636851",
+      "kdf/kdf/bin/kdflib.js": "cbeda42d407d11d59730f4b5ec85bd18e2a6c2eb2e2fc7e65c0381788de91776",
+      "kdf/kdf/bin/package.json": "6ea6bbaa7ba699935182b3096d984a6f7f733e93c5cf07315c7f15dd9a818be6",
+      "kdf/kdf/bin/kdflib_bg.wasm.d.ts": "b21c15e4c0af09ea3ba14bf2c388f98bb5772595dcd8245df992354ccefdec05",
+      "kdf/kdf/bin/snippets/libp2p-wasm-ext-7e5f5edb880ee0f5/src/websockets.js": "bd1472d656c119fdbe76333c56098c0295d913e5c532ef583efda1a59db41a5a",
+      "kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline1.js": "e8bccdb5f7ea2a2affcc10bfff045989d40490101a0575290a30d53009902f0a",
+      "kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline0.js": "fcaa05077e433b5cfb174377954dfe44cd466be81336b965c8e885395ca9f90e",
+      "kdf/kdf/bin/snippets/web3-3a881fca17d19cd8/inline0.js": "e0bb201521f4b8f1376499755278783ad46f4cc7a86bc803fef2dc5b6d264ba9",
+      "kdf/kdf/bin/kdflib_bg.wasm": "4e54b31ee12b43b023c3c63eb9533d8da41710ae793b39fe5a6504e79217be8a"
+    },
+    "legal_availability_bypass": false,
+    "production_approved": false,
+    "lifi_terms": {
+      "url": "https://privacy.gleec.com/tos_lifi_gleec_wallet.md",
+      "retrieved_on": "2026-11-13",
+      "version": "1.0",
+      "effective": "2026-11-06",
+      "sha256": "343d3565d8d4a42cb7623bb616677bbdbd4b721a7782aaa1b87fb88bc89c4104",
+      "availability": "HTTP 200; full hosted terms retrieved",
+      "approval": "Legal-owner approval is separate from retrieval."
+    },
+    "local_validation": {
+      "sdk_suites": 16,
+      "sdk_passed": 3129,
+      "sdk_skipped": 14,
+      "app_unit_summary": "05:03 +4015 ~4: All tests passed!",
+      "analysis": {
+        "error": 0,
+        "warning": 55,
+        "info": 2130
+      },
+      "lockfile_unchanged": true,
+      "changed_dart_formatting": "passed"
+    },
+    "hosted_validation_record": "Current-head checks and refreshed preview identity are recorded in PR #3575 and the focused carry PR; previous a51d69a results do not qualify f9632e0.",
+    "historical_2026_11_04_inputs": {
+      "status": "Accepted RC runtime snapshot 3f2058c8 with frozen SDK caab72b9 (tree of SDK #435 merge bb5b4187; release-0.9.0 8cae3c91 adds only changelogs and release docs) and coins cc8249e8. The session follow-ups, the final coins roll, the Trezor default-coins fix and the SDK build-log redaction passed the full local app gate on both branches; the da3214d8 hosted qualification and preview do not cover this head. Docs-only merges #3591 (4d52eb0e) and the handover update change no runtime input. Owner dispositions and the production integrator decision of 4 November are in owner_dispositions; production distribution keeps the gates in distribution_evidence_still_required. Not a published artifact manifest.",
+      "app": {
+        "version": "0.10.0+0",
+        "integration_source": "5202777ea23ec38acf26c5e344e5eb36cdf75130",
+        "previous_published_tag": "0.9.7-1",
+        "lockfile_sha256": "01455a499d30d836e4a6e5f74fb7c0a7f35ddb0a6b2896acb1058813ffa06be7",
+        "integration_squash_commit": "653ab9000eff9828a03950e63f5969aa9e675ef6",
+        "release_branch": "release-0.10.0",
+        "runtime_validation_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
+        "candidate_commit_record": "release PR head and deployed rc-test-build.json (avoids a self-referential manifest hash)",
+        "sdk_pointer_dev_pr": 3586,
+        "sdk_pointer_release_pr": 3587,
+        "atomic_trading_restoration_pr": 3579,
+        "tested_source_commit": "d732a2c127e3734bde1d0bb2903720ab315aa0bd",
+        "previous_runtime_validation_commit": "5d5cc5c480f8389ce2f9e4b820e5ec2bdfb6a42c",
+        "previous_tested_source_commit": "33bf94a7cc4ed9b4ba5bc04f2694a344445908a1",
+        "accepted_development_commit": "1249c500c96a7dc139ae7b86d8667e8304bd6a1b",
+        "accepted_release_commit": "3f2058c801d823eceb5d5dcadbb9324e163d9115",
+        "accepted_runtime_tree": "b0483953af99d9ac8d11f590bad22635f995a515",
+        "previous_sdk_pointer_dev_pr": 3576,
+        "previous_sdk_pointer_release_pr": 3577
+      },
+      "sdk": {
+        "version": "0.9.0",
+        "integration_source": "03a3cb1adf666952a16f0cd80e67b8173076f4c1",
+        "final_main_pin_required": true,
+        "preparation_commit": "cc9a585504ab2cd723043399937ac04e1dee4dd1",
+        "preparation_pr": 409,
+        "promotion_pr": 416,
+        "integration_squash_commit": "76140abb2312f6c306c3118a2cd619c8985e64a3",
+        "candidate_commit": "caab72b973c3fa74a4b6a11a663e4e67798023e1",
+        "melos_validation_pr": 411,
+        "release_branch": "release-0.9.0",
+        "runtime_validation_commit": "e849cd0de5b59aa6ebe49f5e137c9af6184604e8",
+        "previous_dev_headed_rc_pr": 410,
+        "final_main_pin_required_for": "production distribution, after SDK review/promotion; frozen RC uses candidate_commit",
+        "recovery_pagination_pr": 417,
+        "release_repair_pr": 418,
+        "previous_frozen_candidate_commit": "55bd00c64f5721177d26a78df297751b4b61f540",
+        "candidate_pin_status": "Exact accepted SDK RC pin: the head of logging carry #435 (normal merge bb5b4187 onto release-0.9.0), consumed by app RC carry #3589. It descends from the KDF roll (#430/#431), the session follow-ups (#437/#438) and the final coins roll (#439/#440).",
+        "kdf_roll_dev_pr": 430,
+        "kdf_roll_release_pr": 431,
+        "artifact_roll_validation_commit": "0766626bb3db6706ecb177a921752029630b6412",
+        "previous_kdf_roll_dev_pr": 419,
+        "previous_kdf_roll_release_pr": 420,
+        "previous_kdf_roll_dev_squash_commit": "d111063426266e6b967b88f0f7a8598d1017b73e",
+        "kdf_roll_dev_squash_commit": "db73613cd34a2c0779da024a71338052e4bbb030",
+        "kdf_roll_release_merge_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+        "release_head": "8cae3c91125fc6003fcc637a168b827adb57287f"
+      },
+      "kdf": {
+        "source": "a51d69a11ff937ecf9678e9b37632af578252846",
+        "branch": "dev",
+        "build_config_sha256": "7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5",
+        "build_config_note": "SDK caab72b9's build_config.json. SDK 3b462904's (667a9e28\u2026) differs only in its coins section.",
+        "archives": {
+          "web": [
+            "5389d81b8ab6f126caa24782e4f8f15c5205cc7b5103c9602d8e5b554e390c51"
+          ],
+          "ios": [
+            "fb6f7a42cf43506478cd4cc7e398f0bde3a118778e03c2694ddefefc5e4c9c37"
+          ],
+          "macos": [
+            "62fe0d767548987ecb901e4182f6d88efb65d019ceba20ab8510ce4d7a1e8626"
+          ],
+          "android-armv7": [
+            "f5daf08c2089cefaa9c78ad9bdfb4895f452cfd0f27e368f4306298064797b3b"
+          ],
+          "android-aarch64": [
+            "7b4b30d98ecc4b0a9fdc1a9b9a7a562c6269450f16087f82459239fe61dfe738"
+          ],
+          "linux": [
+            "522fb3a5ec0524588be10a2fc71085b87d9333b459e68e52baef64f7ff13eb52"
+          ],
+          "windows": [
+            "2f8a7f7ba3c659aaa685db9363b1d42cef5574a8a945e0d63b2e4bbcd222a0ef"
+          ]
+        },
+        "workflow_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/41650681364",
+        "artifact_provenance": "sdk/docs/KDF_ARTIFACTS_2026-11-03.json",
+        "upstream_tests": "All17 jobs passed in run41650695853 attempt10 at exact a51d69a. Original Linux Tendermint timeout and macOS Telegram assertion failure are retained alongside one passing actual retry each. Apple capacity cancellations never acquired runners.",
+        "atomic_refund_defaults": {
+          "eth_payment": 155000,
+          "eth_sender_refund": 125000,
+          "source": "mm2src/coins/eth.rs gas_limit module at a51d69a11ff937ecf9678e9b37632af578252846",
+          "eth_rs_git_blob": "73ccdeb00aed5d1bcf98d0ea8b3a1d7a9b6dce83",
+          "comparison": "eth.rs is unchanged from e40ac2f; ETH_PAYMENT=155000 and ETH_SENDER_REFUND=125000. Unconditional ERC-20 payment amount validation retained."
+        },
+        "previous_rc_source": "e40ac2fb4319d352bf9c93683eb2518ce9f939e0",
+        "historical_previous_rc_disposition": {
+          "accepted_by": "release owner",
+          "date": "2026-10-29",
+          "scope": "RC testing only; upstream failures remain production gates",
+          "regression_assessment": "Three Z-coin activation tests passed on pre-merge dev 6afb05f4 in run 31990542840 and fail now: confirmed CI regression, code/infrastructure cause unassigned. Most other integration failures pre-existed. Sia regression unconfirmed; no runtime-source delta from previous RC 35f0bde."
+        },
+        "upstream_test_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/41650695853"
+      }
+    }
   }
 }

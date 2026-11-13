@@ -1,5 +1,13 @@
 # Gleec Wallet 0.10.0 RC: tester and reviewer handoff
 
+Current handoff updated 13 November: the owner selected official KDF main
+`f9632e0`, SDK main `554087ee7401c8ea019494273134d92aea6f767a` (SDK #446), and completion as a
+**draft** GitHub release. The current input/checklist/build records and PR #3575
+supply the refreshed validation and preview identity. Older dated acceptance,
+preview, pin and authorization statements below remain historical. Signed
+installs/upgrades, fee collection and publication are still pending.
+
+
 Updated 6 November 2026. This candidate is available for code review and a
 controlled testing round. Production promotion remains gated below. The release
 owner sends invitations; this handoff does not request reviews or contact testers.

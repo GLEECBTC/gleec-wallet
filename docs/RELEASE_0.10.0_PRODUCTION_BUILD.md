@@ -4,25 +4,29 @@ This is for the release owner who builds, signs and publishes 0.10.0 on a
 private machine. No workflow in this repository signs or publishes: CI builds
 unsigned validation artifacts, and its signing steps only run in the upstream
 KomodoPlatform repository. Every value below was checked against this release's
-tree on 4 November 2026; LI.FI profile instructions were updated on 6 November
-for the owner-requested carry of wallet #3585 and the production-only follow-up.
+tree on 4 November 2026; LI.FI instructions were updated on 6 November.
+The 13 November finalization selects official KDF main f9632e0 and the SDK
+main carry below. GitHub release creation is draft-only until distribution
+gates pass.
 
 ## Order
 
 Follow the checklist's
-[promotion order](RELEASE_0.10.0_CHECKLIST.md#freeze-boundary-and-promotion-order):
+[current draft-finalization record](RELEASE_0.10.0_CHECKLIST.md):
 
-1. **Done:** SDK #416 (`release-0.9.0` → `main`) merged with a merge commit as
-   `09bde8c6978433d509ffabe6696d495fe5923745`.
-2. **Done for this RC:** #3603 pinned `sdk` to that SHA in `release-0.10.0`
-   with a merge commit, and its preview showed the runtime unchanged. App
-   `dev` was deliberately not repinned (see #3575).
-3. Merge app #3575 (`release-0.10.0` → `main`) with a merge commit.
-4. Tag `komodo_defi_sdk-v0.9.0` and the approved package tags on the SDK
-   `main` SHA. Then run the
-   [GitHub release preflight](BUILD_RELEASE.md#github-release-preflight) on the
-   app `main` commit; it fails until that tag exists.
-5. Build, sign and verify from the app `main` commit as below, then publish.
+1. **Done:** SDK #416 promoted SDK 0.9.0 into main as `09bde8c6`.
+2. **Done:** SDK #446 carries the official KDF main build onto SDK main
+   `554087ee7401c8ea019494273134d92aea6f767a`. The required tag
+   `komodo_defi_sdk-v0.9.0` points to that validated commit; the app release
+   branch pins it. Earlier #3603 pins are historical.
+3. Complete source preparation and all current app checks before merging
+   #3575 (`release-0.10.0` → `main`) with a merge commit. The owner authorizes
+   overriding missing approval only; no failed check is waived.
+4. Verify the main merge has the tested tree and rerun the
+   [SDK tag preflight](BUILD_RELEASE.md#github-release-preflight), then create
+   app tag `0.10.0` at that exact main commit and the prepared **draft** release.
+5. Build, sign and verify from that recorded app main commit as below.
+   Publish only after the remaining distribution checks and owner's go-ahead.
 
 ## Inputs
 
@@ -42,11 +46,12 @@ Follow the checklist's
   packages listed in `.github/actions/releases/setup-linux/action.yml`.
 - **GitHub token:** `export GITHUB_API_PUBLIC_READONLY_TOKEN=<any GitHub token>`.
   Without it, the SDK build transformer uses the unauthenticated GitHub API,
-  which allows 60 requests an hour. The transformer downloads KDF `a51d69a`
+  which allows 60 requests an hour. The transformer downloads KDF `f9632e0`
   from `https://devbuilds.gleec.com`, falling back to `https://nebula.decker.im`,
   and rejects any archive whose SHA-256 differs from `build_config.json`. It
-  downloads coins `cc8249e8` from GitHub. Both mirrors served all seven
-  archives on 4 November.
+  downloads coins `cc8249e8` from GitHub. All seven primary-mirror archives were
+  independently checked against GitHub v3.2.0-beta release asset digests and
+  mirror sidecars on 13 November.
 - **Firebase:** apply the production Firebase configuration patch described in
   [FIREBASE_SETUP.md](FIREBASE_SETUP.md). The committed placeholder files turn
   Analytics off without any warning.
@@ -169,7 +174,7 @@ Follow [SIGN_RELEASE.md](SIGN_RELEASE.md) and the 0.9.7-1 process. For 0.10.0:
    `build/web`:
 
    ```text
-   7f648ffa210d9aeb0f7d1ab3e9454bf090f0c155383f4241c64b5ea228b712e5  assets/packages/komodo_defi_framework/app_build/build_config.json
+   86d016de7fa7da5ff3d32bff43892121a54e3b918e31035b6a612a9a85cba161  assets/packages/komodo_defi_framework/app_build/build_config.json
    70f9191b8152c49b61cf2f5f45008fdd4e996ff10ee2c82bce73e9c6bb1d4976  assets/packages/komodo_defi_framework/assets/config/coins_config.json
    652be7d79b27d53fa4f6096217358c94213fd71af7bcc20a6c934b7171026d47  assets/packages/komodo_defi_framework/assets/config/coins.json
    9f8a0ebdfdea513844a72b1bcae01948cdf8f231ba0bd4e505b6d18d2e15f354  assets/packages/komodo_defi_framework/assets/config/seed_nodes.json
@@ -181,7 +186,7 @@ Follow [SIGN_RELEASE.md](SIGN_RELEASE.md) and the 0.9.7-1 process. For 0.10.0:
    e8bccdb5f7ea2a2affcc10bfff045989d40490101a0575290a30d53009902f0a  kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline1.js
    fcaa05077e433b5cfb174377954dfe44cd466be81336b965c8e885395ca9f90e  kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline0.js
    e0bb201521f4b8f1376499755278783ad46f4cc7a86bc803fef2dc5b6d264ba9  kdf/kdf/bin/snippets/web3-3a881fca17d19cd8/inline0.js
-   3224d8c5652a4ee1624bd44b9be940d06a168d23666e39243b814ada5fe34570  kdf/kdf/bin/kdflib_bg.wasm
+   4e54b31ee12b43b023c3c63eb9533d8da41710ae793b39fe5a6504e79217be8a  kdf/kdf/bin/kdflib_bg.wasm
    ```
 
 4. **App:** Settings shows 0.10.0 and the commit, a fresh install asks for the
@@ -204,9 +209,10 @@ before building the next target.
 
 - **Before:**
   - `https://privacy.gleec.com/tos_lifi_gleec_wallet.md` must serve Ilya's
-    approved LI.FI text. On 4 November it was still the placeholder, with its
-    marker removed for RC testing, so the app accepts it like final terms. The
-    owner expects the final text to be live by publication.
+    approved LI.FI text. On 13 November it served version 1.0, effective
+    6 November, with SHA-256 `343d3565d8d4a42cb7623bb616677bbdbd4b721a7782aaa1b87fb88bc89c4104`.
+    Recheck those bytes and legal-owner approval before publication; availability
+    alone does not establish approval.
   - The production KDP `/lifi` route must hold the production LI.FI key.
   - Hand the signed builds to Charl first. He tests them and confirms that KDF
     collects the LI.FI fees (`gleec-dex-production`, 178 + 22 bps). Publish
