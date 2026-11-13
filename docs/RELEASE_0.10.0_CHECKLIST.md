@@ -1,12 +1,56 @@
 # Gleec Wallet 0.10.0 release checklist
 
-Current record audited 4 November 2026, with inputs from the 3 November roll.
+Current draft-finalization record: 13 November 2026; dated earlier records follow.
 App `0.10.0+0` and SDK `0.9.0` are release
 candidates. Last published app: `0.9.7-1`; unpublished 0.9.8 fixes are included.
 Use the [tester/reviewer handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) for the
 preview, reporting instructions and controlled testing restrictions. The
 [input manifest](RELEASE_0.10.0_INPUTS.json) is preparation evidence, not a
 published signed-artifact manifest.
+
+## Draft finalization — 13 November 2026
+
+The owner authorized completing preparation, merging #3575 with a merge commit
+and an override for missing approval only after current checks pass, then
+creating tag `0.10.0` and a **draft** GitHub release. The public latest release
+stays `0.9.7-1`; production deployment and publication remain separate.
+
+- [x] Selected official KDF main `f9632e0ec771668a6f21b37aede01a30110141cb`
+  (`v3.2.0-beta`). Only KDF's changelog differs from `a51d69a`.
+- [x] SDK #446 carries #433's reviewed JSON/YAML pin and seven checksum changes
+  onto SDK main. App pins accepted main `554087ee7401c8ea019494273134d92aea6f767a`;
+  the SDK version remains 0.9.0 and coins remain `cc8249e8`.
+- [x] Independently checked all seven release archive digests, mirror sidecars,
+  archive integrity/contents, compiled commit markers and the native version.
+  The current input manifest and SDK's 13 November artifact record retain proof.
+- [x] Reused app #3588's exact engine-pin regression, audited unchanged payment/
+  refund gas defaults, and corrected iOS setup to use the installed device SDK.
+- [x] Recorded local SDK/app checks and the unchanged enforced lockfile in the
+  current input manifest. Earlier a51 results are historical qualification.
+- [x] Prepared the complete [GitHub draft notes](RELEASE_0.10.0.md), production
+  build guide and new 13-file served hash list before app promotion.
+- [x] Retrieved hosted LI.FI terms version 1.0, effective 6 November, on
+  13 November; SHA-256 `343d3565d8d4a42cb7623bb616677bbdbd4b721a7782aaa1b87fb88bc89c4104`.
+  Retrieval confirms availability, separately from the legal owner's approval.
+
+The initial 13 November carry GUI run failed `failure_taker_order` on Chrome
+and Safari after the swap's success/payment assertions passed: its history
+check waited a fixed five seconds for a subscription refreshed every ten
+seconds. The focused test repair waits for the row with a 60-second bound,
+then keeps the same exactly-one-row assertion. It changes no app runtime or
+settlement assertion. Preserve run `43461084482` and require fresh current-head
+browser qualification; the initial unit/coverage job passed separately.
+
+Before merging, the focused carry and #3575 must pass every current hosted
+check, including native builds, both browser suites and the refreshed preview.
+Record accepted SHAs and check/preview evidence in the PR metadata. Verify the
+SDK tag preflight before promotion and again against the app main merge.
+
+Signed packaging, installation/upgrade tests, Charl's fee-collection check and
+production provider/legal approval remain distribution gates. A draft does
+not mark them complete. Keep the RC testing channel and update endpoint until
+actual publication. The older dated records below retain their original
+revisions and authorization statements; this section is the current instruction.
 
 ## LI.FI production-default carry — 6 November 2026
 

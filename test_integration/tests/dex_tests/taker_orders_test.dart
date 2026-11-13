@@ -133,7 +133,7 @@ Finder _infiniteBidFinder() {
 
 Future<void> _testSwapHistoryTable(
   WidgetTester tester, {
-  Duration timeout = const Duration(milliseconds: 5000),
+  Duration timeout = const Duration(seconds: 60),
 }) async {
   print('🔍 HISTORY CHECK: Starting history table verification');
 
@@ -146,9 +146,17 @@ Future<void> _testSwapHistoryTable(
   await tester.tapAndPump(historyTab);
   print('🔍 HISTORY CHECK: Opened history tab');
 
-  await tester.pump(timeout);
+  // History subscribes when this tab mounts; its next trading refresh runs
+  // on a ten-second timer. A fixed five-second delay can assert before that
+  // snapshot arrives, even though the details page already reports success.
+  final historyItem = find.byType(HistoryItem);
+  await tester.pumpUntilFound(
+    historyItem,
+    timeout: timeout,
+    describeTarget: 'the completed swap in the history table',
+  );
   expect(
-    find.byType(HistoryItem),
+    historyItem,
     findsOneWidget,
     reason: 'Test error: Swap history item not found',
   );

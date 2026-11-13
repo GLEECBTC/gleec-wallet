@@ -1,20 +1,21 @@
 # Gleec Wallet v0.10.0 Release Notes
 
-This candidate brings Swap, Activity and Advanced trading into one surface,
+Gleec Wallet 0.10.0 brings Swap, Activity and Advanced trading into one surface,
 with atomic order-book and KDF-executed routed quotes compared after costs.
 It adds durable swap recovery, clearer review/funding evidence and native-Max
 gas headroom, integrates SDK 0.9.0, and includes the macOS startup, market-data
 and phone-balance fixes prepared for the unpublished 0.9.8 release.
 
-This is release preparation. The latest published app release is **0.9.7-1**.
-Final CI, legal/provider availability, review and signed installation gates
-are tracked in [the 0.10.0 checklist](docs/RELEASE_0.10.0_CHECKLIST.md).
+This release is prepared as a **GitHub draft**. Signed downloads, install/upgrade
+qualification and the final LI.FI fee-collection check remain pending in the
+[release checklist](docs/RELEASE_0.10.0_CHECKLIST.md). The latest published app
+release remains **0.9.7-1**.
 
-Updated 6 November 2026 with the LI.FI production-default carry (#3585),
-on the RC based at `94fc2455` and SDK main `09bde8c6`. The
-[post-opening audit](docs/RC_0.10.0_CHANGELOG_AUDIT_2026-11-04.md) maps every
-accepted change through 4 November since PR #3575 opened at `ffcac834`;
-the current release PR records the later SDK-main pin and LI.FI carry.
+Finalized 13 November 2026 with official KDF main `f9632e0` and SDK main
+`554087ee7401c8ea019494273134d92aea6f767a` ([SDK#446](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/446)).
+The [input manifest](docs/RELEASE_0.10.0_INPUTS.json) records the current pins,
+artifact hashes and local qualification. Dated earlier audits retain their
+original revisions; current hosted qualification is recorded on PR #3575.
 
 ## Build and release configuration
 
@@ -28,7 +29,7 @@ the current release PR records the later SDK-main pin and LI.FI carry.
 
 ### SDK Updates (komodo-defi-sdk-flutter)
 
-This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
+This release integrates **SDK 0.9.0**, distributed as one pinned checkout:
 
 - Refreshed the verified KDF engine and frozen coins bundle, adding TAR/TAR-segwit and TEL-BASE, removing TEL-KRC20, updating TEL ERC-20/Polygon contracts and decimals, and preserving GLEEC/GRC-20 Trezor support ([SDK#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430), [SDK#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431)).
 
@@ -55,8 +56,12 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
   hardware routed signing is not established by this change.
 - Correct CoinGecko/CoinPaprika market data, shared bulk price requests and
   encrypted history-cache recovery ([SDK#392](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/392), [SDK#393](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/393), [SDK#401](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/401), [SDK#402](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/402)).
+- **Build-log privacy** — Failed build-time SDK GitHub API calls report whether
+  authentication was used without logging authorization headers
+  ([SDK#434](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/434),
+  [SDK#435](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/435)).
 - Verified frozen coin files/icons and seven-platform KDF rebuild checksums.
-  See the [SDK release-branch changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/release-0.9.0/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/release-0.9.0/docs/RELEASE_0.9.0.md); immutable runtime pins are recorded below.
+  See the [SDK changelog](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/554087ee7401c8ea019494273134d92aea6f767a/CHANGELOG.md) and [migration guide](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/blob/554087ee7401c8ea019494273134d92aea6f767a/docs/RELEASE_0.9.0.md); immutable runtime pins are recorded below.
 
 ## 🐛 Bug Fixes
 
@@ -82,7 +87,7 @@ This release prepares **SDK 0.9.0**, distributed as one pinned checkout:
 
 - **macOS** ([@DeckerSU], #3541) — Sign the KDF helper with hardened runtime and timestamp for notarization. Signed packaging and fresh-install validation remain release gates.
 - **GasFree TRON** ([@CharlVS], #3546, #3549) — Enable production GasFree defaults in ordinary and shared-CI builds. The four production defines remain pinned for release validation.
-- **Frozen Inputs** ([@CharlVS], [#3586](https://github.com/GLEECBTC/gleec-wallet/pull/3586), [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587), [SDK#430](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/430), [SDK#431](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/431), [#3594](https://github.com/GLEECBTC/gleec-wallet/pull/3594), [#3595](https://github.com/GLEECBTC/gleec-wallet/pull/3595), [SDK#439](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/439), [SDK#440](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/440), [SDK#434](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/434), [SDK#435](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/435)) — Accepted SDK `caab72b9` pins KDF `a51d69a` (`3.2.0-beta`), specs `7c388ea` and coins `cc8249e8`. That final coins roll replaces `efd3a647`; it adds Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON, and removes no coin. Failed build-time GitHub API calls in the SDK no longer log authorization headers. Runtime coin updates remain independent. All ten KDF platform builds and 17 test jobs passed; seven archives match independent artifact digests and mirror bytes. The engine retains the ERC-20 payment validation shipped in 0.9.7-1. Earlier `e40ac2f` / `2b0aefb7` inputs are superseded preparation history.
+- **Frozen Inputs** ([@CharlVS], [SDK#433](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/433), [SDK#446](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/446)) — SDK main `554087ee7401c8ea019494273134d92aea6f767a` pins official KDF main `f9632e0` (`3.2.0-beta`), specs `7c388ea` and coins `cc8249e8`. The engine runtime source matches the preceding `a51d69a` candidate; only KDF's changelog differs. All seven archives were checked against independent release digests and mirror sidecars, with archive contents, compiled commit markers and the native version verified. The final coins roll adds Yenten (YTN) and L2 fee models for AVAX, ETH-BASE, MNT and MON, and removes no coin. Runtime coin updates remain independent. The engine retains the ERC-20 payment validation shipped in 0.9.7-1. Earlier engine inputs remain dated preparation history.
 - **RC Previews** ([@CharlVS], [#3587](https://github.com/GLEECBTC/gleec-wallet/pull/3587)) — Enabled ordinary preview updates for hyphenated frozen release branches while retaining the legal-document availability gate.
 
 ## Compatibility and Known Limits
@@ -102,7 +107,7 @@ interim routed-swap APIs.
   retaining its warning and never recording unavailable terms as accepted.
 - **Capability scope:** the pinned routed contract supports LI.FI and eligible
   EVM assets; it has no external-recipient parameter. Additional provider
-  backends and routed hardware signing are not established by this candidate.
+  backends and routed hardware signing are not established by this release.
   Hardware wallets remain wallet-only, as in app 0.9.7-1.
 - **Native Trezor sessions:** after an app restart, a failed engine health
   check can restart the engine signed out, so sign in with the device again.
@@ -113,15 +118,15 @@ interim routed-swap APIs.
   The existing review describes that behavior without inventing a spender,
   exact amount or reset requirement. Start, Advanced orders and bot starts keep
   their previous interaction flow; existing recovery/cancellation stays usable.
-- **Release qualification:** Chrome/Safari checks and the exact pinned KDF jobs
-  passed for the accepted runtime. Final promotion review, approved hosted
-  legal text, signed packaging and install/upgrade evidence retain their
-  checklist gates. Older engine failures remain dated history. Five-person
-  usability and live fiat testing were explicitly deferred; the named Banxa
-  on-ramp quote/selection deferral remains separate from Ramp. Neither is a
-  passing provider test or a claim that the upstream service is available.
+- **Release qualification:** current official-engine checks and preview identity
+  are recorded on release PR #3575. Signed packaging, fresh installation,
+  upgrades and Charl's production LI.FI fee-collection check remain required
+  before publication. Earlier engine results retain their exact revisions.
+  Five-person usability and live fiat testing were explicitly deferred; the
+  named Banxa quote/selection deferral remains separate from Ramp. Neither is
+  a passing provider test or a claim that the upstream service is available.
 
-**Review comparison:** [0.9.7-1...release-0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...release-0.10.0).
+**Full Changelog:** [0.9.7-1...0.10.0](https://github.com/GLEECBTC/gleec-wallet/compare/0.9.7-1...0.10.0).
 
 # Gleec Wallet v0.9.8 — preparation history (unpublished)
 
