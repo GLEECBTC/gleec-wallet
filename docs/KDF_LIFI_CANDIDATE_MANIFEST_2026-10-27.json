@@ -1,0 +1,400 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-10-27T07:03:50.387219+00:00",
+  "wallet_implementation": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+  "sdk": "b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1",
+  "specs": "7c388ea7b91cb7c657435d416bc03e5349b46162",
+  "integrated_prs": {
+    "3554": "e93c11427c3be9454c5627302b7ecc730149f5b5",
+    "3555": "622f3f36ad46016c935ba699895c2de1584c2426",
+    "3556": "ce9e889dd0c6724eaa5e1d05933bc5a6f399d06a"
+  },
+  "wallet_version": "0.9.8+0",
+  "toolchain": {
+    "frameworkVersion": "3.41.4",
+    "channel": "stable",
+    "repositoryUrl": "https://github.com/flutter/flutter.git",
+    "frameworkRevision": "ff37bef603469fb030f2b72995ab929ccfc227f0",
+    "frameworkCommitDate": "2026-03-03 16:03:22 -0800",
+    "engineRevision": "e4b8dca3f1b4ede4c30371002441c88c12187ed6",
+    "engineCommitDate": "2026-03-03 18:24:54.000Z",
+    "engineContentHash": "99578ad0355da00edb26301c874a3c250a5716f5",
+    "engineBuildDate": "2026-03-03 23:41:09.880",
+    "dartSdkVersion": "3.11.1",
+    "devToolsVersion": "2.54.1",
+    "flutterVersion": "3.41.4"
+  },
+  "xcode": "Xcode 26.5\nBuild version 17F42",
+  "host": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "locked_inputs": [
+    {
+      "path": "pubspec.lock",
+      "bytes": 49443,
+      "sha256": "0bb4acf1a6d7e6445c4919219f60b863a3b33faeee2dcc06451e38e1a10c6aef"
+    },
+    {
+      "path": "macos/Podfile.lock",
+      "bytes": 9908,
+      "sha256": "418f90e4c25d6dd67a8e7b3152aad71f09228d049b18905b106ae238d6cf4123"
+    },
+    {
+      "path": "sdk/pubspec.lock",
+      "bytes": 50220,
+      "sha256": "395bf00e867bd1c313a3d5d2d02dfe70dd79abcab91ed65ef788c103f1af68cc"
+    },
+    {
+      "path": "sdk/packages/komodo_defi_framework/app_build/build_config.json",
+      "bytes": 3755,
+      "sha256": "ed3c5332a45dfd5007dbcacf7becf32b7f1bc39b4941df95811decde8649354d"
+    }
+  ],
+  "sdk_workspace_lock_note": "sdk/pubspec.lock is generated and ignored by Git; digest records the local resolved workspace. Published wallet dependencies are pinned by the tracked root pubspec.lock.",
+  "kdf_config": {
+    "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+    "branch": "feat/lifi-integration",
+    "fetch_at_build_enabled": true,
+    "concurrent_downloads_enabled": true,
+    "require_full_commit_hash": true,
+    "required_platforms": [
+      "web",
+      "ios",
+      "macos",
+      "android-armv7",
+      "android-aarch64",
+      "linux",
+      "windows"
+    ],
+    "source_urls": [
+      "https://devbuilds.gleec.com",
+      "https://nebula.decker.im"
+    ],
+    "platforms": {
+      "web": {
+        "matching_pattern": "^(?:kdf_[a-f0-9]{7,40}-wasm|mm2_[a-f0-9]{7,40}-wasm|mm2-[a-f0-9]{7,40}-wasm)\\.zip$",
+        "valid_zip_sha256_checksums": [
+          "0992678b1d320f727f596dbbe3300799008719dedc2dba5d2203959d5bfa8c24"
+        ],
+        "path": "web/kdf/bin"
+      },
+      "ios": {
+        "matching_pattern": "^(?:kdf_[a-f0-9]{7,40}-ios-aarch64|mm2_[a-f0-9]{7,40}-ios-aarch64|mm2-[a-f0-9]{7,40}-ios-aarch64-CI)\\.zip$",
+        "valid_zip_sha256_checksums": [
+          "cb069482dc2c64b0b9915af3bfe87bb967b3df5fd1eea4eccc414602f0efde5c"
+        ],
+        "path": "ios"
+      },
+      "macos": {
+        "matching_pattern": "^(?:kdf-macos-universal2-[a-f0-9]{7,40}|kdf_[a-f0-9]{7,40}-mac-universal)\\.zip$",
+        "matching_preference": [
+          "kdf-macos-universal2-",
+          "mac-universal"
+        ],
+        "valid_zip_sha256_checksums": [
+          "b67d93080bd3dfb87b5614c56cfd7971d3b5463f637f5950d23ed737285e1a17"
+        ],
+        "path": "macos/bin"
+      },
+      "android-armv7": {
+        "matching_pattern": "^(?:kdf_[a-f0-9]{7,40}-android-armv7|mm2_[a-f0-9]{7,40}-android-armv7|mm2-[a-f0-9]{7,40}-android-armv7-CI)\\.zip$",
+        "valid_zip_sha256_checksums": [
+          "f9cfb4efff5112aa674100d6f930f772d2305a0c8c5b8a3dc4d504d4c873fd75"
+        ],
+        "path": "android/app/src/main/cpp/libs/armeabi-v7a"
+      },
+      "android-aarch64": {
+        "matching_pattern": "^(?:kdf_[a-f0-9]{7,40}-android-aarch64|mm2_[a-f0-9]{7,40}-android-aarch64|mm2-[a-f0-9]{7,40}-android-aarch64-CI)\\.zip$",
+        "valid_zip_sha256_checksums": [
+          "9073f52b8652b19be34337c9fa9036a195fd104200ba6e0dd5ca5432c071093e"
+        ],
+        "path": "android/app/src/main/cpp/libs/arm64-v8a"
+      },
+      "linux": {
+        "matching_pattern": "^(?:kdf_[a-f0-9]{7,40}-linux-x86-64|mm2_[a-f0-9]{7,40}-linux-x86-64|mm2-[a-f0-9]{7,40}-Linux-Release)\\.zip$",
+        "valid_zip_sha256_checksums": [
+          "cf0cdfc90f36481b645ef034d0a7c775eb8380c4e1386aa82fb8c01640c55724"
+        ],
+        "path": "linux/bin"
+      },
+      "windows": {
+        "matching_pattern": "^(?:kdf_[a-f0-9]{7,40}-win-x86-64|mm2_[a-f0-9]{7,40}-win-x86-64|mm2-[a-f0-9]{7,40}-Win64)\\.zip$",
+        "valid_zip_sha256_checksums": [
+          "064298f3e743989630321c05ae02dcd1f95dc8df533cfe6c49d26b28464b2d54"
+        ],
+        "path": "windows/bin"
+      }
+    }
+  },
+  "kdf_cached_provenance": {
+    "web": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "0992678b1d320f727f596dbbe3300799008719dedc2dba5d2203959d5bfa8c24"
+      ],
+      "archive_filename": "kdf_35f0bde-wasm.zip",
+      "archive_sha256": "0992678b1d320f727f596dbbe3300799008719dedc2dba5d2203959d5bfa8c24",
+      "artifact_sha256": "d405d59d412a813ed59aa032b391a4d0b73a36c84b16f24aace3de7455389369",
+      "runtime_set_sha256": "bcfa21f93117bc6fd2f0a23ea8567b4647b3e608c8d2a8f021b3e6842b923d6c",
+      "timestamp": "2026-10-27T09:03:07.755922"
+    },
+    "ios": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "cb069482dc2c64b0b9915af3bfe87bb967b3df5fd1eea4eccc414602f0efde5c"
+      ],
+      "archive_filename": "kdf_35f0bde-ios-aarch64.zip",
+      "archive_sha256": "cb069482dc2c64b0b9915af3bfe87bb967b3df5fd1eea4eccc414602f0efde5c",
+      "artifact_sha256": "1b7773127ed902fec80612a99bdfca69a15623a45b46d38a45b42b56a1260a56",
+      "runtime_set_sha256": "f786f53bd55e1d1658be7b43140aaf0d7fd0fa3ae0a02a51c38964e6c5ff8639",
+      "timestamp": "2026-10-26T17:34:29.565990"
+    },
+    "macos": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "b67d93080bd3dfb87b5614c56cfd7971d3b5463f637f5950d23ed737285e1a17"
+      ],
+      "archive_filename": "kdf_35f0bde-mac-universal.zip",
+      "archive_sha256": "b67d93080bd3dfb87b5614c56cfd7971d3b5463f637f5950d23ed737285e1a17",
+      "artifact_sha256": "fec294a63299bf1b8f3cc645307d864ffec377f0b922cdec5d93f5b16c90523b",
+      "runtime_set_sha256": "f6ce310b6c401105d7bb95a8d66fae82ddc9ff59cadafc0c5c537336cfab7d6f",
+      "timestamp": "2026-10-26T17:34:29.105613"
+    },
+    "android-armv7": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "f9cfb4efff5112aa674100d6f930f772d2305a0c8c5b8a3dc4d504d4c873fd75"
+      ],
+      "archive_filename": "kdf_35f0bde-android-armv7.zip",
+      "archive_sha256": "f9cfb4efff5112aa674100d6f930f772d2305a0c8c5b8a3dc4d504d4c873fd75",
+      "artifact_sha256": "858e559a773539c59a5a6721fb7672ae6f28e9353275273021c34c370f437117",
+      "runtime_set_sha256": "a7f3ba8cbc79356542315347fb45820c5a85409150fa0487067337bc3983bfec",
+      "timestamp": "2026-10-26T17:34:34.498227"
+    },
+    "android-aarch64": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "9073f52b8652b19be34337c9fa9036a195fd104200ba6e0dd5ca5432c071093e"
+      ],
+      "archive_filename": "kdf_35f0bde-android-aarch64.zip",
+      "archive_sha256": "9073f52b8652b19be34337c9fa9036a195fd104200ba6e0dd5ca5432c071093e",
+      "artifact_sha256": "05d94f450b93200abd6a0461b3163beda8ab9ba1f09a4fe6cd9ca547fda15421",
+      "runtime_set_sha256": "1d5d5c1133ec40549bbcf07acdb379f68d2346ad4bf7617496443e6ba4e24919",
+      "timestamp": "2026-10-26T17:34:20.958215"
+    },
+    "linux": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "cf0cdfc90f36481b645ef034d0a7c775eb8380c4e1386aa82fb8c01640c55724"
+      ],
+      "archive_filename": "kdf_35f0bde-linux-x86-64.zip",
+      "archive_sha256": "cf0cdfc90f36481b645ef034d0a7c775eb8380c4e1386aa82fb8c01640c55724",
+      "artifact_sha256": "d55201800c5264a5d860b26d913d496bf778da3c9cf5142d51951eb2c42508b4",
+      "runtime_set_sha256": "7919c7c7ecd91f104d6602a117648b0ba9941edfe166d064603227a01b5c55b8",
+      "timestamp": "2026-10-26T17:34:15.668379"
+    },
+    "windows": {
+      "api_commit_hash": "35f0bde438eec2cb0471b19642b9d9c4602fa17d",
+      "checksums": [
+        "064298f3e743989630321c05ae02dcd1f95dc8df533cfe6c49d26b28464b2d54"
+      ],
+      "archive_filename": "kdf_35f0bde-win-x86-64.zip",
+      "archive_sha256": "064298f3e743989630321c05ae02dcd1f95dc8df533cfe6c49d26b28464b2d54",
+      "artifact_sha256": "9ae8dc6dfaed81f30eb6d2648c83736fa38cbec5da38a12bcd743802ca9ca37f",
+      "runtime_set_sha256": "79247451dd75ad967529711c99c07009ea18ee6b635824882aef40c9d2fdf52c",
+      "timestamp": "2026-10-26T17:34:17.115051"
+    }
+  },
+  "coins_policy": {
+    "fetch_at_build_enabled": true,
+    "update_commit_on_build": false,
+    "bundled_coins_repo_commit": "2b0aefb78b184091ab086c66e513d8b03f5d5a01",
+    "coins_repo_api_url": "https://api.github.com/repos/GLEECBTC/coins",
+    "coins_repo_content_url": "https://raw.githubusercontent.com/GLEECBTC/coins",
+    "coins_repo_branch": "master",
+    "runtime_updates_enabled": true,
+    "mapped_files": {
+      "assets/config/coins_config.json": "utils/coins_config_unfiltered.json",
+      "assets/config/coins.json": "coins",
+      "assets/config/seed_nodes.json": "seed-nodes.json"
+    },
+    "mapped_folders": {
+      "assets/coin_icons/png/": "icons"
+    },
+    "concurrent_downloads_enabled": false,
+    "cdn_branch_mirrors": {
+      "master": "https://gleecbtc.github.io/coins",
+      "main": "https://gleecbtc.github.io/coins"
+    }
+  },
+  "coin_files": {
+    "utils/coins_config_unfiltered.json": {
+      "path": "sdk/packages/komodo_defi_framework/assets/config/coins_config.json",
+      "bytes": 1564362,
+      "sha256": "6a1cb3a8c0fc69f2ef2525151238c6433875ce947d8ced78c6411035dc662ea5",
+      "git_blob_sha1": "77679791efb677be55914a791dcd1b0f166f970c",
+      "url": "https://raw.githubusercontent.com/GLEECBTC/coins/2b0aefb78b184091ab086c66e513d8b03f5d5a01/utils/coins_config_unfiltered.json"
+    },
+    "coins": {
+      "path": "sdk/packages/komodo_defi_framework/assets/config/coins.json",
+      "bytes": 383206,
+      "sha256": "ce2e8dbcde41a1a2d398ef9211ec89061d6dfb4e5b75e4293ee536b055e996ee",
+      "git_blob_sha1": "e5f5ff30389ba6df0872cc006eaa6b3bfbffa3ce",
+      "url": "https://raw.githubusercontent.com/GLEECBTC/coins/2b0aefb78b184091ab086c66e513d8b03f5d5a01/coins"
+    },
+    "seed-nodes.json": {
+      "path": "sdk/packages/komodo_defi_framework/assets/config/seed_nodes.json",
+      "bytes": 1930,
+      "sha256": "d1f450fccc2a55b974e205e35042e56f82289a8fd0911cbe310234bef174f80b",
+      "git_blob_sha1": "ae897b2f1ffa833d8f706bedc1459df80f982d0f",
+      "url": "https://raw.githubusercontent.com/GLEECBTC/coins/2b0aefb78b184091ab086c66e513d8b03f5d5a01/seed-nodes.json"
+    }
+  },
+  "coin_icons": {
+    "path": "sdk/packages/komodo_defi_framework/assets/coin_icons/png",
+    "entry_count": 445,
+    "inventory_sha256": "533b51b80daf8532ac73b81d64a0123e88caa4d09699c5b495401cf675ffee3b",
+    "pinned_remote_files": 444,
+    "tracked_empty_placeholder": ".gitkeep",
+    "verified_against": "GitHub contents API at the pinned coins ref; size and Git blob SHA1"
+  },
+  "effective_build_settings": {
+    "LIFI_PROXY_URL": "https://quicknode.gleec.com/lifi",
+    "LIFI_INTEGRATOR_ENABLED": true,
+    "LIFI_INTEGRATOR_NAME": "gleec-dex-staging",
+    "LIFI_INTEGRATOR_FEE_BPS": 178,
+    "LIFI_FEE_BPS": 22,
+    "TRON_GASLESS_ENABLED": true,
+    "TRON_GASLESS_RECEIVE_ENABLED": true,
+    "TRON_GASLESS_BASE_URL": "https://quicknode.gleec.com/gasfree/tron",
+    "TRON_GASLESS_SERVICE_PROVIDER": "TLntW9Z59LYY5KEi9cmwk3PKjQga828ird"
+  },
+  "build_settings_note": "Web/macOS commands use the source defaults; the unit command explicitly supplies all four GasFree defines. These local validation builds do not include private release-service credentials. Human release packaging must record any additional non-secret overrides and secret version references separately.",
+  "local_outputs": {
+    "web": {
+      "command": "flutter build web --release --no-pub --csp --no-web-resources-cdn",
+      "path": "build/web",
+      "entry_count": 847,
+      "inventory_sha256": "ad52a0a137651aa1e6cc9dda0d63a0e9707020c317bd7b4ab51f9b14f4d8219c",
+      "critical_files": [
+        {
+          "path": "build/web/index.html",
+          "bytes": 7013,
+          "sha256": "e58498a90b5d30271eb9712088cef02521fd2c0150b8c4690d0b1b39d9c96325"
+        },
+        {
+          "path": "build/web/main.dart.js",
+          "bytes": 5823978,
+          "sha256": "5373da194c3f1da3f0b397dd30b618aeea09c01ec56a3fa3adf59df389c123c5"
+        }
+      ]
+    },
+    "macos": {
+      "command": "flutter build macos --release --no-pub",
+      "signing": "disabled; unsigned validation only",
+      "environment": {
+        "FLUTTER_XCODE_CODE_SIGNING_ALLOWED": "NO",
+        "FLUTTER_XCODE_CODE_SIGNING_REQUIRED": "NO",
+        "FLUTTER_XCODE_CODE_SIGN_IDENTITY": "",
+        "FLUTTER_XCODE_CODE_SIGN_STYLE": "Manual",
+        "FLUTTER_XCODE_DEVELOPMENT_TEAM": "",
+        "FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER": ""
+      },
+      "path": "build/macos/Build/Products/Release/Gleec DEX.app",
+      "entry_count": 967,
+      "inventory_sha256": "8e0767a61569a0d1989bc056b4019f12c70188cf488cf49af40ff453978d7b0e"
+    }
+  },
+  "inventory_algorithm": "Recursively list files and symlinks sorted by relative path (POSIX). For symlinks: {path,symlink:readlink}. For regular files: {path,bytes,sha256}. SHA256 of UTF-8 JSON array with sort_keys=true and separators=(comma,colon), no trailing newline. No symlink-directory recursion.",
+  "limitations": [
+    "Output hashes identify local unsigned validation artifacts; signing, version changes and platform packaging require new hashes.",
+    "Runtime coin updates, provider responses and network fees remain live.",
+    "Seven archive checksums were retained from prior verified publication; cache provenance and current native/web contents were checked, not seven new archive downloads.",
+    "CI uses hosted runner images. This manifest records local validation toolchains and artifacts, not bit-for-bit reproducibility across operating systems or signing environments."
+  ],
+  "ci_snapshot_at": "2026-10-27T07:09:13.507937+00:00",
+  "ci_snapshot": {
+    "wallet": [
+      {
+        "conclusion": "",
+        "databaseId": 40464113981,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "CharlVS is running UI tests on PR \ud83d\ude80",
+        "status": "in_progress",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464113981"
+      },
+      {
+        "conclusion": "",
+        "databaseId": 40464114059,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "Building desktop apps \ud83d\udda5\ufe0f",
+        "status": "in_progress",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464114059"
+      },
+      {
+        "conclusion": "",
+        "databaseId": 40464113955,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "CharlVS is running unit tests on PR \ud83d\ude80",
+        "status": "in_progress",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464113955"
+      },
+      {
+        "conclusion": "",
+        "databaseId": 40464114249,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "Building mobile apps \ud83d\udcf1",
+        "status": "in_progress",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464114249"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40464114448,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "CharlVS is scanning dependencies for vulnerabilities \ud83d\udd12",
+        "status": "completed",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464114448"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40464114113,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "CharlVS is deploying a preview build to Firebase Hosting \ud83d\ude80",
+        "status": "completed",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464114113"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40464114091,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "CharlVS is validating code guidelines \ud83d\ude80",
+        "status": "completed",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464114091"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40464114143,
+        "headSha": "1643c3323f5ebeb9168b244d969a5e6d6df971a1",
+        "name": "CharlVS is checking wallet load performance \u23f1\ufe0f",
+        "status": "completed",
+        "url": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/40464114143"
+      }
+    ],
+    "sdk": [
+      {
+        "conclusion": "success",
+        "databaseId": 40464029776,
+        "headSha": "b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1",
+        "name": "Deploy Playground to Firebase Hosting on PR",
+        "status": "completed",
+        "url": "https://github.com/GLEECBTC/komodo-defi-sdk-flutter/actions/runs/40464029776"
+      },
+      {
+        "conclusion": "success",
+        "databaseId": 40464029709,
+        "headSha": "b5c1d9db854358b84cfb4b22f0fd86d1ba8780d1",
+        "name": "Flutter package tests (consolidated)",
+        "status": "completed",
+        "url": "https://github.com/GLEECBTC/komodo-defi-sdk-flutter/actions/runs/40464029709"
+      }
+    ]
+  }
+}

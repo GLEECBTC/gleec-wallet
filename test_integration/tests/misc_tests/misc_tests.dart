@@ -8,6 +8,7 @@ import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 import 'feedback_tests.dart';
 import 'menu_tests.dart';
+import 'swap_destinations_test.dart';
 import 'theme_test.dart';
 
 void main() {
@@ -34,6 +35,8 @@ void miscWidgetTests({
       await tester.pumpAndSettle();
       await restoreWalletToTest(tester);
       await testMainMenu(tester);
+      await tester.pumpAndSettle();
+      await testSwapDestinations(tester);
 
       print('END MISC TESTS');
     },

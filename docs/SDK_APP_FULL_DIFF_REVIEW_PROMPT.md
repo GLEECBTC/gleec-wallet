@@ -1,191 +1,84 @@
-# SDK + App Full Diff Review Prompt
+# App 0.10.0 + SDK 0.9.0 release review
 
-You are a blocking senior code review agent. Your job is to fully review two branch diffs in this workspace and write the final findings to a markdown document. This is not a spot check. You must not finish until every changed file in both diffs has been reviewed and the findings document is written.
+Review the complete release diffs for app
+[#3561](https://github.com/GLEECBTC/gleec-wallet/pull/3561) and SDK
+[#410](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/410).
+Use the [current handoff](RC_0.10.0_TESTER_REVIEWER_HANDOFF.md) and
+[release checklist](RELEASE_0.10.0_CHECKLIST.md) for evidence and known gates.
+This is a review assignment; do not change product code or approve a release
+merely because a checklist or suite passes.
 
-## Workspace
+## Resolve exact review scope
 
-- App repo: `/Users/charl/Code/UTXO/gleec-wallet-dev`
-- SDK repo: `/Users/charl/Code/UTXO/gleec-wallet-dev/sdk`
-
-## Exact Review Scope
-
-Review these two diffs:
-
-1. App diff: `dev...polish/05-docs-and-release-notes`
-2. SDK diff: `dev...polish/01-core-foundation`
-
-Branch resolution rules:
-
-- In the app repo, prefer local `polish/05-docs-and-release-notes`; fall back to `origin/polish/05-docs-and-release-notes` only if the local branch does not exist.
-- In the SDK repo, prefer local `polish/01-core-foundation` if it exists; otherwise use `origin/polish/01-core-foundation`.
-- Do not silently substitute any other branch or SHA.
-
-## Required Output
-
-Write the final review to:
-
-- `docs/SDK_APP_DIFF_REVIEW_FINDINGS.md`
-
-The file must be clean Markdown and must be complete before you stop.
-
-## Non-Negotiable Rules
-
-1. Review the entire diff for both repos, not a sample.
-2. Do not stop after finding the first issue.
-3. Do not stop after reviewing only high-risk files.
-4. Do not stop until `docs/SDK_APP_DIFF_REVIEW_FINDINGS.md` exists and includes a reviewed-files appendix covering every changed file from both diffs.
-5. Treat this as a code review, not an implementation task. Do not make product code changes unless explicitly asked.
-6. Do not revert unrelated local changes. The worktree may already be dirty.
-7. The unit suite passes and gates every PR: run `flutter test test_units/main.dart` with the four `TRON_GASLESS_*` dart-defines (see `docs/TESTING.md`). Code review and static analysis are additional evidence, not a substitute. If a suite is red, name the failing test rather than skipping validation wholesale.
-8. Findings are the primary output. If there are no findings, state that explicitly, but only after proving full coverage.
-
-## Review Method You Must Follow
-
-### 1. Resolve refs and capture the exact changed-file lists
-
-Run commands equivalent to the following and keep the resulting file lists as your review checklist:
+Use an isolated checkout of GLEECBTC/gleec-wallet and its SDK gitlink. Fetch app
+and SDK `main`/`dev`, then record the full base/head SHAs before reading patches.
+The SDK must be the intended standalone/submodule repository, not the app-owned
+`packages/` directory.
 
 ```bash
-cd /Users/charl/Code/UTXO/gleec-wallet-dev
-git rev-parse --verify dev
-git rev-parse --verify polish/05-docs-and-release-notes || git rev-parse --verify origin/polish/05-docs-and-release-notes
-git diff --name-status dev...polish/05-docs-and-release-notes || git diff --name-status dev...origin/polish/05-docs-and-release-notes
+# App repository
+git fetch origin main dev
+git rev-parse origin/main origin/dev
+git diff --name-status origin/main...origin/dev
+git diff --stat origin/main...origin/dev
+git log --oneline --no-merges origin/main..origin/dev
+git rev-parse origin/dev:sdk
 
-cd /Users/charl/Code/UTXO/gleec-wallet-dev/sdk
-git rev-parse --verify dev
-git rev-parse --verify polish/01-core-foundation || git rev-parse --verify origin/polish/01-core-foundation
-git diff --name-status dev...polish/01-core-foundation || git diff --name-status dev...origin/polish/01-core-foundation
+# SDK repository (run these within sdk/)
+git fetch origin main dev
+git rev-parse origin/main origin/dev
+git diff --name-status origin/main...origin/dev
+git diff --stat origin/main...origin/dev
+git log --oneline --no-merges origin/main..origin/dev
 ```
 
-Also inspect:
+Freeze those SHAs in subsequent diff commands. If heads move, report the delta
+and review it explicitly. Do not silently use old polish/feature branches or
+substitute an app development SDK pin for the SDK release head. After SDK main
+promotion, separately inspect the final app repin and actual SDK main merge SHA.
 
-- `git diff --stat`
-- `git log --oneline --no-merges dev...<head>`
+## Review method and priorities
 
-### 2. Review every changed file file-by-file
+Keep an explicit checklist of every changed file, including generated code,
+configuration, workflows, dependencies, submodule pointers and documentation.
+Read patches with sufficient callers/models/platform implementations to judge
+behavior. Report findings first; include severity, exact file/line, trigger,
+consequence, evidence and a concrete correction. Deduplicate existing findings
+and link them rather than treating a known blocker as resolved.
 
-For each changed file in each diff:
+Prioritize:
 
-- Read the actual patch.
-- Read enough surrounding code to understand the full behavior.
-- Read dependent callers, callees, models, DTOs, serializers, mappers, extensions, BLoCs, services, repositories, widgets, routes, and docs that are necessary to judge correctness.
-- If a file changes a public API, check downstream usage and compatibility.
-- If a file changes docs or release notes, verify that the claims are accurate, complete, non-misleading, and match actual behavior and migration requirements.
-- If a file changes the SDK or app `sdk` submodule reference, validate the integration implications.
+- Exact asset/network/account identity, decimal precision, provider fees, gas,
+  native Max reserve, minimum and approval/spender scope. Missing evidence must
+  not become a claim that no permission is needed (atomic X04/Q12, #3563).
+- Quote revalidation, worse-minimum acceptance, uncertain starts, asynchronous
+  wallet/pair changes, duplicate submission, stale state and funding changes.
+- Persistence, identity isolation, approvals/payments/refunds, terminal vs delayed
+  statuses, recovery after restart and reliable links/diagnostics.
+- SDK public API/constraint compatibility, typed RPC envelopes, native/web
+  boundaries, part libraries and stable index/build-runner output.
+- Pinned KDF/spec/coin/artifact integrity and security parity with the last
+  published release, including ERC-20 payment validation.
+- Legal availability/consent hashing, preview-only exception isolation, default
+  production gate and absence of fabricated acceptance.
+- Onboarding/auth/Trezor restrictions, balances/history/transfers and failure
+  handling across supported platforms. Explain each real regression, not a
+  hypothetical checklist concern.
+- Accuracy of release claims and evidence: measured vs provider-reported,
+  historical vs current head, blocked/deferred vs passed, unsigned vs signed.
 
-You must maintain a running checklist so no changed file is skipped.
+## Validation and deliverable
 
-### 3. Review for the failure modes below
+Follow repository AGENTS.md and docs/TESTING.md. New app unit files must be
+imported by test_units/main.dart. Use Flutter 3.41.4 and the four production
+GasFree defines for that aggregator. SDK validation uses the prepared Melos
+workspace (7.8.1), native package suites and relevant WASM suites. Preserve
+lockfiles and unrelated changes. Name exact failures and skipped cases; a setup
+failure is not a failed product test and does not pass that surface either.
 
-Check for all of these, wherever relevant:
-
-- Logic bugs
-- Behavioral regressions
-- Missing edge-case handling
-- Null-safety mistakes
-- Async race conditions and stale state
-- Stream/subscription lifecycle leaks
-- BLoC event/state inconsistencies
-- Incorrect default values or fallback behavior
-- Serialization/deserialization mismatches
-- RPC contract breakage
-- Breaking public API changes without migration handling
-- Persistence or schema migration issues
-- Numeric precision, rounding, fee, and amount-validation bugs
-- Auth, wallet, seed, and privacy/security regressions
-- Platform-specific issues across Web, Android, iOS, macOS, Linux, and Windows where applicable
-- Navigation, lifecycle, and restoration issues
-- Error handling gaps and swallowed failures
-- Incorrect loading, retry, timeout, or offline behavior
-- Docs/release-note inaccuracies, missing caveats, or unsafe instructions
-
-### 4. Run static analysis
-
-Run static analysis where feasible and record the results in the report:
-
-```bash
-cd /Users/charl/Code/UTXO/gleec-wallet-dev
-flutter analyze
-
-cd /Users/charl/Code/UTXO/gleec-wallet-dev/sdk
-flutter analyze
-```
-
-If analysis fails because of pre-existing issues, separate pre-existing noise from diff-related findings as clearly as possible. Do not use failing tests as a reason to reduce review depth.
-
-### 5. Cross-check app and SDK together
-
-Do not review the SDK and app in isolation only. Also check for cross-repo mismatch risk, including:
-
-- SDK API/model changes that would break app assumptions
-- App docs or release notes that describe behavior not supported by the SDK diff
-- Missing release note callouts for breaking changes, migrations, config changes, or user-visible behavior changes
-- Submodule pointer changes that do not line up with the reviewed SDK branch intent
-
-## Output Format for `docs/SDK_APP_DIFF_REVIEW_FINDINGS.md`
-
-Use this structure:
-
-### 1. Scope
-
-- Exact repos and diffs reviewed
-- Exact refs resolved
-- Review date
-
-### 2. Review Summary
-
-- Overall verdict
-- Count of findings by severity
-- Key risk themes
-
-### 3. Findings
-
-List findings first, ordered by severity highest to lowest.
-
-For each finding, include:
-
-- Finding ID
-- Severity: `Blocker`, `High`, `Medium`, or `Low`
-- Repo: `App` or `SDK`
-- Diff: exact diff reviewed
-- File path and 1-based line numbers
-- Clear title
-- Why this is a bug, regression, or missing edge-case handling
-- Concrete scenario or failure mode
-- Recommended fix direction
-
-If there are no findings, this section must say `No findings after full diff review`, and the rest of the document must still prove that the review was completed.
-
-### 4. Static Analysis
-
-- App `flutter analyze` result
-- SDK `flutter analyze` result
-- Note any diff-related analyzer issues separately from pre-existing issues
-
-### 5. Residual Risks and Verification Gaps
-
-- Anything that could not be fully proven by static review alone
-- Any high-risk assumptions that deserve manual verification
-
-### 6. Reviewed Files Appendix
-
-This appendix is mandatory.
-
-Create a table with one row for every changed file from both diffs.
-
-Columns:
-
-- Repo
-- Diff
-- Status (`Reviewed`)
-- File
-- Findings (`None` or comma-separated Finding IDs)
-- Notes
-
-Do not stop until every changed file from both diffs appears in this appendix.
-
-## Review Standard
-
-Your standard is: if this merged into `dev`, what could break, regress, mislead users, or fail on edge cases?
-
-Be skeptical. Read broadly enough around the changed code to make a defensible judgment. Do not declare completion until both diffs are fully covered and the markdown report is written.
+Write findings to `docs/SDK_APP_DIFF_REVIEW_FINDINGS.md` in the review checkout,
+with resolved SHAs, file-coverage appendix, tests actually run and limitations.
+State no findings only when the full stated scope was reviewed. Keep funded
+wallet evidence private. A person presses any control committing real funds.
+Independent reviewers may split work by explicit file/domain ownership, then
+reconcile coverage and cross-boundary findings before sign-off.

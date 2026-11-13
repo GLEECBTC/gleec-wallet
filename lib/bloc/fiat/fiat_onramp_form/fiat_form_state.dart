@@ -110,7 +110,9 @@ final class FiatFormState extends Equatable with FormzMixin {
   bool get isLoadingCurrencies => fiatList.length < 2 || coinList.length < 2;
 
   /// Whether the form is in a loading state
-  bool get isLoading => isLoadingCurrencies || status == FiatFormStatus.loading;
+  bool get isLoading =>
+      status != FiatFormStatus.failure &&
+      (isLoadingCurrencies || status == FiatFormStatus.loading);
 
   /// Whether the form can be submitted
   bool get canSubmit =>

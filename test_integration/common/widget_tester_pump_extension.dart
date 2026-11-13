@@ -16,17 +16,13 @@ extension WidgetTesterPumpExtension on WidgetTester {
 
   /// Pumps frames until [finder] matches, without ever waiting for idle.
   ///
-  /// [pumpUntilVisible] calls `pumpAndSettle` on each turn, which is right
-  /// while the app is quiet between actions and wrong while something on
-  /// screen is animating: `pumpAndSettle` only returns once the tree stops
-  /// scheduling frames, and it gives up with `pumpAndSettle timed out` after
-  /// its own ten-minute default.
-  ///
-  /// A swap in progress animates continuously, so it never goes idle and that
-  /// default fires first - no matter what deadline the caller wrapped around
-  /// it. This advances one frame at a time instead and only asks whether the
-  /// target is there yet, so the deadline the caller asked for is the deadline
-  /// that applies.
+  /// `pumpAndSettle` only returns once the tree stops scheduling frames, and
+  /// it gives up with `pumpAndSettle timed out` after its own ten-minute
+  /// default. A swap in progress animates continuously, so it never goes idle
+  /// and that default fires first - no matter what deadline the caller wrapped
+  /// around it. This advances one frame at a time instead and only asks
+  /// whether the target is there yet, so the deadline the caller asked for is
+  /// the deadline that applies.
   Future<void> pumpUntilFound(
     Finder finder, {
     required Duration timeout,
@@ -66,19 +62,15 @@ extension WidgetTesterPumpExtension on WidgetTester {
     return false;
   }
 
+  /// As [pumpUntilFound], then lets animations that end soon play out.
   Future<void> pumpUntilVisible(
     Finder finder, {
     Duration timeout = const Duration(seconds: 60),
     bool throwOnError = true,
   }) async {
-    final endTime = DateTime.now().add(timeout);
-
-    while (DateTime.now().isBefore(endTime)) {
-      await pumpAndSettle();
-
-      if (any(finder)) {
-        return;
-      }
+    if (await pumpUntilFoundOrMissing(finder, timeout: timeout)) {
+      await _settleBriefly();
+      return;
     }
 
     if (!throwOnError) {
@@ -97,6 +89,8 @@ extension WidgetTesterPumpExtension on WidgetTester {
     throw TimeoutException('pumpUntilVisible timed out: $finderDescription');
   }
 
+  /// Pumps frames until [finder] no longer matches, as [pumpUntilFound] does
+  /// for a match, then lets animations that end soon play out.
   Future<void> pumpUntilDisappear(
     Finder finder, {
     // 60s to match `pumpUntil` above. At 30s this could not cover its own
@@ -105,18 +99,29 @@ extension WidgetTesterPumpExtension on WidgetTester {
     // at ~45s - so the helper threw while sign-in was still legitimately in
     // progress. The import completed; only the wait did not.
     Duration timeout = const Duration(seconds: 60),
+    Duration interval = const Duration(milliseconds: 250),
   }) async {
-    bool timerDone = false;
-    final timer = Timer(
-        timeout, () => throw TimeoutException('Pump until has timed out'));
-    while (timerDone != true) {
-      await pumpAndSettle();
+    final endTime = DateTime.now().add(timeout);
 
-      final found = any(finder);
-      if (!found) {
-        timerDone = true;
+    while (DateTime.now().isBefore(endTime)) {
+      await pump(interval);
+      if (!any(finder)) {
+        await _settleBriefly();
+        return;
       }
     }
-    timer.cancel();
+
+    throw TimeoutException(
+      'Timed out after ${timeout.inSeconds}s waiting for $finder to disappear',
+    );
+  }
+
+  /// What `pumpAndSettle` does after a wait, capped at about two seconds, so
+  /// a transition finishes before the caller taps while an animation that
+  /// never stops cannot hold the test.
+  Future<void> _settleBriefly() async {
+    for (var i = 0; i < 40 && binding.hasScheduledFrame; i++) {
+      await pump(const Duration(milliseconds: 50));
+    }
   }
 }

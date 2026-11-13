@@ -125,3 +125,6 @@ android/key.properties
 # KDF binary fetched for the DEX counterparty in CI
 .counterparty/
 counterparty.log
+
+# Hosted legal text is maintained outside Git; retain the hosting README.
+/docs/legal-hosting/*_gleec_wallet.md

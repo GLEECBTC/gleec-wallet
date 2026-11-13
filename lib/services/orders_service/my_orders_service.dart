@@ -5,6 +5,7 @@ import 'package:web_dex/mm2/mm2_api/rpc/order_status/cancellation_reason.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/order_status/order_status_response.dart';
 import 'package:web_dex/model/my_orders/my_order.dart';
 import 'package:web_dex/model/my_orders/taker_order.dart';
+import 'package:web_dex/model/text_error.dart';
 import 'package:web_dex/services/mappers/my_orders_mappers.dart';
 
 class MyOrdersService {
@@ -28,27 +29,42 @@ class MyOrdersService {
       if (response == null) {
         return null;
       }
-      final dynamic order = response.order;
-      if (order is TakerOrder) {
-        return OrderStatus(
-          takerOrderStatus: TakerOrderStatus(
-            order: mapMyOrderResponseTakerOrderToOrder(order, uuid),
-            cancellationReason: _getTakerOrderCancellationReason(
-                response.cancellationReason ?? ''),
-          ),
-        );
-      } else {
-        return OrderStatus(
-          makerOrderStatus: MakerOrderStatus(
-            order: mapMyOrderResponseMakerOrderToOrder(order, uuid),
-            cancellationReason: _getMakerOrderCancellationReason(
-                response.cancellationReason ?? ''),
-          ),
-        );
-      }
+      return _statusOf(response, uuid);
     } catch (_) {
       return null;
     }
+  }
+
+  /// [getStatus] for a caller that must tell KDF's answer from a failed read:
+  /// throws a [TextError] in KDF's words when it answered with an error, and
+  /// whatever the call threw when no answer arrived.
+  Future<OrderStatus> getStatusOrThrow(String uuid) async {
+    final response = await _mm2Api.orderStatusOrThrow(uuid);
+    final error = response['error'];
+    if (error != null) throw TextError(error: '$error');
+    return _statusOf(OrderStatusResponse.fromJson(response), uuid);
+  }
+
+  OrderStatus _statusOf(OrderStatusResponse response, String uuid) {
+    final dynamic order = response.order;
+    if (order is TakerOrder) {
+      return OrderStatus(
+        takerOrderStatus: TakerOrderStatus(
+          order: mapMyOrderResponseTakerOrderToOrder(order, uuid),
+          cancellationReason: _getTakerOrderCancellationReason(
+            response.cancellationReason ?? '',
+          ),
+        ),
+      );
+    }
+    return OrderStatus(
+      makerOrderStatus: MakerOrderStatus(
+        order: mapMyOrderResponseMakerOrderToOrder(order, uuid),
+        cancellationReason: _getMakerOrderCancellationReason(
+          response.cancellationReason ?? '',
+        ),
+      ),
+    );
   }
 
   /// [beforeMutation] runs immediately before the request leaves the client and

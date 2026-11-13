@@ -17,11 +17,11 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 
 class TransactionListRow extends StatefulWidget {
   const TransactionListRow({
-    Key? key,
+    super.key,
     required this.transaction,
     required this.setTransaction,
     required this.coinAbbr,
-  }) : super(key: key);
+  });
 
   final Transaction transaction;
   final String coinAbbr;
@@ -36,51 +36,29 @@ class _TransactionListRowState extends State<TransactionListRow> {
 
   IconData get _icon {
     if (_isInternalTransfer) return Icons.swap_horiz;
+    if (_isDirectionUnknown) return Icons.help_outline;
     return _isReceived ? Icons.arrow_circle_down : Icons.arrow_circle_up;
   }
 
-  Decimal get _displayAmount {
-    final tx = widget.transaction;
-    if (_isInternalTransfer) {
-      // Unsigned magnitude moved between the wallet's own addresses.
-      return tx.balanceChanges.spentByMe;
-    }
+  Decimal get _displayAmount => widget.transaction.displayedMovement;
 
-    final netChange = tx.amount;
-    if (netChange != Decimal.zero) {
-      return netChange;
-    }
+  bool get _isDirectionUnknown => !widget.transaction.hasKnownMovementDirection;
 
-    final received = tx.balanceChanges.receivedByMe;
-    final spent = tx.balanceChanges.spentByMe;
-    if (received != Decimal.zero || spent != Decimal.zero) {
-      if (received >= spent) {
-        return received;
-      }
-      return -spent;
-    }
-
-    if (tx.balanceChanges.totalAmount != Decimal.zero) {
-      return tx.balanceChanges.totalAmount;
-    }
-
-    return Decimal.zero;
-  }
-
-  bool get _isReceived => _displayAmount > Decimal.zero;
+  bool get _isReceived => !_isDirectionUnknown && _displayAmount > Decimal.zero;
 
   String get _sign {
-    if (_isInternalTransfer) return '';
+    if (_isInternalTransfer || _isDirectionUnknown) return '';
     return _isReceived ? '+' : '-';
   }
 
   String get _typeLabel {
     if (_isInternalTransfer) return LocaleKeys.txInternalTransfer.tr();
+    if (_isDirectionUnknown) return LocaleKeys.unknown.tr();
     return _isReceived ? LocaleKeys.receive.tr() : LocaleKeys.send.tr();
   }
 
   Color? _amountColor(BuildContext context) {
-    if (_isInternalTransfer) {
+    if (_isInternalTransfer || _isDirectionUnknown) {
       return Theme.of(context).textTheme.bodyMedium?.color;
     }
     return _isReceived
@@ -312,17 +290,31 @@ class _TransactionListRowState extends State<TransactionListRow> {
 
   Widget _buildUsdChanges() {
     final coinsBloc = context.read<CoinsBloc>();
-    final double? usdChanges = coinsBloc.state.getUsdPriceForAmount(
-      _displayAmount.toDouble(),
-      widget.coinAbbr,
-    );
-    final String prefix = _sign.isEmpty ? '' : '$_sign ';
-    return AutoScrollText(
-      text: '$prefix\$${formatAmt((usdChanges ?? 0).abs())}',
-      style: TextStyle(
-        color: _amountColor(context),
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
+    final price = coinsBloc.state
+        .getPriceForAsset(widget.transaction.assetId)
+        ?.price;
+    final usdChanges = price == null ? null : price * _displayAmount;
+    final prefix = _sign.isEmpty ? '' : '$_sign ';
+    // This is a current spot valuation, not the value at the transaction date.
+    final value = usdChanges == null
+        ? '—'
+        : '$prefix\$${formatAmt(usdChanges.abs().toDouble())}';
+    final explanation = usdChanges == null
+        ? LocaleKeys.transactionFiatUnavailable.tr()
+        : LocaleKeys.transactionCurrentValue.tr();
+    return Tooltip(
+      message: explanation,
+      child: Semantics(
+        label: '$explanation: $value',
+        excludeSemantics: true,
+        child: AutoScrollText(
+          text: value,
+          style: TextStyle(
+            color: _amountColor(context),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
@@ -332,7 +324,9 @@ extension _TransactionExtension on Transaction {
   String get myAddress {
     // Internal transfers show the destination; post-sanitize the wallet's
     // own (custody) address is sorted first in `to`.
-    final List<String> addressList = isInternalTransfer || isIncoming
+    final List<String> addressList =
+        isInternalTransfer ||
+            (hasKnownMovementDirection && displayedMovement > Decimal.zero)
         ? to
         : from;
     return addressList.isNotEmpty ? addressList.first : LocaleKeys.unknown.tr();

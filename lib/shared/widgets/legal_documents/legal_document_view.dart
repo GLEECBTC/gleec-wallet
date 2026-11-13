@@ -1,57 +1,52 @@
 import 'dart:async';
 
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/bloc/legal_documents/legal_document_bloc.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
-import 'package:komodo_ui_kit/komodo_ui_kit.dart';
+import 'package:web_dex/shared/widgets/legal_documents/legal_document_notice.dart';
 
-class LegalDocumentView extends StatefulWidget {
+class LegalDocumentView extends StatelessWidget {
   const LegalDocumentView({
     super.key,
     required this.document,
     this.padding = const EdgeInsets.all(16),
     this.scrollable = false,
     this.content,
+    this.repository,
   });
-
   final LegalDocumentType document;
   final EdgeInsetsGeometry padding;
   final bool scrollable;
-
-  /// When supplied by a consent form, display its exact accepted snapshot.
   final LegalDocumentContent? content;
+  final LegalDocumentsRepository? repository;
 
   @override
-  State<LegalDocumentView> createState() => _LegalDocumentViewState();
+  Widget build(BuildContext context) => BlocProvider(
+    key: ValueKey((document, content)),
+    create: (_) => LegalDocumentBloc(
+      repository ?? context.read<LegalDocumentsRepository>(),
+      document,
+      content: content,
+    )..add(const LegalDocumentRequested()),
+    child: _LegalDocumentBody(padding: padding, scrollable: scrollable),
+  );
 }
 
-class _LegalDocumentViewState extends State<LegalDocumentView> {
-  final ScrollController _scrollController = ScrollController();
-  int _requestId = 0;
-  LegalDocumentContent? _content;
-  Object? _loadingError;
-  bool _isRefreshing = false;
-
+class _LegalDocumentBody extends StatefulWidget {
+  const _LegalDocumentBody({required this.padding, required this.scrollable});
+  final EdgeInsetsGeometry padding;
+  final bool scrollable;
   @override
-  void initState() {
-    super.initState();
-    _loadDocument();
-  }
+  State<_LegalDocumentBody> createState() => _LegalDocumentBodyState();
+}
 
-  @override
-  void didUpdateWidget(covariant LegalDocumentView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.document != widget.document ||
-        oldWidget.content != widget.content) {
-      _loadDocument();
-    }
-  }
-
+class _LegalDocumentBodyState extends State<_LegalDocumentBody> {
+  final _scrollController = ScrollController();
   @override
   void dispose() {
     _scrollController.dispose();
@@ -59,135 +54,47 @@ class _LegalDocumentViewState extends State<LegalDocumentView> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (_content == null) {
-      if (_loadingError != null) {
-        return Padding(
-          padding: widget.padding,
-          child: Text(
-            LocaleKeys.legalDocumentLoadError.tr(),
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        );
-      }
-
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final markdown = Padding(
-      padding: widget.padding,
-      child: MarkdownBody(
-        data: _content!.markdown,
-        selectable: true,
-        softLineBreak: true,
-        styleSheet: _buildStyleSheet(context),
-        onTapLink: (_, String? href, __) {
-          if (href == null || href.isEmpty) return;
-          unawaited(launchUrlString(href));
+  Widget build(BuildContext context) =>
+      BlocBuilder<LegalDocumentBloc, LegalDocumentContent>(
+        builder: (context, content) {
+          final theme = Theme.of(context);
+          final body = Padding(
+            padding: widget.padding,
+            child: content.isAvailable
+                ? MarkdownBody(
+                    data: content.markdown,
+                    selectable: true,
+                    softLineBreak: true,
+                    styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                      p: theme.textTheme.bodyMedium,
+                      listBullet: theme.textTheme.bodyMedium,
+                      a: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    onTapLink: (_, href, __) {
+                      if (href != null && href.isNotEmpty) {
+                        unawaited(launchUrlString(href));
+                      }
+                    },
+                  )
+                : LegalDocumentNotice(
+                    status: content.status,
+                    onRetry: () => context.read<LegalDocumentBloc>().add(
+                      const LegalDocumentRequested(retry: true),
+                    ),
+                  ),
+          );
+          return widget.scrollable
+              ? DexScrollbar(
+                  scrollController: _scrollController,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    child: body,
+                  ),
+                )
+              : body;
         },
-      ),
-    );
-
-    final Widget body = widget.scrollable
-        ? DexScrollbar(
-            scrollController: _scrollController,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              child: markdown,
-            ),
-          )
-        : markdown;
-
-    if (!widget.scrollable) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_isRefreshing) const LinearProgressIndicator(minHeight: 2),
-          if (_isRefreshing) const SizedBox(height: 12),
-          body,
-        ],
       );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_isRefreshing) const LinearProgressIndicator(minHeight: 2),
-        if (_isRefreshing) const SizedBox(height: 12),
-        Expanded(child: body),
-      ],
-    );
-  }
-
-  MarkdownStyleSheet _buildStyleSheet(BuildContext context) {
-    final base = MarkdownStyleSheet.fromTheme(Theme.of(context));
-    final linkStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: Theme.of(context).colorScheme.primary,
-      decoration: TextDecoration.underline,
-      decorationColor: Theme.of(context).colorScheme.primary,
-    );
-
-    return base.copyWith(
-      a: linkStyle,
-      p: Theme.of(context).textTheme.bodyMedium,
-      listBullet: Theme.of(context).textTheme.bodyMedium,
-    );
-  }
-
-  Future<void> _loadDocument() async {
-    if (widget.content case final content?) {
-      _requestId++;
-      setState(() {
-        _content = content;
-        _loadingError = null;
-        _isRefreshing = false;
-      });
-      return;
-    }
-    final requestId = ++_requestId;
-    setState(() {
-      _loadingError = null;
-      _content = null;
-      _isRefreshing = false;
-    });
-
-    final repository = context.read<LegalDocumentsRepository>();
-
-    try {
-      final initialContent = await repository.loadPreferredContent(
-        widget.document,
-      );
-      if (!mounted || requestId != _requestId) return;
-
-      setState(() {
-        _content = initialContent;
-      });
-    } catch (error) {
-      if (!mounted || requestId != _requestId) return;
-
-      setState(() {
-        _loadingError = error;
-      });
-      return;
-    }
-
-    if (!mounted || requestId != _requestId) return;
-
-    setState(() {
-      _isRefreshing = true;
-    });
-
-    final refreshedContent = await repository.refreshFromRemote(
-      widget.document,
-    );
-    if (!mounted || requestId != _requestId) return;
-
-    setState(() {
-      _isRefreshing = false;
-      if (refreshedContent != null) {
-        _content = refreshedContent;
-      }
-    });
-  }
 }

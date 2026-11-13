@@ -7,6 +7,7 @@ import 'package:web_dex/main.dart' as app;
 import 'package:web_dex/shared/widgets/copied_text.dart';
 import 'package:web_dex/views/dex/entities_list/history/history_item.dart';
 
+import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
 import '../../common/widget_tester_action_extensions.dart';
 import '../../common/widget_tester_pump_extension.dart';
@@ -132,7 +133,7 @@ Finder _infiniteBidFinder() {
 
 Future<void> _testSwapHistoryTable(
   WidgetTester tester, {
-  Duration timeout = const Duration(milliseconds: 5000),
+  Duration timeout = const Duration(seconds: 60),
 }) async {
   print('🔍 HISTORY CHECK: Starting history table verification');
 
@@ -145,9 +146,17 @@ Future<void> _testSwapHistoryTable(
   await tester.tapAndPump(historyTab);
   print('🔍 HISTORY CHECK: Opened history tab');
 
-  await tester.pump(timeout);
+  // History subscribes when this tab mounts; its next trading refresh runs
+  // on a ten-second timer. A fixed five-second delay can assert before that
+  // snapshot arrives, even though the details page already reports success.
+  final historyItem = find.byType(HistoryItem);
+  await tester.pumpUntilFound(
+    historyItem,
+    timeout: timeout,
+    describeTarget: 'the completed swap in the history table',
+  );
   expect(
-    find.byType(HistoryItem),
+    historyItem,
     findsOneWidget,
     reason: 'Test error: Swap history item not found',
   );
@@ -284,11 +293,12 @@ Future<void> _createTakerOrder(WidgetTester tester) async {
 Future<void> _openTakerOrderForm(WidgetTester tester) async {
   print('🔍 OPEN FORM: Navigating to taker order form');
 
-  final Finder dexSectionButton = find.byKey(const Key('main-menu-dex'));
   final Finder dexSectionSwapTab = find.byKey(const Key('dex-swap-tab'));
 
-  await tester.tap(dexSectionButton);
-  print('🔍 OPEN FORM: Opened DEX section');
+  // The taker form is part of the trading interface, which the Swap surface
+  // only mounts on its Advanced destination.
+  await goto.dexPage(tester);
+  print('🔍 OPEN FORM: Opened the trading interface');
   await tester.pumpAndSettle();
 
   await tester.tap(dexSectionSwapTab);

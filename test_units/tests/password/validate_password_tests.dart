@@ -183,8 +183,7 @@ void testcheckPasswordRequirements() {
       );
     });
 
-    test(
-        'Passwords with three or more consecutive identical '
+    test('Passwords with three or more consecutive identical '
         'characters should fail', () {
       expect(
         checkPasswordRequirements('Strong111Security!'),
@@ -238,21 +237,22 @@ void testcheckPasswordRequirements() {
     });
 
     test(
-        'Valid passwords with two consecutive identical characters should pass',
-        () {
-      expect(
-        checkPasswordRequirements('Strong11Secured!'),
-        PasswordValidationError.none,
-      );
-      expect(
-        checkPasswordRequirements('Strong!!Secured1'),
-        PasswordValidationError.none,
-      );
-      expect(
-        checkPasswordRequirements('aaStrong1!Secured'),
-        PasswordValidationError.none,
-      );
-    });
+      'Valid passwords with two consecutive identical characters should pass',
+      () {
+        expect(
+          checkPasswordRequirements('Strong11Secured!'),
+          PasswordValidationError.none,
+        );
+        expect(
+          checkPasswordRequirements('Strong!!Secured1'),
+          PasswordValidationError.none,
+        );
+        expect(
+          checkPasswordRequirements('aaStrong1!Secured'),
+          PasswordValidationError.none,
+        );
+      },
+    );
 
     test('Special case - passwords with unicode characters', () {
       expect(
@@ -467,7 +467,8 @@ void testcheckPasswordRequirements() {
 
     test('Limited fuzzy testing', () {
       final random = Random();
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123'
+      const chars =
+          'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123'
           r'456789!@#$%^&*()';
 
       for (int i = 0; i < 10; i++) {

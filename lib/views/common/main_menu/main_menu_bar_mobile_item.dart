@@ -10,11 +10,13 @@ class MainMenuBarMobileItem extends StatelessWidget {
     required this.value,
     required this.isActive,
     this.enabled = true,
+    this.needAttention = false,
   }) : super(key: Key('main-menu-${value.name}'));
 
   final MainMenuValue value;
   final bool enabled;
   final bool isActive;
+  final bool needAttention;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +39,25 @@ class MainMenuBarMobileItem extends StatelessWidget {
                 Padding(
                   key: Key('main-menu-item-icon-${value.name}'),
                   padding: const EdgeInsets.only(bottom: 6.0),
-                  child: NavIcon(item: value, isActive: isActive),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NavIcon(item: value, isActive: isActive),
+                      if (needAttention)
+                        Positioned(
+                          top: -2,
+                          right: -4,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: theme.currentGlobal.colorScheme.error,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
                 AutoScrollText(
                   text: value.title,

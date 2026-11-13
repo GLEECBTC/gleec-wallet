@@ -56,6 +56,28 @@ class DexRepository {
     }
   }
 
+  /// [sell] for a caller that must tell a refusal from a lost answer: only
+  /// KDF's own answer comes back as an error, and a request that got none
+  /// throws, since the order may have been placed.
+  Future<SellResponse> sellOrThrow(SellRequest request) async {
+    if (!canTradeAssetPair(request.base, request.rel)) {
+      return SellResponse(
+        error: TextError(
+          error: 'Wallet-only assets cannot be submitted to the DEX.',
+        ),
+      );
+    }
+
+    final response = await _mm2Api.sellOrThrow(request);
+    final error = response['error'];
+    // The SDK's transport answers in KDF's place when the request never
+    // reached it, or when its answer could not be read.
+    if (error == 'ConnectionError' || error == 'InvalidKdfResponse') {
+      throw TextError(error: '${response['message'] ?? error}');
+    }
+    return SellResponse.fromJson(response);
+  }
+
   Future<DataFromService<TradePreimage, BaseError>> getTradePreimage(
     String base,
     String rel,

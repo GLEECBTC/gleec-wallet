@@ -761,6 +761,186 @@ class _FakeMm2Api implements Mm2Api {
 
 void testWithdrawFormBloc() {
   group('WithdrawFormBloc', () {
+    for (final (ticker, type, decimals, chain) in [
+      ('USDC-PLG20', 'Polygon', 6, 137),
+      ('ETC', 'Ethereum Classic', 18, 61),
+    ]) {
+      test(
+        '$ticker rejects excess precision before preview or execution',
+        () async {
+          final config = {
+            ..._utxoConfig(coin: ticker),
+            'type': type,
+            'chain_id': chain,
+            'decimals': decimals,
+            'protocol': ticker == 'ETC'
+                ? {
+                    'type': 'ETH',
+                    'protocol_data': {'chain_id': chain},
+                  }
+                : {
+                    'type': 'ERC20',
+                    'protocol_data': {
+                      'platform': 'POL',
+                      'contract_address':
+                          '0x0000000000000000000000000000000000000002',
+                    },
+                  },
+            'nodes': const [],
+            'swap_contract_address':
+                '0x0000000000000000000000000000000000000001',
+            'fallback_swap_contract':
+                '0x0000000000000000000000000000000000000001',
+          };
+          // The pinned native ETC config omits decimals; KDF uses 18.
+          if (ticker == 'ETC') config.remove('decimals');
+          final asset = _assetFromConfig(config);
+          if (ticker == 'ETC') expect(asset.id.chainId.decimals, isNull);
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => _utxoPreview(
+              assetId: ticker,
+              txHash: 'unused',
+              toAddress: 'recipient',
+              timestamp: 1,
+            ),
+          );
+          final bloc = WithdrawFormBloc(
+            asset: asset,
+            sdk: _FakeSdk(
+              addresses: _FakeAddressOperations(),
+              withdrawals: withdrawals,
+              pubkeys: _FakePubkeyManager({asset.id: _assetPubkeys(asset)}),
+              balances: _FakeBalanceManager({asset.id: _balance('5')}),
+            ),
+            mm2Api: _FakeMm2Api(),
+          );
+          addTearDown(bloc.close);
+          final invalid = '0.${'0' * decimals}1';
+          await _primeFillState(bloc, recipient: 'recipient', amount: invalid);
+          expect(bloc.state.amountError, isNotNull);
+          // Even a stale/direct state without the field error fails both gates.
+          expect(
+            bloc.state.copyWith(amountError: () => null).hasValidationErrors,
+            isTrue,
+          );
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          bloc.add(const WithdrawFormSubmitted());
+          await _flush();
+          expect(withdrawals.previewCallCount, 0);
+          expect(withdrawals.executeCallCount, 0);
+          final valid = '0.${'0' * (decimals - 1)}1';
+          final corrected = bloc.stream.firstWhereBounded(
+            (state) => state.amount == valid,
+          );
+          bloc.add(WithdrawFormAmountChanged(valid));
+          expect((await corrected).amountError, isNull);
+          expect(
+            bloc.state.toWithdrawParameters().amount,
+            Decimal.parse(valid),
+          );
+        },
+      );
+    }
+
+    for (final (isMax, mismatch) in [
+      (false, false),
+      (true, false),
+      (false, true),
+    ]) {
+      test(
+        'native EVM ${isMax ? 'Max' : 'typed'} review ${mismatch ? 'rejects a mismatched signed amount' : 'uses signed principal'}',
+        () async {
+          final asset = _assetFromConfig({
+            ..._utxoConfig(coin: 'ETC'),
+            'type': 'Ethereum Classic',
+            'chain_id': 61,
+            'decimals': 18,
+            'protocol': {
+              'type': 'ETH',
+              'protocol_data': {'chain_id': 61},
+            },
+            'nodes': const [],
+            'swap_contract_address':
+                '0x0000000000000000000000000000000000000001',
+            'fallback_swap_contract':
+                '0x0000000000000000000000000000000000000001',
+          });
+          final principal = Decimal.parse('1.000000000000000001');
+          final fee = Decimal.parse('0.000021');
+          final preview = WithdrawResult(
+            txHex: 'signed-value',
+            txHash: 'signed-hash',
+            from: const ['source-address'],
+            to: const ['recipient'],
+            blockHeight: 0,
+            timestamp: 1,
+            balanceChanges: BalanceChanges(
+              netChange: -principal - fee,
+              receivedByMe: Decimal.zero,
+              spentByMe: principal + fee,
+              totalAmount: principal,
+            ),
+            fee: FeeInfo.ethGas(
+              coin: 'ETC',
+              gas: 21000,
+              gasPrice: Decimal.parse('0.000000001'),
+              totalGasFee: fee,
+            ),
+            coin: 'ETC',
+          );
+          final withdrawals = _FakeWithdrawalManager(
+            previewWithdrawalHandler: (_) async => preview,
+          );
+          final bloc = WithdrawFormBloc(
+            asset: asset,
+            sdk: _FakeSdk(
+              addresses: _FakeAddressOperations(),
+              withdrawals: withdrawals,
+              pubkeys: _FakePubkeyManager({asset.id: _assetPubkeys(asset)}),
+              balances: _FakeBalanceManager({asset.id: _balance('5')}),
+            ),
+            mm2Api: _FakeMm2Api(),
+          );
+          addTearDown(bloc.close);
+          await _primeFillState(
+            bloc,
+            recipient: 'recipient',
+            amount: mismatch ? '2' : principal.toString(),
+          );
+          if (isMax) {
+            final maxState = bloc.stream.firstWhereBounded(
+              (state) => state.isMaxAmount,
+            );
+            bloc.add(const WithdrawFormMaxAmountEnabled(true));
+            await maxState;
+          }
+          if (mismatch) {
+            final refused = bloc.stream.firstWhereBounded(
+              (state) => state.hasPreviewError,
+            );
+            bloc.add(const WithdrawFormPreviewSubmitted());
+            final rejected = await refused;
+            expect(rejected.step, WithdrawFormStep.fill);
+            expect(rejected.preview, isNull);
+            bloc.add(const WithdrawFormSubmitted());
+            await _flush();
+            expect(withdrawals.executeCallCount, 0);
+            return;
+          }
+          final confirmed = bloc.stream.firstWhereBounded(
+            (state) => state.step == WithdrawFormStep.confirm,
+          );
+          bloc.add(const WithdrawFormPreviewSubmitted());
+          expect((await confirmed).authorizedRecipientAmount, principal);
+          expect(withdrawals.previewRequests.single.isMax, isMax);
+          expect(
+            withdrawals.previewRequests.single.amount,
+            isMax ? null : principal,
+          );
+        },
+      );
+    }
+
     test('preview completion uses the original request snapshot', () async {
       final asset = _assetFromConfig(_utxoConfig());
       final previewCompleter = Completer<WithdrawalPreview>();

@@ -11,11 +11,17 @@ void testTruncateDecimal() {
     expect(truncateDecimal('0.01', 3), '0.01');
     // @todo: DmitriiP:  Is it expected behavior?
     expect(
-        truncateDecimal('0.00000000000000000001', 19), '0.0000000000000000000');
-    expect(truncateDecimal('0.00000000000000000001', 20),
-        '0.00000000000000000001');
-    expect(truncateDecimal('0.00000000000000000001', 21),
-        '0.00000000000000000001');
+      truncateDecimal('0.00000000000000000001', 19),
+      '0.0000000000000000000',
+    );
+    expect(
+      truncateDecimal('0.00000000000000000001', 20),
+      '0.00000000000000000001',
+    );
+    expect(
+      truncateDecimal('0.00000000000000000001', 21),
+      '0.00000000000000000001',
+    );
     expect(truncateDecimal('0.123456789', 8), '0.12345678');
     expect(truncateDecimal('0.123456789', 1), '0.1');
     // todo: Is it expected behavior?

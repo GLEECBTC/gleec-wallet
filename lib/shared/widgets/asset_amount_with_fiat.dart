@@ -20,6 +20,7 @@ class AssetAmountWithFiat extends StatelessWidget {
     this.isAutoScrollEnabled = true,
     this.showCoinSymbol = true,
     this.symbol,
+    this.semanticsLabel,
   });
 
   /// The asset ID to fetch pricing for
@@ -32,6 +33,9 @@ class AssetAmountWithFiat extends StatelessWidget {
   /// `USDT-TRC20`); pass a clean symbol such as `configSymbol` where the
   /// protocol suffix would read as noise (headline amounts, receipts).
   final String? symbol;
+
+  /// Optional localized role, spoken with the same exact amount as the text.
+  final String? semanticsLabel;
 
   /// Text style for the main amount
   final TextStyle? style;
@@ -70,9 +74,23 @@ class AssetAmountWithFiat extends StatelessWidget {
         textAlign: TextAlign.right,
       );
     }
-
+    final label = semanticsLabel == null
+        ? fullText
+        : '$semanticsLabel: $fullText';
+    // Preserve SelectableText's accessibility focus/selection actions while
+    // providing the exact amount that a canvas-based browser may otherwise omit.
     return isSelectable
-        ? SelectableText(fullText, style: style, textAlign: TextAlign.right)
-        : Text(fullText, style: style, textAlign: TextAlign.right);
+        ? SelectableText(
+            fullText,
+            semanticsLabel: label,
+            style: style,
+            textAlign: TextAlign.right,
+          )
+        : Text(
+            fullText,
+            semanticsLabel: label,
+            style: style,
+            textAlign: TextAlign.right,
+          );
   }
 }

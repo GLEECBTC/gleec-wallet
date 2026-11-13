@@ -1,0 +1,77 @@
+{
+  "verified_at": "2026-11-04T11:35:08.488625+00:00",
+  "preview_url": "https://walletrc--pull-3575-merge-ynyfywb3.web.app",
+  "identity_url": "https://walletrc--pull-3575-merge-ynyfywb3.web.app/rc-test-build.json",
+  "accepted_app_rc": "da3214d80f3c75aa0cc6fe718f75403226df6f30",
+  "preview_merge_commit": "ea490accabbf45c73ffcc9baea679b798dbfd2cb",
+  "preview_and_rc_tree": "4cb5b83ff1a255d9e8b2ef3a33b9152d2a143cbc",
+  "sdk_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+  "identity": {
+    "app_commit": "ea490accabbf45c73ffcc9baea679b798dbfd2cb",
+    "sdk_commit": "3b4629048d8513af8f8a9d17a5cdf7eb5763d206",
+    "version": "0.10.0+0",
+    "channel": "pull/3575/merge",
+    "legal_availability_bypass": false,
+    "production_approved": false,
+    "run": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/41747907997",
+    "built_at": "2026-11-04T00:41:26Z",
+    "javascript_sha256": "0efabd511806077bf3536e0800334115e58132acbe2756a9cf834d569529f570",
+    "kdf_config_sha256": "667a9e28268e691857712f2410a0d29564aca4dbd7dff8eb3a53848785bcca64"
+  },
+  "javascript_sha256_verified": "0efabd511806077bf3536e0800334115e58132acbe2756a9cf834d569529f570",
+  "ordinary_served_assets_verified": [
+    {
+      "path": "assets/packages/komodo_defi_framework/app_build/build_config.json",
+      "sha256": "667a9e28268e691857712f2410a0d29564aca4dbd7dff8eb3a53848785bcca64"
+    },
+    {
+      "path": "assets/packages/komodo_defi_framework/assets/config/coins_config.json",
+      "sha256": "13a060ffb3f01d5f565f203ee190bde9573eb0ae29223c61b8bfe19720e37d9f"
+    },
+    {
+      "path": "assets/packages/komodo_defi_framework/assets/config/coins.json",
+      "sha256": "8f212e78ffc6455d8266aa0c72c78e3843a0782b6daf93b60768c65598c92ecf"
+    },
+    {
+      "path": "assets/packages/komodo_defi_framework/assets/config/seed_nodes.json",
+      "sha256": "2755231cdd598dc89238cd9ad38d7df8acf00853c738aca7e467b2ea9622c756"
+    },
+    {
+      "path": "kdf/kdf/bin/kdflib.d.ts",
+      "sha256": "f5fe0b1a44d35cc28ee3ee29b55a162a6fbb65ae4f2eaa1e4afe53e5ba636851"
+    },
+    {
+      "path": "kdf/kdf/bin/kdflib.js",
+      "sha256": "cbeda42d407d11d59730f4b5ec85bd18e2a6c2eb2e2fc7e65c0381788de91776"
+    },
+    {
+      "path": "kdf/kdf/bin/package.json",
+      "sha256": "6ea6bbaa7ba699935182b3096d984a6f7f733e93c5cf07315c7f15dd9a818be6"
+    },
+    {
+      "path": "kdf/kdf/bin/kdflib_bg.wasm.d.ts",
+      "sha256": "b21c15e4c0af09ea3ba14bf2c388f98bb5772595dcd8245df992354ccefdec05"
+    },
+    {
+      "path": "kdf/kdf/bin/snippets/libp2p-wasm-ext-7e5f5edb880ee0f5/src/websockets.js",
+      "sha256": "bd1472d656c119fdbe76333c56098c0295d913e5c532ef583efda1a59db41a5a"
+    },
+    {
+      "path": "kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline1.js",
+      "sha256": "e8bccdb5f7ea2a2affcc10bfff045989d40490101a0575290a30d53009902f0a"
+    },
+    {
+      "path": "kdf/kdf/bin/snippets/hw_common-c933ea30ea0fef0d/inline0.js",
+      "sha256": "fcaa05077e433b5cfb174377954dfe44cd466be81336b965c8e885395ca9f90e"
+    },
+    {
+      "path": "kdf/kdf/bin/snippets/web3-3a881fca17d19cd8/inline0.js",
+      "sha256": "e0bb201521f4b8f1376499755278783ad46f4cc7a86bc803fef2dc5b6d264ba9"
+    },
+    {
+      "path": "kdf/kdf/bin/kdflib_bg.wasm",
+      "sha256": "3224d8c5652a4ee1624bd44b9be940d06a168d23666e39243b814ada5fe34570"
+    }
+  ],
+  "scope": "Read-only recheck of the accepted RC runtime, not a build, deployment, production approval, signed-installer test or qualification of later carries. The ordinary preview keeps its legal gate. Recheck the live identity after any later RC change. No KDF repository tests were run."
+}

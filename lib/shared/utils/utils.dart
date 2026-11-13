@@ -79,7 +79,7 @@ Future<bool> copyToClipBoard(
                 color: themeData.colorScheme.onPrimaryContainer,
               ),
               const SizedBox(width: 12.0),
-              Text(message ?? LocaleKeys.clipBoard.tr()),
+              Flexible(child: Text(message ?? LocaleKeys.clipBoard.tr())),
             ],
           ),
           duration: const Duration(seconds: 2),

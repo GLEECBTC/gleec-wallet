@@ -12,8 +12,11 @@ void testDecimalTextInputFormatter() {
     expect(comma2dot.$1, comma2dot.$2);
     final dot2dot = _testItemDecimalRange8('123', '123.', '123.');
     expect(dot2dot.$1, dot2dot.$2);
-    final decimalRange8 =
-        _testItemDecimalRange8('123.12345678', '123.123456789', '123.12345678');
+    final decimalRange8 = _testItemDecimalRange8(
+      '123.12345678',
+      '123.123456789',
+      '123.12345678',
+    );
     expect(decimalRange8.$1, decimalRange8.$2);
     // @todo: DmitriiP : Is it expected behavior?
     final notOnlyDigits = _testItemDecimalRange8('123', '123M', '123M');
@@ -26,13 +29,18 @@ void testDecimalTextInputFormatter() {
 final formatter = DecimalTextInputFormatter(decimalRange: 8);
 
 (TextEditingValue, TextEditingValue) _testItemDecimalRange8(
-    String oldValueText, String newValueText, String matcherText) {
+  String oldValueText,
+  String newValueText,
+  String matcherText,
+) {
   final TextEditingValue oldValue = TextEditingValue(
-      text: oldValueText,
-      selection: TextSelection.collapsed(offset: oldValueText.length));
+    text: oldValueText,
+    selection: TextSelection.collapsed(offset: oldValueText.length),
+  );
   final TextEditingValue newValue = TextEditingValue(
-      text: newValueText,
-      selection: TextSelection.collapsed(offset: newValueText.length));
+    text: newValueText,
+    selection: TextSelection.collapsed(offset: newValueText.length),
+  );
   final TextEditingValue matcher = TextEditingValue(
     text: matcherText,
     selection: TextSelection.collapsed(offset: matcherText.length),

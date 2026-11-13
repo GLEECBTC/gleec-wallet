@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 DEFAULT_BUILD_TARGET="web"
 DEFAULT_BUILD_MODE="release"
@@ -14,7 +15,15 @@ else
     exit 1
 fi
 
+# These positional arguments are embedded in the container's build command.
+case "$BUILD_TARGET" in web|apk|appbundle|linux|macos|windows|ios) ;; *) echo "Unsupported build target" >&2; exit 1 ;; esac
+case "$BUILD_MODE" in release|profile|debug) ;; *) echo "Unsupported build mode" >&2; exit 1 ;; esac
+
 echo "Building with target: $BUILD_TARGET, mode: $BUILD_MODE"
+
+# Select public LI.FI settings before any expensive build steps. The credential
+# bundle must never be used as a Dart defines file or passed into this container.
+LIFI_BUILD_DEFINES=$(python3 tool/lifi_build_config.py "${LIFI_BUILD_ENVIRONMENT:-production}") || exit 1
 
 # Ensure submodule is initialized and pinned to the recorded commit
 if command -v git >/dev/null 2>&1; then
@@ -64,6 +73,7 @@ fi
 
 # Build command logic
 BUILD_COMMAND="flutter build $BUILD_TARGET --no-pub --$BUILD_MODE"
+BUILD_COMMAND="$BUILD_COMMAND --dart-define-from-file=$LIFI_BUILD_DEFINES"
 # Prepare build command with feedback service credentials
 BUILD_CMD="$BUILD_COMMAND"
 # Add commit hash and build date to build command
@@ -112,6 +122,23 @@ if [ -n "$MATOMO_URL" ] && [ -n "$MATOMO_SITE_ID" ]; then
   BUILD_CMD="$BUILD_CMD --dart-define=MATOMO_SITE_ID=$MATOMO_SITE_ID"
 else
   echo "Warning: Missing Matomo parameters. Both MATOMO_URL and MATOMO_SITE_ID must be provided."
+fi
+# GasFree TRON is compiled out unless these are passed. Default to the
+# production values CI builds with (.github/workflows/desktop-builds.yml);
+# TRON_GASLESS_ENABLED=false turns the rail off.
+export TRON_GASLESS_ENABLED=${TRON_GASLESS_ENABLED:-true}
+export TRON_GASLESS_RECEIVE_ENABLED=${TRON_GASLESS_RECEIVE_ENABLED:-true}
+export TRON_GASLESS_BASE_URL=${TRON_GASLESS_BASE_URL-https://quicknode.gleec.com/gasfree/tron}
+export TRON_GASLESS_SERVICE_PROVIDER=${TRON_GASLESS_SERVICE_PROVIDER-TLntW9Z59LYY5KEi9cmwk3PKjQga828ird}
+export TRON_GASLESS_REQUIRED_NETWORK=${TRON_GASLESS_REQUIRED_NETWORK-tron}
+bash .github/scripts/validate_tron_gasless_config.sh || exit 1
+BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_ENABLED=$TRON_GASLESS_ENABLED"
+BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_RECEIVE_ENABLED=$TRON_GASLESS_RECEIVE_ENABLED"
+if [ -n "$TRON_GASLESS_BASE_URL" ]; then
+  BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_BASE_URL=$TRON_GASLESS_BASE_URL"
+fi
+if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
+  BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_SERVICE_PROVIDER=$TRON_GASLESS_SERVICE_PROVIDER"
 fi
 # Add web-specific build arguments if the target is web
 if [ "$BUILD_TARGET" = "web" ]; then

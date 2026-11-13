@@ -425,6 +425,8 @@ class SwapInitiatedEventData extends AnalyticsEventData {
     required this.network,
     required this.secondaryNetwork,
     required this.hdType,
+    this.routeCategory,
+    this.stageCount,
   });
 
   final String asset;
@@ -432,6 +434,13 @@ class SwapInitiatedEventData extends AnalyticsEventData {
   final String network;
   final String secondaryNetwork;
   final String hdType;
+
+  /// How the swap completes: `atomic`, `same_chain` or `cross_chain`. Set by
+  /// the unified swap flow only.
+  final String? routeCategory;
+
+  /// How many steps the swap takes. Unified swap flow only.
+  final int? stageCount;
 
   @override
   String get name => 'swap_initiated';
@@ -443,6 +452,8 @@ class SwapInitiatedEventData extends AnalyticsEventData {
     'network': network,
     'secondary_network': secondaryNetwork,
     'hd_type': hdType,
+    if (routeCategory != null) 'route_category': routeCategory,
+    if (stageCount != null) 'stage_count': stageCount,
   };
 }
 
@@ -481,6 +492,8 @@ class SwapSucceededEventData extends AnalyticsEventData {
     required this.fee,
     required this.hdType,
     this.durationMs,
+    this.routeCategory,
+    this.stageCount,
   });
 
   final String asset;
@@ -491,6 +504,12 @@ class SwapSucceededEventData extends AnalyticsEventData {
   final double fee;
   final String hdType;
   final int? durationMs;
+
+  /// See [SwapInitiatedEventData.routeCategory].
+  final String? routeCategory;
+
+  /// See [SwapInitiatedEventData.stageCount].
+  final int? stageCount;
 
   @override
   String get name => 'swap_success';
@@ -505,6 +524,8 @@ class SwapSucceededEventData extends AnalyticsEventData {
     'fee': fee,
     'hd_type': hdType,
     if (durationMs != null) 'duration_ms': durationMs,
+    if (routeCategory != null) 'route_category': routeCategory,
+    if (stageCount != null) 'stage_count': stageCount,
   };
 }
 
@@ -547,8 +568,12 @@ class SwapFailedEventData extends AnalyticsEventData {
     required this.secondaryNetwork,
     required this.failureStage,
     this.failureDetail,
+    this.failureCategory,
     required this.hdType,
     this.durationMs,
+    this.routeCategory,
+    this.outcomeCategory,
+    this.stageCount,
   });
 
   final String asset;
@@ -557,8 +582,24 @@ class SwapFailedEventData extends AnalyticsEventData {
   final String secondaryNetwork;
   final String failureStage;
   final String? failureDetail;
+
+  /// Why the swap failed, as a category the app already chose, such as
+  /// `price_moved`. Sent as is, unlike [failureDetail], which may carry
+  /// provider text. Unified swap flow only.
+  final String? failureCategory;
   final String hdType;
   final int? durationMs;
+
+  /// See [SwapInitiatedEventData.routeCategory].
+  final String? routeCategory;
+
+  /// How the swap ended when it did not deliver what was asked:
+  /// `refunded`, `cancelled`, `no_match`, `partial_below_minimum`,
+  /// `partial_other_token` or `failed`. Unified swap flow only.
+  final String? outcomeCategory;
+
+  /// See [SwapInitiatedEventData.stageCount].
+  final int? stageCount;
 
   @override
   String get name => 'swap_failure';
@@ -572,9 +613,13 @@ class SwapFailedEventData extends AnalyticsEventData {
     'failure_reason': _formatFailureReason(
       stage: failureStage,
       reason: failureDetail,
+      category: failureCategory,
     ),
     'hd_type': hdType,
     if (durationMs != null) 'duration_ms': durationMs,
+    if (routeCategory != null) 'route_category': routeCategory,
+    if (outcomeCategory != null) 'outcome_category': outcomeCategory,
+    if (stageCount != null) 'stage_count': stageCount,
   };
 }
 
@@ -603,7 +648,12 @@ class AnalyticsSwapFailedEvent extends AnalyticsSendDataEvent {
        );
 }
 
-String _formatFailureReason({String? stage, String? reason, String? code}) {
+String _formatFailureReason({
+  String? stage,
+  String? reason,
+  String? code,
+  String? category,
+}) {
   final parts = <String>[];
 
   String? sanitizeStage(String? value) {
@@ -617,7 +667,9 @@ String _formatFailureReason({String? stage, String? reason, String? code}) {
   }
 
   final sanitizedStage = sanitizeStage(stage);
-  final sanitizedReason = _stableFailureToken(reason);
+  final sanitizedReason = category != null
+      ? _stableAnalyticsToken(category)
+      : _stableFailureToken(reason);
   final sanitizedCode = _stableFailureToken(code);
 
   if (sanitizedStage != null) {

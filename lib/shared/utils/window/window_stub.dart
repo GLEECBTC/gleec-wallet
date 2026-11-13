@@ -9,3 +9,15 @@ void showMessageBeforeUnload(String message) {
 Future<void> hardReloadPage() async {
   throw UnsupportedError('stub hardReloadPage');
 }
+
+bool prefersReducedMotion() {
+  throw UnsupportedError('stub prefersReducedMotion');
+}
+
+void Function() watchReducedMotion(void Function(bool reduce) onChange) {
+  throw UnsupportedError('stub watchReducedMotion');
+}
+
+void setTabIconBadge(int? argb) {
+  throw UnsupportedError('stub setTabIconBadge');
+}
