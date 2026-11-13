@@ -17,7 +17,7 @@ jobs:
     # dependency lock avoids treating the broad, non-production browser-QA
     # requirements manifest as a resolvable lockfile (which previously spent
     # 25 minutes backtracking, then exited 127 without reporting a finding).
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
     with:
       scan-args: |-
         --lockfile=pubspec.lock

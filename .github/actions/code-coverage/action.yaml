@@ -63,14 +63,14 @@ runs:
 
     - name: Upload Code Coverage Report
       id: upload_lcov
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ runner.os }}-lcov.info
         path: ./coverage/lcov.info
 
     - name: Upload Code Coverage HTML Report
       id: upload_html
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ runner.os }}-coverage-html
         path: ./coverage-html.zip
