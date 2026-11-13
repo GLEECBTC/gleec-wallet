@@ -615,6 +615,13 @@
         },
         "upstream_test_run_url": "https://github.com/GLEECBTC/kdf-internal/actions/runs/41650695853"
       }
+    },
+    "browser_history_wait_repair": {
+      "original_run": "https://github.com/GLEECBTC/gleec-wallet/actions/runs/43461084482",
+      "failed_stage": "failure_taker_order, Chrome and Safari",
+      "observed": "Swap details reported success and all payment-step assertions passed; the history check asserted exactly five seconds after mounting its subscription. The trading refresh interval is ten seconds.",
+      "repair": "Wait for the HistoryItem condition, bounded at 60 seconds, then retain the existing exactly-one-row assertion. No settlement/payment assertion or app runtime changes.",
+      "validation": "Fresh current-head browser checks required; the original failed logs and original successful unit/coverage job remain evidence for their exact head."
     }
   }
 }

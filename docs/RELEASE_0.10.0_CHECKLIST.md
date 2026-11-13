@@ -33,6 +33,14 @@ stays `0.9.7-1`; production deployment and publication remain separate.
   13 November; SHA-256 `343d3565d8d4a42cb7623bb616677bbdbd4b721a7782aaa1b87fb88bc89c4104`.
   Retrieval confirms availability, separately from the legal owner's approval.
 
+The initial 13 November carry GUI run failed `failure_taker_order` on Chrome
+and Safari after the swap's success/payment assertions passed: its history
+check waited a fixed five seconds for a subscription refreshed every ten
+seconds. The focused test repair waits for the row with a 60-second bound,
+then keeps the same exactly-one-row assertion. It changes no app runtime or
+settlement assertion. Preserve run `43461084482` and require fresh current-head
+browser qualification; the initial unit/coverage job passed separately.
+
 Before merging, the focused carry and #3575 must pass every current hosted
 check, including native builds, both browser suites and the refreshed preview.
 Record accepted SHAs and check/preview evidence in the PR metadata. Verify the
