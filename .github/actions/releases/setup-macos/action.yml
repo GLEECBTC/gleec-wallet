@@ -65,7 +65,7 @@ runs:
     - name: Import macOS certificates
       id: import_certs
       if: inputs.p12-file-base64 != '' && 'KomodoPlatform/komodo-wallet' == github.repository
-      uses: apple-actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3
+      uses: apple-actions/import-codesign-certs@288b8ec97b82c66b6f2a6baaf7acc8dfbcbe331c # v7.2.0
       with:
         keychain: ${{ github.run_id }}
         keychain-password: ${{ github.run_id }}
@@ -76,7 +76,7 @@ runs:
     - name: Download macOS provisioning profile
       id: download_profile
       if: inputs.issuer-id != '' && 'KomodoPlatform/komodo-wallet' == github.repository
-      uses: apple-actions/download-provisioning-profiles@3167792207a5b26099bc0ca22b5010a323dd2a0b # v1
+      uses: apple-actions/download-provisioning-profiles@233aa54e59082c0e8a8cf8b0b02c72dea2422ef9 # v7.1.0
       with:
         bundle-id: ${{ inputs.bundle-id }}
         profile-type: ${{ inputs.profile-type }}
