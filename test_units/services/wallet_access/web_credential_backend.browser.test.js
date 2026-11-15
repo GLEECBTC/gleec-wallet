@@ -131,6 +131,34 @@ async function main() {
       assert.ok(policy.blocked.some(uri=>uri.startsWith('https://invalid.example')));
       trace('CSP blocks unapproved scripts');
     }
+    for (const mutation of ['write', 'delete']) {
+      const cancellation = await evaluate(`(async () => {
+        const api = gleecWalletCredentials;
+        const key = 'canceled-transaction-fixture';
+        await api.write({key, value:'Unfunded-before-cancellation'});
+        const originalGet = IDBObjectStore.prototype.get;
+        let canceled = false;
+        IDBObjectStore.prototype.get = function (query) {
+          const request = originalGet.call(this, query);
+          if (!canceled && this.transaction.mode === 'readwrite' && query === 'active:' + key) {
+            canceled = true;
+            queueMicrotask(() => api.cancel());
+          }
+          return request;
+        };
+        let failure;
+        try {
+          await api[${JSON.stringify(mutation)}]({key, value:'Unfunded-after-cancellation'});
+        } catch (error) { failure = error.code; }
+        finally { IDBObjectStore.prototype.get = originalGet; }
+        const preserved = (await api.read({key})) === 'Unfunded-before-cancellation';
+        await api.delete({key});
+        return {canceled, failure, preserved};
+      })()`);
+      assert.deepEqual(cancellation, {canceled:true, failure:'staleOperation', preserved:true},
+        `Canceling an active IndexedDB ${mutation} must retain the previous credential`);
+    }
+    trace('Canceled IndexedDB mutations preserve the credential');
     const setup = await evaluate(`(async () => {
       try {
         const api=gleecWalletCredentials;

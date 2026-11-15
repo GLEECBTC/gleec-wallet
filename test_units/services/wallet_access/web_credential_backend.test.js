@@ -865,3 +865,35 @@ test('Flutter and optional KDF preload both wait for the browser capability gate
   assert.ok(flutter.indexOf('gleecWalletBrowserSupport.ready')<flutter.indexOf('_flutter.loader.load'));
   assert.ok(preload.indexOf('gleecWalletBrowserSupport.ready')<preload.indexOf('initialize()'));
 });
+
+for (const purpose of [undefined, 'delete']) {
+  test(`cancellation during the final credential reread rejects ${purpose ?? 'unlock'} disclosure`, async () => {
+    const { api, store } = await environment();
+    await api.enrollPasskey({ key: 'wallet-1', value: secret });
+    const get = store.get.bind(store);
+    let reads = 0;
+    store.get = async key => {
+      const record = await get(key);
+      if (++reads === 2) api.cancel();
+      return record;
+    };
+    await assert.rejects(api.read({ key: 'wallet-1', purpose }), { code: 'staleOperation' });
+    store.get = get;
+    assert.equal(await api.read({ key: 'wallet-1' }), secret);
+  });
+}
+
+test('cancellation during deletion authorization reread rejects the grant', async () => {
+  const { api, store } = await environment();
+  await api.enrollPasskey({ key: 'wallet-1', value: secret });
+  const get = store.get.bind(store);
+  let reads = 0;
+  store.get = async key => {
+    const record = await get(key);
+    if (++reads === 2) api.cancel();
+    return record;
+  };
+  await assert.rejects(api.prepareDelete({ key: 'wallet-1' }), { code: 'staleOperation' });
+  store.get = get;
+  assert.equal(await api.read({ key: 'wallet-1' }), secret);
+});

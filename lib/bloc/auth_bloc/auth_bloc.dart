@@ -73,6 +73,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   StreamSubscription<KdfUser?>? _authChangesSubscription;
 
   int _authRevision = 0;
+  int _authObservation = 0;
   Object? _authOperation;
 
   @override
@@ -349,9 +350,16 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       }
     }
 
+    final revision = _authRevision;
+    final observation = ++_authObservation;
+    bool isCurrent() =>
+        !emit.isDone &&
+        revision == _authRevision &&
+        observation == _authObservation;
+
     if (event.currentUser != null) {
       await _walletAccess?.observeEngineUser(event.currentUser);
-      if (emit.isDone) return;
+      if (!isCurrent()) return;
       emit(
         AuthBlocState(
           mode: event.mode,
@@ -363,7 +371,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       );
     } else {
       await _walletAccess?.observeEngineUser(null);
-      if (emit.isDone) return;
+      if (!isCurrent()) return;
       final priorAuthState = state.authenticationState;
       final preserveErrorState =
           priorAuthState?.status == AuthenticationStatus.error;
@@ -1023,6 +1031,7 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
   }) async {
     if (_authOperation != null || state.isLoading) return;
     final revision = _authRevision;
+    final observation = ++_authObservation;
     try {
       if (ensureHealthy) await _kdfSdk.auth.ensureKdfHealthy();
       if (_authOperation != null || revision != _authRevision || emit.isDone) {
@@ -1033,12 +1042,18 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       if (emit.isDone ||
           _authOperation != null ||
           revision != _authRevision ||
+          observation != _authObservation ||
           !_kdfSdk.auth.isSessionContextCurrent(session) ||
           user == null) {
         return;
       }
       await _walletAccess?.observeEngineUser(user);
-      if (emit.isDone || revision != _authRevision) return;
+      if (emit.isDone ||
+          revision != _authRevision ||
+          observation != _authObservation ||
+          !_kdfSdk.auth.isSessionContextCurrent(session)) {
+        return;
+      }
       _emitLoggedInState(emit, user);
       _listenToAuthStateChanges();
     } on AuthSessionChangedException {

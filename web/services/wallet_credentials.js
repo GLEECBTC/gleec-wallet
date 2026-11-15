@@ -98,17 +98,30 @@
       }).catch((error) => { database = null; throw error; });
       return database;
     }
-    async function transaction(mode, action) {
+    async function transaction(mode, action, signal) {
       const db = await open();
       return new Promise((resolve, reject) => {
+        if (signal?.aborted) { reject(new VaultError('staleOperation')); return; }
         let tx;
         try { tx = db.transaction(STORE_NAME, mode, { durability: 'strict' }); }
         catch (_) { tx = db.transaction(STORE_NAME, mode); }
         let result, failure;
         const abort = (code) => { failure = code; tx.abort(); };
-        action(tx.objectStore(STORE_NAME), (value) => { result = value; }, abort);
-        tx.oncomplete = () => resolve(result);
-        tx.onabort = tx.onerror = () => reject(new VaultError(failure ?? 'storageFailed'));
+        // Cancellation can arrive after the caller's generation check while
+        // IndexedDB queues requests. Abort the actual transaction before it
+        // replaces/removes the credential, not only the eventual reply.
+        const cancel = () => {
+          failure = 'staleOperation';
+          try { tx.abort(); } catch (_) { /* A completed commit cannot be undone. */ }
+        };
+        const cleanup = () => signal?.removeEventListener('abort', cancel);
+        tx.oncomplete = () => { cleanup(); resolve(result); };
+        tx.onabort = tx.onerror = () => {
+          cleanup(); reject(new VaultError(failure ?? 'storageFailed'));
+        };
+        signal?.addEventListener('abort', cancel, { once: true });
+        try { action(tx.objectStore(STORE_NAME), (value) => { result = value; }, abort); }
+        catch (error) { cleanup(); try { tx.abort(); } catch (_) {} reject(error); }
       });
     }
     async function getSlot(slot) {
@@ -131,7 +144,7 @@
         if (!slot.startsWith('staged:')) fail('invalidResponse');
         await transaction('readwrite', (store) => store.delete(slot));
       },
-      async promote(key, expectedRevision, stageSlot, stagedRevision) {
+      async promote(key, expectedRevision, stageSlot, stagedRevision, signal) {
         return transaction('readwrite', (store, _, abort) => {
           const current = store.get(`active:${key}`);
           current.onsuccess = () => {
@@ -153,9 +166,9 @@
               };
             };
           };
-        });
+        }, signal);
       },
-      async remove(key, expectedRevision) {
+      async remove(key, expectedRevision, signal) {
         return transaction('readwrite', (store, _, abort) => {
           const current = store.get(`active:${key}`);
           current.onsuccess = () => {
@@ -165,7 +178,7 @@
             const rows = store.index('walletKey').getAllKeys(key);
             rows.onsuccess = () => { for (const slot of rows.result) store.delete(slot); };
           };
-        });
+        }, signal);
       },
     };
   }
@@ -411,7 +424,7 @@
           fail('storageFailed');
         }
         assertOperation(token);
-        await store.promote(next.key, previous?.revision ?? null, stageSlot, next.revision);
+        await store.promote(next.key, previous?.revision ?? null, stageSlot, next.revision, operation.signal);
         // Promotion has already invalidated the old path, even if the active
         // readback below encounters a storage error. Revoke other tabs now.
         notify(next, next.key);
@@ -559,6 +572,7 @@
           const result = await unlockRecord(record, token, signal);
           assertOperation(token);
           if ((await store.get(key))?.revision !== record.revision) fail('staleOperation');
+          assertOperation(token);
           // Credential verification for deletion and the following erase share
           // this one explicit, purpose-bound ceremony, never a normal unlock.
           if (purpose === 'delete' && trigger !== 'automatic') {
@@ -581,6 +595,7 @@
           }
           assertOperation(token);
           if ((await store.get(key))?.revision !== record.revision) fail('staleOperation');
+          assertOperation(token);
           return deletionPermit(record, token);
         });
       },
@@ -613,7 +628,7 @@
           if (previous?.protection === 'passkeyPrf' &&
               !validDeletionPermit(permit, previous, token)) fail('staleOperation');
           assertOperation(token);
-          await store.remove(key, previous?.revision ?? null);
+          await store.remove(key, previous?.revision ?? null, operation.signal);
           if (await store.get(key)) fail('storageFailed');
           notify(null, key);
         });

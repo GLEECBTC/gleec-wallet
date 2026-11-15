@@ -28,12 +28,100 @@ import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 
 part 'auth_bloc_trezor_cases.dart';
 
 /// Auth operations publish SDK-owned metadata and preserve typed failures.
 void testAuthBloc() {
   _trezorSignInCases();
+
+  group('AuthBloc asynchronous access observation', () {
+    late _FakeAuth auth;
+    late _FakeWalletAccess access;
+    late AuthBloc bloc;
+
+    setUp(() {
+      auth = _FakeAuth();
+      access = _FakeWalletAccess();
+      bloc = AuthBloc(
+        _FakeSdk(auth),
+        _FakeWalletsRepository(),
+        _FakeSettingsRepository(),
+        _FakeTradingStatusService(),
+        walletAccessService: access,
+      );
+      addTearDown(bloc.close);
+    });
+
+    test('pending observation cannot restore a cleared auth state', () async {
+      final reached = Completer<void>();
+      final release = Completer<void>();
+      access.onObserve = (_) async {
+        reached.complete();
+        await release.future;
+      };
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: _user()),
+      );
+      await reached.future;
+      bloc.add(const AuthStateClearRequested());
+      await Future<void>.delayed(Duration.zero);
+      release.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.currentUser, isNull);
+      expect(bloc.state.isSignedIn, isFalse);
+    });
+
+    test('newer observed wallet wins over a delayed older wallet', () async {
+      final original = _user();
+      final replacement = _user(name: 'Wallet 2');
+      final reached = Completer<void>();
+      final release = Completer<void>();
+      access.onObserve = (user) async {
+        if (user == original) {
+          reached.complete();
+          await release.future;
+        }
+      };
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: original),
+      );
+      await reached.future;
+      final replaced = bloc.stream.firstWhere(
+        (state) => state.currentUser == replacement,
+      );
+      bloc.add(
+        AuthModeChanged(mode: AuthorizeMode.logIn, currentUser: replacement),
+      );
+      await replaced;
+      release.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(bloc.state.currentUser, replacement);
+    });
+
+    test(
+      'restoration rejects a session replaced during access lookup',
+      () async {
+        final user = _user();
+        auth.userToReturn = user;
+        final reached = Completer<void>();
+        final release = Completer<void>();
+        access.onObserve = (_) async {
+          reached.complete();
+          await release.future;
+        };
+        bloc.add(const AuthStateRestoreRequested());
+        await reached.future;
+        auth.sessions.invalidate();
+        auth.userToReturn = user;
+        release.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(bloc.state.currentUser, isNull);
+        expect(bloc.state.isSignedIn, isFalse);
+      },
+    );
+  });
 
   group('AuthBloc sign-in', () {
     late _FakeAuth auth;
@@ -925,6 +1013,21 @@ KdfUser _user({String name = 'Wallet 1', JsonMap metadata = const {}}) =>
       isBip39Seed: true,
       metadata: metadata,
     );
+
+class _FakeWalletAccess implements WalletAccessService {
+  Future<void> Function(KdfUser?)? onObserve;
+
+  @override
+  Future<void> observeEngineUser(KdfUser? user) async {
+    await onObserve?.call(user);
+  }
+
+  @override
+  void invalidatePendingOperations() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _FakeAuth implements KomodoDefiLocalAuth {
   final StreamController<KdfUser?> _watcher =
