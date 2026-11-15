@@ -31,6 +31,11 @@ inputs:
     description: "App Store Connect API private key"
     required: false
 
+outputs:
+  signing-enabled:
+    description: "Whether this run imported macOS signing credentials"
+    value: ${{ steps.import_certs.outcome == 'success' }}
+
 runs:
   using: "composite"
   steps:
@@ -66,9 +71,8 @@ runs:
       if: inputs.p12-file-base64 != '' && github.event_name != 'pull_request'
       uses: apple-actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3
       with:
-        keychain: ${{ github.run_id }}
-        keychain-password: ${{ github.run_id }}
-        create-keychain: false
+        # Use the action's temporary keychain and generated password.
+        create-keychain: true
         p12-file-base64: ${{ inputs.p12-file-base64 }}
         p12-password: ${{ inputs.p12-password }}
 
