@@ -105,12 +105,14 @@ extension _UnifiedSwapStart on UnifiedSwapBloc {
 
     if (termsRequired) {
       try {
-        await _terms.recordAcceptance(
-          at: _now(),
-          snapshot: legalSnapshot,
-          walletKey: confirmation.submission.walletKey,
-          stillCurrent: () => _stillConfirmed(emit, confirmation),
-        );
+        await _terms
+            .recordAcceptance(
+              at: _now(),
+              snapshot: legalSnapshot,
+              walletKey: confirmation.submission.walletKey,
+              stillCurrent: () => _stillConfirmed(emit, confirmation),
+            )
+            .timeout(_evaluationTimeout);
       } on Object {
         _abandonStart(emit, confirmation);
         return;

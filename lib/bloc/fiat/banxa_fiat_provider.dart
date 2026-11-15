@@ -9,10 +9,31 @@ import 'package:web_dex/bloc/fiat/models/models.dart';
 import 'package:web_dex/model/coin_type.dart';
 
 class BanxaFiatProvider extends BaseFiatProvider {
-  BanxaFiatProvider();
+  BanxaFiatProvider({super.client});
   final String providerId = 'Banxa';
   final String apiEndpoint = '/api/v1/banxa';
   static final _log = Logger('BanxaFiatProvider');
+
+  T _parseData<T>(dynamic response, T Function(Map<String, dynamic>) parse) {
+    if (response is! Map<String, dynamic>) {
+      throw const FiatProviderUnavailable();
+    }
+    try {
+      if (response['errors'] case final Map<String, dynamic> errors) {
+        final error = FiatBuyOrderError.fromJson(errors);
+        if (!error.isNone) throw FiatProviderRejected(error);
+      }
+      final data = response['data'];
+      if (data is! Map<String, dynamic>) {
+        throw const FiatProviderUnavailable();
+      }
+      return parse(data);
+    } on TypeError {
+      throw const FiatProviderUnavailable();
+    } on FormatException {
+      throw const FiatProviderUnavailable();
+    }
+  }
 
   bool _isUnsupportedCoinForChain(String coinCode, CoinType coinType) {
     switch (coinCode) {
@@ -142,16 +163,19 @@ class BanxaFiatProvider extends BaseFiatProvider {
   @override
   Future<List<FiatCurrency>> getFiatList() async {
     final response = await _getFiats();
-    final data = response['data']['fiats'] as List<dynamic>;
-    return data
-        .map(
-          (item) => FiatCurrency(
-            symbol: item['fiat_code'] as String,
-            name: item['fiat_name'] as String,
-            minPurchaseAmount: Decimal.zero,
-          ),
-        )
-        .toList();
+    return _parseData(
+      response,
+      (data) => (data['fiats'] as List<dynamic>)
+          .cast<Map<String, dynamic>>()
+          .map(
+            (item) => FiatCurrency(
+              symbol: item['fiat_code'] as String,
+              name: item['fiat_name'] as String,
+              minPurchaseAmount: Decimal.zero,
+            ),
+          )
+          .toList(),
+    );
   }
 
   @override
@@ -159,59 +183,65 @@ class BanxaFiatProvider extends BaseFiatProvider {
     // TODO: add model classes to parse responses like these when migrating to
     // the SDK
     final response = await _getCoins();
-    final data = response['data']['coins'] as List<dynamic>;
+    return _parseData(response, (responseData) {
+      final data = (responseData['coins'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
 
-    final List<CryptoCurrency> currencyList = [];
-    for (final item in data) {
-      final coinCode = item['coin_code'] as String;
-      final coinName = item['coin_name'] as String;
-      final blockchains = item['blockchains'] as List<dynamic>;
+      final List<CryptoCurrency> currencyList = [];
+      for (final item in data) {
+        final coinCode = item['coin_code'] as String;
+        final coinName = item['coin_name'] as String;
+        final blockchains = (item['blockchains'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
 
-      for (final blockchain in blockchains) {
-        final coinType = getCoinType(
-          blockchain['code'] as String,
-          coinSymbol: coinCode,
-        );
-        if (coinType == null) {
-          continue;
-        }
-        if (_isUnsupportedCoinForChain(coinCode, coinType)) {
-          _log.warning('Banxa does not support $coinCode on ${coinType.name}');
-          continue;
-        }
+        for (final blockchain in blockchains) {
+          final coinType = getCoinType(
+            blockchain['code'] as String,
+            coinSymbol: coinCode,
+          );
+          if (coinType == null) {
+            continue;
+          }
+          if (_isUnsupportedCoinForChain(coinCode, coinType)) {
+            _log.warning(
+              'Banxa does not support $coinCode on ${coinType.name}',
+            );
+            continue;
+          }
 
-        // Parse min_value which can be a string, int, or double
-        final dynamic minValue = blockchain['min_value'];
-        Decimal minPurchaseAmount;
+          // Parse min_value which can be a string, int, or double
+          final dynamic minValue = blockchain['min_value'];
+          Decimal minPurchaseAmount;
 
-        if (minValue == null) {
-          minPurchaseAmount = Decimal.fromInt(0);
-        } else if (minValue is String) {
-          minPurchaseAmount = Decimal.fromJson(minValue);
-        } else if (minValue is int) {
-          minPurchaseAmount = Decimal.fromInt(minValue);
-        } else if (minValue is double) {
-          minPurchaseAmount = Decimal.parse(minValue.toString());
-        } else {
-          // Default to zero for any other unexpected types
-          minPurchaseAmount = Decimal.fromInt(0);
-          _log.warning(
-            'Unexpected type for min_value: ${minValue.runtimeType}',
+          if (minValue == null) {
+            minPurchaseAmount = Decimal.fromInt(0);
+          } else if (minValue is String) {
+            minPurchaseAmount = Decimal.fromJson(minValue);
+          } else if (minValue is int) {
+            minPurchaseAmount = Decimal.fromInt(minValue);
+          } else if (minValue is double) {
+            minPurchaseAmount = Decimal.parse(minValue.toString());
+          } else {
+            // Default to zero for any other unexpected types
+            minPurchaseAmount = Decimal.fromInt(0);
+            _log.warning(
+              'Unexpected type for min_value: ${minValue.runtimeType}',
+            );
+          }
+
+          currencyList.add(
+            CryptoCurrency(
+              symbol: coinCode,
+              name: coinName,
+              chainType: coinType,
+              minPurchaseAmount: minPurchaseAmount,
+            ),
           );
         }
-
-        currencyList.add(
-          CryptoCurrency(
-            symbol: coinCode,
-            name: coinName,
-            chainType: coinType,
-            minPurchaseAmount: minPurchaseAmount,
-          ),
-        );
       }
-    }
 
-    return currencyList;
+      return currencyList;
+    });
   }
 
   @override
@@ -231,14 +261,16 @@ class BanxaFiatProvider extends BaseFiatProvider {
         target,
         sourceAmount: sourceAmount,
       );
-      final List<FiatPaymentMethod> paymentMethods =
-          (response['data']['payment_methods'] as List)
-              .map(
-                (json) => FiatPaymentMethod.fromJson(
-                  json as Map<String, dynamic>? ?? {},
-                ),
-              )
-              .toList();
+      final List<FiatPaymentMethod> paymentMethods = _parseData(
+        response,
+        (data) => (data['payment_methods'] as List)
+            .map(
+              (json) => FiatPaymentMethod.fromJson(
+                json as Map<String, dynamic>? ?? {},
+              ),
+            )
+            .toList(),
+      );
 
       final List<Future<FiatPriceInfo>> priceFutures = [];
       for (final paymentMethod in paymentMethods) {
@@ -260,9 +292,10 @@ class BanxaFiatProvider extends BaseFiatProvider {
       }
 
       return paymentMethods;
-    } catch (e, s) {
-      _log.severe('Failed to get payment methods list', e, s);
-      return [];
+    } on TypeError {
+      throw const FiatProviderUnavailable();
+    } on FormatException {
+      throw const FiatProviderUnavailable();
     }
   }
 
@@ -273,25 +306,26 @@ class BanxaFiatProvider extends BaseFiatProvider {
     String sourceAmount,
     FiatPaymentMethod paymentMethod,
   ) async {
-    try {
-      final response =
-          await _getPricesWithPaymentMethod(
-                source,
-                target,
-                sourceAmount,
-                paymentMethod,
-              )
-              as Map<String, dynamic>? ??
-          {};
-      final responseData = response['data'] as Map<String, dynamic>? ?? {};
-      final prices = responseData['prices'] as List;
-      return FiatPriceInfo.fromJson(
-        prices.first as Map<String, dynamic>? ?? {},
+    final response = await _getPricesWithPaymentMethod(
+      source,
+      target,
+      sourceAmount,
+      paymentMethod,
+    );
+    return _parseData(response, (data) {
+      final prices = data['prices'] as List;
+      if (prices.isEmpty) throw const FiatProviderUnavailable();
+      final price = FiatPriceInfo.fromJson(
+        prices.first as Map<String, dynamic>,
       );
-    } catch (e, s) {
-      _log.severe('Failed to get payment method price', e, s);
-      return FiatPriceInfo.zero;
-    }
+      if (price.coinAmount <= Decimal.zero ||
+          price.fiatAmount <= Decimal.zero ||
+          price.coinCode != target.configSymbol ||
+          price.fiatCode != source) {
+        throw const FiatProviderUnavailable();
+      }
+      return price;
+    });
   }
 
   @override
