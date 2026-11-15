@@ -2073,6 +2073,9 @@ abstract class LocaleKeys {
   static const authPasskeySetupConfirmations = 'authPasskeySetupConfirmations';
   static const authPasskeySetupCompactDescription =
       'authPasskeySetupCompactDescription';
+  static const authPasskeyLocalScopeCompact = 'authPasskeyLocalScopeCompact';
+  static const authPasskeySetupPending = 'authPasskeySetupPending';
+  static const authProtectionPending = 'authProtectionPending';
   static const authPasskeyReadyCompactDescription =
       'authPasskeyReadyCompactDescription';
   static const authRecoveryPhraseTitle = 'authRecoveryPhraseTitle';
