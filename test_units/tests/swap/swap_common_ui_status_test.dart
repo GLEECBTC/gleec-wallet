@@ -294,6 +294,7 @@ void main() {
             .getSemantics(find.text('You received 3,001 USDC'))
             .getSemanticsData();
         expect(data.flagsCollection.isHeader, isTrue);
+        expect(data.headingLevel, 1);
         semantics.dispose();
       });
     });

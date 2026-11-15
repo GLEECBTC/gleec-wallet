@@ -83,6 +83,7 @@ class SwapPageHeading extends StatelessWidget {
     final focus = SwapScreen.focusOf(context);
     Widget name = Semantics(
       header: true,
+      headingLevel: 1,
       namesRoute: true,
       label: visible ? null : title,
       // A node with no size is hidden from screen readers.

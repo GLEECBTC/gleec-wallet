@@ -21,14 +21,13 @@ enum _ConsolidationSourceAvailability {
   preflightUnavailable,
 }
 
-typedef GaslessConsolidationAddressVerifier =
-    String? Function(
-      KomodoDefiSdk sdk,
-      Asset asset,
-      CoinAddressesState state, {
-      required WalletType? walletType,
-      required WalletId? currentWalletId,
-    });
+typedef GaslessConsolidationAddressVerifier = String? Function(
+  KomodoDefiSdk sdk,
+  Asset asset,
+  CoinAddressesState state, {
+  required WalletType? walletType,
+  required WalletId? currentWalletId,
+});
 
 class _ConsolidationSource {
   const _ConsolidationSource({
@@ -485,6 +484,7 @@ class _ConsolidationGateStatus extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       header: true,
+                      headingLevel: 1,
                       child: Text(
                         LocaleKeys.gaslessConsolidationTitle.tr(),
                         style: theme.textTheme.headlineSmall?.copyWith(
@@ -574,6 +574,7 @@ class _ConsolidationSourceList extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       header: true,
+                      headingLevel: 1,
                       child: Text(
                         LocaleKeys.gaslessConsolidationTitle.tr(),
                         style: theme.textTheme.headlineSmall?.copyWith(

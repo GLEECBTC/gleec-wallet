@@ -11,7 +11,7 @@ elif [ "$#" -eq 2 ]; then
     BUILD_TARGET=$1
     BUILD_MODE=$2
 else
-    echo "Usage: $0 [<build_target> <build_mode>]\nE.g. $0 web release"
+    printf 'Usage: %s [<build_target> <build_mode>]\nE.g. %s web release\n' "$0" "$0"
     exit 1
 fi
 
@@ -25,23 +25,20 @@ echo "Building with target: $BUILD_TARGET, mode: $BUILD_MODE"
 # bundle must never be used as a Dart defines file or passed into this container.
 LIFI_BUILD_DEFINES=$(python3 tool/lifi_build_config.py "${LIFI_BUILD_ENVIRONMENT:-production}") || exit 1
 
-# Ensure submodule is initialized and pinned to the recorded commit
-if command -v git >/dev/null 2>&1; then
-    echo "Ensuring SDK submodule is initialized and pinned..."
-    # Keep local submodule config in sync with .gitmodules (e.g., update=checkout)
-    git submodule sync --recursive || true
-    # Clean submodules to discard local changes and untracked files
-    git submodule foreach --recursive "git reset --hard && git clean -fdx" || true
-    # Initialize and checkout recorded commits (pinned)
-    git submodule update --init --recursive --checkout || true
-    # Enable on-demand fetch for submodules (helps when switching branches)
-    git config fetch.recurseSubmodules on-demand || true
+# Initialize missing SDK checkouts without resetting local SDK work. Refuse a
+# different checked-out commit (including nested submodules) before updating.
+SDK_STATUS=$(git submodule status --recursive -- sdk)
+if printf '%s\n' "$SDK_STATUS" | grep -Eq '^[+U]'; then
+    echo "SDK submodule differs from the recorded commit or has conflicts. Resolve its pin explicitly before building; local work was left intact." >&2
+    exit 1
 fi
+git submodule sync --recursive -- sdk
+git submodule update --init --recursive --checkout -- sdk
 
 if [ "$(uname)" = "Darwin" ]; then
-    PLATFORM_FLAG="--platform linux/amd64"
+    PLATFORM_ARGS=(--platform linux/amd64)
 else
-    PLATFORM_FLAG=""
+    PLATFORM_ARGS=()
 fi
 
 HOST_UID=$(id -u)
@@ -56,8 +53,8 @@ if [ "$HOST_UID" = "0" ]; then
     HOST_GID=1000
 fi
 
-docker build $PLATFORM_FLAG --build-arg BUILD_USER_ID=$HOST_UID -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:35
-docker build $PLATFORM_FLAG -f .docker/komodo-wallet-android.dockerfile . -t komodo/komodo-wallet
+docker build "${PLATFORM_ARGS[@]}" --build-arg "BUILD_USER_ID=$HOST_UID" -f .docker/android-sdk.dockerfile . -t komodo/android-sdk:36
+docker build "${PLATFORM_ARGS[@]}" -f .docker/komodo-wallet-android.dockerfile . -t komodo/komodo-wallet
 
 # Create the build directory ourselves to prevent it from being created by the Docker daemon (as root)
 mkdir -p ./build
@@ -66,9 +63,9 @@ COMMIT_HASH=$(git rev-parse --short HEAD | cut -c1-7)
 BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%MZ')
 
 # Only pass GITHUB_API_PUBLIC_READONLY_TOKEN as environment variable
-ENV_ARGS=""
+ENV_ARGS=()
 if [ -n "$GITHUB_API_PUBLIC_READONLY_TOKEN" ]; then
-    ENV_ARGS="-e GITHUB_API_PUBLIC_READONLY_TOKEN=$GITHUB_API_PUBLIC_READONLY_TOKEN"
+    ENV_ARGS=(-e GITHUB_API_PUBLIC_READONLY_TOKEN)
 fi
 
 # Build command logic
@@ -110,7 +107,7 @@ if [ "$HAVE_TRELLO_IDS" = true ] && [ -n "$FEEDBACK_API_KEY" ] && [ -n "$FEEDBAC
 else
   # If any Cloudflare credential is missing, log a message but continue the build
   if [ -n "$FEEDBACK_API_KEY" ] || [ -n "$FEEDBACK_PRODUCTION_URL" ] ||
-     ([ -n "$TRELLO_BOARD_ID" ] || [ -n "$TRELLO_LIST_ID" ]); then
+     { [ -n "$TRELLO_BOARD_ID" ] || [ -n "$TRELLO_LIST_ID" ]; }; then
     echo "Warning: Incomplete Cloudflare feedback credentials provided. All Cloudflare credentials and Trello board/list IDs must be present to include them in the build."
   fi
 fi
@@ -147,9 +144,9 @@ if [ "$BUILD_TARGET" = "web" ]; then
 fi
 # Use the provided arguments for flutter build
 # Build a second time if needed, as asset downloads will require a rebuild on the first attempt
-docker run $PLATFORM_FLAG --rm -v ./build:/app/build \
-  -v $(pwd):/app \
+docker run "${PLATFORM_ARGS[@]}" --rm -v "$(pwd)/build:/app/build" \
+  -v "$(pwd):/app" \
   -u "$HOST_UID:$HOST_GID" \
-  $ENV_ARGS \
-  komodo/komodo-wallet:latest sh -c \
-  "sudo chown -R komodo:komodo /app/build; flutter pub get --enforce-lockfile; $BUILD_COMMAND || true; flutter build $BUILD_TARGET --config-only; $BUILD_CMD"
+  "${ENV_ARGS[@]}" \
+  komodo/komodo-wallet:latest bash -e -c \
+  "sudo chown -R komodo:komodo /app/build; flutter pub get --enforce-lockfile; $BUILD_COMMAND || true; $BUILD_CMD"

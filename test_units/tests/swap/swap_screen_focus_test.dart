@@ -19,6 +19,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_common_ui_fakes.dart';
@@ -158,6 +159,10 @@ void main() {
       expect(
         tester.getSemantics(find.text('One')),
         isSemantics(label: 'One', isHeader: true, namesRoute: true),
+      );
+      expect(
+        tester.getSemantics(find.text('One')).getSemanticsData().headingLevel,
+        1,
       );
     });
 

@@ -161,7 +161,7 @@ class LifiBuildConfigTest(unittest.TestCase):
                 git.write_text("#!/bin/sh\nif [ \"$1\" = rev-parse ]; then echo abcdef0; fi\nexit 0\n")
                 git.chmod(0o700)
                 calls = work / "calls.txt"
-                result = subprocess.run(["sh", str(ROOT / ".docker/build.sh"), "apk", "release"], cwd=work,
+                result = subprocess.run(["bash", str(ROOT / ".docker/build.sh"), "apk", "release"], cwd=work,
                                         env={**build_environment(work, environment), "DOCKER_CALLS": str(calls)},
                                         capture_output=True, text=True)
                 if environment in ["staging", "invalid"]:
