@@ -5,15 +5,18 @@ import 'package:web_dex/views/dex/entity_details/swap/swap_details_step_list.dar
 import 'package:web_dex/views/dex/entity_details/swap/swap_recover_button.dart';
 import 'package:web_dex/views/dex/entity_details/trading_details_coin_pair.dart';
 import 'package:web_dex/views/dex/entity_details/trading_details_total_time.dart';
-import 'package:web_dex/shared/widgets/copied_text.dart';
 
 /// SwapDetails shows the basic information of a DEX swap including coin pairs,
 /// timing and progress steps.  It now includes the swap UUID with a copy
 /// button so users can easily copy it.  This version uses static strings
 /// instead of translation keys for the “Swap UUID” label.
 class SwapDetails extends StatelessWidget {
-  const SwapDetails({Key? key, required this.swapStatus, required this.isFailed, this.belowUuid})
-      : super(key: key);
+  const SwapDetails({
+    Key? key,
+    required this.swapStatus,
+    required this.isFailed,
+    this.belowUuid,
+  }) : super(key: key);
 
   final Swap swapStatus;
   final bool isFailed;
@@ -31,19 +34,19 @@ class SwapDetails extends StatelessWidget {
           if (swapStatus.recoverable)
             Padding(
               padding: const EdgeInsets.only(bottom: 20),
-              child: SwapRecoverButton(
-                uuid: swapStatus.uuid,
-              ),
+              child: SwapRecoverButton(uuid: swapStatus.uuid),
             ),
           // Coin pair and amounts
           TradingDetailsCoinPair(
-            baseCoin:
-                swapStatus.isTaker ? swapStatus.takerCoin : swapStatus.makerCoin,
+            baseCoin: swapStatus.isTaker
+                ? swapStatus.takerCoin
+                : swapStatus.makerCoin,
             baseAmount: swapStatus.isTaker
                 ? swapStatus.takerAmount
                 : swapStatus.makerAmount,
-            relCoin:
-                swapStatus.isTaker ? swapStatus.makerCoin : swapStatus.takerCoin,
+            relCoin: swapStatus.isTaker
+                ? swapStatus.makerCoin
+                : swapStatus.takerCoin,
             relAmount: swapStatus.isTaker
                 ? swapStatus.makerAmount
                 : swapStatus.takerAmount,
@@ -68,20 +71,21 @@ class SwapDetails extends StatelessWidget {
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 
   int? get _finishedTime {
-    if (swapStatus.events.isEmpty) {
-      return null;
-    }
-    if (swapStatus.events.last.event.type ==
-            swapStatus.successEvents.last ||
-        isFailed) {
-      return swapStatus.events.last.timestamp;
+    final terminalEvents = isFailed
+        ? swapStatus.errorEvents
+        : [
+            if (swapStatus.successEvents.isNotEmpty)
+              swapStatus.successEvents.last,
+          ];
+    for (final event in swapStatus.events) {
+      if (terminalEvents.contains(event.event.type)) return event.timestamp;
     }
     return null;
   }

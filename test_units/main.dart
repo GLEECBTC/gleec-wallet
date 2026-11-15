@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+
 import 'services/file_loader/diagnostic_artifacts_test.dart'
     as diagnostic_artifacts_test;
 import 'services/file_loader/guarded_file_saver_test.dart'
@@ -81,6 +82,8 @@ import 'tests/views/dex/simple/form/tables/coins_table_item_key_test.dart'
     as coins_table_item_key_test;
 import 'tests/views/dex/simple/form/tables/table_utils_test.dart'
     as table_utils_test;
+import 'tests/views/dex/swap_terminal_status_test.dart'
+    as swap_terminal_status_test;
 import 'tests/wallet/coin_details/gasless_pending_transfer_panel_test.dart'
     as gasless_pending_transfer_panel_test;
 import 'tests/wallet/coin_details/gasless_recovery_banner_scope_test.dart'
@@ -854,6 +857,7 @@ void main() {
   swap_sign_in_surface_test.main();
   table_utils_test.main();
   coins_table_item_key_test.main();
+  swap_terminal_status_test.main();
   gasless_pending_transfer_panel_test.main();
   gasless_support_diagnostics_test.main();
   gasless_recovery_banner_scope_test.main();
