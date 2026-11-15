@@ -9,6 +9,7 @@ import 'package:komodo_ui/komodo_ui.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/main.dart' as app;
 
+import '../../common/widget_tester_pump_extension.dart';
 import '../../helpers/accept_alpha_warning.dart';
 import '../../helpers/restore_wallet.dart';
 
@@ -31,6 +32,10 @@ Future<void> testCoinIcons(WidgetTester tester) async {
   await tester.pumpAndSettle();
 
   final listFinder = find.byKey(const Key('coins-manager-list'));
+  final iconsFinder = find.descendant(
+    of: listFinder,
+    matching: find.byType(AssetIcon),
+  );
 
   print('🔍 COIN ICONS: Starting icon verification loop');
 
@@ -41,12 +46,21 @@ Future<void> testCoinIcons(WidgetTester tester) async {
     pageCount++;
     print('🔍 COIN ICONS: Checking page $pageCount');
 
-    // Check the icons before scrolling
-    final coinIcons = find
-        .descendant(of: listFinder, matching: find.byType(AssetIcon))
-        .evaluate()
-        .toList();
-    expect(coinIcons, isNotEmpty, reason: 'The asset list must contain icons');
+    // The manager loads its coin list asynchronously. An idle animation queue
+    // does not mean those rows have arrived, especially on a cold Safari run.
+    if (!tester.any(iconsFinder)) {
+      await tester.pumpUntilFound(
+        iconsFinder,
+        timeout: const Duration(seconds: 30),
+        describeTarget: 'coin icons on asset list page $pageCount',
+      );
+    }
+    final coinIcons = iconsFinder.evaluate().toList();
+    expect(
+      coinIcons,
+      isNotEmpty,
+      reason: 'Asset list page $pageCount must contain icons',
+    );
 
     // Snapshot image paths before awaiting bundle reads: live balance updates
     // may rebuild the rows while an asynchronous asset load is in flight.
