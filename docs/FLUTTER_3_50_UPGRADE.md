@@ -49,6 +49,11 @@ public APIs requires a coordinated migration of third-party packages. This
 upgrade retains the existing imports. Analysis reports those deprecations; CI
 continues its existing policy of failing on errors rather than all lint infos.
 
+The SDK playground carries an auditable copy of `json_editor_flutter` 1.4.2
+with its Dart language floor raised from 2.17 to 3.0. Its source and license are
+unchanged; the higher language version permits Flutter 3.50's constant enum
+comparisons. Both playground hosting workflows run an editor interaction test.
+
 ## Validation
 
 Validated with the pinned FVM toolchain on November 15, 2026:
@@ -61,23 +66,26 @@ Validated with the pinned FVM toolchain on November 15, 2026:
 | SDK Chrome/Wasm cases | 215 SDK cases and 10 framework cases passed |
 | Release app bundle | Passed after the expected first-pass asset refresh |
 | Android release APK | Passed; exactly ARM32/ARM64 with Flutter, app and KDF libraries; ZIP and arm64 ELF segments verified for 16 KB pages |
+| Android release App Bundle | Passed; exactly ARM32/ARM64 with complete Flutter, app and KDF libraries and valid archive contents |
 | iOS release | Unsigned device build passed with Xcode 27.2 |
 | macOS release | Unsigned universal x86_64/arm64 app and bundled KDF helper passed |
 | Web release | Wasm and JavaScript fallback build passed |
+| SDK playground | Release web build and JSON editor insertion/editing regression passed |
+| Linux release | GitHub Actions native build and artifact upload passed |
 | Signed-out browser smoke | Release/headless Chrome passed app-bar, wallet-row, maker/taker and settings navigation; the test uses the dialog's real Cancel control |
 | App/SDK lockfiles | Enforced resolution passed |
 | Supporting gates | LI.FI production configuration, Docker regressions, APK-verifier regressions, theme-role checks, hosting URL parsing and Bitrefill bridge tests passed |
 
-The full app analysis has zero errors, 64 warnings and 3,203 infos. These remain, including
+The full app analysis has zero errors, 64 warnings and 3,204 infos. These remain, including
 Material/Cupertino deprecations; the existing CI policy passes, while plain
 `flutter analyze` still returns nonzero. See the SDK toolchain guide for its
 separate diagnostic counts.
 
 Independent adversarial reviews covered native configuration, generated code,
 dependency/CI integrity, widget behavior, and final APK contents. Findings were
-fixed before opening the draft PRs. Windows/Linux native builds and the full
-network-backed integration matrix are left to their CI hosts; local native
-build results do not claim those platforms have passed.
+fixed before opening the app draft PR. Linux passed on its CI host; Windows
+and the full network-backed integration matrix run on their CI hosts. Local
+native build results do not claim those remaining checks have passed.
 
 The SDK dependency is proposed in
 [SDK PR #447](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/447).
