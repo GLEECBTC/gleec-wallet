@@ -56,6 +56,7 @@ jobs:
         id: auth_ux
         timeout-minutes: 5
         env:
+          GITHUB_API_PUBLIC_READONLY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AUTH_UX_CAPTURE_DIR: build/auth-ux
         run: |
           rm -rf build/auth-ux
