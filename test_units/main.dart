@@ -117,6 +117,7 @@ import 'views/wallets_manager/widgets/wallets_manager_test.dart'
 
 import 'tests/dex/order_model_validation_test.dart';
 import 'tests/dex/trading_entities_guards_test.dart';
+import 'tests/dex/history_list_test.dart' as history_list_test;
 import 'tests/encryption/encrypt_data_tests.dart';
 import 'tests/fiat/fiat_checkout_url_allowlist_test.dart'
     as fiat_checkout_url_allowlist_test;
@@ -617,6 +618,7 @@ void main() {
 
   group('Dex trading safety:', () {
     testTradingEntitiesGuards();
+    history_list_test.main();
     testOrderModelValidation();
   });
 

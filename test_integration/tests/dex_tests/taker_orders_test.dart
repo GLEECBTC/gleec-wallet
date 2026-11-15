@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:web_dex/main.dart' as app;
 import 'package:web_dex/shared/widgets/copied_text.dart';
 import 'package:web_dex/views/dex/entities_list/history/history_item.dart';
+import 'package:web_dex/views/dex/entity_details/swap/swap_details_page.dart';
 
 import '../../common/goto.dart' as goto;
 import '../../common/pause.dart';
@@ -133,9 +134,13 @@ Finder _infiniteBidFinder() {
 
 Future<void> _testSwapHistoryTable(
   WidgetTester tester, {
-  Duration timeout = const Duration(milliseconds: 5000),
+  Duration timeout = const Duration(seconds: 30),
 }) async {
   print('🔍 HISTORY CHECK: Starting history table verification');
+
+  final swapDetails = find.byType(SwapDetailsPage);
+  expect(swapDetails, findsOneWidget);
+  final swapUuid = tester.widget<SwapDetailsPage>(swapDetails).swapStatus.uuid;
 
   final Finder backButton = find.byKey(const Key('return-button'));
   final Finder historyTab = find.byKey(const Key('dex-history-tab'));
@@ -146,7 +151,19 @@ Future<void> _testSwapHistoryTable(
   await tester.tapAndPump(historyTab);
   print('🔍 HISTORY CHECK: Opened history tab');
 
-  await tester.pump(timeout);
+  // Details and history refresh independently. Allow the history's ten-second
+  // polling cycle and its RPC to finish, returning as soon as the row appears.
+  final historyItem = find.byWidgetPredicate(
+    (widget) =>
+        widget is HistoryItem &&
+        widget.swap.uuid == swapUuid &&
+        widget.swap.isSuccessful,
+  );
+  await tester.pumpUntilFound(
+    historyItem,
+    timeout: timeout,
+    describeTarget: 'completed swap $swapUuid in history',
+  );
   expect(
     find.byType(HistoryItem),
     findsOneWidget,
