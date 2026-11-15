@@ -1,8 +1,6 @@
-import 'package:collection/collection.dart' show lowerBound;
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
-import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/extensions/profit_loss_transaction_extension.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/price_stamped_transaction.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/models/profit_loss.dart';
@@ -11,7 +9,6 @@ class ProfitLossCalculator {
   ProfitLossCalculator(this._sdk);
 
   final KomodoDefiSdk _sdk;
-  final Logger _log = Logger('ProfitLossCalculator');
 
   /// Get the running profit/loss for a coin based on the transactions.
   /// ProfitLoss = Proceeds - CostBasis
@@ -34,54 +31,51 @@ class ProfitLossCalculator {
       return <ProfitLoss>[];
     }
 
-    transactions.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    final orderedTransactions = List<Transaction>.of(transactions)
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
     final todayAtMidnight = _getDateAtMidnight(DateTime.now());
-    final transactionDates = _getTransactionDates(transactions);
+    final transactionDates = _getTransactionDates(orderedTransactions);
     final coinUsdPrices = await _sdk.marketData.fiatPriceHistory(
       coinId,
       transactionDates,
     );
     if (coinUsdPrices.isEmpty) {
-      throw Exception('No USD price history for ${coinId.id}');
+      throw ProfitLossPriceUnavailable(
+        coinId.id,
+        _getDateAtMidnight(orderedTransactions.first.timestamp),
+      );
     }
-    final prices = _NearestPrices(coinUsdPrices);
-    final currentPrice = coinUsdPrices[todayAtMidnight] ?? prices.latest;
+    final latestDate = coinUsdPrices.keys.reduce(
+      (a, b) => a.isAfter(b) ? a : b,
+    );
+    final currentPrice =
+        coinUsdPrices[todayAtMidnight] ?? coinUsdPrices[latestDate]!;
     final priceStampedTransactions = _priceStampTransactions(
-      transactions,
-      prices,
+      orderedTransactions,
+      coinUsdPrices,
       coinId,
     );
 
     return _calculateProfitLosses(priceStampedTransactions, currentPrice);
   }
 
-  /// A date without a price, such as one older than the price source's
-  /// history, takes the nearest known price. Skipping its transaction instead
-  /// would leave later sales selling coins that were never bought.
+  /// Missing acquisition or sale prices make the entire result unavailable.
+  /// Keep the transaction inventory intact; substituting another day's price
+  /// would publish an invented cost basis as ordinary realized profit/loss.
   List<UsdPriceStampedTransaction> _priceStampTransactions(
     List<Transaction> transactions,
-    _NearestPrices prices,
+    Map<DateTime, Decimal> prices,
     AssetId coinId,
   ) {
-    var approximated = 0;
-    final stamped = <UsdPriceStampedTransaction>[];
-    for (final transaction in transactions) {
+    return transactions.map((transaction) {
       final date = _getDateAtMidnight(transaction.timestamp);
-      var usdPrice = prices.exact(date);
-      if (usdPrice == null) {
-        approximated++;
-        usdPrice = prices.nearest(date);
+      final price = prices[date];
+      if (price == null) {
+        throw ProfitLossPriceUnavailable(coinId.id, date);
       }
-      stamped.add(UsdPriceStampedTransaction(transaction, usdPrice.toDouble()));
-    }
-    if (approximated > 0) {
-      _log.warning(
-        'Priced $approximated of ${transactions.length} ${coinId.id} '
-        'transactions at the nearest date with a USD price',
-      );
-    }
-    return stamped;
+      return UsdPriceStampedTransaction(transaction, price.toDouble());
+    }).toList();
   }
 
   /// UTC, so each date reaches the price history as the day
@@ -108,7 +102,7 @@ class ProfitLossCalculator {
     for (final transaction in transactions) {
       if (transaction.totalAmountAsDouble == 0) continue;
 
-      if (transaction.amount.toDouble() > 0) {
+      if (transaction.amount > Decimal.zero) {
         state = _processBuyTransaction(state, transaction);
       } else {
         state = _processSellTransaction(state, transaction);
@@ -132,14 +126,14 @@ class ProfitLossCalculator {
     UsdPriceStampedTransaction transaction,
   ) {
     final newHolding = (
-      holdings: transaction.amount.toDouble(),
+      holdings: transaction.amount,
       price: transaction.priceUsd,
     );
     return _ProfitLossState(
       holdings: [...state.holdings, newHolding],
       realizedProfitLoss: state.realizedProfitLoss,
       totalInvestment: state.totalInvestment + transaction.balanceChangeUsd,
-      currentHoldings: state.currentHoldings + transaction.amount.toDouble(),
+      currentHoldings: state.currentHoldings + transaction.amount,
     );
   }
 
@@ -147,31 +141,31 @@ class ProfitLossCalculator {
     _ProfitLossState state,
     UsdPriceStampedTransaction transaction,
   ) {
-    if (state.currentHoldings < transaction.amount.toDouble()) {
+    if (state.currentHoldings < transaction.amount.abs()) {
       throw Exception('Attempting to sell more than currently held');
     }
 
     // Balance change is negative for sales, so we use the abs value to
     // calculate the cost basis (formula assumes positive "total" value).
-    var remainingToSell = transaction.amount.toDouble().abs();
+    var remainingToSell = transaction.amount.abs();
     var costBasis = 0.0;
-    final newHoldings = List<({double holdings, double price})>.from(
+    final newHoldings = List<({Decimal holdings, double price})>.from(
       state.holdings,
     );
 
-    while (remainingToSell > 0) {
-      final oldestBuy = newHoldings.first.holdings;
-      if (oldestBuy <= remainingToSell) {
+    while (remainingToSell > Decimal.zero) {
+      final oldestBuy = newHoldings.first;
+      if (oldestBuy.holdings <= remainingToSell) {
         newHoldings.removeAt(0);
-        costBasis += oldestBuy * state.holdings.first.price;
-        remainingToSell -= oldestBuy;
+        costBasis += oldestBuy.holdings.toDouble() * oldestBuy.price;
+        remainingToSell -= oldestBuy.holdings;
       } else {
         newHoldings[0] = (
           holdings: newHoldings[0].holdings - remainingToSell,
           price: newHoldings[0].price,
         );
-        costBasis += remainingToSell * state.holdings.first.price;
-        remainingToSell = 0;
+        costBasis += remainingToSell.toDouble() * oldestBuy.price;
+        remainingToSell = Decimal.zero;
       }
     }
 
@@ -181,8 +175,7 @@ class ProfitLossCalculator {
 
     // Balance change is negative for a sale, so subtract the abs value (
     // or add the positive value) to get the new holdings.
-    final double newCurrentHoldings =
-        state.currentHoldings - transaction.amount.toDouble().abs();
+    final newCurrentHoldings = state.currentHoldings - transaction.amount.abs();
     final double newTotalInvestment = state.totalInvestment - costBasis;
 
     return _ProfitLossState(
@@ -194,7 +187,8 @@ class ProfitLossCalculator {
   }
 
   double _calculateProfitLoss(_ProfitLossState state, Decimal currentPrice) {
-    final currentValue = state.currentHoldings * currentPrice.toDouble();
+    final currentValue =
+        state.currentHoldings.toDouble() * currentPrice.toDouble();
     final unrealizedProfitLoss = currentValue - state.totalInvestment;
     return state.realizedProfitLoss + unrealizedProfitLoss;
   }
@@ -214,7 +208,8 @@ class UnRealisedProfitLossCalculator extends ProfitLossCalculator {
 
   @override
   double _calculateProfitLoss(_ProfitLossState state, Decimal currentPrice) {
-    final currentValue = state.currentHoldings * currentPrice.toDouble();
+    final currentValue =
+        state.currentHoldings.toDouble() * currentPrice.toDouble();
     final unrealizedProfitLoss = currentValue - state.totalInvestment;
     return unrealizedProfitLoss;
   }
@@ -222,39 +217,25 @@ class UnRealisedProfitLossCalculator extends ProfitLossCalculator {
 
 class _ProfitLossState {
   _ProfitLossState({
-    List<({double holdings, double price})>? holdings,
+    List<({Decimal holdings, double price})>? holdings,
     this.realizedProfitLoss = 0.0,
     this.totalInvestment = 0.0,
-    this.currentHoldings = 0.0,
-  }) : holdings = holdings ?? [];
-  final List<({double holdings, double price})> holdings;
+    Decimal? currentHoldings,
+  }) : holdings = holdings ?? [],
+       currentHoldings = currentHoldings ?? Decimal.zero;
+  final List<({Decimal holdings, double price})> holdings;
   final double realizedProfitLoss;
   final double totalInvestment;
-  final double currentHoldings;
+  final Decimal currentHoldings;
 }
 
-/// USD prices by UTC midnight, answering a date without a price with the
-/// closest date that has one.
-class _NearestPrices {
-  _NearestPrices(this._prices) : _dates = _prices.keys.toList()..sort();
+/// No defensible realized result exists without the transaction day's price.
+class ProfitLossPriceUnavailable implements Exception {
+  const ProfitLossPriceUnavailable(this.coinId, this.date);
 
-  final Map<DateTime, Decimal> _prices;
-  final List<DateTime> _dates;
+  final String coinId;
+  final DateTime date;
 
-  Decimal? exact(DateTime date) => _prices[date];
-
-  Decimal get latest => _prices[_dates.last]!;
-
-  Decimal nearest(DateTime date) {
-    final index = lowerBound(_dates, date);
-    if (index == 0) return _prices[_dates.first]!;
-    if (index == _dates.length) return latest;
-
-    final before = _dates[index - 1];
-    final after = _dates[index];
-    final closer = date.difference(before) <= after.difference(date)
-        ? before
-        : after;
-    return _prices[closer]!;
-  }
+  @override
+  String toString() => 'USD price unavailable for $coinId on $date';
 }

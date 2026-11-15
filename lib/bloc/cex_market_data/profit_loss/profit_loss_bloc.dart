@@ -9,6 +9,7 @@ import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
 import 'package:web_dex/bloc/cex_market_data/common/update_frequency_backoff_strategy.dart';
 import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_repository.dart';
+import 'package:web_dex/bloc/cex_market_data/profit_loss/profit_loss_calculator.dart';
 import 'package:web_dex/bloc/coins_bloc/asset_coin_extension.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/base.dart';
 import 'package:web_dex/model/coin.dart';
@@ -44,11 +45,18 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
 
   final _log = Logger('ProfitLossBloc');
   final UpdateFrequencyBackoffStrategy _backoffStrategy;
+  int _loadGeneration = 0;
+  ProfitLossPortfolioChartLoadRequested? _lastRequest;
+
+  bool _ownsLoad(int generation, Emitter<ProfitLossState> emit) =>
+      !isClosed && !emit.isDone && generation == _loadGeneration;
 
   void _onClearPortfolioProfitLoss(
     ProfitLossPortfolioChartClearRequested event,
     Emitter<ProfitLossState> emit,
   ) {
+    _loadGeneration++;
+    _lastRequest = null;
     emit(const ProfitLossInitial());
   }
 
@@ -56,10 +64,13 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
     ProfitLossPortfolioChartLoadRequested event,
     Emitter<ProfitLossState> emit,
   ) async {
+    final generation = ++_loadGeneration;
+    _lastRequest = event;
     try {
       final supportedCoins = await event.coins.filterSupportedCoins();
       final filteredEventCoins = event.coins.withoutTestCoins();
       final initialActiveCoins = await supportedCoins.removeInactiveCoins(_sdk);
+      if (!_ownsLoad(generation, emit)) return;
       if (supportedCoins.isEmpty && filteredEventCoins.length <= 1) {
         return emit(
           PortfolioProfitLossChartUnsupported(
@@ -68,28 +79,31 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
         );
       }
 
-      await _getProfitLossChart(
-        event,
-        initialActiveCoins,
-        useCache: true,
-      ).then(emit.call).catchError((Object error, StackTrace stackTrace) {
-        const errorMessage = 'Failed to load CACHED portfolio profit/loss';
-        _log.warning(errorMessage, error, stackTrace);
-      });
+      await _getProfitLossChart(event, initialActiveCoins, useCache: true)
+          .then((value) {
+            if (_ownsLoad(generation, emit)) emit(value);
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            const errorMessage = 'Failed to load CACHED portfolio profit/loss';
+            _log.warning(errorMessage, error, stackTrace);
+          });
+
+      if (!_ownsLoad(generation, emit)) return;
 
       // Fetch the un-cached version of the chart to update the cache.
       if (supportedCoins.isNotEmpty) {
         await supportedCoins.waitForActivationThreshold(_sdk);
       }
       final activeCoins = await supportedCoins.removeInactiveCoins(_sdk);
+      if (!_ownsLoad(generation, emit)) return;
       if (activeCoins.isNotEmpty) {
-        await _getProfitLossChart(
-          event,
-          activeCoins,
-          useCache: false,
-        ).then(emit.call).catchError((Object e, StackTrace s) {
-          _log.severe('Failed to load uncached profit/loss chart', e, s);
-        });
+        await _getProfitLossChart(event, activeCoins, useCache: false)
+            .then((value) {
+              if (_ownsLoad(generation, emit)) emit(value);
+            })
+            .catchError((Object e, StackTrace s) {
+              _log.severe('Failed to load uncached profit/loss chart', e, s);
+            });
       }
     } catch (error, stackTrace) {
       _log.shout('Failed to load portfolio profit/loss', error, stackTrace);
@@ -97,11 +111,13 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       // recover at the cost of a longer first loading time.
     }
 
+    if (!_ownsLoad(generation, emit)) return;
+
     // Reset backoff strategy for new load request
     _backoffStrategy.reset();
 
     // Create periodic update stream with dynamic intervals
-    await _runPeriodicUpdates(event, emit);
+    await _runPeriodicUpdates(event, emit, generation);
   }
 
   Future<ProfitLossState> _getProfitLossChart(
@@ -131,6 +147,12 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       );
     } catch (error, stackTrace) {
       _log.shout('Failed periodic profit/loss chart update', error, stackTrace);
+      if (error is ProfitLossPriceUnavailable) {
+        return ProfitLossLoadFailure(
+          error: TextError(error: error.toString()),
+          selectedPeriod: event.selectedPeriod,
+        );
+      }
       return state;
     }
   }
@@ -139,13 +161,26 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
     ProfitLossPortfolioPeriodChanged event,
     Emitter<ProfitLossState> emit,
   ) async {
+    _loadGeneration++;
     final eventState = state;
     if (eventState is! PortfolioProfitLossChartLoadSuccess) {
-      return emit(
+      emit(
         PortfolioProfitLossChartLoadInProgress(
           selectedPeriod: event.selectedPeriod,
         ),
       );
+      final request = _lastRequest;
+      if (request != null) {
+        add(
+          ProfitLossPortfolioChartLoadRequested(
+            coins: request.coins,
+            fiatCoinId: request.fiatCoinId,
+            selectedPeriod: event.selectedPeriod,
+            walletId: request.walletId,
+          ),
+        );
+      }
+      return;
     }
 
     emit(
@@ -176,17 +211,16 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
     List<Coin> coins, {
     bool useCache = true,
   }) async {
-    if (!await _sdk.auth.isSignedIn()) {
-      _log.warning('Error loading profit/loss chart: User is not signed in');
-      return ChartData.empty();
-    }
+    final session = await _sdk.auth.captureSessionContext();
 
     final supportedCoins = await coins.filterSupportedCoins();
+    _sdk.auth.ensureSessionContextCurrent(session);
     if (supportedCoins.isEmpty) {
       _log.warning('No supported coins to load profit/loss chart for');
       return ChartData.empty();
     }
     final activeCoins = await supportedCoins.removeInactiveCoins(_sdk);
+    _sdk.auth.ensureSessionContextCurrent(session);
     if (activeCoins.isEmpty) {
       _log.warning('No active coins to load profit/loss chart for');
       return ChartData.empty();
@@ -216,6 +250,10 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
           );
           return nonZeroProfitLosses.toChartData();
         } catch (e, s) {
+          if (e is ProfitLossPriceUnavailable ||
+              e is AuthSessionChangedException) {
+            rethrow;
+          }
           final cached = useCache ? 'cached' : 'uncached';
           _log.severe('Failed to load $cached profit/loss: ${coin.abbr}', e, s);
           return ChartData.empty();
@@ -223,6 +261,7 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       }),
     );
 
+    _sdk.auth.ensureSessionContextCurrent(session);
     chartsList.removeWhere((element) => element.isEmpty);
     return Charts.merge(chartsList)..sort((a, b) => a.x.compareTo(b.x));
   }
@@ -244,9 +283,10 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
   Future<void> _runPeriodicUpdates(
     ProfitLossPortfolioChartLoadRequested event,
     Emitter<ProfitLossState> emit,
+    int generation,
   ) async {
     while (true) {
-      if (isClosed || emit.isDone) {
+      if (!_ownsLoad(generation, emit)) {
         _log.fine('Stopping profit/loss periodic updates: bloc closed.');
         break;
       }
@@ -256,7 +296,7 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
       try {
         await Future.delayed(_backoffStrategy.getNextInterval());
 
-        if (isClosed || emit.isDone) {
+        if (!_ownsLoad(generation, emit)) {
           _log.fine(
             'Skipping profit/loss periodic update: bloc closed during delay.',
           );
@@ -268,6 +308,7 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
 
         final supportedCoins = await event.coins.filterSupportedCoins();
         final activeCoins = await supportedCoins.removeInactiveCoins(_sdk);
+        if (!_ownsLoad(generation, emit)) break;
         if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'pre-fetch')) {
           break;
         }
@@ -276,11 +317,13 @@ class ProfitLossBloc extends Bloc<ProfitLossEvent, ProfitLossState> {
           activeCoins,
           useCache: false,
         );
+        if (!_ownsLoad(generation, emit)) break;
         if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'pre-emit')) {
           break;
         }
         emit(updatedChartState);
       } catch (error, stackTrace) {
+        if (!_ownsLoad(generation, emit)) break;
         if (_isStalePeriodicUpdate(event.selectedPeriod, stage: 'error')) {
           break;
         }

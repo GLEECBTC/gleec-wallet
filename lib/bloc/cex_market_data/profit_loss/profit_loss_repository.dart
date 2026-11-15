@@ -120,19 +120,21 @@ class ProfitLossRepository {
 
     // HD mode is part of the session's wallet identity. `currentUser` would
     // re-verify it against KDF, two RPCs for every coin on every refresh.
-    final bool isHdWallet;
-    try {
-      isHdWallet = (await _sdk.auth.captureSessionContext()).walletId.isHd;
-    } on AuthSessionChangedException {
-      _log.warning('No wallet session when fetching profit/loss');
-      methodStopwatch.stop();
-      return <ProfitLoss>[];
+    final session = await _sdk.auth.captureSessionContext();
+    if (session.walletId.name != walletId ||
+        session.walletId.pubkeyHash?.isNotEmpty != true) {
+      throw const AuthSessionChangedException();
     }
+    final isHdWallet = session.walletId.isHd;
+    // Include the verified seed identity, not just the reusable display name.
+    // The version also retires cached results with approximated cost bases or
+    // the earlier multi-lot FIFO calculation.
+    final cacheWalletId = 'v2:${session.walletId.compoundId}';
 
     final String compoundKey = ProfitLossCache.getPrimaryKey(
       coinId: coinId.id,
       fiatCurrency: fiatCoinId,
-      walletId: walletId,
+      walletId: cacheWalletId,
       isHdWallet: isHdWallet,
     );
 
@@ -140,6 +142,7 @@ class ProfitLossRepository {
       final cacheStopwatch = Stopwatch()..start();
       final ProfitLossCache? profitLossCache = await _profitLossCacheProvider
           .get(compoundKey);
+      _sdk.auth.ensureSessionContextCurrent(session);
       final bool cacheExists = profitLossCache != null;
       cacheStopwatch.stop();
 
@@ -159,6 +162,7 @@ class ProfitLossRepository {
     }
 
     final failure = _recentFailures[compoundKey];
+    _sdk.auth.ensureSessionContextCurrent(session);
     if (failure != null && _clock().isBefore(failure.retryAt)) {
       _log.fine(
         'Not recomputing profit/loss for ${coinId.id} before '
@@ -171,7 +175,8 @@ class ProfitLossRepository {
       final profitLosses = await _computeProfitLoss(
         coinId,
         fiatCoinId,
-        walletId,
+        cacheWalletId,
+        session: session,
         isHdWallet: isHdWallet,
         compoundKey: compoundKey,
         methodStopwatch: methodStopwatch,
@@ -179,6 +184,10 @@ class ProfitLossRepository {
       _recentFailures.remove(compoundKey);
       return profitLosses;
     } catch (error, stackTrace) {
+      // Session revocation is not a provider failure. It must neither cache a
+      // result nor delay a freshly authenticated session's first calculation.
+      _sdk.auth.ensureSessionContextCurrent(session);
+      if (error is AuthSessionChangedException) rethrow;
       (_recentFailures[compoundKey] ??= _FailureBackoff()).record(
         error,
         stackTrace,
@@ -192,6 +201,7 @@ class ProfitLossRepository {
     AssetId coinId,
     String fiatCoinId,
     String walletId, {
+    required AuthSessionContext session,
     required bool isHdWallet,
     required String compoundKey,
     required Stopwatch methodStopwatch,
@@ -200,6 +210,7 @@ class ProfitLossRepository {
     _log.fine('Fetching transactions for ${coinId.id}');
     final transactions = await _transactionHistoryRepo
         .fetchCompletedTransactions(coinId);
+    _sdk.auth.ensureSessionContextCurrent(session);
     txStopwatch.stop();
     _log.fine(
       'Fetched ${transactions.length} transactions for ${coinId.id} '
@@ -210,6 +221,7 @@ class ProfitLossRepository {
       _log.fine('No transactions found for ${coinId.id}');
 
       final existingCache = await _profitLossCacheProvider.get(compoundKey);
+      _sdk.auth.ensureSessionContextCurrent(session);
       if (existingCache != null && existingCache.profitLosses.isNotEmpty) {
         _log.fine(
           'Keeping existing non-empty cache for ${coinId.id} '
@@ -231,6 +243,7 @@ class ProfitLossRepository {
           isHdWallet: isHdWallet,
         ),
       );
+      _sdk.auth.ensureSessionContextCurrent(session);
       cacheInsertStopwatch.stop();
       _log.fine(
         'Cached empty profit/loss for ${coinId.id} '
@@ -250,6 +263,7 @@ class ProfitLossRepository {
           coinId: coinId,
           fiatCoinId: fiatCoinId,
         );
+    _sdk.auth.ensureSessionContextCurrent(session);
     calcStopwatch.stop();
     _log.fine(
       'Calculated ${profitLosses.length} profit/loss entries for ${coinId.id} '
@@ -267,6 +281,7 @@ class ProfitLossRepository {
         isHdWallet: isHdWallet,
       ),
     );
+    _sdk.auth.ensureSessionContextCurrent(session);
     cacheInsertStopwatch.stop();
     _log.fine(
       'Cached ${profitLosses.length} profit/loss entries for ${coinId.id} '

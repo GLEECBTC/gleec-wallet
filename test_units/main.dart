@@ -471,6 +471,7 @@ import 'tests/wallet/coin_details/coin_addresses_bloc_gasless_revalidation_test.
 import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
 import 'tests/wallet/wallet_operation_identity_test.dart';
+import 'tests/wallet/wallet_data_loader_test.dart' as wallet_data_loader_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -621,6 +622,7 @@ void main() {
   testCoinActivationStateBridge();
   testAuthBloc();
   testWalletOperationIdentity();
+  wallet_data_loader_test.main();
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();

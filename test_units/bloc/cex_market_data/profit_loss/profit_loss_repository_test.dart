@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:decimal/decimal.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart';
@@ -35,7 +37,33 @@ class _Auth implements KomodoDefiLocalAuth {
 
   @override
   Future<AuthSessionContext> captureSessionContext() async =>
-      _sessions.current!;
+      _sessions.current ?? (throw const AuthSessionChangedException());
+
+  void invalidateSession() => _sessions.invalidate();
+
+  @override
+  void ensureSessionContextCurrent(AuthSessionContext context) {
+    if (!_sessions.isCurrent(context)) {
+      throw const AuthSessionChangedException();
+    }
+  }
+
+  void replaceSession({
+    String name = 'wallet-a',
+    String hash = 'wallet-a-pubkey-hash',
+  }) {
+    _sessions.invalidate();
+    _sessions.observe(
+      KdfUser(
+        walletId: WalletId.withPubkeyHash(
+          name,
+          const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+          hash,
+        ),
+        isBip39Seed: true,
+      ),
+    );
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -43,7 +71,7 @@ class _Auth implements KomodoDefiLocalAuth {
 
 class _Sdk implements KomodoDefiSdk {
   @override
-  final KomodoDefiLocalAuth auth = _Auth();
+  final _Auth auth = _Auth();
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -68,10 +96,12 @@ class _MemoryCache implements PersistenceProvider<String, ProfitLossCache> {
 
 class _History implements TransactionHistoryRepo {
   int fetches = 0;
+  Future<void> Function()? beforeReturn;
 
   @override
   Future<List<Transaction>> fetchCompletedTransactions(AssetId assetId) async {
     fetches++;
+    await beforeReturn?.call();
     return [
       Transaction(
         id: 'buy',
@@ -101,6 +131,7 @@ class _Calculator extends ProfitLossCalculator {
   _Calculator(super.sdk);
 
   bool fails = true;
+  Future<void> Function()? beforeReturn;
 
   @override
   Future<List<ProfitLoss>> getProfitFromTransactions(
@@ -108,6 +139,7 @@ class _Calculator extends ProfitLossCalculator {
     required AssetId coinId,
     required String fiatCoinId,
   }) async {
+    await beforeReturn?.call();
     if (fails) throw Exception('No USD price history for ${coinId.id}');
     return const <ProfitLoss>[];
   }
@@ -119,14 +151,17 @@ void main() {
     late _History history;
     late _Calculator calculator;
     late ProfitLossRepository repository;
+    late _Sdk sdk;
+    late _MemoryCache cache;
 
     setUp(() {
       now = DateTime.utc(2026, 11, 6, 9);
-      final sdk = _Sdk();
+      sdk = _Sdk();
+      cache = _MemoryCache();
       history = _History();
       calculator = _Calculator(sdk);
       repository = ProfitLossRepository(
-        profitLossCacheProvider: _MemoryCache(),
+        profitLossCacheProvider: cache,
         transactionHistoryRepo: history,
         profitLossCalculator: calculator,
         sdk: sdk,
@@ -199,5 +234,78 @@ void main() {
       await expectFailure();
       expect(history.fetches, 2);
     });
+
+    test(
+      'a missing wallet session is unavailable rather than empty history',
+      () async {
+        sdk.auth.invalidateSession();
+        await expectLater(
+          repository.getProfitLoss(_asset, 'USDT', 'wallet-a'),
+          throwsA(isA<AuthSessionChangedException>()),
+        );
+        expect(history.fetches, 0);
+        expect(cache._entries, isEmpty);
+      },
+    );
+
+    test(
+      'rejects requests for a wallet other than the active session',
+      () async {
+        calculator.fails = false;
+        await expectLater(
+          repository.getProfitLoss(_asset, 'USDT', 'wallet-b'),
+          throwsA(isA<AuthSessionChangedException>()),
+        );
+        expect(history.fetches, 0);
+        expect(cache._entries, isEmpty);
+      },
+    );
+
+    for (final boundary in ['history', 'calculation']) {
+      test(
+        'session replacement during $boundary cannot poison the cache or backoff',
+        () async {
+          calculator.fails = false;
+          final reached = Completer<void>();
+          final released = Completer<void>();
+          Future<void> wait() async {
+            reached.complete();
+            await released.future;
+          }
+
+          if (boundary == 'history') {
+            history.beforeReturn = wait;
+          } else {
+            calculator.beforeReturn = wait;
+          }
+          final pending = repository.getProfitLoss(_asset, 'USDT', 'wallet-a');
+          final rejected = expectLater(
+            pending,
+            throwsA(isA<AuthSessionChangedException>()),
+          );
+          await reached.future;
+          sdk.auth.replaceSession();
+          released.complete();
+          await rejected;
+          expect(cache._entries, isEmpty);
+          history.beforeReturn = null;
+          calculator.beforeReturn = null;
+          await repository.getProfitLoss(_asset, 'USDT', 'wallet-a');
+          expect(history.fetches, 2);
+        },
+      );
+    }
+
+    test(
+      'same-name wallet replacement never reuses another identity cache',
+      () async {
+        calculator.fails = false;
+        await repository.getProfitLoss(_asset, 'USDT', 'wallet-a');
+        sdk.auth.replaceSession(hash: 'replacement-pubkey-hash');
+        await repository.getProfitLoss(_asset, 'USDT', 'wallet-a');
+        expect(history.fetches, 2);
+        expect(cache._entries, hasLength(2));
+      },
+    );
   });
 }

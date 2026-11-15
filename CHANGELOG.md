@@ -6,7 +6,7 @@
   - The first request starts on a day the free plan serves.
   - A failed or rate-limited history is reported as a failure, so other price sources and backoff apply.
   - Past days' prices stay cached.
-  - Profit/loss prices a transaction older than the available history at the nearest known price instead of failing.
+  - Profit/loss stays unavailable when acquisition or sale prices are missing, instead of inventing a historical cost basis.
   - A coin whose profit/loss still fails is retried after 1, 1, 2, 2, 4… minutes, up to hourly, instead of every minute.
   - The wallet overview no longer starts a refresh while the previous one is still running.
 

@@ -13,16 +13,16 @@ final _asset = AssetId(
   subClass: CoinSubClass.utxo,
 );
 
-Transaction _transaction(String id, DateTime timestamp, int netChange) =>
+Transaction _transaction(String id, DateTime timestamp, num netChange) =>
     Transaction(
       id: id,
       internalId: id,
       assetId: _asset,
       balanceChanges: BalanceChanges(
-        netChange: Decimal.fromInt(netChange),
-        receivedByMe: Decimal.fromInt(netChange > 0 ? netChange : 0),
-        spentByMe: Decimal.fromInt(netChange < 0 ? -netChange : 0),
-        totalAmount: Decimal.fromInt(netChange.abs()),
+        netChange: Decimal.parse('$netChange'),
+        receivedByMe: Decimal.parse('${netChange > 0 ? netChange : 0}'),
+        spentByMe: Decimal.parse('${netChange < 0 ? -netChange : 0}'),
+        totalAmount: Decimal.parse('${netChange.abs()}'),
       ),
       timestamp: timestamp,
       confirmations: 1,
@@ -72,30 +72,129 @@ void main() {
     final firstPricedDay = DateTime.utc(2025, 11, 7);
     final pricedSaleDay = DateTime.utc(2025, 11, 15);
 
-    test('prices a buy older than the history at the nearest date', () async {
-      final calculator = ProfitLossCalculator(
+    test(
+      'does not invent a cost basis for a buy older than the history',
+      () async {
+        final calculator = ProfitLossCalculator(
+          _Sdk(
+            _MarketData({
+              firstPricedDay: Decimal.one,
+              pricedSaleDay: Decimal.fromInt(2),
+              _utcToday(): Decimal.fromInt(3),
+            }),
+          ),
+        );
+
+        await expectLater(
+          calculator.getProfitFromTransactions(
+            [
+              _transaction('buy', DateTime.utc(2024, 6, 1, 12), 10),
+              _transaction(
+                'sell',
+                pricedSaleDay.add(const Duration(hours: 8)),
+                -4,
+              ),
+            ],
+            coinId: _asset,
+            fiatCoinId: 'USDT',
+          ),
+          throwsA(isA<ProfitLossPriceUnavailable>()),
+        );
+      },
+    );
+
+    test('fractional sales can exactly liquidate a holding', () async {
+      final calculator = RealisedProfitLossCalculator(
         _Sdk(
           _MarketData({
             firstPricedDay: Decimal.one,
             pricedSaleDay: Decimal.fromInt(2),
-            _utcToday(): Decimal.fromInt(3),
           }),
         ),
       );
-
-      final profitLosses = await calculator.getProfitFromTransactions(
+      final result = await calculator.getProfitFromTransactions(
         [
-          _transaction('buy', DateTime.utc(2024, 6, 1, 12), 10),
-          _transaction('sell', pricedSaleDay.add(const Duration(hours: 8)), -4),
+          _transaction('buy', firstPricedDay, 0.3),
+          _transaction('sell-1', pricedSaleDay, -0.1),
+          _transaction(
+            'sell-2',
+            pricedSaleDay.add(const Duration(hours: 1)),
+            -0.2,
+          ),
         ],
         coinId: _asset,
         fiatCoinId: 'USDT',
       );
-
-      // The buy takes the first known price, $1. Selling 4 at $2 realizes
-      // $4; the 6 left are worth $3 each against their $6 cost.
-      expect(profitLosses.map((p) => p.profitLoss), [20.0, 16.0]);
+      expect(result.last.profitLoss, closeTo(0.3, 1e-12));
     });
+
+    test('realized FIFO sales use the price of each consumed lot', () async {
+      final calculator = RealisedProfitLossCalculator(
+        _Sdk(
+          _MarketData({
+            firstPricedDay: Decimal.one,
+            firstPricedDay.add(const Duration(days: 1)): Decimal.fromInt(2),
+            pricedSaleDay: Decimal.fromInt(3),
+          }),
+        ),
+      );
+      final result = await calculator.getProfitFromTransactions(
+        [
+          _transaction('buy-1', firstPricedDay, 2),
+          _transaction('buy-2', firstPricedDay.add(const Duration(days: 1)), 3),
+          _transaction('sell', pricedSaleDay, -4),
+        ],
+        coinId: _asset,
+        fiatCoinId: 'USDT',
+      );
+      // Four units sell for $12: cost is 2 x $1 plus 2 x $2.
+      expect(result.last.profitLoss, 6);
+    });
+
+    test(
+      'missing sale prices also leave the whole calculation unavailable',
+      () async {
+        final calculator = RealisedProfitLossCalculator(
+          _Sdk(_MarketData({firstPricedDay: Decimal.one})),
+        );
+        await expectLater(
+          calculator.getProfitFromTransactions(
+            [
+              _transaction('buy', firstPricedDay, 10),
+              _transaction('sell', pricedSaleDay, -4),
+            ],
+            coinId: _asset,
+            fiatCoinId: 'USDT',
+          ),
+          throwsA(isA<ProfitLossPriceUnavailable>()),
+        );
+      },
+    );
+
+    test(
+      'accepts immutable transaction history without changing its order',
+      () async {
+        final calculator = ProfitLossCalculator(
+          _Sdk(
+            _MarketData({
+              firstPricedDay: Decimal.one,
+              pricedSaleDay: Decimal.fromInt(2),
+            }),
+          ),
+        );
+        final transactions = List<Transaction>.unmodifiable([
+          _transaction('sell', pricedSaleDay, -1),
+          _transaction('buy', firstPricedDay, 2),
+        ]);
+        final result = await calculator.getProfitFromTransactions(
+          transactions,
+          coinId: _asset,
+          fiatCoinId: 'USDT',
+        );
+        expect(result.last.profitLoss, 2);
+        expect(transactions.first.id, 'sell');
+      },
+    );
 
     test('uses the latest-dated price when today has none', () async {
       final calculator = ProfitLossCalculator(
@@ -125,7 +224,7 @@ void main() {
           coinId: _asset,
           fiatCoinId: 'USDT',
         ),
-        throwsA(isA<Exception>()),
+        throwsA(isA<ProfitLossPriceUnavailable>()),
       );
     });
 
