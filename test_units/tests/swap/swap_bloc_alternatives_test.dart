@@ -59,6 +59,72 @@ void main() {
     expect(h.routed.requests, hasLength(2));
   });
 
+  swapBlocTest(
+    'a late quiet refresh preserves the newly selected fastest route',
+    (h) {
+      offerAsked(h);
+      final bloc = h.open();
+      final pending = h.atomic.gate = Completer<void>();
+      bloc.add(const UnifiedSwapEvaluationRequested(quiet: true));
+      h.settle();
+      expect(h.routed.requests.last.orders, {SwapQuoteOrder.cheapest});
+
+      bloc.add(const UnifiedSwapAlternativesRequested());
+      h.settle();
+      bloc.add(const UnifiedSwapOptionSelected('fastest'));
+      h.settle();
+      expect(bloc.state.selectedId, 'fastest');
+
+      pending.complete();
+      h.settle();
+
+      expect(bloc.state.options.map((quote) => quote.id), [
+        'cheapest',
+        'fastest',
+      ]);
+      expect(bloc.state.selectedId, 'fastest');
+      expect(bloc.state.manuallySelected, isTrue);
+      expect(bloc.state.canReview, isTrue);
+
+      bloc.add(const UnifiedSwapAmountChanged('0.5'));
+      h.settle();
+      expect(bloc.state.options.map((quote) => quote.id), ['cheapest']);
+      expect(bloc.state.selectedQuote!.sellAmount, d('0.5'));
+    },
+  );
+
+  swapBlocTest('a late refresh cannot revive an expired alternative', (h) {
+    h.routed.respond = (request) => [
+      for (final order in request.orders)
+        SwapQuoteAvailable(
+          quoteOf(
+            id: order.name,
+            order: order,
+            sell: request.amount.toString(),
+            guaranteed: order == SwapQuoteOrder.fastest ? '2980' : '2985',
+            quotedAt: order == SwapQuoteOrder.fastest
+                ? h.now().subtract(const Duration(seconds: 59))
+                : h.now(),
+          ),
+        ),
+    ];
+    final bloc = h.open();
+    final pending = h.atomic.gate = Completer<void>();
+    bloc.add(const UnifiedSwapEvaluationRequested(quiet: true));
+    h.settle();
+    bloc.add(const UnifiedSwapAlternativesRequested());
+    h.settle();
+    bloc.add(const UnifiedSwapOptionSelected('fastest'));
+    h.settle();
+    h.elapse(const Duration(seconds: 2));
+
+    pending.complete();
+    h.settle();
+
+    expect(bloc.state.options.map((quote) => quote.id), ['cheapest']);
+    expect(bloc.state.selectedId, 'cheapest');
+  });
+
   swapBlocTest('asked for before prices arrive, it comes with them', (h) {
     offerAsked(h);
     final bloc = h.open(

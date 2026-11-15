@@ -426,10 +426,10 @@ Current as of the last audit. Each is a real defect, not a caveat.
 > and asynchronous failures. For older builds, confirm the suite's final marker
 > in the browser log before trusting its reported success.
 
-1. **Two `test_units/` files are orphaned** and never run anywhere:
-   `views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart`,
-   `views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart`.
-   `testTruncateDecimal()` is also commented out in `test_units/main.dart`.
+1. **Legacy migration coverage is registered in the unit gate.** The cleanup
+   plate and compatibility dialog suites run from `test_units/main.dart`,
+   including default strong-password validation, explicit weak-password opt-in,
+   and cancellation. `testTruncateDecimal()` remains commented out.
 2. **The macOS Debug/Profile configuration has no provisioning profile.** A
    `-D macos -m profile` run fails at `No profiles for 'com.GleecDEX.wallet' were found`.
    Only the Release configuration (bundle id `com23.GleecDEX.wallet`, Developer ID

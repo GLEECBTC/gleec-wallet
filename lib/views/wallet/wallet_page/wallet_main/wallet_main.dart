@@ -60,6 +60,41 @@ class WalletMain extends StatefulWidget {
   State<WalletMain> createState() => _WalletMainState();
 }
 
+/// Publishes wallet data only for the view and session that requested it.
+class WalletDataLoader {
+  WalletDataLoader(this._sdk, {Future<List<Coin>> Function()? loadCoins})
+    : _loadCoins = loadCoins ?? _sdk.getWalletCoins;
+
+  final KomodoDefiSdk _sdk;
+  final Future<List<Coin>> Function() _loadCoins;
+  int _generation = 0;
+
+  void invalidate() => _generation++;
+
+  Future<void> load({
+    required WalletId walletId,
+    required bool Function() isViewCurrent,
+    required void Function(List<Coin>) publish,
+  }) async {
+    final generation = ++_generation;
+    try {
+      final session = await _sdk.auth.captureSessionContext();
+      bool isCurrent() =>
+          generation == _generation &&
+          isViewCurrent() &&
+          session.walletId == walletId &&
+          _sdk.auth.isSessionContextCurrent(session);
+      if (!isCurrent()) return;
+      final coins = await _loadCoins();
+      if (!isCurrent()) return;
+      // No await between the final check and all three BLoC publications.
+      publish(coins);
+    } on AuthSessionChangedException {
+      // Signing out or replacing the session cancels the pending publication.
+    }
+  }
+}
+
 class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
   final ValueNotifier<String> _searchPhraseNotifier = ValueNotifier<String>('');
   PopupDispatcher? _popupDispatcher;
@@ -70,6 +105,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
   final FocusNode _searchFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   late final Stopwatch _walletListStopwatch;
+  late final WalletDataLoader _walletDataLoader;
   bool _walletHalfLogged = false;
 
   void _initTabController(bool authenticated) {
@@ -97,10 +133,11 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
     _walletListStopwatch = Stopwatch()..start();
     _scrollController.addListener(_onScroll);
+    _walletDataLoader = WalletDataLoader(context.read<KomodoDefiSdk>());
 
     final authBloc = context.read<AuthBloc>();
     if (authBloc.state.currentUser != null) {
-      _loadWalletData(authBloc.state.currentUser!.wallet.id).ignore();
+      _loadWalletData(authBloc.state.currentUser!.walletId).ignore();
     }
 
     _initTabController(authBloc.state.currentUser != null);
@@ -108,6 +145,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _walletDataLoader.invalidate();
     _walletSubscription?.cancel();
     _popupDispatcher?.close();
     _popupDispatcher = null;
@@ -127,7 +165,7 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
           previous.currentUser != current.currentUser,
       listener: (context, state) {
         if (state.currentUser?.wallet != null) {
-          _loadWalletData(state.currentUser!.wallet.id).ignore();
+          _loadWalletData(state.currentUser!.walletId).ignore();
           _updateTabController(true);
         } else {
           _clearWalletData();
@@ -223,11 +261,11 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _loadWalletData(String walletId) async {
+  Future<void> _loadWalletData(WalletId walletId) async {
     final portfolioGrowthBloc = context.read<PortfolioGrowthBloc>();
     final profitLossBloc = context.read<ProfitLossBloc>();
     final assetOverviewBloc = context.read<AssetOverviewBloc>();
-    final sdk = RepositoryProvider.of<KomodoDefiSdk>(context);
+    final authBloc = context.read<AuthBloc>();
 
     // Use the historical (previously activated) wallet coins here, as the
     // [CoinsBloc] state might not be updated yet if the user signs in on this
@@ -236,37 +274,43 @@ class _WalletMainState extends State<WalletMain> with TickerProviderStateMixin {
     // balance updated.
     // TODO: update to event-based approach based on soon-to-be-implemented
     // balance events from the SDK
-    final walletCoins = await sdk.getWalletCoins();
+    await _walletDataLoader.load(
+      walletId: walletId,
+      isViewCurrent: () =>
+          mounted && authBloc.state.currentUser?.walletId == walletId,
+      publish: (walletCoins) {
+        portfolioGrowthBloc.add(
+          PortfolioGrowthLoadRequested(
+            coins: walletCoins,
+            fiatCoinId: 'USDT',
+            selectedPeriod: portfolioGrowthBloc.state.selectedPeriod,
+            walletId: walletId.name,
+          ),
+        );
 
-    portfolioGrowthBloc.add(
-      PortfolioGrowthLoadRequested(
-        coins: walletCoins,
-        fiatCoinId: 'USDT',
-        selectedPeriod: portfolioGrowthBloc.state.selectedPeriod,
-        walletId: walletId,
-      ),
-    );
+        profitLossBloc.add(
+          ProfitLossPortfolioChartLoadRequested(
+            coins: walletCoins,
+            selectedPeriod: profitLossBloc.state.selectedPeriod,
+            fiatCoinId: 'USDT',
+            walletId: walletId.name,
+          ),
+        );
 
-    profitLossBloc.add(
-      ProfitLossPortfolioChartLoadRequested(
-        coins: walletCoins,
-        selectedPeriod: profitLossBloc.state.selectedPeriod,
-        fiatCoinId: 'USDT',
-        walletId: walletId,
-      ),
-    );
-
-    // Subscribe fires an immediate load event, so no need to also call load
-    assetOverviewBloc.add(
-      PortfolioAssetsOverviewSubscriptionRequested(
-        coins: walletCoins,
-        walletId: walletId,
-        updateFrequency: const Duration(minutes: 1),
-      ),
+        // Subscribe fires an immediate load event, so no need to also call load
+        assetOverviewBloc.add(
+          PortfolioAssetsOverviewSubscriptionRequested(
+            coins: walletCoins,
+            walletId: walletId.name,
+            updateFrequency: const Duration(minutes: 1),
+          ),
+        );
+      },
     );
   }
 
   void _clearWalletData() {
+    _walletDataLoader.invalidate();
     final portfolioGrowthBloc = context.read<PortfolioGrowthBloc>();
     final profitLossBloc = context.read<ProfitLossBloc>();
     final assetOverviewBloc = context.read<AssetOverviewBloc>();

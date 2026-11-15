@@ -998,6 +998,7 @@ abstract class LocaleKeys {
   static const followTrezorInstructions = 'followTrezorInstructions';
   static const orderFailedTryAgain = 'orderFailedTryAgain';
   static const noOptionsToPurchase = 'noOptionsToPurchase';
+  static const fiatProviderUnavailable = 'fiatProviderUnavailable';
   static const youReceive = 'youReceive';
   static const selectFiat = 'selectFiat';
   static const selectCoin = 'selectCoin';

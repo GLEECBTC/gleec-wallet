@@ -35,6 +35,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     }
     final amount = amountOf(state)!;
     final version = ++_evaluationVersion;
+    _evaluationAlternatives = const [];
     final quiet = event.quiet && state.quotes != null;
     if (!quiet) {
       // The structural notice survives this: it explains why fresh options
@@ -48,7 +49,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     }
 
     final request = _request(state, amount, automatic: event.quiet);
-    final UnifiedSwapQuotes result;
+    UnifiedSwapQuotes result;
     try {
       result = await _repository
           .quote(request)
@@ -73,6 +74,21 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
     // The intent moved on while this was in flight. Emitting now would show a
     // price for an amount or pair the user has already left behind.
     if (version != _evaluationVersion) return;
+
+    // Max may have resolved a new principal; its own request prices all
+    // compared orders at that amount. Only retain ordinary-input additions.
+    if (_evaluationAlternatives.isNotEmpty && request.maxSource == null) {
+      result = UnifiedSwapRepository.rank([
+        ...result.options,
+        for (final alternative in _evaluationAlternatives)
+          if (result.byId(alternative.id) == null &&
+              alternative.from == request.from &&
+              alternative.to == request.to &&
+              alternative.sellAmount == request.amount &&
+              !alternative.isExpiredAt(_now()))
+            _repository.pricing.price(alternative),
+      ], result.failures);
+    }
 
     if (result.isEmpty) {
       _failEvaluation(
@@ -270,6 +286,7 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
         ))
           quote,
     ];
+    _evaluationAlternatives = [..._evaluationAlternatives, ...added];
     emit(
       _validated(
         state.copyWith(

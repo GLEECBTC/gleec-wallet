@@ -167,6 +167,10 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
 
+  /// Alternatives fetched during a refresh are absent from its original
+  /// request, but must remain available when that refresh finishes.
+  List<SwapQuote> _evaluationAlternatives = const [];
+
   /// Bumped whenever a review is left or replaced, so a start that is still
   /// re-pricing is abandoned rather than executed behind the user's back.
   int _startVersion = 0;

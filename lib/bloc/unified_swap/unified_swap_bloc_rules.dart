@@ -4,6 +4,7 @@ part of 'unified_swap_bloc.dart';
 extension _UnifiedSwapRules on UnifiedSwapBloc {
   void _invalidate() {
     _evaluationVersion++;
+    _evaluationAlternatives = const [];
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();

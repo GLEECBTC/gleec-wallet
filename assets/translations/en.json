@@ -877,6 +877,7 @@
   "followTrezorInstructions": "Follow the instructions on your Trezor screen",
   "orderFailedTryAgain": "Order failed, please try again later or contact support",
   "noOptionsToPurchase": "No options to purchase {} with {}. Please try a different pair.",
+  "fiatProviderUnavailable": "Buying crypto is temporarily unavailable. Please try again.",
   "youReceive": "You Receive",
   "selectFiat": "Select fiat",
   "selectCoin": "Select coin",
