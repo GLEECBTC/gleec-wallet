@@ -13,6 +13,14 @@ Reviewed against KDF [`b1ff8f05c880d6f118124cac9ef615aa9d91bb39`](https://github
 
 The development build workflow [40693119999](https://github.com/GLEECBTC/kdf-internal/actions/runs/40693119999) built the Solana head for WASM, iOS, Android arm64/armv7, macOS, Linux and Windows. Compilation and lockfile validation do not establish a passing full engine test run.
 
+## Interim engine on dev
+
+Until KDF merges PR 35, the SDK pins `46769c4df3b043669eee59508bf1af017157dcdd` on the local branch `local/solana-combined`. It merges KDF dev `e3392da6f5`, PR 35's head `b1ff8f05c8` and production main `f9632e0ec7`, so LI.FI and the other production changes are kept. Merging main changed no files; the one conflict, in `mm2_main`'s dev-dependencies, kept both sides. The commit exists only in a private local clone, on no KDF remote. Native and WASM `cargo check --locked` pass; the Solana engine code is PR 35's, so every dependency above is still open.
+
+Its seven artifacts were built with nitride-kdf-builds and are served from `https://kdf-dev-builds.nitride.app/local-solana-combined/`. macOS and Linux also have `native-v1` archives carrying the shared library, built from a `git archive` of the commit with Rust 1.98.0 and `--locked` (Linux offline, in the Debian 11 CI image). Both libraries pass the eight-phase native lifecycle smoke: macOS on arm64 and on x86_64 under Rosetta, Linux on amd64. Archive checksums are in the SDK build configuration.
+
+This pin may reach dev only. [`kdf-pin-releasable.yml`](../.github/workflows/kdf-pin-releasable.yml) fails any pull request into main or a release branch while the SDK pins a `local/...` KDF build. When PR 35 merges, repin to the merged kdf-internal commit, and update `SolanaBuildConfig.enginesWithOpenWithdrawalDefects` to match its fixes.
+
 Release must use **one combined KDF commit** across all seven required platform artifacts. Preserve the production `f9632e0ec771668a6f21b37aede01a30110141cb` changes, including LI.FI, when combining Solana. The divergent `b1ff8f0` branch must not be substituted directly into production build configuration. Record the full commit and artifact digests, then repeat wallet and swap acceptance on that exact candidate. Solana mainnet atomic trading additionally requires the audited/deployed program, operational prerequisites, and removal of the KDF mainnet trading gate. Solana routed trading needs a separate upstream execution contract.
 
 The native unfunded smoke in [SOLANA_INTEGRATION.md](SOLANA_INTEGRATION.md) supplies useful early activation evidence; it closes none of the funded withdrawal, history-backfill, or atomic recovery dependencies above.
