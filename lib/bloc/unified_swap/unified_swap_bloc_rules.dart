@@ -125,19 +125,17 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
   }
 
   /// The pair to open on: the last one swapped, or the largest holding paired
-  /// with a stablecoin.
+  /// with a stablecoin, or ETH and one when no holding has a value yet.
   Future<({AssetId pay, AssetId receive})?> _defaultPair(
     Set<AssetId> tradable,
   ) async {
     // Portfolio decoration must not hold up the form. Start both reads
     // together and abandon slow holdings after the cached-content budget.
     const budget = Duration(milliseconds: 300);
-    Future<List<SwapHolding>?> readHoldings() async {
+    Future<List<SwapHolding>> readHoldings() async {
       try {
         return await (_holdings?.call() ?? Future.value(const <SwapHolding>[]))
             .timeout(budget);
-      } on TimeoutException {
-        return null;
       } on Object {
         return const [];
       }
@@ -166,7 +164,11 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
       }
 
       final holdings = await holdingsRead;
-      if (holdings == null) {
+      final ranked = holdings.where((h) => tradable.contains(h.asset)).toList()
+        ..sort((a, b) => b.usdValue.compareTo(a.usdValue));
+      // Nothing valued says as little as a read that is slow or failed:
+      // holdings carry a value only once their prices are cached.
+      if (ranked.isEmpty) {
         final preferred = _resolveAsset('ETH');
         final candidates = [
           if (preferred != null && tradable.contains(preferred)) preferred,
@@ -180,9 +182,6 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
         }
         return null;
       }
-      final ranked = holdings.where((h) => tradable.contains(h.asset)).toList()
-        ..sort((a, b) => b.usdValue.compareTo(a.usdValue));
-      if (ranked.isEmpty) return null;
       final pay = ranked.first.asset;
       final receive = _partnerFor(pay, tradable);
       return receive == null ? null : (pay: pay, receive: receive);
@@ -224,14 +223,13 @@ bool _isStructuralChange(SwapQuote accepted, SwapQuote fresh) {
 /// Any drop in the guaranteed minimum is material: a swap that silently
 /// delivers less than the figure someone agreed to is the failure this flow
 /// exists to prevent. Costs may drift a little, not a lot.
-bool _isMaterialChange(SwapQuote accepted, SwapQuote fresh) {
+bool _isMaterialChange(
+  SwapQuote accepted,
+  SwapQuote fresh, {
+  required Decimal? Function(AssetId asset) usdPrice,
+}) {
   if (fresh.guaranteedReceive < accepted.guaranteedReceive) return true;
-  for (final entry in fresh.requiredFeeBalances.entries) {
-    if (entry.value >
-        (accepted.requiredFeeBalances[entry.key] ?? Decimal.zero)) {
-      return true;
-    }
-  }
+  if (_heldForFeesRose(accepted, fresh, usdPrice)) return true;
   // Fees not read for the review are new at any amount.
   if (!accepted.feesKnown) return fresh.fees.isNotEmpty;
   final before = accepted.pricing.totalCostUsd;
@@ -242,6 +240,42 @@ bool _isMaterialChange(SwapQuote accepted, SwapQuote fresh) {
   if (before == null) return _feesRose(accepted, fresh);
   if (after == null) return false;
   return _rose(before, after);
+}
+
+/// Whether [fresh] needs more held for its fees than [accepted] did, in a
+/// new coin or by more than costs may drift. Whether the wallet holds it is
+/// checked apart, for any rise.
+///
+/// A Solana order keeps the exact comparison: its funding can show in this
+/// figure alone, with no fee line beside it, and the order is checked
+/// against it to the unit when sent.
+bool _heldForFeesRose(
+  SwapQuote accepted,
+  SwapQuote fresh,
+  Decimal? Function(AssetId asset) usdPrice,
+) {
+  final exact = [
+    accepted.from,
+    accepted.to,
+    fresh.from,
+    fresh.to,
+  ].any(isSolanaTradingAsset);
+  for (final MapEntry(key: asset, value: now)
+      in fresh.requiredFeeBalances.entries) {
+    final was = accepted.requiredFeeBalances[asset];
+    if (was == null) {
+      if (now > Decimal.zero) return true;
+      continue;
+    }
+    if (now <= was) continue;
+    if (exact) return true;
+    final price = usdPrice(asset);
+    final rose = price == null || price <= Decimal.zero
+        ? now > was * (Decimal.one + _costTolerance)
+        : _rose(was * price, now * price);
+    if (rose) return true;
+  }
+  return false;
 }
 
 bool _rose(Decimal before, Decimal after) {

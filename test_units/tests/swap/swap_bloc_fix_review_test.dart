@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
@@ -323,6 +324,106 @@ void main() {
       h.settle();
 
       expect(h.routedExecutor.started.single.id, 'fresh');
+    });
+  });
+
+  group('the balance the order book says its fees need', () {
+    /// [pay] for BTC on the order book, which must hold [required] of [pay]
+    /// for a network fee estimated at [fee].
+    SwapQuote holding(
+      SwapBlocHarness h,
+      String required, {
+      AssetId? pay,
+      String sell = '1',
+      String fee = '0.002',
+    }) => SwapQuote(
+      id: 'book',
+      source: SwapLiquiditySource.atomic,
+      routeKind: SwapRouteKind.direct,
+      from: pay ?? eth,
+      to: btc,
+      sellAmount: d(sell),
+      expectedReceive: d('0.05'),
+      guaranteedReceive: d('0.05'),
+      fees: [feeOf(amount: fee, usd: null, asset: pay ?? eth)],
+      stages: const [],
+      requiredFeeBalances: {pay ?? eth: d(required)},
+      quotedAt: h.now(),
+    );
+
+    /// The review of [quote], the only offer, re-pricing as [fresh].
+    UnifiedSwapBloc reviewing(
+      SwapBlocHarness h,
+      SwapQuote quote,
+      SwapQuote fresh,
+    ) {
+      h.prices.prices[btc] = d('60000');
+      h.routed
+        ..respond = null
+        ..results = [rejected(SwapQuoteFailureKind.noRoute)];
+      h.atomic
+        ..respond = ((_) => [SwapQuoteAvailable(quote)])
+        ..requoteResult = SwapQuoteAvailable(fresh);
+      final bloc = h.open(
+        pay: quote.from.id,
+        receive: 'BTC',
+        amount: '${quote.sellAmount}',
+      )..add(const UnifiedSwapReviewOpened());
+      h.settle();
+      expect(bloc.state.review!.quote.requiredFeeBalances, isNotEmpty);
+      return bloc;
+    }
+
+    swapBlocTest('rising a little with gas starts without asking again', (h) {
+      final bloc = reviewing(h, holding(h, '0.0021'), holding(h, '0.00211'))
+        ..add(const UnifiedSwapStartRequested());
+      h.settle();
+
+      expect(
+        h.atomicExecutor.started.single.requiredFeeBalances[eth],
+        d('0.00211'),
+      );
+      expect(bloc.state.view, UnifiedSwapView.progress);
+    });
+
+    swapBlocTest('rising by more than costs may drift asks first', (h) {
+      final bloc = reviewing(h, holding(h, '0.0021'), holding(h, '0.003'))
+        ..add(const UnifiedSwapStartRequested());
+      h.settle();
+
+      expect(bloc.state.review!.status, SwapReviewStatus.materialUpdate);
+      expect(h.atomicExecutor.started, isEmpty);
+    });
+
+    for (final (required, asks) in [('0.000105', false), ('0.00012', true)]) {
+      swapBlocTest('in a coin with no price, $required up from 0.0001 '
+          '${asks ? 'asks first' : 'starts'}', (h) {
+        SwapQuote quote(String needed) =>
+            holding(h, needed, pay: gleec, sell: '0.5', fee: '0.0001');
+        final bloc = reviewing(h, quote('0.0001'), quote(required))
+          ..add(const UnifiedSwapStartRequested());
+        h.settle();
+
+        expect(h.atomicExecutor.started, asks ? isEmpty : hasLength(1));
+        expect(
+          bloc.state.review?.status,
+          asks ? SwapReviewStatus.materialUpdate : isNull,
+        );
+      });
+    }
+
+    swapBlocTest('rising a little past what the wallet holds still stops', (h) {
+      h.balances[eth] = d('1.0021');
+      final bloc = reviewing(h, holding(h, '0.0021'), holding(h, '0.00211'))
+        ..add(const UnifiedSwapStartRequested());
+      h.settle();
+
+      expect(bloc.state.review!.status, SwapReviewStatus.revalidationFailed);
+      expect(
+        bloc.state.review!.revalidationFailure!.kind,
+        SwapQuoteFailureKind.insufficientFunds,
+      );
+      expect(h.atomicExecutor.started, isEmpty);
     });
   });
 }

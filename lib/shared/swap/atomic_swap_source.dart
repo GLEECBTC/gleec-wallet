@@ -57,26 +57,36 @@ class AtomicSwapPlan {
 /// less any receive-side fee paid out of the traded amount.
 class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// Creates a source backed by the SDK's trading manager.
+  ///
+  /// [tradingAllowed] says whether this location may trade a pair, and a
+  /// refusal is reported as that restriction. [pairAllowed] is the order
+  /// book's own rule for a pair, whose refusal is a pair it does not trade.
+  /// [spendDecimalsOf] resolves the precision of an asset whose config
+  /// declares none, as the form does to check an amount.
   AtomicSwapQuoteSource({
     required TradingManager trading,
     required SwapNetworks Function() networks,
     Future<String?> Function(AssetId asset)? addressOf,
     bool Function(AssetId from, AssetId to)? tradingAllowed,
+    bool Function(AssetId from, AssetId to)? pairAllowed,
     bool Function()? clockValid,
     bool Function(AssetId asset)? isWalletOnly,
     bool Function(AssetId asset)? assetAllowed,
     bool Function(AssetId asset)? tokenApproval,
     Map<String, Object?>? Function(AssetId asset)? gasLimitsOf,
+    Future<int?> Function(AssetId asset)? spendDecimalsOf,
     DateTime Function()? now,
   }) : _trading = trading,
        _networks = networks,
        _addressOf = addressOf,
        _tradingAllowed = tradingAllowed,
+       _pairAllowed = pairAllowed,
        _clockValid = clockValid,
        _isWalletOnly = isWalletOnly,
        _assetAllowed = assetAllowed,
        _tokenApproval = tokenApproval ?? isAtomicEvmToken,
        _gasLimitsOf = gasLimitsOf,
+       _spendDecimalsOf = spendDecimalsOf,
        _now = now ?? DateTime.now;
 
   final bool Function(AssetId asset) _tokenApproval;
@@ -84,6 +94,8 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   final SwapNetworks Function() _networks;
   final Future<String?> Function(AssetId asset)? _addressOf;
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
+  final bool Function(AssetId from, AssetId to)? _pairAllowed;
+  final Future<int?> Function(AssetId asset)? _spendDecimalsOf;
   final bool Function()? _clockValid;
   final bool Function(AssetId asset)? _isWalletOnly;
   final bool Function(AssetId asset)? _assetAllowed;
@@ -101,6 +113,10 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// Whether the orderbook can trade [asset] at all.
   bool canTrade(AssetId asset) =>
       canTradeWith(asset, _isWalletOnly, assetAllowed: _assetAllowed);
+
+  /// Whether the orderbook trades [from] for [to], by its own rules.
+  bool _canTradePair(AssetId from, AssetId to) =>
+      canTrade(from) && canTrade(to) && (_pairAllowed?.call(from, to) ?? true);
 
   /// Whether the orderbook can trade [asset], given the config's
   /// [isWalletOnly] flag.
@@ -239,7 +255,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
       ),
     );
 
-    if (!canTrade(from) || !canTrade(to)) {
+    if (!_canTradePair(from, to)) {
       return reject(SwapQuoteFailureKind.pairUnsupported);
     }
     if (_tradingAllowed != null && !_tradingAllowed(from, to)) {

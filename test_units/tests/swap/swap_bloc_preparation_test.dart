@@ -496,13 +496,15 @@ void main() {
         );
       h.settle();
       expect(bloc.state.inputText, '10');
-      expect(bloc.state.preparationFailedAsset, token);
+      // The asset is prepared; only its dollar amount has no conversion.
+      expect(bloc.state.preparationFailedAsset, isNull);
       expect(bloc.state.issue, SwapFormIssue.fiatUnavailable);
       expect(bloc.state.canReview, isFalse);
       expect(h.routed.requests, isEmpty);
       bloc.add(const UnifiedSwapBalancesRefreshed());
       h.settle();
-      expect(bloc.state.preparationFailedAsset, token);
+      expect(bloc.state.issue, SwapFormIssue.fiatUnavailable);
+      expect(h.routed.requests, isEmpty);
       available = true;
       bloc.add(const UnifiedSwapPreparationRetried());
       h.settle();

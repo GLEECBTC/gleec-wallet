@@ -53,9 +53,10 @@ void main() {
       final submission = registry.beginSubmission();
       gate.block();
       gate.allow(walletEntryId: 'entry');
+      // Refused as a start that sent nothing, which the form may offer again.
       await expectLater(
         registry.start(quoteOf(), submission),
-        throwsA(isA<WalletOperationDenied>()),
+        throwsA(isA<SwapStartRejectedException>()),
       );
       expect(executor.started, isEmpty);
       expect(registry.current, isEmpty);
@@ -67,7 +68,7 @@ void main() {
       final operation = registry.start(quoteOf(), registry.beginSubmission());
       final rejected = expectLater(
         operation,
-        throwsA(isA<WalletOperationDenied>()),
+        throwsA(isA<SwapStartRejectedException>()),
       );
       await executor.preparing.future;
       gate.block();

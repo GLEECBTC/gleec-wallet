@@ -13,10 +13,13 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
         : null,
   );
 
+  /// [automatic] for a preparation no one asked for, as after a session
+  /// change: its price is asked quietly, and only while the form is shown.
   Future<void> _preparePair(
     Emitter<UnifiedSwapState> emit, {
     bool chooseMode = true,
     AssetId? activateRequired,
+    bool automatic = false,
   }) async {
     final version = ++_preparationVersion;
     final epoch = _walletEpoch;
@@ -29,6 +32,13 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
         epoch == _walletEpoch &&
         pay == state.pay &&
         receive == state.receive;
+    void evaluate() {
+      if (!automatic) {
+        _scheduleEvaluation(immediate: true);
+      } else if (_present) {
+        _scheduleEvaluation(immediate: true, quiet: true);
+      }
+    }
 
     _quoteScope = Object();
     if (!state.signedIn) {
@@ -41,7 +51,7 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
           state.copyWith(preparingAssets: false, clearPreparationFailure: true),
         ),
       );
-      _scheduleEvaluation(immediate: true);
+      evaluate();
       return;
     }
     // The arriving catalog restarts preparation. Do not activate merely
@@ -50,8 +60,9 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
     emit(state.copyWith(preparingAssets: true, clearPreparationFailure: true));
     // Unit selection and preparation are independent. A slow balance read
     // must not leave a priced empty field in crypto until after typing starts.
+    final precision = Completer<void>();
     final mode = chooseMode && state.inputText.isEmpty
-        ? _chooseAmountMode(emit, current: current)
+        ? _chooseAmountMode(emit, current: current, precision: precision.future)
         : Future<void>.value();
     AssetId? preparing;
     try {
@@ -87,13 +98,19 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
       await Future.wait([
         _loadBalances(emit),
         _loadAddresses(emit),
-        if (pay != null) _loadSpendDecimals(pay, current: current),
+        if (pay != null)
+          _loadSpendDecimals(
+            pay,
+            current: current,
+          ).whenComplete(precision.complete),
       ]);
       if (!current()) return;
+      // Precision that cannot be resolved is no failure: an amount of the
+      // asset itself needs none, and a dollar amount says it has no
+      // conversion.
       final missing =
           pay != null &&
-              ((_spendDecimalsOf != null && _decimalsOf(pay) == null) ||
-                  state.balance == null ||
+              (state.balance == null ||
                   state.payAddress == null ||
                   (pay.parentId != null && state.feeBalance == null))
           ? pay
@@ -110,7 +127,7 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
         ),
       );
       if (!current()) return;
-      _scheduleEvaluation(immediate: true);
+      evaluate();
     } on Object {
       if (!current()) return;
       emit(
@@ -122,6 +139,7 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
         ),
       );
     } finally {
+      if (!precision.isCompleted) precision.complete();
       await mode;
     }
   }
@@ -148,9 +166,11 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
 
   /// Picks a unit only for an untouched empty field. An arriving price can
   /// never reinterpret a number that the user has already started entering.
+  /// [precision] completes once the pay asset's own has been read.
   Future<void> _chooseAmountMode(
     Emitter<UnifiedSwapState> emit, {
     required bool Function() current,
+    required Future<void> precision,
   }) async {
     final pay = state.pay;
     if (pay == null) return;
@@ -183,8 +203,19 @@ extension _UnifiedSwapPreparation on UnifiedSwapBloc {
       }
       price = _repository.pricing.prices.usdPrice(pay);
     }
-    if (price != null && price > Decimal.zero) {
-      emit(_validated(state.copyWith(amountMode: SwapAmountMode.fiat)));
+    if (price == null || price <= Decimal.zero) return;
+    if (_decimalsOf(pay) == null) {
+      // No dollar amount converts without the asset's precision: the field
+      // takes its own unit until that is read, and for good if it cannot be.
+      emit(_validated(state.copyWith(amountMode: SwapAmountMode.token)));
+      await precision;
+      if (!current() ||
+          version != _amountModeVersion ||
+          state.inputText.isNotEmpty ||
+          _decimalsOf(pay) == null) {
+        return;
+      }
     }
+    emit(_validated(state.copyWith(amountMode: SwapAmountMode.fiat)));
   }
 }

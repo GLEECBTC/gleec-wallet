@@ -8,15 +8,20 @@ extension _UnifiedSwapPair on UnifiedSwapBloc {
     UnifiedSwapStarted event,
     Emitter<UnifiedSwapState> emit,
   ) async {
-    final epoch = _walletEpoch;
     _catalogLoading = true;
-    final SwapCatalog read;
+    SwapCatalog read;
+    int epoch;
     try {
-      read = await _repository.catalog(signedIn: state.signedIn);
+      do {
+        epoch = _walletEpoch;
+        read = await _repository.catalog(signedIn: state.signedIn);
+        // A wallet that signed in or changed session meanwhile is read for
+        // again: giving up here would leave the form loading for good.
+      } while (epoch != _walletEpoch && !emit.isDone && !_closing);
     } finally {
       _catalogLoading = false;
     }
-    if (emit.isDone || epoch != _walletEpoch || _closing) return;
+    if (emit.isDone || _closing) return;
     // A later read may have returned first; the repository keeps the latest.
     final catalog = _repository.current ?? read;
     emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
@@ -39,7 +44,13 @@ extension _UnifiedSwapPair on UnifiedSwapBloc {
     final pair = await _defaultPair({
       for (final source in catalog.sources) ...source.quotable,
     });
-    if (pair == null || _pairChosen) return;
+    if (emit.isDone || _closing || _pairChosen) return;
+    if (epoch != _walletEpoch) {
+      // Chosen from another session's catalog, last pair and holdings.
+      add(const UnifiedSwapStarted());
+      return;
+    }
+    if (pair == null) return;
     await _setPair(emit, pay: pair.pay, receive: pair.receive);
   }
 

@@ -104,6 +104,30 @@ void main() {
 
       expect(manager.quotes, hasLength(1));
     });
+
+    test('a Solana asset is a pair it does not route, never a restriction of '
+        'the location', () async {
+      final sol = assetOf('SOL', subClass: CoinSubClass.solana, decimals: 9);
+      final routed = source(tradingAllowed: (from, to) => true);
+      final quote = SwapQuoteRequest(from: sol, to: usdc, amount: d('1'));
+
+      final [asked] = await routed.quote(quote);
+      final again = await routed.requote(quoteOf(from: eth, to: sol));
+
+      expect(failure(asked).kind, SwapQuoteFailureKind.pairUnsupported);
+      expect(failure(again).kind, SwapQuoteFailureKind.pairUnsupported);
+      await expectLater(
+        routed.maxAmount(from: sol, to: usdc, balance: d('1')),
+        throwsA(
+          isA<SwapMaxUnavailableException>().having(
+            (error) => error.failure.kind,
+            'kind',
+            SwapQuoteFailureKind.pairUnsupported,
+          ),
+        ),
+      );
+      expect(manager.quotes, isEmpty);
+    });
   });
 
   group('alternatives', () {

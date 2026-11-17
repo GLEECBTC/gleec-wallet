@@ -158,13 +158,19 @@ extension _UnifiedSwapEvaluation on UnifiedSwapBloc {
       return;
     }
     // During quiet refresh the chosen source may still be outstanding. Keep
-    // that known quote until its source settles rather than switching early.
+    // that known quote until its source settles rather than switching early,
+    // and until it expires if that source fails: as when every source does,
+    // a failed refresh never hands the choice to another kind of swap.
     final selectedBefore = state.selectedQuote;
-    if (quiet &&
-        !keep &&
-        selectedBefore != null &&
-        update.pendingSources.contains(selectedBefore.source)) {
-      return;
+    if (quiet && !keep && selectedBefore != null) {
+      final status = update.sources[selectedBefore.source];
+      if (status == SwapQuoteSourceStatus.pending) return;
+      if (status == SwapQuoteSourceStatus.unavailable &&
+          !selectedBefore.isExpiredAt(_now())) {
+        final limit = result.failures.rateLimit;
+        if (limit != null) _pauseForRateLimit(emit, limit);
+        return;
+      }
     }
     final selected = keep ? result.byId(previous) : result.preselected;
     final maximum = request.maxSource == null

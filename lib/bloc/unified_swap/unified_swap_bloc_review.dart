@@ -10,7 +10,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     Emitter<UnifiedSwapState> emit,
   ) async {
     if (!state.canReview) return;
-    final quote = state.selectedQuote!;
+    final tapped = state.selectedQuote!;
     final SwapSubmission reviewedIn;
     try {
       reviewedIn = _registry.beginSubmission();
@@ -19,9 +19,16 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       // the registry announces the next one.
       emit(state.copyWith(sessionReady: false));
       return;
+    } on WalletOperationDenied {
+      // Locked, which no session change will lift: Review stays as it was,
+      // to be asked for again once unlocked.
+      return;
     }
     final version = ++_startVersion;
     final epoch = _walletEpoch;
+    // Each arriving source prices the options again as new instances. The
+    // tap stands while the selected one is the offer tapped, on its terms;
+    // anything else is a price the user has not asked to review.
     bool current() =>
         !_closing &&
         !isClosed &&
@@ -29,9 +36,9 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
         version == _startVersion &&
         epoch == _walletEpoch &&
         _registry.isCurrent(reviewedIn) &&
-        identical(state.selectedQuote, quote) &&
+        (state.selectedQuote?.isSameOfferAs(tapped) ?? false) &&
         state.view == UnifiedSwapView.form;
-    final routed = quote.source == SwapLiquiditySource.routed;
+    final routed = tapped.source == SwapLiquiditySource.routed;
     final snapshot = routed ? await _terms.loadSnapshot() : null;
     if (!current()) return;
     final termsRequired =
@@ -41,6 +48,7 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           walletKey: reviewedIn.walletKey,
         );
     if (!current()) return;
+    final quote = state.selectedQuote!;
     _reviewSubmission = reviewedIn;
     // Freeze the selected snapshot and ignore form requests already in flight.
     _invalidate();
@@ -385,7 +393,11 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           );
           return null;
         }
-        if (_isMaterialChange(accepted, fresh)) {
+        if (_isMaterialChange(
+          accepted,
+          fresh,
+          usdPrice: _repository.pricing.prices.usdPrice,
+        )) {
           emit(
             state.copyWith(
               review: SwapReview(

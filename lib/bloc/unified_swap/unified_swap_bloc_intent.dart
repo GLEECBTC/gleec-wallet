@@ -13,11 +13,15 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
         : _resolveAsset(event.receive!);
     if (pay == null && receive == null) return;
     _intentApplied = true;
-    emit(
-      state.copyWith(
-        slippage: event.slippage.clamp(swapMinSlippage, swapMaxSlippage),
-      ),
-    );
+    // A raised allowance belongs to the swap it was set for: it returns with
+    // an amount not yet submitted, never after the swap it was sent with.
+    if (event.input.trim().isNotEmpty) {
+      emit(
+        state.copyWith(
+          slippage: event.slippage.clamp(swapMinSlippage, swapMaxSlippage),
+        ),
+      );
+    }
     await _setPair(
       emit,
       pay: pay,
@@ -195,7 +199,13 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
           .rememberFiatAmount(nextMode == SwapAmountMode.fiat)
           .catchError((Object _) {}),
     );
-    if (restoreDraft) _scheduleEvaluation(immediate: true);
+    // Converting can also lift what kept the amount from being priced, as
+    // more decimals than the asset has.
+    if (restoreDraft ||
+        (state.selectedQuote == null &&
+            state.evaluation == SwapEvaluationStatus.idle)) {
+      _scheduleEvaluation(immediate: true);
+    }
   }
 
   void _onSlippageChanged(

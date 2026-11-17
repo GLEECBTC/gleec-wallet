@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_preferences.dart';
@@ -89,11 +90,16 @@ class SwapBlocHarness {
   final routedExecutor = GatedExecutor(SwapLiquiditySource.routed);
   final atomicExecutor = GatedExecutor(SwapLiquiditySource.atomic);
   final auth = TestSwapAuth(fullIdentity: false);
+
+  /// The app lock's authority over new starts, when a test sets one before
+  /// the registry is first read; otherwise the uninstalled, permissive one.
+  WalletOperationGate? operationGate;
   late final registry = SwapExecutionRegistry(
     executors: [routedExecutor, atomicExecutor],
     inFlight: () async => const [],
     currentSession: () => auth.currentSession,
     isSessionCurrent: auth.isSessionContextCurrent,
+    operationGate: operationGate,
   );
   final storage = SwapBlocStorage();
   final prices = FakePriceSource({eth: d('3000'), usdc: d('1')});

@@ -73,6 +73,9 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         (quote != null && quote.isExpiredAt(_now()));
     if (stale && _keepsFresh) {
       add(const UnifiedSwapEvaluationRequested());
+    } else if (quote == null && state.evaluation == SwapEvaluationStatus.idle) {
+      // Left unpriced while away, as by a session that began meanwhile.
+      _scheduleEvaluation(immediate: true, quiet: true);
     } else {
       _armTimers(quote, shownAgain: true);
     }
@@ -85,10 +88,14 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     if (_closing || isClosed || emit.isDone) return;
     _invalidate();
     final epoch = ++_walletEpoch;
+    // A preparation under way read the session this replaces.
+    _preparationVersion++;
     _startVersion++;
     _legalVersion++;
     _legalSubmissionVersion = null;
     _reviewSubmission = null;
+    _quoteScope = Object();
+    _resolvedSpendDecimals.clear();
     // This is a different wallet context, not cancellation of the old engine
     // operation. The registry owns recovery; none of its prior UI belongs here.
     emit(
@@ -102,6 +109,9 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
           clearFailure: true,
           clearMaxApplied: true,
           checkingMax: false,
+          // Still due from the first catalog read while the assets load.
+          preparingAssets: state.loadingAssets ? null : false,
+          clearPreparationFailure: true,
           clearBalance: true,
           clearFeeBalance: true,
           clearPayAddress: true,
@@ -112,14 +122,21 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         ),
       ),
     );
-    await _loadBalances(emit);
-    if (_closing || emit.isDone || epoch != _walletEpoch) return;
-    await _loadAddresses(emit);
-    if (_closing || emit.isDone || epoch != _walletEpoch) return;
-    if (_present) {
-      add(const UnifiedSwapOffersRequested(quiet: true));
-      _scheduleEvaluation(immediate: true, quiet: true);
+    if (state.loadingAssets) {
+      // The first catalog read prepares the pair once it lands, reading again
+      // for this session if it began for the last one.
+      if (!_catalogLoading) add(const UnifiedSwapStarted());
+      return;
     }
+    // The unit too: a sign-in's own preparation, cut short by its session
+    // arriving, was still choosing one for the empty field.
+    await _preparePair(
+      emit,
+      chooseMode: state.inputText.isEmpty,
+      automatic: true,
+    );
+    if (_closing || emit.isDone || epoch != _walletEpoch) return;
+    if (_present) add(const UnifiedSwapOffersRequested(quiet: true));
   }
 
   Future<void> _onCapabilitiesChanged(
@@ -326,7 +343,6 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
               unknownAsset == null &&
               (previousFailure == pay ||
                   held.fundingBalances.containsKey(previousFailure)) &&
-              (_spendDecimalsOf == null || _decimalsOf(pay) != null) &&
               state.payAddress != null &&
               state.receiveAddress != null,
           balance: held.balance,

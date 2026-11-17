@@ -459,6 +459,12 @@ class SwapServices {
   }
 
   /// Builds the quote repository, gated by the live trading checks.
+  ///
+  /// [tradingAllowed] says whether this location may trade a pair, and both
+  /// sources report its refusal as that restriction. The order book's own
+  /// rules are added here, for the order book alone: a wallet-only asset can
+  /// still be routed. A caller that folds those rules into [tradingAllowed]
+  /// keeps such assets from routed swaps too, under the location's wording.
   UnifiedSwapRepository createRepository({
     required bool Function(AssetId from, AssetId to) tradingAllowed,
     required bool Function() clockValid,
@@ -478,15 +484,16 @@ class SwapServices {
           trading: _sdk.trading,
           networks: networks,
           addressOf: addressOf,
-          tradingAllowed: (from, to) =>
-              tradingAllowed(from, to) &&
-              (_tradingPolicy?.allowsPair(from.id, to.id) ??
-                  canTradeAssetPair(from.id, to.id)),
+          tradingAllowed: tradingAllowed,
+          pairAllowed: (from, to) =>
+              _tradingPolicy?.allowsPair(from.id, to.id) ??
+              canTradeAssetPair(from.id, to.id),
           assetAllowed: _tradingPolicy?.allowsAsset,
           clockValid: clockValid,
           isWalletOnly: isWalletOnly,
           tokenApproval: atomicTokenApproval,
           gasLimitsOf: gasLimitsOf,
+          spendDecimalsOf: spendDecimalsOf,
         ),
       ],
       pricing: pricing,

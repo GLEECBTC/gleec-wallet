@@ -72,4 +72,70 @@ void main() {
     expect(bloc.state.inputText, '0.5');
     expect(bloc.state.selectedQuote!.sellAmount, d('0.5'));
   });
+
+  group('a Review asked for while its terms are read', () {
+    swapBlocTest('opens on the same offer once another source has arrived', (
+      h,
+    ) {
+      final slower = h.atomic.gate = Completer<void>();
+      h.atomic.results = [
+        SwapQuoteAvailable(
+          quoteOf(
+            id: 'later',
+            source: SwapLiquiditySource.atomic,
+            expected: '3200',
+            guaranteed: '3190',
+          ),
+        ),
+      ];
+      final bloc = h.open();
+      final tapped = bloc.state.selectedQuote!;
+      h.termsGate = Completer<void>();
+      bloc.add(const UnifiedSwapReviewOpened());
+      h.settle();
+      expect(bloc.state.view, UnifiedSwapView.form);
+
+      // Every arrival prices the options again, as new instances.
+      slower.complete();
+      h.settle();
+      expect(bloc.state.selectedQuote, isNot(same(tapped)));
+      h.termsGate!.complete();
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.review);
+      expect(bloc.state.review!.quote.id, tapped.id);
+      expect(bloc.state.review!.quote.quotedAt, tapped.quotedAt);
+      expect(
+        bloc.state.review!.quote.guaranteedReceive,
+        tapped.guaranteedReceive,
+      );
+    });
+
+    swapBlocTest('never opens on terms priced since the tap', (h) {
+      final bloc = h.open();
+      h.termsGate = Completer<void>();
+      bloc.add(const UnifiedSwapReviewOpened());
+      h.settle();
+
+      // The same option id, at a lower minimum than the one tapped.
+      h.routed.respond = (request) => [
+        SwapQuoteAvailable(
+          quoteOf(
+            id: 'routed-${request.amount}',
+            sell: '${request.amount}',
+            guaranteed: '2900',
+            quotedAt: h.now(),
+          ),
+        ),
+      ];
+      bloc.add(const UnifiedSwapEvaluationRequested(quiet: true));
+      h.settle();
+      expect(bloc.state.selectedQuote!.guaranteedReceive, d('2900'));
+      h.termsGate!.complete();
+      h.settle();
+
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.review, isNull);
+    });
+  });
 }

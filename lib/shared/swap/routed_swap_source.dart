@@ -28,6 +28,10 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// Creates a source backed by [manager]. Sources given the same [rateLimit]
   /// wait out a refusal together. Each failed quote or catalog read is
   /// described in one line to [log], for the app's exportable log.
+  ///
+  /// [tradingAllowed] says whether this location may trade a pair, and a
+  /// refusal is reported as that restriction. The order book's own rules,
+  /// such as wallet-only assets, bind no routed swap and do not belong in it.
   RoutedSwapQuoteSource(
     this.manager, {
     required SwapNetworks Function() networks,
@@ -188,15 +192,23 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     );
   }
 
-  bool _blocked(AssetId from, AssetId to) =>
-      isSolanaTradingAsset(from) ||
-      isSolanaTradingAsset(to) ||
-      (_tradingAllowed != null && !_tradingAllowed(from, to));
+  /// Why [from] for [to] is not asked for at all, if it is not. The engine
+  /// routes EVM networks only, which is no restriction of the location: only
+  /// [_tradingAllowed] refusing reads as one.
+  SwapQuoteRejected? _refusal(AssetId from, AssetId to) {
+    if (isSolanaTradingAsset(from) || isSolanaTradingAsset(to)) {
+      return _rejected(SwapQuoteFailureKind.pairUnsupported);
+    }
+    if (_tradingAllowed != null && !_tradingAllowed(from, to)) {
+      return _rejected(SwapQuoteFailureKind.tradingBlocked);
+    }
+    return null;
+  }
 
   @override
   Future<List<SwapQuoteResult>> quote(SwapQuoteRequest request) async {
-    if (_blocked(request.from, request.to)) {
-      return [_rejected(SwapQuoteFailureKind.tradingBlocked)];
+    if (_refusal(request.from, request.to) case final refusal?) {
+      return [refusal];
     }
     final orders = request.orders.isEmpty
         ? const {SwapQuoteOrder.cheapest}
@@ -255,9 +267,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
   /// better price must still execute against the accepted minimum.
   @override
   Future<SwapQuoteResult> requote(SwapQuote quote) async {
-    if (_blocked(quote.from, quote.to)) {
-      return _rejected(SwapQuoteFailureKind.tradingBlocked);
-    }
+    if (_refusal(quote.from, quote.to) case final refusal?) return refusal;
     final order = quote.order ?? SwapQuoteOrder.cheapest;
     final result = await _quote(
       quote.from,
@@ -289,9 +299,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     bool max = false,
   }) async {
     // Max and cached/requoted routes share this boundary too.
-    if (_blocked(from, to)) {
-      return _rejected(SwapQuoteFailureKind.tradingBlocked);
-    }
+    if (_refusal(from, to) case final refusal?) return refusal;
     final pausedUntil = _budget.pausedUntil;
     if (pausedUntil != null) {
       return _rejected(SwapQuoteFailureKind.rateLimited, retryAt: pausedUntil);
@@ -338,9 +346,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
           retainedBalance: null,
         );
       }
-      if (_blocked(from, to)) {
-        return _rejected(SwapQuoteFailureKind.tradingBlocked);
-      }
+      if (_refusal(from, to) case final refusal?) return refusal;
       final quote = routedQuoteFromOffer(
         priced.offer,
         networks: _networks(),

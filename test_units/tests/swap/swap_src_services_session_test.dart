@@ -447,6 +447,25 @@ void main() {
       });
     });
 
+    test(
+      'routes a wallet-only token, which only the order book refuses',
+      () async {
+        final repo = services.createRepository(
+          tradingAllowed: (_, _) => true,
+          clockValid: () => true,
+        );
+
+        final result = await repo.quote(
+          SwapQuoteRequest(from: walletOnly, to: eth, amount: d('1')),
+        );
+
+        expect(result.options.single.source, SwapLiquiditySource.routed);
+        expect(result.failures.map((f) => (f.source, f.kind)), [
+          (SwapLiquiditySource.atomic, SwapQuoteFailureKind.pairUnsupported),
+        ]);
+      },
+    );
+
     test('applies the clock check to the order book only', () async {
       final repo = services.createRepository(
         tradingAllowed: (_, _) => true,

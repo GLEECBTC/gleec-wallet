@@ -107,6 +107,93 @@ void main() {
       expect(h.routed.requests.last.amount, d('0.1'));
     },
   );
+
+  swapBlocTest('switching to dollars prices an amount it brings within the '
+      'asset\'s decimals', (h) {
+    final token = assetOf('USD6-ERC20', parent: eth, decimals: 6);
+    h.extraAssets.add(token);
+    h.routed.tradable.add(token);
+    h.atomic.tradable.add(token);
+    h.balances[token] = d('100');
+    h.prices.prices[token] = d('1');
+    final bloc = h.open(pay: token.id, receive: 'ETH', amount: '1.1234567');
+    expect(bloc.state.issue, SwapFormIssue.tooManyDecimals);
+    expect(h.routed.requests, isEmpty);
+
+    bloc.add(const UnifiedSwapAmountModeToggled());
+    h.settle();
+
+    expect(bloc.state.amountMode, SwapAmountMode.fiat);
+    expect(bloc.state.issue, isNull);
+    expect(h.routed.requests.single.amount, d('1.123456'));
+    expect(bloc.state.canReview, isTrue);
+  });
+
+  group('a pay asset whose precision cannot be resolved', () {
+    AssetId unresolved(SwapBlocHarness h) {
+      final token = assetOf('QRC-TOKEN', parent: eth, decimals: null);
+      h.extraAssets.add(token);
+      h.routed.tradable.add(token);
+      h.atomic.tradable.add(token);
+      h.balances[token] = d('100');
+      h.prices.prices[token] = d('2');
+      return token;
+    }
+
+    swapBlocTest('is still sold by an amount of its own, as typed', (h) {
+      final token = unresolved(h);
+      final bloc = h.build(spendDecimalsOf: (_) async => null)
+        ..add(const UnifiedSwapStarted())
+        ..add(
+          UnifiedSwapIntentApplied(
+            pay: token.id,
+            receive: 'ETH',
+            amount: '1.123456789',
+          ),
+        );
+      h.settle();
+
+      expect(bloc.state.preparationFailedAsset, isNull);
+      expect(bloc.state.issue, isNull);
+      expect(h.routed.requests.single.amount, d('1.123456789'));
+      expect(bloc.state.canReview, isTrue);
+    });
+
+    swapBlocTest('opens for its own amount, as dollars cannot be converted', (
+      h,
+    ) {
+      final token = unresolved(h);
+      final bloc = h.build(spendDecimalsOf: (_) async => null)
+        ..add(const UnifiedSwapStarted())
+        ..add(UnifiedSwapIntentApplied(pay: token.id, receive: 'ETH'));
+      h.settle();
+
+      expect(bloc.state.amountMode, SwapAmountMode.token);
+      expect(bloc.state.preparationFailedAsset, isNull);
+    });
+
+    swapBlocTest('names a dollar amount it cannot convert, quoting nothing', (
+      h,
+    ) {
+      final token = unresolved(h);
+      final bloc = h.build(spendDecimalsOf: (_) async => null)
+        ..add(const UnifiedSwapStarted())
+        ..add(
+          UnifiedSwapIntentApplied(
+            pay: token.id,
+            receive: 'ETH',
+            amount: '10',
+            amountMode: SwapAmountMode.fiat,
+          ),
+        );
+      h.settle();
+
+      expect(bloc.state.preparationFailedAsset, isNull);
+      expect(bloc.state.issue, SwapFormIssue.fiatUnavailable);
+      expect(h.routed.requests, isEmpty);
+      expect(bloc.state.canReview, isFalse);
+    });
+  });
 }
 
 class _GatedPrices implements SwapPriceSource {
