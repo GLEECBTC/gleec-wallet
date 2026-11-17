@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/shared/utils/zip.dart';
 
 class FileLoaderNativeDesktop implements FileLoader {
@@ -14,7 +15,19 @@ class FileLoaderNativeDesktop implements FileLoader {
     required String fileName,
     required String data,
     required LoadFileType type,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    if (beforeWrite != null) {
+      await saveGuardedTextFile(
+        fileName: fileName,
+        data: data,
+        type: type,
+        beforeWrite: beforeWrite,
+        selectDestination: selectDestination,
+      );
+      return;
+    }
     switch (type) {
       case LoadFileType.text:
         if (p.extension(fileName).toLowerCase() == '.json') {
@@ -52,20 +65,24 @@ class FileLoaderNativeDesktop implements FileLoader {
   }
 
   Future<void> _saveAsTextFile(String fileName, String data) async {
-    final String suggestedName =
-        p.extension(fileName).isEmpty ? '$fileName.txt' : fileName;
-    final String? fileFullPath =
-        await FilePicker.platform.saveFile(fileName: suggestedName);
+    final String suggestedName = p.extension(fileName).isEmpty
+        ? '$fileName.txt'
+        : fileName;
+    final String? fileFullPath = await FilePicker.platform.saveFile(
+      fileName: suggestedName,
+    );
     if (fileFullPath == null) return;
     final File file = File(fileFullPath)..createSync(recursive: true);
     await file.writeAsString(data);
   }
 
   Future<void> _saveAsJsonFile(String fileName, String data) async {
-    final String suggestedName =
-        p.extension(fileName).isEmpty ? '$fileName.json' : fileName;
-    final String? fileFullPath =
-        await FilePicker.platform.saveFile(fileName: suggestedName);
+    final String suggestedName = p.extension(fileName).isEmpty
+        ? '$fileName.json'
+        : fileName;
+    final String? fileFullPath = await FilePicker.platform.saveFile(
+      fileName: suggestedName,
+    );
     if (fileFullPath == null) return;
 
     String prettyData = data;
@@ -80,16 +97,16 @@ class FileLoaderNativeDesktop implements FileLoader {
     await file.writeAsString(prettyData);
   }
 
-  Future<void> _saveAsCompressedFile(
-    String fileName,
-    String data,
-  ) async {
-    final String? fileFullPath =
-        await FilePicker.platform.saveFile(fileName: '$fileName.zip');
+  Future<void> _saveAsCompressedFile(String fileName, String data) async {
+    final String? fileFullPath = await FilePicker.platform.saveFile(
+      fileName: '$fileName.zip',
+    );
     if (fileFullPath == null) return;
 
-    final compressedBytes =
-        createZipOfSingleFile(fileName: fileName, fileContent: data);
+    final compressedBytes = createZipOfSingleFile(
+      fileName: fileName,
+      fileContent: data,
+    );
 
     final File compressedFile = File(fileFullPath);
     await compressedFile.writeAsBytes(compressedBytes);

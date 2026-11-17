@@ -18,9 +18,7 @@ class FiatRepository {
   ICurrency? _paymentMethodsCoin;
   List<FiatPaymentMethod>? _paymentMethodsList;
 
-  BaseFiatProvider? _getPaymentMethodProvider(
-    FiatPaymentMethod paymentMethod,
-  ) {
+  BaseFiatProvider? _getPaymentMethodProvider(FiatPaymentMethod paymentMethod) {
     for (final provider in fiatProviders) {
       if (provider.getProviderId() == paymentMethod.providerId) {
         return provider;
@@ -43,14 +41,14 @@ class FiatRepository {
     Future<List<ICurrency>> Function(BaseFiatProvider) getList,
     bool isCoin,
   ) async {
+    Object? providerFailure;
     final futures = fiatProviders.map((provider) async {
       try {
         return await getList(provider);
-      } catch (e, s) {
-        _log.severe(
+      } catch (e) {
+        providerFailure ??= e;
+        _log.warning(
           'Failed to get currency list from ${provider.getProviderId()}',
-          e,
-          s,
         );
         return <ICurrency>[];
       }
@@ -85,6 +83,9 @@ class FiatRepository {
       }
     }
 
+    if (currencyMap.isEmpty && providerFailure != null) {
+      throw providerFailure!;
+    }
     return currencyMap.values.toList()
       ..sort((a, b) => a.symbol.compareTo(b.symbol));
   }
@@ -129,7 +130,7 @@ class FiatRepository {
   Decimal? _calculateCoinAmount(
     String fiatAmount,
     Decimal spotPriceIncludingFee,
-    ) {
+  ) {
     if (fiatAmount.isEmpty || spotPriceIncludingFee == Decimal.zero) {
       _log.info('Fiat amount or spot price is zero, returning null');
       return null;
@@ -174,8 +175,9 @@ class FiatRepository {
 
     try {
       return paymentMethodsList.map((method) {
-        final Decimal spotPriceIncludingFee =
-            _calculateSpotPriceIncludingFee(method);
+        final Decimal spotPriceIncludingFee = _calculateSpotPriceIncludingFee(
+          method,
+        );
 
         final coinAmount = _calculateCoinAmount(
           sourceAmount,
@@ -217,6 +219,7 @@ class FiatRepository {
       }
     }
 
+    Object? providerFailure;
     final futures = fiatProviders.map((provider) async {
       try {
         final paymentMethods = await provider.getPaymentMethodsList(
@@ -232,11 +235,10 @@ class FiatRepository {
               ),
             )
             .toList();
-      } catch (e, s) {
-        _log.severe(
+      } catch (e) {
+        providerFailure ??= e;
+        _log.warning(
           'Failed to fetch payment methods from ${provider.getProviderId()}',
-          e,
-          s,
         );
         return <FiatPaymentMethod>[];
       }
@@ -244,6 +246,12 @@ class FiatRepository {
 
     final results = await Future.wait(futures);
     _paymentMethodsList = results.expand((x) => x).toList();
+    if (_paymentMethodsList!.isEmpty && providerFailure != null) {
+      _paymentMethodsList = null;
+      _paymentMethodsCoin = null;
+      _paymentMethodFiat = null;
+      throw providerFailure!;
+    }
     _paymentMethodsList = _addRelativePercentField(_paymentMethodsList!);
 
     _paymentMethodsCoin = target;
@@ -322,12 +330,11 @@ class FiatRepository {
             scaleOnInfinitePrecision: scaleOnInfinitePrecision,
           ),
         );
-      }).toList()
-        ..sort((a, b) {
-          if (a.relativePercent == Decimal.zero) return -1;
-          if (b.relativePercent == Decimal.zero) return 1;
-          return b.relativePercent.compareTo(a.relativePercent);
-        });
+      }).toList()..sort((a, b) {
+        if (a.relativePercent == Decimal.zero) return -1;
+        if (b.relativePercent == Decimal.zero) return 1;
+        return b.relativePercent.compareTo(a.relativePercent);
+      });
     } catch (e, s) {
       _log.shout(
         'Failed to add relative percent field to payment methods list',

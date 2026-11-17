@@ -237,14 +237,29 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       return;
     }
     final epoch = _walletEpoch;
-    _showHeld(emit, pay, epoch, await _heldOf(pay));
+    final version = ++_balanceReadVersion;
+    final receive = state.receive;
+    final held = await _heldOf(pay, quote: state.selectedQuote);
+    if (version != _balanceReadVersion || receive != state.receive) return;
+    _showHeld(emit, pay, epoch, held);
   }
 
-  Future<_Held> _heldOf(AssetId asset) async {
-    final feeAsset = asset.parentId;
-    final balance = await _read(asset);
-    final feeBalance = feeAsset == null ? null : await _read(feeAsset);
-    return (balance: balance, feeBalance: feeBalance);
+  Future<_Held> _heldOf(AssetId asset, {SwapQuote? quote}) async {
+    final receive = quote?.to ?? state.receive;
+    final assets = <AssetId>{
+      asset,
+      if (asset.parentId != null) asset.parentId!,
+      if (receive != null) receive,
+      if (receive?.parentId != null) receive!.parentId!,
+      ...?quote?.fundingAssets,
+    }.toList();
+    final readings = await Future.wait(assets.map(_read));
+    final funding = Map<AssetId, Decimal?>.fromIterables(assets, readings);
+    return (
+      balance: funding[asset],
+      feeBalance: funding[asset.parentId],
+      fundingBalances: Map<AssetId, Decimal?>.unmodifiable(funding),
+    );
   }
 
   void _showHeld(
@@ -261,6 +276,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
           balance: held.balance,
           clearBalance: held.balance == null,
           feeBalance: held.feeBalance,
+          fundingBalances: held.fundingBalances,
           clearFeeBalance: held.feeBalance == null,
         ),
       ),
@@ -269,7 +285,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
 
   Future<Decimal?> _read(AssetId asset) async {
     try {
-      return await _spendableBalance(asset);
+      return await _spendableBalance(asset).timeout(_evaluationTimeout);
     } on Object {
       return null;
     }

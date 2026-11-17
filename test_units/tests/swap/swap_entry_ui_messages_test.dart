@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
@@ -62,6 +63,63 @@ void main() {
         ),
       )
       .tone;
+
+  testWidgets(
+    'a failed additional funding read explains the required currency and offers retry',
+    (tester) async {
+      await pump(
+        tester,
+        swapPricedForm(
+          ranked: [
+            quoteOf(
+              fees: [
+                SwapFeeComponent(
+                  kind: SwapFeeKind.network,
+                  asset: btc,
+                  amount: d('0.01'),
+                  deductedFromReceive: false,
+                ),
+              ],
+            ),
+          ],
+        ).copyWith(fundingBalances: {eth: d('2'), btc: null}),
+      );
+      expect(lines(tester), [
+        'The BTC balance could not be checked. Try again before reviewing this swap.',
+      ]);
+      expect(swap.state.canReview, isFalse);
+      await tester.tap(find.text('Try again'));
+      expect(swap.events, contains(isA<UnifiedSwapBalancesRefreshed>()));
+    },
+  );
+
+  testWidgets('additional funding shortfall names the actual currency', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      swapPricedForm(
+        ranked: [
+          quoteOf(
+            fees: [
+              SwapFeeComponent(
+                kind: SwapFeeKind.network,
+                asset: btc,
+                amount: d('0.01'),
+                deductedFromReceive: false,
+              ),
+            ],
+          ),
+        ],
+      ).copyWith(
+        issue: SwapFormIssue.insufficientForFees,
+        fundingBalances: {eth: d('2'), btc: d('0.001')},
+      ),
+    );
+    expect(lines(tester).single, contains('0.01 BTC'));
+    expect(lines(tester).single, contains('0.001 BTC'));
+    expect(find.text('Not enough BTC'), findsOneWidget);
+  });
 
   group('warnings', () {
     testWidgets('steps that changed under review are pointed out', (

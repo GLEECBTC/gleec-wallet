@@ -7,6 +7,11 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
     AssetId to,
     Decimal balance,
   ) async {
+    if (!canTrade(from) ||
+        !canTrade(to) ||
+        (_tradingAllowed != null && !_tradingAllowed(from, to))) {
+      return null;
+    }
     final asked = _now();
     try {
       // KDF's own answer already keeps back the trading fee and, for a coin
@@ -44,7 +49,7 @@ extension _AtomicSwapMax on AtomicSwapQuoteSource {
             ? SwapMaxReserve.tradingAndNetworkFees
             : SwapMaxReserve.tradingFee,
         offerLimit: fillable != null && fillable < sellable,
-        coversRefund: true,
+        coversRefund: !isSolanaTradingAsset(from) && !isSolanaTradingAsset(to),
       );
     } on Object {
       return null;

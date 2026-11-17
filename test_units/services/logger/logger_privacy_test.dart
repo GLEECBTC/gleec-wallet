@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/logger/diagnostic_log_bridge.dart';
 import 'package:web_dex/services/logger/diagnostic_log_store.dart';
 import 'package:web_dex/services/logger/mock_logger.dart';
@@ -58,7 +59,10 @@ class _FileLoader implements FileLoader {
     required String fileName,
     required String data,
     required LoadFileType type,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    beforeWrite?.call();
     this.data = data;
     expect(fileName, startsWith('komodo_wallet_log_'));
     expect(type, LoadFileType.compressed);
@@ -79,6 +83,49 @@ class _TrapError implements Exception {
 
 void main() {
   group('app diagnostic privacy and lifecycle', () {
+    test(
+      'vault and passkey canaries cannot enter diagnostic downloads',
+      () async {
+        const canary = 'QWxwaGFHdWFyZFRlc3RDYW5hcnk=';
+        const fields = [
+          'walletPassword',
+          'prf',
+          'prfOutput',
+          'prfResult',
+          'wrappingKey',
+          'credential',
+          'credentialId',
+          'rotationEnvelope',
+          'derivedKey',
+        ];
+        final store = _Store();
+        final loader = _FileLoader();
+        final logger = UniversalLogger(
+          platformInfo: const _Platform(),
+          store: store,
+          fileLoader: loader,
+          purgeLegacyArtifacts: () async {},
+        );
+        await logger.init();
+        for (final field in fields) {
+          await logger.write('$field=$canary');
+          // Recheck persisted entries too: export must not trust old writers.
+          store.records.add(
+            jsonEncode({
+              'schema': 1,
+              'timestamp': 1,
+              'message': '$field=$canary',
+            }),
+          );
+        }
+        await logger.write('Wallet access completed');
+        await logger.getLogFile();
+        expect(loader.data, isNot(contains(canary)));
+        expect(loader.data, contains('Wallet access completed'));
+        expect(utf8.decode(await logger.exportRecentLogsBytes()), loader.data);
+        await logger.dispose();
+      },
+    );
     test(
       'concurrent init/export waits for cleanup and store readiness once',
       () async {

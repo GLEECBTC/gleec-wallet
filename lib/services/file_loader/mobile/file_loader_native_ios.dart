@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:web_dex/app_config/app_config.dart';
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/file_loader/diagnostic_artifacts_native.dart';
 import 'package:web_dex/shared/utils/zip.dart';
 
@@ -29,7 +30,19 @@ class FileLoaderNativeIOS implements FileLoader {
     required String fileName,
     required String data,
     LoadFileType type = LoadFileType.text,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    if (beforeWrite != null) {
+      await saveGuardedTextFile(
+        fileName: fileName,
+        data: data,
+        type: type,
+        beforeWrite: beforeWrite,
+        selectDestination: selectDestination,
+      );
+      return;
+    }
     switch (type) {
       case LoadFileType.text:
         if (path.extension(fileName).toLowerCase() == '.json') {

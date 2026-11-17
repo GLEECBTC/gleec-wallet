@@ -1,3 +1,58 @@
+import 'views/common/wallet_access/auth_setup_flow_test.dart'
+    as auth_setup_flow_test;
+import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
+import 'services/wallet_access/swap_submission_lock_test.dart'
+    as swap_submission_lock_test;
+import 'services/wallet_access/wallet_credential_cleanup_test.dart'
+    as wallet_credential_cleanup_test;
+import 'services/wallet_access/wallet_access_service_test.dart'
+    as wallet_access_service_test;
+import 'services/wallet_access/wallet_access_rollback_test.dart'
+    as wallet_access_rollback_test;
+import 'services/wallet_access/artifact_privacy_test.dart'
+    as artifact_privacy_test;
+import 'bloc/update_bloc_dismissal_test.dart' as update_bloc_dismissal_test;
+import 'services/wallet_access/native_credential_backend_linux_test.dart'
+    as native_credential_backend_linux_test;
+import 'services/wallet_access/password_rotation_envelope_test.dart'
+    as password_rotation_envelope_test;
+import 'tests/wallet/recovery_evidence_test.dart';
+import 'views/common/wallet_access/managed_wallet_access_test.dart'
+    as managed_wallet_access_test;
+import 'views/common/wallet_access/auth_accessibility_test.dart'
+    as auth_accessibility_test;
+import 'views/common/wallet_access/auth_recovery_accessibility_test.dart'
+    as auth_recovery_accessibility_test;
+import 'views/common/wallet_access/auth_settings_accessibility_test.dart'
+    as auth_settings_accessibility_test;
+import 'services/wallet_access/web_credential_bridge_test.dart'
+    as web_credential_bridge_test;
+import 'services/wallet_access/financial_operation_gate_test.dart'
+    as financial_operation_gate_test;
+import 'services/wallet_access/app_lock_boundary_test.dart'
+    as app_lock_boundary_test;
+import 'services/wallet_access/wallet_operation_gate_test.dart'
+    as wallet_operation_gate_test;
+import 'services/wallet_access/unlock_coordinator_test.dart'
+    as unlock_coordinator_test;
+import 'views/settings/wallet_display_name_section_test.dart'
+    as wallet_display_name_section_test;
+import 'views/settings/passkey_replacement_section_test.dart'
+    as passkey_replacement_section_tests;
+import 'views/settings/password_update_provider_test.dart'
+    as password_update_provider_tests;
+import 'views/settings/wallet_removal_section_test.dart'
+    as wallet_removal_section_tests;
+import 'tests/integration_test_runner_test.dart'
+    as integration_test_runner_test;
+import 'tests/mm2/prefetch_native_kdf_test.dart' as prefetch_native_kdf_test;
+import 'tests/swap/solana_trade_dispatch_test.dart'
+    as solana_trade_dispatch_test;
+import 'tests/mm2/mm2_initialization_test.dart' as mm2_initialization_test;
+import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
+import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
+import 'tests/swap/solana_atomic_lifecycle_test.dart'
+    as solana_atomic_lifecycle_test;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'services/file_loader/diagnostic_artifacts_test.dart'
@@ -37,6 +92,13 @@ import 'views/wallets_manager/widgets/inline_legal_acceptance_test.dart'
 
 import 'services/initializer/app_error_handling_test.dart'
     as app_error_handling_test;
+import 'services/storage/app_storage_test.dart' as app_storage_test;
+import 'tests/fiat/fiat_provider_availability_test.dart'
+    as fiat_provider_availability_test;
+import 'views/settings/widgets/security_settings/legacy_migration_cleanup_plate_test.dart'
+    as legacy_migration_cleanup_plate_test;
+import 'views/wallets_manager/widgets/legacy_migration_compatibility_dialog_test.dart'
+    as legacy_migration_compatibility_dialog_test;
 import 'views/wallets_manager/widgets/wallet_simple_import_test.dart'
     as wallet_simple_import_test;
 
@@ -103,6 +165,7 @@ import 'views/wallets_manager/widgets/wallets_manager_test.dart'
 
 import 'tests/dex/order_model_validation_test.dart';
 import 'tests/dex/trading_entities_guards_test.dart';
+import 'tests/dex/history_list_test.dart' as history_list_test;
 import 'tests/encryption/encrypt_data_tests.dart';
 import 'tests/fiat/fiat_checkout_url_allowlist_test.dart'
     as fiat_checkout_url_allowlist_test;
@@ -471,6 +534,7 @@ import 'tests/wallet/coin_details/coin_addresses_bloc_gasless_revalidation_test.
 import 'tests/wallet/coin_activation_state_bridge_test.dart';
 import 'tests/auth/auth_bloc_test.dart';
 import 'tests/wallet/wallet_operation_identity_test.dart';
+import 'tests/wallet/wallet_data_loader_test.dart' as wallet_data_loader_test;
 import 'tests/wallet/coins_bloc_activation_recovery_test.dart';
 import 'tests/wallet/coins_bloc_pubkeys_retry_test.dart';
 import 'tests/utils/convert_double_to_string_tests.dart';
@@ -500,6 +564,37 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 ///   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
 /// ```
 void main() {
+  auth_setup_flow_test.main();
+  wallet_protection_bloc_test.main();
+  swap_submission_lock_test.main();
+  wallet_credential_cleanup_test.main();
+  wallet_access_service_test.main();
+  wallet_access_rollback_test.main();
+  artifact_privacy_test.main();
+  update_bloc_dismissal_test.main();
+  native_credential_backend_linux_test.main();
+  password_rotation_envelope_test.main();
+  testRecoveryEvidence();
+  managed_wallet_access_test.main();
+  auth_accessibility_test.main();
+  auth_recovery_accessibility_test.main();
+  auth_settings_accessibility_test.main();
+  web_credential_bridge_test.main();
+  financial_operation_gate_test.main();
+  app_lock_boundary_test.main();
+  wallet_operation_gate_test.main();
+  unlock_coordinator_test.main();
+  wallet_display_name_section_test.main();
+  passkey_replacement_section_tests.main();
+  password_update_provider_tests.main();
+  wallet_removal_section_tests.main();
+  solana_build_config_test.main();
+  solana_trade_dispatch_test.main();
+  mm2_initialization_test.main();
+  prefetch_native_kdf_test.main();
+  integration_test_runner_test.main();
+  solana_trading_test.main();
+  solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();
   guarded_file_saver_test.main();
   safe_log_exporter_test.main();
@@ -519,6 +614,10 @@ void main() {
   auto_scroll_text_test.main();
   scale_down_or_scroll_test.main();
   app_error_handling_test.main();
+  app_storage_test.main();
+  fiat_provider_availability_test.main();
+  legacy_migration_cleanup_plate_test.main();
+  legacy_migration_compatibility_dialog_test.main();
   wallet_simple_import_test.main();
   group('App update:', () {
     testUpdateVersionCompare();
@@ -591,6 +690,7 @@ void main() {
 
   group('Dex trading safety:', () {
     testTradingEntitiesGuards();
+    history_list_test.main();
     testOrderModelValidation();
   });
 
@@ -621,6 +721,7 @@ void main() {
   testCoinActivationStateBridge();
   testAuthBloc();
   testWalletOperationIdentity();
+  wallet_data_loader_test.main();
   activated_coin_id_migration_test.testActivatedCoinIdMigration();
   nft_main_bloc_test.testNftMainBloc();
   nft_main_repo_test.testNftMainRepo();

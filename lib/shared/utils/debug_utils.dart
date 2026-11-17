@@ -1,20 +1,19 @@
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
-import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/shared/utils/debug_wallet_source.dart';
 
 Future<void> initDebugData(
   AuthBloc authBloc,
   WalletsRepository walletsRepository,
 ) async {
   try {
-    final String testWalletStr = await rootBundle.loadString(
-      'assets/debug_data.json',
-    );
+    final testWalletStr = await loadDebugWalletSource();
+    if (testWalletStr == null) return;
     final Map<String, dynamic> debugDataJson = jsonDecode(testWalletStr);
     final Map<String, dynamic>? newWalletJson = debugDataJson['wallet'];
     if (newWalletJson == null) {
@@ -80,15 +79,14 @@ Future<Wallet?> _createDebugWallet(
 }
 
 Future<List<dynamic>?> loadDebugSwaps() async {
-  final String? testDataStr;
   try {
-    testDataStr = await rootBundle.loadString('assets/debug_data.json');
-  } catch (e) {
+    final testDataStr = await loadDebugWalletSource();
+    if (testDataStr == null) return null;
+    final Map<String, dynamic> debugDataJson = jsonDecode(testDataStr);
+    if (debugDataJson['swaps'] == null) return null;
+    return debugDataJson['swaps']['import'];
+  } on Object {
+    // A malformed local fixture must not print its wallet data in an error.
     return null;
   }
-
-  final Map<String, dynamic> debugDataJson = jsonDecode(testDataStr);
-
-  if (debugDataJson['swaps'] == null) return null;
-  return debugDataJson['swaps']['import'];
 }

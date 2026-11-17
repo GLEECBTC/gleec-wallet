@@ -10,12 +10,12 @@ import 'package:web_dex/router/state/routing_state.dart';
 
 class BackupSeedNotification extends StatefulWidget {
   const BackupSeedNotification({
-    Key? key,
+    super.key,
     this.title,
     this.description,
     this.customizationNotification,
     this.hideOnMobile = true,
-  }) : super(key: key);
+  });
 
   final String? title;
   final String? description;
@@ -42,7 +42,7 @@ class _BackupSeedNotificationState extends State<BackupSeedNotification> {
     return BlocBuilder<AuthBloc, AuthBlocState>(
       builder: (context, state) {
         final currentWallet = state.currentUser?.wallet;
-        if (currentWallet == null || currentWallet.config.hasBackup) {
+        if (currentWallet == null || currentWallet.config.hasRecoveryPhrase) {
           return const SizedBox();
         }
 

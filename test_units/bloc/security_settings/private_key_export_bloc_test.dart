@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/security_settings/private_key_export_event.dart';
 import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/security/private_key_export_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
 import '../../services/security/private_key_export_test_support.dart';
 
@@ -57,6 +58,46 @@ void testPrivateKeyExportBloc() {
       bloc.add(const PrivateKeyExportVisibilityChanged(true));
       await flushExportEvents();
     }
+
+    test('queued password event retains its original app permit', () async {
+      await request();
+      final gate = WalletOperationGate()
+        ..attachWallet('entry', allowOperations: true);
+      final permit = gate.capture();
+      final event = PrivateKeyExportPasswordSubmitted(
+        bloc.state.operationId,
+        SensitiveString(exportPasswordSentinel),
+        ensureAuthorized: permit.ensureCurrent,
+      );
+      gate.block();
+      gate.allow(walletEntryId: 'entry');
+      bloc.add(event);
+      await flushExportEvents();
+      expect(service.authentications, 0);
+      expect(bloc.state.result, isNull);
+    });
+
+    test('app lock rejects keys completing after authorization', () async {
+      await request();
+      final gate = WalletOperationGate()
+        ..attachWallet('entry', allowOperations: true);
+      final permit = gate.capture();
+      service.pendingExport = Completer<PrivateKeyExportResult>();
+      bloc.add(
+        PrivateKeyExportPasswordSubmitted(
+          bloc.state.operationId,
+          SensitiveString(exportPasswordSentinel),
+          ensureAuthorized: permit.ensureCurrent,
+        ),
+      );
+      await flushExportEvents();
+      gate.block();
+      service.pendingExport!.complete(exportTestResult());
+      await flushExportEvents();
+      expect(bloc.state.phase, PrivateKeyExportPhase.failed);
+      expect(bloc.state.result, isNull);
+      expect(delivery.calls, 0);
+    });
 
     test('wrong password stays in prompt; no secrets in diagnostics', () async {
       service.authenticationError = const PrivateKeyExportException(

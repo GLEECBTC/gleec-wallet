@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
+import 'package:web_dex/bloc/legal_agreement/legal_agreement_bloc.dart';
+import 'package:web_dex/shared/widgets/disclaimer/terms_consent_text.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallets_list.dart';
+import 'package:web_dex/views/wallets_manager/widgets/wallet_credential_cleanup_notice.dart';
 
 /// The single first screen of wallet setup.
 ///
@@ -34,6 +37,8 @@ class WalletsManagerEntry extends StatefulWidget {
     required this.onHardwareWallet,
     required this.onWalletSelected,
     required this.onCancel,
+    this.cancelLabel,
+    this.onUserIntent,
     super.key,
   });
 
@@ -41,6 +46,8 @@ class WalletsManagerEntry extends StatefulWidget {
   final VoidCallback onHardwareWallet;
   final void Function(Wallet, WalletsManagerExistWalletAction) onWalletSelected;
   final VoidCallback onCancel;
+  final String? cancelLabel;
+  final VoidCallback? onUserIntent;
 
   @override
   State<WalletsManagerEntry> createState() => _WalletsManagerEntryState();
@@ -48,6 +55,7 @@ class WalletsManagerEntry extends StatefulWidget {
 
 class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
   late final Stream<List<Wallet>> _walletsStream;
+  bool _creating = false;
 
   @override
   void initState() {
@@ -66,45 +74,106 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
     );
   }
 
+  Future<void> _onAction(WalletsManagerAction action) async {
+    widget.onUserIntent?.call();
+    if (action != WalletsManagerAction.create) {
+      widget.onAction(action);
+      return;
+    }
+    if (_creating) return;
+    setState(() => _creating = true);
+    final agreement = await awaitLegalAgreement(context);
+    if (!mounted) return;
+    if (agreement == null) {
+      setState(() => _creating = false);
+      return;
+    }
+    context.read<LegalAgreementBloc>().add(
+      LegalAgreementSubmitted('wallet-creation', snapshot: agreement.snapshot),
+    );
+    widget.onAction(action);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Wallet>>(
-      initialData:
-          context.read<WalletsRepository>().wallets ?? const <Wallet>[],
-      stream: _walletsStream,
-      builder: (context, snapshot) {
-        final wallets = snapshot.data ?? const <Wallet>[];
-        final hasWallets = wallets.isNotEmpty;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _OnboardingHeader(hasWallets: hasWallets),
-            const SizedBox(height: 24),
-            if (hasWallets) ...[
-              WalletsList(
-                walletType: WalletType.iguana,
-                wallets: wallets,
-                onWalletClick: widget.onWalletSelected,
+    final theme = Theme.of(context);
+    // The legacy body styles apply opacity even to enabled action titles.
+    // Onboarding uses the existing opaque surface roles so Import stays visibly
+    // available and supporting instructions remain readable in both themes.
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(
+          bodyLarge: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface,
+          ),
+          bodySmall: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      child: StreamBuilder<List<Wallet>>(
+        initialData:
+            context.read<WalletsRepository>().wallets ?? const <Wallet>[],
+        stream: _walletsStream,
+        builder: (context, snapshot) {
+          final wallets = snapshot.data ?? const <Wallet>[];
+          final hasWallets = wallets.isNotEmpty;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const WalletCredentialCleanupNotice(),
+              _OnboardingHeader(hasWallets: hasWallets),
+              if (!hasWallets) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'authCreationProtectionNotice'.tr(),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 24),
+              if (hasWallets) ...[
+                WalletsList(
+                  walletType: WalletType.iguana,
+                  wallets: wallets,
+                  onWalletClick: (wallet, action) {
+                    widget.onUserIntent?.call();
+                    widget.onWalletSelected(wallet, action);
+                  },
+                ),
+                const SizedBox(height: 16),
+                const UiDivider(),
+                const SizedBox(height: 8),
+              ],
+              LegalConsentAction(
+                builder: (allowed) => _OnboardingActions(
+                  canCreate: allowed && !_creating,
+                  hasWallets: hasWallets,
+                  onAction: _onAction,
+                  onHardwareWallet: () {
+                    widget.onUserIntent?.call();
+                    widget.onHardwareWallet();
+                  },
+                ),
               ),
-              const SizedBox(height: 16),
-              const UiDivider(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              TermsConsentText(
+                actionLabel: LocaleKeys.onboardingCreateWallet.tr(),
+              ),
+              const SizedBox(height: 12),
+              UiUnderlineTextButton(
+                key: const Key('onboarding-cancel-button'),
+                text: widget.cancelLabel ?? LocaleKeys.cancel.tr(),
+                onPressed: () {
+                  widget.onUserIntent?.call();
+                  widget.onCancel();
+                },
+              ),
             ],
-            _OnboardingActions(
-              hasWallets: hasWallets,
-              onAction: widget.onAction,
-              onHardwareWallet: widget.onHardwareWallet,
-            ),
-            const SizedBox(height: 12),
-            UiUnderlineTextButton(
-              key: const Key('onboarding-cancel-button'),
-              text: LocaleKeys.cancel.tr(),
-              onPressed: widget.onCancel,
-            ),
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -128,16 +197,20 @@ class _OnboardingHeader extends StatelessWidget {
     return GestureDetector(
       key: const Key('wallet-type-list-item-iguana'),
       behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
       onTap: () {},
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            hasWallets
-                ? LocaleKeys.onboardingReturningTitle.tr()
-                : LocaleKeys.onboardingTitle.tr(),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
+          Semantics(
+            header: true,
+            child: Text(
+              hasWallets
+                  ? LocaleKeys.onboardingReturningTitle.tr()
+                  : LocaleKeys.onboardingTitle.tr(),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -156,6 +229,7 @@ class _OnboardingHeader extends StatelessWidget {
 class _OnboardingActions extends StatelessWidget {
   const _OnboardingActions({
     required this.hasWallets,
+    required this.canCreate,
     required this.onAction,
     required this.onHardwareWallet,
   });
@@ -163,6 +237,7 @@ class _OnboardingActions extends StatelessWidget {
   final bool hasWallets;
   final void Function(WalletsManagerAction) onAction;
   final VoidCallback onHardwareWallet;
+  final bool canCreate;
 
   @override
   Widget build(BuildContext context) {
@@ -170,22 +245,28 @@ class _OnboardingActions extends StatelessWidget {
     // Hardware wallets have never been offered on native mobile.
     final showHardware = !PlatformTuner.isNativeMobile;
 
-    final importRow = UiListActionRow(
-      rowKey: const Key('import-wallet-button'),
-      title: LocaleKeys.onboardingImportTitle.tr(),
-      // The load-bearing string on this screen. "I already have a wallet" asks
-      // the user to classify themselves; naming the artifact in their hand asks
-      // them only to recognise it.
-      subtitle: LocaleKeys.onboardingImportSubtitle.tr(),
-      backgroundColor: hasWallets ? theme.cardColor : null,
-      onTap: () => onAction(WalletsManagerAction.import),
+    final importRow = Semantics(
+      button: true,
+      child: UiListActionRow(
+        rowKey: const Key('import-wallet-button'),
+        title: LocaleKeys.onboardingImportTitle.tr(),
+        // The load-bearing string on this screen. "I already have a wallet" asks
+        // the user to classify themselves; naming the artifact in their hand asks
+        // them only to recognise it.
+        subtitle: LocaleKeys.onboardingImportSubtitle.tr(),
+        backgroundColor: hasWallets ? theme.cardColor : null,
+        onTap: () => onAction(WalletsManagerAction.import),
+      ),
     );
 
-    final hardwareRow = UiListActionRow(
-      rowKey: const Key('connect-hardware-wallet-button'),
-      title: LocaleKeys.onboardingHardwareTitle.tr(),
-      backgroundColor: hasWallets ? theme.cardColor : null,
-      onTap: onHardwareWallet,
+    final hardwareRow = Semantics(
+      button: true,
+      child: UiListActionRow(
+        rowKey: const Key('connect-hardware-wallet-button'),
+        title: LocaleKeys.onboardingHardwareTitle.tr(),
+        backgroundColor: hasWallets ? theme.cardColor : null,
+        onTap: onHardwareWallet,
+      ),
     );
 
     // With wallets already on the device the list is the dominant element, so
@@ -194,11 +275,17 @@ class _OnboardingActions extends StatelessWidget {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          UiListActionRow(
-            rowKey: const Key('create-wallet-button'),
-            title: LocaleKeys.onboardingCreateWallet.tr(),
-            backgroundColor: theme.cardColor,
-            onTap: () => onAction(WalletsManagerAction.create),
+          Semantics(
+            button: true,
+            enabled: canCreate,
+            child: UiListActionRow(
+              rowKey: const Key('create-wallet-button'),
+              title: LocaleKeys.onboardingCreateWallet.tr(),
+              backgroundColor: theme.cardColor,
+              onTap: canCreate
+                  ? () => onAction(WalletsManagerAction.create)
+                  : null,
+            ),
           ),
           const SizedBox(height: 8),
           importRow,
@@ -212,10 +299,13 @@ class _OnboardingActions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         UiPrimaryButton(
+          expandForText: true,
           key: const Key('create-wallet-button'),
           height: 56,
           text: LocaleKeys.onboardingCreateWallet.tr(),
-          onPressed: () => onAction(WalletsManagerAction.create),
+          onPressed: canCreate
+              ? () => onAction(WalletsManagerAction.create)
+              : null,
         ),
         const SizedBox(height: 16),
         const UiDivider(),

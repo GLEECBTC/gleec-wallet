@@ -17,12 +17,12 @@ import 'swap_history_sort_mixin.dart';
 
 class HistoryList extends StatefulWidget {
   const HistoryList({
-    Key? key,
+    super.key,
     this.filter,
     required this.onItemClick,
     this.entitiesFilterData,
     this.onFilterChange,
-  }) : super(key: key);
+  });
 
   final bool Function(Swap)? filter;
   final Function(Swap) onItemClick;
@@ -114,7 +114,7 @@ class _HistoryListState extends State<HistoryList>
     final tradingEntitiesBloc = RepositoryProvider.of<TradingEntitiesBloc>(
       context,
     );
-    return tradingEntitiesBloc.outSwaps
+    final subscription = tradingEntitiesBloc.outSwaps
         .where((swaps) {
           final didSwapsChange =
               !_hasReceivedData || !areSwapsSame(swaps, _unprocessedSwaps);
@@ -128,8 +128,19 @@ class _HistoryListState extends State<HistoryList>
           onError: (e) {
             setState(() => error = e.toString());
           },
+          onDone: () {
+            _unprocessedSwaps = [];
+            _processSwapFilters(_unprocessedSwaps);
+          },
           cancelOnError: false,
         );
+
+    // The poll may have completed before this tab mounted. Subscribe first,
+    // then read the current wallet-scoped cache without yielding, so neither
+    // an earlier snapshot nor a subsequent update is missed.
+    _unprocessedSwaps = tradingEntitiesBloc.swaps;
+    _processSwapFilters(_unprocessedSwaps);
+    return subscription;
   }
 
   void _processSwapFilters(List<Swap> swaps) {

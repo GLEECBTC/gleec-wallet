@@ -3,6 +3,7 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 import 'package:web_dex/services/file_loader/file_loader.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 FileLoader createFileLoader() => const FileLoaderWeb();
@@ -15,7 +16,19 @@ class FileLoaderWeb implements FileLoader {
     required String fileName,
     required String data,
     required LoadFileType type,
+    void Function()? beforeWrite,
+    GuardedDestinationSelector? selectDestination,
   }) async {
+    if (beforeWrite != null) {
+      await saveGuardedTextFile(
+        fileName: fileName,
+        data: data,
+        type: type,
+        beforeWrite: beforeWrite,
+        selectDestination: selectDestination,
+      );
+      return;
+    }
     switch (type) {
       case LoadFileType.text:
         if (fileName.toLowerCase().endsWith('.json')) {

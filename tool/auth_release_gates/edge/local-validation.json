@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "scope": "local-only candidate; no account or DNS writes",
+  "validationDateUtc": "2026-11-08T23:30:45.422Z",
+  "node": "v26.8.2",
+  "wrangler": "4.158.0",
+  "workerd": "1.20261104.1",
+  "tests": {
+    "passed": 76,
+    "failed": 0,
+    "skipped": 0,
+    "nodeCases": 69,
+    "workerdCases": 7,
+    "logSha256": "4ab44297f89839627a9b6f091485c6fd0f59ebc06ee829f0ba64ce81db301e2b"
+  },
+  "typecheck": "passed",
+  "wranglerDryRun": "passed",
+  "independentReview": "final encoded delimiter/traversal correction reviewed; no blocking code finding",
+  "compiledBundleSha256": "cdb6e3bc1c402276959e350d6055180993c262d10a26fa45ef29eff3ab8870e8",
+  "source": [
+    {
+      "path": "src/worker.js",
+      "sha256": "e3af81f5cb7e988ca3a43583b8028d8b24bad664064178eeaad8bfe29cff9b35"
+    },
+    {
+      "path": "wrangler.jsonc",
+      "sha256": "a88aaebca9bac277bf211fd0a268d8edf68fc1580269b5dd500a3956248f95ed"
+    },
+    {
+      "path": "package.json",
+      "sha256": "98eb9f0f3a53f8e138e26fb9555e7ce0d5a617d74510e6927bd2e50d08d368c9"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "ebfab3130d5cf5c2b362ef91228dd8c420c269c1041d8436f0a0a9316089e38d"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "7d07486b0f5a819840c830cf48ef52422f75b5a5e6597710afefdaa3103ca526"
+    },
+    {
+      "path": "worker-configuration.d.ts",
+      "sha256": "bc85a1715f59b5638a5d0519f25542a6499c1f286ec11624df9365b146030b08"
+    },
+    {
+      "path": "test/worker.test.js",
+      "sha256": "65cfb400aee209bbaf54910235378c27626b5e5b080e8c28964bd60be36ed7e9"
+    },
+    {
+      "path": "test/runtime.test.js",
+      "sha256": "2f967f5fae81f341fb82c6386dae9ac2498a713a55b98e326ab6741c73558d49"
+    }
+  ],
+  "pending": [
+    "Cloudflare authentication",
+    "Exact DNS/route/account baseline capture",
+    "Proxy/TLS readiness",
+    "Worker route activation with fail-closed mode",
+    "Production response/encoded-path/browser comparison",
+    "Live rollback rehearsal"
+  ]
+}

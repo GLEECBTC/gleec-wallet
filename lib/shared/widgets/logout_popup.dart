@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -76,9 +78,28 @@ class LogOutPopup extends StatelessWidget {
   }
 
   void _onConfirmLogout(BuildContext context) {
-    // stop listening to balance updates before logging out
-    context.read<CoinsBloc>().add(CoinsSessionEnded());
-    context.read<AuthBloc>().add(const AuthSignOutRequested());
+    final auth = context.read<AuthBloc>();
+    final coins = context.read<CoinsBloc>();
+    // A failed durable sign-out leaves the existing session locked and usable.
+    // Only tear down its coin projection after auth confirms removal. The auth
+    // coordinator disconnects engine streams before shutting down KDF.
+    unawaited(
+      auth.stream
+          .firstWhere(
+            (state) =>
+                !state.isLoading &&
+                (state.currentUser == null || state.authError != null),
+          )
+          .then((state) {
+            if (state.currentUser == null &&
+                auth.state.currentUser == null &&
+                !coins.isClosed) {
+              coins.add(CoinsSessionEnded());
+            }
+          })
+          .catchError((Object _) {}),
+    );
+    auth.add(const AuthSignOutRequested());
     onConfirm();
   }
 }

@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart' show RpcDispatchGuard;
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
+import 'package:web_dex/shared/trading/trading_asset_policy.dart';
 
 /// Executes routed swaps through the SDK and follows them to a terminal
 /// outcome.
@@ -31,16 +34,28 @@ class RoutedSwapExecutor implements SwapExecutor {
     SwapQuote quote, {
     required SwapExecutionAuthorization authorization,
   }) async {
+    final permit = WalletOperationGate.instance.capture();
     final offer = quote.payload;
     if (offer is! RoutedSwapOffer) {
       throw const SwapStartRejectedException(SwapStartRejection.quoteStale);
+    }
+    if ([
+      quote.from,
+      quote.to,
+      offer.from,
+      offer.to,
+    ].any(isSolanaTradingAsset)) {
+      throw const SwapStartRejectedException(SwapStartRejection.notAvailable);
     }
     final startedAt = _now();
     final RoutedSwapHandle handle;
     try {
       handle = await manager.start(
         offer,
-        beforeDispatch: authorization.beforeDispatch,
+        beforeDispatch: () {
+          permit.ensureCurrent();
+          authorization.beforeDispatch();
+        },
       );
     } on RoutedSwapStartUnconfirmedException catch (error) {
       throw SwapStartUnconfirmedException(error.cause, taskId: error.taskId);
@@ -106,8 +121,13 @@ class RoutedSwapExecutor implements SwapExecutor {
       checkedAt: handle.checkedAt,
       checks: handle.checks,
       cancel: () async {
+        final permit = WalletOperationGate.instance.capture();
         try {
-          await handle.cancel();
+          await RpcDispatchGuard.run(
+            permit.ensureCurrent,
+            handle.cancel,
+            methods: const {'task::routed_swap::cancel'},
+          );
         } on RoutedSwapNotCancellableException catch (error) {
           throw SwapCancelRefusedException(switch (error.refusal) {
             RoutedSwapCancelRefusal.alreadyBroadcast =>

@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart' show KomodoDefiSdk;
 import 'package:web_dex/bloc/coins_bloc/coins_repo.dart';
 import 'package:web_dex/bloc/fiat/banxa_fiat_provider.dart';
+import 'package:web_dex/bloc/fiat/base_fiat_provider.dart';
 import 'package:web_dex/bloc/fiat/fiat_onramp_form/fiat_form_bloc.dart';
 import 'package:web_dex/bloc/fiat/fiat_repository.dart';
 import 'package:web_dex/bloc/fiat/models/models.dart';
@@ -60,7 +61,8 @@ class _Storage implements BaseStorage {
 
 void main() {
   group('Fiat provider response boundary', () {
-    const blockPage = '<html>upstream block page</html>';
+    const blockPage =
+        '<html>upstream block page PRIVATE_RESPONSE_CANARY</html>';
     for (final entry in {
       'JSON-wrapped block page': jsonEncode(blockPage),
       'HTML block page': blockPage,
@@ -72,12 +74,14 @@ void main() {
           await expectLater(
             BanxaFiatProvider().getFiatList(),
             throwsA(
-              isA<FormatException>().having(
+              isA<FiatProviderUnavailable>().having(
                 (error) => error.toString(),
                 'safe message',
                 allOf(
-                  contains('Invalid fiat provider response'),
+                  contains('Fiat provider is temporarily unavailable'),
                   isNot(contains(blockPage)),
+                  isNot(contains('<html>')),
+                  isNot(contains('PRIVATE_RESPONSE_CANARY')),
                 ),
               ),
             ),

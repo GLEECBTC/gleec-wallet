@@ -34,6 +34,7 @@ KdfUser _user({required bool hasBackup, bool generated = false}) => KdfUser(
   metadata: {
     'type': 'hdwallet',
     'has_backup': hasBackup,
+    'recovery_evidence': hasBackup ? 'phraseConfirmed' : 'none',
     if (generated) 'wallet_provenance': 'generated',
   },
 );

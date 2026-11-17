@@ -6,44 +6,7 @@
 </head>
 
 <body>
-  <script>
-    // Extract URL parameters and put them into an object
-    function getParams() {
-      var params = {};
-      window.location.search.substring(1).split("&").forEach(function (part) {
-        var item = part.split("=");
-        params[item[0]] = decodeURIComponent(item[1]);
-      });
-      return params;
-    }
-
-    // Send the parameters to the opener window
-    var params = getParams();
-    var status = params['status'];
-
-    console.log('opener: ' + (window.opener?.location?.href ?? 'null'));
-
-    if (window.opener != null && !window.opener.closed) {
-      // Temporary work-around because of Banxa checkout bug. We are polling the status of the payment
-      // using the order ID in the main app, but this would be better if we could get the post message
-      // callback to work.
-      if (status == null) {
-        status = 'unknown';
-      }
-
-      // The opener is always the wallet app, which serves this page, so pin
-      // the target origin rather than broadcasting the payment status with '*'.
-      window.opener.postMessage(
-        { type: 'PAYMENT-STATUS', status: status, params: params },
-        window.location.origin
-      );
-      window.opener.focus();
-    }
-
-    // Both Ramp and Banxa checkout pages are either opened in a new tab or a popup dialog webview,
-    // so we need to close the current window rather than redirecting back to the website.
-    window.close();
-  </script>
+  <script src="checkout_status_redirect.js"></script>
 </body>
 
 </html>

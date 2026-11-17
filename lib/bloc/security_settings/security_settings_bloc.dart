@@ -5,6 +5,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_rpc_methods/komodo_defi_rpc_methods.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
+import 'package:web_dex/model/wallet.dart';
 
 /// Owns security settings navigation, seed backup progress and unbanning.
 /// Private-key authorization, results and delivery belong to the screen-scoped
@@ -106,6 +107,7 @@ class SecuritySettingsBloc
     try {
       await sdk.auth.updateMetadataForSession(event.session, {
         'has_backup': true,
+        'recovery_evidence': RecoveryEvidence.phraseConfirmed.name,
       });
       if (emit.isDone || revision != _backupSaveRevision) return;
       sdk.auth.ensureSessionContextCurrent(event.session);

@@ -1,0 +1,48 @@
+name: Installable onboarding Android test build
+on:
+  pull_request:
+    branches: [dev, feat/solana-integration]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: auth-internal-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  internal_android:
+    if: startsWith(github.head_ref, 'auth/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ORG_GRADLE_PROJECT_gleecInternalTesting: "true"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/flutter-deps
+      - uses: ./.github/actions/releases/setup-android
+      - uses: ./.github/actions/generate-assets
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_COMMAND: flutter build apk --no-pub --release
+          ANALYTICS_DISABLED: "true"
+          TRON_GASLESS_ENABLED: "true"
+          TRON_GASLESS_RECEIVE_ENABLED: "true"
+      - name: Verify isolated installable package
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_path=build/app/outputs/flutter-apk/app-release.apk
+          package_id=$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest application-id "$apk_path")
+          test "$package_id" = com.gleec.gleecdex.onboardinginternal
+          python3 tool/verify_wallet_artifacts.py "$apk_path"
+          python3 tool/write_auth_android_identity.py "$apk_path"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gleec-onboarding-internal-android
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/auth-internal-android.json
+          if-no-files-found: error
+          retention-days: 14

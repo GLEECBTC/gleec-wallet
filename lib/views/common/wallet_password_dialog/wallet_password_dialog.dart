@@ -11,6 +11,7 @@ import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 Future<String?> walletPasswordDialog(
   BuildContext context, {
   Wallet? wallet,
+  bool passwordOnly = false,
 }) async {
   final currentWallet = context.read<AuthBloc>().state.currentUser?.wallet;
   wallet ??= currentWallet;
@@ -25,15 +26,18 @@ Future<String?> walletPasswordDialog(
 
   popupManager = PopupDispatcher(
     context: context,
+    onDismiss: () => isOpen = false,
     popupContent: ScreenshotSensitive(
       child: PasswordDialogContent(
-      wallet: wallet,
-      onSuccess: (String pass) {
-        password = pass;
-        close();
-      },
-      onCancel: close,
-    )),
+        wallet: wallet,
+        passwordOnly: passwordOnly,
+        onSuccess: (String pass) {
+          password = pass;
+          close();
+        },
+        onCancel: close,
+      ),
+    ),
   );
 
   isOpen = true;
@@ -74,20 +78,22 @@ Future<bool> walletPasswordDialogWithLoading(
 
   popupManager = PopupDispatcher(
     context: context,
+    onDismiss: () => isOpen = false,
     popupContent: ScreenshotSensitive(
       child: PasswordDialogContentWithLoading(
-      wallet: wallet,
-      onPasswordValidated: onPasswordValidated,
-      onComplete: (bool success) {
-        operationSuccessful = success;
-        close();
-      },
-      onCancel: close,
-      loadingTitle: loadingTitle,
-      loadingMessage: loadingMessage,
-      operationFailedMessage: operationFailedMessage,
-      passwordFieldKey: passwordFieldKey,
-    )),
+        wallet: wallet,
+        onPasswordValidated: onPasswordValidated,
+        onComplete: (bool success) {
+          operationSuccessful = success;
+          close();
+        },
+        onCancel: close,
+        loadingTitle: loadingTitle,
+        loadingMessage: loadingMessage,
+        operationFailedMessage: operationFailedMessage,
+        passwordFieldKey: passwordFieldKey,
+      ),
+    ),
   );
 
   isOpen = true;

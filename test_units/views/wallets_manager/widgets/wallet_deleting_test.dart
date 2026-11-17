@@ -18,6 +18,7 @@ import 'package:komodo_ui_kit/komodo_ui_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_deleting.dart';
 
 class _EnglishLoader extends AssetLoader {
@@ -206,6 +207,21 @@ void main() {
       tester.widget<UiPrimaryButton>(find.byType(UiPrimaryButton)).onPressed !=
       null;
 
+  testWidgets(
+    'inactive passkey wallet explains the required password unlock before deletion',
+    (tester) async {
+      repository.confirm = () async => throw const WalletAccessException(
+        WalletAccessFailure.walletMustBeUnlocked,
+      );
+      await pump(tester);
+      await submit(tester);
+      await tester.pumpAndSettle();
+      expect(find.text('authUnlockWalletBeforeDeletion'.tr()), findsOneWidget);
+      expect(closes, 0);
+      expect(enabled(tester), isTrue);
+    },
+  );
+
   testWidgets('shows payment warning without private recovery internals', (
     tester,
   ) async {
@@ -258,8 +274,16 @@ void main() {
     expect(repository.acknowledgements, [same(original)]);
     expect(find.textContaining('confirm deletion again'), findsOneWidget);
     expect(find.textContaining('TNewDestination'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+    );
+    // Confirmation is explicit again, including fresh password input. The
+    // previous secret is not retained while a payment warning changes.
     await tester.tap(find.byType(UiPrimaryButton));
     await tester.pump();
+    expect(repository.acknowledgements, [same(original)]);
+    await submit(tester);
     expect(repository.acknowledgements.last, same(updated));
     expect(closes, 1);
   });
@@ -275,8 +299,15 @@ void main() {
       expect(find.textContaining('still being submitted'), findsOneWidget);
       expect(enabled(tester), isTrue);
       expect(closes, 0);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
       await tester.tap(find.byType(UiPrimaryButton));
       await tester.pump();
+      expect(repository.acknowledgements, hasLength(1));
+      expect(closes, 0);
+      await submit(tester);
       expect(closes, 1);
     },
   );

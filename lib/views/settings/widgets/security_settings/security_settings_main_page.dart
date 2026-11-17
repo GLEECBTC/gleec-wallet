@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/device_protection_section.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/wallet_display_name_section.dart';
+import 'package:web_dex/views/settings/widgets/security_settings/wallet_removal_section.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/change_password_section.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/legacy_migration_cleanup_plate.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/plate_seed_backup.dart';
@@ -21,6 +24,10 @@ class SecuritySettingsMainPage extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const DeviceProtectionSection(),
+        const SizedBox(height: 12),
+        const WalletDisplayNameSection(),
+        const SizedBox(height: 12),
         const LegacyMigrationCleanupPlate(),
         SizedBox(
           width: double.infinity,
@@ -37,6 +44,8 @@ class SecuritySettingsMainPage extends StatelessWidget {
         SizedBox(width: double.infinity, child: UnbanPubkeysPlate()),
         const SizedBox(height: 12),
         const ChangePasswordSection(),
+        const SizedBox(height: 12),
+        const WalletRemovalSection(),
       ],
     );
   }

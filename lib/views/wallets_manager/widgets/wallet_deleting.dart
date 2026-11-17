@@ -1,8 +1,11 @@
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 import 'package:app_theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_local_auth/komodo_defi_local_auth.dart'
+    show WalletDeletionCommittedException;
 import 'package:web_dex/shared/constants.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_ui_kit/komodo_ui_kit.dart';
@@ -13,9 +16,15 @@ import 'package:web_dex/shared/widgets/password_visibility_control.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 
 class WalletDeleting extends StatefulWidget {
-  const WalletDeleting({super.key, required this.wallet, required this.close});
+  const WalletDeleting({
+    super.key,
+    required this.wallet,
+    required this.close,
+    this.additionalWarning,
+  });
   final Wallet wallet;
   final VoidCallback close;
+  final String? additionalWarning;
 
   @override
   State<WalletDeleting> createState() => _WalletDeletingState();
@@ -24,6 +33,9 @@ class WalletDeleting extends StatefulWidget {
 class _WalletDeletingState extends State<WalletDeleting> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isDeleting = false;
+  bool _manualPassword = false;
+  bool _hasManagedCredential = false;
+  Future<WalletAccessStatus?>? _accessStatus;
   String? _error;
   WalletDeletionReview? _review;
   bool _reviewReady = false;
@@ -36,6 +48,9 @@ class _WalletDeletingState extends State<WalletDeleting> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _accessStatus ??=
+        context.read<WalletAccessService?>()?.statusForWallet(widget.wallet) ??
+        Future<WalletAccessStatus?>.value();
     if (!_targetChanged && !_loadingReview && !_reviewReady) _loadReview();
   }
 
@@ -46,6 +61,13 @@ class _WalletDeletingState extends State<WalletDeleting> {
       _targetGeneration++;
       _isDeleting = false;
       _passwordController.clear();
+      _manualPassword = false;
+      _hasManagedCredential = false;
+      _accessStatus =
+          context.read<WalletAccessService?>()?.statusForWallet(
+            widget.wallet,
+          ) ??
+          Future<WalletAccessStatus?>.value();
       _error = null;
       _review = null;
       _reviewReady = false;
@@ -93,72 +115,97 @@ class _WalletDeletingState extends State<WalletDeleting> {
 
   @override
   Widget build(BuildContext context) {
-    return ScreenshotSensitive(
-      child: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            _buildHeader(),
-            Padding(
-              padding: const EdgeInsets.only(top: 18.0),
-              child: Text(
-                LocaleKeys.deleteWalletTitle.tr(args: [widget.wallet.name]),
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: 16),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                LocaleKeys.deleteWalletInfo.tr(),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+    return FutureBuilder<WalletAccessStatus?>(
+      future: _accessStatus,
+      builder: (context, snapshot) {
+        _hasManagedCredential = snapshot.data?.hasManagedCredential == true;
+        return ScreenshotSensitive(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                _buildHeader(),
+                Padding(
+                  padding: const EdgeInsets.only(top: 18.0),
+                  child: Text(
+                    LocaleKeys.deleteWalletTitle.tr(
+                      args: [widget.wallet.displayName],
+                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontSize: 16),
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 20.0),
-              child: _DeletionRecoveryNotice(review: _review),
-            ),
-            if (_loadingReview) const UiSpinner(),
-            if (!_targetChanged && !_loadingReview && !_reviewReady)
-              TextButton(
-                onPressed: _loadReview,
-                child: Text(LocaleKeys.tryAgain.tr()),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 20.0),
-              child: _PasswordField(
-                controller: _passwordController,
-                onFieldSubmitted: _isDeleting || !_reviewReady
-                    ? null
-                    : _deleteWallet,
-                onChanged: _handlePasswordChanged,
-                validator: (password) {
-                  if (password == null || password.isEmpty) {
-                    return LocaleKeys.passwordIsEmpty.tr();
-                  }
-                  return null;
-                },
-              ),
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    LocaleKeys.deleteWalletInfo.tr(),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 25.0),
-              child: _buildButtons(),
+                Padding(
+                  padding: const EdgeInsets.only(top: 20.0),
+                  child: _DeletionRecoveryNotice(review: _review),
+                ),
+                if (widget.additionalWarning case final warning?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(warning),
+                  ),
+                if (_loadingReview) const UiSpinner(),
+                if (!_targetChanged && !_loadingReview && !_reviewReady)
+                  TextButton(
+                    onPressed: _loadReview,
+                    child: Text(LocaleKeys.tryAgain.tr()),
+                  ),
+                if (_hasManagedCredential && !_manualPassword) ...[
+                  const SizedBox(height: 20),
+                  Text('authDeletionAuthorization'.tr()),
+                  TextButton(
+                    onPressed: _isDeleting
+                        ? null
+                        : () => setState(() => _manualPassword = true),
+                    child: Text('authUsePassword'.tr()),
+                  ),
+                ] else
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20.0),
+                    child: _PasswordField(
+                      controller: _passwordController,
+                      onFieldSubmitted: _isDeleting || !_reviewReady
+                          ? null
+                          : _deleteWallet,
+                      onChanged: _handlePasswordChanged,
+                      validator: (password) {
+                        if (password == null || password.isEmpty) {
+                          return LocaleKeys.passwordIsEmpty.tr();
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 25.0),
+                  child: _buildButtons(),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -223,7 +270,8 @@ class _WalletDeletingState extends State<WalletDeleting> {
 
   Future<void> _deleteWallet() async {
     if (_isDeleting || !_reviewReady) return;
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if ((!_hasManagedCredential || _manualPassword) &&
+        !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     setState(() {
@@ -235,9 +283,18 @@ class _WalletDeletingState extends State<WalletDeleting> {
     final targetGeneration = _targetGeneration;
     bool isCurrent() => mounted && targetGeneration == _targetGeneration;
     try {
+      final access = context.read<WalletAccessService?>();
+      final supplied = !_hasManagedCredential || _manualPassword
+          ? _passwordController.text
+          : null;
+      final password = access == null
+          ? supplied!
+          : await access.credentialForDeletion(wallet, password: supplied);
+      _passwordController.clear();
+      if (!isCurrent()) return;
       final result = await walletsRepository.deleteWallet(
         wallet,
-        password: _passwordController.text,
+        password: password,
         acknowledgedReview: _review,
       );
       if (!isCurrent()) return;
@@ -255,7 +312,34 @@ class _WalletDeletingState extends State<WalletDeleting> {
           _error = LocaleKeys.walletDeletionTargetChanged.tr();
       }
     } catch (e) {
-      if (!isCurrent()) return;
+      if (!mounted || !isCurrent()) return;
+      if (e is WalletDeletionCommittedException) {
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        widget.close();
+        messenger?.showSnackBar(
+          SnackBar(content: Text('authWalletRemovedSettingsPending'.tr())),
+        );
+        return;
+      }
+      final access = context.read<WalletAccessService?>();
+      if (e is WalletAccessException &&
+          e.failure == WalletAccessFailure.storageFailed &&
+          access != null) {
+        try {
+          final pendingCleanup = await access.hasPendingCredentialCleanup;
+          if (!isCurrent()) return;
+          if (pendingCleanup) {
+            final remaining = await walletsRepository.refreshWallets();
+            if (!isCurrent()) return;
+            if (!remaining.any((candidate) => candidate.name == wallet.name)) {
+              widget.close();
+              return;
+            }
+          }
+        } catch (_) {
+          // The original safe error remains visible when storage is unreadable.
+        }
+      }
       if (e is AuthException) {
         switch (e.type) {
           case AuthExceptionType.incorrectPassword:
@@ -268,7 +352,15 @@ class _WalletDeletingState extends State<WalletDeleting> {
             _error = e.message;
         }
       } else {
-        _error = e.toString();
+        _error = switch (e) {
+          WalletAccessException(failure: WalletAccessFailure.canceled) =>
+            'authUnlockCanceled'.tr(),
+          WalletAccessException(
+            failure: WalletAccessFailure.walletMustBeUnlocked,
+          ) =>
+            'authUnlockWalletBeforeDeletion'.tr(),
+          _ => LocaleKeys.passwordNotAccepted.tr(),
+        };
       }
     } finally {
       if (isCurrent()) {

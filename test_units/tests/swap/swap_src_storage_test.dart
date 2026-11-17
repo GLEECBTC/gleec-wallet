@@ -143,6 +143,13 @@ void main() {
   });
 
   group('the routing provider\'s terms', () {
+    test('a refused write is not reported as recorded consent', () async {
+      await expectLater(
+        terms(store: _RefusingStorage()).recordAcceptance(),
+        throwsStateError,
+      );
+    });
+
     test(
       'acceptance is recorded per wallet, with whose terms and when',
       () async {
@@ -215,6 +222,11 @@ void main() {
       expect(SwapTermsAcceptance.tryParse(42), isNull);
     });
   });
+}
+
+class _RefusingStorage extends MemoryStorage {
+  @override
+  Future<bool> write(String key, dynamic data) async => false;
 }
 
 class _FailingStorage implements BaseStorage {

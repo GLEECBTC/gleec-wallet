@@ -156,6 +156,20 @@ void main() {
       expect(bloc.state.review, isNull);
     });
 
+    swapBlocTest('records no terms after the confirmation times out', (h) {
+      final bloc = _startingWithTermsHeld(h);
+
+      h.elapse(const Duration(seconds: 25));
+      expect(bloc.state.view, UnifiedSwapView.form);
+      expect(bloc.state.review, isNull);
+
+      h.termsGate!.complete();
+      h.settle();
+
+      expect(h.routedExecutor.started, isEmpty);
+      expect(_acceptances(h), isEmpty);
+    });
+
     swapBlocTest('records no terms for the wallet signed in meanwhile', (h) {
       final bloc = _startingWithTermsHeld(h)..add(_signedOut);
       h.settle();
