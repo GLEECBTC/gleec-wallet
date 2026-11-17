@@ -226,9 +226,71 @@ void main() {
         expect(await storage.read(_pendingKey), replacement.entryId);
         expect(await storage.read(_lastKey), {'entryId': replacement.entryId});
         expect(await cleanup.hasPending, isFalse);
-        expect(await cleanup.hasIntents, isTrue);
+        // Startup found the replacement alive, so the intent prepared for a
+        // deletion that never committed does not outlive it.
+        expect(await cleanup.hasIntents, isFalse);
       },
     );
+
+    test('an uncommitted intent can be withdrawn with its token', () async {
+      seed(protected: true);
+      await cleanup.prepare(original, _token);
+      await cleanup.withdraw(original.entryId);
+      expect(await cleanup.hasIntents, isFalse);
+      // A later engine deletion finds no leftover authorization to spend.
+      await expectLater(
+        cleanup.complete(
+          original.walletName,
+          original.pubkeyHash,
+          discoverRecords: true,
+        ),
+        throwsA(_storageFailure),
+      );
+      expect(backend.deletions, isEmpty);
+      expect(await backend.metadata(original.credentialKey), isNotNull);
+    });
+
+    test('a committed deletion cannot be withdrawn', () async {
+      seed(protected: true);
+      await cleanup.prepare(original, null);
+      await cleanup.resume({});
+      expect(await cleanup.hasPending, isTrue);
+      await cleanup.withdraw(original.entryId);
+      expect(await cleanup.hasPending, isTrue);
+    });
+
+    test('startup withdraws a leftover intent rather than keep it', () async {
+      await cleanup.prepare(original, null);
+      final restarted = WalletCredentialCleanup(storage, backend);
+      await restarted.resume({original.entryId});
+      expect(await restarted.hasIntents, isFalse);
+      // Were the catalog to miss this wallet on a later launch, nothing is
+      // left to turn that into the removal of its credential.
+      await WalletCredentialCleanup(storage, backend).resume({});
+      expect(backend.deletions, isEmpty);
+      expect(await backend.metadata(original.credentialKey), isNotNull);
+      expect(
+        await storage.read(WalletCredentialCleanup.recordsKey),
+        contains(original.entryId),
+      );
+    });
+
+    test('an unreadable record does not stop another cleanup', () async {
+      const unreadable = {'version': 99, 'entryId': 'later-build-entry'};
+      await storage.write(WalletCredentialCleanup.recordsKey, {
+        original.entryId: original.toJson(),
+        'later-build-entry': unreadable,
+      });
+      await cleanup.complete(
+        original.walletName,
+        original.pubkeyHash,
+        discoverRecords: true,
+      );
+      expect(await backend.metadata(original.credentialKey), isNull);
+      expect(await storage.read(WalletCredentialCleanup.recordsKey), {
+        'later-build-entry': unreadable,
+      });
+    });
 
     test(
       'a native success without deletion fails its readback check',

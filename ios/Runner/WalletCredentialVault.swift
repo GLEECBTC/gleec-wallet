@@ -98,11 +98,11 @@ final class WalletCredentialVault {
   }
 
   private func deviceLocked() {
-    cancelPending()
+    cancelPending(code: "interrupted")
     channel.invokeMethod("deviceLocked", arguments: nil)
   }
 
-  private func cancelPending() {
+  private func cancelPending(code: String = "canceled") {
     operationLock.lock()
     activeOperation = nil
     deletionAuthorizations.removeAll()
@@ -115,7 +115,7 @@ final class WalletCredentialVault {
     guard let operation = pending else { return }
     pending = nil
     operation.context.invalidate()
-    operation.result(FlutterError(code: "canceled", message: "Authentication canceled", details: nil))
+    operation.result(FlutterError(code: code, message: "Authentication canceled", details: nil))
   }
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -295,10 +295,12 @@ final class WalletCredentialVault {
     guard try snapshot(key, context: context) == expected else { throw Failure(code: "busy") }
   }
 
+  // SecItemUpdate and SecItemDelete reject kSecMatch* keys on the
+  // data-protection keychain. Each write stores a fresh record id in this
+  // attribute, so it pins the record that checkSnapshot just compared.
   private func matchingQuery(_ key: String, snapshot: RecordSnapshot) -> [String: Any] {
     var request = query(key)
     request[kSecAttrGeneric as String] = snapshot.metadata
-    if let reference = snapshot.persistentReference { request[kSecMatchItemList as String] = [reference] }
     return request
   }
 
@@ -309,6 +311,7 @@ final class WalletCredentialVault {
     let snapshot = try snapshot(metadata)
     if let expected = expected, snapshot != expected { throw Failure(code: "busy") }
     var request = matchingQuery(key, snapshot: snapshot)
+    if let reference = snapshot.persistentReference { request[kSecMatchItemList as String] = [reference] }
     request[kSecReturnData as String] = true
     request[kSecMatchLimit as String] = kSecMatchLimitOne
     request[kSecUseAuthenticationContext as String] = context
@@ -382,7 +385,9 @@ final class WalletCredentialVault {
       outcome.success = success
       if let error = error as? LAError {
         switch error.code {
-        case .userCancel, .appCancel, .systemCancel, .invalidContext: outcome.code = "canceled"
+        case .userCancel, .invalidContext: outcome.code = "canceled"
+        // The system or the app dismissed the prompt; the user declined nothing.
+        case .appCancel, .systemCancel: outcome.code = "interrupted"
         case .biometryLockout: outcome.code = "lockedOut"
         default: outcome.code = "unavailable"
         }

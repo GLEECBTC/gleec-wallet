@@ -70,5 +70,8 @@ abstract class CredentialBackend {
     required String title,
   });
   Stream<void> get deviceLocked => const Stream.empty();
-  Stream<void> get protectionChanged => const Stream.empty();
+
+  /// A change made outside this process, with the credential key it concerns
+  /// or null when the source cannot say.
+  Stream<String?> get protectionChanged => const Stream.empty();
 }
