@@ -10,11 +10,12 @@ focused review.
 | Audited onboarding/device access, app #3612 | `6b80c458650572c042c9c7867f777c7265f5519f` |
 | Audited Solana, app #3611 | `b58b21c21d84186b9b0525db513064a460451e0a` |
 | Audited pricing, app #3607 | `309dd97d926383feeb4f0c34a907de986be7b716` |
-| Combined SDK #448 | `ca316f2930eb60f4779ee83254de6d615682b718` |
+| Combined SDK #448 | `776559bcfcdc32fc047710c8960c4eba38879012` |
 
 The app branch preserves the four published app heads as ancestors. SDK #448
 combines SDK #443, #444, #445 and #447. The app pins that combined SDK rather
-than selecting one feature branch's dependency tree.
+than selecting one feature branch's dependency tree. SDK #448 is merged into
+SDK `dev` as `776559bc`, whose tree equals the tested head `ca316f29`.
 
 ## Swap UX reconciliation
 
