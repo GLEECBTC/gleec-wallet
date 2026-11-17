@@ -15,6 +15,7 @@ import 'package:komodo_persistence_layer/komodo_persistence_layer.dart';
 import 'package:logging/logging.dart';
 import 'package:web_dex/bloc/cex_market_data/cache_constants.dart';
 import 'package:web_dex/bloc/cex_market_data/charts.dart';
+import 'package:web_dex/bloc/cex_market_data/common/price_history_coverage.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/mock_portfolio_growth_repository.dart';
 import 'package:web_dex/bloc/cex_market_data/mockup/performance_mode.dart';
 import 'package:web_dex/bloc/cex_market_data/models/graph_type.dart';
@@ -96,6 +97,9 @@ class PortfolioGrowthRepository {
   /// transactions again.
   /// NOTE: If the transactions are empty, an empty chart is stored in the
   /// cache. This is to avoid fetching transactions again for each invocation.
+  /// NOTE: A price history that is only partly known is never charted or
+  /// cached. The last cached chart is returned instead, or a
+  /// [PartialPriceHistoryException] is thrown when there is none.
   ///
   /// [coinId] is the coin to get the growth chart for.
   /// [fiatCoinId] is the fiat currency to convert the coin to.
@@ -164,16 +168,17 @@ class PortfolioGrowthRepository {
       'in ${txStopwatch.elapsedMilliseconds}ms',
     );
 
+    final String compoundKey = GraphCache.getPrimaryKey(
+      coinId: coinId.id,
+      fiatCoinId: fiatCoinId,
+      graphType: GraphType.balanceGrowth,
+      walletId: walletId,
+      isHdWallet: isHdWallet,
+    );
+
     if (transactions.isEmpty) {
       _log.fine('No transactions found for ${coin.id}');
 
-      final String compoundKey = GraphCache.getPrimaryKey(
-        coinId: coinId.id,
-        fiatCoinId: fiatCoinId,
-        graphType: GraphType.balanceGrowth,
-        walletId: walletId,
-        isHdWallet: isHdWallet,
-      );
       final existingCache = await _graphCache.get(compoundKey);
       if (existingCache != null && existingCache.graph.isNotEmpty) {
         _log.fine(
@@ -260,6 +265,23 @@ class PortfolioGrowthRepository {
         dates,
         quoteCurrency: quoteCurrency,
       );
+
+      // During a provider outage the SDK answers with what little it knows,
+      // down to today's price. A chart built from that is not this coin's
+      // history, and caching it would show it again on the next start.
+      if (isPartialPriceHistory(ohlcData, dates)) {
+        ohlcStopwatch.stop();
+        final lastComplete = await _graphCache.get(compoundKey);
+        if (lastComplete != null && lastComplete.graph.isNotEmpty) {
+          _log.warning(
+            'Price history for ${coin.id} is incomplete '
+            '(${ohlcData.length} days); keeping the cached chart',
+          );
+          methodStopwatch.stop();
+          return lastComplete.graph;
+        }
+        throw PartialPriceHistoryException(coin.id.id);
+      }
     }
     ohlcStopwatch.stop();
     _log.fine(
@@ -402,6 +424,10 @@ class PortfolioGrowthRepository {
       } on CacheMissException {
         errorCount++;
         _log.fine('Cache miss for ${coin.id}');
+        return Future.value(ChartData.empty());
+      } on PartialPriceHistoryException {
+        errorCount++;
+        _log.warning('Not enough price history to chart ${coin.id}');
         return Future.value(ChartData.empty());
       } on Exception catch (error, stackTrace) {
         errorCount++;
