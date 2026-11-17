@@ -19,13 +19,17 @@ class SwapButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final SwapButtonVariant variant;
+
+  /// Shows a spinner and ignores presses until the work is done. It keeps
+  /// its enabled colours, as its label is the status to read, and stays
+  /// focusable: disabling a focused button moves keyboard focus elsewhere.
   final bool busy;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
-    final enabled = onPressed != null && !busy;
+    final pressable = onPressed != null && !busy;
     final (background, foreground, border) = switch (variant) {
       SwapButtonVariant.primary => (
         palette.brand,
@@ -53,16 +57,15 @@ class SwapButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
             color: states.contains(WidgetState.disabled)
-                ? border.withValues(alpha: 0.4)
+                ? palette.borderStrong
                 : border,
           ),
         ),
       ),
       backgroundColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled)) {
-          return background.withValues(alpha: 0.45);
-        }
-        if (variant == SwapButtonVariant.primary &&
+        if (states.contains(WidgetState.disabled)) return palette.disabled;
+        if (pressable &&
+            variant == SwapButtonVariant.primary &&
             states.contains(WidgetState.pressed)) {
           return palette.brandPressed;
         }
@@ -70,10 +73,15 @@ class SwapButton extends StatelessWidget {
       }),
       foregroundColor: WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.disabled)
-            ? foreground.withValues(alpha: 0.7)
+            ? palette.onDisabled
             : foreground,
       ),
-      overlayColor: WidgetStatePropertyAll(foreground.withValues(alpha: 0.08)),
+      overlayColor: WidgetStatePropertyAll(
+        pressable ? foreground.withValues(alpha: 0.08) : Colors.transparent,
+      ),
+      mouseCursor: busy
+          ? const WidgetStatePropertyAll(SystemMouseCursors.basic)
+          : null,
       elevation: const WidgetStatePropertyAll(0),
       textStyle: WidgetStatePropertyAll(
         SwapText.strong(context).copyWith(fontWeight: FontWeight.w800),
@@ -93,26 +101,32 @@ class SwapButton extends StatelessWidget {
         : icon == null
         ? null
         : Icon(icon, size: 18);
-    return SwapPressScale(
-      enabled: enabled,
-      child: TextButton(
-        style: style,
-        onPressed: enabled ? onPressed : null,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 26,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                heightFactor: 1,
-                child: ExcludeSemantics(child: leading ?? const SizedBox()),
+    // One node in every state, so a screen reader's focus stays on the
+    // button as it turns busy, and hears it as unavailable until it is done.
+    return SwapButtonSemantics(
+      label: label,
+      onTap: pressable ? onPressed : null,
+      child: SwapPressScale(
+        enabled: pressable,
+        child: TextButton(
+          style: style,
+          onPressed: busy ? () {} : onPressed,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 26,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  heightFactor: 1,
+                  child: leading ?? const SizedBox(),
+                ),
               ),
-            ),
-            Flexible(child: Text(label, textAlign: TextAlign.center)),
-            const SizedBox(width: 26),
-          ],
+              Flexible(child: Text(label, textAlign: TextAlign.center)),
+              const SizedBox(width: 26),
+            ],
+          ),
         ),
       ),
     );

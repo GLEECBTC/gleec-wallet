@@ -209,7 +209,7 @@ void main() {
       expect(
         copyOf(snap()).supportPayload(),
         'Swap ID: swap-1\n'
-        'Route: 1 ETH → 3,000 USDC\n'
+        'Route: 1 ETH → ≈ 3,000 USDC\n'
         'Status: Confirming on Ethereum',
       );
     });

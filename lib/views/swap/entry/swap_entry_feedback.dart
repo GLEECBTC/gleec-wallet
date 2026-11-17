@@ -24,12 +24,28 @@ class _EntryAvailability extends StatelessWidget {
   }
 }
 
-/// Keeps quote feedback in one stable place. Only the first useful arrival
-/// gets an emphasis; a provider poll never causes a new celebration.
+/// Everything the form says under the cards, in one block that keeps its
+/// height once a pair is chosen: alerts, the selected option, its rate, and
+/// the standing hints. An amount typed, and a quote arriving, failing or
+/// being checked again, fill the block in; none of them moves the cards or
+/// the main action.
+///
+/// Only the first useful arrival gets an emphasis; a provider poll never
+/// causes a new celebration.
 class _EntryQuoteArea extends StatefulWidget {
-  const _EntryQuoteArea({required this.state, required this.onCompare});
+  const _EntryQuoteArea({
+    required this.state,
+    required this.lines,
+    required this.stale,
+    required this.onCompare,
+  });
 
   final UnifiedSwapState state;
+  final _EntryLines lines;
+
+  /// Whether the open review has replaced the selected option: its figures
+  /// are then left to the review, which shows the old against the new.
+  final bool stale;
   final VoidCallback onCompare;
 
   @override
@@ -45,6 +61,10 @@ class _EntryQuoteAreaState extends State<_EntryQuoteArea>
     vsync: this,
     duration: SwapMotion.quote,
   );
+
+  /// The hints on show. They hold while a new estimate is on its way, so a
+  /// hint is not taken away on every edit only to come back.
+  late List<String> _hints = widget.lines.hints;
 
   bool get _checking =>
       widget.state.evaluation == SwapEvaluationStatus.checking &&
@@ -90,6 +110,12 @@ class _EntryQuoteAreaState extends State<_EntryQuoteArea>
         _canAnimate) {
       _arrival.reverse(from: 1);
     }
+    final sameForm =
+        before.pay == after.pay &&
+        before.receive == after.receive &&
+        before.signedIn == after.signedIn &&
+        before.maxApplied == after.maxApplied;
+    if (!sameForm || !swapAwaitingEstimate(after)) _hints = widget.lines.hints;
   }
 
   void _watchWait() {
@@ -110,51 +136,115 @@ class _EntryQuoteAreaState extends State<_EntryQuoteArea>
     super.dispose();
   }
 
+  /// What the strip says it is waiting for, while it has no option to show.
+  String? get _waitingLabel {
+    final state = widget.state;
+    if (state.selectedQuote != null || !swapAwaitingEstimate(state)) {
+      return null;
+    }
+    if (state.preparingAssets) return 'swapPreparingAssets'.tr();
+    return _slow ? 'swapQuoteSlow'.tr() : LocaleKeys.swapHelperChecking.tr();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
-    final quote = state.selectedQuote;
-    final scale = MediaQuery.textScalerOf(context).scale(1);
+    final pay = state.pay;
+    final receive = state.receive;
+    final quote = widget.stale ? null : state.selectedQuote;
+    // Once a pair is chosen the block is as tall as a priced swap makes it,
+    // and where the pair can be priced, the figures to come hold their
+    // place: typing, checking, pricing and failing all leave the main
+    // action where it is.
+    final reserves = state.hasPair || state.selectedQuote != null;
+    final placeholder =
+        !widget.stale &&
+        state.selectedQuote == null &&
+        state.hasPair &&
+        state.tradingEnabled &&
+        state.issue != SwapFormIssue.pairUnsupported &&
+        state.issue != SwapFormIssue.noOffers;
+    final routed =
+        state.selectedQuote?.source == SwapLiquiditySource.routed ||
+        (state.pairSupport?.sources.contains(SwapLiquiditySource.routed) ??
+            false);
+
+    final summary = quote == null && !placeholder
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: _summaryGap),
+              AnimatedBuilder(
+                animation: _arrival,
+                builder: (context, child) => DecoratedBox(
+                  position: DecorationPosition.foreground,
+                  decoration: BoxDecoration(
+                    color: SwapPalette.of(context).selected
+                        .withValues(alpha: 0.35 * _arrival.value),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: child,
+                ),
+                child: SwapQuoteStrip(
+                  state: state,
+                  onCompare: widget.onCompare,
+                  placeholder: placeholder,
+                  waitingLabel: _waitingLabel,
+                  waitingAnnounced: _slow,
+                ),
+              ),
+              if (quote != null)
+                SwapRateLine(quote: quote)
+              else if (pay != null && receive != null)
+                SwapRatePlaceholder(from: pay, to: receive),
+            ],
+          );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Reserve the summary, comparison and provider line before they arrive.
-        // Narrow widths stack the three facts; large text gets the same space
-        // without clipping or scaling the financial figures down.
-        final reserved =
-            (constraints.maxWidth / scale < 328 ? 410.0 : 320.0) * scale;
-        return ConstrainedBox(
+        final summaryHeight = reserves
+            ? _summaryGap +
+                  SwapQuoteStrip.reservedHeight(
+                    context,
+                    width: constraints.maxWidth,
+                    receive: receive,
+                    routed: routed,
+                  ) +
+                  SwapRateLine.heightOf(context)
+            : 0.0;
+        return Column(
           key: const Key('swap-quote-region'),
-          constraints: BoxConstraints(minHeight: reserved),
-          child: AnimatedBuilder(
-            animation: _arrival,
-            builder: (context, child) => DecoratedBox(
-              decoration: BoxDecoration(
-                color: SwapPalette.of(context).selected
-                    .withValues(alpha: 0.35 * _arrival.value),
-                borderRadius: BorderRadius.circular(16),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(minHeight: summaryHeight),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [...widget.lines.alerts, ?summary],
               ),
-              child: child,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (state.evaluation == SwapEvaluationStatus.checking)
-                  SwapHelperLine(
-                    text: _slow
-                        ? 'swapQuoteSlow'.tr()
-                        : LocaleKeys.swapHelperChecking.tr(),
-                  ),
-                if (quote != null) ...[
-                  SwapQuoteStrip(state: state, onCompare: widget.onCompare),
-                  SwapRateLine(quote: quote),
-                  if (state.quotesPending)
-                    SwapHelperLine(text: 'swapMoreQuotesChecking'.tr()),
+            // Under the reserved summary, so a hint changing moves nothing
+            // above it, and one line of it nothing below.
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: reserves ? SwapHelperLine.heightOf(context) : 0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final hint in _hints)
+                    SwapHelperLine(text: hint, liveRegion: false),
                 ],
-              ],
+              ),
             ),
-          ),
+          ],
         );
       },
     );
   }
 }
+
+/// The space between the cards, or the alerts, and the quote strip.
+const _summaryGap = 14.0;

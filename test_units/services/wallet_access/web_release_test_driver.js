@@ -200,12 +200,24 @@ class LocalBrowser {
     await page.evaluate("document.querySelector('flt-semantics-placeholder')?.click(); true");
   }
 
+  // Reports the document as hidden (or restores the real state) and fires
+  // 'visibilitychange', which Flutter web and the credential bridge read as
+  // leaving or returning to the app. The renderer keeps painting, so the
+  // privacy cover can be observed; a real background tab stops drawing frames.
+  // A window blur alone no longer covers the wallet on desktop or web.
+  async visibility(page, state) {
+    assert.ok(['hidden','visible'].includes(state),'Select hidden or visible');
+    await page.evaluate(state==='hidden'
+      ? "(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>'hidden'});Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));return true;})()"
+      : "(()=>{delete document.visibilityState;delete document.hidden;if(document.visibilityState!=='visible')throw new Error('The fixture tab is not in front');document.dispatchEvent(new Event('visibilitychange'));return true;})()");
+  }
+
   async buttons(page) {
     return page.evaluate("Array.from(document.querySelectorAll('[role=button]')).map(el=>el.getAttribute('aria-label')||el.textContent||'')");
   }
 
   async click(page, label, {pointer=false}={}) {
-    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).find(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}&&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
+    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).find(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}&&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
     // A semantics node can precede the route's painted, interactive frame.
     // Navigate and activate like a real user: settle the painted target and
     // scroll it into view, then click exactly once. Never retry the action or
@@ -246,7 +258,7 @@ class LocalBrowser {
     }
     // Report only public control shape. Field values, page text and wallet
     // credentials must never enter browser acceptance logs.
-    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}).map(el=>{const r=el.getBoundingClientRect();return {disabled:el.getAttribute('aria-disabled')==='true',hidden:!!el.closest('[aria-hidden=true]'),hasArea:r.width>0&&r.height>0,inViewport:r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth};})`);
+    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox],[role=radio]')).filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}).map(el=>{const r=el.getBoundingClientRect();return {disabled:el.getAttribute('aria-disabled')==='true',hidden:!!el.closest('[aria-hidden=true]'),hasArea:r.width>0&&r.height>0,inViewport:r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth};})`);
     console.error('Fixture control shape',JSON.stringify(shape));
     throw new Error(`Timed out waiting for painted button ${label}`);
   }

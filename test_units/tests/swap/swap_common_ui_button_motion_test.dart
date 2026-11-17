@@ -14,6 +14,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
+import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -196,6 +197,13 @@ void main() {
       await show(tester, SwapReviewStatus.ready);
 
       await tester.ensureVisible(find.byKey(const Key('swap-start')));
+      // Dropped while the action arms: no start, and no haptic for one.
+      await tester.tap(find.byKey(const Key('swap-start')));
+      await tester.pump();
+      expect(played, isEmpty);
+      expect(swap.events.whereType<UnifiedSwapStartRequested>(), isEmpty);
+
+      await tester.pump(swapCommitArmingDelay);
       await tester.tap(find.byKey(const Key('swap-start')));
       await tester.pump();
       expect(played, ['HapticFeedbackType.mediumImpact']);

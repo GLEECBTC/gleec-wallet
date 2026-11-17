@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
@@ -54,12 +55,12 @@ void main() {
       final kind = SwapQuoteFailureKind.assetInactive;
       expectCopy(
         SwapFailureCopy.of(failure(kind, asset: usdc), eth),
-        'We couldn’t prepare USDC for this swap. Try again.',
+        'swapAssetPreparationUnavailable'.tr(args: ['USDC']),
         action: SwapEntryAction.activate,
       );
       expectCopy(
         SwapFailureCopy.of(failure(kind), eth),
-        'We couldn’t prepare ETH for this swap. Try again.',
+        'swapAssetPreparationUnavailable'.tr(args: ['ETH']),
         action: SwapEntryAction.activate,
       );
     });

@@ -19,6 +19,7 @@ import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_display.dart';
+import 'package:web_dex/views/swap/execution/swap_loading_status.dart';
 import 'package:web_dex/views/swap/execution/swap_time_context.dart';
 import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
@@ -26,6 +27,7 @@ import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 part 'swap_execution_moments.dart';
 part 'swap_execution_sections.dart';
+part 'swap_execution_states.dart';
 
 /// Where a swap screen was opened from, which decides where leaving goes.
 enum SwapExecutionContext {
@@ -38,7 +40,7 @@ enum SwapExecutionContext {
 
 /// One swap, running or finished: its status, how it completes, and — once
 /// it has stopped — what happened, where the funds are and what to do next.
-class SwapExecutionView extends StatelessWidget {
+class SwapExecutionView extends StatefulWidget {
   const SwapExecutionView({
     required this.id,
     required this.context,
@@ -53,24 +55,52 @@ class SwapExecutionView extends StatelessWidget {
   final SwapExecutionSnapshot? initial;
 
   @override
+  State<SwapExecutionView> createState() => _SwapExecutionViewState();
+}
+
+class _SwapExecutionViewState extends State<SwapExecutionView> {
+  /// How many times a swap no source knew was looked for again. Each look is
+  /// a fresh watch, as the one before it has ended.
+  int _looks = 0;
+
+  @override
   Widget build(BuildContext context) {
     final services = context.read<SwapServices>();
+    final id = widget.id;
     return BlocProvider(
-      key: ValueKey(id),
-      create: (_) => SwapExecutionBloc(
-        registry: services.registry,
-        seed: services.registry.snapshotOf(id) ?? initial,
-      )..add(SwapExecutionWatched(id, source: source, initial: initial)),
-      child: _ExecutionBody(id: id, executionContext: this.context),
+      key: ValueKey((id, _looks)),
+      create: (_) =>
+          SwapExecutionBloc(
+            registry: services.registry,
+            seed: services.registry.snapshotOf(id) ?? widget.initial,
+          )..add(
+            SwapExecutionWatched(
+              id,
+              source: widget.source,
+              initial: widget.initial,
+            ),
+          ),
+      child: _ExecutionBody(
+        id: id,
+        executionContext: widget.context,
+        onLookAgain: () => setState(() => _looks++),
+      ),
     );
   }
 }
 
 class _ExecutionBody extends StatefulWidget {
-  const _ExecutionBody({required this.id, required this.executionContext});
+  const _ExecutionBody({
+    required this.id,
+    required this.executionContext,
+    required this.onLookAgain,
+  });
 
   final String id;
   final SwapExecutionContext executionContext;
+
+  /// Watches the swap afresh, after a watch ended without finding it.
+  final VoidCallback onLookAgain;
 
   @override
   State<_ExecutionBody> createState() => _ExecutionBodyState();
@@ -95,6 +125,12 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
   void initState() {
     super.initState();
     _heard = _bloc.state.snapshot;
+    // Looking again for a swap replaces this screen with one for the same
+    // swap. The one leaving is disposed after this one mounts, and takes
+    // the swap out of the set of those on screen as it goes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _visible == true) _services.viewing.add(widget.id);
+    });
     _lifecycle = AppLifecycleListener(
       onStateChange: (_) => _reportVisible(),
       onResume: () {
@@ -325,7 +361,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         final snapshot = state.snapshot;
         final heading = SwapPageHeading(
           title: _inFlow
-              ? LocaleKeys.swapProgressTitle.tr()
+              ? _flowTitle(snapshot)
               : LocaleKeys.swapNavActivity.tr(),
           leading: SwapIconButton(
             icon: _inFlow ? Icons.close_rounded : Icons.arrow_back_rounded,
@@ -333,35 +369,9 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
             onPressed: _leave,
           ),
         );
-
-        final Widget body;
-        if (snapshot == null) {
-          body = state.notFound
-              ? SwapStatusHero(
-                  icon: Icons.search_off_rounded,
-                  tone: SwapTone.warning,
-                  title: LocaleKeys.swapProgressUnknownTitle.tr(),
-                  body: LocaleKeys.swapProgressUnknownBody.tr(),
-                )
-              : state.unanswered
-              ? _hero(SwapHeroCopy.delayed())
-              : const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Column(
-                    children: [
-                      SwapSkeleton(height: 64, widthFactor: 0.2),
-                      SizedBox(height: 16),
-                      SwapSkeleton(widthFactor: 0.6),
-                      SizedBox(height: 24),
-                      SwapSkeleton(height: 70),
-                      SizedBox(height: 8),
-                      SwapSkeleton(height: 70),
-                    ],
-                  ),
-                );
-        } else {
-          body = _content(context, state, snapshot);
-        }
+        final body = snapshot == null
+            ? _waiting(context, state)
+            : _content(context, state, snapshot);
 
         return SwapScreen(
           onEscape: _leave,

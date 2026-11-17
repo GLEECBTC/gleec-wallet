@@ -11,8 +11,10 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/shared/swap/unified_swap_repository.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
+import 'package:web_dex/views/swap/pickers/swap_asset_picker.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -134,6 +136,97 @@ void main() {
     ),
   };
 
+  // A form with nothing typed yet, and one whose option takes long, pays an
+  // unpriced fee and delivers a small amount: the widest figures the quote
+  // strip has to hold.
+  final empty = ready.copyWith(
+    inputText: '',
+    clearConverted: true,
+    clearQuotes: true,
+    clearSelectedId: true,
+    evaluation: SwapEvaluationStatus.idle,
+    issue: SwapFormIssue.amountMissing,
+  );
+  final slowRoute = quoteOf(
+    to: btc,
+    expected: '0.04419321',
+    guaranteed: '0.04397224',
+    duration: const Duration(minutes: 12),
+    fees: [
+      SwapFeeComponent(
+        kind: SwapFeeKind.network,
+        amount: d('0.0004'),
+        deductedFromReceive: false,
+        asset: eth,
+      ),
+      SwapFeeComponent(
+        kind: SwapFeeKind.dexFee,
+        amount: d('0.1'),
+        deductedFromReceive: false,
+        asset: gleec,
+      ),
+    ],
+    pricing: entry.pricingOf(
+      expected: '2990',
+      minimum: '2975',
+      network: null,
+      swap: null,
+      complete: false,
+    ),
+  );
+  final longEta = ready.copyWith(
+    receive: btc,
+    quotes: UnifiedSwapQuotes(
+      ranked: const [],
+      unrankable: [slowRoute],
+      failures: const [],
+    ),
+    selectedId: slowRoute.id,
+  );
+  final extraStates = <String, UnifiedSwapState>{
+    'empty': empty,
+    'long-eta': longEta,
+    'expired': ready.copyWith(evaluation: SwapEvaluationStatus.expired),
+  };
+
+  for (final layout in [
+    (
+      name: 'phone-light',
+      size: const Size(390, 844),
+      states: ['ready', 'empty', 'slow', 'failed', 'expired'],
+    ),
+    (name: 'phone-dark', size: const Size(390, 844), states: ['empty']),
+    (
+      name: 'small-phone-dark',
+      size: const Size(360, 800),
+      states: ['long-eta'],
+    ),
+    (name: 'narrow-light', size: const Size(320, 640), states: ['long-eta']),
+    (name: 'desktop-light', size: const Size(1280, 900), states: ['empty']),
+  ]) {
+    for (final name in layout.states) {
+      testWidgets('renders ${layout.name} $name without layout errors', (
+        tester,
+      ) async {
+        final bloc = entry.RecordingSwapBloc()
+          ..emit(states[name] ?? extraStates[name]!);
+        addTearDown(bloc.close);
+        await entry.pumpSwapUi(
+          tester,
+          _frame(const SwapPage(), light: layout.name.endsWith('light')),
+          bloc: bloc,
+          services: entry.FakeSwapServices(),
+          size: layout.size,
+          settle: false,
+        );
+        await tester.pump(const Duration(seconds: 4));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        await _capture(tester, '${layout.name}-$name');
+      });
+    }
+  }
+
   for (final layout in [
     (name: 'phone-dark', size: const Size(390, 844), light: false),
     (name: 'desktop-light', size: const Size(1280, 900), light: true),
@@ -204,6 +297,37 @@ void main() {
         await _capture(tester, '${layout.name}-$name');
       });
     }
+  }
+
+  for (final light in [true, false]) {
+    testWidgets('renders the asset picker ${light ? 'light' : 'dark'}', (
+      tester,
+    ) async {
+      final bloc = entry.RecordingSwapBloc()..emit(ready);
+      addTearDown(bloc.close);
+      final services = entry.FakeSwapServices()
+        ..balances = {eth: d('2'), usdc: d('120.5')}
+        ..prices = {eth: d('3000'), usdc: d('1')};
+      await entry.pumpSwapUi(
+        tester,
+        _frame(
+          SwapAssetPicker(
+            side: SwapPickerSide.pay,
+            catalog: entry.swapTestCatalog,
+            selected: eth,
+            other: usdc,
+            services: services,
+            isBlocked: (_) => false,
+          ),
+          light: light,
+        ),
+        bloc: bloc,
+        services: services,
+        size: const Size(390, 844),
+      );
+      expect(tester.takeException(), isNull);
+      await _capture(tester, 'phone-${light ? 'light' : 'dark'}-picker');
+    });
   }
 
   testWidgets('review return retains the exact input element and draft', (

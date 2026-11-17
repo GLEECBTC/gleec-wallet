@@ -1,6 +1,7 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
@@ -213,11 +215,11 @@ void main() {
             pending ? findsNothing : findsOneWidget,
           );
           expect(
-            find.byTooltip(
-              'The legal documentation could not be retrieved. Please consult Gleec’s online legal documentation before proceeding.',
-            ),
+            find.byTooltip(LocaleKeys.legalDocumentsUnavailable.tr()),
             pending ? findsNothing : findsOneWidget,
           );
+          // The action that commits is armed a moment after it appears.
+          await tester.pump(swapCommitArmingDelay);
           await tester.tap(button);
           expect(
             bloc.events,

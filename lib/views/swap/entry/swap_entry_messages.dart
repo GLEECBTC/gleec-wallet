@@ -1,26 +1,37 @@
 part of 'swap_entry_view.dart';
 
+/// What the form says under the cards: [alerts] to act on, shown first, and
+/// standing [hints], shown where they move nothing as they change.
+typedef _EntryLines = ({List<Widget> alerts, List<String> hints});
+
+const _EntryLines _noLines = (alerts: <Widget>[], hints: <String>[]);
+
 /// The lines under the cards, and the figures they quote.
 extension _SwapEntryMessages on _SwapEntryViewState {
-  /// One line under the cards: an error, else a warning, else a hint.
-  List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
+  /// An error, else warnings, else hints. With [stale], the selected option
+  /// is one the open review has replaced, so nothing is said about it.
+  _EntryLines _lines(UnifiedSwapState state, {required bool stale}) {
     final pay = state.pay;
     final issue = state.issue;
-    if (state.preparingAssets) {
-      return [SwapHelperLine(text: 'swapPreparingAssets'.tr())];
-    }
+    // The button and the quote strip say what is being prepared.
+    if (state.preparingAssets) return _noLines;
     if (state.preparationFailedAsset case final asset?) {
-      return [
-        SwapHelperLine(
-          text: 'swapAssetPreparationUnavailable'.tr(
-            args: [SwapFormat.ticker(asset)],
+      return (
+        alerts: [
+          SwapHelperLine(
+            text: 'swapAssetPreparationUnavailable'.tr(
+              args: [SwapFormat.ticker(asset)],
+            ),
+            tone: SwapTone.warning,
           ),
-          tone: SwapTone.warning,
-        ),
-      ];
+        ],
+        hints: const [],
+      );
     }
-    if (issue == SwapFormIssue.assetInactive) return const [];
-    if (issue == SwapFormIssue.noOffers) return _noOffersLines(state);
+    if (issue == SwapFormIssue.assetInactive) return _noLines;
+    if (issue == SwapFormIssue.noOffers) {
+      return (alerts: _noOffersLines(state), hints: const []);
+    }
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(
         issue,
@@ -35,48 +46,52 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         heldElsewhere: _heldElsewhere(state),
       );
       if (copy != null) {
-        return [
-          SwapHelperLine(
-            text: copy.message,
-            tone: issue == SwapFormIssue.assetInactive
-                ? SwapTone.warning
-                : SwapTone.danger,
-          ),
-          if (copy.detail != null) SwapHelperLine(text: copy.detail!),
-          // Still priced, so why no price came back matters too.
-          if (issue.stillPriced) ..._failureLines(state),
-        ];
+        return (
+          alerts: [
+            SwapHelperLine(
+              text: copy.message,
+              tone: issue == SwapFormIssue.assetInactive
+                  ? SwapTone.warning
+                  : SwapTone.danger,
+            ),
+            if (copy.detail != null) SwapHelperLine(text: copy.detail!),
+            // Still priced, so why no price came back matters too.
+            if (issue.stillPriced) ..._failureLines(state),
+          ],
+          hints: const [],
+        );
       }
     }
 
     if (state.fundingFailedAsset case final asset?) {
-      return [
-        SwapHelperLine(
-          text: 'swapFundingBalanceUnavailable'.tr(
-            args: [SwapFormat.ticker(asset)],
+      return (
+        alerts: [
+          SwapHelperLine(
+            text: 'swapFundingBalanceUnavailable'.tr(
+              args: [SwapFormat.ticker(asset)],
+            ),
+            tone: SwapTone.warning,
           ),
-          tone: SwapTone.warning,
-        ),
-      ];
+        ],
+        hints: const [],
+      );
     }
     final failed = _failureLines(state);
-    if (failed.isNotEmpty) return failed;
+    if (failed.isNotEmpty) return (alerts: failed, hints: const []);
 
-    final partial = _partialNote(state);
-
-    final messages = <Widget>[];
+    final quote = stale ? null : state.selectedQuote;
+    final alerts = <Widget>[];
     if (state.structuralNotice) {
-      messages.add(
+      alerts.add(
         SwapHelperLine(
           text: LocaleKeys.swapHelperStructural.tr(),
           tone: SwapTone.warning,
         ),
       );
     }
-    final quote = state.selectedQuote;
     final impact = quote?.pricing.priceImpact;
     if (impact != null && impact >= swapHighImpact) {
-      messages.add(
+      alerts.add(
         SwapHelperLine(
           text: LocaleKeys.swapWarningHighImpact.tr(
             args: [SwapFormat.percent(impact)],
@@ -87,7 +102,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     }
     final feeShare = quote?.pricing.feeShare;
     if (feeShare != null && feeShare >= swapHighFeeShare) {
-      messages.add(
+      alerts.add(
         SwapHelperLine(
           text: LocaleKeys.swapWarningHighFees.tr(
             args: [SwapFormat.percent(feeShare)],
@@ -96,38 +111,41 @@ extension _SwapEntryMessages on _SwapEntryViewState {
         ),
       );
     }
-    if (partial != null) {
-      messages.add(SwapHelperLine(text: partial));
-    } else if (!state.signedIn && quote != null) {
-      messages.add(
-        SwapHelperLine(text: LocaleKeys.swapHelperSignedOutPriced.tr()),
-      );
+    final partial = stale ? null : _partialNote(state);
+    final priced = partial != null
+        ? [partial]
+        : !state.signedIn && quote != null
+        ? [LocaleKeys.swapHelperSignedOutPriced.tr()]
+        : const <String>[];
+    if (alerts.isNotEmpty || priced.isNotEmpty) {
+      return (alerts: alerts, hints: priced);
     }
-    if (messages.isNotEmpty) return messages;
 
-    // Quote progress is presented once in the stable quote region.
-    if (state.evaluation == SwapEvaluationStatus.checking) return const [];
     final max = state.maxApplied;
     if (max != null && pay != null) {
-      return [SwapHelperLine(text: _maxHint(max, pay))];
+      return (alerts: const [], hints: [_maxHint(max, pay)]);
     }
     if (quote != null && quote.pricing.expectedUsd == null) {
-      return [
-        SwapHelperLine(text: LocaleKeys.swapWarningPriceUnavailable.tr()),
-      ];
+      return (
+        alerts: const [],
+        hints: [LocaleKeys.swapWarningPriceUnavailable.tr()],
+      );
     }
     final range = _offerRange(state);
     // Signed out, "Checking what this wallet can swap" would name no wallet.
     if (!state.signedIn) {
-      return [
-        ?range,
-        SwapHelperLine(text: LocaleKeys.swapHelperSignedOut.tr()),
-      ];
+      return (
+        alerts: const [],
+        hints: [?range, LocaleKeys.swapHelperSignedOut.tr()],
+      );
     }
     if (state.loadingAssets) {
-      return [SwapHelperLine(text: LocaleKeys.swapHelperLoadingAssets.tr())];
+      return (
+        alerts: const [],
+        hints: [LocaleKeys.swapHelperLoadingAssets.tr()],
+      );
     }
-    return [?range];
+    return (alerts: const [], hints: [?range]);
   }
 
   SwapFailureCopy _failureCopy(
@@ -165,7 +183,8 @@ extension _SwapEntryMessages on _SwapEntryViewState {
       _ => SwapTone.danger,
     };
     return [
-      SwapHelperLine(text: copy.message, tone: tone),
+      // A failed check is news whatever its tone.
+      SwapHelperLine(text: copy.message, tone: tone, liveRegion: true),
       if (copy.detail != null)
         if (failure.reasons.isNotEmpty)
           SwapDetails(

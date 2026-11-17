@@ -2,6 +2,7 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
@@ -152,7 +153,7 @@ void main() {
       );
 
       expect(
-        find.text('We couldn’t prepare BTC for this swap. Try again.'),
+        find.text('swapAssetPreparationUnavailable'.tr(args: ['BTC'])),
         findsOneWidget,
       );
       expect(swapPrimaryLabel(tester), 'Try again');
@@ -176,7 +177,7 @@ void main() {
 
       expect(swapPrimaryLabel(tester), 'Try again');
       expect(
-        find.text('We couldn’t prepare ETH for this swap. Try again.'),
+        find.text('swapAssetPreparationUnavailable'.tr(args: ['ETH'])),
         findsOneWidget,
       );
       await press(tester);

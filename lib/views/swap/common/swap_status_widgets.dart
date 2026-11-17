@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
@@ -140,12 +142,34 @@ class SwapHelperLine extends StatelessWidget {
     required this.text,
     this.tone = SwapTone.neutral,
     this.icon,
+    this.liveRegion,
     super.key,
   });
 
   final String text;
   final SwapTone tone;
   final IconData? icon;
+
+  /// Whether screen readers announce it as it appears or changes. Null
+  /// announces a warning or an error and leaves a neutral note to be read in
+  /// place: a standing note read aloud on every rebuild talks over the
+  /// screen.
+  final bool? liveRegion;
+
+  /// How tall a line that fits on one line is, with the space above it.
+  static double heightOf(BuildContext context) =>
+      _gap +
+      math.max(
+        _iconSize + 1,
+        SwapText.heightOf(
+          context,
+          const TextSpan(text: '0'),
+          SwapText.small(context),
+        ),
+      );
+
+  static const _gap = 10.0;
+  static const _iconSize = 16.0;
 
   @override
   Widget build(BuildContext context) {
@@ -163,16 +187,16 @@ class SwapHelperLine extends StatelessWidget {
           _ => Icons.info_outline_rounded,
         };
     return Semantics(
-      liveRegion: true,
+      liveRegion: liveRegion ?? tone != SwapTone.neutral,
       container: true,
       child: Padding(
-        padding: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.only(top: _gap),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 1),
-              child: Icon(glyph, size: 16, color: color),
+              child: Icon(glyph, size: _iconSize, color: color),
             ),
             const SizedBox(width: 8),
             Expanded(

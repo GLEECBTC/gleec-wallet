@@ -176,7 +176,7 @@ void main() {
           outcome: const SwapExecutionOutcome(kind: SwapOutcomeKind.noMatch),
         ),
         title: 'No match found',
-        body: 'No one took this exchange in time. Nothing was sent.',
+        body: 'No one took this swap in time. Nothing was sent.',
         funds: unchanged,
         actions: ['Try again'],
         timeline: 'Not started: Exchanging asset.',
@@ -219,7 +219,8 @@ void main() {
 
         final hero = tester.widget<SwapStatusHero>(find.byType(SwapStatusHero));
         expect(hero.title, outcome.title);
-        expect(hero.body, outcome.body);
+        // An address in it is kept on one line by word joiners, unseen.
+        expect(hero.body?.replaceAll('\u2060', ''), outcome.body);
         expect(find.text(outcome.title), findsWidgets);
 
         final funds = outcome.funds;

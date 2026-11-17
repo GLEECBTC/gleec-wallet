@@ -1,5 +1,30 @@
 import 'views/common/wallet_access/auth_setup_flow_test.dart'
     as auth_setup_flow_test;
+import 'views/common/wallet_access/wallet_protection_states_test.dart'
+    as wallet_protection_states_test;
+import 'views/settings/security_recovery_flow_test.dart'
+    as security_recovery_flow_test;
+import 'views/settings/recovery_plates_test.dart' as recovery_plates_test;
+import 'services/wallet_access/native_credential_backend_channel_test.dart'
+    as native_credential_backend_channel_test;
+import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
+    as portfolio_growth_repository_test;
+import 'views/wallet/portfolio_profit_loss_views_test.dart'
+    as portfolio_profit_loss_views_test;
+import 'tests/wallet/coin_details/withdraw_solana_unknown_status_test.dart'
+    as withdraw_solana_unknown_status_test;
+import 'tests/swap/swap_review_commit_test.dart' as swap_review_commit_test;
+import 'tests/swap/swap_review_changes_test.dart' as swap_review_changes_test;
+import 'tests/swap/swap_surface_ui_waiting_test.dart'
+    as swap_surface_ui_waiting_test;
+import 'views/common/wallet_access/wallet_lock_screen_test.dart'
+    as wallet_lock_screen_test;
+import 'views/common/wallet_access/wallet_authorization_form_test.dart'
+    as wallet_authorization_form_test;
+import 'views/wallets_manager/widgets/wallet_list_item_test.dart'
+    as wallet_list_item_test;
+import 'tests/swap/swap_entry_ui_stability_test.dart'
+    as swap_entry_ui_stability_test;
 import 'bloc/wallet_protection_bloc_test.dart' as wallet_protection_bloc_test;
 import 'services/wallet_access/swap_submission_lock_test.dart'
     as swap_submission_lock_test;
@@ -582,6 +607,34 @@ import 'tests/utils/transaction_history/sanitize_transaction_tests.dart';
 /// ```
 void main() {
   auth_setup_flow_test.main();
+  // Each of these keeps set-up at the top of its `main`; a group stops that
+  // set-up from running for every other test in this file.
+  group('wallet_protection_states_test', wallet_protection_states_test.main);
+  group('security_recovery_flow_test', security_recovery_flow_test.main);
+  group('recovery_plates_test', recovery_plates_test.main);
+  group(
+    'native_credential_backend_channel_test',
+    native_credential_backend_channel_test.main,
+  );
+  group(
+    'portfolio_growth_repository_test',
+    portfolio_growth_repository_test.main,
+  );
+  group(
+    'portfolio_profit_loss_views_test',
+    portfolio_profit_loss_views_test.main,
+  );
+  group(
+    'withdraw_solana_unknown_status_test',
+    withdraw_solana_unknown_status_test.main,
+  );
+  group('swap_review_commit_test', swap_review_commit_test.main);
+  group('swap_review_changes_test', swap_review_changes_test.main);
+  group('swap_surface_ui_waiting_test', swap_surface_ui_waiting_test.main);
+  group('wallet_lock_screen_test', wallet_lock_screen_test.main);
+  group('wallet_authorization_form_test', wallet_authorization_form_test.main);
+  group('wallet_list_item_test', wallet_list_item_test.main);
+  group('swap_entry_ui_stability_test', swap_entry_ui_stability_test.main);
   wallet_protection_bloc_test.main();
   swap_submission_lock_test.main();
   wallet_credential_cleanup_test.main();

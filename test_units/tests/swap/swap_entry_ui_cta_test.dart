@@ -2,6 +2,7 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,8 +14,10 @@ import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_order_book_offers.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
+import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
+import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/wallets_manager/wallets_manager_wrapper.dart';
 
@@ -134,7 +137,7 @@ void main() {
       await pump(tester, inactive.copyWith(preparationFailedAsset: usdc));
 
       expect(
-        find.text('We couldn’t prepare USDC for this swap. Try again.'),
+        find.text('swapAssetPreparationUnavailable'.tr(args: ['USDC'])),
         findsOneWidget,
       );
       expect(swapPrimaryLabel(tester), 'Try again');
@@ -274,7 +277,7 @@ void main() {
       expect(enabled(tester), isFalse);
       expect(find.text('Checking swap options…'), findsOneWidget);
       expect(find.byType(SwapSkeleton), findsNothing);
-      expect(find.text('Updating estimate'), findsOneWidget);
+      expect(find.text('swapEstimateUpdating'.tr()), findsOneWidget);
     });
 
     testWidgets('a re-price keeps the current option on screen', (
@@ -377,7 +380,14 @@ void main() {
     );
 
     expect(swapPrimaryLabel(tester), 'Select an option');
-    expect(find.text('Minimum received'), findsNothing);
+    // Until one is chosen its figures stay placeholders.
+    expect(
+      find.descendant(
+        of: find.byType(SwapQuoteStrip),
+        matching: find.text(SwapFormat.unknown),
+      ),
+      findsNWidgets(3),
+    );
     await press(tester);
     expect(swap.events, [const UnifiedSwapAlternativesRequested()]);
     expect(find.text('Choose manually'), findsOneWidget);

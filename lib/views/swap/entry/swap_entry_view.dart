@@ -141,6 +141,11 @@ class _SwapEntryViewState extends State<SwapEntryView> {
         final receive = state.receive;
         final price = pay == null ? null : _services.usdPrice(pay);
         final compact = SwapGeometry.isCompact(context);
+        // The review beside the form has new terms. The form's figures are
+        // the ones it replaced, so they must not read as current.
+        final stale =
+            widget.panelOpen &&
+            state.review?.status == SwapReviewStatus.materialUpdate;
 
         final cards = Semantics(
           container: true,
@@ -170,15 +175,18 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                   }
                 },
                 onPickAsset: () => _pick(SwapPickerSide.pay),
+                onSubmitted: () {
+                  if (_bloc.state.canReview) {
+                    _bloc.add(const UnifiedSwapReviewOpened());
+                  }
+                },
               ),
             ),
             bottom: Semantics(
               sortKey: const OrdinalSortKey(2),
               child: SwapReceiveCard(
                 state: state,
-                previousEstimate:
-                    widget.panelOpen &&
-                    state.review?.status == SwapReviewStatus.materialUpdate,
+                previousEstimate: stale,
                 network: receive == null
                     ? null
                     : SwapFormat.network(receive, networks),
@@ -223,15 +231,19 @@ class _SwapEntryViewState extends State<SwapEntryView> {
                     const SizedBox(height: 10),
                   ],
                   cards,
-                  ..._messages(context, state),
+                  // Under the cards it explains, and above the figures the
+                  // review may take away, so their going moves nothing.
+                  if (widget.panelOpen)
+                    SwapHelperLine(
+                      text: LocaleKeys.swapReviewPanelNote.tr(),
+                      liveRegion: false,
+                    ),
                   _EntryQuoteArea(
                     state: state,
+                    lines: _lines(state, stale: stale),
+                    stale: stale,
                     onCompare: () => showSwapOptionsSheet(context, _bloc),
                   ),
-                  if (widget.panelOpen) ...[
-                    const SizedBox(height: 14),
-                    SwapHelperLine(text: LocaleKeys.swapReviewPanelNote.tr()),
-                  ],
                   if (inlineAction != null) ...[
                     const SizedBox(height: 14),
                     inlineAction,

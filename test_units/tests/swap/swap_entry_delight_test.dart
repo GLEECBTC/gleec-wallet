@@ -1,5 +1,6 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -163,7 +164,7 @@ void main() {
     controller.selection = const TextSelection.collapsed(offset: 0);
     final region = tester.getRect(find.byKey(const Key('swap-quote-region')));
 
-    expect(find.text('Updating estimate'), findsOneWidget);
+    expect(find.text('swapEstimateUpdating'.tr()), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(SwapReceiveCard),
@@ -230,7 +231,7 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 4));
 
-    expect(find.text('Updating estimate'), findsNothing);
+    expect(find.text('swapEstimateUpdating'.tr()), findsNothing);
     expect(find.text('Still checking swap options…'), findsNothing);
     expect(find.text('Price estimate unavailable'), findsOneWidget);
     expect(
@@ -277,7 +278,7 @@ void main() {
           failures: [failure],
         ),
       );
-      expect(find.text('Updating estimate'), findsNothing);
+      expect(find.text('swapEstimateUpdating'.tr()), findsNothing);
       expect(find.text('Price estimate unavailable'), findsOneWidget);
     });
   }
@@ -296,7 +297,7 @@ void main() {
       tester,
     ) async {
       await pump(tester, entry.value);
-      expect(find.text('Updating estimate'), findsNothing);
+      expect(find.text('swapEstimateUpdating'.tr()), findsNothing);
       expect(find.text('Price estimate unavailable'), findsOneWidget);
     });
   }
@@ -322,10 +323,7 @@ void main() {
         tradingStatusUnavailable: true,
       ),
     );
-    expect(
-      find.text('We couldn’t check swap availability. Try again.'),
-      findsOneWidget,
-    );
+    expect(find.text('swapAvailabilityUnavailable'.tr()), findsOneWidget);
     expect(find.textContaining('location'), findsNothing);
     expect(swapPrimaryLabel(tester), 'Try again');
     await tester.tap(swapPrimaryAction);

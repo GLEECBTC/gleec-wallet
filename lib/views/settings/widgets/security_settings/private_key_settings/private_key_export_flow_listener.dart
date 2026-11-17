@@ -14,6 +14,7 @@ import 'package:web_dex/bloc/security_settings/security_settings_event.dart';
 import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_labels.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/private_key_settings/private_key_export_password_dialog.dart';
@@ -60,7 +61,7 @@ class _PrivateKeyExportFlowListenerState
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) return;
+    if (!lifecycleLeavesApp(state)) return;
     _revokeSensitivePresentation();
   }
 

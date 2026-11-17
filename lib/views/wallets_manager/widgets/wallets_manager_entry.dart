@@ -37,12 +37,21 @@ class WalletsManagerEntry extends StatefulWidget {
     required this.onHardwareWallet,
     required this.onWalletSelected,
     required this.onCancel,
+    this.onCreateAnother,
     this.cancelLabel,
     this.onUserIntent,
     super.key,
   });
 
   final void Function(WalletsManagerAction) onAction;
+
+  /// Opens the creation card for someone who already has wallets here. Create
+  /// is then a second, deliberate press beside the legal notice, so the row on
+  /// this screen neither creates a wallet nor accepts the terms.
+  ///
+  /// First-run creation, and a host that leaves this out, stay a single tap
+  /// through [onAction].
+  final VoidCallback? onCreateAnother;
   final VoidCallback onHardwareWallet;
   final void Function(Wallet, WalletsManagerExistWalletAction) onWalletSelected;
   final VoidCallback onCancel;
@@ -74,18 +83,26 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
     );
   }
 
-  Future<void> _onAction(WalletsManagerAction action) async {
+  Future<void> _onAction(
+    WalletsManagerAction action, {
+    required bool reviewsCreation,
+  }) async {
     widget.onUserIntent?.call();
     if (action != WalletsManagerAction.create) {
       widget.onAction(action);
       return;
     }
+    final createAnother = widget.onCreateAnother;
+    if (reviewsCreation && createAnother != null) {
+      createAnother();
+      return;
+    }
     if (_creating) return;
-    setState(() => _creating = true);
+    _creating = true;
     final agreement = await awaitLegalAgreement(context);
     if (!mounted) return;
     if (agreement == null) {
-      setState(() => _creating = false);
+      _creating = false;
       return;
     }
     context.read<LegalAgreementBloc>().add(
@@ -118,6 +135,7 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
         builder: (context, snapshot) {
           final wallets = snapshot.data ?? const <Wallet>[];
           final hasWallets = wallets.isNotEmpty;
+          final reviewsCreation = hasWallets && widget.onCreateAnother != null;
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,19 +165,24 @@ class _WalletsManagerEntryState extends State<WalletsManagerEntry> {
                 const SizedBox(height: 8),
               ],
               LegalConsentAction(
+                // Opening the creation card accepts nothing; the card gates
+                // and records acceptance beside its own Create action.
+                enforce: !reviewsCreation,
                 builder: (allowed) => _OnboardingActions(
-                  canCreate: allowed && !_creating,
+                  // Left pressable while the legal lookup settles so the
+                  // focused button is not disabled; `_onAction` drops repeats.
+                  canCreate: allowed,
                   hasWallets: hasWallets,
-                  onAction: _onAction,
+                  consent: reviewsCreation
+                      ? null
+                      : _CreateConsent(centered: !hasWallets),
+                  onAction: (action) =>
+                      _onAction(action, reviewsCreation: reviewsCreation),
                   onHardwareWallet: () {
                     widget.onUserIntent?.call();
                     widget.onHardwareWallet();
                   },
                 ),
-              ),
-              const SizedBox(height: 12),
-              TermsConsentText(
-                actionLabel: LocaleKeys.onboardingCreateWallet.tr(),
               ),
               const SizedBox(height: 12),
               UiUnderlineTextButton(
@@ -226,18 +249,63 @@ class _OnboardingHeader extends StatelessWidget {
   }
 }
 
+/// The legal sentence for Create, in supporting size.
+class _CreateConsent extends StatelessWidget {
+  const _CreateConsent({required this.centered});
+
+  final bool centered;
+
+  // `TermsConsentText` sets its sentence at this size and has no size
+  // parameter, so the supporting size is reached through the text scaler.
+  static const double _noticeFontSize = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    final consent = TermsConsentText(
+      actionLabel: LocaleKeys.onboardingCreateWallet.tr(),
+    );
+    // Only the routine sentence is supporting text. News the user must act on
+    // (changed or unavailable agreements) keeps its full size.
+    final routine = context.select<LegalAgreementBloc, bool>(
+      (bloc) =>
+          !bloc.state.hasFailure &&
+          bloc.state.status != LegalAgreementStatus.updated,
+    );
+    if (!routine) return consent;
+    final supportingSize =
+        Theme.of(context).textTheme.bodySmall?.fontSize ?? 12;
+    final scaler = MediaQuery.textScalerOf(context);
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(
+        textScaler: TextScaler.linear(
+          scaler.scale(supportingSize) / _noticeFontSize,
+        ),
+      ),
+      child: DefaultTextStyle.merge(
+        textAlign: centered ? TextAlign.center : null,
+        child: consent,
+      ),
+    );
+  }
+}
+
 class _OnboardingActions extends StatelessWidget {
   const _OnboardingActions({
     required this.hasWallets,
     required this.canCreate,
     required this.onAction,
     required this.onHardwareWallet,
+    this.consent,
   });
 
   final bool hasWallets;
   final void Function(WalletsManagerAction) onAction;
   final VoidCallback onHardwareWallet;
   final bool canCreate;
+
+  /// Sits directly under Create, the only action here that accepts the terms.
+  /// Null when Create only opens the creation card.
+  final Widget? consent;
 
   @override
   Widget build(BuildContext context) {
@@ -287,6 +355,13 @@ class _OnboardingActions extends StatelessWidget {
                   : null,
             ),
           ),
+          if (consent case final consent?) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: consent,
+            ),
+          ],
           const SizedBox(height: 8),
           importRow,
           if (showHardware) ...[const SizedBox(height: 8), hardwareRow],
@@ -307,6 +382,10 @@ class _OnboardingActions extends StatelessWidget {
               ? () => onAction(WalletsManagerAction.create)
               : null,
         ),
+        if (consent case final consent?) ...[
+          const SizedBox(height: 12),
+          consent,
+        ],
         const SizedBox(height: 16),
         const UiDivider(),
         const SizedBox(height: 4),

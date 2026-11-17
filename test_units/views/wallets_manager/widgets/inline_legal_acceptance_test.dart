@@ -87,13 +87,11 @@ void main() {
           await harness.pump(
             tester,
             WalletSimpleImport(
-              onImport:
-                  ({
-                    required name,
-                    required password,
-                    required walletConfig,
-                    required rememberMe,
-                  }) => imported++,
+              onImport: ({
+                required name,
+                required password,
+                required walletConfig,
+              }) => imported++,
               onUploadFiles: ({required fileName, required fileData}) {},
               onCancel: () {},
             ),
@@ -148,13 +146,11 @@ void main() {
                 content: encrypted!,
                 name: 'My wallet.json',
               ),
-              onImport:
-                  ({
-                    required name,
-                    required password,
-                    required walletConfig,
-                    required rememberMe,
-                  }) => imported++,
+              onImport: ({
+                required name,
+                required password,
+                required walletConfig,
+              }) => imported++,
               onCancel: () {},
             ),
           );
@@ -210,8 +206,9 @@ void main() {
           (await harness.repository.readAcceptance())?.surface,
           oldRecord?.surface,
         );
-        await tester.ensureVisible(find.text('Log In'));
-        await tester.tap(find.text('Log In'));
+        final unlock = find.byKey(const Key('wallet-password-unlock'));
+        await tester.ensureVisible(unlock);
+        await tester.tap(unlock);
         await tester.pumpAndSettle();
         await tester.pump();
         expect(loggedIn, 1);

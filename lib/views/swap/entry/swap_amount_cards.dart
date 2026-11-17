@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -104,6 +105,7 @@ class SwapPayCard extends StatefulWidget {
     required this.onModeToggled,
     required this.onMax,
     required this.onPickAsset,
+    this.onSubmitted,
     super.key,
   });
 
@@ -122,6 +124,9 @@ class SwapPayCard extends StatefulWidget {
   final VoidCallback onModeToggled;
   final VoidCallback onMax;
   final VoidCallback onPickAsset;
+
+  /// Enter in the amount field: the keyboard's way to the form's action.
+  final VoidCallback? onSubmitted;
 
   @override
   State<SwapPayCard> createState() => _SwapPayCardState();
@@ -183,11 +188,13 @@ class _SwapPayCardState extends State<SwapPayCard> {
     final amountStyle = state.checkingMax
         ? SwapText.amount(context).copyWith(color: palette.textSecondary)
         : SwapText.amount(context);
+    final hintStyle = amountStyle.copyWith(color: palette.textTertiary);
     final field = TextField(
       key: const Key('swap-amount'),
       controller: _controller,
       focusNode: _focus,
       onChanged: widget.onAmountChanged,
+      onSubmitted: (_) => widget.onSubmitted?.call(),
       // A phone's decimal pad has no key to put it away: a tap anywhere else
       // does, as dragging the form does.
       onTapOutside: (_) => _focus.unfocus(),
@@ -213,12 +220,25 @@ class _SwapPayCardState extends State<SwapPayCard> {
         errorBorder: InputBorder.none,
         filled: false,
         hintText: '0',
-        hintStyle: amountStyle.copyWith(color: palette.textTertiary),
-        prefixText: fiat ? r'$' : null,
-        prefixStyle: amountStyle,
+        hintStyle: hintStyle,
         semanticCounterText: '',
       ),
     );
+    // The sign stands beside the field rather than in it: a prefix hides
+    // while the field is empty yet keeps its room, which sets the "0" adrift.
+    final amountField = fiat
+        ? Row(
+            children: [
+              ExcludeSemantics(
+                child: Text(
+                  r'$',
+                  style: state.inputText.isEmpty ? hintStyle : amountStyle,
+                ),
+              ),
+              Expanded(child: field),
+            ],
+          )
+        : field;
 
     final amount = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,8 +246,8 @@ class _SwapPayCardState extends State<SwapPayCard> {
       children: [
         MergeSemantics(
           child: Semantics(
-            label: LocaleKeys.swapAmountToPay.tr(),
-            child: field,
+            label: _fieldLabel(ticker, fiat),
+            child: amountField,
           ),
         ),
         const SizedBox(height: 6),
@@ -275,13 +295,24 @@ class _SwapPayCardState extends State<SwapPayCard> {
     );
   }
 
+  /// What the field takes, with its unit: a bare number says neither
+  /// dollars nor which asset on which network.
+  String _fieldLabel(String ticker, bool fiat) {
+    if (widget.state.pay == null) return LocaleKeys.swapAmountToPay.tr();
+    if (fiat) return 'swapAmountToPayInUsd'.tr();
+    final network = widget.network;
+    return 'swapAmountToPayIn'.tr(
+      args: [network == null ? ticker : SwapFormat.onNetwork(ticker, network)],
+    );
+  }
+
   Widget _secondaryLine(BuildContext context, String ticker) {
     final state = widget.state;
     final price = widget.usdPrice;
     final palette = SwapPalette.of(context);
     final toggle = state.startInDoubt ? null : widget.onModeToggled;
     if (state.pay == null) {
-      return Text('—', style: SwapText.small(context));
+      return Text(SwapFormat.unknown, style: SwapText.small(context));
     }
     final fiat = state.amountMode == SwapAmountMode.fiat;
     if (price == null) {
@@ -300,17 +331,25 @@ class _SwapPayCardState extends State<SwapPayCard> {
         ],
       );
     }
-    final tokenAmount = widget.tokenAmount ?? Decimal.zero;
+    // Nothing typed, or an amount not converted yet, is unknown, not zero.
+    final tokenAmount = widget.tokenAmount;
     final text = fiat
         ? LocaleKeys.swapApproxToken.tr(
-            args: [SwapFormat.amount(tokenAmount), ticker],
+            args: [
+              tokenAmount == null
+                  ? SwapFormat.unknown
+                  : SwapFormat.amount(tokenAmount),
+              ticker,
+            ],
           )
+        : tokenAmount == null
+        ? SwapFormat.unknown
         : SwapFormat.usd(tokenAmount * price);
     final label = fiat
         ? LocaleKeys.swapEnterInToken.tr(args: [ticker])
         : LocaleKeys.swapEnterInUsd.tr();
     return SwapButtonSemantics(
-      label: '$text. $label',
+      label: tokenAmount == null ? label : '$text. $label',
       onTap: toggle,
       child: Tooltip(
         message: label,
@@ -337,6 +376,20 @@ class _SwapPayCardState extends State<SwapPayCard> {
     );
   }
 }
+
+/// Whether an estimate for the amount typed is on its way, rather than not
+/// asked for or failed.
+bool swapAwaitingEstimate(UnifiedSwapState state) =>
+    state.inputText.trim().isNotEmpty &&
+    state.hasPair &&
+    (state.preparingAssets ||
+        state.checkingMax ||
+        state.evaluation == SwapEvaluationStatus.checking ||
+        (state.evaluation == SwapEvaluationStatus.idle &&
+            state.preparationFailedAsset == null &&
+            state.failure == null &&
+            state.tradingEnabled &&
+            (state.issue?.stillPriced ?? true)));
 
 /// The price impact from which the form warns: 5%.
 final swapHighImpact = Decimal.parse('0.05');

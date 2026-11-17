@@ -1,28 +1,40 @@
 part of 'swap_review_view.dart';
 
-/// The review's detail sections: costs, route and identities, warnings and
-/// the status of the latest re-price.
+/// What stands in for a cost the engine could not read. Never "free".
+const _costUnknown = '—';
+
+/// A cost as the review writes it: in dollars when [usd] prices it, else as
+/// its own token amounts, and [_costUnknown] when the fees were not read.
+String _costText(
+  SwapQuote quote,
+  Decimal? usd,
+  Iterable<SwapFeeComponent> fees,
+) {
+  if (!quote.feesKnown) return _costUnknown;
+  if (usd != null) return SwapFormat.usd(usd, rounding: SwapRounding.up);
+  return _feeTokens(fees);
+}
+
+/// [fees] summed per token: "0.0004 ETH + 0.1 GLEEC".
+String _feeTokens(Iterable<SwapFeeComponent> fees) {
+  final byToken = <String, Decimal>{};
+  for (final fee in fees) {
+    final label = fee.tokenLabel;
+    byToken[label] = (byToken[label] ?? Decimal.zero) + fee.amount;
+  }
+  if (byToken.isEmpty) return SwapFormat.usd(Decimal.zero);
+  return byToken.entries
+      .map((e) => SwapFormat.tokens(e.value, e.key, rounding: SwapRounding.up))
+      .join(' + ');
+}
+
+/// The gas [quote] pays, its approval's included.
+Iterable<SwapFeeComponent> _networkFees(SwapQuote quote) => quote.fees.where(
+  (f) => f.kind == SwapFeeKind.network || f.kind == SwapFeeKind.approvalNetwork,
+);
+
+/// The review's detail sections: costs, route and identities, and warnings.
 extension _ReviewContentDetails on _ReviewContent {
-  String _usdOrTokens(Decimal? usd, Iterable<SwapFeeComponent> fees) {
-    if (!quote.feesKnown) return LocaleKeys.swapCostIncomplete.tr();
-    if (usd != null) return SwapFormat.usd(usd, rounding: SwapRounding.up);
-    return _tokens(fees);
-  }
-
-  String _tokens(Iterable<SwapFeeComponent> fees) {
-    final byToken = <String, Decimal>{};
-    for (final fee in fees) {
-      final label = fee.tokenLabel;
-      byToken[label] = (byToken[label] ?? Decimal.zero) + fee.amount;
-    }
-    if (byToken.isEmpty) return SwapFormat.usd(Decimal.zero);
-    return byToken.entries
-        .map(
-          (e) => SwapFormat.tokens(e.value, e.key, rounding: SwapRounding.up),
-        )
-        .join(' + ');
-  }
-
   /// The USD total of [fees], or null when any is unpriced.
   Decimal? _pricedTotal(Iterable<SwapFeeComponent> fees) {
     var total = Decimal.zero;
@@ -36,11 +48,7 @@ extension _ReviewContentDetails on _ReviewContent {
 
   Widget _costs(BuildContext context) {
     final pricing = quote.pricing;
-    final network = quote.fees.where(
-      (f) =>
-          f.kind == SwapFeeKind.network ||
-          f.kind == SwapFeeKind.approvalNetwork,
-    );
+    final network = _networkFees(quote);
     final approval = quote.feesOf(SwapFeeKind.approvalNetwork);
     final swap = quote.fees.where(
       (f) => f.kind == SwapFeeKind.swap || f.kind == SwapFeeKind.dexFee,
@@ -52,22 +60,22 @@ extension _ReviewContentDetails on _ReviewContent {
       children: [
         SwapDetailRow(
           label: LocaleKeys.swapNetworkCosts.tr(),
-          value: _usdOrTokens(pricing.networkCostUsd, network),
+          value: _costText(quote, pricing.networkCostUsd, network),
         ),
         // Already counted in the network costs above.
         if (approval.isNotEmpty)
           SwapDetailRow(
             label: '↳ ${LocaleKeys.swapApprovalNetworkCost.tr()}',
-            value: _usdOrTokens(pricing.approvalNetworkCostUsd, approval),
+            value: _costText(quote, pricing.approvalNetworkCostUsd, approval),
           ),
         SwapDetailRow(
           label: LocaleKeys.swapSwapCosts.tr(),
-          value: _usdOrTokens(pricing.swapCostUsd, swap),
+          value: _costText(quote, pricing.swapCostUsd, swap),
         ),
         if (inReceive.isNotEmpty)
           SwapDetailRow(
             label: LocaleKeys.swapReviewTakenFromReceive.tr(),
-            value: _usdOrTokens(_pricedTotal(inReceive), inReceive),
+            value: _costText(quote, _pricedTotal(inReceive), inReceive),
           ),
         SwapDetailRow(
           label: LocaleKeys.swapReviewSlippage.tr(),
@@ -227,131 +235,5 @@ extension _ReviewContentDetails on _ReviewContent {
         ),
       ],
     ];
-  }
-
-  /// The material update's cost line; null when it reads the same.
-  String? _costChange(SwapQuote previous) {
-    String usd(Decimal value) =>
-        SwapFormat.usd(value, rounding: SwapRounding.up);
-    final before = previous.pricing.totalCostUsd;
-    final after = quote.pricing.totalCostUsd;
-    if (before != null && after != null) {
-      return _changed(usd(before), usd(after));
-    }
-    if (!quote.feesKnown) return null;
-    if (!previous.feesKnown) {
-      return LocaleKeys.swapReviewUpdatedCostKnown.tr(
-        args: [after == null ? _tokens(quote.fees) : usd(after)],
-      );
-    }
-    return _changed(_tokens(previous.fees), _tokens(quote.fees));
-  }
-
-  /// Null when both read the same: a finer change would read "from $0.54 to
-  /// $0.54".
-  static String? _changed(String was, String now) =>
-      was == now ? null : LocaleKeys.swapReviewUpdatedCost.tr(args: [was, now]);
-
-  List<Widget> _status(BuildContext context) {
-    final toTicker = SwapFormat.ticker(quote.to);
-    switch (review.status) {
-      case SwapReviewStatus.materialUpdate:
-        final previous = review.previous;
-        final lines = <String>[];
-        if (previous != null) {
-          if (previous.guaranteedReceive != quote.guaranteedReceive) {
-            final (was, now) = SwapFormat.tokensApart(
-              previous.guaranteedReceive,
-              quote.guaranteedReceive,
-              toTicker,
-              rounding: SwapRounding.down,
-            );
-            lines.add(LocaleKeys.swapReviewUpdatedMinimum.tr(args: [was, now]));
-          }
-          final cost = _costChange(previous);
-          if (cost != null) lines.add(cost);
-        }
-        return [
-          const SizedBox(height: 12),
-          SwapCallout(
-            tone: SwapTone.warning,
-            icon: Icons.refresh_rounded,
-            title: LocaleKeys.swapReviewUpdatedTitle.tr(),
-            message: lines.join(' '),
-            liveRegion: true,
-          ),
-        ];
-      case SwapReviewStatus.expired:
-        return [
-          const SizedBox(height: 12),
-          SwapCallout(
-            tone: SwapTone.warning,
-            icon: Icons.timer_outlined,
-            title: LocaleKeys.swapReviewExpiredTitle.tr(),
-            message: LocaleKeys.swapReviewExpiredBody.tr(),
-            liveRegion: true,
-          ),
-        ];
-      case SwapReviewStatus.revalidating:
-        return [
-          SwapHelperLine(text: LocaleKeys.swapReviewRevalidatingBody.tr()),
-        ];
-      case SwapReviewStatus.revalidationFailed:
-        final (title, message) = switch (review.revalidationRecovery) {
-          SwapRevalidationRecovery.waitForSource => (
-            LocaleKeys.swapReviewPausedTitle.tr(),
-            LocaleKeys.swapReviewPausedBody.tr(),
-          ),
-          SwapRevalidationRecovery.backToForm =>
-            switch (review.revalidationFailure?.kind) {
-              SwapQuoteFailureKind.noRoute ||
-              SwapQuoteFailureKind.belowMinimum ||
-              SwapQuoteFailureKind.aboveMaximum ||
-              SwapQuoteFailureKind.pairUnsupported => (
-                LocaleKeys.swapReviewGoneTitle.tr(),
-                LocaleKeys.swapReviewGoneBody.tr(),
-              ),
-              _ => (
-                LocaleKeys.swapReviewChangedTitle.tr(),
-                LocaleKeys.swapReviewChangedBody.tr(),
-              ),
-            },
-          SwapRevalidationRecovery.tryAgain => (
-            LocaleKeys.swapReviewFailedTitle.tr(),
-            LocaleKeys.swapReviewFailedBody.tr(),
-          ),
-        };
-        return [
-          const SizedBox(height: 12),
-          SwapCallout(
-            tone: SwapTone.warning,
-            title: title,
-            message: message,
-            liveRegion: true,
-          ),
-        ];
-      case SwapReviewStatus.rejected:
-        return [
-          const SizedBox(height: 12),
-          SwapCallout(
-            tone: SwapTone.danger,
-            title: LocaleKeys.swapReviewRejectedTitle.tr(),
-            message: LocaleKeys.swapReviewRejectedBody.tr(),
-            liveRegion: true,
-          ),
-        ];
-      case SwapReviewStatus.unconfirmed:
-        return [
-          const SizedBox(height: 12),
-          SwapCallout(
-            tone: SwapTone.warning,
-            title: LocaleKeys.swapReviewUnconfirmedTitle.tr(),
-            message: LocaleKeys.swapReviewUnconfirmedBody.tr(),
-            liveRegion: true,
-          ),
-        ];
-      case SwapReviewStatus.ready || SwapReviewStatus.starting:
-        return const [];
-    }
   }
 }

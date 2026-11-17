@@ -33,6 +33,7 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
@@ -396,14 +397,21 @@ void main() {
           swap.emit(entryState);
           await pump(tester, layout, const SwapEntryView());
           await expectSwapAccessible(tester, largeText: layout.textScale > 1);
+          // The field names its unit: dollars, or the asset on its network.
+          final pay = entryState.pay!;
           expect(
             tester.getSemantics(find.byKey(const Key('swap-amount'))),
             isSemantics(
-              // InputDecorator includes the visible currency affix in the
-              // merged field label. Keep the fiat unit audible as well.
               label: entryState.amountMode == SwapAmountMode.fiat
-                  ? 'Amount to pay\n\$'
-                  : 'Amount to pay',
+                  ? 'swapAmountToPayInUsd'.tr()
+                  : 'swapAmountToPayIn'.tr(
+                      args: [
+                        SwapFormat.onNetwork(
+                          SwapFormat.ticker(pay),
+                          SwapFormat.network(pay, services.networks()),
+                        ),
+                      ],
+                    ),
               isTextField: true,
             ),
           );

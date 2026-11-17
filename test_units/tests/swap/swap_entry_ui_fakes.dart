@@ -35,6 +35,7 @@ import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+import 'package:web_dex/views/swap/common/swap_buttons.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
 import '../../support/legal_documents_fixture.dart';
@@ -474,14 +475,24 @@ List<String> recordClipboard(WidgetTester tester) {
   return copied;
 }
 
-/// Whether the button showing [text] can be pressed.
+/// Whether the button showing [text] can be pressed. A busy swap button
+/// stays focusable, so its press does nothing rather than being null.
 bool swapButtonEnabled(WidgetTester tester, Finder text) =>
     tester
-        .widget<TextButton>(
-          find.ancestor(of: text, matching: find.byType(TextButton)).first,
+            .widget<TextButton>(
+              find.ancestor(of: text, matching: find.byType(TextButton)).first,
+            )
+            .onPressed !=
+        null &&
+    find
+        .ancestor(
+          of: text,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is SwapButton && widget.busy,
+          ),
         )
-        .onPressed !=
-    null;
+        .evaluate()
+        .isEmpty;
 
 final Finder swapPrimaryAction = find.byKey(const Key('swap-primary-action'));
 

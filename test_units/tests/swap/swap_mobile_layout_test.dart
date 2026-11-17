@@ -2,6 +2,7 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/main_layout/main_layout.dart';
@@ -207,7 +209,7 @@ void _formCases() {
       await tester.pumpAndSettle();
       expect(find.byType(SnackBar), findsNothing);
       expect(
-        find.text('We couldn’t prepare USDC for this swap. Try again.'),
+        find.text('swapAssetPreparationUnavailable'.tr(args: ['USDC'])),
         findsOneWidget,
       );
       expect(swapPrimaryAction.hitTestable(), findsOneWidget);

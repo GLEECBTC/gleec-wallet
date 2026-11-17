@@ -208,8 +208,11 @@ class _SwapScopeState extends State<_SwapScope> {
     _swap =
         UnifiedSwapBloc(
             repository: _services.createRepository(
+              // Whether this location may swap the pair at all. The order
+              // book applies its own wallet-only rule; a route is not bound
+              // by it, and neither rule is about location.
               tradingAllowed: (from, to) =>
-                  tradingStatus.state.canTradeAssets([from, to]),
+                  tradingStatus.state.isTradingPermitted([from, to]),
               clockValid: () => _clockValid(systemHealth.state),
             ),
             registry: _services.registry,

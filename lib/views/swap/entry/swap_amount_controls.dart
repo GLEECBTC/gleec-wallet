@@ -185,32 +185,39 @@ class _SwapSwitchButtonState extends State<SwapSwitchButton> {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
+    final onTap = widget.onPressed == null ? null : _switch;
+    // The whole 48 dp circle takes the tap. Its outer band is drawn in the
+    // canvas colour, which lifts the disc off the two cards it straddles.
     return SwapButtonSemantics(
       label: LocaleKeys.swapSwitchDirection.tr(),
-      onTap: widget.onPressed == null ? null : _switch,
+      onTap: onTap,
       child: Tooltip(
         message: LocaleKeys.swapSwitchDirection.tr(),
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: palette.canvas, width: 6),
-          ),
-          child: Material(
-            color: palette.surfaceHighest,
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: widget.onPressed == null ? null : _switch,
-              child: AnimatedRotation(
-                turns: _turns,
-                duration: SwapMotion.of(context, SwapMotion.pair),
-                curve: SwapMotion.standard,
-                child: Icon(
-                  Icons.swap_vert_rounded,
-                  size: 20,
-                  color: palette.text,
+        child: Material(
+          color: palette.canvas,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(
+              dimension: SwapGeometry.touchTarget,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Ink(
+                  decoration: ShapeDecoration(
+                    color: palette.surfaceHighest,
+                    shape: const CircleBorder(),
+                  ),
+                  child: AnimatedRotation(
+                    turns: _turns,
+                    duration: SwapMotion.of(context, SwapMotion.pair),
+                    curve: SwapMotion.standard,
+                    child: Icon(
+                      Icons.swap_vert_rounded,
+                      size: 20,
+                      color: palette.text,
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -23,6 +23,7 @@ import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 part 'swap_asset_picker_balance.dart';
+part 'swap_asset_picker_filters.dart';
 part 'swap_asset_picker_list.dart';
 part 'swap_asset_picker_reach.dart';
 part 'swap_asset_picker_row.dart';
@@ -353,37 +354,6 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
     Navigator.of(context).pop(id);
   }
 
-  Widget _networkFilter(BuildContext context) {
-    final networks = <String, String>{
-      for (final id in _offered())
-        (id.parentId ?? id).id: widget.services.networks().networkOf(id),
-    };
-    final entries = networks.entries.toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
-    return DropdownButtonFormField<String>(
-      key: const Key('swap-picker-network'),
-      initialValue: _network,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: 'swapNetworkFilter'.tr(),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      items: [
-        DropdownMenuItem(value: '', child: Text('swapAllNetworks'.tr())),
-        for (final entry in entries)
-          DropdownMenuItem(
-            value: entry.key,
-            child: Text(
-              entry.value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-      ],
-      onChanged: (network) => setState(() => _network = network ?? ''),
-    );
-  }
-
   void _setHideZero(bool hide) {
     setState(() => _hideZero = hide);
     unawaited(widget.services.preferences.rememberHideZeroBalances(hide));
@@ -391,12 +361,17 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
 
   void _clearSearch() => setState(_search.clear);
 
+  /// The list is a function of the search text; a rebuild shows it.
+  void _searchChanged() => setState(() {});
+
+  void _setNetwork(String network) => setState(() => _network = network);
+
   @override
   Widget build(BuildContext context) {
     final searching = _search.text.trim().isNotEmpty;
     final listed = _activated == null ? null : _listed();
-    final header = [
-      _searchField(context),
+    final search = _searchField(context);
+    final filters = [
       const SizedBox(height: 14),
       if (!searching)
         SwapFilterBar<_PickerTab>(
@@ -432,6 +407,9 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
         _incompleteNotice(context),
     ];
     final content = _content(context, listed);
+    // With the keyboard up there is room for the search and little else:
+    // the filters then scroll away with the list they narrow.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     return SwapSheetScaffold(
       title: LocaleKeys.swapPickerTitle.tr(),
       subtitle: widget.side == SwapPickerSide.pay
@@ -449,7 +427,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
                 SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: header,
+                    children: [search, ...filters],
                   ),
                 ),
                 content,
@@ -457,62 +435,32 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
               ],
             );
           }
+          // The search stays the column's first child either way, so it
+          // keeps its focus as the keyboard comes and goes.
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ...header,
+              search,
+              if (!keyboard) ...filters,
               Expanded(
+                key: const ValueKey('swap-picker-list'),
                 child: CustomScrollView(
-                  slivers: [content, const _KeyboardSpace()],
+                  slivers: [
+                    if (keyboard)
+                      SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: filters,
+                        ),
+                      ),
+                    content,
+                    const _KeyboardSpace(),
+                  ],
                 ),
               ),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _searchField(BuildContext context) {
-    final palette = SwapPalette.of(context);
-    return Container(
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.controlBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.search_rounded, color: palette.textTertiary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: _search,
-              autofocus: MediaQuery.sizeOf(context).width >= 768,
-              onChanged: (_) => setState(() {}),
-              style: SwapText.body(context).copyWith(color: palette.text),
-              decoration: InputDecoration(
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.standard,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: false,
-                hintText: LocaleKeys.swapPickerSearch.tr(),
-                hintMaxLines: 4,
-                hintStyle: SwapText.body(context)
-                    .copyWith(color: palette.textTertiary),
-              ),
-            ),
-          ),
-          if (_search.text.isNotEmpty)
-            SwapLinkButton(
-              label: LocaleKeys.clear.tr(),
-              onPressed: _clearSearch,
-            ),
-        ],
       ),
     );
   }

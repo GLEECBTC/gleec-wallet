@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/router/state/routing_state.dart';
 import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
@@ -67,14 +69,61 @@ void main() {
       await tester.pump();
       await tester.pumpAndSettle();
       expect(services.presentation.walletEntries, hasLength(2));
-      expect(
-        find.text('2 swaps to follow'),
-        findsOneWidget,
-        reason: textsOf(tester, find.byType(WalletSwapStatus)).toString(),
-      );
+      // Counted, not "to follow": some of several may be done or stuck.
+      expect(textsOf(tester, find.byType(WalletSwapStatus)), [
+        'swapWalletSwaps'.tr(args: ['2']),
+        'swapWalletSummaryInProgress'.tr(args: ['2']),
+      ]);
       await tester.tap(find.byKey(const Key('wallet-swap-status')));
       expect(services.takePendingActivity(), isTrue);
       expect(services.takePendingOpen(), isNull);
+    });
+
+    testWidgets('the row is one named button with a glyph for where each '
+        'swap stands, and says how several stand', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final row = find.byType(WalletSwapStatus);
+      String label() => tester
+          .getSemantics(find.byKey(const Key('wallet-swap-status')))
+          .label;
+
+      final first = await start();
+      await pumpSurface(tester, const WalletSwapStatus(), services: services);
+      expect(find.byIcon(Icons.sync_rounded), findsOneWidget);
+      final preparing = LocaleKeys.swapProgressPreparingTitle.tr();
+      expect(textsOf(tester, row), [preparing, '1 ETH → ≈ 3,000 USDC']);
+      expect(label(), '$preparing. 1 ETH → ≈ 3,000 USDC');
+      expect(
+        tester.getSemantics(find.byKey(const Key('wallet-swap-status'))),
+        isSemantics(isButton: true, hasTapAction: true),
+      );
+      expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
+
+      first.push(
+        snapshotOf(
+          id: first.id,
+          outcome: failed(SwapFailureReason.routeFailed),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.priority_high_rounded), findsOneWidget);
+
+      // Several: a neutral count, the generic glyph, and how each stands.
+      final second = await start();
+      await start();
+      second.push(snapshotOf(id: second.id, outcome: completed()));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
+      expect(textsOf(tester, row), [
+        'swapWalletSwaps'.tr(args: ['3']),
+        [
+          'swapWalletSummaryInProgress'.tr(args: ['1']),
+          'swapWalletSummaryAttention'.tr(args: ['1']),
+          'swapWalletSummaryReceived'.tr(args: ['1']),
+        ].join(' · '),
+      ]);
+      expect(label(), textsOf(tester, row).join('. '));
+      semantics.dispose();
     });
 
     testWidgets('completion stays discoverable until the receipt is seen', (
@@ -165,19 +214,53 @@ void main() {
         handle.push(done);
         await tester.pumpAndSettle();
         expect(find.text('You received 3,001 USDC'), findsOneWidget);
-        expect(find.text('Updating balance'), findsOneWidget);
+        final status = find.byKey(const Key('swap-receipt-balance'));
+        final viewAsset = find.byKey(const Key('swap-view-asset'));
+        expect(tester.widget<Text>(status).data, 'swapUpdatingBalance'.tr());
+        final before = tester.getRect(viewAsset);
         expect(reads, 1);
         handle.push(done);
         await tester.pumpAndSettle();
         expect(reads, 1);
         balance.complete(true);
         await tester.pumpAndSettle();
-        expect(find.text('Updating balance'), findsNothing);
-        await tester.tap(find.byKey(const Key('swap-view-asset')));
+        // The answer takes the question's place: the action under it has
+        // not moved from under a finger on its way down.
+        expect(tester.widget<Text>(status).data, 'swapBalanceUpdated'.tr());
+        expect(tester.getRect(viewAsset), before);
+        await tester.tap(viewAsset);
         expect(routingState.selectedMenu, MainMenuValue.wallet);
         expect(routingState.walletState.selectedCoin, usdc.id);
       },
     );
+
+    testWidgets('a balance that could not be read says so in the same '
+        'place, with a way to read it again', (tester) async {
+      var reads = 0;
+      services.refreshBalances = (_) async => ++reads > 1;
+      final handle = await start();
+      await pumpSurface(
+        tester,
+        SwapExecutionView(id: handle.id, context: SwapExecutionContext.flow),
+        services: services,
+        swap: swap,
+        shell: shell,
+      );
+      handle.push(snapshotOf(id: handle.id, outcome: completed()));
+      await tester.pumpAndSettle();
+
+      final status = find.byKey(const Key('swap-receipt-balance'));
+      final viewAsset = find.byKey(const Key('swap-view-asset'));
+      expect(tester.widget<Text>(status).data, 'swapBalanceNotRefreshed'.tr());
+      final before = tester.getRect(viewAsset);
+
+      await tester.tap(find.byKey(const Key('swap-receipt-balance-retry')));
+      await tester.pumpAndSettle();
+      expect(reads, 2);
+      expect(tester.widget<Text>(status).data, 'swapBalanceUpdated'.tr());
+      expect(find.byKey(const Key('swap-receipt-balance-retry')), findsNothing);
+      expect(tester.getRect(viewAsset), before);
+    });
 
     test('old balance refresh cannot complete a new wallet session', () async {
       final balance = Completer<bool>();

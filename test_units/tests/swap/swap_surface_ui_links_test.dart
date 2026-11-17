@@ -259,7 +259,7 @@ void main() {
 
         expect(find.byType(SwapExecutionView), findsNothing);
         expect(observer.eventsOf<SwapActivityStarted>(), hasLength(1));
-        expect(find.text('1 ETH → 3,000 USDC'), findsOneWidget);
+        expect(find.text('1 ETH → ≈ 3,000 USDC'), findsOneWidget);
       });
     });
   });

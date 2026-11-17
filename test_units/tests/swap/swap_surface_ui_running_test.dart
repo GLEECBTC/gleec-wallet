@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/shared/swap/swap_execution.dart';
@@ -105,7 +106,7 @@ void main() {
           'matching': (
             snapshotOf(stage: SwapProgressStage.matching),
             'Finding a counterparty',
-            'Waiting for a peer to take this exchange. Nothing has left your '
+            'Waiting for a peer to take this swap. Nothing has left your '
                 'wallet.',
             'Current: Preparing.',
           ),
@@ -171,10 +172,12 @@ void main() {
             'This can take a few minutes. Gleec will keep tracking.',
             'Current: Receive USDC.',
           ),
+          // The line under the headline says what was sent and what is
+          // awaited, not the headline again; see [bodies].
           'awaiting delivery': (
             snapshotOf(stage: SwapProgressStage.awaitingDelivery),
             'Arriving on Ethereum',
-            'Waiting for delivery on Ethereum.',
+            '',
             'Current: Receive USDC. 3,000 USDC at 0x5520…7B91 on Ethereum',
           ),
           'refunding': (
@@ -196,9 +199,22 @@ void main() {
             'Cancelled: Exchanging asset. Peer-to-peer exchange',
           ),
           'action required': (
-            snapshotOf(stage: SwapProgressStage.actionRequired),
+            reshaped(
+              snapshotOf(stage: SwapProgressStage.actionRequired),
+              evidence: const SwapEvidence(
+                executionId: 'swap-1',
+                providerExplorerUrl: 'https://route.example/status/1',
+              ),
+            ),
             'Action required',
             "Open the route's page to continue.",
+            'Current: Receive USDC.',
+          ),
+          // With no page to open, the status must not send the user to one.
+          'action required, with no page to act on': (
+            snapshotOf(stage: SwapProgressStage.actionRequired),
+            'Action required',
+            '',
             'Current: Receive USDC.',
           ),
           'exchanging': (
@@ -251,17 +267,33 @@ void main() {
       _ => 'You can leave this screen. The swap continues in Activity.',
     };
 
-    for (final MapEntry(key: name, value: (snapshot, title, body, step))
+    // Copy this screen composes, looked up when the test runs.
+    final bodies = <String, String Function()>{
+      'awaiting delivery': () =>
+          '${'swapProgressDeliveryDetail'.tr(args: ['ETH', 'USDC'])} '
+          '${'swapProgressFewMinutes'.tr()}',
+      'action required, with no page to act on': () =>
+          'swapProgressActionNoPageBody'.tr(),
+    };
+
+    for (final MapEntry(key: name, value: (snapshot, title, fixed, step))
         in stages.entries) {
       testWidgets('$name: says "$title" and marks the step it is on', (
         tester,
       ) async {
         await follow(tester, snapshot);
+        final body = bodies[name]?.call() ?? fixed;
 
         expect(hero(title), findsOneWidget);
         expect(hero(body), findsOneWidget);
         expect(timeline(tester), contains(step));
-        expect(find.text(leaveNote(name)), findsOneWidget);
+        // A swap waiting on the user is not told it carries on by itself.
+        expect(
+          find.text(leaveNote(name)),
+          snapshot.stage == SwapProgressStage.actionRequired
+              ? findsNothing
+              : findsOneWidget,
+        );
         await expectSwapAccessible(tester);
       });
     }
@@ -306,26 +338,6 @@ void main() {
 
       expect(find.byType(SwapSkeleton), findsNWidgets(4));
       expect(find.byType(SwapStatusHero), findsNothing);
-    });
-
-    testWidgets('says so, calmly, when no source knows the swap', (
-      tester,
-    ) async {
-      await pumpSurface(
-        tester,
-        const SwapExecutionView(
-          id: 'ghost',
-          context: SwapExecutionContext.flow,
-        ),
-        services: services,
-        swap: swap,
-        shell: shell,
-        expandProgressDetails: true,
-      );
-
-      expect(hero('Tracking your swap'), findsOneWidget);
-      expect(find.byIcon(Icons.search_off_rounded), findsOneWidget);
-      expect(find.byType(SwapTimelineView), findsNothing);
     });
 
     testWidgets('two screens opening one swap both keep following it', (

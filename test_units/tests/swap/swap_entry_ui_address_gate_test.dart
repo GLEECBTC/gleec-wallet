@@ -2,6 +2,7 @@
 // members read as violations here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,7 @@ import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/common/seed_backup_gate/seed_backup_gate.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
@@ -140,7 +142,7 @@ void main() {
       );
 
   /// Shows the review of [quote], both addresses unless given one, with
-  /// "Route & identities" open, and returns the sign-in.
+  /// its route section open, and returns the sign-in.
   Future<FakeAuthBloc> showReview(
     WidgetTester tester, {
     KdfUser? user,
@@ -163,7 +165,7 @@ void main() {
       size: size,
       textScale: textScale,
     );
-    final section = find.text('Route & identities');
+    final section = find.text(LocaleKeys.swapReviewRouteIdentities.tr());
     await tester.ensureVisible(section);
     await tester.pumpAndSettle();
     await tester.tap(section);

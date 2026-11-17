@@ -24,19 +24,24 @@ must not issue another ceremony.
 
 | Surface | State | Primary action | Secondary actions |
 | --- | --- | --- | --- |
-| Entry | New user | Create wallet | Import wallet, hardware wallet where supported |
-| Entry | Creation pending | Creating your wallet | Cancel when safe; duplicate submission disabled |
+| Entry | New user | Create wallet (one tap; consent sentence directly under it) | Import wallet, hardware wallet where supported |
+| Entry | Returning user | Open a listed wallet | Create another wallet (opens the creation card; nothing is created until Create is pressed), import, wallet options menu with Remove from this device |
+| Entry | Creation pending | Creating your wallet (one labelled indicator; a "taking longer than usual" line after 15 s) | No Cancel: engine registration cannot be stopped once started; duplicate submission disabled |
 | Entry | Creation failed | Try again on the same pending operation | Import wallet, cancel |
-| Unlock | Managed wallet | Unlock with device/passkey, or open unprotected wallet | Use password, switch wallet, recover wallet |
+| Unlock | Managed wallet | "Unlock {wallet}": Unlock with passkey / Unlock with this device, or open an unlocked wallet | Use password, switch wallet (only when no wallet list is behind the sheet), recover wallet |
 | Unlock | Password fallback | Unlock | Return to device/passkey, switch wallet |
-| Unlock | Canceled or failed | Try again | Password and recovery remain visible |
-| Wallet setup | Protection or backup incomplete | Create a passkey / enable device unlock | Back up recovery phrase, settings |
-| Security | Protected | Device/passkey status | Immediate/30-second app lock, optional password |
+| Unlock | Cancelled or failed | Try again | Password and recovery remain visible. The message names what failed: only a typed password is ever "not accepted" |
+| Unlock | Stored unlock unavailable | Enter wallet password | Explains why the password is asked for; a generated password points to the password manager and recovery |
+| Wallet setup | Lock or backup incomplete | Checklist: the most important open step is primary (lock while one step can set it, otherwise backup) | The other step as a secondary button; a finished step collapses to a done row |
+| Wallet setup | No one-step lock available | Back up recovery phrase | Set a wallet password, with the reason no passkey or device unlock is offered |
+| Security | Protected | Device/passkey status | Lock after leaving: immediately, 30 seconds, 5 minutes or 15 minutes; optional password |
 | Wallet name | Current display label | Rename wallet | Existing engine identity stays fixed |
 | Wallet name | Editing or validation error | Save name after authorization | Cancel preserves the existing label |
-| Authorization | Managed credential | Continue with enrolled method | Use password, cancel |
+| Authorization | Managed credential | Continue with enrolled method (one title, "Confirm wallet access") | Use password and back again, cancel, Escape |
 | Authorization | Unprotected credential | Explicitly continue | Cancel |
-| Password change | Managed credential | Set a personal password | Cancel; no unknown old-password field |
+| Password change | Managed credential | Set a personal password | Cancel; no unknown old-password field. If the stored unlock could not follow the new password, the change still succeeds and says device unlock or the passkey is off until set up again |
+| Wallet removal | Recovery phrase confirmed | Remove wallet | Cancel has initial focus; one reminder that the phrase will be needed |
+| Wallet removal | No confirmed backup | Back up recovery phrase first | Remove wallet stays disabled until the loss is acknowledged |
 
 Creation has no name or password fields. Renaming lives in settings and changes
 only the visible label; authentication, passkeys and password-manager usernames
@@ -44,6 +49,12 @@ retain the original wallet identity. The existing legal notice stays beside
 the create action and records the displayed document version. No artificial
 delay is added. Provider saves and device prompts are separate outcomes: a
 requested save is never displayed as confirmed backup.
+
+Leaving the app follows one rule. On a phone or tablet, losing focus already
+counts: wallet content is covered, visible secrets are re-masked and the lock
+clock starts. On desktop and web, losing focus only means another window was
+clicked, so nothing happens until the window or tab is hidden. Hiding closes
+recovery-phrase and key screens with a message saying why.
 
 Use one primary action per moment, 48-pixel touch targets, visible keyboard
 focus, wrapping text at large text scales, explicit loading/error semantics and

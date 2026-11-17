@@ -6,6 +6,7 @@ import 'package:web_dex/bloc/wallet_protection/wallet_protection_bloc.dart';
 import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 
 final _id = WalletId.withPubkeyHash(
   'Gleec Wallet',
@@ -25,7 +26,9 @@ class _Access extends Fake implements WalletAccessService {
   WalletAccessFailure? failure;
   Completer<void>? pending;
   Completer<void>? pendingStatus;
+  WalletAccessFailure? statusFailure;
   final requests = <WalletId>[];
+  final authorizations = <String?>[];
   @override
   final unlockCoordinator = WalletUnlockCoordinator(
     operationGate: WalletOperationGate(),
@@ -37,6 +40,7 @@ class _Access extends Fake implements WalletAccessService {
   Future<WalletAccessStatus> status({WalletId? walletId}) async {
     expect(walletId, _id);
     await pendingStatus?.future;
+    if (statusFailure case final failure?) throw WalletAccessException(failure);
     return WalletAccessStatus(
       entryId: entry,
       protection: protected
@@ -78,6 +82,20 @@ class _Access extends Fake implements WalletAccessService {
     if (failure != null) throw WalletAccessException(failure!);
     protected = true;
   }
+
+  @override
+  Future<String> authorize({
+    required WalletId walletId,
+    String? password,
+    String reason = 'Unlock your wallet',
+  }) async {
+    authorizations.add(password);
+    return 'synthetic-credential';
+  }
+
+  @override
+  Future<void> setBackgroundGrace(Duration duration) async =>
+      unlockCoordinator.setBackgroundGrace(duration);
 }
 
 Future<WalletProtectionBloc> _ready(_Access access) async {
@@ -95,59 +113,49 @@ Future<WalletProtectionBloc> _ready(_Access access) async {
 
 void main() {
   group('Wallet protection presentation boundary', () {
-    test(
-      'pending provider save blocks setup until completion without starting a ceremony',
-      () async {
-        final access = _Access()..managerPending = true;
-        final bloc = await _ready(access);
-        expect(bloc.state.waitingForPasswordManager, isTrue);
-        bloc.add(
-          const WalletProtectionRequested(WalletProtectionAction.passkey),
-        );
-        await Future<void>.delayed(Duration.zero);
-        expect(access.requests, isEmpty);
-        final ready = bloc.stream.firstWhere(
-          (state) => !state.waitingForPasswordManager,
-        );
-        access.managerPending = false;
-        access.activity.add(null);
-        await ready.timeout(const Duration(seconds: 2));
-        expect(access.requests, isEmpty);
-        final completed = bloc.stream.firstWhere(
-          (state) => state.completed != null,
-        );
-        bloc.add(
-          const WalletProtectionRequested(WalletProtectionAction.passkey),
-        );
-        await completed.timeout(const Duration(seconds: 2));
-        expect(access.requests, [_id]);
-      },
-    );
-    test(
-      'provider activity disables setup before a slow metadata refresh completes',
-      () async {
-        final access = _Access();
-        final bloc = await _ready(access);
-        final status = Completer<void>();
-        access.pendingStatus = status;
-        access.managerPending = true;
-        final waiting = bloc.stream.firstWhere(
-          (state) => state.waitingForPasswordManager,
-        );
-        access.activity.add(null);
-        await waiting.timeout(const Duration(seconds: 2));
-        expect(access.requests, isEmpty);
-        access.pendingStatus = null;
-        access.managerPending = false;
-        final ready = bloc.stream.firstWhere(
-          (state) => !state.waitingForPasswordManager,
-        );
-        access.activity.add(null);
-        await ready.timeout(const Duration(seconds: 2));
-        status.complete();
-        expect(access.requests, isEmpty);
-      },
-    );
+    test('pending provider save blocks setup until completion without starting a ceremony', () async {
+      final access = _Access()..managerPending = true;
+      final bloc = await _ready(access);
+      expect(bloc.state.waitingForPasswordManager, isTrue);
+      bloc.add(const WalletProtectionRequested(WalletProtectionAction.passkey));
+      await Future<void>.delayed(Duration.zero);
+      expect(access.requests, isEmpty);
+      final ready = bloc.stream.firstWhere(
+        (state) => !state.waitingForPasswordManager,
+      );
+      access.managerPending = false;
+      access.activity.add(null);
+      await ready.timeout(const Duration(seconds: 2));
+      expect(access.requests, isEmpty);
+      final completed = bloc.stream.firstWhere(
+        (state) => state.completed != null,
+      );
+      bloc.add(const WalletProtectionRequested(WalletProtectionAction.passkey));
+      await completed.timeout(const Duration(seconds: 2));
+      expect(access.requests, [_id]);
+    });
+    test('provider activity disables setup before a slow metadata refresh completes', () async {
+      final access = _Access();
+      final bloc = await _ready(access);
+      final status = Completer<void>();
+      access.pendingStatus = status;
+      access.managerPending = true;
+      final waiting = bloc.stream.firstWhere(
+        (state) => state.waitingForPasswordManager,
+      );
+      access.activity.add(null);
+      await waiting.timeout(const Duration(seconds: 2));
+      expect(access.requests, isEmpty);
+      access.pendingStatus = null;
+      access.managerPending = false;
+      final ready = bloc.stream.firstWhere(
+        (state) => !state.waitingForPasswordManager,
+      );
+      access.activity.add(null);
+      await ready.timeout(const Duration(seconds: 2));
+      status.complete();
+      expect(access.requests, isEmpty);
+    });
 
     test('loading and refresh never start an authenticator ceremony', () async {
       final access = _Access();
@@ -159,47 +167,37 @@ void main() {
       expect(bloc.state.status!.requiresAuthentication, isFalse);
     });
 
-    test(
-      'return from an owned system prompt only refreshes status, without another ceremony',
-      () async {
-        final access = _Access();
-        final bloc = await _ready(access);
-        final before = access.capabilityReads;
-        await access.unlockCoordinator.runSystemPrompt(() async {});
-        await Future<void>.delayed(Duration.zero);
-        expect(access.capabilityReads, greaterThan(before));
-        expect(access.requests, isEmpty);
-        expect(bloc.state.loading, isFalse);
-      },
-    );
+    test('return from an owned system prompt only refreshes status, without another ceremony', () async {
+      final access = _Access();
+      final bloc = await _ready(access);
+      final before = access.capabilityReads;
+      await access.unlockCoordinator.runSystemPrompt(() async {});
+      await Future<void>.delayed(Duration.zero);
+      expect(access.capabilityReads, greaterThan(before));
+      expect(access.requests, isEmpty);
+      expect(bloc.state.loading, isFalse);
+    });
 
-    test(
-      'duplicate clicks create one wallet-bound operation and publish confirmed state',
-      () async {
-        final access = _Access()..pending = Completer<void>();
-        final bloc = await _ready(access);
-        final finished = bloc.stream.firstWhere(
-          (state) => state.completed != null,
-        );
-        bloc.add(
-          const WalletProtectionRequested(WalletProtectionAction.passkey),
-        );
-        bloc.add(
-          const WalletProtectionRequested(WalletProtectionAction.passkey),
-        );
-        await Future<void>.delayed(Duration.zero);
-        expect(access.requests, [_id]);
-        expect(bloc.state.busy, isTrue);
-        expect(bloc.state.activeAction, WalletProtectionAction.passkey);
-        expect(bloc.state.status!.requiresAuthentication, isFalse);
-        access.pending!.complete();
-        final state = await finished.timeout(const Duration(seconds: 2));
-        expect(state.status!.protection, CredentialProtection.passkey);
-        expect(state.status!.requiresAuthentication, isTrue);
-        expect(state.activeAction, isNull);
-        expect(access.requests, [_id]);
-      },
-    );
+    test('duplicate clicks create one wallet-bound operation and publish confirmed state', () async {
+      final access = _Access()..pending = Completer<void>();
+      final bloc = await _ready(access);
+      final finished = bloc.stream.firstWhere(
+        (state) => state.completed != null,
+      );
+      bloc.add(const WalletProtectionRequested(WalletProtectionAction.passkey));
+      bloc.add(const WalletProtectionRequested(WalletProtectionAction.passkey));
+      await Future<void>.delayed(Duration.zero);
+      expect(access.requests, [_id]);
+      expect(bloc.state.busy, isTrue);
+      expect(bloc.state.activeAction, WalletProtectionAction.passkey);
+      expect(bloc.state.status!.requiresAuthentication, isFalse);
+      access.pending!.complete();
+      final state = await finished.timeout(const Duration(seconds: 2));
+      expect(state.status!.protection, CredentialProtection.passkey);
+      expect(state.status!.requiresAuthentication, isTrue);
+      expect(state.activeAction, isNull);
+      expect(access.requests, [_id]);
+    });
 
     for (final failure in [
       WalletAccessFailure.canceled,
@@ -248,6 +246,134 @@ void main() {
         expect(state.failure, WalletAccessFailure.staleOperation);
         expect(access.requests, isEmpty);
         expect(state.status!.entryId, 'setup-entry');
+      },
+    );
+
+    test(
+      'a failed status check is not a failed change, and the next good check '
+      'clears it',
+      () async {
+        final access = _Access();
+        final bloc = await _ready(access);
+        access.statusFailure = WalletAccessFailure.storageFailed;
+        final failed = bloc.stream.firstWhere(
+          (state) => state.checkFailure != null,
+        );
+        bloc.add(const WalletProtectionRefreshed());
+        final state = await failed.timeout(const Duration(seconds: 2));
+        expect(state.checkFailure, WalletAccessFailure.storageFailed);
+        // Nothing was asked for, so no change is reported as failed.
+        expect(state.failure, isNull);
+        expect(state.failedAction, isNull);
+        expect(state.status, isNotNull);
+
+        access.statusFailure = null;
+        final recovered = bloc.stream.firstWhere(
+          (state) => state.checkFailure == null,
+        );
+        bloc.add(const WalletProtectionRefreshed());
+        await recovered.timeout(const Duration(seconds: 2));
+        expect(bloc.state.failure, isNull);
+      },
+    );
+
+    test('a check the user asked for is shown while it runs', () async {
+      final access = _Access()..statusFailure = WalletAccessFailure.unavailable;
+      final bloc = await _ready(access);
+      expect(bloc.state.status, isNull);
+      expect(bloc.state.checkFailure, WalletAccessFailure.unavailable);
+
+      access.statusFailure = null;
+      final states = <WalletProtectionState>[];
+      final subscription = bloc.stream.listen(states.add);
+      final done = bloc.stream.firstWhere((state) => state.status != null);
+      bloc.add(const WalletProtectionRefreshed(manual: true));
+      await done.timeout(const Duration(seconds: 2));
+      await subscription.cancel();
+      expect(states.first.loading, isTrue);
+      expect(states.last.loading, isFalse);
+      expect(states.last.checkFailure, isNull);
+    });
+
+    test(
+      'the outcome of a requested change outlives later status checks',
+      () async {
+        final access = _Access()..failure = WalletAccessFailure.canceled;
+        final bloc = await _ready(access);
+        final failed = bloc.stream.firstWhere((state) => state.failure != null);
+        bloc.add(
+          const WalletProtectionRequested(WalletProtectionAction.passkey),
+        );
+        final state = await failed.timeout(const Duration(seconds: 2));
+        expect(state.failedAction, WalletProtectionAction.passkey);
+        // Returning from the system prompt checks the status again; the
+        // user must still be able to read that their setup was cancelled.
+        final before = access.capabilityReads;
+        bloc.add(const WalletProtectionRefreshed());
+        await bloc.stream
+            .firstWhere((_) => access.capabilityReads > before)
+            .timeout(const Duration(seconds: 2));
+        expect(bloc.state.failure, WalletAccessFailure.canceled);
+        expect(bloc.state.failedAction, WalletProtectionAction.passkey);
+      },
+    );
+
+    test('every offered lock interval can be chosen, and only those', () async {
+      final access = _Access()..protected = true;
+      final bloc = await _ready(access);
+      var changes = 0;
+      for (final option in walletLockGraceOptions) {
+        if (option.inSeconds == bloc.state.graceSeconds) continue;
+        changes++;
+        final saved = bloc.stream.firstWhere(
+          (state) => !state.busy && state.graceSeconds == option.inSeconds,
+        );
+        bloc.add(
+          WalletProtectionRequested(
+            WalletProtectionAction.grace,
+            graceSeconds: option.inSeconds,
+          ),
+        );
+        final state = await saved.timeout(const Duration(seconds: 2));
+        expect(state.completed, WalletProtectionAction.grace);
+        expect(access.unlockCoordinator.backgroundGrace, option);
+      }
+      final authorized = access.authorizations.length;
+      // One authentication per change, and each one was a change.
+      expect(changes, greaterThanOrEqualTo(walletLockGraceOptions.length - 1));
+      expect(authorized, changes);
+
+      final refused = bloc.stream.firstWhere((state) => state.failure != null);
+      bloc.add(
+        const WalletProtectionRequested(
+          WalletProtectionAction.grace,
+          graceSeconds: 60,
+        ),
+      );
+      final state = await refused.timeout(const Duration(seconds: 2));
+      expect(state.failure, WalletAccessFailure.unavailable);
+      expect(state.failedAction, WalletProtectionAction.grace);
+      expect(access.authorizations, hasLength(authorized));
+    });
+
+    test(
+      'choosing the interval already in force asks for no authentication',
+      () async {
+        final access = _Access()..protected = true;
+        final bloc = await _ready(access);
+        final states = <WalletProtectionState>[];
+        final subscription = bloc.stream.listen(states.add);
+        bloc.add(
+          WalletProtectionRequested(
+            WalletProtectionAction.grace,
+            graceSeconds: bloc.state.graceSeconds,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        await subscription.cancel();
+        expect(access.authorizations, isEmpty);
+        expect(states, isEmpty);
       },
     );
 
