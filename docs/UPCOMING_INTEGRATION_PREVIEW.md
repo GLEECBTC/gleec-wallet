@@ -10,7 +10,7 @@ focused review.
 | Audited onboarding/device access, app #3612 | `6b80c458650572c042c9c7867f777c7265f5519f` |
 | Audited Solana, app #3611 | `b58b21c21d84186b9b0525db513064a460451e0a` |
 | Audited pricing, app #3607 | `309dd97d926383feeb4f0c34a907de986be7b716` |
-| Combined SDK #448 | `00b37f50abefbf2499c02da50fca98fb908aadd7` |
+| Combined SDK #448 | `ca316f2930eb60f4779ee83254de6d615682b718` |
 
 The app branch preserves the four published app heads as ancestors. SDK #448
 combines SDK #443, #444, #445 and #447. The app pins that combined SDK rather
@@ -66,7 +66,7 @@ defines from `docs/TESTING.md`. New Swap tests are imported and invoked in
   remains. Changed Dart files were formatted.
 - Complete app aggregator: **4,784 passed, 26 platform/opt-in skips**, 6m54s.
   Published integration CI results are recorded in the PR.
-- SDK analysis: zero errors; 2,065 existing warnings/informational findings
+- SDK analysis: zero errors; 2,064 existing warnings/informational findings
   across the combined workspace, including supported deprecated Flutter APIs.
 
 Local widget tests reuse cached assets with shaders recompiled for Flutter
@@ -104,6 +104,14 @@ canaries. The harness fingerprints the Wasm binary and serves `.mjs` correctly;
 types: 214 passed/three existing skips; real Wasm auth: two passed; KDF Wasm
 transport/privacy: 11 passed; browser log-storage privacy: 12 passed. The
 changed SDK source/tests have clean scoped analysis and formatting.
+
+All five full-app browser suites also passed against the real release Wasm
+binary: credentials/lifecycle, recovery, missing data, passkey replacement and
+browser support. The last includes the audited offline helper after the same
+asset preparation used by CI. The SDK playground JSON-editor test passed after
+its asset hook received the existing build-time GitHub token; the SDK workflow
+now supplies it consistently. This final SDK CI correction changes no Dart
+runtime source.
 
 **UI-Pro Basis:** the repository's wallet design-system, Flutter accessibility
 and financial error-recovery searches; existing Swap state/motion contract;

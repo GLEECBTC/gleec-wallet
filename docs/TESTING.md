@@ -255,6 +255,7 @@ fvm flutter build web --release --no-pub --wasm --csp \
   --dart-define=TRON_GASLESS_RECEIVE_ENABLED=true \
   --dart-define=TRON_GASLESS_BASE_URL=https://quicknode.gleec.com/gasfree/tron \
   --dart-define=TRON_GASLESS_SERVICE_PROVIDER=TLntW9Z59LYY5KEi9cmwk3PKjQga828ird
+python3 tool/prepare_wallet_web_assets.py build/web-wasm
 GLEEC_TEST_WEB_COMPILER=wasm \
   node test_units/services/wallet_access/web_wallet_recovery.browser.test.js
 ```
