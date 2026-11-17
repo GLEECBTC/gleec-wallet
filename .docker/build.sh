@@ -144,9 +144,16 @@ if [ "$BUILD_TARGET" = "web" ]; then
 fi
 # Use the provided arguments for flutter build
 # Build a second time if needed, as asset downloads will require a rebuild on the first attempt
+# Native configuration happens before Flutter runs asset transformers. Prepare
+# the pinned, verified library first, as the shared CI build action does.
+NATIVE_PREPARATION=""
+case "$BUILD_TARGET" in
+  apk|appbundle) NATIVE_PREPARATION="dart tool/prefetch_native_kdf.dart android; " ;;
+  linux|macos|windows|ios) NATIVE_PREPARATION="dart tool/prefetch_native_kdf.dart $BUILD_TARGET; " ;;
+esac
 docker run "${PLATFORM_ARGS[@]}" --rm -v "$(pwd)/build:/app/build" \
   -v "$(pwd):/app" \
   -u "$HOST_UID:$HOST_GID" \
   "${ENV_ARGS[@]}" \
   komodo/komodo-wallet:latest bash -e -c \
-  "sudo chown -R komodo:komodo /app/build; flutter pub get --enforce-lockfile; $BUILD_COMMAND || true; $BUILD_CMD"
+  "sudo chown -R komodo:komodo /app/build; flutter pub get --enforce-lockfile; $NATIVE_PREPARATION$BUILD_COMMAND || true; $BUILD_CMD"

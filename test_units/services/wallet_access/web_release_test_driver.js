@@ -194,7 +194,7 @@ class LocalBrowser {
   }
 
   async click(page, label, {pointer=false}={}) {
-    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).find(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)})`;
+    const expression=`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).find(el=>{const r=el.getBoundingClientRect();return (el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}&&el.getAttribute('aria-disabled')!=='true'&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0;})`;
     // A semantics node can precede the route's painted, interactive frame.
     // Navigate and activate like a real user: settle the painted target and
     // scroll it into view, then click exactly once. Never retry the action or
@@ -233,12 +233,19 @@ class LocalBrowser {
       }
       await delay(100);
     }
+    // Report only public control shape. Field values, page text and wallet
+    // credentials must never enter browser acceptance logs.
+    const shape=await page.evaluate(`Array.from(document.querySelectorAll('[role=button],[role=switch],[role=checkbox]')).filter(el=>(el.getAttribute('aria-label')||el.textContent||'').trim()===${JSON.stringify(label)}).map(el=>{const r=el.getBoundingClientRect();return {disabled:el.getAttribute('aria-disabled')==='true',hidden:!!el.closest('[aria-hidden=true]'),hasArea:r.width>0&&r.height>0,inViewport:r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth};})`);
+    console.error('Fixture control shape',JSON.stringify(shape));
     throw new Error(`Timed out waiting for painted button ${label}`);
   }
 
   async fill(page, label, value) {
-    const selector=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).find(el=>
-      (el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n').some(part=>part.trim()===${JSON.stringify(label)})&&!el.readOnly)`;
+    // Flutter 3.50 can retain a zero-sized editing node with the same label.
+    // Choose the rendered input before focusing or editing; a stale node's
+    // value is not evidence that the user-visible form accepted the text.
+    const selector=`Array.from(document.querySelectorAll('input,textarea,[role=textbox]')).find(el=>{const r=el.getBoundingClientRect();return (
+      (el.getAttribute('aria-label')||el.getAttribute('placeholder')||'').split('\\n').some(part=>part.trim()===${JSON.stringify(label)})&&!el.readOnly&&!el.disabled&&!el.closest('[aria-hidden=true]')&&r.width>0&&r.height>0);})`;
     try {
       await this.wait(page,`(()=>{const field=${selector};if(!field)return false;field.focus();return true;})()`,{label:`editable fixture field: ${label}`});
     } catch (error) {

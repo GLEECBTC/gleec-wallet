@@ -73,6 +73,17 @@ Local widget tests reuse cached assets with shaders recompiled for Flutter
 3.50. Native asset generation is serialized because concurrent transformers
 share framework output paths. CI builds and validates fresh artifacts.
 
+The first integration CI run exposed two tooling incompatibilities. Docker
+reached native CMake configuration before generating the verified library;
+the wrapper now runs the same manifest-checked preparation as shared CI.
+Nine Docker regressions cover preparation order, failure propagation, SDK
+preservation and target selection. The browser driver selected a zero-sized
+stale Flutter 3.50 input instead of the visible confirmation field. It now
+selects rendered, enabled controls before focusing or typing. The complete
+compiled phrase/encrypted-file recovery flow passed after that correction,
+including identity, derivation and diagnostic-canary assertions. No wallet
+authorization or recovery assertion was bypassed.
+
 **UI-Pro Basis:** the repository's wallet design-system, Flutter accessibility
 and financial error-recovery searches; existing Swap state/motion contract;
 `docs/design/swap_experience` reference; automated layout/semantics/motion tests.
