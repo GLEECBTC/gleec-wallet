@@ -62,6 +62,7 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
+        expandProgressDetails: true,
       );
       return followed;
     }
@@ -285,7 +286,7 @@ void main() {
       handle.push(snapshotOf(outcome: completed()));
       await tester.pumpAndSettle();
       expect(hero('You received 3,001 USDC'), findsOneWidget);
-      expect(find.text('Done'), findsOneWidget);
+      expect(find.text('View asset'), findsOneWidget);
     });
 
     testWidgets('holds the layout while the first status loads', (
@@ -298,6 +299,7 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
+        expandProgressDetails: true,
         settle: false,
       );
       await tester.pump();
@@ -318,6 +320,7 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
+        expandProgressDetails: true,
       );
 
       expect(hero('Tracking your swap'), findsOneWidget);
@@ -356,6 +359,7 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
+        expandProgressDetails: true,
       );
       expect(hero('Finding a counterparty'), findsNWidgets(2));
 

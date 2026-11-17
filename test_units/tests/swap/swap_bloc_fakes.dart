@@ -17,6 +17,7 @@ import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/shared/swap/unified_swap_repository.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_offer_fakes.dart';
@@ -107,6 +108,9 @@ class SwapBlocHarness {
   final extraAssets = <AssetId>[];
   final unreadableBalances = <AssetId>{};
   final unreadableAddresses = <AssetId>{};
+  final inactiveAssets = <AssetId>{};
+  Future<Decimal?> Function(AssetId)? balanceReader;
+  Future<String?> Function(AssetId)? addressReader;
   List<SwapHolding> holdings = [];
   Object? holdingsError;
   Completer<void>? catalogGate;
@@ -147,25 +151,38 @@ class SwapBlocHarness {
     Duration idleLimit = const Duration(minutes: 5),
     Duration offersInterval = const Duration(seconds: 30),
     Duration offersIdleLimit = const Duration(minutes: 5),
+    Future<void> Function(AssetId)? activateAsset,
+    Future<int?> Function(AssetId)? spendDecimalsOf,
+    SwapPriceSource? priceSource,
   }) {
     final bloc = UnifiedSwapBloc(
       repository: UnifiedSwapRepository(
         sources: [routed, atomic],
-        pricing: SwapPricingService(prices),
+        pricing: SwapPricingService(priceSource ?? prices),
         activatedAssets: () async {
           await catalogGate?.future;
-          return {eth, usdc, btc, gleec, ...extraAssets};
+          return {
+            eth,
+            usdc,
+            btc,
+            gleec,
+            ...extraAssets,
+          }.difference(inactiveAssets);
         },
       ),
       registry: registry,
       terms: _HarnessTerms(this),
       preferences: preferences,
+      activateAsset: activateAsset,
+      spendDecimalsOf: spendDecimalsOf,
       spendableBalance: (asset) async {
+        if (balanceReader case final read?) return read(asset);
         await balanceGate?.future;
         if (unreadableBalances.contains(asset)) throw StateError('offline');
         return balances[asset];
       },
       addressOf: (asset) async {
+        if (addressReader case final read?) return read(asset);
         if (unreadableAddresses.contains(asset)) throw StateError('offline');
         return 'address-of-${asset.id}';
       },

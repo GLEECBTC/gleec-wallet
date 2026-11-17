@@ -114,9 +114,9 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
     Set<AssetId> onceActive,
   ) async {
     try {
-      final eligible = (await manager.eligibleAssets().timeout(
-        _catalogTimeout,
-      )).where((asset) => !isSolanaTradingAsset(asset)).toSet();
+      final eligible = (await manager.eligibleAssets().timeout(_catalogTimeout))
+          .where((asset) => !isSolanaTradingAsset(asset))
+          .toSet();
       _lastEligible = eligible;
       return SwapSourceAssets(
         source: source,
@@ -434,6 +434,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       Decimal? minimum,
       Decimal? maximum,
       List<String> reasons = const [],
+      SwapQuoteFailureCause? cause,
     }) => SwapQuoteFailure(
       source: SwapLiquiditySource.routed,
       kind: kind,
@@ -441,6 +442,7 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       minimum: minimum,
       maximum: maximum,
       reasons: reasons,
+      cause: cause,
       providerRequestId: error.providerRequestId,
       detail: '${error.errorType}: ${error.message}',
       retryAt: retryAt,
@@ -506,14 +508,21 @@ class RoutedSwapQuoteSource implements SwapQuoteSource {
       RoutedSwapRateLimitedException() => failure(
         SwapQuoteFailureKind.rateLimited,
       ),
-      // A node that won't estimate gas for an address without the network's
-      // coin answers the same as one that is down, so a failed estimate reads
-      // as a service error, whose copy names the coin to check.
-      RoutedSwapProviderException() ||
-      RoutedSwapTransportException() ||
-      RoutedSwapInternalException() ||
+      RoutedSwapProviderException() => failure(
+        SwapQuoteFailureKind.serviceError,
+        cause: SwapQuoteFailureCause.provider,
+      ),
+      RoutedSwapTransportException() => failure(
+        SwapQuoteFailureKind.serviceError,
+        cause: SwapQuoteFailureCause.transport,
+      ),
+      RoutedSwapInternalException() => failure(
+        SwapQuoteFailureKind.serviceError,
+        cause: SwapQuoteFailureCause.engine,
+      ),
       RoutedSwapGasEstimationFailedException() => failure(
         SwapQuoteFailureKind.serviceError,
+        cause: SwapQuoteFailureCause.feeEstimation,
       ),
       _ => failure(SwapQuoteFailureKind.unknown),
     };

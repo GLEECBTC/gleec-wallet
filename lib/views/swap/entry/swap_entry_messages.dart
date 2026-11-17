@@ -6,6 +6,20 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   List<Widget> _messages(BuildContext context, UnifiedSwapState state) {
     final pay = state.pay;
     final issue = state.issue;
+    if (state.preparingAssets) {
+      return [SwapHelperLine(text: 'swapPreparingAssets'.tr())];
+    }
+    if (state.preparationFailedAsset case final asset?) {
+      return [
+        SwapHelperLine(
+          text: 'swapAssetPreparationUnavailable'.tr(
+            args: [SwapFormat.ticker(asset)],
+          ),
+          tone: SwapTone.warning,
+        ),
+      ];
+    }
+    if (issue == SwapFormIssue.assetInactive) return const [];
     if (issue == SwapFormIssue.noOffers) return _noOffersLines(state);
     if (issue != null && issue != SwapFormIssue.amountMissing) {
       final copy = SwapIssueCopy.of(
@@ -91,9 +105,8 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     }
     if (messages.isNotEmpty) return messages;
 
-    if (state.evaluation == SwapEvaluationStatus.checking) {
-      return [SwapHelperLine(text: LocaleKeys.swapHelperChecking.tr())];
-    }
+    // Quote progress is presented once in the stable quote region.
+    if (state.evaluation == SwapEvaluationStatus.checking) return const [];
     final max = state.maxApplied;
     if (max != null && pay != null) {
       return [SwapHelperLine(text: _maxHint(max, pay))];
@@ -153,7 +166,21 @@ extension _SwapEntryMessages on _SwapEntryViewState {
     };
     return [
       SwapHelperLine(text: copy.message, tone: tone),
-      if (copy.detail != null) SwapHelperLine(text: copy.detail!),
+      if (copy.detail != null)
+        if (failure.reasons.isNotEmpty)
+          SwapDetails(
+            key: ValueKey((
+              state.pay,
+              state.receive,
+              state.inputText,
+              state.amountMode,
+              failure,
+            )),
+            title: LocaleKeys.swapDetails.tr(),
+            children: [SwapHelperLine(text: copy.detail!)],
+          )
+        else
+          SwapHelperLine(text: copy.detail!),
       if (paused)
         SwapHelperLine(text: LocaleKeys.swapHelperRoutedPausedLine.tr()),
     ];
@@ -234,7 +261,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   }
 
   String? _feeNeeded(UnifiedSwapState state) {
-    final parent = state.insufficientFeeAsset ?? state.pay?.parentId;
+    final parent = state.insufficientFeeAsset;
     final quote = state.selectedQuote;
     if (parent == null || quote == null) return null;
     return SwapFormat.tokens(
@@ -261,7 +288,7 @@ extension _SwapEntryMessages on _SwapEntryViewState {
   }
 
   String? _feeHeld(UnifiedSwapState state) {
-    final parent = state.insufficientFeeAsset ?? state.pay?.parentId;
+    final parent = state.insufficientFeeAsset;
     final held = parent == state.pay?.parentId
         ? state.feeBalance
         : state.fundingBalances[parent];

@@ -10,6 +10,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -483,10 +484,12 @@ void main() {
     final total = find.text('Total cost');
     final time = find.text('Estimated completion');
 
-    testWidgets('sit in a row, and say when a cost is unknown', (tester) async {
+    testWidgets('use compact rows and say when a cost is unknown', (
+      tester,
+    ) async {
       await pump(tester, quoteOf(pricing: pricingOf(network: null)));
 
-      expect(sameRow(tester, total, time), isTrue);
+      expect(above(tester, total, time), isTrue);
       expect(find.text('Incomplete'), findsNWidgets(2));
     });
 

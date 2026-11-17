@@ -69,7 +69,11 @@ void main() {
           kind: SwapQuoteFailureKind.timeout,
         ),
       );
-      expect(bloc.state.failures, [bloc.state.failure]);
+      expect(bloc.state.failures, contains(bloc.state.failure));
+      expect(
+        bloc.state.failures.map((failure) => failure.kind),
+        contains(SwapQuoteFailureKind.pairUnsupported),
+      );
     });
 
     swapBlocTest('is ignored once the amount has changed', (h) {

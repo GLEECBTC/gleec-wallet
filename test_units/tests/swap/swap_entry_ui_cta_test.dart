@@ -2,8 +2,6 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -75,7 +73,7 @@ void main() {
       expect(swapPrimaryLabel(tester), 'Select asset');
       // Both pills and the action say the same.
       expect(find.text('Select asset'), findsNWidgets(3));
-      expect(find.text(r'$0.00'), findsNWidgets(2));
+      expect(find.text(r'$0.00'), findsNothing);
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, false);
       expect(
         tester.getSemantics(find.byType(SwapAssetPill).first),
@@ -114,50 +112,36 @@ void main() {
       catalog: SwapCatalog(sources: swapTestCatalog.sources, activated: {eth}),
     );
 
-    testWidgets('is activated from the button, then reported to the bloc', (
+    testWidgets('prepares in place without blocking another asset choice', (
       tester,
     ) async {
-      services.activationGate = Completer<void>();
-      await pump(tester, inactive);
-
-      expect(swapPrimaryLabel(tester), 'Activate USDC');
-      expect(
-        find.text(
-          "USDC isn't active in this wallet yet. Activate it to see its "
-          'balance and prices.',
-        ),
-        findsOneWidget,
+      await pump(
+        tester,
+        inactive.copyWith(preparingAssets: true),
+        settle: false,
       );
 
-      await tester.tap(swapPrimaryAction);
-      await tester.pump();
-      expect(services.activations, [usdc]);
+      expect(swapPrimaryLabel(tester), 'Preparing your assets…');
       expect(swapPrimaryBusy(), isTrue);
       expect(enabled(tester), isFalse);
-      expect(swap.events, isEmpty);
-
-      services.activationGate!.complete();
-      await tester.pumpAndSettle();
-      expect(swap.events, [UnifiedSwapAssetActivated(usdc)]);
-      expect(swapPrimaryBusy(), isFalse);
-      expect(enabled(tester), isTrue);
+      expect(find.byType(SwapAssetPill).first.hitTestable(), findsOneWidget);
+      expect(services.activations, isEmpty);
     });
 
-    testWidgets('that fails to activate says so, and can be tried again', (
+    testWidgets('a failed preparation retries through the bloc', (
       tester,
     ) async {
-      services.activationError = StateError('offline');
-      await pump(tester, inactive);
+      await pump(tester, inactive.copyWith(preparationFailedAsset: usdc));
 
-      await press(tester);
-      expect(find.text("Couldn't activate USDC. Try again."), findsOneWidget);
-      expect(swap.events, isEmpty);
+      expect(
+        find.text('We couldn’t prepare USDC for this swap. Try again.'),
+        findsOneWidget,
+      );
+      expect(swapPrimaryLabel(tester), 'Try again');
       expect(swapPrimaryBusy(), isFalse);
-
-      services.activationError = null;
       await press(tester);
-      expect(services.activations, [usdc, usdc]);
-      expect(swap.events, [UnifiedSwapAssetActivated(usdc)]);
+      expect(swap.events, [const UnifiedSwapPreparationRetried()]);
+      expect(services.activations, isEmpty);
     });
   });
 
@@ -289,8 +273,8 @@ void main() {
       expect(swapPrimaryBusy(), isTrue);
       expect(enabled(tester), isFalse);
       expect(find.text('Checking swap options…'), findsOneWidget);
-      // Two under the cards, one for the amount to receive.
-      expect(find.byType(SwapSkeleton), findsNWidgets(3));
+      expect(find.byType(SwapSkeleton), findsNothing);
+      expect(find.text('Updating estimate'), findsOneWidget);
     });
 
     testWidgets('a re-price keeps the current option on screen', (
@@ -435,9 +419,8 @@ void main() {
     ) async {
       await pump(
         tester,
-        swapBaseForm(
-          input: '1.2.3',
-        ).copyWith(issue: SwapFormIssue.amountMalformed),
+        swapBaseForm(input: '1.2.3')
+            .copyWith(issue: SwapFormIssue.amountMalformed),
       );
 
       expect(find.text('Enter a valid number.'), findsOneWidget);

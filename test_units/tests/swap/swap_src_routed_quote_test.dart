@@ -91,9 +91,8 @@ void main() {
     });
 
     test('a trading restriction answers without asking', () async {
-      final [result] = await source(
-        tradingAllowed: (from, to) => false,
-      ).quote(request());
+      final [result] = await source(tradingAllowed: (from, to) => false)
+          .quote(request());
 
       expect(failure(result).kind, SwapQuoteFailureKind.tradingBlocked);
       expect(failure(result).source, SwapLiquiditySource.routed);
@@ -165,6 +164,51 @@ void main() {
   });
 
   group('errors', () {
+    test(
+      'service faults retain their cause without claiming a funding shortfall',
+      () async {
+        final cases = <(RoutedSwapRpcException, SwapQuoteFailureCause)>[
+          (
+            const RoutedSwapInternalException(
+              detail: 'fee calculation',
+              message: 'engine failed',
+            ),
+            SwapQuoteFailureCause.engine,
+          ),
+          (
+            const RoutedSwapTransportException(
+              detail: 'offline',
+              message: 'transport failed',
+            ),
+            SwapQuoteFailureCause.transport,
+          ),
+          (
+            const RoutedSwapProviderException(
+              detail: 'unavailable',
+              message: 'provider failed',
+            ),
+            SwapQuoteFailureCause.provider,
+          ),
+          (
+            const RoutedSwapGasEstimationFailedException(
+              coin: 'ETH',
+              detail: 'estimate failed',
+              message: 'estimate failed',
+            ),
+            SwapQuoteFailureCause.feeEstimation,
+          ),
+        ];
+        for (final (error, cause) in cases) {
+          manager.quoteError = error;
+          final [result] = await source().quote(request());
+          expect(failure(result).kind, SwapQuoteFailureKind.serviceError);
+          expect(failure(result).cause, cause);
+          expect(failure(result).minimum, isNull);
+          expect(failure(result).detail, contains(error.errorType));
+        }
+      },
+    );
+
     test('a typed contract error becomes its entry state', () async {
       manager.quoteError = const RoutedSwapPairNotSupportedException(
         from: 'ETH',
@@ -334,9 +378,8 @@ void main() {
     );
 
     test('a trading restriction answers without asking', () async {
-      final result = await source(
-        tradingAllowed: (from, to) => false,
-      ).requote(quoteOf());
+      final result = await source(tradingAllowed: (from, to) => false)
+          .requote(quoteOf());
 
       expect(failure(result).kind, SwapQuoteFailureKind.tradingBlocked);
       expect(failure(result).source, SwapLiquiditySource.routed);

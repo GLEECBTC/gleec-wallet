@@ -256,8 +256,31 @@ void main() {
       SwapMaxAmount max, {
       AssetId? pay,
       AssetId? receive,
-    }) =>
-        swapPricedForm().copyWith(pay: pay, receive: receive, maxApplied: max);
+    }) {
+      final from = pay ?? eth;
+      final to = receive ?? usdc;
+      final feeAsset = max.feeAsset ?? from.parentId ?? from;
+      final quote = quoteOf(
+        from: from,
+        to: to,
+        sell: max.amount.toString(),
+        fees: [
+          SwapFeeComponent(
+            kind: SwapFeeKind.network,
+            amount: max.reservedForFees,
+            deductedFromReceive: false,
+            asset: feeAsset,
+          ),
+        ],
+      );
+      return swapPricedForm(ranked: [quote]).copyWith(
+        pay: from,
+        receive: to,
+        inputText: max.amount.toString(),
+        balance: max.amount + max.reservedForFees,
+        maxApplied: max,
+      );
+    }
 
     testWidgets('a native coin says what it kept back for fees', (
       tester,

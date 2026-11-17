@@ -49,6 +49,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
       state.copyWith(
         view: UnifiedSwapView.review,
         structuralNotice: false,
+        quotesPending: false,
+        pricingPending: false,
         review: SwapReview(
           quote: quote,
           status: quote.isExpiredAt(_now())
@@ -337,6 +339,8 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
           add(const UnifiedSwapEvaluationRequested());
           return null;
         }
+        // Unknown funding is not an affordable balance. Final confirmation
+        // must not start after a failed balance read, even with a valid quote.
         if (held.balance == null ||
             (fresh.from.parentId != null && held.feeBalance == null) ||
             fresh.fundingAssets.any(
@@ -460,59 +464,5 @@ extension _UnifiedSwapReview on UnifiedSwapBloc {
     final fresh = await _revalidate(emit, review, confirmation);
     if (fresh == null) return;
     await _start(emit, fresh, termsRequired: false, confirmation: confirmation);
-  }
-
-  void _onProgressLeft(
-    UnifiedSwapProgressLeft event,
-    Emitter<UnifiedSwapState> emit,
-  ) => _resetForm(emit, keepPair: true);
-
-  void _onResetRequested(
-    UnifiedSwapResetRequested event,
-    Emitter<UnifiedSwapState> emit,
-  ) => _resetForm(emit, keepPair: event.keepPair);
-
-  void _resetForm(Emitter<UnifiedSwapState> emit, {required bool keepPair}) {
-    if (state.review?.status == SwapReviewStatus.starting) return;
-    _invalidate();
-    _startVersion++;
-    emit(
-      _validated(
-        state.copyWith(
-          view: UnifiedSwapView.form,
-          inputText: '',
-          amountMode: SwapAmountMode.token,
-          clearActiveExecution: true,
-          clearReview: true,
-          clearQuotes: true,
-          clearSelectedId: true,
-          clearFailure: true,
-          clearMaxApplied: true,
-          checkingMax: false,
-          clearPay: !keepPair,
-          clearReceive: !keepPair,
-          evaluation: SwapEvaluationStatus.idle,
-          structuralNotice: false,
-        ),
-      ),
-    );
-    add(const UnifiedSwapBalancesRefreshed());
-    // The swap just made may have taken the last offer.
-    if (keepPair) add(const UnifiedSwapOffersRequested(recount: true));
-  }
-
-  Future<void> _onFollowUpRequested(
-    UnifiedSwapFollowUpRequested event,
-    Emitter<UnifiedSwapState> emit,
-  ) async {
-    if (_startInDoubt) return;
-    _startVersion++;
-    emit(state.copyWith(clearActiveExecution: true, clearReview: true));
-    await _setPair(
-      emit,
-      pay: event.pay,
-      receive: event.receive == event.pay ? null : event.receive,
-      amount: event.amount ?? '',
-    );
   }
 }

@@ -279,7 +279,7 @@ void main() {
     expect(await services.preferences.hideZeroBalances(), isFalse);
   });
 
-  testWidgets('while one asset activates, no other can be chosen', (
+  testWidgets('selection dismisses without waiting for asset preparation', (
     tester,
   ) async {
     services
@@ -293,19 +293,10 @@ void main() {
     );
 
     await tester.tap(find.text('BTC').first);
-    await tester.pump();
-    expect(find.text('Activating…'), findsOneWidget);
-
-    await tester.tap(find.text('USDC'));
-    await tester.pump();
-    expect(popped, isEmpty);
-    expect(
-      tester.getSemantics(find.text('USDC')),
-      isSemantics(isButton: true, isEnabled: false),
-    );
-
-    services.activationGate!.complete();
     await tester.pumpAndSettle();
     expect(popped, [btc]);
+    expect(services.activations, isEmpty);
+    expect(services.activationGate!.isCompleted, isFalse);
+    expect(find.text('Choose asset'), findsNothing);
   });
 }

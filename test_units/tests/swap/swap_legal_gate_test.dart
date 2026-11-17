@@ -1,5 +1,6 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,7 @@ import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/shared/swap/swap_terms_repository.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_bloc_fakes.dart';
@@ -205,7 +207,7 @@ void main() {
           );
           final button = find.byKey(const Key('swap-start'));
           final pending = status == LegalDocumentStatus.loading;
-          expect(swapButtonEnabled(tester, find.text('Start swap')), pending);
+          expect(swapButtonEnabled(tester, find.text('Confirm swap')), pending);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
             pending ? findsNothing : findsOneWidget,
@@ -236,7 +238,7 @@ void main() {
               ),
             ),
           );
-          expect(swapButtonEnabled(tester, find.text('Start swap')), isTrue);
+          expect(swapButtonEnabled(tester, find.text('Confirm swap')), isTrue);
           expect(
             find.byKey(const Key('legal-documents-unavailable')),
             findsNothing,

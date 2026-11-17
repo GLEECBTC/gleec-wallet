@@ -11,11 +11,15 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/common/swap_legal_notice.dart';
+import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_entry_ui_fakes.dart';
+import 'swap_common_ui_fakes.dart' as common;
 import 'swap_test_fixtures.dart';
 
 /// Covers the review's frame: the status badge, the one action each status
@@ -57,10 +61,12 @@ void main() {
     Size size = const Size(420, 1600),
   }) async {
     swap.emit(state);
-    final busy = switch (state.review?.status) {
-      SwapReviewStatus.revalidating || SwapReviewStatus.starting => true,
-      _ => false,
-    };
+    final busy =
+        state.tradingStatusLoading ||
+        switch (state.review?.status) {
+          SwapReviewStatus.revalidating || SwapReviewStatus.starting => true,
+          _ => false,
+        };
     await pumpSwapUi(
       tester,
       SwapReviewView(inPanel: inPanel),
@@ -78,6 +84,43 @@ void main() {
   ];
 
   final back = find.byTooltip('Back');
+
+  group('availability', () {
+    testWidgets('checking never claims a confirmed restriction', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        reviewing(SwapReviewStatus.ready)
+            .copyWith(tradingEnabled: false, tradingStatusLoading: true),
+      );
+      expect(find.text('Checking swap availability…'), findsNWidgets(2));
+      expect(find.textContaining('your location'), findsNothing);
+      expect(
+        swapButtonEnabled(
+          tester,
+          find.text('Checking swap availability…').last,
+        ),
+        isFalse,
+      );
+    });
+
+    testWidgets('an unavailable check offers retry without location copy', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        reviewing(SwapReviewStatus.ready)
+            .copyWith(tradingEnabled: false, tradingStatusUnavailable: true),
+      );
+      expect(
+        find.text('We couldn’t check swap availability. Try again.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('your location'), findsNothing);
+      expect(swapButtonEnabled(tester, find.text('Try again')), isTrue);
+    });
+  });
 
   group('the status badge', () {
     for (final (status, badge) in [
@@ -109,7 +152,7 @@ void main() {
 
   group('the footer', () {
     for (final (status, label) in [
-      (SwapReviewStatus.ready, 'Start swap'),
+      (SwapReviewStatus.ready, 'Confirm swap'),
       (SwapReviewStatus.materialUpdate, 'Accept updated quote'),
       (SwapReviewStatus.expired, 'Refresh quote'),
       (SwapReviewStatus.revalidationFailed, 'Try again'),
@@ -202,7 +245,7 @@ void main() {
 
       expect(find.text('No token approval needed'), findsOneWidget);
       expect(
-        find.text("You'll only sign the swap request when you start."),
+        find.text("No separate token-spending approval is required."),
         findsOneWidget,
       );
       expect(find.byKey(const Key('swap-start')), findsOneWidget);
@@ -244,6 +287,29 @@ void main() {
   });
 
   group('the routing provider\'s terms', () {
+    testWidgets('legal links use readable swap colours in both themes', (
+      tester,
+    ) async {
+      for (final dark in [true, false]) {
+        await common.pumpSwapUi(
+          tester,
+          SwapLegalConsentNotice(
+            review: reviewing(SwapReviewStatus.ready).review!,
+          ),
+          dark: dark,
+        );
+        final links = tester.widgetList<TextButton>(find.byType(TextButton));
+        expect(links, hasLength(2));
+        for (final link in links) {
+          expect(link.onPressed, isNotNull);
+          expect(
+            link.style?.foregroundColor?.resolve({}),
+            (dark ? SwapPalette.dark : SwapPalette.light).brandHover,
+          );
+        }
+      }
+    });
+
     testWidgets('are presented on a first routed swap, and the link opens '
         'them', (tester) async {
       const channel = MethodChannel('plugins.flutter.io/url_launcher');
@@ -343,7 +409,8 @@ void main() {
   testWidgets('the summary shows each address as the wallet reports it', (
     tester,
   ) async {
-    final ready = reviewing(SwapReviewStatus.ready);
+    final ready = reviewing(SwapReviewStatus.ready)
+        .copyWith(clearPayAddress: true, clearReceiveAddress: true);
     await pump(tester, ready);
     expect(find.text('Ethereum'), findsNWidgets(2));
 
@@ -362,6 +429,13 @@ void main() {
       ),
     );
     expect(find.text('Ethereum · 0x80A1…42F0'), findsOneWidget);
+    await tester.tap(find.text('Your wallet · 0x80A1…42F0'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('0x80A1c2d4E5f60718293a4B5c6D7e8F9012A342F0'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('with no review open there is nothing to show', (tester) async {

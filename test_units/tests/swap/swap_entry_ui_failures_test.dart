@@ -2,8 +2,6 @@
 // @visibleForTesting reads as a violation here.
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
@@ -12,6 +10,7 @@ import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/entry/swap_entry_view.dart';
 
 import 'swap_entry_ui_fakes.dart';
@@ -98,7 +97,7 @@ void main() {
       expect(swap.events, [const UnifiedSwapEvaluationRequested()]);
     });
 
-    testWidgets('selling a token suggests checking its network coin', (
+    testWidgets('selling a token never invents a network-fee shortage', (
       tester,
     ) async {
       await pump(
@@ -113,14 +112,14 @@ void main() {
 
       expect(
         find.text(
-          "We couldn't check swap options. If this keeps happening, check "
-          'you have enough ETH on Ethereum for network fees.',
+          "We couldn't check swap options. Your selections are preserved and "
+          'nothing was signed or sent.',
         ),
         findsOneWidget,
       );
     });
 
-    testWidgets('and says what the swap address holds, when it is known', (
+    testWidgets('keeps an unrelated gas balance out of the service error', (
       tester,
     ) async {
       final failed = failedWith(
@@ -131,7 +130,8 @@ void main() {
       ).copyWith(pay: usdc, receive: eth);
 
       await pump(tester, failed.copyWith(feeBalance: d('60')));
-      expect(find.text('This address has 60 ETH.'), findsOneWidget);
+      expect(find.text('This address has 60 ETH.'), findsNothing);
+      expect(find.textContaining('network fees'), findsNothing);
 
       await pump(tester, failed);
       expect(find.textContaining('This address has'), findsNothing);
@@ -139,8 +139,7 @@ void main() {
   });
 
   group('an inactive asset reported by a source', () {
-    testWidgets('is activated from the button', (tester) async {
-      services.activationGate = Completer<void>();
+    testWidgets('retries preparation through the bloc', (tester) async {
       await pump(
         tester,
         failedWith(
@@ -153,23 +152,13 @@ void main() {
       );
 
       expect(
-        find.text(
-          "BTC isn't active in this wallet yet. Activate it to see its "
-          'balance and prices.',
-        ),
+        find.text('We couldn’t prepare BTC for this swap. Try again.'),
         findsOneWidget,
       );
-      expect(swapPrimaryLabel(tester), 'Activate BTC');
-
-      await tester.tap(swapPrimaryAction);
-      await tester.pump();
-      expect(swapPrimaryBusy(), isTrue);
-      expect(enabled(tester), isFalse);
-
-      services.activationGate!.complete();
-      await tester.pumpAndSettle();
-      expect(services.activations, [btc]);
-      expect(swap.events, [UnifiedSwapAssetActivated(btc)]);
+      expect(swapPrimaryLabel(tester), 'Try again');
+      await press(tester);
+      expect(swap.events, [const UnifiedSwapPreparationRetried()]);
+      expect(services.activations, isEmpty);
     });
 
     testWidgets('without naming one means the asset being paid', (
@@ -185,9 +174,14 @@ void main() {
         ),
       );
 
-      expect(swapPrimaryLabel(tester), 'Activate ETH');
+      expect(swapPrimaryLabel(tester), 'Try again');
+      expect(
+        find.text('We couldn’t prepare ETH for this swap. Try again.'),
+        findsOneWidget,
+      );
       await press(tester);
-      expect(services.activations, [eth]);
+      expect(swap.events, [const UnifiedSwapPreparationRetried()]);
+      expect(services.activations, isEmpty);
     });
   });
 
@@ -294,9 +288,7 @@ void main() {
     });
   });
 
-  testWidgets('no route explains why, in the provider\'s words', (
-    tester,
-  ) async {
+  testWidgets('no route keeps provider reasons behind Details', (tester) async {
     await pump(
       tester,
       failedWith(
@@ -314,9 +306,84 @@ void main() {
     );
     expect(
       find.text('Why: Liquidity too low · Amount too small'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(swapPrimaryLabel(tester), 'Try again');
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Why: Liquidity too low · Amount too small'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Why: Liquidity too low · Amount too small'),
+      findsNothing,
+    );
+    expect(swapPrimaryLabel(tester), 'Try again');
+  });
+
+  testWidgets('long provider diagnostics do not crowd out a phone draft', (
+    tester,
+  ) async {
+    final reason = List.filled(
+      12,
+      'No available quotes: provider minimum for '
+      '8453-0x0000000000000000000000000000000000000000.',
+    ).join(' ');
+    final failed = failedWith(
+      SwapQuoteFailure(
+        source: SwapLiquiditySource.routed,
+        kind: SwapQuoteFailureKind.noRoute,
+        reasons: [reason],
+      ),
+    ).copyWith(pay: usdc, receive: eth, inputText: '0.000001');
+    swap.emit(failed);
+    await pumpSwapUi(
+      tester,
+      const SwapEntryView(),
+      bloc: swap,
+      services: services,
+      size: const Size(390, 844),
+    );
+
+    final field = find.byKey(const Key('swap-amount'));
+    expect(tester.widget<TextField>(field).controller!.text, '0.000001');
+    expect(find.text('Why: $reason'), findsNothing);
+    expect(
+      find.text('No swap is available for this amount and pair right now.'),
+      findsOneWidget,
+    );
+    expect(find.text('Details').hitTestable(), findsOneWidget);
+    expect(swapPrimaryAction.hitTestable(), findsOneWidget);
+    final actionTop = tester.getTopLeft(swapPrimaryAction).dy;
+    for (final pill in find.byType(SwapAssetPill).evaluate()) {
+      expect(
+        tester.getRect(find.byWidget(pill.widget)).bottom,
+        lessThan(actionTop),
+      );
+    }
+
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(find.text('Why: $reason'), findsOneWidget);
+    expect(swapPrimaryAction.hitTestable(), findsOneWidget);
+    expect(tester.widget<TextField>(field).controller!.text, '0.000001');
+    expect(tester.takeException(), isNull);
+
+    // Polling the same attempt preserves the explicit expansion, while a
+    // changed amount starts its diagnostic disclosure collapsed again.
+    await emitSwapState(tester, swap, failed.copyWith(balance: d('3')));
+    expect(find.text('Why: $reason'), findsOneWidget);
+    await emitSwapState(tester, swap, failed.copyWith(inputText: '0.000002'));
+    await tester.pumpAndSettle();
+    expect(find.text('Why: $reason'), findsNothing);
+    expect(tester.widget<TextField>(field).controller!.text, '0.000002');
+    expect(swap.state.pay, usdc);
+    expect(swap.state.receive, eth);
+    expect(swapPrimaryLabel(tester), 'Try again');
+    expect(swap.events, isEmpty);
   });
 
   testWidgets('a timeout says nothing was sent, and the amount is not wrong', (

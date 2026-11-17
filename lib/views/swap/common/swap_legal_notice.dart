@@ -11,6 +11,7 @@ import 'package:web_dex/shared/swap/swap_services.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_notice.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_view.dart';
+import 'package:web_dex/views/swap/common/swap_palette.dart';
 
 Future<void> showSwapLegalDocument(
   BuildContext context,
@@ -93,6 +94,9 @@ class SwapLegalConsentNotice extends StatelessWidget {
               ),
             ])
               TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: SwapPalette.of(context).brandHover,
+                ),
                 onPressed: () => showSwapLegalDocument(
                   context,
                   entry.$1,

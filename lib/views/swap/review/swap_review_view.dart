@@ -3,9 +3,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/bloc/trading_status/trading_status_bloc.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
@@ -15,6 +17,7 @@ import 'package:web_dex/views/swap/common/swap_copy.dart';
 import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
+import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/entry/swap_amount_cards.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
@@ -41,6 +44,9 @@ class SwapReviewView extends StatelessWidget {
           previous.review != current.review ||
           previous.tradingEnabled != current.tradingEnabled ||
           previous.tradingStatusLoading != current.tradingStatusLoading ||
+          previous.tradingStatusUnavailable !=
+              current.tradingStatusUnavailable ||
+          previous.hardwareWallet != current.hardwareWallet ||
           previous.rateLimitedUntil != current.rateLimitedUntil ||
           previous.payAddress != current.payAddress ||
           previous.receiveAddress != current.receiveAddress,
@@ -63,9 +69,11 @@ class SwapReviewView extends StatelessWidget {
           review: review,
           tradingEnabled: state.tradingEnabled,
           tradingStatusLoading: state.tradingStatusLoading,
+          tradingStatusUnavailable: state.tradingStatusUnavailable,
+          hardwareWallet: state.hardwareWallet,
           paused: state.rateLimitedUntil?.isAfter(DateTime.now()) ?? false,
         );
-        // Consent stays together with the button that gives it.
+        // Consent stays in the same confirmation section as its action.
         if (review.quote.source == SwapLiquiditySource.routed &&
             !review.isRecovery) {
           footer = Column(
@@ -82,40 +90,37 @@ class SwapReviewView extends StatelessWidget {
         return SwapScreen(
           onEscape: back,
           child: LayoutBuilder(
-            builder: (context, constraints) {
-              final body = inPanel
-                  ? Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-                      child: content,
-                    )
-                  : SwapColumn(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                      child: content,
-                    );
-              final action = SwapStickyFooter(inPanel: inPanel, child: footer);
-              final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
-
-              // A pinned legal notice can consume a short window's entire
-              // height. Keep one scroll path for the money, consent and action
-              // when zoom, text size or a short panel leaves too little room.
-              if (constraints.maxHeight < 480 * textScale) {
-                return SingleChildScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [body, action],
+            builder: (context, constraints) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: inPanel
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                            child: content,
+                          )
+                        : SwapColumn(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                            child: content,
+                          ),
                   ),
-                );
-              }
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: SingleChildScrollView(child: body)),
-                  action,
-                ],
-              );
-            },
+                ),
+                // A landscape window or recovery reminder can leave less room
+                // than consent and confirmation need. Keep them together and
+                // reachable, while leaving space for the review's own scroll.
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .6,
+                  ),
+                  child: SingleChildScrollView(
+                    key: const Key('swap-review-confirmation-scroll'),
+                    primary: false,
+                    child: SwapStickyFooter(inPanel: inPanel, child: footer),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -172,6 +177,23 @@ class _ReviewContent extends StatelessWidget {
         // What changed comes first: on a phone the details below run past
         // the screen, while the button asking to accept it is pinned.
         ..._status(context),
+        if (!state.tradingEnabled &&
+            review.status != SwapReviewStatus.starting &&
+            review.status != SwapReviewStatus.unconfirmed) ...[
+          const SizedBox(height: 8),
+          SwapHelperLine(
+            text: state.hardwareWallet
+                ? LocaleKeys.trezorWalletOnlyNotice.tr()
+                : state.tradingStatusLoading
+                ? 'swapAvailabilityChecking'.tr()
+                : state.tradingStatusUnavailable
+                ? 'swapAvailabilityUnavailable'.tr()
+                : LocaleKeys.tradingDisabled.tr(),
+            tone: state.tradingStatusLoading
+                ? SwapTone.neutral
+                : SwapTone.warning,
+          ),
+        ],
         const SizedBox(height: 12),
         _Summary(
           quote: quote,
@@ -180,20 +202,14 @@ class _ReviewContent extends StatelessWidget {
           fromAddress: fromAddress,
           toAddress: toAddress,
         ),
-        const SizedBox(height: 14),
-        _Protection(
-          minimum: SwapFormat.tokens(
-            quote.guaranteedReceive,
-            toTicker,
-            rounding: SwapRounding.down,
-          ),
-        ),
         ..._warnings(context, impact),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
         _DecisionGrid(quote: quote),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        _Permission(quote: quote),
+        const SizedBox(height: 10),
         _costs(context),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _routeAndIdentities(
           context,
           fromAddress: fromAddress,
@@ -203,8 +219,6 @@ class _ReviewContent extends StatelessWidget {
           fromNetwork: fromNetwork,
           toNetwork: toNetwork,
         ),
-        const SizedBox(height: 14),
-        _Permission(quote: quote),
         if (quote.source == SwapLiquiditySource.routed &&
             review.isRecovery) ...[
           const SizedBox(height: 14),

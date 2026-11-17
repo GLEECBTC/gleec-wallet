@@ -53,6 +53,7 @@ import 'tests/mm2/solana_build_config_test.dart' as solana_build_config_test;
 import 'tests/swap/solana_trading_test.dart' as solana_trading_test;
 import 'tests/swap/solana_atomic_lifecycle_test.dart'
     as solana_atomic_lifecycle_test;
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'services/file_loader/diagnostic_artifacts_test.dart'
@@ -71,6 +72,7 @@ import 'services/security/private_key_export_delivery_test.dart'
     as private_key_export_delivery_test;
 import 'services/security/private_key_export_service_test.dart'
     as private_key_export_service_test;
+
 import 'views/settings/private_key_export_password_dialog_test.dart'
     as private_key_export_password_dialog_test;
 import 'views/settings/private_key_export_flow_test.dart'
@@ -199,6 +201,15 @@ import 'tests/password/validate_rpc_password_tests.dart';
 import 'tests/sorting/sorting_tests.dart';
 import 'tests/router/swap_route_alias_test.dart' as swap_route_alias_test;
 import 'tests/swap/swap_accessibility_test.dart' as swap_accessibility_test;
+import 'tests/swap/swap_quote_stream_test.dart' as swap_quote_stream_test;
+import 'tests/swap/swap_entry_delight_test.dart' as swap_entry_delight_test;
+import 'tests/swap/swap_ux_capture_test.dart' as swap_ux_capture_test;
+import 'tests/swap/swap_bloc_preparation_test.dart'
+    as swap_bloc_preparation_test;
+import 'tests/swap/swap_bloc_stream_test.dart' as swap_bloc_stream_test;
+import 'tests/swap/swap_preferences_mode_test.dart'
+    as swap_preferences_mode_test;
+import 'tests/swap/wallet_swap_status_test.dart' as wallet_swap_status_test;
 import 'tests/swap/swap_asset_picker_test.dart' as swap_asset_picker_test;
 import 'tests/swap/swap_catalog_test.dart' as swap_catalog_test;
 import 'tests/swap/swap_copy_test.dart' as swap_copy_test;
@@ -794,6 +805,13 @@ void main() {
   swap_route_alias_test.main();
   swap_widgets_test.main();
   swap_accessibility_test.main();
+  swap_quote_stream_test.main();
+  swap_entry_delight_test.main();
+  swap_ux_capture_test.main();
+  swap_bloc_preparation_test.main();
+  swap_bloc_stream_test.main();
+  swap_preferences_mode_test.main();
+  wallet_swap_status_test.main();
   swap_history_repository_test.main();
   swap_shell_test.main();
   swap_shell_backup_notice_button_test.main();

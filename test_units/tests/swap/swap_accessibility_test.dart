@@ -21,6 +21,7 @@ import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
 import 'package:web_dex/shared/swap/atomic_swap_execution.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
+import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -136,6 +137,7 @@ void main() {
 
   tearDown(() async {
     await swap.close();
+    await services.presentation.dispose();
     await registry.dispose();
     shell.dispose();
     Localization.load(const Locale('en'));
@@ -182,7 +184,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    if (swap.state.checkingMax || swap.state.preparingAssets) {
+      await tester.pump(const Duration(seconds: 3));
+    } else {
+      await tester.pumpAndSettle();
+    }
   }
 
   UnifiedSwapState form({
@@ -203,7 +209,9 @@ void main() {
       receive: receive ?? usdc,
       inputText: '1',
       balance: d('2'),
-      feeBalance: feeBalance,
+      feeBalance: feeBalance ?? d('2'),
+      payAddress: 'own-pay',
+      receiveAddress: 'own-receive',
       issue: issue,
       evaluation: evaluation,
       quotes: ready
@@ -559,7 +567,9 @@ void main() {
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 
-      testWidgets('picker: while an asset activates', (tester) async {
+      testWidgets('picker: inactive assets remain immediately selectable', (
+        tester,
+      ) async {
         services = _Services(registry, {eth});
         await pump(
           tester,
@@ -573,7 +583,12 @@ void main() {
             isBlocked: (_) => false,
           ),
         );
-        final inactive = find.text('BTC').first;
+        final inactive = find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data == 'BTC' &&
+              widget.style?.fontWeight == FontWeight.w700,
+        );
         await tester.scrollUntilVisible(
           inactive,
           200,
@@ -586,9 +601,8 @@ void main() {
         );
         await tester.pumpAndSettle();
         await tester.tap(inactive);
-        // The spinner never settles, so pump once rather than settle.
-        await tester.pump();
-        expect(find.text('Activating…'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(find.text('Activating…'), findsNothing);
         await expectSwapAccessible(tester, largeText: layout.textScale > 1);
       });
 

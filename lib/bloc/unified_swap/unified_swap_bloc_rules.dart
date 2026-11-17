@@ -5,9 +5,18 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
   void _invalidate() {
     _evaluationVersion++;
     _evaluationAlternatives = const [];
+    _stopQuoteWatch();
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();
+  }
+
+  void _stopQuoteWatch() {
+    final subscription = _quoteSubscription;
+    _quoteSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    _finishQuoteWatch?.call();
+    _finishQuoteWatch = null;
   }
 
   /// Applies form validation to [next].
@@ -52,7 +61,8 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
           ? SwapFormIssue.fiatUnavailable
           : SwapFormIssue.amountMalformed;
     }
-    final decimals = pay?.chainId.decimals;
+    if (amount <= Decimal.zero) return SwapFormIssue.amountZero;
+    final decimals = pay == null ? null : _decimalsOf(pay);
     if (next.amountMode == SwapAmountMode.token &&
         decimals != null &&
         amount.scale > decimals) {
@@ -119,8 +129,26 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
   Future<({AssetId pay, AssetId receive})?> _defaultPair(
     Set<AssetId> tradable,
   ) async {
+    // Portfolio decoration must not hold up the form. Start both reads
+    // together and abandon slow holdings after the cached-content budget.
+    const budget = Duration(milliseconds: 300);
+    Future<List<SwapHolding>?> readHoldings() async {
+      try {
+        return await (_holdings?.call() ?? Future.value(const <SwapHolding>[]))
+            .timeout(budget);
+      } on TimeoutException {
+        return null;
+      } on Object {
+        return const [];
+      }
+    }
+
+    final holdingsRead = readHoldings();
     try {
-      final last = await _preferences.lastPair();
+      final last = await _preferences.lastPair().timeout(
+        budget,
+        onTimeout: () => null,
+      );
       if (last != null) {
         final pay = _resolveAsset(last.from);
         final receive = _resolveAsset(last.to);
@@ -130,12 +158,28 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
             tradable.contains(receive) &&
             !isLegacySwapAsset(receive) &&
             (!isLegacySwapAsset(pay) ||
-                (await _read(pay) ?? Decimal.zero) > Decimal.zero)) {
+                (await _read(pay).timeout(budget, onTimeout: () => null) ??
+                        Decimal.zero) >
+                    Decimal.zero)) {
           return (pay: pay, receive: receive);
         }
       }
 
-      final holdings = await _holdings?.call() ?? const <SwapHolding>[];
+      final holdings = await holdingsRead;
+      if (holdings == null) {
+        final preferred = _resolveAsset('ETH');
+        final candidates = [
+          if (preferred != null && tradable.contains(preferred)) preferred,
+          ...tradable.where(
+            (asset) => asset != preferred && !isLegacySwapAsset(asset),
+          ),
+        ];
+        for (final pay in candidates) {
+          final receive = _partnerFor(pay, tradable);
+          if (receive != null) return (pay: pay, receive: receive);
+        }
+        return null;
+      }
       final ranked = holdings.where((h) => tradable.contains(h.asset)).toList()
         ..sort((a, b) => b.usdValue.compareTo(a.usdValue));
       if (ranked.isEmpty) return null;

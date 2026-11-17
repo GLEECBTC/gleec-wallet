@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/bloc/swap_activity/swap_activity_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_registry.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_history_repository.dart';
@@ -35,6 +36,7 @@ import 'package:web_dex/views/swap/entry/swap_quote_strip.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -98,6 +100,7 @@ void main() {
 
   tearDown(() async {
     await swap.close();
+    await services.presentation.dispose();
     await registry.dispose();
     shell.dispose();
     Localization.load(const Locale('en'));
@@ -167,6 +170,8 @@ void main() {
       receive: usdc,
       inputText: input,
       balance: d('2'),
+      payAddress: 'own-pay',
+      receiveAddress: 'own-receive',
       issue: issue,
       evaluation: evaluation,
       quotes: ready
@@ -517,6 +522,12 @@ class _FakeServices implements SwapServices {
 
   @override
   final SwapExecutionRegistry registry;
+
+  @override
+  late final SwapPresentationSession presentation = SwapPresentationSession(
+    registry: registry,
+    refreshBalances: (_) async => true,
+  );
 
   @override
   final Set<String> viewing = {};

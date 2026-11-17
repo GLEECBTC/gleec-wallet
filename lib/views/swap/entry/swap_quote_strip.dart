@@ -110,9 +110,8 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
                           const SizedBox(height: 4),
                           Text(
                             value,
-                            style: SwapText.strong(
-                              context,
-                            ).copyWith(fontSize: 14),
+                            style: SwapText.strong(context)
+                                .copyWith(fontSize: 14),
                           ),
                         ],
                       ),
@@ -150,9 +149,10 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
                 final compare = SwapLinkButton(
                   // An aggregator route may have a faster alternative, priced
                   // only once the comparison opens.
-                  label:
-                      (state.quotes?.hasAlternatives ?? false) ||
-                          quote.source == SwapLiquiditySource.routed
+                  label: _hasBetterQuote(quote)
+                      ? 'swapBetterOptionAvailable'.tr()
+                      : (state.quotes?.hasAlternatives ?? false) ||
+                            quote.source == SwapLiquiditySource.routed
                       ? LocaleKeys.swapCompareOptions.tr()
                       : LocaleKeys.swapDetails.tr(),
                   onPressed: widget.onCompare,
@@ -184,6 +184,20 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
     );
   }
 
+  bool _hasBetterQuote(SwapQuote selected) {
+    if (!selected.isRankable || widget.state.manuallySelected) return false;
+    return widget.state.quotes?.ranked.any(
+          (candidate) =>
+              candidate.id != selected.id &&
+              candidate.from == selected.from &&
+              candidate.to == selected.to &&
+              candidate.sellAmount == selected.sellAmount &&
+              candidate.isRankable &&
+              candidate.netReturnUsd! > selected.netReturnUsd!,
+        ) ??
+        false;
+  }
+
   Widget _badges(BuildContext context, SwapQuote quote) {
     final state = widget.state;
     final quotes = state.quotes;
@@ -192,6 +206,8 @@ class _SwapQuoteStripState extends State<SwapQuoteStrip> {
 
     final isBest =
         quotes != null &&
+        !state.quotesPending &&
+        !state.pricingPending &&
         quotes.canClaimBestNetReturn &&
         quotes.ranked.first.id == quote.id;
     if (!quote.isRankable && state.manuallySelected) {
@@ -306,9 +322,8 @@ class _SwapRateLineState extends State<SwapRateLine> {
                   Flexible(
                     child: Text(
                       text,
-                      style: SwapText.small(
-                        context,
-                      ).copyWith(color: palette.textSecondary),
+                      style: SwapText.small(context)
+                          .copyWith(color: palette.textSecondary),
                     ),
                   ),
                   const SizedBox(width: 6),

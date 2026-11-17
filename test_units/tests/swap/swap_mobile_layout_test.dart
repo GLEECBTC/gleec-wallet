@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_state.dart';
+import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/views/main_layout/main_layout.dart';
@@ -190,11 +191,11 @@ void _formCases() {
 
     testWidgets('a failed activation is said under the cards, leaving the '
         'pinned button free to try again', (tester) async {
-      services.activationError = StateError('offline');
       await pump(
         tester,
         swapBaseForm().copyWith(
           issue: SwapFormIssue.assetInactive,
+          preparationFailedAsset: usdc,
           catalog: SwapCatalog(
             sources: swapTestCatalog.sources,
             activated: {eth},
@@ -205,23 +206,23 @@ void _formCases() {
       await tester.tap(swapPrimaryAction);
       await tester.pumpAndSettle();
       expect(find.byType(SnackBar), findsNothing);
-      expect(find.text("Couldn't activate USDC. Try again."), findsOneWidget);
+      expect(
+        find.text('We couldn’t prepare USDC for this swap. Try again.'),
+        findsOneWidget,
+      );
       expect(swapPrimaryAction.hitTestable(), findsOneWidget);
 
-      services.activationError = null;
-      await tester.tap(swapPrimaryAction);
-      await tester.pumpAndSettle();
-      expect(services.activations, [usdc, usdc]);
-      expect(find.text("Couldn't activate USDC. Try again."), findsNothing);
+      expect(swap.events, [const UnifiedSwapPreparationRetried()]);
+      expect(services.activations, isEmpty);
     });
   });
 
   group('the form on a wide screen', () {
-    testWidgets('draws no title either, and the main action follows the '
-        'quote', (tester) async {
+    testWidgets('draws no title and keeps the action reachable when the '
+        'reserved quote area fills the window', (tester) async {
       await pump(tester, swapPricedForm(), size: tablet);
 
-      expect(footer, findsNothing);
+      expect(footer, findsOneWidget);
       expect(find.text('Swap'), findsNothing);
       expect(
         find.semantics.byPredicate(
@@ -264,7 +265,7 @@ void _cardCases() {
       );
     });
 
-    testWidgets('signed in, keep the row an address is on its way to', (
+    testWidgets('signed in, reserve no entry space for a receiving address', (
       tester,
     ) async {
       await pump(
@@ -277,7 +278,7 @@ void _cardCases() {
           of: find.byType(SwapReceiveCard),
           matching: find.byType(Divider),
         ),
-        findsOneWidget,
+        findsNothing,
       );
     });
 

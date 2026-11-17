@@ -6,7 +6,9 @@ import 'package:web_dex/bloc/swap_execution/swap_execution_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_bloc.dart';
 import 'package:web_dex/bloc/unified_swap/unified_swap_event.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
+import 'package:web_dex/model/main_menu_value.dart';
 import 'package:web_dex/router/state/routing_state.dart';
+import 'package:web_dex/shared/swap/swap_execution_presentation.dart';
 import 'package:web_dex/shared/swap/swap_execution_snapshot.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_services.dart';
@@ -16,6 +18,7 @@ import 'package:web_dex/views/swap/common/swap_links.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_evidence_sheet.dart';
+import 'package:web_dex/views/swap/execution/swap_execution_display.dart';
 import 'package:web_dex/views/swap/execution/swap_time_context.dart';
 import 'package:web_dex/views/swap/execution/swap_timeline_view.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
@@ -86,12 +89,12 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
   // Whether no other screen covers this one, and what the bloc was last told.
   bool _onstage = true;
   bool? _visible;
+  bool _animateMoment = false;
 
   @override
   void initState() {
     super.initState();
     _heard = _bloc.state.snapshot;
-    _services.viewing.add(widget.id);
     _lifecycle = AppLifecycleListener(
       onStateChange: (_) => _reportVisible(),
       onResume: () {
@@ -115,6 +118,17 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         (lifecycle == null || lifecycle == AppLifecycleState.resumed);
     if (visible == _visible) return;
     _visible = visible;
+    if (visible) {
+      _services.viewing.add(widget.id);
+      final snapshot = _bloc.state.snapshot;
+      if (snapshot != null) {
+        _services.presentation.markSeen(snapshot);
+        _services.presentation.refreshReceipt(snapshot);
+      }
+    } else {
+      _services.viewing.remove(widget.id);
+      _animateMoment = false;
+    }
     _bloc.add(SwapExecutionVisibilityChanged(visible: visible));
   }
 
@@ -132,6 +146,17 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
       context.read<UnifiedSwapBloc>().add(const UnifiedSwapProgressLeft());
     } else {
       SwapShellScope.of(context).closeDetail();
+    }
+  }
+
+  void _backToWallet({SwapExecutionSnapshot? received}) {
+    if (_inFlow) {
+      context.read<UnifiedSwapBloc>().add(const UnifiedSwapProgressLeft());
+    }
+    routingState.selectedMenu = MainMenuValue.wallet;
+    if (received != null) {
+      final asset = SwapExecutionPresentation(received).receivedAsset;
+      if (asset != null) routingState.walletState.selectedCoin = asset.id;
     }
   }
 
@@ -244,49 +269,29 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
     }
   }
 
-  static Widget _hero(SwapHeroCopy hero, {SwapHeroMotion? motion}) =>
-      SwapStatusHero(
-        icon: hero.icon,
-        tone: hero.tone,
-        title: hero.title,
-        body: hero.body,
-        motion: motion,
-      );
-
-  /// How the hero moves into [hero]: a success settles with a little
-  /// overshoot, a refund's icon unwinds, a delay's hourglass turns over, and
-  /// an error arrives without any bounce.
-  static SwapHeroMotion _heroMotion(
-    SwapExecutionState state,
-    SwapExecutionSnapshot snapshot,
+  static Widget _hero(
     SwapHeroCopy hero, {
-    required bool delayed,
-  }) {
-    final (curve, from, turns, duration) = switch (snapshot.outcome?.kind) {
-      null when delayed => (SwapMotion.enter, 0.9, 0.5, SwapMotion.settle),
-      null => (SwapMotion.enter, 0.8, 0.0, SwapMotion.pop),
-      SwapOutcomeKind.completed => (
-        SwapMotion.success,
-        0.6,
-        0.0,
-        SwapMotion.settle,
-      ),
-      SwapOutcomeKind.refunded => (SwapMotion.enter, 0.8, 1.0, SwapMotion.ring),
-      _ when hero.tone == SwapTone.danger => (
-        SwapMotion.error,
-        0.9,
-        0.0,
-        SwapMotion.pop,
-      ),
-      _ => (SwapMotion.warning, 0.7, 0.0, SwapMotion.settle),
-    };
+    SwapHeroMotion? motion,
+    Widget? illustration,
+  }) => SwapStatusHero(
+    key: const Key('swap-execution-status'),
+    icon: hero.icon,
+    tone: hero.tone,
+    title: hero.title,
+    body: hero.body,
+    motion: motion,
+    illustration: illustration,
+  );
+
+  /// One restrained emphasis for a real event; polls and reopening are still.
+  SwapHeroMotion _heroMotion(SwapExecutionSnapshot snapshot) {
+    final success = snapshot.isSuccess;
     return SwapHeroMotion(
-      animate: state.live,
-      iconFrom: from,
-      iconTurns: turns,
-      iconCurve: curve,
-      iconDuration: duration,
-      iconKey: snapshot.outcome?.kind,
+      animate: _animateMoment && _visible == true,
+      iconFrom: success ? 0.92 : 1,
+      iconCurve: SwapMotion.enter,
+      iconDuration: success ? SwapMotion.completion : SwapMotion.feedback,
+      iconKey: snapshot.outcome?.kind ?? snapshot.stage,
       ring: snapshot.outcome?.kind == SwapOutcomeKind.completed
           ? snapshot.id
           : null,
@@ -361,6 +366,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         return SwapScreen(
           onEscape: _leave,
           child: SingleChildScrollView(
+            key: PageStorageKey('swap-progress-${widget.id}'),
             child: SwapColumn(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -379,7 +385,7 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
     SwapExecutionSnapshot snapshot,
   ) {
     final networks = _services.networks();
-    final copy = SwapExecutionCopy(snapshot, networks);
+    final copy = SwapExecutionDisplay(snapshot, networks);
     final terminal = snapshot.isTerminal;
     // Until the engine answers, this is Activity's possibly stale snapshot.
     final unanswered = state.unanswered && !terminal;
@@ -387,14 +393,24 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
     final delayed = unanswered || (!terminal && snapshot.delayedSince != null);
 
     final children = <Widget>[
-      if (!_inFlow) ...[
+      if (!snapshot.isSuccess) ...[
         Text(
           copy.pairLine,
           style: SwapText.strong(context),
           textAlign: TextAlign.center,
         ),
       ],
-      _hero(hero, motion: _heroMotion(state, snapshot, hero, delayed: delayed)),
+      _hero(
+        hero,
+        motion: _heroMotion(snapshot),
+        illustration: snapshot.isSuccess
+            ? SwapTokenIcon(
+                asset: copy.presentation.receivedAsset,
+                ticker: copy.receivedTicker,
+                size: 44,
+              )
+            : null,
+      ),
       SwapTimeContext(
         snapshot: snapshot,
         delayed: delayed,
@@ -402,47 +418,48 @@ class _ExecutionBodyState extends State<_ExecutionBody> {
         checks: _checks,
       ),
       if (copy.priceMoveComparison case final String comparison)
-        SwapReveal(
-          onMount: state.live,
-          animate: state.live,
-          delay: _sectionDelay,
-          child: SwapCallout(
-            tone: SwapTone.warning,
-            icon: Icons.compare_arrows_rounded,
-            message: comparison,
-          ),
+        SwapCallout(
+          tone: SwapTone.warning,
+          icon: Icons.compare_arrows_rounded,
+          message: comparison,
         ),
-      SwapTimelineView(
-        steps: SwapTimeline.of(
-          snapshot,
-          networks,
-          explorer: _services.explorerTxUrl,
-        ),
-        animate: state.live,
-        tracking:
-            !terminal &&
-            !state.unanswered &&
-            snapshot.delayedSince == null &&
-            snapshot.stage != SwapProgressStage.actionRequired,
-        event: snapshot,
-        resumes: _resumes,
-      ),
     ];
 
-    children
-      ..add(
-        SwapSmoothSize(
-          animate: state.live,
-          child: Column(
-            key: ValueKey(terminal),
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: terminal
-                ? _recovery(context, snapshot, copy, live: state.live)
-                : _running(context, state, snapshot, copy),
-          ),
+    children.add(
+      Column(
+        key: ValueKey(terminal),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: terminal
+            ? _recovery(context, snapshot, copy, live: state.live)
+            : _running(context, state, snapshot, copy),
+      ),
+    );
+    if (!snapshot.isSuccess) {
+      children.addAll([
+        const SizedBox(height: 16),
+        SwapDetails(
+          key: const Key('swap-progress-details'),
+          title: 'swapProgressDetails'.tr(),
+          children: [
+            if (copy.presentation.awaitingBroadcastEvidence)
+              Text(copy.hero.body!, style: SwapText.body(context))
+            else
+              SwapTimelineView(
+                steps: SwapTimeline.of(
+                  snapshot,
+                  networks,
+                  explorer: _services.explorerTxUrl,
+                ),
+                animate: false,
+                tracking: false,
+                event: snapshot,
+                resumes: _resumes,
+              ),
+            _evidence(context, snapshot, live: false),
+          ],
         ),
-      )
-      ..add(_evidence(context, snapshot, live: state.live));
+      ]);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,

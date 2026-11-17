@@ -6,6 +6,7 @@ class SwapReceiveCard extends StatelessWidget {
     required this.state,
     required this.network,
     required this.onPickAsset,
+    this.previousEstimate = false,
     super.key,
   });
 
@@ -13,46 +14,43 @@ class SwapReceiveCard extends StatelessWidget {
   final String? network;
   final VoidCallback onPickAsset;
 
+  /// The desktop review has revised terms; this card still describes the
+  /// preserved draft, which must not look like a competing current quote.
+  final bool previousEstimate;
+
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
     final quote = state.selectedQuote;
     final receive = state.receive;
-    final checking =
-        state.evaluation == SwapEvaluationStatus.checking && quote == null;
-    final address = quote?.toAddress ?? state.receiveAddress;
 
-    final Widget amountText;
-    if (checking) {
-      amountText = const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: SwapSkeleton(height: 24, widthFactor: 0.6),
-      );
-    } else {
-      final value = quote?.expectedReceive;
-      amountText = ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Align(
+    // Unknown or updating amounts are never represented by a real zero.
+    // The stable row keeps typing and quote arrivals from moving the cards.
+    final value = quote?.expectedReceive;
+    final amountText = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value == null
-                  ? '0'
-                  : SwapFormat.amount(value, rounding: SwapRounding.down),
-              style: SwapText.amount(context).copyWith(
-                color: value == null ? palette.textTertiary : palette.text,
-              ),
-              maxLines: 1,
+          child: Text(
+            value == null
+                ? '—'
+                : SwapFormat.amount(value, rounding: SwapRounding.down),
+            style: SwapText.amount(context).copyWith(
+              color: value == null ? palette.textTertiary : palette.text,
             ),
+            maxLines: 1,
           ),
         ),
-      );
-    }
+      ),
+    );
 
     return _AmountCardFrame(
-      label: LocaleKeys.swapYouReceive.tr(),
+      label: previousEstimate
+          ? 'swapPreviousEstimate'.tr()
+          : LocaleKeys.swapYouReceive.tr(),
       amount: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -64,16 +62,6 @@ class SwapReceiveCard extends StatelessWidget {
         onTap: onPickAsset,
         semanticLabel: LocaleKeys.swapYouReceive.tr(),
       ),
-      footer: address == null && (receive == null || !state.signedIn)
-          ? null
-          : Align(
-              alignment: Alignment.centerLeft,
-              child: _AddressFooterButton(
-                prefix: (a) => LocaleKeys.swapToAddress.tr(args: [a]),
-                address: address,
-                asset: receive,
-              ),
-            ),
     );
   }
 
@@ -81,7 +69,24 @@ class SwapReceiveCard extends StatelessWidget {
     final palette = SwapPalette.of(context);
     final quote = state.selectedQuote;
     if (quote == null) {
-      return Text(r'$0.00', style: SwapText.small(context));
+      final hasIntent = state.inputText.trim().isNotEmpty && state.hasPair;
+      final updating =
+          state.preparingAssets ||
+          state.checkingMax ||
+          state.evaluation == SwapEvaluationStatus.checking ||
+          (state.evaluation == SwapEvaluationStatus.idle &&
+              state.preparationFailedAsset == null &&
+              state.failure == null &&
+              state.tradingEnabled &&
+              (state.issue?.stillPriced ?? true));
+      // A completed failure must not keep promising an update. The specific
+      // reason and recovery action remain below the cards.
+      final label = !hasIntent
+          ? 'swapEstimatePlaceholder'
+          : updating
+          ? 'swapEstimateUpdating'
+          : LocaleKeys.swapPriceUnavailable;
+      return Text(label.tr(), style: SwapText.small(context));
     }
     final expected = quote.pricing.expectedUsd;
     if (expected == null) {

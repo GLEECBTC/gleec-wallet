@@ -56,6 +56,7 @@ void main() {
         services: services,
         swap: swap,
         shell: shell,
+        expandProgressDetails: true,
       );
     }
 
@@ -177,6 +178,8 @@ void main() {
           tester,
           snapshotOf(outcome: completed(), finishedAt: finished),
         );
+        await tester.tap(find.text('Receipt details'));
+        await tester.pumpAndSettle();
 
         expect(find.text(SwapFormat.time(finished)), findsOneWidget);
       });

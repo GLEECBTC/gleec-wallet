@@ -11,6 +11,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
 import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
+import 'package:web_dex/views/swap/execution/swap_execution_display.dart';
 import 'package:web_dex/views/swap/motion/swap_motion.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
 
@@ -167,7 +168,7 @@ class _ActivityList extends StatelessWidget {
           for (final entry in entries) ...[
             _ActivityRow(
               snapshot: entry,
-              copy: SwapExecutionCopy(entry, networks),
+              copy: SwapExecutionDisplay(entry, networks),
               returning: entry.id == shell.lastDetail?.id,
               onTap: () => shell.showActivity(
                 swap: (id: entry.id, source: entry.source),

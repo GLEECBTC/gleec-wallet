@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:bloc/bloc.dart';
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
@@ -20,6 +21,8 @@ part 'unified_swap_bloc_environment.dart';
 part 'unified_swap_bloc_evaluation.dart';
 part 'unified_swap_bloc_intent.dart';
 part 'unified_swap_bloc_offers.dart';
+part 'unified_swap_bloc_pair.dart';
+part 'unified_swap_bloc_preparation.dart';
 part 'unified_swap_bloc_review.dart';
 part 'unified_swap_bloc_rules.dart';
 part 'unified_swap_bloc_start.dart';
@@ -62,6 +65,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     required Future<String?> Function(AssetId asset) addressOf,
     required AssetId? Function(String ticker) resolveAsset,
     Future<List<SwapHolding>> Function()? holdings,
+    Future<void> Function(AssetId asset)? activateAsset,
+    Future<int?> Function(AssetId asset)? spendDecimalsOf,
     DateTime Function()? now,
     Duration debounce = const Duration(milliseconds: 500),
     Duration evaluationTimeout = const Duration(seconds: 25),
@@ -78,6 +83,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
        _addressOf = addressOf,
        _resolveAsset = resolveAsset,
        _holdings = holdings,
+       _activateAsset = activateAsset,
+       _spendDecimalsOf = spendDecimalsOf,
        _now = now ?? DateTime.now,
        _debounceDelay = debounce,
        _evaluationTimeout = evaluationTimeout,
@@ -121,6 +128,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     on<UnifiedSwapCatalogRefreshRequested>(_onCatalogRefreshRequested);
     on<UnifiedSwapCatalogArrived>(_onCatalogArrived);
     on<UnifiedSwapAssetActivated>(_onAssetActivated);
+    on<UnifiedSwapPreparationRetried>(_onPreparationRetried);
+    on<UnifiedSwapDraftRestored>(_onDraftRestored);
     on<UnifiedSwapAlternativesRequested>(_onAlternativesRequested);
     on<UnifiedSwapAlternativesDismissed>(_onAlternativesDismissed);
     on<UnifiedSwapSlippageChanged>(_onSlippageChanged);
@@ -143,6 +152,16 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   final Future<String?> Function(AssetId asset) _addressOf;
   final AssetId? Function(String ticker) _resolveAsset;
   final Future<List<SwapHolding>> Function()? _holdings;
+  final Future<void> Function(AssetId asset)? _activateAsset;
+  final Future<int?> Function(AssetId asset)? _spendDecimalsOf;
+  final Map<AssetId, int> _resolvedSpendDecimals = {};
+  int _preparationVersion = 0;
+  int _balanceReadVersion = 0;
+  int _amountModeVersion = 0;
+  Object _quoteScope = Object();
+  StreamSubscription<SwapQuoteUpdate>? _quoteSubscription;
+  void Function()? _finishQuoteWatch;
+  ({AssetId asset, String text})? _fiatDraft;
   final DateTime Function() _now;
   final Duration _debounceDelay;
   final Duration _evaluationTimeout;
@@ -167,8 +186,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped by every change that invalidates an in-flight evaluation.
   int _evaluationVersion = 0;
 
-  /// Alternatives fetched during a refresh are absent from its original
-  /// request, but must remain available when that refresh finishes.
+  /// Alternatives fetched beside this evaluation must survive its later
+  /// source/pricing snapshots, which contain only the originally asked orders.
   List<SwapQuote> _evaluationAlternatives = const [];
 
   /// Bumped whenever a review is left or replaced, so a start that is still
@@ -188,7 +207,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// Bumped when a wallet signs in or out, so reads for the previous one are
   /// dropped.
   var _walletEpoch = 0;
-  var _balanceReadVersion = 0;
 
   /// Bumped by every read of the order book's offers; only the latest lands.
   var _offersVersion = 0;
@@ -205,8 +223,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
   /// priced on every refresh until the comparison closes or the intent
   /// changes.
   Object? _comparing;
-
-  var _settingPair = 0;
 
   /// While the first catalog read is in flight, nothing says which sources
   /// can answer or whether an asset still needs activating.
@@ -229,18 +245,29 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     final value = Decimal.tryParse(text);
     if (value == null) return null;
     if (state.amountMode == SwapAmountMode.token) return value;
+    final pay = state.pay;
+    final decimals = pay == null ? null : _decimalsOf(pay);
+    // A dollar amount is not a concrete token amount until its precision is
+    // known. Never pass an unbounded division to either quote source.
+    if (decimals == null) return null;
     final converted = state.converted;
     if (converted != null &&
         converted.asset == state.pay &&
         converted.text == state.inputText) {
-      return converted.amount;
+      return converted.amount.floor(scale: decimals);
     }
-    final pay = state.pay;
-    final price = pay == null ? null : _repository.pricing.prices.usdPrice(pay);
+    final price = _repository.pricing.prices.usdPrice(pay!);
     if (price == null || price <= Decimal.zero) return null;
-    final raw = (value / price).toDecimal(scaleOnInfinitePrecision: 18);
-    final decimals = pay!.chainId.decimals;
-    return decimals == null ? raw : raw.floor(scale: decimals);
+    return (value / price)
+        .toDecimal(scaleOnInfinitePrecision: decimals)
+        .floor(scale: decimals);
+  }
+
+  int? _decimalsOf(AssetId asset) {
+    final declared = asset.chainId.decimals;
+    return declared != null && declared >= 0 && declared <= 255
+        ? declared
+        : _resolvedSpendDecimals[asset];
   }
 
   /// What starting the selected option takes from the pay balance, for the
@@ -283,191 +310,6 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     );
   }
 
-  // ------------------------------------------------------------- lifecycle
-
-  Future<void> _onStarted(
-    UnifiedSwapStarted event,
-    Emitter<UnifiedSwapState> emit,
-  ) async {
-    _catalogLoading = true;
-    final SwapCatalog read;
-    try {
-      read = await _repository.catalog(signedIn: state.signedIn);
-    } finally {
-      _catalogLoading = false;
-    }
-    // A later read may have returned first; the repository keeps the latest.
-    final catalog = _repository.current ?? read;
-    emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
-    // Which pairs only the order book trades was unknown until now.
-    if (state.pay != null || state.receive != null) {
-      add(const UnifiedSwapOffersRequested());
-    }
-    if (_pairChosen) {
-      // A pair set while the catalog loaded could not be priced then; one
-      // still being set prices itself when it finishes.
-      if (state.hasPair && _settingPair == 0) {
-        _scheduleEvaluation(immediate: true);
-      }
-      return;
-    }
-    // Signed out there is no pair to find, and looking queues on the sign-in
-    // lock.
-    if (!state.signedIn) return;
-
-    final pair = await _defaultPair({
-      for (final source in catalog.sources) ...source.quotable,
-    });
-    if (pair == null || _pairChosen) return;
-    await _setPair(emit, pay: pair.pay, receive: pair.receive);
-  }
-
-  /// Whether either side was chosen, so no default pair replaces it.
-  bool get _pairChosen =>
-      state.pay != null || state.receive != null || _intentApplied;
-
-  Future<void> _refreshCatalog(Emitter<UnifiedSwapState> emit) async {
-    final read = await _repository.catalog(signedIn: state.signedIn);
-    final catalog = _repository.current ?? read;
-    emit(_validated(state.copyWith(catalog: catalog, loadingAssets: false)));
-  }
-
-  Future<void> _onCatalogRefreshRequested(
-    UnifiedSwapCatalogRefreshRequested event,
-    Emitter<UnifiedSwapState> emit,
-  ) async {
-    await _refreshCatalog(emit);
-    _scheduleEvaluation(immediate: true);
-  }
-
-  void _onCatalogArrived(
-    UnifiedSwapCatalogArrived event,
-    Emitter<UnifiedSwapState> emit,
-  ) {
-    final catalog = _repository.current;
-    if (catalog == null || catalog == state.catalog) return;
-    final support = state.pairSupport;
-    emit(_validated(state.copyWith(catalog: catalog)));
-    // Only a change in who can price the pair is worth a request.
-    if (state.view == UnifiedSwapView.form && state.pairSupport != support) {
-      add(const UnifiedSwapOffersRequested());
-      _scheduleEvaluation(immediate: true);
-    }
-  }
-
-  Future<void> _onAssetActivated(
-    UnifiedSwapAssetActivated event,
-    Emitter<UnifiedSwapState> emit,
-  ) async {
-    _invalidate();
-    await _refreshCatalog(emit);
-    await _loadBalances(emit);
-    await _loadAddresses(emit);
-    // Max asked before the asset to receive was active could not read every
-    // fee it must keep back, such as the gas to claim a token.
-    if (state.maxApplied != null && event.asset == state.receive) {
-      add(const UnifiedSwapMaxRequested());
-    }
-    _scheduleEvaluation(immediate: true);
-  }
-
-  Future<void> _onIntentApplied(
-    UnifiedSwapIntentApplied event,
-    Emitter<UnifiedSwapState> emit,
-  ) async {
-    final pay = event.pay == null ? null : _resolveAsset(event.pay!);
-    final receive = event.receive == null
-        ? null
-        : _resolveAsset(event.receive!);
-    if (pay == null && receive == null) return;
-    _intentApplied = true;
-    await _setPair(
-      emit,
-      pay: pay ?? state.pay,
-      receive: receive == pay ? null : (receive ?? state.receive),
-      amount: event.amount,
-      amountMode: event.amountMode,
-    );
-  }
-
-  Future<void> _setPair(
-    Emitter<UnifiedSwapState> emit, {
-    AssetId? pay,
-    AssetId? receive,
-    String? amount,
-    SwapAmountMode amountMode = SwapAmountMode.token,
-  }) async {
-    if (_startInDoubt) return;
-    _settingPair++;
-    try {
-      await _applyPair(
-        emit,
-        pay: pay,
-        receive: receive,
-        amount: amount,
-        amountMode: amountMode,
-      );
-    } finally {
-      _settingPair--;
-    }
-  }
-
-  Future<void> _applyPair(
-    Emitter<UnifiedSwapState> emit, {
-    AssetId? pay,
-    AssetId? receive,
-    String? amount,
-    required SwapAmountMode amountMode,
-  }) async {
-    // Max, applied or still asking, asks again for a new asset to receive,
-    // rather than leave an amount sized for the old pair, or the whole
-    // balance it shows while asking.
-    final remax =
-        (state.maxRequested || state.checkingMax || state.maxApplied != null) &&
-        amount == null &&
-        pay == state.pay;
-    _invalidate();
-    _startVersion++;
-    emit(
-      _validated(
-        state.copyWith(
-          view: UnifiedSwapView.form,
-          pay: pay,
-          receive: receive,
-          clearPay: pay == null,
-          clearReceive: receive == null,
-          inputText: amount ?? state.inputText,
-          amountMode: amount == null ? null : amountMode,
-          // Until the new asset's own is read, the old balance would show
-          // under its ticker and be what Max fills in.
-          clearBalance: pay != state.pay,
-          clearFeeBalance: pay != state.pay,
-          clearConverted: pay != state.pay,
-          clearQuotes: true,
-          clearSelectedId: true,
-          clearFailure: true,
-          clearMaxApplied: true,
-          checkingMax: false,
-          clearReview: true,
-          evaluation: SwapEvaluationStatus.idle,
-          structuralNotice: false,
-        ),
-      ),
-    );
-    _offersWatch?.cancel();
-    add(const UnifiedSwapOffersRequested());
-    if (remax) add(const UnifiedSwapMaxRequested());
-    // An asset the catalog thinks inactive may have been activated since —
-    // by the picker a moment ago, or elsewhere in the app. Signed out,
-    // nothing can have been.
-    if (state.signedIn && !state.loadingAssets && state.inactiveAsset != null) {
-      await _refreshCatalog(emit);
-    }
-    await _loadBalances(emit);
-    await _loadAddresses(emit);
-    _scheduleEvaluation(immediate: true);
-  }
-
   // ---------------------------------------------------------- environment
 
   @override
@@ -494,6 +336,8 @@ class UnifiedSwapBloc extends Bloc<UnifiedSwapEvent, UnifiedSwapState> {
     _closing = true;
     _startVersion++;
     _legalVersion++;
+    _preparationVersion++;
+    _stopQuoteWatch();
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();

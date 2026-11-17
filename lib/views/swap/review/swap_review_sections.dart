@@ -18,6 +18,30 @@ class _Summary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = SwapPalette.of(context);
+    void showRecipient() {
+      final services = context.read<SwapServices>();
+      final auth = context.read<AuthBloc>();
+      showSwapSheet<void>(
+        context: context,
+        label: LocaleKeys.swapReviewRecipientAddress.tr(),
+        fitContent: true,
+        builder: (_) => RepositoryProvider<SwapServices>.value(
+          value: services,
+          child: BlocProvider<AuthBloc>.value(
+            value: auth,
+            child: SwapSheetScaffold(
+              title: LocaleKeys.swapReviewRecipientAddress.tr(),
+              body: SwapCopyLine(
+                value: toAddress!,
+                label: LocaleKeys.swapReviewRecipientAddress.tr(),
+                payableIn: quote.to,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     Widget leg({
       required AssetId asset,
       required String label,
@@ -36,9 +60,8 @@ class _Summary extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: SwapText.small(
-                      context,
-                    ).copyWith(fontWeight: FontWeight.w700),
+                    style: SwapText.small(context)
+                        .copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -50,9 +73,8 @@ class _Summary extends StatelessWidget {
                     address == null
                         ? network
                         : '$network · ${SwapFormat.short(address)}',
-                    style: SwapText.small(
-                      context,
-                    ).copyWith(color: palette.textSecondary),
+                    style: SwapText.small(context)
+                        .copyWith(color: palette.textSecondary),
                   ),
                 ],
               ),
@@ -66,7 +88,7 @@ class _Summary extends StatelessWidget {
       container: true,
       label: LocaleKeys.swapReviewSummaryA11y.tr(),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: palette.surfaceRaised,
           borderRadius: BorderRadius.circular(18),
@@ -85,21 +107,21 @@ class _Summary extends StatelessWidget {
               address: fromAddress,
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
                 children: [
                   Expanded(child: Divider(color: palette.border)),
                   const SizedBox(width: 8),
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: 24,
+                    height: 24,
                     decoration: BoxDecoration(
                       color: palette.selected,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.arrow_downward_rounded,
-                      size: 18,
+                      size: 16,
                       color: palette.brandHover,
                     ),
                   ),
@@ -119,6 +141,22 @@ class _Summary extends StatelessWidget {
               network: toNetwork,
               address: toAddress,
             ),
+            const SizedBox(height: 10),
+            _Protection(
+              minimum: SwapFormat.tokens(
+                quote.guaranteedReceive,
+                SwapFormat.ticker(quote.to),
+                rounding: SwapRounding.down,
+              ),
+            ),
+            if (toAddress != null)
+              SwapLinkButton(
+                label: 'swapReviewYourWallet'.tr(
+                  args: [SwapFormat.short(toAddress!)],
+                ),
+                icon: Icons.account_balance_wallet_outlined,
+                onPressed: showRecipient,
+              ),
           ],
         ),
       ),
@@ -136,29 +174,32 @@ class _Protection extends StatelessWidget {
     final palette = SwapPalette.of(context);
     return MergeSemantics(
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: palette.successBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: palette.success),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.verified_user_outlined, color: palette.success),
-            const SizedBox(width: 12),
+            Icon(
+              Icons.verified_user_outlined,
+              color: palette.success,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 2,
                 children: [
                   Text(
                     LocaleKeys.swapReviewAtLeast.tr(),
-                    style: SwapText.body(context),
+                    style: SwapText.small(context),
                   ),
-                  const SizedBox(height: 2),
                   Text(
                     minimum,
-                    style: SwapText.strong(context).copyWith(fontSize: 17),
+                    style: SwapText.strong(context).copyWith(fontSize: 14),
                   ),
                 ],
               ),
@@ -177,7 +218,6 @@ class _DecisionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = SwapPalette.of(context);
     final pricing = quote.pricing;
     final total = pricing.totalCostUsd;
     final network = pricing.networkCostUsd;
@@ -211,48 +251,40 @@ class _DecisionGrid extends StatelessWidget {
             : SwapFormat.usd(network, rounding: SwapRounding.up),
       ),
     ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final scale = MediaQuery.textScalerOf(context).scale(1);
-        final columns = constraints.maxWidth / scale < 300 ? 1 : 3;
-        final width = (constraints.maxWidth - (columns - 1) * 8) / columns;
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (quote.requiredFeeBalances.isNotEmpty)
-              SizedBox(
-                width: constraints.maxWidth,
-                child: SwapHelperLine(
-                  text: 'swapReviewRequiredFundingExplanation'.tr(),
-                  tone: SwapTone.neutral,
-                ),
-              ),
-            for (final (label, value) in facts)
-              SizedBox(
-                width: width,
-                child: MergeSemantics(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: palette.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: palette.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(label, style: SwapText.small(context)),
-                        const SizedBox(height: 5),
-                        Text(value, style: SwapText.strong(context)),
-                      ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (label, value) in facts)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: MergeSemantics(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Text(label, style: SwapText.small(context))),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      value,
+                      textAlign: TextAlign.end,
+                      style: SwapText.strong(context).copyWith(fontSize: 14),
                     ),
                   ),
-                ),
+                ],
               ),
-          ],
-        );
-      },
+            ),
+          ),
+        if (quote.requiredFeeBalances.isNotEmpty)
+          SwapHelperLine(
+            text: 'swapReviewRequiredFundingExplanation'.tr(),
+            tone: SwapTone.neutral,
+          ),
+        if (quote.source == SwapLiquiditySource.atomic)
+          SwapHelperLine(
+            text: 'swapReviewPeerToPeer'.tr(),
+            tone: SwapTone.neutral,
+          ),
+      ],
     );
   }
 }
@@ -285,11 +317,33 @@ class _Permission extends StatelessWidget {
           ? LocaleKeys.swapPermissionResetBody.tr(args: [amount])
           : LocaleKeys.swapPermissionExactBody.tr(args: [amount]);
     }
-    return SwapCallout(
-      tone: SwapTone.info,
-      icon: Icons.shield_outlined,
-      title: title,
-      message: body,
+    return Semantics(
+      container: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.shield_outlined,
+            size: 18,
+            color: SwapPalette.of(context).info,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: SwapText.small(context)
+                      .copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(body, style: SwapText.small(context)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -299,6 +353,8 @@ class _ReviewFooter extends StatelessWidget {
     required this.review,
     required this.tradingEnabled,
     required this.tradingStatusLoading,
+    required this.tradingStatusUnavailable,
+    required this.hardwareWallet,
     this.paused = false,
   });
 
@@ -306,6 +362,8 @@ class _ReviewFooter extends StatelessWidget {
   final bool paused;
   final bool tradingEnabled;
   final bool tradingStatusLoading;
+  final bool tradingStatusUnavailable;
+  final bool hardwareWallet;
 
   @override
   Widget build(BuildContext context) {
@@ -322,13 +380,23 @@ class _ReviewFooter extends StatelessWidget {
     if (!tradingEnabled &&
         review.status != SwapReviewStatus.starting &&
         review.status != SwapReviewStatus.unconfirmed) {
+      final retry =
+          !hardwareWallet && !tradingStatusLoading && tradingStatusUnavailable;
       return SwapButton(
         key: const Key('swap-start'),
-        label: tradingStatusLoading
-            ? LocaleKeys.swapCtaChecking.tr()
-            : LocaleKeys.swapCtaUnavailable.tr(),
-        onPressed: null,
-        busy: tradingStatusLoading,
+        label: hardwareWallet
+            ? LocaleKeys.swapCtaUnavailable.tr()
+            : tradingStatusLoading
+            ? 'swapAvailabilityChecking'.tr()
+            : retry
+            ? LocaleKeys.tryAgain.tr()
+            : LocaleKeys.tradingDisabled.tr(),
+        onPressed: retry
+            ? () => context.read<TradingStatusBloc>().add(
+                TradingStatusCheckRequested(),
+              )
+            : null,
+        busy: !hardwareWallet && tradingStatusLoading,
       );
     }
 
@@ -394,7 +462,7 @@ class _ReviewFooter extends StatelessWidget {
 
   static String _startLabel(SwapQuote quote) {
     final approval = quote.approval;
-    if (approval == null) return LocaleKeys.swapStartSwap.tr();
+    if (approval == null) return 'swapConfirmSwap'.tr();
     if (approval.resetsFirst) return LocaleKeys.swapStartReset.tr();
     return LocaleKeys.swapStartApprove.tr(
       args: [

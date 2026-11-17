@@ -20,6 +20,7 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 part 'swap_asset_picker_balance.dart';
 part 'swap_asset_picker_list.dart';
@@ -51,8 +52,8 @@ const swapPopularTickers = [
   'AVAX',
 ];
 
-/// Opens the asset picker and returns the chosen asset, activated if a wallet
-/// is signed in.
+/// Returns the exact chosen asset immediately. The swap BLoC prepares it
+/// after selection, so activation never holds the picker open.
 Future<AssetId?> showSwapAssetPicker({
   required BuildContext context,
   required SwapPickerSide side,
@@ -150,18 +151,34 @@ class SwapAssetPicker extends StatefulWidget {
 class _SwapAssetPickerState extends State<SwapAssetPicker> {
   final TextEditingController _search = TextEditingController();
   // Signed out, nothing is held: no "My assets" to open on or offer.
-  late _PickerTab _tab = widget.signedIn ? _PickerTab.mine : _PickerTab.popular;
-  Set<AssetId>? _activated;
+  late _PickerTab _tab = widget.signedIn && widget.side == SwapPickerSide.pay
+      ? _PickerTab.mine
+      : _PickerTab.popular;
+  late Set<AssetId>? _activated = widget.signedIn
+      ? widget.catalog.activated ?? widget.catalog.assets
+      : const <AssetId>{};
+  String _network = '';
+  bool _tabTouched = false;
   List<String> _recentTickers = const [];
   bool _failed = false;
   bool _hideZero = false;
-  AssetId? _activating;
-  AssetId? _activationFailed;
 
   @override
   void initState() {
     super.initState();
+    if (_tab == _PickerTab.mine && _mine(_activated ?? const {}).isEmpty) {
+      _tab = _popular().isEmpty ? _PickerTab.all : _PickerTab.popular;
+    }
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SwapAssetPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_network.isNotEmpty &&
+        !_offered().any((id) => (id.parentId ?? id).id == _network)) {
+      _network = '';
+    }
   }
 
   @override
@@ -188,7 +205,9 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
         _hideZero = hideZero;
         // Open on something useful: holdings when there are any, else what
         // was chosen lately, else the most traded rather than the alphabet.
-        if (_mine(activated).isEmpty) {
+        if (!_tabTouched &&
+            (widget.side == SwapPickerSide.receive ||
+                _mine(activated).isEmpty)) {
           _tab = _recent().isNotEmpty
               ? _PickerTab.recent
               : _popular().isNotEmpty
@@ -314,38 +333,55 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
 
   List<AssetId> _rows() {
     final query = _search.text.trim().toLowerCase();
-    if (query.isNotEmpty) return _searched(query);
     final activated = _activated ?? const {};
-    return switch (_tab) {
-      _PickerTab.mine => _mine(activated),
-      _PickerTab.recent => _recent(),
-      _PickerTab.popular => _popular(),
-      _PickerTab.all => _all(),
-    };
+    final rows = query.isNotEmpty
+        ? _searched(query)
+        : switch (_tab) {
+            _PickerTab.mine => _mine(activated),
+            _PickerTab.recent => _recent(),
+            _PickerTab.popular => _popular(),
+            _PickerTab.all => _all(),
+          };
+    return _network.isEmpty
+        ? rows
+        : rows.where((id) => (id.parentId ?? id).id == _network).toList();
   }
 
-  Future<void> _choose(AssetId id) async {
+  void _choose(AssetId id) {
     if (widget.isBlocked(id)) return;
-    final activated = _activated ?? const {};
-    if (!widget.signedIn || activated.contains(id)) {
-      Navigator.of(context).pop(id);
-      return;
-    }
-    setState(() {
-      _activating = id;
-      _activationFailed = null;
-    });
-    try {
-      await widget.services.activate(id);
-      if (!mounted) return;
-      Navigator.of(context).pop(id);
-    } on Object {
-      if (!mounted) return;
-      setState(() {
-        _activating = null;
-        _activationFailed = id;
-      });
-    }
+    SwapHaptics.selection();
+    Navigator.of(context).pop(id);
+  }
+
+  Widget _networkFilter(BuildContext context) {
+    final networks = <String, String>{
+      for (final id in _offered())
+        (id.parentId ?? id).id: widget.services.networks().networkOf(id),
+    };
+    final entries = networks.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    return DropdownButtonFormField<String>(
+      key: const Key('swap-picker-network'),
+      initialValue: _network,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'swapNetworkFilter'.tr(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: [
+        DropdownMenuItem(value: '', child: Text('swapAllNetworks'.tr())),
+        for (final entry in entries)
+          DropdownMenuItem(
+            value: entry.key,
+            child: Text(
+              entry.value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: (network) => setState(() => _network = network ?? ''),
+    );
   }
 
   void _setHideZero(bool hide) {
@@ -376,8 +412,13 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
             _PickerTab.popular => LocaleKeys.swapPickerTabPopular.tr(),
             _PickerTab.all => LocaleKeys.swapPickerTabAll.tr(),
           },
-          onChanged: (tab) => setState(() => _tab = tab),
+          onChanged: (tab) => setState(() {
+            _tab = tab;
+            _tabTouched = true;
+          }),
         ),
+      const SizedBox(height: 10),
+      _networkFilter(context),
       if (_filterable) ...[
         if (!searching) const SizedBox(height: 8),
         _ZeroBalanceSwitch(
@@ -461,9 +502,8 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
                 filled: false,
                 hintText: LocaleKeys.swapPickerSearch.tr(),
                 hintMaxLines: 4,
-                hintStyle: SwapText.body(
-                  context,
-                ).copyWith(color: palette.textTertiary),
+                hintStyle: SwapText.body(context)
+                    .copyWith(color: palette.textTertiary),
               ),
             ),
           ),

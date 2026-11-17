@@ -192,5 +192,21 @@ void main() {
       expect(tester.hasRunningAnimations, isFalse);
       expect(painter(tester), isNot(paints..rrect()));
     });
+
+    testWidgets('a live ring stops in the background without replay', (
+      tester,
+    ) async {
+      addTearDown(() => resumeMotionApp(tester));
+      await tester.pumpWidget(pulse(1));
+      await tester.pumpWidget(pulse(2));
+      await tester.pump(SwapMotion.beat ~/ 2);
+      pauseMotionApp(tester);
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      resumeMotionApp(tester);
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isFalse);
+      expect(painter(tester), isNot(paints..rrect()));
+    });
   });
 }

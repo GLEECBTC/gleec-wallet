@@ -13,6 +13,7 @@ import 'package:web_dex/views/swap/execution/swap_execution_view.dart';
 import 'package:web_dex/views/swap/review/swap_review_view.dart';
 import 'package:web_dex/views/swap/swap_page.dart';
 import 'package:web_dex/views/swap/swap_shell_controller.dart';
+
 import '../../support/legal_documents_fixture.dart';
 
 import 'swap_accessibility_checks.dart';
@@ -57,6 +58,9 @@ void main() {
       loadingAssets: false,
       pay: eth,
       receive: usdc,
+      payAddress: '0xpay',
+      receiveAddress: '0xreceive',
+      feeBalance: d('2'),
       inputText: '1',
       balance: d('2'),
       evaluation: SwapEvaluationStatus.ready,

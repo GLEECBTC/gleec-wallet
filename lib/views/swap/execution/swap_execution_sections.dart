@@ -1,20 +1,8 @@
 part of 'swap_execution_view.dart';
 
-/// What sits below the timeline: controls while running, the answers once it
-/// has stopped, and the evidence either way.
-/// When the sections below the timeline start arriving after a live change:
-/// once the hero has begun to settle.
-const _sectionDelay = Duration(milliseconds: 160);
-
 extension _ExecutionSections on _ExecutionBodyState {
-  /// Brings in the [order]th section that arrived with a live change.
-  Widget _arrive(Widget child, {required bool live, int order = 0}) =>
-      SwapReveal(
-        onMount: live,
-        animate: live,
-        delay: _sectionDelay + SwapMotion.stagger * order,
-        child: child,
-      );
+  /// Controls remain immediately available while the status icon settles.
+  Widget _arrive(Widget child, {required bool live, int order = 0}) => child;
 
   List<Widget> _running(
     BuildContext context,
@@ -47,26 +35,18 @@ extension _ExecutionSections on _ExecutionBodyState {
         ),
       ],
       const SizedBox(height: 16),
+      SwapButton(
+        key: const Key('swap-back-to-wallet'),
+        label: 'swapBackToWallet'.tr(),
+        onPressed: _backToWallet,
+      ),
+      const SizedBox(height: 10),
       if (snapshot.stage == SwapProgressStage.actionRequired &&
           routePage != null) ...[
-        // The swap is waiting on the user: two pulses say so, then stop.
-        _arrive(
-          SwapPulse(
-            trigger: SwapProgressStage.actionRequired,
-            active: state.live,
-            onMount: true,
-            beats: 2,
-            delay: SwapMotion.screen,
-            color: SwapPalette.of(context).warning,
-            spread: 10,
-            borderRadius: BorderRadius.circular(16),
-            child: SwapButton(
-              label: LocaleKeys.swapOpenRoutePage.tr(),
-              icon: Icons.open_in_new_rounded,
-              onPressed: () => openSwapLink(context, '$routePage'),
-            ),
-          ),
-          live: state.live,
+        SwapButton(
+          label: LocaleKeys.swapOpenRoutePage.tr(),
+          icon: Icons.open_in_new_rounded,
+          onPressed: () => openSwapLink(context, '$routePage'),
         ),
         const SizedBox(height: 10),
       ],
@@ -103,6 +83,42 @@ extension _ExecutionSections on _ExecutionBodyState {
     var order = 0;
     Widget arrive(Widget child) => _arrive(child, live: live, order: order++);
     return [
+      if (success) ...[
+        _receiptBalance(context, snapshot),
+        const SizedBox(height: 12),
+        if (SwapExecutionPresentation(snapshot).canViewReceivedAsset)
+          SwapButton(
+            key: const Key('swap-view-asset'),
+            label: 'swapViewAsset'.tr(),
+            onPressed: () => _backToWallet(received: snapshot),
+          ),
+        const SizedBox(height: 10),
+        SwapButton(
+          label: 'swapReceiptDetails'.tr(),
+          variant: SwapButtonVariant.secondary,
+          onPressed: () => showSwapEvidenceSheet(
+            context,
+            snapshot: snapshot,
+            services: _services,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 12,
+          children: [
+            for (final action in actions)
+              SwapLinkButton(
+                label: _ExecutionBodyState._actionLabel(action, copy),
+                onPressed: () => _onAction(action, snapshot),
+              ),
+            SwapLinkButton(
+              label: 'swapBackToWallet'.tr(),
+              onPressed: _backToWallet,
+            ),
+          ],
+        ),
+      ],
       if (!success) ...[
         arrive(
           SwapQuestion(
@@ -126,30 +142,59 @@ extension _ExecutionSections on _ExecutionBodyState {
         ),
       ],
       const SizedBox(height: 8),
-      for (final (index, action) in actions.indexed) ...[
-        arrive(
-          SwapButton(
-            label: _ExecutionBodyState._actionLabel(action, copy),
-            variant: index == 0
-                ? SwapButtonVariant.primary
-                : SwapButtonVariant.secondary,
-            onPressed: () => _onAction(action, snapshot),
+      if (!success)
+        for (final (index, action) in actions.indexed) ...[
+          arrive(
+            SwapButton(
+              label: _ExecutionBodyState._actionLabel(action, copy),
+              variant: index == 0
+                  ? SwapButtonVariant.primary
+                  : SwapButtonVariant.secondary,
+              onPressed: () => _onAction(action, snapshot),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-      ],
-      if (_inFlow)
+          const SizedBox(height: 10),
+        ],
+      if (_inFlow && !success)
         arrive(
           SwapButton(
-            label: success
-                ? LocaleKeys.done.tr()
-                : LocaleKeys.swapViewInActivity.tr(),
+            label: LocaleKeys.swapViewInActivity.tr(),
             variant: SwapButtonVariant.secondary,
-            onPressed: success ? _leave : () => _viewInActivity(snapshot),
+            onPressed: () => _viewInActivity(snapshot),
           ),
         ),
     ];
   }
+
+  Widget _receiptBalance(
+    BuildContext context,
+    SwapExecutionSnapshot snapshot,
+  ) => StreamBuilder<int>(
+    stream: _services.presentation.changes,
+    builder: (context, _) {
+      final status = _services.presentation.balanceStatus(snapshot.id);
+      if (status == SwapReceiptBalanceStatus.current) {
+        return const SizedBox.shrink();
+      }
+      return Column(
+        children: [
+          Text(
+            status == SwapReceiptBalanceStatus.unavailable
+                ? 'swapBalanceRefreshUnavailable'.tr()
+                : 'swapUpdatingBalance'.tr(),
+            style: SwapText.small(context),
+            textAlign: TextAlign.center,
+          ),
+          if (status == SwapReceiptBalanceStatus.unavailable)
+            SwapLinkButton(
+              label: LocaleKeys.tryAgain.tr(),
+              onPressed: () =>
+                  _services.presentation.refreshReceipt(snapshot, retry: true),
+            ),
+        ],
+      );
+    },
+  );
 
   Widget _evidence(
     BuildContext context,

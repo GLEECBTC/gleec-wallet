@@ -385,6 +385,7 @@ void main() {
         shell: shell,
       );
 
+      await expandSurfaceDetails(tester);
       await tester.tap(find.text('View on Explorer'));
       await tester.pumpAndSettle();
 

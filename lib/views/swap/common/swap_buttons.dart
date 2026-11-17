@@ -79,31 +79,20 @@ class SwapButton extends StatelessWidget {
         SwapText.strong(context).copyWith(fontWeight: FontWeight.w800),
       ),
     );
+    // The two equal slots keep the label centred when work starts. Only the
+    // busy indicator changes; its arrival never moves the button or its text.
     final leading = busy
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwapPop(
-                trigger: busy,
-                onMount: true,
-                from: 0.5,
-                child: SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: foreground,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-            ],
+        ? SizedBox.square(
+            dimension: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: foreground,
+              value: SwapMotion.enabled(context) ? null : 0.75,
+            ),
           )
-        : icon != null
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [Icon(icon, size: 18), const SizedBox(width: 8)],
-          )
-        : const SizedBox.shrink();
+        : icon == null
+        ? null
+        : Icon(icon, size: 18);
     return SwapPressScale(
       enabled: enabled,
       child: TextButton(
@@ -113,8 +102,16 @@ class SwapButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            SwapSmoothSize(alignment: Alignment.centerLeft, child: leading),
+            SizedBox(
+              width: 26,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                heightFactor: 1,
+                child: ExcludeSemantics(child: leading ?? const SizedBox()),
+              ),
+            ),
             Flexible(child: Text(label, textAlign: TextAlign.center)),
+            const SizedBox(width: 26),
           ],
         ),
       ),

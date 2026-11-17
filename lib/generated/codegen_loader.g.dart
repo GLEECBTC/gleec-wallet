@@ -2087,4 +2087,35 @@ abstract class LocaleKeys {
   static const authPasswordManagerPending = 'authPasswordManagerPending';
   static const authProtectionBusy = 'authProtectionBusy';
   static const authProtectionStale = 'authProtectionStale';
+  static const swapAvailabilityChecking = 'swapAvailabilityChecking';
+  static const swapAvailabilityUnavailable = 'swapAvailabilityUnavailable';
+  static const swapPreparingAssets = 'swapPreparingAssets';
+  static const swapCheckingFunds = 'swapCheckingFunds';
+  static const swapQuoteSlow = 'swapQuoteSlow';
+  static const swapEstimateUpdating = 'swapEstimateUpdating';
+  static const swapEstimatePlaceholder = 'swapEstimatePlaceholder';
+  static const swapMoreQuotesChecking = 'swapMoreQuotesChecking';
+  static const swapNetworkFilter = 'swapNetworkFilter';
+  static const swapAllNetworks = 'swapAllNetworks';
+  static const swapReviewYourWallet = 'swapReviewYourWallet';
+  static const swapReviewPeerToPeer = 'swapReviewPeerToPeer';
+  static const swapConfirmSwap = 'swapConfirmSwap';
+  static const swapAssetPreparationUnavailable =
+      'swapAssetPreparationUnavailable';
+  static const swapBackToWallet = 'swapBackToWallet';
+  static const swapViewAsset = 'swapViewAsset';
+  static const swapReceiptDetails = 'swapReceiptDetails';
+  static const swapProgressDetails = 'swapProgressDetails';
+  static const swapUpdatingBalance = 'swapUpdatingBalance';
+  static const swapBalanceRefreshUnavailable = 'swapBalanceRefreshUnavailable';
+  static const swapCheckingTransferTitle = 'swapCheckingTransferTitle';
+  static const swapCheckingTransferBody = 'swapCheckingTransferBody';
+  static const swapWalletCount = 'swapWalletCount';
+  static const swapWalletOpenActivity = 'swapWalletOpenActivity';
+  static const swapBetterOptionAvailable = 'swapBetterOptionAvailable';
+  static const swapPreviousEstimate = 'swapPreviousEstimate';
+  static const authSavePassword = 'authSavePassword';
+  static const authPasswordManagerOffer = 'authPasswordManagerOffer';
+  static const authPasswordManagerCompatibility =
+      'authPasswordManagerCompatibility';
 }

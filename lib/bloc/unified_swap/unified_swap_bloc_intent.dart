@@ -2,6 +2,31 @@ part of 'unified_swap_bloc.dart';
 
 /// What the user asks for: the pair, the amount and how it is entered.
 extension _UnifiedSwapIntent on UnifiedSwapBloc {
+  Future<void> _onDraftRestored(
+    UnifiedSwapDraftRestored event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    if (_intentApplied || _startInDoubt) return;
+    final pay = event.pay == null ? null : _resolveAsset(event.pay!);
+    final receive = event.receive == null
+        ? null
+        : _resolveAsset(event.receive!);
+    if (pay == null && receive == null) return;
+    _intentApplied = true;
+    emit(
+      state.copyWith(
+        slippage: event.slippage.clamp(swapMinSlippage, swapMaxSlippage),
+      ),
+    );
+    await _setPair(
+      emit,
+      pay: pay,
+      receive: receive == pay ? null : receive,
+      amount: event.input,
+      amountMode: event.amountMode,
+    );
+  }
+
   Future<void> _onPayAssetChanged(
     UnifiedSwapPayAssetChanged event,
     Emitter<UnifiedSwapState> emit,
@@ -58,6 +83,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     if (_startInDoubt) return;
     _startVersion++;
     _invalidate();
+    _amountModeVersion++;
     emit(
       _validated(
         state.copyWith(
@@ -87,17 +113,66 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final pay = state.pay;
     if (pay == null || _startInDoubt) return;
     final price = _repository.pricing.prices.usdPrice(pay);
-    if (price == null || price <= Decimal.zero) return;
+    if (price == null || price <= Decimal.zero || _decimalsOf(pay) == null) {
+      // A missing conversion must never turn a dollar draft into that many
+      // crypto units. Keep it separately while the user enters crypto.
+      if (state.amountMode == SwapAmountMode.fiat) {
+        _fiatDraft = (asset: pay, text: state.inputText);
+        _invalidate();
+        _amountModeVersion++;
+        emit(
+          _validated(
+            state.copyWith(
+              amountMode: SwapAmountMode.token,
+              inputText: '',
+              clearConverted: true,
+              clearQuotes: true,
+              clearSelectedId: true,
+              evaluation: SwapEvaluationStatus.idle,
+            ),
+          ),
+        );
+        unawaited(
+          _preferences.rememberFiatAmount(false).catchError((Object _) {}),
+        );
+      } else if (_fiatDraft case final draft? when draft.asset == pay) {
+        _invalidate();
+        _amountModeVersion++;
+        emit(
+          _validated(
+            state.copyWith(
+              amountMode: SwapAmountMode.fiat,
+              inputText: draft.text,
+              clearConverted: true,
+              clearQuotes: true,
+              clearSelectedId: true,
+              evaluation: SwapEvaluationStatus.idle,
+            ),
+          ),
+        );
+        unawaited(
+          _preferences.rememberFiatAmount(true).catchError((Object _) {}),
+        );
+      }
+      return;
+    }
+    _amountModeVersion++;
     // Convert what is typed, so toggling never changes the amount traded.
     final typed = amountOf(state);
-    final decimals = pay.chainId.decimals;
+    final decimals = _decimalsOf(pay);
     final amount = typed == null || decimals == null
         ? typed
         : typed.floor(scale: decimals);
     final nextMode = state.amountMode == SwapAmountMode.token
         ? SwapAmountMode.fiat
         : SwapAmountMode.token;
-    final text = amount == null
+    final restoreDraft =
+        nextMode == SwapAmountMode.fiat &&
+        state.inputText.isEmpty &&
+        _fiatDraft?.asset == pay;
+    final text = restoreDraft
+        ? _fiatDraft!.text
+        : amount == null
         ? state.inputText
         : nextMode == SwapAmountMode.fiat
         ? (amount * price).floor(scale: 2).toString()
@@ -115,6 +190,12 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
         ),
       ),
     );
+    unawaited(
+      _preferences
+          .rememberFiatAmount(nextMode == SwapAmountMode.fiat)
+          .catchError((Object _) {}),
+    );
+    if (restoreDraft) _scheduleEvaluation(immediate: true);
   }
 
   void _onSlippageChanged(
@@ -150,6 +231,7 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
   ) {
     if (_startInDoubt) return;
     _invalidate();
+    _amountModeVersion++;
     emit(
       _validated(
         state.copyWith(
@@ -175,7 +257,15 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
     final pay = state.pay;
     final receive = state.receive;
     final balance = state.balance;
-    if (pay == null || balance == null || state.checkingMax) return;
+    if (pay == null ||
+        balance == null ||
+        state.checkingMax ||
+        state.preparingAssets ||
+        state.loadingAssets ||
+        state.preparationFailedAsset != null) {
+      return;
+    }
+    _amountModeVersion++;
     if (_startInDoubt) return;
     if (receive == null) {
       // Without a destination no source can say what fees to keep; the whole
@@ -279,5 +369,65 @@ extension _UnifiedSwapIntent on UnifiedSwapBloc {
       ),
     );
     _scheduleEvaluation(immediate: true);
+  }
+
+  Future<void> _onProgressLeft(
+    UnifiedSwapProgressLeft event,
+    Emitter<UnifiedSwapState> emit,
+  ) => _resetForm(emit, keepPair: true);
+
+  Future<void> _onResetRequested(
+    UnifiedSwapResetRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) => _resetForm(emit, keepPair: event.keepPair);
+
+  Future<void> _resetForm(
+    Emitter<UnifiedSwapState> emit, {
+    required bool keepPair,
+  }) async {
+    if (state.review?.status == SwapReviewStatus.starting) return;
+    _invalidate();
+    _startVersion++;
+    _fiatDraft = null;
+    _amountModeVersion++;
+    emit(
+      _validated(
+        state.copyWith(
+          view: UnifiedSwapView.form,
+          inputText: '',
+          clearConverted: true,
+          clearActiveExecution: true,
+          clearReview: true,
+          clearQuotes: true,
+          clearSelectedId: true,
+          clearFailure: true,
+          clearMaxApplied: true,
+          checkingMax: false,
+          clearPay: !keepPair,
+          clearReceive: !keepPair,
+          evaluation: SwapEvaluationStatus.idle,
+          structuralNotice: false,
+        ),
+      ),
+    );
+    await _preparePair(emit);
+    // The swap just made may have taken the last offer.
+    if (keepPair) add(const UnifiedSwapOffersRequested(recount: true));
+  }
+
+  Future<void> _onFollowUpRequested(
+    UnifiedSwapFollowUpRequested event,
+    Emitter<UnifiedSwapState> emit,
+  ) async {
+    if (_startInDoubt) return;
+    _startVersion++;
+    emit(state.copyWith(clearActiveExecution: true, clearReview: true));
+    await _setPair(
+      emit,
+      pay: event.pay,
+      receive: event.receive == event.pay ? null : event.receive,
+      amount: event.amount ?? '',
+      amountMode: event.amount == null ? null : SwapAmountMode.token,
+    );
   }
 }
