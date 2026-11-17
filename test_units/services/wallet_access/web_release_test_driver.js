@@ -17,6 +17,8 @@ class LocalBrowser {
     this.port = port;
     this.debugPort = debugPort;
     this.base = `http://localhost:${port}/`;
+    this.webCompiler = process.env.GLEEC_TEST_WEB_COMPILER ?? 'javascript';
+    assert.ok(['javascript','wasm'].includes(this.webCompiler), 'Select javascript or wasm for browser acceptance');
     this.profile = fs.mkdtempSync(path.join(os.tmpdir(), 'gleec-browser-release-'));
     this.events = new Set();
     this.pending = new Map();
@@ -28,6 +30,7 @@ class LocalBrowser {
   async serve() {
     const hosted = process.env.GLEEC_TEST_HOSTED_URL;
     if (hosted) {
+      assert.equal(this.webCompiler, 'javascript', 'Hosted acceptance requires the deployed JavaScript build');
       const target = new URL(hosted);
       assert.equal(target.protocol, 'https:');
       assert.match(target.hostname, /^(?:walletrc|gleec-wallet-official)--pull-\d+-merge-(?:[a-f0-9]{7,40}-)?[a-z0-9]{6,40}\.web\.app$/);
@@ -43,8 +46,11 @@ class LocalBrowser {
       this.buildFingerprint = actual;
       return;
     }
-    const source = path.join(this.root, 'build/web');
+    const isWasm = this.webCompiler === 'wasm';
+    const source = path.join(this.root, isWasm ? 'build/web-wasm' : 'build/web');
+    const entrypoint = isWasm ? 'main.dart.wasm' : 'main.dart.js';
     assert.ok(fs.existsSync(path.join(source, 'main.dart.js')), 'Build the release app first');
+    assert.ok(fs.existsSync(path.join(source, entrypoint)), 'Build the selected release compiler first');
     assert.equal(fs.existsSync(path.join(source, 'assets/assets/debug_data.json')),false,
       'Stop: rebuild with the explicit public asset manifest before browser validation');
     for(const name of ['AssetManifest.bin','AssetManifest.json','AssetManifest.bin.json']){
@@ -56,20 +62,20 @@ class LocalBrowser {
         'Stop: the compiled asset manifest still advertises a private fixture');
     }
     const digest = filename => createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
-    this.buildFingerprint = digest(path.join(source, 'main.dart.js'));
+    this.buildFingerprint = digest(path.join(source, entrypoint));
     if(process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256){
       assert.equal(this.buildFingerprint,process.env.GLEEC_TEST_EXPECTED_BUILD_SHA256,
         'Use only the exact release build approved for this regression round');
     }
     const build = path.join(this.profile, 'compiled-fixture');
     fs.cpSync(source, build, {recursive:true,dereference:true});
-    assert.equal(digest(path.join(source, 'main.dart.js')),this.buildFingerprint,
+    assert.equal(digest(path.join(source, entrypoint)),this.buildFingerprint,
       'Wait for the shared Flutter build to finish before taking a fixture snapshot');
-    assert.equal(digest(path.join(build, 'main.dart.js')),this.buildFingerprint);
+    assert.equal(digest(path.join(build, entrypoint)),this.buildFingerprint);
     const hosting = JSON.parse(fs.readFileSync(path.join(this.root, 'firebase.json'))).hosting;
     const headers = Object.fromEntries(hosting.headers.find(item => item.source === '**').headers
       .map(item => [item.key, item.value]));
-    const mime = { '.html':'text/html', '.js':'text/javascript', '.json':'application/json',
+    const mime = { '.html':'text/html', '.js':'text/javascript', '.mjs':'text/javascript', '.json':'application/json',
       '.wasm':'application/wasm', '.svg':'image/svg+xml', '.png':'image/png', '.webp':'image/webp',
       '.jpg':'image/jpeg', '.ttf':'font/ttf', '.otf':'font/otf', '.woff2':'font/woff2', '.css':'text/css' };
     this.server = http.createServer((request, response) => {
@@ -186,6 +192,11 @@ class LocalBrowser {
 
   async semantics(page) {
     await this.wait(page,"document.querySelector('flt-semantics-placeholder')||document.querySelector('[role=button]')",{label:'Flutter semantics'});
+    if (this.webCompiler === 'wasm') {
+      const loaded = await page.evaluate("performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname)");
+      assert.ok(loaded.includes('/main.dart.wasm'), 'The acceptance flow must load the Dart2Wasm application');
+      assert.equal(loaded.includes('/main.dart.js'), false, 'JavaScript fallback must not satisfy Wasm acceptance');
+    }
     await page.evaluate("document.querySelector('flt-semantics-placeholder')?.click(); true");
   }
 

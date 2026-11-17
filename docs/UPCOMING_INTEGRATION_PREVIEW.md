@@ -10,7 +10,7 @@ focused review.
 | Audited onboarding/device access, app #3612 | `6b80c458650572c042c9c7867f777c7265f5519f` |
 | Audited Solana, app #3611 | `b58b21c21d84186b9b0525db513064a460451e0a` |
 | Audited pricing, app #3607 | `309dd97d926383feeb4f0c34a907de986be7b716` |
-| Combined SDK #448 | `181e07982bc8ba72a4ebcf53bfcf0debed80923f` |
+| Combined SDK #448 | `00b37f50abefbf2499c02da50fca98fb908aadd7` |
 
 The app branch preserves the four published app heads as ancestors. SDK #448
 combines SDK #443, #444, #445 and #447. The app pins that combined SDK rather
@@ -60,7 +60,7 @@ defines from `docs/TESTING.md`. New Swap tests are imported and invoked in
 - SDK pricing/providers: 374 passed, six opt-in live-provider skips.
 - Deployment privacy/URL fixtures: 27 + eight passed in each repository.
 - Android signing fixture and all nine LI.FI build-profile fixtures passed.
-- Full app analysis: zero errors, 60 warnings and 3,254 informational findings.
+- Full app analysis: zero errors, 60 warnings and 3,253 informational findings.
   All 122 changed app Dart files have zero scoped errors/warnings.
   SDK analysis also found no errors; documented warning/deprecation debt
   remains. Changed Dart files were formatted.
@@ -83,6 +83,27 @@ selects rendered, enabled controls before focusing or typing. The complete
 compiled phrase/encrypted-file recovery flow passed after that correction,
 including identity, derivation and diagnostic-canary assertions. No wallet
 authorization or recovery assertion was bypassed.
+
+Full application WebAssembly acceptance then found two runtime defects that
+compilation and the existing package lanes did not cover. Adapting the SDK's
+optional-named extension tear-off to a zero-argument engine-stop callback
+trapped; an explicit call preserves the same nested transition/revocation
+behavior. KDF's numeric Argon2 version became `19.0` through JS interop and
+failed string-to-integer parsing; the parser now accepts exact integral values,
+retains hex/decimal string compatibility and rejects fractional/non-finite
+values without exposing malformed inputs in errors. Focused tests reproduced
+both failures before correction. The SDK runs the auth and JS-boundary
+regressions in WebAssembly CI.
+
+After those fixes, the **complete release Wasm recovery flow passed** with
+JavaScript fallback rejected: creation, passkey registration/verification,
+requested-only encrypted export, phrase confirmation, reload/sign-out, separate
+seed and encrypted-file restoration, verified identity/derivation and diagnostic
+canaries. The harness fingerprints the Wasm binary and serves `.mjs` correctly;
+`docs/TESTING.md` records the command. SDK auth recheck: 196 passed; complete
+types: 214 passed/three existing skips; real Wasm auth: two passed; KDF Wasm
+transport/privacy: 11 passed; browser log-storage privacy: 12 passed. The
+changed SDK source/tests have clean scoped analysis and formatting.
 
 **UI-Pro Basis:** the repository's wallet design-system, Flutter accessibility
 and financial error-recovery searches; existing Swap state/motion contract;
