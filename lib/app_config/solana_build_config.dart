@@ -34,6 +34,13 @@ class SolanaBuildConfig {
   static const catalogAsset =
       'packages/komodo_defi_framework/assets/config/coins_config.json';
 
+  /// KDF PR #35's head, and the local build that merges it with KDF dev and
+  /// main. Both carry the same SPL Max and Token-2022 withdrawal defects.
+  static const enginesWithOpenWithdrawalDefects = {
+    'b1ff8f05c880d6f118124cac9ef615aa9d91bb39',
+    '46769c4df3b043669eee59508bf1af017157dcdd',
+  };
+
   final bool enabled;
   final bool splMaxEnabled;
   final bool token2022Enabled;
@@ -72,7 +79,7 @@ class SolanaBuildConfig {
         'The Solana candidate must use its isolated catalog storage namespace.',
       );
     }
-    if (engineCommit == 'b1ff8f05c880d6f118124cac9ef615aa9d91bb39' &&
+    if (enginesWithOpenWithdrawalDefects.contains(engineCommit) &&
         (splMaxEnabled || token2022Enabled)) {
       throw StateError(
         'This KDF revision has unresolved SPL Max and Token-2022 withdrawals.',
