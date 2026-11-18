@@ -11,11 +11,21 @@ focused review.
 | Audited Solana, app #3611 | `b58b21c21d84186b9b0525db513064a460451e0a` |
 | Audited pricing, app #3607 | `309dd97d926383feeb4f0c34a907de986be7b716` |
 | Combined SDK #448 | `776559bcfcdc32fc047710c8960c4eba38879012` |
+| Post-0.10.0 review fixes, app #3618 | `320445fa17b66d065f72ff380905bb9725b8680a` |
+| Combined Solana KDF, app #3619 | `8b7c0052b0657289c6cb988d9a8c252e2f68b1a3` |
+| SDK `dev` pin (#448, #450, #452, #453) | `6790655afdc247749d3d7a477f101b0983f3df96` |
+| KDF `charl-temp/solana-combined` | `46769c4df3b043669eee59508bf1af017157dcdd` |
 
 The app branch preserves the four published app heads as ancestors. SDK #448
 combines SDK #443, #444, #445 and #447. The app pins that combined SDK rather
 than selecting one feature branch's dependency tree. SDK #448 is merged into
 SDK `dev` as `776559bc`, whose tree equals the tested head `ca316f29`.
+
+On 2026-11-18 the review fixes (#3618) and the combined Solana KDF pin (#3619)
+were fast-forwarded into this branch, so their commits are unchanged. The app
+now pins SDK `dev` `6790655a`, which adds the review fixes (SDK #450) and the
+KDF pin (SDK #452, relabelled by #453). KDF `46769c4d` merges kdf-internal
+`dev`, Solana PR #35 and `main`; see `SOLANA_KDF_DEPENDENCIES.md`.
 
 ## Swap UX reconciliation
 
@@ -127,9 +137,10 @@ test result.
 
 ## Remaining release gates
 
-The SDK must merge to an accepted branch and the app must be repinned before
-release. The SDK ancestry safeguard remains enabled and deliberately rejects
-the preview-only commit. A successful preview is not production approval.
+The KDF pin is a temporary build that the KDF team has not reviewed. The "KDF
+pin can ship" check refuses it for `main` and release branches, so the app
+must be repinned to a merged kdf-internal commit before release. A successful
+preview is not production approval.
 
 Physical biometric/PIN/passkey/provider behavior, OS lock/invalidation/reinstall,
 trusted signing/provisioning and rollback, production helper-origin closure,
@@ -138,5 +149,5 @@ SPL Max/Token-2022, funded history/backfill, combined seven-platform KDF artifac
 preserving LI.FI, bot per-order guarantees, Banxa/live-provider availability,
 historical-log/credential review, device performance and moderated usability
 remain separate gates. A person operates every control that commits funds in
-manual preview rounds. Capability defaults and production KDF/catalog pins are
+manual preview rounds. Capability defaults and the production catalog pin are
 preserved; no production promotion is performed.
