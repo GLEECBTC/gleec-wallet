@@ -30,11 +30,13 @@ import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 
+part 'auth_bloc_managed_cases.dart';
 part 'auth_bloc_trezor_cases.dart';
 
 /// Auth operations publish SDK-owned metadata and preserve typed failures.
 void testAuthBloc() {
   _trezorSignInCases();
+  _managedSignInCases();
 
   group('AuthBloc asynchronous access observation', () {
     late _FakeAuth auth;

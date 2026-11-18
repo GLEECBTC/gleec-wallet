@@ -266,6 +266,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   String? failPasswordChange;
   bool cleanupSucceeds = true;
   int cleanupAttempts = 0;
+  int signIns = 0;
   void activate(KdfUser user) {
     active = user;
     sessions.observe(user);
@@ -352,6 +353,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
     required String password,
     AuthOptions options = _options,
   }) async {
+    signIns++;
     final user = users.firstWhere((user) => user.walletId.name == walletName);
     activate(user);
     return user;
@@ -1924,6 +1926,17 @@ void main() {
         expect(backend.writes, writes);
       },
     );
+    test('managed unlock reuses the session the engine holds', () async {
+      // The real engine refuses a second sign-in while one is open.
+      final user = await install(protected: false);
+      final verified = auth.verifiedWallets.length;
+      expect(await service.signInManaged(user.wallet), user);
+      expect(auth.signIns, 0);
+      expect(auth.verifiedWallets.length, verified + 1);
+      auth.active = null;
+      expect(await service.signInManaged(user.wallet), user);
+      expect(auth.signIns, 1);
+    });
     test(
       'normal same-wallet engine attachment does not revoke unlock operation',
       () async {

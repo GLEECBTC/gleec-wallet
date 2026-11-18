@@ -508,11 +508,17 @@ class WalletAccessService {
       revision: revision,
     );
     _ensureRevision(revision);
-    final signedIn = await _sdk.auth.signIn(
-      walletName: user.walletId.name,
-      password: password,
-      options: user.walletId.authOptions,
-    );
+    // The engine refuses a second sign-in, so a repeated unlock would fail for
+    // as long as a session it already holds for this wallet stays open. The
+    // credential is still verified against that session below.
+    final current = await _sdk.auth.currentUser;
+    final signedIn = current != null && current.walletId == user.walletId
+        ? current
+        : await _sdk.auth.signIn(
+            walletName: user.walletId.name,
+            password: password,
+            options: user.walletId.authOptions,
+          );
     await _sdk.auth.verifyPassword(
       password: password,
       expectedWalletId: signedIn.walletId,
