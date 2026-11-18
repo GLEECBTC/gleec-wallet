@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' show Tristate;
 
 import 'package:easy_localization/easy_localization.dart';
@@ -13,7 +12,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
 import 'package:web_dex/model/wallet.dart';
-import 'package:web_dex/shared/utils/encryption_tool.dart';
 import 'package:web_dex/shared/widgets/legal_documents/legal_document_notice.dart';
 import 'package:web_dex/services/legal_documents/legal_document.dart';
 import 'package:web_dex/views/common/hw_wallet_dialog/hw_dialog_wallet_select.dart';
@@ -22,6 +20,7 @@ import 'package:web_dex/views/wallets_manager/widgets/wallet_import_by_file.dart
 import 'package:web_dex/views/wallets_manager/widgets/wallet_login.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart';
 
+import '../../../support/legacy_wallet_file_writer.dart';
 import '../../../support/legal_onboarding_harness.dart';
 
 // Read from the catalogue: its wording is edited centrally.
@@ -133,22 +132,18 @@ void main() {
           )..remoteAvailable = succeeds;
           String? fileContent;
           if (form == 'file') {
-            fileContent = await tester.runAsync(() async {
-              final tool = EncryptionTool();
-              final config = WalletConfig(
-                seedPhrase: await tool.encryptData(
-                  legalTestPassword,
-                  legalTestSeed,
-                ),
-                activatedCoins: [],
-                hasBackup: true,
-                type: WalletType.hdwallet,
-              );
-              return tool.encryptData(
+            fileContent = await tester.runAsync(
+              () => legacyWalletFile(
                 legalTestPassword,
-                jsonEncode(config.toJson()),
-              );
-            });
+                WalletConfig(
+                  seedPhrase: '',
+                  activatedCoins: [],
+                  hasBackup: true,
+                  type: WalletType.hdwallet,
+                ),
+                legalTestSeed,
+              ),
+            );
           }
           var submitted = 0;
           await harness.pump(

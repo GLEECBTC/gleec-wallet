@@ -4,42 +4,13 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart';
 
+/// Reads data written by earlier versions of the app: version 1 wallet files
+/// and the seeds of wallets kept in legacy browser storage.
+///
+/// Nothing writes this format any more. It is PBKDF2-HMAC-SHA1 with 1,000
+/// iterations and AES-128-CBC with no MAC, and before that an MD5 key. New
+/// wallet files use `WalletFileCodec`.
 class EncryptionTool {
-  /// Encrypts the provided [data] using AES encryption with the given [password].
-  ///
-  /// Parameters:
-  /// - [password] (String): The password used for encryption key derivation.
-  /// - [data] (String): The data to be encrypted.
-  ///
-  /// Return Value:
-  /// - Future<String>: A JSON-encoded string containing the encrypted data and IVs.
-  ///
-  /// Example Usage:
-  /// ```dart
-  /// String password = 'securepassword';
-  /// String data = 'confidential information';
-  ///
-  /// String encryptedResult = await encryptData(password, data);
-  /// print(encryptedResult); // Output: JSON-encoded string with encrypted data and IVs
-  /// ```
-  /// unit tests [testEncryptDataTool]
-  Future<String> encryptData(String password, String data) async {
-    final iv1 = IV.fromLength(16);
-    final iv2 = IV.fromLength(16);
-    final secretKey = await _pbkdf2Key(password, iv2.bytes);
-
-    final encrypter = Encrypter(AES(secretKey, mode: AESMode.cbc));
-    final Encrypted encrypted = encrypter.encrypt(data, iv: iv1);
-
-    final String result = jsonEncode(<String, dynamic>{
-      '0': base64.encode(encrypted.bytes),
-      '1': base64.encode(iv1.bytes),
-      '2': base64.encode(iv2.bytes),
-    });
-
-    return result;
-  }
-
   /// Decrypts the provided [encryptedData] using AES decryption with the given [password].
   /// The method attempts to decode the [encryptedData] as a JSON-encoded string
   /// containing encrypted data and initialization vectors (IVs).

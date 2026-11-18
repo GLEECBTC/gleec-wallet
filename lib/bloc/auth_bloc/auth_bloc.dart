@@ -21,6 +21,8 @@ import 'package:web_dex/model/kdf_auth_metadata_extension.dart';
 import 'package:web_dex/model/prepared_legacy_migration.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart'
+    show WalletOperationDenied;
 import 'package:web_dex/services/file_loader/file_loader.dart'
     show FileSaveCancelledException, FileSaveUnconfirmedException;
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
@@ -975,7 +977,16 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       // The authorization ended before anything was read. The app's lock
       // already tells the user why; there is no failure to report.
       return;
+    } on WalletOperationDenied {
+      // Likewise a lock or switch later on, often while the file was being
+      // protected. Nothing was written.
+      return;
     } catch (e, s) {
+      if (e is WalletAccessException &&
+          (e.failure == WalletAccessFailure.staleOperation ||
+              e.failure == WalletAccessFailure.canceled)) {
+        return;
+      }
       _log.shout('Failed to download wallet data', e, s);
       final currentUser = await _kdfSdk.auth.currentUser;
       if (emit.isDone || currentUser?.walletId != expectedWalletId) return;
@@ -994,6 +1005,8 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
           ),
         ),
       );
+    } finally {
+      event.onFinished?.call();
     }
   }
 

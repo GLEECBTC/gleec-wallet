@@ -18,6 +18,7 @@ import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
+import 'package:web_dex/services/wallet_file/wallet_file_codec.dart';
 
 import '../../helpers/runtime_auth_fixture.dart';
 
@@ -296,6 +297,123 @@ void testWalletOperationIdentity() {
         expect(fileLoader.savedFileNames, isEmpty);
       },
     );
+
+    group('export format', () {
+      const phrase =
+          'legal winner thank year wave sausage worth useful legal winner thank yellow';
+      Future<_RecordingFileLoader> export() async {
+        auth.readMnemonic = () async => Mnemonic.plaintext(phrase);
+        final files = _RecordingFileLoader();
+        await WalletsRepository(
+          sdk,
+          _UnusedMm2Api(),
+          _UnusedStorage(),
+          fileLoader: files,
+        ).downloadEncryptedWallet(
+          auth.user.wallet,
+          'synthetic password',
+          expectedWalletId: auth.user.walletId,
+        );
+        return files;
+      }
+
+      test('a version 2 file records the engine derivation', () async {
+        final files = await export();
+        final file = files.savedData.single;
+        expect(WalletFileInspection.of(file).kind, WalletFileKind.current);
+        final opened = await const WalletFileCodec().open(
+          password: 'synthetic password',
+          content: file,
+        );
+        expect(opened.recordedType, WalletType.iguana);
+        expect(opened.config.seedPhrase, phrase);
+      });
+
+      test('the engine derivation wins over the app label', () async {
+        auth.user = KdfUser(
+          walletId: WalletId.withPubkeyHash(
+            'Original',
+            const AuthOptions(derivationMethod: DerivationMethod.hdWallet),
+            'pubkey-Original',
+          ),
+          isBip39Seed: true,
+        ).copyWith(metadata: {'type': 'iguana'});
+        expect(auth.user.wallet.config.type, WalletType.iguana);
+        final files = await export();
+        expect(
+          WalletFileInspection.of(files.savedData.single).recordedType,
+          WalletType.hdwallet,
+        );
+      });
+
+      for (final interruption in ['switch', 'lock']) {
+        test(
+          'a $interruption while the file is protected writes nothing',
+          () async {
+            auth.readMnemonic = () async => Mnemonic.plaintext(phrase);
+            final gate = WalletOperationGate()
+              ..attachWallet('entry', allowOperations: true);
+            final permit = gate.capture();
+            final codec = _GatedCodec();
+            final files = _RecordingFileLoader();
+            final finished = expectLater(
+              WalletsRepository(
+                sdk,
+                _UnusedMm2Api(),
+                _UnusedStorage(),
+                fileLoader: files,
+                walletFileCodec: codec,
+              ).downloadEncryptedWallet(
+                auth.user.wallet,
+                'synthetic password',
+                expectedWalletId: auth.user.walletId,
+                ensureAuthorized: permit.ensureCurrent,
+              ),
+              // A lock is the user's doing, not a failed export.
+              throwsA(
+                interruption == 'switch'
+                    ? isA<WalletChangedDisconnectException>()
+                    : isA<WalletOperationDenied>(),
+              ),
+            );
+            await codec.reached.future;
+            if (interruption == 'switch') {
+              auth.user = _user('Replacement');
+            } else {
+              gate.block();
+            }
+            codec.release.complete();
+            await finished;
+            expect(files.savedData, isEmpty);
+          },
+        );
+      }
+
+      test('a hardware wallet has no file to export', () async {
+        auth.user = auth.user.copyWith(metadata: {'type': 'trezor'});
+        var mnemonicCalls = 0;
+        auth.readMnemonic = () async {
+          mnemonicCalls++;
+          return Mnemonic.plaintext(phrase);
+        };
+        final files = _RecordingFileLoader();
+        await expectLater(
+          WalletsRepository(
+            sdk,
+            _UnusedMm2Api(),
+            _UnusedStorage(),
+            fileLoader: files,
+          ).downloadEncryptedWallet(
+            auth.user.wallet,
+            'synthetic password',
+            expectedWalletId: auth.user.walletId,
+          ),
+          throwsA(isA<Exception>()),
+        );
+        expect(mnemonicCalls, 0);
+        expect(files.savedData, isEmpty);
+      });
+    });
   });
 }
 
@@ -411,6 +529,7 @@ class _FakeArrrActivationService implements ArrrActivationService {
 
 class _RecordingFileLoader implements FileLoader {
   final List<String> savedFileNames = [];
+  final List<String> savedData = [];
   Future<void> Function()? beforeCommit;
 
   @override
@@ -424,10 +543,29 @@ class _RecordingFileLoader implements FileLoader {
     await beforeCommit?.call();
     beforeWrite?.call();
     savedFileNames.add(fileName);
+    savedData.add(data);
   }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Holds the sealed file until released, the window Argon2id opens.
+class _GatedCodec extends WalletFileCodec {
+  final reached = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<String> seal({
+    required String password,
+    required String mnemonic,
+    required WalletConfig config,
+    required DerivationMethod derivation,
+  }) async {
+    reached.complete();
+    await release.future;
+    return 'sealed';
+  }
 }
 
 class _UnusedMm2Api implements Mm2Api {
