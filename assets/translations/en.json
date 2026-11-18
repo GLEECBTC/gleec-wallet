@@ -1436,6 +1436,7 @@
   "swapReviewChangedBody": "Go back to see what changed. Nothing has been signed or sent.",
   "swapReviewRejectedTitle": "This swap couldn't start",
   "swapReviewRejectedBody": "Nothing was sent. Check the amount and try again.",
+  "swapReviewSigningPolicyBody": "This pay asset requires a wallet that signs locally. Choose another pay asset or switch wallets.",
   "swapReviewUnconfirmedTitle": "We couldn't confirm whether this swap started",
   "swapReviewUnconfirmedBody": "It may already be running. Check Activity before trying again — starting another would swap twice.",
   "swapReviewHighImpactTitle": "High price impact",

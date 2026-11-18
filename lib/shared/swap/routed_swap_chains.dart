@@ -82,8 +82,9 @@ const Set<int> routedSwapChainIds = {
   11155420,
 };
 
-/// Whether [asset] should be routable once active.
+/// Whether [asset] should be eligible to quote once active.
 bool isRoutedSwapCandidate(AssetId asset) {
+  if (SwapNetworks.nonEvmRoutedChainIdOf(asset) != null) return true;
   final chainId = SwapNetworks.evmChainIdOf(asset);
   return chainId != null && routedSwapChainIds.contains(chainId);
 }

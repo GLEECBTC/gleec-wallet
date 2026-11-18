@@ -391,7 +391,9 @@ void main() {
         tradingAllowed: (_, _) => true,
         clockValid: () => true,
       );
+      final listed = repo.arrivals.first;
       await repo.catalog();
+      await listed;
 
       final result = await repo.quote(
         SwapQuoteRequest(from: btc, to: eth, amount: d('1')),
@@ -422,7 +424,9 @@ void main() {
         tradingAllowed: (_, _) => true,
         clockValid: () => true,
       );
+      final listed = repo.arrivals.first;
       await repo.catalog();
+      await listed;
 
       final result = await repo.quote(
         SwapQuoteRequest(from: eth, to: btc, amount: d('1')),

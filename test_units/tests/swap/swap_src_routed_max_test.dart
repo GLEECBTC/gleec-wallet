@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
+import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/routed_swap_source.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
 import 'package:web_dex/shared/swap/swap_networks.dart';
@@ -31,6 +32,44 @@ void main() {
   );
 
   group('KDF Max quotes', () {
+    test(
+      'Bitcoin miner fees and staked TRON use the original KDF Max',
+      () async {
+        final trx = assetOf('TRX', subClass: CoinSubClass.trx, decimals: 6);
+        final routed = RoutedSwapQuoteSource(
+          manager,
+          networks: () => SwapNetworks([btc, trx, usdc]),
+          nativeMaxGasReserve: true,
+        );
+        for (final (asset, fee) in [(btc, '0.0001'), (trx, '0')]) {
+          manager.maximum = offerOf(
+            from: asset,
+            to: usdc,
+            sell: '0.01',
+            guaranteed: '5',
+            networkFees: [
+              RoutedSwapNetworkFee(
+                ticker: asset.id,
+                assetId: asset,
+                amount: d(fee),
+                requiredBalance: d(fee),
+              ),
+            ],
+          );
+          final result = (await routed.maxAmount(
+            from: asset,
+            to: usdc,
+            balance: d('0.02'),
+          ))!;
+          expect(result.amount, d('0.01'));
+          expect(result.quote!.guaranteedReceive, d('5'));
+          expect(result.reservedForFees, d(fee));
+        }
+        expect(manager.maxCalls, 2);
+        expect(manager.quotes, isEmpty);
+      },
+    );
+
     test(
       'uses the returned amount, required balance and exact minimum',
       () async {
@@ -188,9 +227,8 @@ void main() {
     test('timeout never falls back to full balance', () async {
       manager.hangMax = true;
       await expectLater(
-        source(
-          timeout: Duration.zero,
-        ).maxAmount(from: eth, to: usdc, balance: d('2')),
+        source(timeout: Duration.zero)
+            .maxAmount(from: eth, to: usdc, balance: d('2')),
         throwsA(
           isA<SwapMaxUnavailableException>().having(
             (e) => e.failure.kind,
@@ -212,17 +250,38 @@ void main() {
       manager.hangEligible = true;
       final paxg = assetOf('PAXG-ERC20', parent: eth);
 
-      final assets = await source(
-        catalogTimeout: Duration.zero,
-      ).assets(known: {eth, usdc, paxg, btc}, activated: {eth, usdc, btc});
+      final assets = await source(catalogTimeout: Duration.zero)
+          .assets(known: {eth, usdc, paxg, btc}, activated: {eth, usdc, btc});
 
       expect(assets.source, SwapLiquiditySource.routed);
-      expect(assets.quotable, {eth, usdc});
+      expect(assets.quotable, {eth, usdc, btc});
       expect(assets.onceActive, {paxg});
       final update = await assets.update!;
       expect(update.status, SwapCatalogStatus.unavailable);
-      expect(update.quotable, {eth, usdc});
+      expect(update.quotable, {eth, usdc, btc});
       expect(update.onceActive, {paxg});
+    },
+  );
+
+  test(
+    'KDF confirms active Bitcoin and TRON eligibility before quoting',
+    () async {
+      final trx = assetOf('TRX', subClass: CoinSubClass.trx, decimals: 6);
+      final usdt = assetOf(
+        'USDT-TRC20',
+        subClass: CoinSubClass.trc20,
+        parent: trx,
+      );
+      manager.eligible = {eth, usdt};
+      final assets = await source().assets(
+        known: {eth, btc, trx, usdt},
+        activated: {eth, btc, usdt},
+      );
+      expect(assets.quotable, {eth, btc, usdt});
+      expect(assets.onceActive, {trx});
+      final confirmed = await assets.update!;
+      expect(confirmed.quotable, {eth, usdt});
+      expect(confirmed.onceActive, {trx});
     },
   );
 }
