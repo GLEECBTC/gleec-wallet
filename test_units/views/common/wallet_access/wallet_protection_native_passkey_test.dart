@@ -23,6 +23,14 @@ const _passkeysOnly = CredentialCapabilities(
   protection: CredentialProtection.osAccountProtected,
   existingPasskeyCandidate: true,
 );
+
+/// Linux: security keys, and no device unlock to go back to.
+const _securityKeys = CredentialCapabilities(
+  available: true,
+  protection: CredentialProtection.osAccountProtected,
+  existingPasskeyCandidate: true,
+  unattendedReturn: true,
+);
 const _deviceOnly = CredentialCapabilities(
   available: true,
   protection: CredentialProtection.authenticationBound,
@@ -84,6 +92,13 @@ class _NativeAccess extends AccessibilityAccess {
     required WalletId walletId,
     required String password,
   }) async => _record('passwordOnly', password, CredentialProtection.password);
+
+  @override
+  Future<void> useDeviceStorageInstead({required WalletId walletId}) async {
+    requests.add(('deviceStorage', null));
+    if (failure case final failure?) throw WalletAccessException(failure);
+    lock = null;
+  }
 
   @override
   Future<void> replacePasskeyUsingPassword({
@@ -247,6 +262,35 @@ void main() {
       await _tap(tester, 'switch-to-device-unlock');
       expect(access.requests, [('device', null)]);
       expect(find.text('authProtectionEnabled'.tr()), findsOneWidget);
+    });
+
+    testWidgets('without device unlock, the passkey leads back to storage', (
+      tester,
+    ) async {
+      final access = _NativeAccess(
+        _securityKeys,
+        lock: CredentialProtection.passkey,
+      );
+      await _pumpSection(tester, access);
+      expect(find.byKey(const Key('switch-to-device-unlock')), findsNothing);
+      expect(_isPrimary('use-device-storage'), isFalse);
+
+      await _tap(tester, 'use-device-storage');
+      // The passkey authorizes it; nothing is typed.
+      expect(access.requests, [('deviceStorage', null)]);
+      expect(find.text('authOpenedWithoutPasskey'.tr()), findsOneWidget);
+      expect(find.byKey(const Key('use-device-storage')), findsNothing);
+    });
+
+    testWidgets('where device unlock exists, storage is not the way back', (
+      tester,
+    ) async {
+      await _pumpSection(
+        tester,
+        _NativeAccess(_deviceAndPasskeys, lock: CredentialProtection.passkey),
+      );
+      expect(find.byKey(const Key('switch-to-device-unlock')), findsOneWidget);
+      expect(find.byKey(const Key('use-device-storage')), findsNothing);
     });
 
     testWidgets('says plainly when no passkey was found', (tester) async {

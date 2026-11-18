@@ -13,6 +13,12 @@ import 'services/wallet_access/passkey/passkey_credential_backend_test.dart'
     as passkey_credential_backend_test;
 import 'views/common/wallet_access/wallet_protection_native_passkey_test.dart'
     as wallet_protection_native_passkey_test;
+import 'services/wallet_access/passkey/security_key/linux_security_key_authenticator_test.dart'
+    as linux_security_key_authenticator_test;
+import 'services/wallet_access/passkey/security_key/security_key_bridge_test.dart'
+    as security_key_bridge_test;
+import 'views/common/wallet_access/security_key_prompt_host_test.dart'
+    as security_key_prompt_host_test;
 import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
     as portfolio_growth_repository_test;
 import 'views/wallet/portfolio_profit_loss_views_test.dart'
@@ -634,6 +640,12 @@ void main() {
     'wallet_protection_native_passkey_test',
     wallet_protection_native_passkey_test.main,
   );
+  group(
+    'linux_security_key_authenticator_test',
+    linux_security_key_authenticator_test.main,
+  );
+  group('security_key_bridge_test', security_key_bridge_test.main);
+  group('security_key_prompt_host_test', security_key_prompt_host_test.main);
   group(
     'portfolio_growth_repository_test',
     portfolio_growth_repository_test.main,

@@ -52,7 +52,7 @@ if [[ "$apt_ready" != true ]]; then
   exit 1
 fi
 packages=(
-  ninja-build libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev
+  ninja-build libgtk-3-dev libblkid-dev liblzma-dev libsecret-1-dev libfido2-dev
   libjsoncpp-dev libsqlite3-dev libxdg-basedir-dev cmake pkg-config clang
   binutils git xz-utils zip libglu1-mesa curl libstdc++-12-dev
 )

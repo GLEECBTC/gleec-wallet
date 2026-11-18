@@ -125,6 +125,7 @@ class WalletProtectionBloc
         state.canEnableDevice || state.canSwitchToDevice,
       WalletProtectionAction.replacePasskey => state.canReplacePasskey,
       WalletProtectionAction.passwordOnly => state.canUsePasswordOnly,
+      WalletProtectionAction.deviceStorage => state.canUseDeviceStorage,
       WalletProtectionAction.grace =>
         state.status?.requiresAuthentication == true &&
             walletLockGraceOptions.any(
@@ -183,6 +184,8 @@ class WalletProtectionBloc
             );
           }
           await access.stopUsingPasskey(walletId: walletId, password: password);
+        case WalletProtectionAction.deviceStorage:
+          await access.useDeviceStorageInstead(walletId: walletId);
         case WalletProtectionAction.grace:
           await access.authorize(
             walletId: walletId,

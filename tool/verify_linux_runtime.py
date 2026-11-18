@@ -20,4 +20,11 @@ for path in sorted(binaries):
     result = subprocess.run(["ldd", str(path)], capture_output=True, text=True)
     if result.returncode or "not found" in result.stdout + result.stderr:
         raise SystemExit("Unresolved Linux runtime dependencies: " + str(path.relative_to(root)))
-print("Verified Linux bundle dependencies and Ubuntu 22.04 glibc compatibility.")
+# The security-key bridge loads libfido2 when first used, so a missing library
+# only hides the option. A build without its headers compiles a stub instead.
+runner = root / "GleecDEX"
+if b"libfido2.so.1\0" not in runner.read_bytes():
+    raise SystemExit("The Linux build lacks the security-key bridge (install libfido2-dev)")
+if re.search(r"NEEDED\s+libfido2", subprocess.check_output(["objdump", "-p", str(runner)], text=True)):
+    raise SystemExit("libfido2 must be loaded at runtime, not linked")
+print("Verified Linux bundle dependencies, Ubuntu 22.04 glibc compatibility and the security-key bridge.")

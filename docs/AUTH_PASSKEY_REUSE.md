@@ -1,7 +1,8 @@
 # Reusing a web passkey in the native apps
 
 A user who protects the web wallet with a passkey can choose **Use existing
-passkey** in the iOS, iPadOS, macOS, Android or Windows app. The app then
+passkey** in the iOS, iPadOS, macOS, Android or Windows app, or in the Linux
+app when that passkey is on a FIDO2 security key. The app then
 unlocks that device's copy of the wallet with the same passkey. Nobody creates
 a second passkey, and no account or server is involved.
 
@@ -61,14 +62,16 @@ way to lock a wallet: most people hold no passkey for the web wallet, so the
 device unlock or wallet password offer stays first.
 
 Code: `lib/services/wallet_access/platform/passkey/` (envelope, checks,
-decorator), the service's `useExistingPasskey`, and one `gleec.wallet/passkey`
-bridge per platform. The device vaults are unchanged.
+decorator), the service's `useExistingPasskey`, one `gleec.wallet/passkey`
+bridge per platform, and on Linux `gleec.wallet/security_key` (see
+[Linux](#linux-fido2-security-keys)). The device vaults are unchanged.
 
 ### Ways back
 
 | Situation | What the user can do |
 | --- | --- |
 | Passkey still works | **Use device unlock instead** (authorized by the passkey). |
+| Passkey still works, no device unlock (Linux) | **Open without the passkey** (authorized by the passkey): the keyring or app-local record governs again. It is never behind a rollout flag. |
 | Provider lost, password known | **Switch to device unlock using password**, **Choose another passkey using password**, or **Use only the wallet password**. The last one is never behind a rollout flag. |
 | Provider lost, generated password unknown | Recover with the phrase. The settings copy points to the password manager first. |
 | Envelope unreadable (damaged, or written by a later build) | It reports `invalidated`. It can be replaced or removed after password verification, never opened. |
@@ -81,10 +84,60 @@ bridge per platform. The device vaults are unchanged.
 | macOS 15+ | The same Swift file. It is offered only when the running app carries an associated-domains entitlement. | A provisioning profile with Associated Domains and the entitlement added to `Release.entitlements` (not done here: without the profile, macOS refuses to launch an app that claims it). |
 | Android 9+ | Credential Manager 1.6.0 (`PasskeyAuthenticatorChannel.java`). Offered only with a screen lock set. | `assetlinks.json` for the package and **release** signing certificate. The provider must return PRF through Credential Manager. On Android 13 and earlier with older Play services, the library's non-JSON request path drops extensions, so PRF fails as unsupported after the user verifies. |
 | Windows 10 1903+ | `webauthn.dll` API v4+, loaded from System32 (`windows/runner/passkey_channel.cpp`). | A provider whose assertions return hmac-secret/PRF: a FIDO2 security key, or Windows Hello or a plug-in passkey manager where they support it. |
-| Linux | Not offered. | Reuse would mean libfido2 with a PIN prompt in the app, udev access to security keys, and no phone hand-off. That deserves its own design. |
+| Linux (Ubuntu 22.04+) | libfido2 1.10+, loaded at runtime (`linux/security_key_channel*.cc`), with the PIN and the choice of key asked in the app. USB security keys only: no phone hand-off, NFC or BLE. | `libfido2-1` installed, and udev access to the key for the session (systemd's `uaccess` gives it to the local seat). A key whose web passkey was made with PRF, which the web wallet requires. |
 
 Security-key PRF on Apple platforms needs iOS and macOS 26.4 APIs. CI's
 latest-stable Xcode cannot yet be relied on to have them, so it is not used.
+
+### Linux: FIDO2 security keys
+
+The web wallet makes discoverable, user-verified passkeys with PRF, so on a
+security key they carry hmac-secret and an empty allow-list finds them.
+
+- **PRF.** libfido2 passes its salt to the key raw. The Dart side sends
+  `SHA-256("WebAuthn PRF" || 0x00 || salt)`, as browsers and `webauthn.dll`
+  do, and the 32-byte output is the PRF result. The binding's salt is its
+  own, so nothing depends on matching the browser's output. The transform
+  keeps `salt` meaning a PRF input on every bridge. User verification is
+  always requested: hmac-secret keeps a separate secret without it.
+- **Client data** is composed exactly as the Windows bridge does, so the same
+  assertion checks apply.
+- **The sheet** (`SecurityKeyPromptHost`, above the lock cover) asks for each
+  step: insert a key, touch the one to use when several are inserted, the PIN,
+  the touch, and which passkey when a key holds several. A PIN is never sent
+  to a key the user did not pick: a wrong guess spends that key's tries. A
+  key with built-in verification is tried without a PIN and falls back to it.
+  Tries left show from three down, with a warning at the last: a blocked PIN
+  means a reset, which erases the key's passkeys. Three wrong PINs in a row
+  need the key reinserted, and the sheet waits for that.
+- **The PIN** is checked for CTAP's bounds before it is sent, sent once as
+  bytes, wiped after the call on both sides, never kept between assertions
+  and never logged. Binding therefore asks PIN and touch twice, as Windows
+  does. The field holds it as a Dart string until garbage collection, as it
+  does the wallet password, and the platform channel's own copies are not
+  wiped. It is sent as typed, without NFC normalisation, so a non-ASCII PIN
+  typed in decomposed form would be refused and spend a try.
+- **Cancel** from outside (lock, sign-out) also ends a step waiting on the
+  user, so the wallet-access lock is never held by an open sheet.
+- **No key, no access.** Keys are listed from sysfs, so one the session may
+  not open is reported as such rather than missing. A key without
+  hmac-secret, or a U2F-only key, cannot unlock wallets. A key with neither
+  PIN nor fingerprint cannot hold the web passkey.
+- **Build and runtime.** Only libfido2's headers are used to build
+  (`libfido2-dev`); `tool/verify_linux_runtime.py` refuses a bundle without
+  the bridge or with libfido2 as an ELF dependency. A missing library only
+  hides the option. libfido2 1.14's raw authenticator-data accessor is not
+  relied on: the bridge strips the CBOR header itself.
+- **Cancel** answers at once and sends CTAPHID_CANCEL from the platform thread
+  while the worker waits on the key. libfido2 does not document that as
+  thread-safe; if a key misbehaves, the key's own touch timeout still ends the
+  request, and the next one reports `busy` until then.
+- **udev.** systemd 244+ tags FIDO hidraw nodes (`ID_SECURITY_TOKEN`) and
+  grants the active local session access. A session without a seat needs a
+  group rule such as
+  `SUBSYSTEM=="hidraw", ENV{ID_SECURITY_TOKEN}=="1", GROUP="plugdev", MODE="0660"`;
+  other init systems set no such tag and need the key vendor's rules (Debian:
+  `libu2f-udev`). The app never asks for root.
 
 ## Rollout
 
@@ -155,6 +208,13 @@ record no secrets.
    a FIDO2 key and with Hello. Record which providers returned PRF. A provider
    that returns none must show the "can't unlock wallets in this app" message
    and change nothing.
+7. Linux (Ubuntu 22.04 and a current Fedora), with the web passkey on a
+   PIN-protected key: bind, cold-restart and unlock. Then check each of
+   these: no key until prompted; two keys inserted; a wrong PIN, then three in
+   a row (reinsert); a key holding two web passkeys (picker); a bio key if one
+   is available; a session without uaccess (the "can't open your key"
+   message); and **Open without the passkey**, after which the wallet opens
+   with no prompt.
 
 ## Automated evidence
 
@@ -172,5 +232,23 @@ record no secrets.
   with `/W4 /WX` against the real Windows SDK headers
   (`windows/runner/test/check_windows_vault.py`). No iOS, macOS, Android or
   Windows app was built or run end to end.
+- Linux adds 58 Dart tests:
+  - 29 for the authenticator, including the PRF salt and client data
+    against vectors computed with Python's `hashlib`;
+  - 12 for the channel and the prompt broker;
+  - 6 for the sheet;
+  - 9 for the way back to unattended storage, through the decorator and
+    the service;
+  - 2 for Security settings.
+
+  Each of these mutations fails exactly the test aimed at it: removing the
+  salt transform, the PIN wipe, the guard against unattended writes on a
+  vault that can protect, or the sheet cancel that ends a waiting step.
+- The Linux bridge compiled with `-Wall -Werror` in a release
+  `flutter build linux` against libfido2 1.10 on Ubuntu 22.04 (arm64), and
+  as a syntax check on x86_64. `linux/test/check_security_key_bridge.sh`
+  passed its 76 checks on both. Dropping the UV request or the PIN wipe
+  fails it. Without `libfido2-dev` the build is a stub that
+  `verify_linux_runtime.py` refuses.
 - None of this exercises a real provider, a signed build or a device. Those are
   the acceptance round above.

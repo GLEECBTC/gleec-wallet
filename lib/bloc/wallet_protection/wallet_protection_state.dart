@@ -55,6 +55,13 @@ final class WalletProtectionState extends Equatable {
       capabilities?.deviceAuthentication == true &&
       status?.protection == CredentialProtection.passkey;
 
+  /// A native passkey wallet can return to unattended storage where the
+  /// device has no device unlock to return to.
+  bool get canUseDeviceStorage =>
+      capabilities?.available == true &&
+      capabilities?.unattendedReturn == true &&
+      status?.protection == CredentialProtection.passkey;
+
   /// Another passkey can replace a lost one after password verification.
   bool get canReplacePasskey =>
       status?.protection == CredentialProtection.passkey &&
