@@ -6,6 +6,9 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 /// "USDC · Arbitrum" — because the same ticker on two networks is two
 /// different assets.
 class SwapNetworks {
+  static const tronRoutedChainId = 728126428;
+  static const bitcoinRoutedChainId = 20000000000001;
+
   /// Creates the namer over the assets the wallet knows, which is how a route
   /// leg's EVM chain id is turned back into a name.
   SwapNetworks(Iterable<AssetId> knownAssets) {
@@ -26,7 +29,10 @@ class SwapNetworks {
     // already names (ERC20 → Ethereum, PLG20 → Polygon, GRC20 → Gleec).
     if (asset.isChildAsset) {
       final parent = asset.parentId!;
-      return _usesOwnName(asset.subClass) ? networkOf(parent) : _name(asset);
+      return _usesOwnName(asset.subClass) ||
+              asset.subClass == CoinSubClass.trc20
+          ? networkOf(parent)
+          : _name(asset);
     }
     return _usesOwnName(asset.subClass) ? asset.name : _name(asset);
   }
@@ -37,6 +43,26 @@ class SwapNetworks {
     final asset = _byEvmChainId[chainId];
     return asset == null ? null : networkOf(asset);
   }
+
+  /// The network named by a LI.FI route leg.
+  String? networkOfRoutedChain(int? chainId) => switch (chainId) {
+    tronRoutedChainId => 'TRON',
+    bitcoinRoutedChainId => 'Bitcoin',
+    _ => networkOfEvmChain(chainId),
+  };
+
+  /// Catalog identity for the non-EVM chains KDF can route on. KDF checks the
+  /// activated coin's network and protocol before quoting.
+  static int? nonEvmRoutedChainIdOf(AssetId asset) => switch (asset.subClass) {
+    CoinSubClass.trx when asset.id == 'TRX' => tronRoutedChainId,
+    CoinSubClass.trc20
+        when asset.parentId?.subClass == CoinSubClass.trx &&
+            asset.parentId?.id == 'TRX' =>
+      tronRoutedChainId,
+    CoinSubClass.utxo when asset.id == 'BTC' || asset.id == 'BTC-segwit' =>
+      bitcoinRoutedChainId,
+    _ => null,
+  };
 
   /// The EVM chain id [asset] lives on, when it has one.
   static int? evmChainIdOf(AssetId asset) {

@@ -183,7 +183,7 @@ void main() {
       expect(assets.status, SwapCatalogStatus.fresh);
       expect(assets.quotable, isEmpty);
       // What it can route once active: served EVM networks, so not BTC.
-      expect(assets.onceActive, {eth, usdc});
+      expect(assets.onceActive, {eth, usdc, btc});
     });
 
     test('with anything active, KDF decides', () async {

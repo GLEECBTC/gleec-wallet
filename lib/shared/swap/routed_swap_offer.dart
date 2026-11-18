@@ -120,14 +120,14 @@ List<SwapRouteStage> _routedLegStages(
         stages.add(
           SwapRouteStage(
             kind: SwapRouteStageKind.bridge,
-            network: networks.networkOfEvmChain(leg.toChainId) ?? toNetwork,
+            network: networks.networkOfRoutedChain(leg.toChainId) ?? toNetwork,
           ),
         );
       case RoutedSwapStepType.swap:
         stages.add(
           SwapRouteStage(
             kind: SwapRouteStageKind.convert,
-            network: networks.networkOfEvmChain(leg.chainId) ?? fromNetwork,
+            network: networks.networkOfRoutedChain(leg.chainId) ?? fromNetwork,
           ),
         );
       case RoutedSwapStepType.unknown:

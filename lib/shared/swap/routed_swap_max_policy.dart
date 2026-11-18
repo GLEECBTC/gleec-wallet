@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:decimal/decimal.dart';
 import 'package:komodo_defi_sdk/komodo_defi_sdk.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
+import 'package:web_dex/shared/swap/swap_networks.dart';
 import 'package:web_dex/shared/swap/swap_quote.dart';
 import 'package:web_dex/shared/swap/swap_quote_failure.dart';
 
@@ -25,8 +26,9 @@ class RoutedSwapMaxPolicy {
   /// One initial exact quote and at most two reductions if its fees increase.
   static const _maxExactQuotes = 3;
 
-  /// Quotes native Max with twice the current required gas balance retained.
-  /// Tokens keep their full KDF Max; their gas is paid in another asset.
+  /// Retains extra gas headroom for native EVM Max. KDF's TRON funding
+  /// includes its energy margin and Bitcoin Max already reserves miner fees
+  /// and any dust top-up.
   Future<({RoutedSwapOffer offer, Decimal? retainedBalance})> quote({
     required RoutedSwapManager manager,
     required AssetId from,
@@ -55,7 +57,9 @@ class RoutedSwapMaxPolicy {
         order: order,
       ),
     );
-    if (!enabled || from.isChildAsset) {
+    if (!enabled ||
+        from.isChildAsset ||
+        SwapNetworks.nonEvmRoutedChainIdOf(from) != null) {
       return (offer: maximum, retainedBalance: null);
     }
     _validatePair(maximum, from, to);

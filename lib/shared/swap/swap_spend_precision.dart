@@ -46,6 +46,7 @@ class SwapSpendPrecision {
       final type = protocol?.valueOrNull<String>('type');
       // These are the native protocols' base units, not token fallbacks.
       if (id.parentId == null) {
+        if (id.subClass == CoinSubClass.trx) return 6;
         if (type == 'ETH') return 18;
         if (type == 'UTXO' || type == 'ZHTLC' || type == 'QTUM') return 8;
       }

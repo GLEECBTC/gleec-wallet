@@ -164,6 +164,7 @@ extension _UnifiedSwapStart on UnifiedSwapBloc {
         state.copyWith(
           review: state.review?.copyWith(
             status: SwapReviewStatus.rejected,
+            rejectionReason: error.reason,
             rejectionDetail: error.detail,
           ),
         ),
