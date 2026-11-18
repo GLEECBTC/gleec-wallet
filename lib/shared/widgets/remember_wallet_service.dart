@@ -36,6 +36,13 @@ class RememberWalletService {
         _hasShownRememberMeDialogThisSession) {
       return false;
     }
+    // Don't stack over a dialog the user opened meanwhile, such as Connect
+    // wallet: signing in from here would leave it open over the open wallet.
+    // The root navigator holds only the app's page, so anything it can pop is
+    // such a dialog. ModalRoute.of would rebuild the caller on every dialog.
+    if (Navigator.maybeOf(context, rootNavigator: true)?.canPop() ?? false) {
+      return false;
+    }
     final auth = context.read<AuthBloc>().state;
     return auth.mode == AuthorizeMode.noLogin &&
         !auth.isSignedIn &&
