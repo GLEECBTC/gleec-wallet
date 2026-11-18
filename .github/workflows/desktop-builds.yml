@@ -89,6 +89,11 @@ jobs:
           gpg-key: ${{ secrets.LINUX_GPG_KEY }}
           gpg-key-id: ${{ secrets.LINUX_GPG_KEY_ID }}
 
+      - name: Check the security-key bridge
+        if: ${{ matrix.platform == 'linux' }}
+        shell: bash
+        run: bash linux/test/check_security_key_bridge.sh
+
       # Windows setup
       - name: Setup Windows environment
         id: setup_windows

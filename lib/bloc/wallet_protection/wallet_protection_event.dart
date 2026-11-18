@@ -25,6 +25,10 @@ enum WalletProtectionAction {
 
   /// Remove a lost native passkey so the wallet opens with its password.
   passwordOnly,
+
+  /// Leave a working passkey for the device's unattended storage, where the
+  /// device has no protected tier (Linux).
+  deviceStorage,
   grace,
 }
 

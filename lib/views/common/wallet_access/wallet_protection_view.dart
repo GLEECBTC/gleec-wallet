@@ -131,6 +131,9 @@ class _ProtectionView {
       (state.capabilities?.protection ?? status?.protection) ==
           CredentialProtection.browserLocal;
 
+  bool get _securityKeys =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+
   String get unavailableReason {
     if (_storedInBrowser) {
       return (WalletAccessService.passkeyEnrollmentEnabled
@@ -182,6 +185,8 @@ class _ProtectionView {
               ? 'authExistingPasskeyPending'
               : state.activeAction == WalletProtectionAction.passwordOnly
               ? 'authPasskeyRemoving'
+              : state.activeAction == WalletProtectionAction.deviceStorage
+              ? 'authOpenWithoutPasskeyPending'
               : state.activeAction == WalletProtectionAction.passkey ||
                     state.activeAction == WalletProtectionAction.replacePasskey
               ? 'authPasskeySetupPending'
@@ -208,7 +213,13 @@ class _ProtectionView {
       WalletAccessFailure.busy => 'authProtectionBusy',
       WalletAccessFailure.staleOperation => 'authProtectionStale',
       WalletAccessFailure.canceled => 'authProtectionCanceled',
+      // Linux reaches passkeys on security keys only.
+      WalletAccessFailure.passkeyNotFound when _securityKeys =>
+        'authSecurityKeyPasskeyNotFound',
       WalletAccessFailure.passkeyNotFound => 'authExistingPasskeyNotFound',
+      WalletAccessFailure.prfUnavailable || WalletAccessFailure.unavailable
+          when chosen && _securityKeys =>
+        'authSecurityKeyUnsupported',
       WalletAccessFailure.prfUnavailable || WalletAccessFailure.unavailable
           when chosen =>
         'authExistingPasskeyUnsupported',
@@ -232,6 +243,7 @@ class _ProtectionView {
       (_storedInBrowser ? 'authPasskeyReplaced' : 'authPasskeyChosen').tr(),
     WalletProtectionAction.grace => 'authLockPreferenceSaved'.tr(),
     WalletProtectionAction.passwordOnly => 'authPasskeyRemoved'.tr(),
+    WalletProtectionAction.deviceStorage => 'authOpenedWithoutPasskey'.tr(),
     _ => 'authProtectionEnabled'.tr(),
   };
 

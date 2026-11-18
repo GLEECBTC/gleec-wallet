@@ -139,6 +139,13 @@ class FakeDeviceVault extends CredentialBackend {
   bool deleteReplyLost = false;
   WalletAccessFailure? deleteFailure;
 
+  /// False where device unlock isn't set up, such as a phone without a
+  /// passcode.
+  bool deviceAuthentication = true;
+
+  /// False for a vault with no protected tier at all, as on Linux.
+  bool protectedTier = true;
+
   String? value(String key) => items[key]?.value;
   bool holds(String key) => items.containsKey(key);
 
@@ -152,12 +159,14 @@ class FakeDeviceVault extends CredentialBackend {
   Stream<void> get deviceLocked => deviceEvents.stream;
 
   @override
-  Future<CredentialCapabilities> capabilities() async =>
-      const CredentialCapabilities(
-        available: true,
-        protection: CredentialProtection.authenticationBound,
-        deviceAuthentication: true,
-      );
+  Future<CredentialCapabilities> capabilities() async => CredentialCapabilities(
+    available: true,
+    protection: protectedTier
+        ? CredentialProtection.authenticationBound
+        : CredentialProtection.osAccountProtected,
+    deviceAuthentication: protectedTier && deviceAuthentication,
+    unattendedReturn: !protectedTier,
+  );
 
   @override
   Future<CredentialRecordInfo?> metadata(String key) async {
