@@ -35,6 +35,7 @@ import 'package:web_dex/services/wallet_access/wallet_access_record.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
 
+part 'auth_bloc_managed_cases.dart';
 part 'auth_bloc_session_cases.dart';
 part 'auth_bloc_trezor_cases.dart';
 
@@ -42,6 +43,7 @@ part 'auth_bloc_trezor_cases.dart';
 void testAuthBloc() {
   _trezorSignInCases();
   _engineSessionCases();
+  _managedSignInCases();
 
   group('AuthBloc asynchronous access observation', () {
     late _FakeAuth auth;

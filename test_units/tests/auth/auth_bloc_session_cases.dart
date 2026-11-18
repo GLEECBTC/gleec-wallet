@@ -168,6 +168,9 @@ class _Engine implements KomodoDefiLocalAuth {
 
 class _Vault extends CredentialBackend {
   final values = <String, String>{};
+
+  /// Reads end as a browser does when no unlock prompt could be completed.
+  bool cancelReads = false;
   @override
   Future<CredentialCapabilities> capabilities() async =>
       const CredentialCapabilities(
@@ -196,7 +199,13 @@ class _Vault extends CredentialBackend {
     bool requireAuthentication = false,
     bool automatic = false,
     String? purpose,
-  }) async => values[key];
+  }) async {
+    if (cancelReads) {
+      throw const WalletAccessException(WalletAccessFailure.canceled);
+    }
+    return values[key];
+  }
+
   @override
   Future<void> delete(String key, {String? authorization}) async =>
       values.remove(key);

@@ -30,6 +30,7 @@ part 'auth_bloc_event.dart';
 part 'auth_bloc_logging.dart';
 part 'auth_bloc_state.dart';
 part 'auth_engine_session.dart';
+part 'auth_managed_sign_in.dart';
 part 'trezor_auth_mixin.dart';
 
 /// AuthBloc is responsible for managing the authentication state of the
@@ -461,50 +462,6 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
         error: error,
         stackTrace: stack,
         flow: AuthFlow.register,
-      );
-    } finally {
-      _endAuthOperation(operation);
-    }
-  }
-
-  Future<void> _onManagedSignIn(
-    AuthManagedSignInRequested event,
-    Emitter<AuthBlocState> emit,
-  ) async {
-    if (_authOperation != null) return;
-    final access = _walletAccess;
-    if (access == null) return;
-    final operation = _beginAuthOperation();
-    try {
-      await _pauseAuthUserWatcher();
-      emit(AuthBlocState.loading());
-      final user = await access.signInManaged(
-        event.wallet,
-        automatic: event.automatic,
-      );
-      if (!_ownsAuthOperation(operation, emit)) return;
-      _emitLoggedInState(emit, user);
-      _listenToAuthStateChanges();
-    } catch (error, stackTrace) {
-      final canceled =
-          error is WalletAccessException &&
-          error.failure == WalletAccessFailure.canceled;
-      _logManagedSignInFailure(
-        error,
-        stackTrace,
-        canceled: canceled,
-        automatic: event.automatic,
-      );
-      if (!_ownsAuthOperation(operation, emit)) return;
-      emit(
-        AuthBlocState.error(
-          AuthException(
-            canceled
-                ? 'authManagedUnlockCanceled'.tr()
-                : 'authManagedUnlockFailed'.tr(),
-            type: AuthExceptionType.generalAuthError,
-          ),
-        ),
       );
     } finally {
       _endAuthOperation(operation);

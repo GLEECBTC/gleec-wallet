@@ -552,11 +552,7 @@ class WalletAccessService {
         _ensureRevision(revision);
         final KdfUser signedIn;
         try {
-          signedIn = await _sdk.auth.signIn(
-            walletName: user.walletId.name,
-            password: password,
-            options: user.walletId.authOptions,
-          );
+          signedIn = await _openEngineSession(user, password);
         } on AuthException catch (error) {
           // The stored credential predates a password change the engine did
           // complete. Only the new password can finish that change.
