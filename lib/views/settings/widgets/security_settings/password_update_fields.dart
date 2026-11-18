@@ -149,9 +149,16 @@ class _PasswordField extends StatelessWidget {
 /// The change is done: say so as a status, and offer the way back as its
 /// own button rather than dressing the status up as one.
 class _SuccessView extends StatelessWidget {
-  const _SuccessView({required this.outcome, required this.back});
+  const _SuccessView({
+    required this.outcome,
+    required this.back,
+    this.passkey = false,
+  });
 
   final PasswordChangeOutcome outcome;
+
+  /// The wallet was protected by a passkey before the change.
+  final bool passkey;
   final VoidCallback back;
 
   @override
@@ -174,6 +181,8 @@ class _SuccessView extends StatelessWidget {
             text:
                 (kIsWeb
                         ? 'authPasswordChangedPasskeyOff'
+                        : passkey
+                        ? 'authPasswordChangedDevicePasskeyOff'
                         : 'authPasswordChangedDeviceUnlockOff')
                     .tr(),
             tone: WalletAccessTone.warning,

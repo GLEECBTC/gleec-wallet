@@ -73,6 +73,7 @@ def main():
     ]
     sources = {
         "vault": project / "windows/runner/credential_vault_channel.cpp",
+        "passkey": project / "windows/runner/passkey_channel.cpp",
         "window": project / "windows/runner/flutter_window.cpp",
         "envelope_test": Path(__file__).with_name("credential_vault_envelope_test.cpp"),
         "standard_codec": common / "standard_codec.cc",

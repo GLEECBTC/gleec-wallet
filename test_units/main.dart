@@ -7,6 +7,12 @@ import 'views/settings/security_recovery_flow_test.dart'
 import 'views/settings/recovery_plates_test.dart' as recovery_plates_test;
 import 'services/wallet_access/native_credential_backend_channel_test.dart'
     as native_credential_backend_channel_test;
+import 'services/wallet_access/passkey/passkey_envelope_test.dart'
+    as passkey_envelope_test;
+import 'services/wallet_access/passkey/passkey_credential_backend_test.dart'
+    as passkey_credential_backend_test;
+import 'views/common/wallet_access/wallet_protection_native_passkey_test.dart'
+    as wallet_protection_native_passkey_test;
 import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
     as portfolio_growth_repository_test;
 import 'views/wallet/portfolio_profit_loss_views_test.dart'
@@ -618,6 +624,15 @@ void main() {
   group(
     'native_credential_backend_channel_test',
     native_credential_backend_channel_test.main,
+  );
+  group('passkey_envelope_test', passkey_envelope_test.main);
+  group(
+    'passkey_credential_backend_test',
+    passkey_credential_backend_test.main,
+  );
+  group(
+    'wallet_protection_native_passkey_test',
+    wallet_protection_native_passkey_test.main,
   );
   group(
     'portfolio_growth_repository_test',

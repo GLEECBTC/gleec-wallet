@@ -42,6 +42,31 @@ final class WalletProtectionState extends Equatable {
       (status?.requiresAuthentication == false ||
           status?.protection == CredentialProtection.password);
 
+  /// A passkey the user already holds can protect this wallet instead of its
+  /// current lock. Browsers create passkeys instead, so this is native only.
+  bool get canUseExistingPasskey =>
+      capabilities?.available == true &&
+      capabilities?.existingPasskeyCandidate == true &&
+      status?.protection != CredentialProtection.passkey;
+
+  /// A native passkey-protected wallet can return to device unlock.
+  bool get canSwitchToDevice =>
+      capabilities?.available == true &&
+      capabilities?.deviceAuthentication == true &&
+      status?.protection == CredentialProtection.passkey;
+
+  /// Another passkey can replace a lost one after password verification.
+  bool get canReplacePasskey =>
+      status?.protection == CredentialProtection.passkey &&
+      (capabilities?.passkeyCandidate == true ||
+          capabilities?.existingPasskeyCandidate == true);
+
+  /// A native passkey wallet can always fall back to its password alone.
+  bool get canUsePasswordOnly =>
+      status?.protection == CredentialProtection.passkey &&
+      capabilities?.available == true &&
+      capabilities?.protection != CredentialProtection.browserLocal;
+
   WalletProtectionState copyWith({
     WalletAccessStatus? status,
     CredentialCapabilities? capabilities,

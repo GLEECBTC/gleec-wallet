@@ -42,6 +42,8 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   credential_vault_ = std::make_unique<CredentialVaultChannel>(
       GetHandle(), flutter_controller_->engine()->messenger());
+  passkey_ = std::make_unique<PasskeyChannel>(
+      GetHandle(), flutter_controller_->engine()->messenger());
   reduced_motion_ = ReadReducedMotion();
   reduced_motion_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
@@ -73,6 +75,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   // The channels send through the engine's messenger, so they go first.
+  passkey_ = nullptr;
   credential_vault_ = nullptr;
   reduced_motion_channel_ = nullptr;
   if (flutter_controller_) {
@@ -86,6 +89,10 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // A session lock reaches both: the passkey channel cancels and passes it on.
+  if (passkey_ && passkey_->HandleMessage(message, wparam)) {
+    return 0;
+  }
   if (credential_vault_ && credential_vault_->HandleMessage(message, wparam)) {
     return 0;
   }

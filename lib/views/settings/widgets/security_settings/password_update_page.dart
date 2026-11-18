@@ -32,6 +32,7 @@ class PasswordUpdatePage extends StatefulWidget {
 class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
   /// Set once the engine uses the new password.
   PasswordChangeOutcome? _outcome;
+  bool _passkey = false;
   final _scrollController = ScrollController();
 
   @override
@@ -48,8 +49,17 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
 
     final outcome = _outcome;
     final Widget pageContent = outcome != null
-        ? _SuccessView(outcome: outcome, back: gotoSecurityMain)
-        : _FormView(onSuccess: (outcome) => setState(() => _outcome = outcome));
+        ? _SuccessView(
+            outcome: outcome,
+            passkey: _passkey,
+            back: gotoSecurityMain,
+          )
+        : _FormView(
+            onSuccess: (outcome, passkey) => setState(() {
+              _outcome = outcome;
+              _passkey = passkey;
+            }),
+          );
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       decoration: BoxDecoration(
@@ -120,7 +130,9 @@ class _PasswordUpdatePageState extends State<PasswordUpdatePage> {
 class _FormView extends StatefulWidget {
   const _FormView({required this.onSuccess});
 
-  final ValueChanged<PasswordChangeOutcome> onSuccess;
+  /// Also says whether the wallet was protected by a passkey, which is the
+  /// lock a change the vault could not follow turns off.
+  final void Function(PasswordChangeOutcome outcome, bool passkey) onSuccess;
 
   @override
   State<_FormView> createState() => _FormViewState();
@@ -136,6 +148,7 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
   WalletAccessTone _errorTone = WalletAccessTone.error;
   bool _busy = false;
   bool _managed = false;
+  bool _passkey = false;
   WalletId? _walletId;
   Future<WalletAccessStatus?>? _accessStatus;
 
@@ -182,6 +195,7 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
       future: _accessStatus,
       builder: (context, snapshot) {
         _managed = snapshot.data?.hasManagedCredential == true;
+        _passkey = snapshot.data?.protection == CredentialProtection.passkey;
         if (snapshot.connectionState != ConnectionState.done) {
           return Center(
             child: WalletAccessProgress(label: 'authProtectionChecking'.tr()),
@@ -313,7 +327,7 @@ class _FormViewState extends State<_FormView> with WidgetsBindingObserver {
       // The stored credential may no longer follow the password, so whether
       // the wallet is opened for the user is read again, not remembered.
       _accessStatus = null;
-      widget.onSuccess(outcome);
+      widget.onSuccess(outcome, _passkey);
     } catch (e) {
       if (!mounted) return;
       setState(() {

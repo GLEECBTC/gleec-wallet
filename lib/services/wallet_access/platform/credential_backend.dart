@@ -45,10 +45,31 @@ abstract class CredentialBackend {
   }) async =>
       throw const WalletAccessException(WalletAccessFailure.unavailable);
 
+  /// Binds a passkey the user already holds for the wallet's site, chosen in
+  /// one user-verified PRF assertion, and switches the record to it. The
+  /// envelope is verified with that ceremony's key before the previous record
+  /// is removed; until then the previous protection stays in force. Callers
+  /// should first read the credential with purpose `delete` so removing a
+  /// protected record needs no second prompt.
+  Future<void> bindExistingPasskey(String key, String value) async =>
+      throw const WalletAccessException(WalletAccessFailure.unavailable);
+
+  /// Replaces passkey protection with device protection after the
+  /// coordinator has verified [value] with the engine, without needing the
+  /// passkey. Creating the device record is itself OS-authorized.
+  Future<void> replacePasskeyWithDevice(
+    String key,
+    String value, {
+    required int expectedRevision,
+  }) async =>
+      throw const WalletAccessException(WalletAccessFailure.unavailable);
+
   /// Explicit recovery after the coordinator has freshly verified the supplied
   /// password with the same wallet engine/session. This never decrypts the old
   /// envelope: it stages new verified PRF protection and atomically replaces
   /// only the expected revision. Cancellation must retain the old record.
+  /// Where passkeys cannot be created, the new protection is another passkey
+  /// the user already holds, bound as [bindExistingPasskey] does.
   Future<void> replacePasskeyAfterPasswordVerification(
     String key,
     String value, {
