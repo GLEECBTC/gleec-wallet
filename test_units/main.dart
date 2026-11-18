@@ -147,6 +147,7 @@ import 'shared/utils/formatters_test.dart' as formatters_test;
 import 'shared/widgets/connect_wallet_button_test.dart'
     as connect_wallet_button_test;
 import 'shared/widgets/quick_login_switch_test.dart' as quick_login_switch_test;
+import 'shared/widgets/app_dialog_test.dart' as app_dialog_test;
 import 'shared/widgets/terms_consent_text_test.dart' as terms_consent_text_test;
 import 'tests/analytics/firebase_config_test.dart' as firebase_config_test;
 import 'tests/analytics/firebase_analytics_api_test.dart'
@@ -193,6 +194,8 @@ import 'views/wallets_manager/widgets/wallet_login_test.dart'
     as wallet_login_test;
 import 'views/wallets_manager/widgets/wallets_manager_entry_test.dart'
     as wallets_manager_entry_test;
+import 'views/wallets_manager/widgets/wallet_opened_elsewhere_test.dart'
+    as wallet_opened_elsewhere_test;
 import 'views/wallets_manager/widgets/wallets_manager_test.dart'
     as wallets_manager_test;
 
@@ -830,6 +833,7 @@ void main() {
   formatters_test.main();
   quick_login_switch_test.main();
   connect_wallet_button_test.main();
+  app_dialog_test.main();
   analytics_test.main();
   firebase_config_test.main();
   firebase_analytics_api_test.main();
@@ -1046,5 +1050,6 @@ void main() {
   hardware_wallets_manager_test.main();
   wallet_login_test.main();
   wallets_manager_entry_test.main();
+  wallet_opened_elsewhere_test.main();
   wallets_manager_test.main();
 }

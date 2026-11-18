@@ -6,6 +6,7 @@ import 'package:web_dex/analytics/events/auth_events.dart';
 import 'package:web_dex/analytics/events/user_acquisition_events.dart';
 import 'package:web_dex/analytics/onboarding_funnel.dart';
 import 'package:web_dex/bloc/analytics/analytics_bloc.dart';
+import 'package:web_dex/bloc/auth_bloc/auth_bloc.dart';
 import 'package:web_dex/blocs/wallets_repository.dart';
 import 'package:web_dex/model/wallet.dart';
 import 'package:web_dex/model/wallets_manager_models.dart';
@@ -104,11 +105,22 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) =>
-          LegalAgreementBloc(context.read<LegalDocumentsRepository>())
-            ..add(const LegalAgreementOpened()),
-      child: Builder(builder: _buildRoute),
+    return BlocListener<AuthBloc, AuthBlocState>(
+      // The forms finish their own sign-ins. The list has none, so a wallet
+      // opened elsewhere, as by the remembered-wallet prompt, finishes here.
+      listenWhen: (previous, current) =>
+          previous.currentUser == null && current.currentUser != null,
+      listener: (_, auth) {
+        if (_route == _WalletsManagerRoute.entry) {
+          widget.onSuccess?.call(auth.currentUser!.wallet);
+        }
+      },
+      child: BlocProvider(
+        create: (context) =>
+            LegalAgreementBloc(context.read<LegalDocumentsRepository>())
+              ..add(const LegalAgreementOpened()),
+        child: Builder(builder: _buildRoute),
+      ),
     );
   }
 
@@ -206,6 +218,14 @@ class _WalletsManagerWrapperState extends State<WalletsManagerWrapper> {
     Wallet wallet,
     WalletsManagerExistWalletAction action,
   ) {
+    final open = context.read<AuthBloc>().state.currentUser;
+    if (action == WalletsManagerExistWalletAction.logIn &&
+        open != null &&
+        open.walletId.name == wallet.name) {
+      // Its unlock would be a second sign-in, which the engine refuses.
+      widget.onSuccess?.call(open.wallet);
+      return;
+    }
     // Acting on an existing wallet is not onboarding.
     _funnel
       ..complete()

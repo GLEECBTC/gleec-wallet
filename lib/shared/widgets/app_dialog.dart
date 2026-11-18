@@ -175,6 +175,10 @@ class AppDialog {
     assert(maxWidth > 0, 'maxWidth must be positive');
     assert(width == null || width > 0, 'width must be positive if provided');
 
+    // Guard against multiple close attempts which may happen during
+    // rapid navigation state changes (e.g. login success + route change).
+    // Held per dialog, so a rebuild of its content does not reset it.
+    bool didRequestClose = false;
     return show<T>(
       context: context,
       width: width,
@@ -188,20 +192,25 @@ class AppDialog {
       child: Builder(
         builder: (context) {
           try {
-            // Guard against multiple close attempts which may happen during
-            // rapid navigation state changes (e.g. login success + route change)
-            bool didRequestClose = false;
             return childBuilder(() {
-              if (didRequestClose) return;
+              if (didRequestClose || !context.mounted) return;
               didRequestClose = true;
 
               // Pop the dialog using the same navigator that was used to show it.
-              // Use maybePop to avoid "Bad state: No element" when there is
-              // nothing left to pop on the target navigator.
               final navigator = Navigator.of(
                 context,
                 rootNavigator: useRootNavigator,
               );
+              // maybePop acts on the top route. Below another dialog it would
+              // close that one instead, and while that one is closing it
+              // drops this request, leaving this dialog open.
+              final route = ModalRoute.of(context);
+              if (route != null && route.isActive && !route.isCurrent) {
+                navigator.removeRoute(route);
+                return;
+              }
+              // Use maybePop to avoid "Bad state: No element" when there is
+              // nothing left to pop on the target navigator.
               // ignore: discarded_futures
               navigator.maybePop();
             });
