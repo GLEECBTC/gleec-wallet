@@ -487,5 +487,42 @@ void _engineSessionCases() {
       expect(state.authError?.message, 'authManagedUnlockFailed');
       expect(s.engine.active, isNull);
     });
+
+    test('a failed managed unlock logs its cause', () async {
+      final user = await s.installManaged();
+      s.vault.values.clear();
+      final logged = Logger.root.onRecord.firstWhere(
+        (record) =>
+            record.loggerName == 'AuthBloc' &&
+            record.message.startsWith('Managed explicit sign-in failed'),
+      );
+      await s.outcomeOf(AuthManagedSignInRequested(wallet: user.wallet));
+      final record = await logged.timeout(const Duration(seconds: 2));
+      expect(record.level, Level.SHOUT);
+      expect(record.error, isA<WalletAccessException>());
+      expect(
+        record.message,
+        contains((record.error! as WalletAccessException).failure.name),
+      );
+      expect(record.stackTrace, isNotNull);
+    });
+
+    test('an engine that refuses a managed unlock is logged', () async {
+      final user = await s.installManaged();
+      s.engine.password = 'Different-password-0!';
+      final logged = Logger.root.onRecord.firstWhere(
+        (record) =>
+            record.loggerName == 'AuthBloc' &&
+            record.message.startsWith('Managed explicit sign-in failed'),
+      );
+      final state = await s.outcomeOf(
+        AuthManagedSignInRequested(wallet: user.wallet),
+      );
+      expect(state.authError?.message, 'authManagedUnlockFailed');
+      final record = await logged.timeout(const Duration(seconds: 2));
+      expect(record.message, contains('incorrectPassword'));
+      expect(record.error, isA<AuthException>());
+      expect(record.stackTrace, isNotNull);
+    });
   });
 }

@@ -27,6 +27,7 @@ import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
     show GuardedDestinationSelector;
 
 part 'auth_bloc_event.dart';
+part 'auth_bloc_logging.dart';
 part 'auth_bloc_state.dart';
 part 'auth_engine_session.dart';
 part 'trezor_auth_mixin.dart';
@@ -484,13 +485,21 @@ class AuthBloc extends Bloc<AuthBlocEvent, AuthBlocState> with TrezorAuthMixin {
       if (!_ownsAuthOperation(operation, emit)) return;
       _emitLoggedInState(emit, user);
       _listenToAuthStateChanges();
-    } catch (error) {
+    } catch (error, stackTrace) {
+      final canceled =
+          error is WalletAccessException &&
+          error.failure == WalletAccessFailure.canceled;
+      _logManagedSignInFailure(
+        error,
+        stackTrace,
+        canceled: canceled,
+        automatic: event.automatic,
+      );
       if (!_ownsAuthOperation(operation, emit)) return;
       emit(
         AuthBlocState.error(
           AuthException(
-            error is WalletAccessException &&
-                    error.failure == WalletAccessFailure.canceled
+            canceled
                 ? 'authManagedUnlockCanceled'.tr()
                 : 'authManagedUnlockFailed'.tr(),
             type: AuthExceptionType.generalAuthError,
