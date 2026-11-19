@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/views/wallet_backup/passkey_backup_restore.dart';
+import 'package:web_dex/views/wallet_move/wallet_move_receive.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_import_by_file.dart';
 import 'package:web_dex/views/wallets_manager/widgets/wallet_simple_import.dart';
 
@@ -32,18 +34,28 @@ class _WalletImportWrapperState extends State<WalletImportWrapper> {
   WalletFileData? _fileData;
 
   @override
-  Widget build(BuildContext context) {
-    return _importType == WalletImportTypes.simple
-        ? _buildSimpleImport()
-        : _buildFileImport();
-  }
+  Widget build(BuildContext context) => switch (_importType) {
+    WalletImportTypes.simple => _buildSimpleImport(),
+    WalletImportTypes.file => _buildFileImport(),
+    WalletImportTypes.moveFromDevice => WalletMoveReceive(onCancel: _onCancel),
+    WalletImportTypes.passkeyBackup => PasskeyBackupRestore(
+      onCancel: _onCancel,
+    ),
+  };
 
   Widget _buildSimpleImport() {
     return WalletSimpleImport(
       onImport: widget.onImport,
       onUploadFiles: _onUploadFiles,
       onCancel: _onCancel,
+      onMoveFromDevice: () => _show(WalletImportTypes.moveFromDevice),
+      onRestoreFromPasskey: () => _show(WalletImportTypes.passkeyBackup),
     );
+  }
+
+  void _show(WalletImportTypes type) {
+    setState(() => _importType = type);
+    widget.onImportTypeChanged?.call(type);
   }
 
   Widget _buildFileImport() {
@@ -68,7 +80,7 @@ class _WalletImportWrapperState extends State<WalletImportWrapper> {
   }
 
   void _onCancel() {
-    if (_importType == WalletImportTypes.file) {
+    if (_importType != WalletImportTypes.simple) {
       setState(() {
         _importType = WalletImportTypes.simple;
         _fileData = null;
@@ -81,4 +93,4 @@ class _WalletImportWrapperState extends State<WalletImportWrapper> {
   }
 }
 
-enum WalletImportTypes { simple, file }
+enum WalletImportTypes { simple, file, moveFromDevice, passkeyBackup }

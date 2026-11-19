@@ -128,4 +128,7 @@ dependencies {
     // provider serves Android 13 and earlier.
     implementation "androidx.credentials:credentials:1.6.0"
     implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
+    // Google Drive app-data authorization for passkey backups. The version
+    // credentials-play-services-auth 1.6.0 already resolves at runtime.
+    implementation "com.google.android.gms:play-services-auth:21.1.1"
 }

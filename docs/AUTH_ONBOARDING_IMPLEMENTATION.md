@@ -27,6 +27,7 @@ This change implements instant, locally recoverable wallet provisioning and a se
 | Native storage | Platform runners; see [native implementation and checks](AUTH_NATIVE_VALIDATION.md) |
 | Browser PRF vault | `web/services/wallet_credentials.js`, `platform/web_credential_backend.dart` |
 | Native reuse of a web passkey | `platform/passkey/`, one `gleec.wallet/passkey` bridge per platform; see [passkey reuse](AUTH_PASSKEY_REUSE.md) |
+| Moving a wallet, passkey backups | `services/wallet_move/`, `services/wallet_backup/`, `views/wallet_move/`, `views/wallet_backup/`; see [move and backup](AUTH_SEED_MOVE_AND_BACKUP.md) |
 | Recovery evidence | `WalletConfig.recoveryEvidence`; legacy `has_backup` is not independent evidence |
 | UI state reference | [Authentication design reference](design/authentication/README.md) |
 
@@ -47,6 +48,7 @@ Apple password-manager integration additionally needs the deployed AASA file and
 - `WALLET_DEVICE_ENROLLMENT_ENABLED` and `WALLET_PASSKEY_ENROLLMENT_ENABLED` default to `true` and can stop new enrollment. Existing credential readers/unlock paths remain available.
 - `WALLET_IMMEDIATE_LOCK_REQUIRED` defaults to `false`; enabling it overrides the grace period to zero.
 - `WALLET_EXISTING_PASSKEY_ENABLED` defaults to `false` until the association files and signed builds pass [the reuse round](AUTH_PASSKEY_REUSE.md#acceptance-round). Bound wallets keep unlocking either way.
+- `WALLET_MOVE_ENABLED` and `WALLET_PASSKEY_BACKUP_ENABLED` default to `false`. Backups also need `WALLET_BACKUP_RP_ID`, a dedicated domain outside `gleec.com`; see [the move and backup round](AUTH_SEED_MOVE_AND_BACKUP.md#acceptance-round).
 - Retain this version's vault readers, provisioning and rotation journals, cleanup handling and SDK catalog migration in rollback builds. A pre-feature build can strand generated-password wallets and is not a compatible rollback.
 - Stage platform enrollment only after the physical-device matrix passes. Do not infer production certification from compilation or mock/virtual-authenticator tests.
 

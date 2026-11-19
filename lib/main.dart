@@ -43,6 +43,11 @@ import 'package:web_dex/services/initializer/legacy_app_settings_migration_servi
 import 'package:web_dex/services/initializer/app_error_handling.dart';
 import 'package:web_dex/services/storage/get_storage.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/device/device_controls.dart';
+import 'package:web_dex/services/wallet_backup/passkey_backup_types.dart';
+import 'package:web_dex/services/wallet_move/wallet_move_types.dart';
+import 'package:web_dex/services/wallet_transfer/wallet_transfer_config.dart';
+import 'package:web_dex/services/wallet_transfer/wallet_transfer_services.dart';
 import 'package:web_dex/shared/constants.dart';
 import 'package:web_dex/shared/screenshot/screenshot_sensitivity.dart';
 import 'package:web_dex/shared/utils/platform_tuner.dart';
@@ -133,6 +138,11 @@ Future<void> runWalletApp({LegalDocumentsRepository? legalDocuments}) async {
       storage: getStorage(),
     );
     await walletAccess.initialize();
+    const transferConfig = WalletTransferConfig.fromEnvironment;
+    final transfer = createWalletTransferServices(
+      config: transferConfig,
+      storage: getStorage(),
+    );
     final walletsRepository = WalletsRepository(
       komodoDefiSdk,
       mm2Api,
@@ -167,6 +177,17 @@ Future<void> runWalletApp({LegalDocumentsRepository? legalDocuments}) async {
             RepositoryProvider.value(value: coinsRepo),
             RepositoryProvider.value(value: walletsRepository),
             RepositoryProvider.value(value: walletAccess),
+            RepositoryProvider<WalletTransferConfig>.value(
+              value: transferConfig,
+            ),
+            if (transfer.move case final move?) ...[
+              RepositoryProvider<WalletMoveProtocol>.value(value: move),
+              RepositoryProvider<DeviceControls>.value(
+                value: const MethodChannelDeviceControls(),
+              ),
+            ],
+            if (transfer.backup case final backup?)
+              RepositoryProvider<PasskeyBackupController>.value(value: backup),
             RepositoryProvider.value(value: sparklineRepository),
             RepositoryProvider.value(value: tradingStatusRepository),
             RepositoryProvider.value(value: tradingStatusService),

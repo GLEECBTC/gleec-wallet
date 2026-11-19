@@ -23,6 +23,7 @@ import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
 import 'passkey/passkey_test_support.dart';
 
+part 'wallet_access_managed_import_cases.dart';
 part 'wallet_access_passkey_reuse_cases.dart';
 part 'wallet_access_review_cases.dart';
 part 'wallet_access_rotation_cases.dart';
@@ -300,6 +301,10 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
   KdfUser? active;
   final hooks = <Future<void> Function(WalletId)>[];
   final registrations = <({String name, String id, String password})>[];
+  final registeredOptions = <AuthOptions>[];
+
+  /// The seed each engine wallet was created with, by entry ID.
+  final seeds = <String, String>{};
   final metadataUpdates = <Map<String, dynamic>>[];
   final verifiedWallets = <WalletId>[];
   Completer<void>? verificationReached;
@@ -489,6 +494,7 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
       id: provisioningId!,
       password: password,
     ));
+    registeredOptions.add(options);
     if (collideOnce || ownedCollision) {
       collideOnce = false;
       throw AuthException(
@@ -510,6 +516,8 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
     }
     final user = _user(name: walletName, id: provisioningId);
     users.add(user);
+    seeds[provisioningId] =
+        mnemonic?.plaintextMnemonic ?? 'generated $provisioningId';
     enginePassword = password;
     activate(user);
     if (failCreationAfterCommitOnce) {
@@ -517,6 +525,18 @@ class _Auth extends Fake implements KomodoDefiLocalAuth {
       throw const WalletAccessException(WalletAccessFailure.storageFailed);
     }
     return user;
+  }
+
+  @override
+  Future<Mnemonic> getMnemonicPlainText(String walletPassword) async {
+    RpcDispatchGuard.ensureCurrent('get_mnemonic');
+    if (walletPassword != enginePassword) {
+      throw AuthException(
+        'Incorrect password',
+        type: AuthExceptionType.incorrectPassword,
+      );
+    }
+    return Mnemonic.plaintext(seeds[active?.metadata['_wallet_entry_id']]!);
   }
 
   @override
@@ -553,6 +573,7 @@ class _NoPendingTransfers extends Fake
 }
 
 void main() {
+  _managedImportCases();
   _passkeyReuseCases();
   _unattendedReturnCases();
   _rotationCases();

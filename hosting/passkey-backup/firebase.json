@@ -1,0 +1,35 @@
+{
+  "hosting": {
+    "target": "passkey-backup",
+    "public": "public",
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "appAssociation": "NONE",
+    "ignore": ["firebase.json", "README.md"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "sandbox; default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "publickey-credentials-get=(), publickey-credentials-create=()"
+          },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "X-Frame-Options", "value": "DENY" },
+          { "key": "Referrer-Policy", "value": "no-referrer" },
+          { "key": "Cache-Control", "value": "no-cache, max-age=0" }
+        ]
+      },
+      {
+        "source": "/.well-known/@(apple-app-site-association|assetlinks.json|passkey-endpoints)",
+        "headers": [
+          { "key": "Content-Type", "value": "application/json" }
+        ]
+      }
+    ]
+  }
+}

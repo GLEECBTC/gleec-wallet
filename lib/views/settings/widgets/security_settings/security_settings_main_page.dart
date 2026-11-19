@@ -8,6 +8,7 @@ import 'package:web_dex/views/settings/widgets/security_settings/plate_seed_back
 import 'package:web_dex/views/settings/widgets/security_settings/plate_private_key_backup.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/security_section_card.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/unban_pubkeys_plate.dart';
+import 'package:web_dex/views/wallet_move/wallet_transfer_settings.dart';
 
 class SecuritySettingsMainPage extends StatelessWidget {
   const SecuritySettingsMainPage({
@@ -43,6 +44,7 @@ class SecuritySettingsMainPage extends StatelessWidget {
           width: double.infinity,
           child: PlateSeedBackup(onViewSeedPressed: onViewSeedPressed),
         ),
+        const WalletTransferSettings(),
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
