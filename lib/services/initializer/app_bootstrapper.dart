@@ -58,6 +58,7 @@ final class AppBootstrapper {
     KomodoLegacyWalletMigration? legacyNativeWalletMigration,
   }) {
     return [
+      _removeLegacyExportResidue(),
       app_bloc_root.loadLibrary(),
       packageInformation.init(),
       EasyLocalization.ensureInitialized(),
@@ -107,6 +108,23 @@ final class AppBootstrapper {
       'AppBootstrapper: Unified Analytics repository (Firebase + Matomo) registered with GetIt',
     );
     return;
+  }
+}
+
+/// A copy that cannot be removed now is tried again at the next launch, so a
+/// failure here never stops the app from starting.
+Future<void> _removeLegacyExportResidue() async {
+  try {
+    final removed = await purgeLegacyExportResidue();
+    if (removed > 0) {
+      log('AppBootstrapper: removed $removed legacy export copies');
+    }
+  } on Object catch (error, trace) {
+    log(
+      'AppBootstrapper: legacy export cleanup failed: $error',
+      trace: trace,
+      isError: true,
+    );
   }
 }
 

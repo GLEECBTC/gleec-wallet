@@ -37,6 +37,7 @@ import 'package:web_dex/sdk/widgets/window_close_handler.dart';
 import 'package:web_dex/services/arrr_activation/arrr_activation_service.dart';
 import 'package:web_dex/services/fd_monitor_service.dart';
 import 'package:web_dex/services/feedback/app_feedback_wrapper.dart';
+import 'package:web_dex/services/file_loader/legacy_export_residue.dart';
 import 'package:web_dex/services/legal_documents/legal_documents_repository.dart';
 import 'package:web_dex/services/logger/get_logger.dart';
 import 'package:web_dex/services/initializer/legacy_app_settings_migration_service.dart';
