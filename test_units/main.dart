@@ -19,6 +19,37 @@ import 'services/wallet_access/passkey/security_key/security_key_bridge_test.dar
     as security_key_bridge_test;
 import 'views/common/wallet_access/security_key_prompt_host_test.dart'
     as security_key_prompt_host_test;
+import 'services/wallet_transfer/wallet_transfer_config_test.dart'
+    as wallet_transfer_config_test;
+import 'views/wallet_transfer_strings_test.dart'
+    as wallet_transfer_strings_test;
+import 'views/wallet_move/read_wallet_transfer_secret_test.dart'
+    as read_wallet_transfer_secret_test;
+import 'views/wallet_move/wallet_move_receive_test.dart'
+    as wallet_move_receive_test;
+import 'views/wallet_move/wallet_move_send_test.dart' as wallet_move_send_test;
+import 'views/wallet_move/wallet_transfer_entry_points_test.dart'
+    as wallet_transfer_entry_points_test;
+import 'views/wallet_backup/passkey_backup_section_test.dart'
+    as passkey_backup_section_test;
+import 'views/wallet_backup/passkey_backup_setup_test.dart'
+    as passkey_backup_setup_test;
+import 'views/wallet_backup/passkey_backup_restore_test.dart'
+    as passkey_backup_restore_test;
+import 'services/wallet_transfer/wallet_transfer_secret_test.dart'
+    as wallet_transfer_secret_test;
+import 'services/wallet_move/wallet_move_protocol_test.dart'
+    as wallet_move_protocol_test;
+import 'services/wallet_move/wallet_move_vector_test.dart'
+    as wallet_move_vector_test;
+import 'services/wallet_access/passkey/passkey_registration_test.dart'
+    as passkey_registration_test;
+import 'services/wallet_backup/passkey_backup_record_test.dart'
+    as passkey_backup_record_test;
+import 'services/wallet_backup/passkey_backup_service_test.dart'
+    as passkey_backup_service_test;
+import 'services/wallet_backup/stores/backup_stores_test.dart'
+    as backup_stores_test;
 import 'bloc/cex_market_data/portfolio_growth/portfolio_growth_repository_test.dart'
     as portfolio_growth_repository_test;
 import 'views/wallet/portfolio_profit_loss_views_test.dart'
@@ -646,6 +677,28 @@ void main() {
   );
   group('security_key_bridge_test', security_key_bridge_test.main);
   group('security_key_prompt_host_test', security_key_prompt_host_test.main);
+  group('wallet_transfer_config_test', wallet_transfer_config_test.main);
+  group('wallet_transfer_strings_test', wallet_transfer_strings_test.main);
+  group(
+    'read_wallet_transfer_secret_test',
+    read_wallet_transfer_secret_test.main,
+  );
+  group('wallet_move_receive_test', wallet_move_receive_test.main);
+  group('wallet_move_send_test', wallet_move_send_test.main);
+  group(
+    'wallet_transfer_entry_points_test',
+    wallet_transfer_entry_points_test.main,
+  );
+  group('passkey_backup_section_test', passkey_backup_section_test.main);
+  group('passkey_backup_setup_test', passkey_backup_setup_test.main);
+  group('passkey_backup_restore_test', passkey_backup_restore_test.main);
+  group('wallet_transfer_secret_test', wallet_transfer_secret_test.main);
+  group('wallet_move_protocol_test', wallet_move_protocol_test.main);
+  group('wallet_move_vector_test', wallet_move_vector_test.main);
+  group('passkey_registration_test', passkey_registration_test.main);
+  group('passkey_backup_record_test', passkey_backup_record_test.main);
+  group('passkey_backup_service_test', passkey_backup_service_test.main);
+  group('backup_stores_test', backup_stores_test.main);
   group(
     'portfolio_growth_repository_test',
     portfolio_growth_repository_test.main,

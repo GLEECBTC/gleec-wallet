@@ -27,6 +27,8 @@ public class MainActivity extends FlutterFragmentActivity {
     private SensitiveExportChannel sensitiveExports;
     private WalletCredentialVault credentialVault;
     private PasskeyAuthenticatorChannel passkeyChannel;
+    private GoogleDriveAuthChannel googleDriveAuth;
+    private DeviceControlsChannel deviceControls;
     private boolean isSafBytes = false;
     private MethodChannel.Result safResult;
     private String safData;
@@ -85,6 +87,9 @@ public class MainActivity extends FlutterFragmentActivity {
         if (sensitiveExports != null &&
                 sensitiveExports.onActivityResult(requestCode, resultCode, resultData)) return;
 
+        if (googleDriveAuth != null &&
+                googleDriveAuth.onActivityResult(requestCode, resultCode, resultData)) return;
+
         if (requestCode == CREATE_SAF_FILE
                 && resultCode == Activity.RESULT_OK) {
             Log.i(TAG_CREATE_SAF_FILE, "File picker finished");
@@ -134,6 +139,10 @@ public class MainActivity extends FlutterFragmentActivity {
                 this, flutterEngine.getDartExecutor().getBinaryMessenger());
         passkeyChannel = new PasskeyAuthenticatorChannel(
                 this, flutterEngine.getDartExecutor().getBinaryMessenger());
+        googleDriveAuth = new GoogleDriveAuthChannel(
+                this, flutterEngine.getDartExecutor().getBinaryMessenger());
+        deviceControls = new DeviceControlsChannel(
+                this, flutterEngine.getDartExecutor().getBinaryMessenger());
         try {
             credentialVault = new WalletCredentialVault(
                     this, flutterEngine.getDartExecutor().getBinaryMessenger());
@@ -150,6 +159,8 @@ public class MainActivity extends FlutterFragmentActivity {
         if (sensitiveExports != null) sensitiveExports.dispose();
         if (credentialVault != null) credentialVault.dispose();
         if (passkeyChannel != null) passkeyChannel.dispose();
+        if (googleDriveAuth != null) googleDriveAuth.dispose();
+        if (deviceControls != null) deviceControls.dispose();
         super.onDestroy();
     }
 }

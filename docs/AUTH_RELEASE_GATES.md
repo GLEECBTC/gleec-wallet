@@ -227,6 +227,16 @@ builds with `WALLET_EXISTING_PASSKEY_ENABLED=true`. It first needs the
 production (or staging) `apple-app-site-association` and `assetlinks.json`
 described there; production served neither on 2026-11-18.
 
+### 7. Moving a wallet between phones, and passkey backups
+
+Run [the move and backup acceptance round](AUTH_SEED_MOVE_AND_BACKUP.md#acceptance-round).
+
+- **Move to another phone** needs only builds with `WALLET_MOVE_ENABLED=true`.
+- **Passkey backups** also need the dedicated backup domain, its entitlement
+  and association files, and the Google OAuth clients for Drive, all listed in
+  [rollout and setup](AUTH_SEED_MOVE_AND_BACKUP.md#rollout-and-setup). None of
+  these existed on 2026-11-19.
+
 ## Evidence to return
 
 For each row record the build/commit, device model, OS version, provider,

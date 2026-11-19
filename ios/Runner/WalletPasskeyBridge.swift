@@ -11,9 +11,10 @@ import AppKit
 import Security
 #endif
 
-/// One user-verified passkey assertion that evaluates the WebAuthn PRF
-/// extension. It stores nothing and never sees the wallet credential: the
-/// Dart passkey tier checks the reply, derives its key and wipes the output.
+/// One user-verified passkey assertion or creation at a time, evaluating the
+/// WebAuthn PRF extension. It stores nothing and never sees the wallet
+/// credential: the Dart passkey tier checks the reply, derives its key and
+/// wipes the output.
 final class WalletPasskeyBridge: NSObject {
   private let channel: FlutterMethodChannel
   private var ceremony: AnyObject?
@@ -58,6 +59,11 @@ final class WalletPasskeyBridge: NSObject {
       result(nil)
     case "getAssertion":
       begin(call.arguments as? [String: Any] ?? [:], result: result)
+    case "register":
+      register(call.arguments as? [String: Any] ?? [:], result: result)
+    case "reportRemoved":
+      reportRemoved(call.arguments as? [String: Any] ?? [:])
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -81,6 +87,55 @@ final class WalletPasskeyBridge: NSObject {
     started.start()
   }
 
+  /// Creates a discoverable, user-verified passkey and evaluates PRF where the
+  /// provider supports it at creation. Dart checks the reply.
+  private func register(_ args: [String: Any], result: @escaping FlutterResult) {
+    guard #available(iOS 18.0, macOS 15.0, *), supported else { result(Self.error("unavailable")); return }
+    guard ceremony == nil else { result(Self.error("busy")); return }
+    guard let rpId = args["rpId"] as? String, !rpId.isEmpty, rpId.utf8.count <= 253,
+          let challenge = (args["challenge"] as? FlutterStandardTypedData)?.data, challenge.count >= 16,
+          let userId = (args["userId"] as? FlutterStandardTypedData)?.data, (1...64).contains(userId.count),
+          let userName = args["userName"] as? String, !userName.isEmpty, userName.utf8.count <= 1024,
+          let displayName = args["displayName"] as? String, !displayName.isEmpty,
+          displayName.utf8.count <= 1024,
+          let salt = (args["prfSalt"] as? FlutterStandardTypedData)?.data, salt.count == 32 else {
+      result(Self.error("invalidResponse")); return
+    }
+    pendingResult = result
+    let started = PasskeyRegistrationCeremony(
+      rpId: rpId, challenge: challenge, userId: userId, userName: userName,
+      displayName: displayName, salt: salt
+    ) { [weak self] outcome in self?.finish(outcome) }
+    ceremony = started
+    started.start()
+  }
+
+  /// Best effort, answered at once: the password manager may hide or delete
+  /// the passkey later, or never. Older systems have no such signal.
+  private func reportRemoved(_ args: [String: Any]) {
+    // Toolchains older than these can ship an SDK predating each type.
+    #if compiler(>=6.2)
+    guard let rpId = args["rpId"] as? String, !rpId.isEmpty, rpId.utf8.count <= 253,
+          let credentialId = (args["credentialId"] as? FlutterStandardTypedData)?.data,
+          (1...1023).contains(credentialId.count) else { return }
+    #if compiler(>=6.3)
+    if #available(iOS 26.2, macOS 26.2, *) {
+      Task {
+        try? await ASCredentialDataManager().reportUnknownPublicKeyCredential(
+          relyingPartyIdentifier: rpId, credentialID: credentialId)
+      }
+      return
+    }
+    #endif
+    if #available(iOS 26.0, macOS 26.0, *) {
+      Task {
+        try? await ASCredentialUpdater().reportUnknownPublicKeyCredential(
+          relyingPartyIdentifier: rpId, credentialID: credentialId)
+      }
+    }
+    #endif
+  }
+
   private func finish(_ outcome: Result<[String: Any], PasskeyFailure>) {
     guard let result = pendingResult else { return }
     pendingResult = nil
@@ -95,6 +150,9 @@ final class WalletPasskeyBridge: NSObject {
   /// callback arrives later and finds nothing to answer.
   private func cancel() {
     if #available(iOS 18.0, macOS 15.0, *), let running = ceremony as? PasskeyCeremony {
+      running.cancel()
+    }
+    if #available(iOS 18.0, macOS 15.0, *), let running = ceremony as? PasskeyRegistrationCeremony {
       running.cancel()
     }
     finish(.failure(PasskeyFailure(code: "canceled")))
@@ -171,6 +229,89 @@ private final class PasskeyCeremony: NSObject, ASAuthorizationControllerDelegate
     let code: String
     switch (error as? ASAuthorizationError)?.code {
     // The system does not distinguish dismissal from finding no passkey.
+    case .canceled?: code = "canceled"
+    case .invalidResponse?: code = "invalidResponse"
+    default: code = "unavailable"
+    }
+    finish(.failure(PasskeyFailure(code: code)))
+  }
+}
+
+/// The window a system sheet attaches to.
+func walletPresentationAnchor() -> ASPresentationAnchor {
+  #if os(iOS)
+  let windows = UIApplication.shared.connectedScenes
+    .compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
+  return windows.first { $0.isKeyWindow } ?? windows.first ?? ASPresentationAnchor()
+  #else
+  return NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
+  #endif
+}
+
+@available(iOS 18.0, macOS 15.0, *)
+private final class PasskeyRegistrationCeremony: NSObject, ASAuthorizationControllerDelegate,
+  ASAuthorizationControllerPresentationContextProviding {
+  private let controller: ASAuthorizationController
+  private var completion: ((Result<[String: Any], PasskeyFailure>) -> Void)?
+
+  init(rpId: String, challenge: Data, userId: Data, userName: String, displayName: String, salt: Data,
+       completion: @escaping (Result<[String: Any], PasskeyFailure>) -> Void) {
+    let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpId)
+    let request = provider.createCredentialRegistrationRequest(challenge: challenge, name: userName, userID: userId)
+    request.displayName = displayName
+    // The PRF key differs without verification, as for assertions.
+    request.userVerificationPreference = .required
+    request.attestationPreference = .none
+    request.prf = .inputValues(.init(saltInput1: salt))
+    controller = ASAuthorizationController(authorizationRequests: [request])
+    self.completion = completion
+    super.init()
+    controller.delegate = self
+    controller.presentationContextProvider = self
+  }
+
+  func start() { controller.performRequests() }
+
+  func cancel() {
+    completion = nil
+    controller.cancel()
+  }
+
+  private func finish(_ outcome: Result<[String: Any], PasskeyFailure>) {
+    let done = completion
+    completion = nil
+    done?(outcome)
+  }
+
+  func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    walletPresentationAnchor()
+  }
+
+  func authorizationController(controller: ASAuthorizationController,
+                               didCompleteWithAuthorization authorization: ASAuthorization) {
+    guard let registration = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration,
+          let attestation = registration.rawAttestationObject else {
+      finish(.failure(PasskeyFailure(code: "invalidResponse"))); return
+    }
+    var value: [String: Any] = [
+      "credentialId": FlutterStandardTypedData(bytes: registration.credentialID),
+      "clientDataJSON": FlutterStandardTypedData(bytes: registration.rawClientDataJSON),
+      "attestationObject": FlutterStandardTypedData(bytes: attestation),
+      // The API reports none. A passkey made here is internal and usable over
+      // hybrid; one made on a phone over hybrid lives on that phone.
+      "transports": registration.attachment == .crossPlatform ? ["hybrid"] : ["hybrid", "internal"],
+      "prfFirst": NSNull(),
+    ]
+    // Without a value here Dart compares two sign-ins instead.
+    if let prf = registration.prf, prf.isSupported, let first = prf.first {
+      value["prfFirst"] = FlutterStandardTypedData(bytes: first.withUnsafeBytes { Data($0) })
+    }
+    finish(.success(value))
+  }
+
+  func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+    let code: String
+    switch (error as? ASAuthorizationError)?.code {
     case .canceled?: code = "canceled"
     case .invalidResponse?: code = "invalidResponse"
     default: code = "unavailable"

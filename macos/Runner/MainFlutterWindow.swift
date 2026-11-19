@@ -6,6 +6,8 @@ class MainFlutterWindow: NSWindow {
   private var reducedMotionObserver: NSObjectProtocol?
   private var credentialVault: WalletCredentialVault?
   private var passkeyBridge: WalletPasskeyBridge?
+  private var backupKeychainStore: WalletBackupKeychainStore?
+  private var googleDriveAuth: GoogleDriveAuthBridge?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -17,6 +19,8 @@ class MainFlutterWindow: NSWindow {
     registerReducedMotion(messenger: flutterViewController.engine.binaryMessenger)
     credentialVault = WalletCredentialVault(messenger: flutterViewController.engine.binaryMessenger)
     passkeyBridge = WalletPasskeyBridge(messenger: flutterViewController.engine.binaryMessenger)
+    backupKeychainStore = WalletBackupKeychainStore(messenger: flutterViewController.engine.binaryMessenger)
+    googleDriveAuth = GoogleDriveAuthBridge(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
   }
