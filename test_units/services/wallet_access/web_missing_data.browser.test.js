@@ -66,7 +66,9 @@ async function check(kind){
     else assert.equal(await page.evaluate(removeWallet),1);
     await browser.stopBrowser();await browser.launch();
     page=await browser.page({initialize:probe,existing:true});await browser.navigate(page);await browser.semantics(page);
-    await browser.wait(page,`${buttonPresent('Use password')}||${buttonPresent('Unlock')}||${buttonPresent('Connect wallet')}`,{timeout:60000,label:'data-loss fallback'});
+    // A generated password was never shown, so its sheet leads with the phrase.
+    const phraseFirst=buttonPresent('Use recovery phrase');
+    await browser.wait(page,`${phraseFirst}||${buttonPresent('Use password')}||${buttonPresent('Unlock')}||${buttonPresent('Connect wallet')}`,{timeout:60000,label:'data-loss fallback'});
     await delay(1000);
     assert.equal(await page.evaluate('__gleecReleaseProbe.metrics().observedCredentials'),0,'A missing record must not silently create another credential');
     const after=await page.evaluate(credentialsSummary);
@@ -82,14 +84,20 @@ async function check(kind){
       await browser.wait(page,`!!(${stored})`,{label:'preserved wallet catalog entry'});
       await page.evaluate(`(${stored}).click();true`);
     }
-    await browser.wait(page,`${buttonPresent('Use password')}||${buttonPresent('Unlock')}`,{label:'explicit recovery form'});
-    if(await page.evaluate(buttonPresent('Use password')))await browser.click(page,'Use password');
+    await browser.wait(page,`${phraseFirst}||${buttonPresent('Use password')}||${buttonPresent('Unlock')}`,{label:'explicit recovery form'});
     if(kind==='credential'){
       assert.equal(after.active,0);assert.equal(await page.evaluate(walletRows),1);
+      const lost="Your wallet is here, but this browser can't unlock it.";
+      assert.equal(await page.evaluate(`document.body.textContent.includes(${JSON.stringify(lost)})||Array.from(document.querySelectorAll('[aria-label]')).some(el=>el.getAttribute('aria-label').includes(${JSON.stringify(lost)}))`),true,
+        'The sheet must say the wallet is here but its unlock is not');
+      assert.equal(await page.evaluate(phraseFirst),true,'A generated password must not be what the sheet asks for first');
+      assert.equal(await page.evaluate(buttonPresent('Unlock')),false,'No password form before the user asks for one');
+      // The provider may still hold the generated password it was offered.
+      await browser.click(page,await page.evaluate(buttonPresent('Use saved password'))?'Use saved password':'Use password');
       await browser.fill(page,'Wallet password',credential);await browser.click(page,'Unlock');
       await browser.wait(page,buttonPresent('Gleec Wallet'),{timeout:60000,label:'known-password missing-credential recovery'});
       assert.deepEqual(await page.evaluate(publicIdentity),identity);
-      console.log('PASS: missing local credential preserves encrypted wallet; known password restores same verified identity');
+      console.log('PASS: missing local credential preserves encrypted wallet, is explained, leads with the phrase; saved password restores same verified identity');
     }else{
       assert.deepEqual(after,vault);assert.equal(await page.evaluate(walletRows),0);
       assert.equal(await page.evaluate(buttonPresent('Gleec Wallet')),false,'A credential alone must not present an unlocked wallet');

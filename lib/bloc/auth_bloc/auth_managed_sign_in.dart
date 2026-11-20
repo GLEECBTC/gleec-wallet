@@ -1,5 +1,15 @@
 part of 'auth_bloc.dart';
 
+const _walletAccessFailureDetail = 'walletAccessFailure';
+
+/// Whether a stored-unlock sign-in failed because the unlock this device kept
+/// can no longer open the wallet.
+bool managedUnlockGone(AuthException? error) {
+  final failure = error?.details?[_walletAccessFailureDetail];
+  return failure == WalletAccessFailure.missingCredential.name ||
+      failure == WalletAccessFailure.invalidated.name;
+}
+
 /// Opens a wallet with the credential this device keeps for it.
 extension _ManagedSignIn on AuthBloc {
   Future<void> _onManagedSignIn(
@@ -25,9 +35,8 @@ extension _ManagedSignIn on AuthBloc {
       _emitLoggedInState(emit, user);
       _listenToAuthStateChanges();
     } catch (error, stackTrace) {
-      final canceled =
-          error is WalletAccessException &&
-          error.failure == WalletAccessFailure.canceled;
+      final failure = error is WalletAccessException ? error.failure : null;
+      final canceled = failure == WalletAccessFailure.canceled;
       _logManagedSignInFailure(
         error,
         stackTrace,
@@ -44,10 +53,11 @@ extension _ManagedSignIn on AuthBloc {
       emit(
         AuthBlocState.error(
           AuthException(
-            canceled
-                ? 'authManagedUnlockCanceled'.tr()
-                : 'authManagedUnlockFailed'.tr(),
+            _managedUnlockFailure(failure, generated: event.generatedPassword),
             type: AuthExceptionType.generalAuthError,
+            details: {
+              if (failure != null) _walletAccessFailureDetail: failure.name,
+            },
           ),
         ),
       );
@@ -55,4 +65,22 @@ extension _ManagedSignIn on AuthBloc {
       _endAuthOperation(operation);
     }
   }
+
+  /// A password created for the wallet is one its owner may never have
+  /// seen, so it is never the advice for that wallet.
+  String _managedUnlockFailure(
+    WalletAccessFailure? failure, {
+    required bool generated,
+  }) => switch (failure) {
+    WalletAccessFailure.canceled =>
+      generated
+          ? 'authManagedUnlockCanceledGenerated'
+          : 'authManagedUnlockCanceled',
+    WalletAccessFailure.missingCredential || WalletAccessFailure.invalidated =>
+      generated ? 'authManagedUnlockGoneGenerated' : 'authManagedUnlockGone',
+    _ =>
+      generated
+          ? 'authManagedUnlockFailedGenerated'
+          : 'authManagedUnlockFailed',
+  }.tr();
 }
