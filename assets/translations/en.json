@@ -1980,5 +1980,22 @@
   "authDeviceUnlockOffTitle": "Device unlock is off",
   "authDeviceUnlockOffDescription": "Device unlock stopped working for this wallet, so it now opens with its password. Set it up again to open the wallet with your screen lock or biometrics.",
   "authPasskeyOffTitle": "Passkey is off",
-  "authPasskeyOffDescription": "The passkey stopped working for this wallet, so it now opens with its password. Create a new passkey to open the wallet without typing it."
+  "authPasskeyOffDescription": "The passkey stopped working for this wallet, so it now opens with its password. Create a new passkey to open the wallet without typing it.",
+  "authUseExistingPasskey": "Use an existing passkey",
+  "authExistingPasskeyPending": "Follow your device's prompts: choose your Gleec Wallet passkey, then use it once more to check that it unlocks this wallet. Nothing changes until then.",
+  "authExistingPasskeyNotFound": "No Gleec Wallet passkey was found on this device or in your passkey manager. Nothing changed.",
+  "authExistingPasskeyUnsupported": "That passkey or passkey manager can't unlock wallets in this app. Nothing changed. Try another passkey manager.",
+  "authExistingPasskeyReady": "This wallet now unlocks with your passkey on this device.",
+  "authExistingPasskeyOffDescription": "The passkey stopped working for this wallet, so it now opens with its password. Set up a wallet lock again to open it without typing the password.",
+  "authPasskeyProtectedDevice": "Your passkey protects access on this device. It does not back up your wallet.",
+  "authUseDeviceUnlockInstead": "Use device unlock instead",
+  "authPasskeyLostDeviceDescription": "Lost access to your passkey? Your wallet password can switch this wallet to another way to unlock. Your funds and recovery phrase don't change.",
+  "authPasskeyLostDeviceGeneratedDescription": "Lost access to your passkey? Your wallet password can switch this wallet to another way to unlock. That password was created for you, so look for it in your password manager, or set your own password while this passkey still works.",
+  "authChooseAnotherPasskeyWithPassword": "Choose another passkey using password",
+  "authUseDeviceUnlockWithPassword": "Switch to device unlock using password",
+  "authPasskeyChosen": "This wallet now unlocks with the passkey you chose.",
+  "authStopUsingPasskey": "Use only the wallet password",
+  "authPasskeyRemoving": "Removing the passkey from this wallet…",
+  "authPasskeyRemoved": "This wallet now opens with its password.",
+  "authPasswordChangedDevicePasskeyOff": "Your passkey is off until you set up a wallet lock again."
 }

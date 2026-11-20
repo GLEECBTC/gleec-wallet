@@ -26,6 +26,7 @@ import io.flutter.plugin.common.MethodChannel;
 public class MainActivity extends FlutterFragmentActivity {
     private SensitiveExportChannel sensitiveExports;
     private WalletCredentialVault credentialVault;
+    private PasskeyAuthenticatorChannel passkeyChannel;
     private boolean isSafBytes = false;
     private MethodChannel.Result safResult;
     private String safData;
@@ -131,6 +132,8 @@ public class MainActivity extends FlutterFragmentActivity {
         setupSaf(flutterEngine);
         sensitiveExports = new SensitiveExportChannel(
                 this, flutterEngine.getDartExecutor().getBinaryMessenger());
+        passkeyChannel = new PasskeyAuthenticatorChannel(
+                this, flutterEngine.getDartExecutor().getBinaryMessenger());
         try {
             credentialVault = new WalletCredentialVault(
                     this, flutterEngine.getDartExecutor().getBinaryMessenger());
@@ -146,6 +149,7 @@ public class MainActivity extends FlutterFragmentActivity {
     protected void onDestroy() {
         if (sensitiveExports != null) sensitiveExports.dispose();
         if (credentialVault != null) credentialVault.dispose();
+        if (passkeyChannel != null) passkeyChannel.dispose();
         super.onDestroy();
     }
 }

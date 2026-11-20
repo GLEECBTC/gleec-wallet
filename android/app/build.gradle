@@ -124,4 +124,8 @@ dependencies {
     // Also used by local_auth; explicitly declared for the credential vault's
     // CryptoObject integration (no Boolean-only authentication shortcut).
     implementation "androidx.biometric:biometric:1.1.0"
+    // Passkey assertions with the WebAuthn PRF extension; the Play services
+    // provider serves Android 13 and earlier.
+    implementation "androidx.credentials:credentials:1.6.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
 }

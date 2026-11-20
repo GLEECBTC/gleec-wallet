@@ -33,14 +33,26 @@ extension _DeletionPreparation on WalletAccessService {
           String? token;
           CredentialRecordInfo? actual;
           var vaultItemGone = false;
-          if (record.managed && password != null) {
+          // A record a password change left unmanaged can still have a
+          // passkey envelope beside it, which only the password path below
+          // can authorize removing once the provider is gone.
+          final current = await _sdk.auth.currentUser;
+          final open =
+              current != null &&
+              WalletAccessService.entryId(current) ==
+                  WalletAccessService.entryId(user);
+          if (password != null && (record.managed || open)) {
             try {
               actual = await _backend.metadata(record.credentialKey);
               vaultItemGone = actual == null;
             } on WalletAccessException catch (error) {
               // A key the system invalidated has no readable metadata, yet
-              // its leftover can still be authorized for removal below.
-              if (error.failure != WalletAccessFailure.invalidated) rethrow;
+              // its leftover can still be authorized for removal below. The
+              // unmanaged probe is best effort and never blocks the deletion.
+              if (record.managed &&
+                  error.failure != WalletAccessFailure.invalidated) {
+                rethrow;
+              }
             }
           }
           if (actual?.protection == CredentialProtection.passkey) {

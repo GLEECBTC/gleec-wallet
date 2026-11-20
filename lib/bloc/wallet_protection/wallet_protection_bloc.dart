@@ -120,10 +120,11 @@ class WalletProtectionBloc
     }
     final allowed = switch (event.action) {
       WalletProtectionAction.passkey => state.canCreatePasskey,
-      WalletProtectionAction.device => state.canEnableDevice,
-      WalletProtectionAction.replacePasskey =>
-        state.status?.protection == CredentialProtection.passkey &&
-            state.capabilities?.passkeyCandidate == true,
+      WalletProtectionAction.existingPasskey => state.canUseExistingPasskey,
+      WalletProtectionAction.device =>
+        state.canEnableDevice || state.canSwitchToDevice,
+      WalletProtectionAction.replacePasskey => state.canReplacePasskey,
+      WalletProtectionAction.passwordOnly => state.canUsePasswordOnly,
       WalletProtectionAction.grace =>
         state.status?.requiresAuthentication == true &&
             walletLockGraceOptions.any(
@@ -153,6 +154,11 @@ class WalletProtectionBloc
             walletId: walletId,
             password: event.password,
           );
+        case WalletProtectionAction.existingPasskey:
+          await access.useExistingPasskey(
+            walletId: walletId,
+            password: event.password,
+          );
         case WalletProtectionAction.device:
           await access.enrollDevice(
             walletId: walletId,
@@ -169,6 +175,14 @@ class WalletProtectionBloc
             walletId: walletId,
             password: password,
           );
+        case WalletProtectionAction.passwordOnly:
+          final password = event.password;
+          if (password == null) {
+            throw const WalletAccessException(
+              WalletAccessFailure.incorrectPassword,
+            );
+          }
+          await access.stopUsingPasskey(walletId: walletId, password: password);
         case WalletProtectionAction.grace:
           await access.authorize(
             walletId: walletId,

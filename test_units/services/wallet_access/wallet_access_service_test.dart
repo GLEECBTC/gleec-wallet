@@ -13,6 +13,7 @@ import 'package:web_dex/services/file_loader/file_loader.dart';
 import 'package:web_dex/services/storage/base_storage.dart';
 import 'package:web_dex/services/wallet_access/password_rotation_envelope.dart';
 import 'package:web_dex/services/wallet_access/platform/credential_backend.dart';
+import 'package:web_dex/services/wallet_access/platform/passkey/passkey_credential_backend.dart';
 import 'package:web_dex/services/wallet_access/unlock_coordinator.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_record.dart';
 import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
@@ -20,6 +21,9 @@ import 'package:web_dex/services/wallet_access/wallet_credential_cleanup.dart';
 import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 
+import 'passkey/passkey_test_support.dart';
+
+part 'wallet_access_passkey_reuse_cases.dart';
 part 'wallet_access_review_cases.dart';
 part 'wallet_access_rotation_cases.dart';
 part 'wallet_access_session_cases.dart';
@@ -548,6 +552,7 @@ class _NoPendingTransfers extends Fake
 }
 
 void main() {
+  _passkeyReuseCases();
   _rotationCases();
   _sessionCases();
   _reviewCases();
