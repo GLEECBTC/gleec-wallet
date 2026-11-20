@@ -1791,6 +1791,9 @@ class WithdrawFormBloc extends Bloc<WithdrawFormEvent, WithdrawFormState> {
           throw Exception('Gas limit must be greater than 0');
         }
       },
+      solana: (_) {
+        throw Exception('Solana uses automatic network fees');
+      },
       tron: (_) {
         throw Exception('Custom TRON fees are not supported');
       },

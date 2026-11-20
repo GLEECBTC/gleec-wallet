@@ -1335,6 +1335,8 @@ abstract class LocaleKeys {
       'privateKeyExportCoverageNotice';
   static const privateKeyExportLegacyCoverage =
       'privateKeyExportLegacyCoverage';
+  static const privateKeyExportActiveWalletCoverage =
+      'privateKeyExportActiveWalletCoverage';
   static const privateKeyExportAccountCoverage =
       'privateKeyExportAccountCoverage';
   static const privateKeyExportHdCoverage = 'privateKeyExportHdCoverage';
