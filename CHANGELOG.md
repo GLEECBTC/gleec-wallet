@@ -1,5 +1,11 @@
 # Unreleased
 
+## 🔒 Security
+
+- **Wallet Secrets Stay Out of iOS Backups** ([@CharlVS], [SDK#456](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/456)) — iCloud and computer backups of an iPhone no longer include the wallet's encrypted recovery phrase, as on Android. A new or restored iPhone starts without the wallet; restore it with the recovery phrase.
+  - Copies that earlier exports left inside the app are removed at start-up: "Download all keys" files from 0.9.5 and 0.9.6, which held the keys unencrypted, and "Download as file" wallet files. The copy you shared or saved at the time is not affected.
+  - macOS is unchanged: Time Machine backups stay on disks you hold.
+
 ## 🐛 Bug Fixes
 
 - **Price History Retries** ([@CharlVS], [SDK#443](https://github.com/GLEECBTC/komodo-defi-sdk-flutter/pull/443)) — Coins priced only by CoinPaprika, such as BTCZ, LCC and DINGO, no longer request a year of price history again every minute.

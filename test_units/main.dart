@@ -85,6 +85,8 @@ import 'services/file_loader/diagnostic_artifacts_test.dart'
     as diagnostic_artifacts_test;
 import 'services/file_loader/guarded_file_saver_test.dart'
     as guarded_file_saver_test;
+import 'services/file_loader/legacy_export_residue_test.dart'
+    as legacy_export_residue_test;
 import 'services/logger/safe_log_exporter_test.dart' as safe_log_exporter_test;
 import 'services/logger/logger_privacy_test.dart' as logger_privacy_test;
 import 'services/feedback/feedback_diagnostics_test.dart'
@@ -670,6 +672,7 @@ void main() {
   solana_atomic_lifecycle_test.main();
   diagnostic_artifacts_test.main();
   guarded_file_saver_test.main();
+  legacy_export_residue_test.main();
   safe_log_exporter_test.main();
   logger_privacy_test.main();
   feedback_diagnostics_test.main();
