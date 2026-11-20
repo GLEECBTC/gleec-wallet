@@ -7,6 +7,8 @@ import 'package:web_dex/bloc/security_settings/private_key_export_state.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/security/private_key_export_document.dart';
 import 'package:web_dex/services/security/private_key_export_service.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart'
+    show GuardedDestinationSelector;
 
 /// Owns one settings screen's export. No password is retained in state.
 class PrivateKeyExportBloc
@@ -58,6 +60,8 @@ class PrivateKeyExportBloc
   final Set<String> _permanentlyExcludedAssetIds;
   StreamSubscription<void>? _subscription;
   PrivateKeyExportAccess? _access;
+  void Function()? _operationAuthorization;
+  GuardedDestinationSelector? _selectDestination;
   int _generation = 0;
   int _visibilityRevision = 0;
   int _qrRevision = 0;
@@ -78,6 +82,8 @@ class PrivateKeyExportBloc
     PrivateKeyExportError? error,
   }) {
     _access = null;
+    _operationAuthorization = null;
+    _selectDestination = null;
     emit(
       PrivateKeyExportState(
         operationId: ++_generation,
@@ -139,9 +145,13 @@ class PrivateKeyExportBloc
       state.copyWith(phase: PrivateKeyExportPhase.exporting, clearError: true),
     );
     try {
+      event.ensureAuthorized?.call();
+      _operationAuthorization = event.ensureAuthorized;
+      _selectDestination = event.selectDestination;
       final result = await _service.authenticateAndExport(
         access,
         event.password,
+        ensureAuthorized: event.ensureAuthorized,
       );
       if (!_current(operation, emit)) return;
       await _requireCurrent(operation, access);
@@ -177,6 +187,13 @@ class PrivateKeyExportBloc
       );
     }
     _service.ensureCurrentSync(access);
+    try {
+      _operationAuthorization?.call();
+    } catch (_) {
+      throw const PrivateKeyExportException(
+        PrivateKeyExportError.sessionChanged,
+      );
+    }
   }
 
   Future<void> _requireCurrent(
@@ -339,6 +356,7 @@ class PrivateKeyExportBloc
         content: content,
         beforeWrite: () => _requireCurrent(operation, access),
         beforeCommit: () => _requireCurrentSync(operation, access),
+        selectDestination: _selectDestination,
       );
       if (!_current(operation, emit)) return;
       await _requireCurrent(operation, access);

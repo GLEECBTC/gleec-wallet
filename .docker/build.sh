@@ -137,16 +137,33 @@ fi
 if [ -n "$TRON_GASLESS_SERVICE_PROVIDER" ]; then
   BUILD_CMD="$BUILD_CMD --dart-define=TRON_GASLESS_SERVICE_PROVIDER=$TRON_GASLESS_SERVICE_PROVIDER"
 fi
-# Add web-specific build arguments if the target is web
+# Add web-specific build arguments if the target is web. These are the options
+# CI builds the hosted bundle with (.github/actions/generate-assets).
 if [ "$BUILD_TARGET" = "web" ]; then
-    echo "Adding web-specific build arguments: --no-web-resources-cdn"
-    BUILD_CMD="$BUILD_CMD --no-web-resources-cdn"
+    echo "Adding web-specific build arguments: --csp --no-web-resources-cdn"
+    BUILD_CMD="$BUILD_CMD --csp --no-web-resources-cdn"
 fi
 # Use the provided arguments for flutter build
 # Build a second time if needed, as asset downloads will require a rebuild on the first attempt
+# Native configuration happens before Flutter runs asset transformers. Prepare
+# the pinned, verified library first, as the shared CI build action does.
+NATIVE_PREPARATION=""
+case "$BUILD_TARGET" in
+  apk|appbundle) NATIVE_PREPARATION="dart tool/prefetch_native_kdf.dart android; " ;;
+  linux|macos|windows|ios) NATIVE_PREPARATION="dart tool/prefetch_native_kdf.dart $BUILD_TARGET; " ;;
+esac
 docker run "${PLATFORM_ARGS[@]}" --rm -v "$(pwd)/build:/app/build" \
   -v "$(pwd):/app" \
   -u "$HOST_UID:$HOST_GID" \
   "${ENV_ARGS[@]}" \
   komodo/komodo-wallet:latest bash -e -c \
-  "sudo chown -R komodo:komodo /app/build; flutter pub get --enforce-lockfile; $BUILD_COMMAND || true; $BUILD_CMD"
+  "sudo chown -R komodo:komodo /app/build; flutter pub get --enforce-lockfile; $NATIVE_PREPARATION$BUILD_COMMAND || true; $BUILD_CMD"
+
+# Finish the web bundle the way the shared CI build action does: self-host the
+# audited offline-game scripts for the strict CSP, then reject local fixtures.
+if [ "$BUILD_TARGET" = "web" ]; then
+    if [ -f build/web/assets/packages/flutter_inappwebview/assets/t_rex_runner/t-rex.html ]; then
+        python3 tool/prepare_wallet_web_assets.py build/web
+    fi
+    python3 tool/verify_wallet_artifacts.py build
+fi

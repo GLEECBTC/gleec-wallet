@@ -422,14 +422,32 @@ void main() {
       });
     }
 
-    swapBlocTest('a balance that cannot be read is unknown, not zero', (h) {
-      h.unreadableBalances.add(eth);
-      final bloc = h.open();
+    swapBlocTest(
+      'unknown funding allows quotes but requires retry before review',
+      (h) {
+        h.unreadableBalances.add(eth);
+        final bloc = h.open();
 
-      expect(bloc.state.balance, isNull);
-      expect(bloc.state.issue, isNull);
-      expect(bloc.state.canReview, isTrue);
-    });
+        expect(bloc.state.balance, isNull);
+        expect(bloc.state.issue, isNull);
+        expect(bloc.state.evaluation, SwapEvaluationStatus.ready);
+        expect(bloc.state.selectedQuote, isNotNull);
+        expect(h.routed.requests, hasLength(1));
+        expect(bloc.state.fundingFailedAsset, eth);
+        expect(bloc.state.canReview, isFalse);
+        bloc.add(const UnifiedSwapReviewOpened());
+        h.settle();
+        expect(bloc.state.view, UnifiedSwapView.form);
+        expect(h.routedExecutor.started, isEmpty);
+
+        h.unreadableBalances.remove(eth);
+        bloc.add(const UnifiedSwapBalancesRefreshed());
+        h.settle();
+        expect(bloc.state.fundingFailedAsset, isNull);
+        expect(bloc.state.canReview, isTrue);
+        expect(h.routed.requests, hasLength(1));
+      },
+    );
 
     swapBlocTest('a balance read for a replaced asset is dropped', (h) {
       final bloc = h.open();

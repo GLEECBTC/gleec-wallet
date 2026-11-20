@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/shared/swap/swap_catalog.dart';
@@ -50,19 +51,16 @@ void main() {
       expect(copy.detail, detail);
     }
 
-    test('an inactive asset names it and offers to activate it', () {
-      const message =
-          " isn't active in this wallet yet. Activate it to see its balance "
-          'and prices.';
+    test('an unprepared asset names it and offers preparation retry', () {
       final kind = SwapQuoteFailureKind.assetInactive;
       expectCopy(
         SwapFailureCopy.of(failure(kind, asset: usdc), eth),
-        'USDC$message',
+        'swapAssetPreparationUnavailable'.tr(args: ['USDC']),
         action: SwapEntryAction.activate,
       );
       expectCopy(
         SwapFailureCopy.of(failure(kind), eth),
-        'ETH$message',
+        'swapAssetPreparationUnavailable'.tr(args: ['ETH']),
         action: SwapEntryAction.activate,
       );
     });
@@ -203,15 +201,14 @@ void main() {
           "We couldn't check swap options. Your selections are preserved and "
           'nothing was signed or sent.';
 
-      test("a routed token suggests checking its network's coin", () {
+      test('a service failure does not invent a token gas shortfall', () {
         expectCopy(
           SwapFailureCopy.of(routed, usdc, networks: networks),
-          "We couldn't check swap options. If this keeps happening, check "
-          'you have enough ETH on Ethereum for network fees.',
+          generic,
         );
       });
 
-      test('and says what the address holds, so plenty rules gas out', () {
+      test('an unrelated balance does not imply a funding diagnosis', () {
         expectCopy(
           SwapFailureCopy.of(
             routed,
@@ -219,9 +216,7 @@ void main() {
             networks: networks,
             feeHeld: '60 ETH',
           ),
-          "We couldn't check swap options. If this keeps happening, check "
-          'you have enough ETH on Ethereum for network fees.',
-          detail: 'This address has 60 ETH.',
+          generic,
         );
       });
 

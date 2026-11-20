@@ -144,7 +144,7 @@ class SwapTermsRepository {
     if (!presented.covers(swapConsentDocuments)) return;
     final key = walletKey == null ? await _key() : '$_keyPrefix:$walletKey';
     if (key == null || !(stillCurrent?.call() ?? true)) return;
-    await _storage.write(
+    final saved = await _storage.write(
       key,
       SwapTermsAcceptance(
         version: currentVersion,
@@ -154,5 +154,6 @@ class SwapTermsRepository {
         documentShas: presented.documentShas,
       ).toStorage(),
     );
+    if (!saved) throw StateError('Swap consent could not be saved');
   }
 }

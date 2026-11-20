@@ -15,13 +15,18 @@ import 'package:web_dex/bloc/security_settings/security_settings_state.dart';
 import 'package:web_dex/common/screen.dart';
 import 'package:web_dex/generated/codegen_loader.g.dart';
 import 'package:web_dex/model/wallet.dart';
+import 'package:web_dex/services/wallet_access/wallet_access_service.dart';
+import 'package:web_dex/services/wallet_access/wallet_lock_policy.dart';
 import 'package:web_dex/shared/seed_backup/seed_backup_policy.dart';
 import 'package:web_dex/shared/widgets/app_dialog.dart';
+import 'package:web_dex/views/common/wallet_access/wallet_access_feedback.dart';
 import 'package:web_dex/views/common/wallet_password_dialog/mnemonic_prompt.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_back_button.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_confirm_success.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_confirmation/seed_confirmation.dart';
 import 'package:web_dex/views/settings/widgets/security_settings/seed_settings/seed_show.dart';
+
+part 'seed_backup_gate_views.dart';
 
 /// Wallets acknowledged this session, keyed by authenticated wallet identity.
 ///
@@ -113,18 +118,45 @@ class _SeedBackupGateDialog extends StatefulWidget {
   State<_SeedBackupGateDialog> createState() => _SeedBackupGateDialogState();
 }
 
-class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
+class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog>
+    with WidgetsBindingObserver {
   /// Held only for the life of this dialog and dropped on the way out. Dart
   /// strings are immutable, so this matches the existing convention of
   /// releasing the reference rather than claiming zeroisation.
   String _seed = '';
   bool _backingUp = false;
   bool _closing = false;
+  bool _awaitingMnemonic = false;
+  int _revealGeneration = 0;
+
+  /// The reveal and confirmation steps, held here so the words can be
+  /// covered again from outside them.
+  SecuritySettingsBloc? _flow;
+
+  /// Why the phrase was taken off screen, shown on the notice it returns to.
+  String? _interruption;
   StreamSubscription<AuthSessionContext?>? _sessionSubscription;
+  StreamSubscription<void>? _sensitiveViewSubscription;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final coordinator = context.read<WalletAccessService?>()?.unlockCoordinator;
+    _sensitiveViewSubscription = coordinator?.sensitiveViewsMustClose.listen((
+      _,
+    ) {
+      // Losing focus alone is answered in [didChangeAppLifecycleState]. Here
+      // it only ends the backup when it also locked the wallet.
+      if (WidgetsBinding.instance.lifecycleState ==
+              AppLifecycleState.inactive &&
+          !coordinator.state.isLocked) {
+        return;
+      }
+      if (_backingUp || (_awaitingMnemonic && !coordinator.hasSystemPrompt)) {
+        _interrupt(leftApp: !coordinator.state.isForeground);
+      }
+    });
     _sessionSubscription = widget.sdk.auth.watchSessionContext().listen((_) {
       if (!_isCurrentWallet) _close(false);
     });
@@ -135,9 +167,70 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _seed = '';
+    _flow?.close();
     _sessionSubscription?.cancel();
+    _sensitiveViewSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        return;
+      case AppLifecycleState.inactive:
+        // On desktop and web another window was clicked, often the one the
+        // words are being saved in: the user is still here. On a phone the
+        // app is about to be snapshotted, so the words are covered again but
+        // the step, and a quiz in progress, are kept.
+        if (focusLossLeavesApp) _maskWords();
+        return;
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        break;
+    }
+    // Secret views never inherit the ordinary wallet's background grace.
+    if (_backingUp || _seed.isNotEmpty) {
+      _interrupt(leftApp: true);
+      return;
+    }
+    final systemPrompt =
+        context
+            .read<WalletAccessService?>()
+            ?.unlockCoordinator
+            .hasSystemPrompt ??
+        false;
+    if (_awaitingMnemonic && !systemPrompt) _interrupt(leftApp: true);
+  }
+
+  void _maskWords() {
+    final flow = _flow;
+    if (flow == null || flow.isClosed) return;
+    // The event also returns to the reveal step, so it is only sent from it.
+    if (flow.state.step == SecuritySettingsStep.seedShow &&
+        flow.state.showSeedWords) {
+      flow.add(const ShowSeedWordsEvent(false));
+    }
+  }
+
+  /// Takes the phrase off screen and returns to the notice, which says why:
+  /// closing without a word would leave the user wondering where it went.
+  void _interrupt({required bool leftApp}) {
+    if (!mounted || _closing) return;
+    _revealGeneration++;
+    _seed = '';
+    final flow = _flow;
+    _flow = null;
+    flow?.close();
+    setState(() {
+      _backingUp = false;
+      _interruption =
+          (leftApp ? 'authRecoveryHiddenLeftApp' : 'authRecoveryHiddenLocked')
+              .tr();
+    });
   }
 
   void _close(bool proceed) {
@@ -186,19 +279,40 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
   }
 
   Future<void> _startBackup() async {
+    if (_awaitingMnemonic || _closing) return;
     if (!_isCurrentWallet) {
       _close(false);
       return;
     }
-    final seed = await promptForPlaintextMnemonic(context);
-    if (!mounted) return;
+    final generation = _revealGeneration;
+    _awaitingMnemonic = true;
+    if (_interruption != null) setState(() => _interruption = null);
+    final String? seed;
+    try {
+      seed = await promptForPlaintextMnemonic(context);
+    } finally {
+      _awaitingMnemonic = false;
+    }
+    if (!mounted || _closing) return;
     if (!_isCurrentWallet) {
       _close(false);
       return;
     }
-    if (seed == null) return;
+    // Already told why when the interruption happened.
+    if (generation != _revealGeneration) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycleLeavesApp(lifecycle)) {
+      _interrupt(leftApp: true);
+      return;
+    }
+    final plaintext = seed;
+    if (plaintext == null) return;
     setState(() {
-      _seed = seed;
+      _seed = plaintext;
+      _flow = SecuritySettingsBloc(
+        SecuritySettingsState.initialState(),
+        kdfSdk: RepositoryProvider.of<KomodoDefiSdk>(context),
+      )..add(const ShowSeedEvent());
       _backingUp = true;
     });
   }
@@ -212,21 +326,20 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
       },
       child: Builder(
         builder: (context) {
-          if (!_backingUp) {
+          final flow = _flow;
+          if (!_backingUp || flow == null) {
             return _SeedBackupGateNotice(
               isGenerated: seedWasGeneratedForUser(widget.wallet),
               reason: widget.reason,
+              interruption: _interruption,
               onBackUp: _startBackup,
               onImportInstead: _restoreInstead,
               onContinueAnyway: _continueAnyway,
             );
           }
 
-          return BlocProvider<SecuritySettingsBloc>(
-            create: (context) => SecuritySettingsBloc(
-              SecuritySettingsState.initialState(),
-              kdfSdk: RepositoryProvider.of<KomodoDefiSdk>(context),
-            )..add(const ShowSeedEvent()),
+          return BlocProvider<SecuritySettingsBloc>.value(
+            value: flow,
             child: BlocConsumer<SecuritySettingsBloc, SecuritySettingsState>(
               listener: (context, state) {
                 // `SeedShow` and `SeedConfirmation` each embed a back button that
@@ -258,10 +371,12 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
                     _seed = '';
                     return _SeedBackupGateSuccess(onDone: () => _close(true));
                   default:
-                    return const Center(
+                    return Center(
                       child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: UiSpinner(),
+                        padding: const EdgeInsets.all(32),
+                        child: WalletAccessProgress(
+                          label: LocaleKeys.pleaseWait.tr(),
+                        ),
                       ),
                     );
                 }
@@ -303,94 +418,6 @@ class _SeedBackupGateDialogState extends State<_SeedBackupGateDialog> {
           );
         },
       ),
-    );
-  }
-}
-
-class _SeedBackupGateNotice extends StatelessWidget {
-  const _SeedBackupGateNotice({
-    required this.isGenerated,
-    required this.reason,
-    required this.onBackUp,
-    required this.onImportInstead,
-    required this.onContinueAnyway,
-  });
-
-  final bool isGenerated;
-  final SeedBackupGateReason reason;
-  final VoidCallback onBackUp;
-  final VoidCallback onImportInstead;
-  final VoidCallback onContinueAnyway;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      key: const Key('seed-backup-gate-notice'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Icon(Icons.shield_outlined, size: 40, color: theme.colorScheme.primary),
-        const SizedBox(height: 16),
-        Text(
-          LocaleKeys.seedBackupGateTitle.tr(),
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleLarge?.copyWith(fontSize: 18),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          isGenerated
-              ? LocaleKeys.seedBackupGateGeneratedBody.tr()
-              : LocaleKeys.seedBackupGateBody.tr(),
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-        ),
-        const SizedBox(height: 24),
-        UiPrimaryButton(
-          key: const Key('seed-backup-gate-backup-button'),
-          height: 48,
-          text: LocaleKeys.seedBackupGateBackUpNow.tr(),
-          onPressed: onBackUp,
-        ),
-        if (isGenerated) ...[
-          const SizedBox(height: 12),
-          UiUnderlineTextButton(
-            key: const Key('seed-backup-gate-import-instead-button'),
-            text: LocaleKeys.seedBackupGateImportInstead.tr(),
-            onPressed: onImportInstead,
-          ),
-        ],
-        const SizedBox(height: 4),
-        UiUnderlineTextButton(
-          key: const Key('seed-backup-gate-continue-button'),
-          text: LocaleKeys.seedBackupGateContinueAnyway.tr(),
-          onPressed: onContinueAnyway,
-        ),
-      ],
-    );
-  }
-}
-
-class _SeedBackupGateSuccess extends StatelessWidget {
-  const _SeedBackupGateSuccess({required this.onDone});
-
-  final VoidCallback onDone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SeedConfirmSuccess(),
-        const SizedBox(height: 16),
-        UiPrimaryButton(
-          key: const Key('seed-backup-gate-done-button'),
-          height: 48,
-          text: LocaleKeys.seedBackupGateShowAddress.tr(),
-          onPressed: onDone,
-        ),
-      ],
     );
   }
 }

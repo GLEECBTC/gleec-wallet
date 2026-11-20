@@ -110,9 +110,8 @@ Future<void> _pump(WidgetTester tester, _Layout layout, _Input input) async {
           supportedLocales: context.supportedLocales,
           localizationsDelegates: context.localizationDelegates,
           builder: (context, app) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: TextScaler.linear(layout.textScale)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(layout.textScale)),
             child: app!,
           ),
           home: BlocProvider<AuthBloc>.value(
@@ -140,10 +139,6 @@ final Finder _button = find.descendant(
   matching: find.byType(ElevatedButton),
 );
 
-/// The part of the button that is drawn.
-Finder get _pill =>
-    find.descendant(of: _button, matching: find.byType(Material)).first;
-
 /// Covers the seed backup notice's button against the swap surface's
 /// accessibility checks, wherever the app's theme leaves its tap target.
 void main() {
@@ -168,18 +163,23 @@ void main() {
         });
       }
 
-      testWidgets('keeps its 85 × 28 look inside a 48 dp target, which a tap '
-          'beside the pill presses', (tester) async {
+      testWidgets('is a full 48 dp button that leads to the backup', (
+        tester,
+      ) async {
         final previous = routingState;
         routingState = RoutingState();
         addTearDown(() => routingState = previous);
         await _pump(tester, _layouts.first, input);
 
-        final pill = tester.getRect(_pill);
-        expect(pill.size, const Size(85, 28));
-        expect(tester.getSemantics(_button).rect.size, const Size(85, 48));
+        // The most important safety action gets a real button, drawn at the
+        // size of its target wherever the theme leaves tap targets.
+        expect(tester.getSize(_button).height, greaterThanOrEqualTo(48));
+        expect(
+          tester.getSemantics(_button).rect.height,
+          greaterThanOrEqualTo(48),
+        );
 
-        await tester.tapAt(Offset(pill.center.dx, pill.top - 8));
+        await tester.tap(_button);
         await tester.pumpAndSettle();
         expect(
           routingState.settingsState.selectedMenu,

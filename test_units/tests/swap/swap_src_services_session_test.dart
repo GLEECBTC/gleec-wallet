@@ -137,6 +137,62 @@ void main() {
       expect(followed(), ['r-2']);
     });
 
+    test(
+      'a new authenticated session rejects pre-auth drafts and late disposal',
+      () async {
+        final token = services.draftSession;
+        const draft = (
+          pay: 'ETH',
+          receive: 'BTC',
+          input: '25',
+          fiat: true,
+          slippage: 0.005,
+        );
+        services.rememberDraft(token, draft);
+        await signIn(userOf('alice'));
+        expect(services.draftFor(token), isNull);
+        expect(services.draftSession, isNot(same(token)));
+        await signIn(null);
+        services.rememberDraft(token, draft);
+        await signIn(userOf('alice'));
+        expect(services.draftFor(services.draftSession), isNull);
+      },
+    );
+
+    test(
+      'wallet change drops pending handoffs and retains consumed route dedupe',
+      () async {
+        await signIn(userOf('alice'));
+        services.lastRouteIntent = 'ETH|BTC|25';
+        services.requestIntent((
+          pay: 'ETH',
+          receive: 'BTC',
+          amount: '25',
+          fiat: true,
+        ));
+        services.requestOpen((
+          id: 'alice-swap',
+          source: SwapLiquiditySource.routed,
+        ));
+        await signIn(userOf('bob'));
+        expect(services.takePendingIntent(), isNull);
+        expect(services.takePendingOpen(), isNull);
+        expect(services.lastRouteIntent, 'ETH|BTC|25');
+      },
+    );
+
+    test(
+      'authorized sign-in intent survives manager completion before auth',
+      () async {
+        await signIn(null);
+        const intent = (pay: 'ETH', receive: 'BTC', amount: '25', fiat: true);
+        services.beginSignIn(intent);
+        services.endSignIn(signedIn: true);
+        await signIn(userOf('alice'));
+        expect(services.takePendingIntent(), intent);
+      },
+    );
+
     test('an error from sign-in is ignored', () async {
       sdk.auth.users.addError(StateError('auth failed'));
       await signIn(userOf('alice'));
@@ -390,6 +446,25 @@ void main() {
         (SwapLiquiditySource.atomic, SwapQuoteFailureKind.tradingBlocked),
       });
     });
+
+    test(
+      'routes a wallet-only token, which only the order book refuses',
+      () async {
+        final repo = services.createRepository(
+          tradingAllowed: (_, _) => true,
+          clockValid: () => true,
+        );
+
+        final result = await repo.quote(
+          SwapQuoteRequest(from: walletOnly, to: eth, amount: d('1')),
+        );
+
+        expect(result.options.single.source, SwapLiquiditySource.routed);
+        expect(result.failures.map((f) => (f.source, f.kind)), [
+          (SwapLiquiditySource.atomic, SwapQuoteFailureKind.pairUnsupported),
+        ]);
+      },
+    );
 
     test('applies the clock check to the order book only', () async {
       final repo = services.createRepository(

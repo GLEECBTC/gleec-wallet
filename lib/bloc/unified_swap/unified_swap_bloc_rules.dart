@@ -4,9 +4,19 @@ part of 'unified_swap_bloc.dart';
 extension _UnifiedSwapRules on UnifiedSwapBloc {
   void _invalidate() {
     _evaluationVersion++;
+    _evaluationAlternatives = const [];
+    _stopQuoteWatch();
     _debounce?.cancel();
     _refresh?.cancel();
     _expiry?.cancel();
+  }
+
+  void _stopQuoteWatch() {
+    final subscription = _quoteSubscription;
+    _quoteSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    _finishQuoteWatch?.call();
+    _finishQuoteWatch = null;
   }
 
   /// Applies form validation to [next].
@@ -51,7 +61,8 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
           ? SwapFormIssue.fiatUnavailable
           : SwapFormIssue.amountMalformed;
     }
-    final decimals = pay?.chainId.decimals;
+    if (amount <= Decimal.zero) return SwapFormIssue.amountZero;
+    final decimals = pay == null ? null : _decimalsOf(pay);
     if (next.amountMode == SwapAmountMode.token &&
         decimals != null &&
         amount.scale > decimals) {
@@ -72,6 +83,7 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
       _shortfall(quote, _spendFor(next, quote), (
         balance: next.balance,
         feeBalance: next.feeBalance,
+        fundingBalances: next.fundingBalances,
       ));
 
   /// The balance [spend] of [quote] leaves short in [held], if any: the pay
@@ -91,16 +103,50 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
         quote.fundingOnTopIn(feeAsset) > feeBalance) {
       return SwapFormIssue.insufficientForFees;
     }
+    for (final asset in quote.fundingAssets) {
+      if (asset == quote.from || asset == feeAsset) continue;
+      final heldAmount = held.fundingBalances[asset];
+      if (heldAmount != null && quote.fundingOnTopIn(asset) > heldAmount) {
+        return SwapFormIssue.insufficientForFees;
+      }
+    }
+    return null;
+  }
+
+  AssetId? _shortFundingAsset(SwapQuote quote, _Held held) {
+    for (final asset in quote.fundingAssets) {
+      if (asset == quote.from) continue;
+      final amount = asset == quote.from.parentId
+          ? held.feeBalance
+          : held.fundingBalances[asset];
+      if (amount == null || quote.fundingOnTopIn(asset) > amount) return asset;
+    }
     return null;
   }
 
   /// The pair to open on: the last one swapped, or the largest holding paired
-  /// with a stablecoin.
+  /// with a stablecoin, or ETH and one when no holding has a value yet.
   Future<({AssetId pay, AssetId receive})?> _defaultPair(
     Set<AssetId> tradable,
   ) async {
+    // Portfolio decoration must not hold up the form. Start both reads
+    // together and abandon slow holdings after the cached-content budget.
+    const budget = Duration(milliseconds: 300);
+    Future<List<SwapHolding>> readHoldings() async {
+      try {
+        return await (_holdings?.call() ?? Future.value(const <SwapHolding>[]))
+            .timeout(budget);
+      } on Object {
+        return const [];
+      }
+    }
+
+    final holdingsRead = readHoldings();
     try {
-      final last = await _preferences.lastPair();
+      final last = await _preferences.lastPair().timeout(
+        budget,
+        onTimeout: () => null,
+      );
       if (last != null) {
         final pay = _resolveAsset(last.from);
         final receive = _resolveAsset(last.to);
@@ -110,15 +156,32 @@ extension _UnifiedSwapRules on UnifiedSwapBloc {
             tradable.contains(receive) &&
             !isLegacySwapAsset(receive) &&
             (!isLegacySwapAsset(pay) ||
-                (await _read(pay) ?? Decimal.zero) > Decimal.zero)) {
+                (await _read(pay).timeout(budget, onTimeout: () => null) ??
+                        Decimal.zero) >
+                    Decimal.zero)) {
           return (pay: pay, receive: receive);
         }
       }
 
-      final holdings = await _holdings?.call() ?? const <SwapHolding>[];
+      final holdings = await holdingsRead;
       final ranked = holdings.where((h) => tradable.contains(h.asset)).toList()
         ..sort((a, b) => b.usdValue.compareTo(a.usdValue));
-      if (ranked.isEmpty) return null;
+      // Nothing valued says as little as a read that is slow or failed:
+      // holdings carry a value only once their prices are cached.
+      if (ranked.isEmpty) {
+        final preferred = _resolveAsset('ETH');
+        final candidates = [
+          if (preferred != null && tradable.contains(preferred)) preferred,
+          ...tradable.where(
+            (asset) => asset != preferred && !isLegacySwapAsset(asset),
+          ),
+        ];
+        for (final pay in candidates) {
+          final receive = _partnerFor(pay, tradable);
+          if (receive != null) return (pay: pay, receive: receive);
+        }
+        return null;
+      }
       final pay = ranked.first.asset;
       final receive = _partnerFor(pay, tradable);
       return receive == null ? null : (pay: pay, receive: receive);
@@ -160,8 +223,13 @@ bool _isStructuralChange(SwapQuote accepted, SwapQuote fresh) {
 /// Any drop in the guaranteed minimum is material: a swap that silently
 /// delivers less than the figure someone agreed to is the failure this flow
 /// exists to prevent. Costs may drift a little, not a lot.
-bool _isMaterialChange(SwapQuote accepted, SwapQuote fresh) {
+bool _isMaterialChange(
+  SwapQuote accepted,
+  SwapQuote fresh, {
+  required Decimal? Function(AssetId asset) usdPrice,
+}) {
   if (fresh.guaranteedReceive < accepted.guaranteedReceive) return true;
+  if (_heldForFeesRose(accepted, fresh, usdPrice)) return true;
   // Fees not read for the review are new at any amount.
   if (!accepted.feesKnown) return fresh.fees.isNotEmpty;
   final before = accepted.pricing.totalCostUsd;
@@ -172,6 +240,42 @@ bool _isMaterialChange(SwapQuote accepted, SwapQuote fresh) {
   if (before == null) return _feesRose(accepted, fresh);
   if (after == null) return false;
   return _rose(before, after);
+}
+
+/// Whether [fresh] needs more held for its fees than [accepted] did, in a
+/// new coin or by more than costs may drift. Whether the wallet holds it is
+/// checked apart, for any rise.
+///
+/// A Solana order keeps the exact comparison: its funding can show in this
+/// figure alone, with no fee line beside it, and the order is checked
+/// against it to the unit when sent.
+bool _heldForFeesRose(
+  SwapQuote accepted,
+  SwapQuote fresh,
+  Decimal? Function(AssetId asset) usdPrice,
+) {
+  final exact = [
+    accepted.from,
+    accepted.to,
+    fresh.from,
+    fresh.to,
+  ].any(isSolanaTradingAsset);
+  for (final MapEntry(key: asset, value: now)
+      in fresh.requiredFeeBalances.entries) {
+    final was = accepted.requiredFeeBalances[asset];
+    if (was == null) {
+      if (now > Decimal.zero) return true;
+      continue;
+    }
+    if (now <= was) continue;
+    if (exact) return true;
+    final price = usdPrice(asset);
+    final rose = price == null || price <= Decimal.zero
+        ? now > was * (Decimal.one + _costTolerance)
+        : _rose(was * price, now * price);
+    if (rose) return true;
+  }
+  return false;
 }
 
 bool _rose(Decimal before, Decimal after) {

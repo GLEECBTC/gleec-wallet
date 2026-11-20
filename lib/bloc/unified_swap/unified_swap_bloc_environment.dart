@@ -73,6 +73,9 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         (quote != null && quote.isExpiredAt(_now()));
     if (stale && _keepsFresh) {
       add(const UnifiedSwapEvaluationRequested());
+    } else if (quote == null && state.evaluation == SwapEvaluationStatus.idle) {
+      // Left unpriced while away, as by a session that began meanwhile.
+      _scheduleEvaluation(immediate: true, quiet: true);
     } else {
       _armTimers(quote, shownAgain: true);
     }
@@ -85,10 +88,14 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     if (_closing || isClosed || emit.isDone) return;
     _invalidate();
     final epoch = ++_walletEpoch;
+    // A preparation under way read the session this replaces.
+    _preparationVersion++;
     _startVersion++;
     _legalVersion++;
     _legalSubmissionVersion = null;
     _reviewSubmission = null;
+    _quoteScope = Object();
+    _resolvedSpendDecimals.clear();
     // This is a different wallet context, not cancellation of the old engine
     // operation. The registry owns recovery; none of its prior UI belongs here.
     emit(
@@ -102,6 +109,9 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
           clearFailure: true,
           clearMaxApplied: true,
           checkingMax: false,
+          // Still due from the first catalog read while the assets load.
+          preparingAssets: state.loadingAssets ? null : false,
+          clearPreparationFailure: true,
           clearBalance: true,
           clearFeeBalance: true,
           clearPayAddress: true,
@@ -112,14 +122,21 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
         ),
       ),
     );
-    await _loadBalances(emit);
-    if (_closing || emit.isDone || epoch != _walletEpoch) return;
-    await _loadAddresses(emit);
-    if (_closing || emit.isDone || epoch != _walletEpoch) return;
-    if (_present) {
-      add(const UnifiedSwapOffersRequested(quiet: true));
-      _scheduleEvaluation(immediate: true, quiet: true);
+    if (state.loadingAssets) {
+      // The first catalog read prepares the pair once it lands, reading again
+      // for this session if it began for the last one.
+      if (!_catalogLoading) add(const UnifiedSwapStarted());
+      return;
     }
+    // The unit too: a sign-in's own preparation, cut short by its session
+    // arriving, was still choosing one for the empty field.
+    await _preparePair(
+      emit,
+      chooseMode: state.inputText.isEmpty,
+      automatic: true,
+    );
+    if (_closing || emit.isDone || epoch != _walletEpoch) return;
+    if (_present) add(const UnifiedSwapOffersRequested(quiet: true));
   }
 
   Future<void> _onCapabilitiesChanged(
@@ -135,6 +152,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       return;
     }
     final signingChanged = event.signedIn != state.signedIn;
+    final becameAllowed = !state.tradingEnabled && event.tradingEnabled;
     if (!signingChanged) {
       // Periodic policy refreshes must not discard the accepted snapshot.
       // Start stays disabled through pending or unavailable lookups. Only a
@@ -175,6 +193,11 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
       // wallet's. A start in doubt keeps its review: its answer must be seen.
       _invalidate();
       _walletEpoch++;
+      _preparationVersion++;
+      _amountModeVersion++;
+      _quoteScope = Object();
+      _fiatDraft = null;
+      _resolvedSpendDecimals.clear();
       final leaveReview =
           state.view == UnifiedSwapView.review && !_startInDoubt;
       if (leaveReview) _startVersion++;
@@ -195,6 +218,8 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
             clearFailure: true,
             clearMaxApplied: true,
             checkingMax: false,
+            preparingAssets: false,
+            clearPreparationFailure: true,
             clearBalance: true,
             clearFeeBalance: true,
             clearPayAddress: true,
@@ -202,8 +227,10 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
           ),
         ),
       );
-      await _loadBalances(emit);
-      await _loadAddresses(emit);
+      await _preparePair(emit, chooseMode: state.inputText.isEmpty);
+    }
+    if (!signingChanged && becameAllowed && state.inactiveAsset != null) {
+      await _preparePair(emit, chooseMode: state.inputText.isEmpty);
     }
     if (event.tradingEnabled &&
         state.view == UnifiedSwapView.form &&
@@ -231,20 +258,57 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
   ) => _loadBalances(emit);
 
   Future<void> _loadBalances(Emitter<UnifiedSwapState> emit) async {
+    final readVersion = ++_balanceReadVersion;
     final pay = state.pay;
     if (pay == null) {
       emit(state.copyWith(clearBalance: true, clearFeeBalance: true));
       return;
     }
     final epoch = _walletEpoch;
-    _showHeld(emit, pay, epoch, await _heldOf(pay));
+    final preparation = _preparationVersion;
+    final held = await _heldOf(pay, quote: state.selectedQuote);
+    if (preparation != _preparationVersion ||
+        readVersion != _balanceReadVersion) {
+      return;
+    }
+    _showHeld(emit, pay, epoch, held);
+    _requestMissingFunding();
   }
 
-  Future<_Held> _heldOf(AssetId asset) async {
-    final feeAsset = asset.parentId;
-    final balance = await _read(asset);
-    final feeBalance = feeAsset == null ? null : await _read(feeAsset);
-    return (balance: balance, feeBalance: feeBalance);
+  /// A quote can name a fee coin outside the selected pair (for example a
+  /// provider fee). Read it when that quote becomes selected, before review.
+  void _requestMissingFunding() {
+    final quote = state.selectedQuote;
+    if (!state.signedIn ||
+        quote == null ||
+        state.view != UnifiedSwapView.form ||
+        state.preparationFailedAsset != null) {
+      return;
+    }
+    final unread = quote.fundingAssets.where(
+      (asset) => state.fundingBalances[asset] == null,
+    );
+    if (unread.isNotEmpty) {
+      add(const UnifiedSwapBalancesRefreshed());
+    }
+  }
+
+  Future<_Held> _heldOf(AssetId asset, {SwapQuote? quote}) async {
+    final receive = quote?.to ?? state.receive;
+    final assets = <AssetId>{
+      asset,
+      if (asset.parentId != null) asset.parentId!,
+      if (receive != null) receive,
+      if (receive?.parentId != null) receive!.parentId!,
+      ...?quote?.fundingAssets,
+    }.toList();
+    final readings = await Future.wait(assets.map(_read));
+    final funding = Map<AssetId, Decimal?>.fromIterables(assets, readings);
+    return (
+      balance: funding[asset],
+      feeBalance: funding[asset.parentId],
+      fundingBalances: Map<AssetId, Decimal?>.unmodifiable(funding),
+    );
   }
 
   void _showHeld(
@@ -253,14 +317,38 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     int epoch,
     _Held held,
   ) {
-    if (_closing || isClosed || emit.isDone) return;
-    if (state.pay != pay || epoch != _walletEpoch) return;
+    if (_closing ||
+        isClosed ||
+        emit.isDone ||
+        state.pay != pay ||
+        epoch != _walletEpoch)
+      return;
+    if (state.balance != held.balance || state.feeBalance != held.feeBalance) {
+      _quoteScope = Object();
+    }
+    final unknownBase =
+        held.balance == null ||
+        (pay.parentId != null && held.feeBalance == null);
+    final unknownAsset = unknownBase
+        ? pay
+        : state.selectedQuote?.fundingAssets
+              .where((asset) => held.fundingBalances[asset] == null)
+              .firstOrNull;
+    final previousFailure = state.preparationFailedAsset;
     emit(
       _validated(
         state.copyWith(
+          preparationFailedAsset: unknownAsset,
+          clearPreparationFailure:
+              unknownAsset == null &&
+              (previousFailure == pay ||
+                  held.fundingBalances.containsKey(previousFailure)) &&
+              state.payAddress != null &&
+              state.receiveAddress != null,
           balance: held.balance,
           clearBalance: held.balance == null,
           feeBalance: held.feeBalance,
+          fundingBalances: held.fundingBalances,
           clearFeeBalance: held.feeBalance == null,
         ),
       ),
@@ -269,7 +357,7 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
 
   Future<Decimal?> _read(AssetId asset) async {
     try {
-      return await _spendableBalance(asset);
+      return await _spendableBalance(asset).timeout(_evaluationTimeout);
     } on Object {
       return null;
     }
@@ -279,9 +367,15 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
     final pay = state.pay;
     final receive = state.receive;
     final epoch = _walletEpoch;
-    final payAddress = pay == null ? null : await _address(pay);
-    final receiveAddress = receive == null ? null : await _address(receive);
+    final preparation = _preparationVersion;
+    final readings = await Future.wait([
+      pay == null ? Future<String?>.value() : _address(pay),
+      receive == null ? Future<String?>.value() : _address(receive),
+    ]);
+    final payAddress = readings[0];
+    final receiveAddress = readings[1];
     if (_closing || isClosed || emit.isDone) return;
+    if (preparation != _preparationVersion) return;
     if (state.pay != pay || state.receive != receive) return;
     if (epoch != _walletEpoch) return;
     emit(
@@ -296,7 +390,8 @@ extension _UnifiedSwapEnvironment on UnifiedSwapBloc {
 
   Future<String?> _address(AssetId asset) async {
     try {
-      return await _addressOf(asset);
+      final address = await _addressOf(asset).timeout(_evaluationTimeout);
+      return address == null || address.trim().isEmpty ? null : address;
     } on Object {
       return null;
     }

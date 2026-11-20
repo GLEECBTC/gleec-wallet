@@ -20,8 +20,10 @@ import 'package:web_dex/views/swap/common/swap_format.dart';
 import 'package:web_dex/views/swap/common/swap_palette.dart';
 import 'package:web_dex/views/swap/common/swap_sheet.dart';
 import 'package:web_dex/views/swap/common/swap_widgets.dart';
+import 'package:web_dex/views/swap/motion/swap_motion.dart';
 
 part 'swap_asset_picker_balance.dart';
+part 'swap_asset_picker_filters.dart';
 part 'swap_asset_picker_list.dart';
 part 'swap_asset_picker_reach.dart';
 part 'swap_asset_picker_row.dart';
@@ -51,8 +53,8 @@ const swapPopularTickers = [
   'AVAX',
 ];
 
-/// Opens the asset picker and returns the chosen asset, activated if a wallet
-/// is signed in.
+/// Returns the exact chosen asset immediately. The swap BLoC prepares it
+/// after selection, so activation never holds the picker open.
 Future<AssetId?> showSwapAssetPicker({
   required BuildContext context,
   required SwapPickerSide side,
@@ -150,18 +152,34 @@ class SwapAssetPicker extends StatefulWidget {
 class _SwapAssetPickerState extends State<SwapAssetPicker> {
   final TextEditingController _search = TextEditingController();
   // Signed out, nothing is held: no "My assets" to open on or offer.
-  late _PickerTab _tab = widget.signedIn ? _PickerTab.mine : _PickerTab.popular;
-  Set<AssetId>? _activated;
+  late _PickerTab _tab = widget.signedIn && widget.side == SwapPickerSide.pay
+      ? _PickerTab.mine
+      : _PickerTab.popular;
+  late Set<AssetId>? _activated = widget.signedIn
+      ? widget.catalog.activated ?? widget.catalog.assets
+      : const <AssetId>{};
+  String _network = '';
+  bool _tabTouched = false;
   List<String> _recentTickers = const [];
   bool _failed = false;
   bool _hideZero = false;
-  AssetId? _activating;
-  AssetId? _activationFailed;
 
   @override
   void initState() {
     super.initState();
+    if (_tab == _PickerTab.mine && _mine(_activated ?? const {}).isEmpty) {
+      _tab = _popular().isEmpty ? _PickerTab.all : _PickerTab.popular;
+    }
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SwapAssetPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_network.isNotEmpty &&
+        !_offered().any((id) => (id.parentId ?? id).id == _network)) {
+      _network = '';
+    }
   }
 
   @override
@@ -188,7 +206,9 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
         _hideZero = hideZero;
         // Open on something useful: holdings when there are any, else what
         // was chosen lately, else the most traded rather than the alphabet.
-        if (_mine(activated).isEmpty) {
+        if (!_tabTouched &&
+            (widget.side == SwapPickerSide.receive ||
+                _mine(activated).isEmpty)) {
           _tab = _recent().isNotEmpty
               ? _PickerTab.recent
               : _popular().isNotEmpty
@@ -314,38 +334,24 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
 
   List<AssetId> _rows() {
     final query = _search.text.trim().toLowerCase();
-    if (query.isNotEmpty) return _searched(query);
     final activated = _activated ?? const {};
-    return switch (_tab) {
-      _PickerTab.mine => _mine(activated),
-      _PickerTab.recent => _recent(),
-      _PickerTab.popular => _popular(),
-      _PickerTab.all => _all(),
-    };
+    final rows = query.isNotEmpty
+        ? _searched(query)
+        : switch (_tab) {
+            _PickerTab.mine => _mine(activated),
+            _PickerTab.recent => _recent(),
+            _PickerTab.popular => _popular(),
+            _PickerTab.all => _all(),
+          };
+    return _network.isEmpty
+        ? rows
+        : rows.where((id) => (id.parentId ?? id).id == _network).toList();
   }
 
-  Future<void> _choose(AssetId id) async {
+  void _choose(AssetId id) {
     if (widget.isBlocked(id)) return;
-    final activated = _activated ?? const {};
-    if (!widget.signedIn || activated.contains(id)) {
-      Navigator.of(context).pop(id);
-      return;
-    }
-    setState(() {
-      _activating = id;
-      _activationFailed = null;
-    });
-    try {
-      await widget.services.activate(id);
-      if (!mounted) return;
-      Navigator.of(context).pop(id);
-    } on Object {
-      if (!mounted) return;
-      setState(() {
-        _activating = null;
-        _activationFailed = id;
-      });
-    }
+    SwapHaptics.selection();
+    Navigator.of(context).pop(id);
   }
 
   void _setHideZero(bool hide) {
@@ -355,12 +361,17 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
 
   void _clearSearch() => setState(_search.clear);
 
+  /// The list is a function of the search text; a rebuild shows it.
+  void _searchChanged() => setState(() {});
+
+  void _setNetwork(String network) => setState(() => _network = network);
+
   @override
   Widget build(BuildContext context) {
     final searching = _search.text.trim().isNotEmpty;
     final listed = _activated == null ? null : _listed();
-    final header = [
-      _searchField(context),
+    final search = _searchField(context);
+    final filters = [
       const SizedBox(height: 14),
       if (!searching)
         SwapFilterBar<_PickerTab>(
@@ -376,8 +387,13 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
             _PickerTab.popular => LocaleKeys.swapPickerTabPopular.tr(),
             _PickerTab.all => LocaleKeys.swapPickerTabAll.tr(),
           },
-          onChanged: (tab) => setState(() => _tab = tab),
+          onChanged: (tab) => setState(() {
+            _tab = tab;
+            _tabTouched = true;
+          }),
         ),
+      const SizedBox(height: 10),
+      _networkFilter(context),
       if (_filterable) ...[
         if (!searching) const SizedBox(height: 8),
         _ZeroBalanceSwitch(
@@ -391,6 +407,9 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
         _incompleteNotice(context),
     ];
     final content = _content(context, listed);
+    // With the keyboard up there is room for the search and little else:
+    // the filters then scroll away with the list they narrow.
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     return SwapSheetScaffold(
       title: LocaleKeys.swapPickerTitle.tr(),
       subtitle: widget.side == SwapPickerSide.pay
@@ -408,7 +427,7 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
                 SliverToBoxAdapter(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: header,
+                    children: [search, ...filters],
                   ),
                 ),
                 content,
@@ -416,63 +435,32 @@ class _SwapAssetPickerState extends State<SwapAssetPicker> {
               ],
             );
           }
+          // The search stays the column's first child either way, so it
+          // keeps its focus as the keyboard comes and goes.
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ...header,
+              search,
+              if (!keyboard) ...filters,
               Expanded(
+                key: const ValueKey('swap-picker-list'),
                 child: CustomScrollView(
-                  slivers: [content, const _KeyboardSpace()],
+                  slivers: [
+                    if (keyboard)
+                      SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: filters,
+                        ),
+                      ),
+                    content,
+                    const _KeyboardSpace(),
+                  ],
                 ),
               ),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _searchField(BuildContext context) {
-    final palette = SwapPalette.of(context);
-    return Container(
-      constraints: const BoxConstraints(minHeight: 52),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.controlBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.search_rounded, color: palette.textTertiary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: _search,
-              autofocus: MediaQuery.sizeOf(context).width >= 768,
-              onChanged: (_) => setState(() {}),
-              style: SwapText.body(context).copyWith(color: palette.text),
-              decoration: InputDecoration(
-                contentPadding: EdgeInsets.zero,
-                visualDensity: VisualDensity.standard,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: false,
-                hintText: LocaleKeys.swapPickerSearch.tr(),
-                hintMaxLines: 4,
-                hintStyle: SwapText.body(
-                  context,
-                ).copyWith(color: palette.textTertiary),
-              ),
-            ),
-          ),
-          if (_search.text.isNotEmpty)
-            SwapLinkButton(
-              label: LocaleKeys.clear.tr(),
-              onPressed: _clearSearch,
-            ),
-        ],
       ),
     );
   }

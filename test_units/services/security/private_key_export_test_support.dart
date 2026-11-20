@@ -4,6 +4,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:komodo_defi_types/komodo_defi_type_utils.dart';
 import 'package:web_dex/services/security/private_key_export_delivery.dart';
 import 'package:web_dex/services/security/private_key_export_service.dart';
+import 'package:web_dex/services/file_loader/guarded_file_saver.dart';
 
 const exportKeySentinel = 'synthetic-private-key-export-sentinel';
 const exportViewingKeySentinel = 'synthetic-viewing-key-export-sentinel';
@@ -129,8 +130,10 @@ class FakePrivateKeyExportService implements PrivateKeyExportService {
   @override
   Future<PrivateKeyExportResult> authenticateAndExport(
     PrivateKeyExportAccess access,
-    SensitiveString password,
-  ) async {
+    SensitiveString password, {
+    void Function()? ensureAuthorized,
+  }) async {
+    ensureAuthorized?.call();
     authentications++;
     if (authenticationError case final error?) throw error;
     return pendingExport == null ? result : await pendingExport!.future;
@@ -150,6 +153,7 @@ class FakePrivateKeyExportDelivery implements PrivateKeyExportDelivery {
     required SensitiveString content,
     required Future<void> Function() beforeWrite,
     required void Function() beforeCommit,
+    GuardedDestinationSelector? selectDestination,
   }) async {
     calls++;
     await picker?.future;

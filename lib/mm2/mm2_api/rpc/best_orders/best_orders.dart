@@ -8,10 +8,7 @@ import 'package:web_dex/model/orderbook/order.dart';
 import 'package:web_dex/shared/utils/utils.dart';
 
 // Define the AddressType enum
-enum AddressType {
-  transparent,
-  shielded,
-}
+enum AddressType { transparent, shielded }
 
 class BestOrders {
   BestOrders({this.result, this.error});
@@ -23,8 +20,9 @@ class BestOrders {
       final bestOrders = <BestOrder>[];
       final bestOrdersJson = orders[key] as List<dynamic>;
       for (final dynamic result in bestOrdersJson) {
-        bestOrders
-            .add(BestOrder.fromJson(result as Map<String, dynamic>? ?? {}));
+        bestOrders.add(
+          BestOrder.fromJson(result as Map<String, dynamic>? ?? {}),
+        );
       }
       ordersMap.putIfAbsent(key, () => bestOrders);
     }
@@ -43,6 +41,8 @@ class BestOrder {
     required this.coin,
     required this.address,
     required this.uuid,
+    this.isMine,
+    this.pubkey,
   });
 
   factory BestOrder.fromOrder(Order order, String? coin) {
@@ -52,28 +52,37 @@ class BestOrder {
       minVolume: order.minVolume ?? Rational.zero,
       coin: coin ?? order.base,
       address: OrderAddress(
-        addressType: AddressType.transparent, // Assuming transparent as default
-        addressData: order.address ?? '',
+        addressType: order.address == null
+            ? AddressType.shielded
+            : AddressType.transparent,
+        addressData: order.address,
       ),
       uuid: order.uuid ?? '',
+      isMine: order.isMine,
+      pubkey: order.pubkey,
     );
   }
 
   factory BestOrder.fromJson(Map<String, dynamic> json) {
     return BestOrder(
-      price: fract2rat(json['price']['fraction'] as Map<String, dynamic>?) ??
+      price:
+          fract2rat(json['price']['fraction'] as Map<String, dynamic>?) ??
           Rational.parse(json['price']['decimal'] as String? ?? ''),
-      maxVolume: fract2rat(
+      maxVolume:
+          fract2rat(
             json['base_max_volume']['fraction'] as Map<String, dynamic>?,
           ) ??
           Rational.parse(json['base_max_volume']['decimal'] as String? ?? ''),
-      minVolume: fract2rat(
+      minVolume:
+          fract2rat(
             json['base_min_volume']['fraction'] as Map<String, dynamic>?,
           ) ??
           Rational.parse(json['base_min_volume']['decimal'] as String? ?? ''),
       coin: json['coin'] as String? ?? '',
       address: OrderAddress.fromJson(json['address'] as Map<String, dynamic>),
       uuid: json['uuid'] as String? ?? '',
+      isMine: json['is_mine'] as bool?,
+      pubkey: json['pubkey'] as String?,
     );
   }
 
@@ -84,6 +93,10 @@ class BestOrder {
   final OrderAddress address;
   final String uuid;
 
+  /// KDF ownership is authoritative even when the offer hides its address.
+  final bool? isMine;
+  final String? pubkey;
+
   @override
   String toString() {
     return 'BestOrder($coin, $price)';
@@ -91,22 +104,13 @@ class BestOrder {
 }
 
 class OrderAddress extends Equatable {
-  const OrderAddress({
-    required this.addressType,
-    required this.addressData,
-  });
+  const OrderAddress({required this.addressType, required this.addressData});
 
   const OrderAddress.transparent(String? addressData)
-      : this(
-          addressType: AddressType.transparent,
-          addressData: addressData,
-        );
+    : this(addressType: AddressType.transparent, addressData: addressData);
 
   const OrderAddress.shielded()
-      : this(
-          addressType: AddressType.shielded,
-          addressData: null,
-        );
+    : this(addressType: AddressType.shielded, addressData: null);
 
   factory OrderAddress.fromJson(Map<String, dynamic> json) {
     // Only [addressType] is required, since shielded addresses don't have

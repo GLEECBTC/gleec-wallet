@@ -96,13 +96,14 @@ void main() {
       expect(copy.detail, LocaleKeys.swapHelperOrderBookOnly);
     });
 
-    test('a token service error suggests checking the network coin', () {
+    test('a token service error does not speculate about gas funding', () {
       final copy = SwapFailureCopy.of(
         failure(SwapQuoteFailureKind.serviceError),
         usdc,
         networks: networks,
       );
-      expect(copy.message, LocaleKeys.swapErrorServiceToken);
+      expect(copy.message, LocaleKeys.swapErrorService);
+      expect(copy.detail, isNull);
     });
 
     test('a native coin service error stays generic', () {
@@ -114,23 +115,26 @@ void main() {
       expect(copy.message, LocaleKeys.swapErrorService);
     });
 
-    test('a token service error shows what the address holds, if known', () {
-      final service = failure(SwapQuoteFailureKind.serviceError);
+    test(
+      'a known gas balance does not turn a service error into a shortfall',
+      () {
+        final service = failure(SwapQuoteFailureKind.serviceError);
 
-      final held = SwapFailureCopy.of(
-        service,
-        usdc,
-        networks: networks,
-        feeHeld: '60 ETH',
-      );
-      final unread = SwapFailureCopy.of(service, usdc, networks: networks);
+        final held = SwapFailureCopy.of(
+          service,
+          usdc,
+          networks: networks,
+          feeHeld: '60 ETH',
+        );
+        final unread = SwapFailureCopy.of(service, usdc, networks: networks);
 
-      expect(held.message, LocaleKeys.swapErrorServiceToken);
-      expect(held.detail, LocaleKeys.swapHelperFeeHeld);
-      expect(unread.detail, isNull);
-    });
+        expect(held.message, LocaleKeys.swapErrorService);
+        expect(held.detail, isNull);
+        expect(unread.detail, isNull);
+      },
+    );
 
-    test('the held amount goes only with the gas suggestion', () {
+    test('unrelated failures never suggest adding gas', () {
       final orderBookMiss = failure(
         SwapQuoteFailureKind.noRoute,
         source: SwapLiquiditySource.atomic,

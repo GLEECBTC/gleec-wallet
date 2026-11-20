@@ -1,3 +1,4 @@
+import 'package:web_dex/views/common/wallet_access/wallet_access_boundary.dart';
 import 'dart:async';
 
 import 'package:app_theme/app_theme.dart';
@@ -119,7 +120,10 @@ class AppBlocRoot extends StatelessWidget {
       mm2Api,
       myOrdersService,
     );
-    final dexRepository = DexRepository(mm2Api);
+    final dexRepository = DexRepository(
+      mm2Api,
+      tradingPolicy: mm2Api.tradingPolicy,
+    );
 
     final transactionsRepo = performanceMode != null
         ? MockTransactionHistoryRepo(
@@ -188,6 +192,7 @@ class AppBlocRoot extends StatelessWidget {
         RepositoryProvider(
           lazy: false,
           create: (context) => SwapServices(
+            tradingPolicy: mm2Api.tradingPolicy,
             legalDocuments: context.read<LegalDocumentsRepository>(),
             sdk: komodoDefiSdk,
             coinsRepo: coinsRepository,
@@ -275,7 +280,11 @@ class AppBlocRoot extends StatelessWidget {
             ),
           BlocProvider<MarketMakerBotBloc>(
             create: (context) => MarketMakerBotBloc(
-              MarketMakerBotRepository(mm2Api, SettingsRepository()),
+              MarketMakerBotRepository(
+                mm2Api,
+                SettingsRepository(),
+                tradingPolicy: mm2Api.tradingPolicy,
+              ),
               MarketMakerBotOrderListRepository(
                 myOrdersService,
                 SettingsRepository(),
@@ -287,9 +296,10 @@ class AppBlocRoot extends StatelessWidget {
           ),
           BlocProvider<TradingStatusBloc>(
             lazy: false,
-            create: (context) =>
-                TradingStatusBloc(context.read<TradingStatusService>())
-                  ..add(TradingStatusWatchStarted()),
+            create: (context) => TradingStatusBloc(
+              context.read<TradingStatusService>(),
+              tradingPolicy: mm2Api.tradingPolicy,
+            )..add(TradingStatusWatchStarted()),
           ),
           BlocProvider<SystemHealthBloc>(
             create: (_) =>
@@ -389,7 +399,7 @@ class _MyAppViewState extends State<_MyAppView> {
           // The colour MaterialApp gives its own title, kept as the page's
           // theme colour.
           color: theme.global.light.primaryColor,
-          child: child ?? const SizedBox.shrink(),
+          child: WalletAccessBoundary(child: child ?? const SizedBox.shrink()),
         ),
       ),
     );
@@ -415,13 +425,7 @@ class _MyAppViewState extends State<_MyAppView> {
     if (kIsWeb) {
       _platformWebApi.setElementDisplay('main-content', 'block');
 
-      // Trigger the zoom out animation.
-      _platformWebApi.addElementClass('loading', 'init_done');
-
-      // Await 200ms so the user can see the animation.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      // Remove the loading indicator.
+      // Expose the ready application immediately, without a presentation delay.
       _platformWebApi.removeElement('loading');
 
       final delay = DateTime.now()
@@ -431,7 +435,7 @@ class _MyAppViewState extends State<_MyAppView> {
         PageInteractiveDelayEventData(
           pageName: 'app_root',
           interactiveDelayMs: delay,
-          spinnerTimeMs: 200,
+          spinnerTimeMs: 0,
         ),
       );
     }

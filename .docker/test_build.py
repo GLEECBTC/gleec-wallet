@@ -64,9 +64,9 @@ class DockerBuildTest(unittest.TestCase):
         self.git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
                  "commit", "-qm", "fixture", cwd=cwd)
 
-    def build(self):
+    def build(self, target="linux"):
         return subprocess.run(["bash", str(ROOT / ".docker/build.sh"),
-                               "linux", "release"], cwd=self.work,
+                               target, "release"], cwd=self.work,
                               env=self.env, capture_output=True, text=True)
 
     def test_preserves_tracked_and_untracked_sdk_work(self):
@@ -127,6 +127,83 @@ class DockerBuildTest(unittest.TestCase):
         self.assertEqual(result.returncode, 19)
         self.assertEqual(flutter_calls.read_text().splitlines(),
                          ["pub get --enforce-lockfile"])
+
+    def run_container_command(self, *, target="linux", prefetch_exit=0):
+        result = self.build(target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = [json.loads(line) for line in self.calls.read_text().splitlines()]
+        run = next(call for call in calls if call[0] == "run")
+        self.executable("sudo", "#!/bin/sh\nexit 0\n")
+        self.executable("flutter", '#!/bin/sh\nprintf "flutter %s\\n" "$*" >> "$BUILD_CALLS"\n')
+        self.executable("dart", '#!/bin/sh\nprintf "dart %s\\n" "$*" >> "$BUILD_CALLS"\n'
+                        f'exit {prefetch_exit}\n')
+        build_calls = self.base / "build-calls.txt"
+        result = subprocess.run(run[-4:], cwd=self.work,
+                                env={**self.env, "BUILD_CALLS": str(build_calls)},
+                                capture_output=True, text=True)
+        return result, build_calls.read_text().splitlines()
+
+    def test_verified_native_preparation_precedes_linux_compilation(self):
+        result, calls = self.run_container_command()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[:2], ["flutter pub get --enforce-lockfile",
+                                    "dart tool/prefetch_native_kdf.dart linux"])
+        self.assertEqual(sum(call.startswith("flutter build linux ")
+                             for call in calls), 2)
+
+    def test_failed_native_preparation_never_starts_flutter_build(self):
+        result, calls = self.run_container_command(prefetch_exit=31)
+        self.assertEqual(result.returncode, 31)
+        self.assertEqual(calls, ["flutter pub get --enforce-lockfile",
+                                 "dart tool/prefetch_native_kdf.dart linux"])
+
+    def test_android_prepares_the_android_library_before_compilation(self):
+        result, calls = self.run_container_command(target="apk")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[1], "dart tool/prefetch_native_kdf.dart android")
+
+    def test_web_does_not_prepare_a_native_library(self):
+        result, calls = self.run_container_command(target="web")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(call.startswith("dart ") for call in calls))
+
+    def test_web_compiles_with_the_options_of_the_hosted_bundle(self):
+        result, calls = self.run_container_command(target="web")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        final = calls[-1].split()
+        self.assertEqual(final[:3], ["flutter", "build", "web"])
+        self.assertIn("--csp", final)
+        self.assertIn("--no-web-resources-cdn", final)
+
+    def test_native_targets_receive_no_web_options(self):
+        for target in ("linux", "apk"):
+            self.calls.unlink(missing_ok=True)
+            result, calls = self.run_container_command(target=target)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for call in calls:
+                self.assertNotIn("--csp", call)
+                self.assertNotIn("--no-web-resources-cdn", call)
+
+    def test_web_bundle_carrying_a_local_fixture_is_rejected(self):
+        fixture = self.work / "build/web/assets/debug_data.json"
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text("synthetic fixture")
+        result = self.build("web")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Artifact privacy check failed", result.stderr)
+        # Only the web target gained the check.
+        self.assertEqual(self.build("linux").returncode, 0)
+
+    def test_web_bundle_with_an_unreviewed_offline_game_is_rejected(self):
+        helper = self.work / ("build/web/assets/packages/flutter_inappwebview/"
+                              "assets/t_rex_runner/t-rex.html")
+        helper.parent.mkdir(parents=True)
+        helper.write_text("<script>unreviewed()</script>")
+        result = self.build("web")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("prepare_wallet_web_assets.py: error:", result.stderr)
+        self.assertEqual(helper.read_text(), "<script>unreviewed()</script>")
+        self.assertEqual(self.build("linux").returncode, 0)
 
 
 if __name__ == "__main__":

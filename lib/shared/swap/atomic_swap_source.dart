@@ -57,24 +57,36 @@ class AtomicSwapPlan {
 /// less any receive-side fee paid out of the traded amount.
 class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// Creates a source backed by the SDK's trading manager.
+  ///
+  /// [tradingAllowed] says whether this location may trade a pair, and a
+  /// refusal is reported as that restriction. [pairAllowed] is the order
+  /// book's own rule for a pair, whose refusal is a pair it does not trade.
+  /// [spendDecimalsOf] resolves the precision of an asset whose config
+  /// declares none, as the form does to check an amount.
   AtomicSwapQuoteSource({
     required TradingManager trading,
     required SwapNetworks Function() networks,
     Future<String?> Function(AssetId asset)? addressOf,
     bool Function(AssetId from, AssetId to)? tradingAllowed,
+    bool Function(AssetId from, AssetId to)? pairAllowed,
     bool Function()? clockValid,
     bool Function(AssetId asset)? isWalletOnly,
+    bool Function(AssetId asset)? assetAllowed,
     bool Function(AssetId asset)? tokenApproval,
     Map<String, Object?>? Function(AssetId asset)? gasLimitsOf,
+    Future<int?> Function(AssetId asset)? spendDecimalsOf,
     DateTime Function()? now,
   }) : _trading = trading,
        _networks = networks,
        _addressOf = addressOf,
        _tradingAllowed = tradingAllowed,
+       _pairAllowed = pairAllowed,
        _clockValid = clockValid,
        _isWalletOnly = isWalletOnly,
+       _assetAllowed = assetAllowed,
        _tokenApproval = tokenApproval ?? isAtomicEvmToken,
        _gasLimitsOf = gasLimitsOf,
+       _spendDecimalsOf = spendDecimalsOf,
        _now = now ?? DateTime.now;
 
   final bool Function(AssetId asset) _tokenApproval;
@@ -82,8 +94,11 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   final SwapNetworks Function() _networks;
   final Future<String?> Function(AssetId asset)? _addressOf;
   final bool Function(AssetId from, AssetId to)? _tradingAllowed;
+  final bool Function(AssetId from, AssetId to)? _pairAllowed;
+  final Future<int?> Function(AssetId asset)? _spendDecimalsOf;
   final bool Function()? _clockValid;
   final bool Function(AssetId asset)? _isWalletOnly;
+  final bool Function(AssetId asset)? _assetAllowed;
   final Map<String, Object?>? Function(AssetId asset)? _gasLimitsOf;
   final DateTime Function() _now;
 
@@ -96,7 +111,12 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   bool get pricesSignedOut => true;
 
   /// Whether the orderbook can trade [asset] at all.
-  bool canTrade(AssetId asset) => canTradeWith(asset, _isWalletOnly);
+  bool canTrade(AssetId asset) =>
+      canTradeWith(asset, _isWalletOnly, assetAllowed: _assetAllowed);
+
+  /// Whether the orderbook trades [from] for [to], by its own rules.
+  bool _canTradePair(AssetId from, AssetId to) =>
+      canTrade(from) && canTrade(to) && (_pairAllowed?.call(from, to) ?? true);
 
   /// Whether the orderbook can trade [asset], given the config's
   /// [isWalletOnly] flag.
@@ -108,8 +128,11 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
   /// KDF refuses to trade.
   static bool canTradeWith(
     AssetId asset,
-    bool Function(AssetId asset)? isWalletOnly,
-  ) => canTradeAssetId(asset) && !(isWalletOnly?.call(asset) ?? false);
+    bool Function(AssetId asset)? isWalletOnly, {
+    bool Function(AssetId asset)? assetAllowed,
+  }) =>
+      (assetAllowed?.call(asset) ?? canTradeAssetId(asset)) &&
+      !(isWalletOnly?.call(asset) ?? false);
 
   @override
   Future<SwapSourceAssets> assets({
@@ -119,6 +142,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     known: known,
     activated: activated,
     isWalletOnly: _isWalletOnly,
+    assetAllowed: _assetAllowed,
   );
 
   /// The orderbook's assets among [known].
@@ -127,15 +151,18 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
     required Set<AssetId> known,
     required Set<AssetId> activated,
     bool Function(AssetId asset)? isWalletOnly,
+    bool Function(AssetId asset)? assetAllowed,
   }) => SwapSourceAssets(
     source: SwapLiquiditySource.atomic,
     quotable: {
       for (final asset in activated)
-        if (canTradeWith(asset, isWalletOnly)) asset,
+        if (canTradeWith(asset, isWalletOnly, assetAllowed: assetAllowed))
+          asset,
     },
     onceActive: {
       for (final asset in known)
-        if (!activated.contains(asset) && canTradeWith(asset, isWalletOnly))
+        if (!activated.contains(asset) &&
+            canTradeWith(asset, isWalletOnly, assetAllowed: assetAllowed))
           asset,
     },
   );
@@ -228,7 +255,7 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
       ),
     );
 
-    if (!canTrade(from) || !canTrade(to)) {
+    if (!_canTradePair(from, to)) {
       return reject(SwapQuoteFailureKind.pairUnsupported);
     }
     if (_tradingAllowed != null && !_tradingAllowed(from, to)) {
@@ -281,6 +308,11 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         : await _preimage(from, to, amount, order.price);
     if (preimage case _PreimageRejected(:final failure)) {
       return SwapQuoteRejected(failure);
+    }
+    if (!indicative &&
+        preimage is _PreimageUnavailable &&
+        (isSolanaTradingAsset(from) || isSolanaTradingAsset(to))) {
+      return reject(SwapQuoteFailureKind.serviceError);
     }
     final (fees, refundReserve) = switch (preimage) {
       _PreimageFees(:final fees, :final refundReserve) => (fees, refundReserve),
@@ -337,6 +369,9 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         quotedAt: _now(),
         feesKnown: preimage is _PreimageFees,
         refundReserve: refundReserve,
+        requiredFeeBalances: preimage is _PreimageFees
+            ? preimage.requiredFeeBalances
+            : const {},
         payload: AtomicSwapPlan(
           base: from,
           rel: to,
@@ -402,10 +437,24 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         volume: volume.toString(),
         price: price.toString(),
       );
+      if ((isSolanaTradingAsset(base) || isSolanaTradingAsset(rel)) &&
+          preimage.totalFees.isEmpty) {
+        throw const FormatException('Missing Solana funding requirements');
+      }
       SwapFeeComponent? fee(PreimageCoinFee? raw, SwapFeeKind kind) {
         if (raw == null) return null;
         final amount = Decimal.tryParse(raw.amount);
-        if (amount == null || amount == Decimal.zero) return null;
+        if (amount == null || amount < Decimal.zero) {
+          if (!isSolanaTradingAsset(base) && !isSolanaTradingAsset(rel)) {
+            return null;
+          }
+          throw const FormatException('Invalid fee amount');
+        }
+        if (amount == Decimal.zero) return null;
+        if (assetOf(raw.coin) == null &&
+            (isSolanaTradingAsset(base) || isSolanaTradingAsset(rel))) {
+          throw FormatException('Unknown funding currency ${raw.coin}');
+        }
         return SwapFeeComponent(
           kind: kind,
           amount: amount,
@@ -415,12 +464,30 @@ class AtomicSwapQuoteSource implements SwapQuoteSource, SwapOfferSource {
         );
       }
 
-      return _PreimageFees([
-        ?fee(preimage.takerFee, SwapFeeKind.dexFee),
-        ?fee(preimage.feeToSendTakerFee, SwapFeeKind.network),
-        ?fee(preimage.baseCoinFee, SwapFeeKind.network),
-        ?fee(preimage.relCoinFee, SwapFeeKind.network),
-      ], refundReserve: _refundReserve(base, preimage));
+      final requiredFeeBalances = <AssetId, Decimal>{};
+      for (final total in preimage.totalFees) {
+        final amount = Decimal.parse(total.requiredBalance);
+        if (amount < Decimal.zero) {
+          throw const FormatException('Negative required balance');
+        }
+        if (amount == Decimal.zero) continue;
+        final asset = assetOf(total.coin);
+        if (asset == null) {
+          throw FormatException('Unknown funding currency ${total.coin}');
+        }
+        requiredFeeBalances[asset] =
+            (requiredFeeBalances[asset] ?? Decimal.zero) + amount;
+      }
+      return _PreimageFees(
+        [
+          ?fee(preimage.takerFee, SwapFeeKind.dexFee),
+          ?fee(preimage.feeToSendTakerFee, SwapFeeKind.network),
+          ?fee(preimage.baseCoinFee, SwapFeeKind.network),
+          ?fee(preimage.relCoinFee, SwapFeeKind.network),
+        ],
+        refundReserve: _refundReserve(base, preimage),
+        requiredFeeBalances: Map.unmodifiable(requiredFeeBalances),
+      );
     } on TradePreimageRpcErrorNotSufficientBalanceException catch (error) {
       return _PreimageRejected(insufficient(error.coin, error.required));
     } on TradePreimageRpcErrorNotSufficientBaseCoinBalanceException catch (
@@ -482,7 +549,12 @@ sealed class _Preimage {
 }
 
 final class _PreimageFees extends _Preimage {
-  const _PreimageFees(this.fees, {this.refundReserve});
+  const _PreimageFees(
+    this.fees, {
+    this.refundReserve,
+    this.requiredFeeBalances = const {},
+  });
+  final Map<AssetId, Decimal> requiredFeeBalances;
   final List<SwapFeeComponent> fees;
   final Decimal? refundReserve;
 }

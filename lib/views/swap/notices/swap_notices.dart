@@ -30,10 +30,24 @@ class SwapNoticeListener extends StatefulWidget {
 class _SwapNoticeListenerState extends State<SwapNoticeListener> {
   StreamSubscription<SwapExecutionNotice>? _subscription;
   SwapServices? _services;
+  final Map<String, ({SwapExecutionNotice notice, Object session})> _pending =
+      {};
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        final pending = _pending.values.toList();
+        _pending.clear();
+        for (final queued in pending) {
+          if (queued.session == _services?.presentation.sessionIdentity) {
+            _show(queued.notice);
+          }
+        }
+      },
+    );
     final services = _services = context.read<SwapServices?>();
     if (services == null) return;
     _subscription = services.registry.notices.listen(_show);
@@ -41,6 +55,7 @@ class _SwapNoticeListenerState extends State<SwapNoticeListener> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     unawaited(_subscription?.cancel());
     super.dispose();
   }
@@ -49,10 +64,20 @@ class _SwapNoticeListenerState extends State<SwapNoticeListener> {
     final services = _services;
     if (!mounted || services == null) return;
     final snapshot = notice.snapshot;
+    if (services.registry.snapshotOf(snapshot.id) == null) return;
     // Already on screen: the screen itself is the notice.
     if (services.viewing.contains(snapshot.id)) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
+      _pending[snapshot.id] = (
+        notice: notice,
+        session: services.presentation.sessionIdentity,
+      );
+      return;
+    }
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    if (!services.presentation.claimNotice(notice)) return;
 
     messenger.showSnackBar(
       SnackBar(

@@ -8,11 +8,13 @@ import 'package:komodo_defi_types/komodo_defi_types.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_wallet_session.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_repository.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_status.dart';
+import 'package:web_dex/bloc/market_maker_bot/market_maker_bot/market_maker_bot_error.dart';
 import 'package:web_dex/bloc/market_maker_bot/market_maker_order_list/market_maker_bot_order_list_repository.dart';
 import 'package:web_dex/bloc/settings/settings_repository.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/market_maker_bot/trade_coin_pair_config.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/rpc_error_type.dart';
+import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/bloc/analytics/analytics_repo.dart';
 import 'package:web_dex/analytics/events/market_bot_events.dart';
 import 'package:get_it/get_it.dart';
@@ -132,7 +134,11 @@ class MarketMakerBotBloc
           strategyType: 'simple',
         ),
       );
-      emit(const MarketMakerBotState.stopped().copyWith(error: e.toString()));
+      emit(
+        const MarketMakerBotState.stopped().copyWith(
+          error: marketMakerErrorMessage(e),
+        ),
+      );
     }
   }
 
@@ -171,18 +177,27 @@ class MarketMakerBotBloc
     emit(const MarketMakerBotState.stopping());
 
     try {
+      final permit = WalletOperationGate.instance.capture();
       // Add the trade pair to stored settings immediately to provide feedback
       // and updates to the user.
       await _botRepository.addTradePairToStoredSettings(event.tradePair);
 
       // Cancel the order immediately to provide feedback to the user that
       // the bot is being updated, since the restart process may take some time.
+      permit.ensureCurrent();
       await _cancelOrdersForSession([event.tradePair]);
+      permit.ensureCurrent();
       final Stream<MarketMakerBotStatus> botStatusStream = _botRepository
           .updateOrder(event.tradePair, botId: event.botId);
       await for (final botStatus in botStatusStream) {
         emit(state.copyWith(status: botStatus));
       }
+    } on WalletOperationDenied catch (error) {
+      // The last acknowledged bot state remains authoritative. In particular,
+      // do not issue the failure-cleanup stop against a changed session.
+      emit(state.copyWith(error: error.toString()));
+    } on RpcDispatchRejected catch (error) {
+      emit(state.copyWith(error: error.toString()));
     } catch (e) {
       final isAlreadyStarted =
           e is RpcException && e.error.errorType == RpcErrorType.alreadyStarted;
@@ -192,7 +207,7 @@ class MarketMakerBotBloc
       }
 
       final stoppingState = const MarketMakerBotState.stopping().copyWith(
-        error: e.toString(),
+        error: marketMakerErrorMessage(e),
       );
       emit(stoppingState);
       // Log bot error
@@ -214,8 +229,10 @@ class MarketMakerBotBloc
     emit(const MarketMakerBotState.stopping());
 
     try {
+      final permit = WalletOperationGate.instance.capture();
       await _cancelOrdersForSession(event.tradePairs.toList());
 
+      permit.ensureCurrent();
       final botStatusStream = _botRepository.cancelOrders(
         event.tradePairs,
         botId: event.botId,
@@ -227,9 +244,14 @@ class MarketMakerBotBloc
       // Remove the trade pairs from the stored settings after the orders have
       // been cancelled to prevent the lag between the orders being cancelled
       // and the trade pairs being removed from the settings.
+      permit.ensureCurrent();
       await _botRepository.removeTradePairsFromStoredSettings(
         event.tradePairs.toList(),
       );
+    } on WalletOperationDenied catch (error) {
+      emit(state.copyWith(error: error.toString()));
+    } on RpcDispatchRejected catch (error) {
+      emit(state.copyWith(error: error.toString()));
     } catch (e) {
       final isAlreadyStarted =
           e is RpcException && e.error.errorType == RpcErrorType.alreadyStarted;
@@ -239,7 +261,7 @@ class MarketMakerBotBloc
       }
 
       final stoppingState = const MarketMakerBotState.stopping().copyWith(
-        error: e.toString(),
+        error: marketMakerErrorMessage(e),
       );
       emit(stoppingState);
       // Log bot error
