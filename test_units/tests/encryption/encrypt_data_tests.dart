@@ -1,33 +1,26 @@
 import 'package:test/test.dart';
 import 'package:web_dex/shared/utils/encryption_tool.dart';
 
+import '../../support/legacy_wallet_file_writer.dart';
+
 void testEncryptDataTool() {
-  test('Test that algorithm is consistent', () async {
-    // Should produce the same text after every encryption
-    final tool = EncryptionTool();
+  test('Legacy data still decrypts', () async {
     const password = '123';
     const data = 'Hello my friend';
 
     expect(
-      await tool.decryptData(password, await tool.encryptData(password, data)),
+      await EncryptionTool().decryptData(
+        password,
+        await legacyEncrypt(password, data),
+      ),
       data,
     );
   });
 
-  test('Test that algorithm encrypt every time diff result', () async {
-    // For security reasons, should produce different ciphertext after every encryption
-    // But decryption should produce the same plaintext
-    final tool = EncryptionTool();
-    const password = '123';
+  test('Legacy data does not decrypt with another password', () async {
     const data = 'Hello my friend';
+    final encrypted = await legacyEncrypt('123', data);
 
-    final cipherText1 = await tool.encryptData(password, data);
-    final cipherText2 = await tool.encryptData(password, data);
-
-    expect(cipherText1 != cipherText2, true);
-
-    final plainText1 = await tool.decryptData(password, cipherText1);
-    final plainText2 = await tool.decryptData(password, cipherText2);
-    expect(plainText1, plainText2);
+    expect(await EncryptionTool().decryptData('1234', encrypted), isNot(data));
   });
 }

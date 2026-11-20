@@ -104,6 +104,7 @@ class _EncryptedFilePlateState extends State<_EncryptedFilePlate> {
   /// to know: one created for them that no password manager took. Null until
   /// read.
   bool? _generatedPassword;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -163,8 +164,14 @@ class _EncryptedFilePlateState extends State<_EncryptedFilePlate> {
               : SecuritySecondaryButton(
                   key: const Key('wallet-file-download'),
                   width: width,
-                  icon: const Icon(Icons.file_download_outlined),
+                  icon: _exporting
+                      ? WalletAccessProgress(
+                          label: 'authEncryptedWalletFilePreparing'.tr(),
+                        )
+                      : const Icon(Icons.file_download_outlined),
                   text: LocaleKeys.seedPhraseSettingControlsDownloadSeed.tr(),
+                  // Busy, it stays enabled so it keeps focus; `_download`
+                  // ignores the repeat.
                   onPressed: generated == null ? null : _download,
                 ),
         );
@@ -173,6 +180,7 @@ class _EncryptedFilePlateState extends State<_EncryptedFilePlate> {
   }
 
   Future<void> _download() async {
+    if (_exporting) return;
     final authBloc = context.read<AuthBloc>();
     final expectedWalletId = authBloc.state.currentUser?.walletId;
     if (expectedWalletId == null) return;
@@ -192,16 +200,21 @@ class _EncryptedFilePlateState extends State<_EncryptedFilePlate> {
         return;
       }
       authorization?.ensureCurrent();
+      setState(() => _exporting = true);
       authBloc.add(
         AuthWalletDownloadRequested(
           password: password,
           expectedWalletId: expectedWalletId,
           ensureAuthorized: authorization?.ensureCurrent,
           selectDestination: authorization?.selectDestination,
+          onFinished: () {
+            if (mounted) setState(() => _exporting = false);
+          },
         ),
       );
     } on Object {
       // Locking, leaving or switching revokes this export request.
+      if (mounted) setState(() => _exporting = false);
     }
   }
 }
