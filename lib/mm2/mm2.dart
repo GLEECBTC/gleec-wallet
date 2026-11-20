@@ -7,6 +7,7 @@ import 'package:komodo_defi_types/komodo_defi_types.dart'
     show GaslessServiceKomodoProxy, TronGaslessProviderConfig, RpcDispatchGuard;
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_request.dart';
 import 'package:web_dex/mm2/mm2_api/rpc/version/version_response.dart';
+import 'package:web_dex/app_config/kdf_data_directory.dart';
 import 'package:web_dex/app_config/solana_build_config.dart';
 import 'package:web_dex/services/wallet_access/wallet_operation_gate.dart';
 import 'package:web_dex/shared/constants.dart';
@@ -33,7 +34,7 @@ final class MM2 {
     SolanaBuildConfig.environment.validate();
     _kdfSdk =
         sdk ??
-        KomodoDefiSdk(
+        createSdk(
           config: KomodoDefiSdkConfig(
             solanaCapabilities: SolanaBuildConfig.environment.capabilities,
             assetsAutoUpdate: !SolanaBuildConfig.environment.enabled,
@@ -52,10 +53,19 @@ final class MM2 {
             assetConfigTransform: applyGleecTronGaslessActivationConfig,
             lifiProxyUrl: _lifiProxyUrl(),
             lifiIntegrator: gleecLifiIntegratorConfig(),
+            desktopDataDirectory: gleecKdfDesktopDataDirectory,
           ),
           onLog: _handleSdkLog,
         );
   }
+
+  /// Builds the SDK. Tests swap it to see the configuration the app passes.
+  @visibleForTesting
+  static KomodoDefiSdk Function({
+    KomodoDefiSdkConfig? config,
+    void Function(String)? onLog,
+  })
+  createSdk = ({config, onLog}) => KomodoDefiSdk(config: config, onLog: onLog);
 
   String? _lifiProxyUrl() {
     final url = validatedLifiProxyUrl(lifiProxyUrl);
